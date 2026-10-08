@@ -105,7 +105,7 @@ public class StaffPinController {
                         state.lockedAt(),
                         pendingOf(tenantId, state),
                         recent.stream()
-                                .map(row -> Unlock.of(row, clock.instant()))
+                                .map(row -> OwnUnlock.of(row, clock.instant()))
                                 .toList()));
     }
 
@@ -148,7 +148,7 @@ public class StaffPinController {
                             + "of the two routes (the issuer could type the code first), which is why the person's own profile shows "
                             + "each PIN set and unlock afterwards. No Idempotency-Key: the response carries a secret.")
     public ResponseEntity<CodeResponse> issueAtTenant(
-            @PathVariable UUID tenantId, @PathVariable UUID memberId, @Valid @RequestBody ReasonRequest body) {
+            @PathVariable UUID tenantId, @PathVariable UUID memberId, @Valid @RequestBody PinReasonRequest body) {
         members.requireChangeable(tenantId, Reach.tenant(null, null), memberId);
         return issue(tenantId, memberId, body);
     }
@@ -161,7 +161,7 @@ public class StaffPinController {
                     "Clears the credential and ends the person's terminal sessions; the person then activates again. "
                             + "The manager never sees or chooses a PIN.")
     public ResponseEntity<Void> resetAtTenant(
-            @PathVariable UUID tenantId, @PathVariable UUID memberId, @Valid @RequestBody ReasonRequest body) {
+            @PathVariable UUID tenantId, @PathVariable UUID memberId, @Valid @RequestBody PinReasonRequest body) {
         members.requireChangeable(tenantId, Reach.tenant(null, null), memberId);
         pins.reset(tenantId, memberId, currentActor.get().subject(), body.reason());
         return ResponseEntity.noContent().build();
@@ -193,7 +193,7 @@ public class StaffPinController {
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID memberId,
-            @Valid @RequestBody ReasonRequest body) {
+            @Valid @RequestBody PinReasonRequest body) {
         members.requireChangeable(tenantId, Reach.location(brandId, locationId), memberId);
         return issue(tenantId, memberId, body);
     }
@@ -206,7 +206,7 @@ public class StaffPinController {
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID memberId,
-            @Valid @RequestBody ReasonRequest body) {
+            @Valid @RequestBody PinReasonRequest body) {
         members.requireChangeable(tenantId, Reach.location(brandId, locationId), memberId);
         pins.reset(tenantId, memberId, currentActor.get().subject(), body.reason());
         return ResponseEntity.noContent().build();
@@ -228,7 +228,7 @@ public class StaffPinController {
                         state.status(), state.setAt(), state.lockedAt(), pendingOf(tenantId, state)));
     }
 
-    private ResponseEntity<CodeResponse> issue(UUID tenantId, UUID memberId, ReasonRequest body) {
+    private ResponseEntity<CodeResponse> issue(UUID tenantId, UUID memberId, PinReasonRequest body) {
         IssuedCode issued = pins.issueActivation(
                 tenantId, memberId, currentActor.get().subject(), ActivationVia.MANAGER, body.reason());
         return code(issued);
@@ -241,7 +241,7 @@ public class StaffPinController {
                         issued.code(), issued.expiresAt(), issued.via().name()));
     }
 
-    private @Nullable Pending pendingOf(UUID tenantId, PinState state) {
+    private @Nullable PendingPinCode pendingOf(UUID tenantId, PinState state) {
         PinService.PendingCode pending = state.pendingCode();
         if (pending == null) {
             return null;
@@ -249,12 +249,12 @@ public class StaffPinController {
         String by = "SELF".equals(pending.issuedVia())
                 ? null
                 : pending.issuedBy() == null ? null : directory.nameOf(tenantId, pending.issuedBy());
-        return new Pending(pending.issuedVia(), by, pending.expiresAt());
+        return new PendingPinCode(pending.issuedVia(), by, pending.expiresAt());
     }
 
     // ------------------------------------------------------------------------------------ bodies
 
-    record ReasonRequest(@NotBlank @Size(max = 500) String reason) {}
+    record PinReasonRequest(@NotBlank @Size(max = 500) String reason) {}
 
     /** The code is shown once; it is not stored and not logged. */
     record CodeResponse(String code, Instant expiresAt, String issuedVia) {
@@ -266,15 +266,15 @@ public class StaffPinController {
     }
 
     /** @param issuedBy the issuing manager's display name, for display only; null when I issued it myself */
-    record Pending(String issuedVia, @Nullable String issuedBy, Instant expiresAt) {}
+    record PendingPinCode(String issuedVia, @Nullable String issuedBy, Instant expiresAt) {}
 
     record PinStateResponse(
             String status,
             @Nullable Instant setAt,
             @Nullable Instant lockedAt,
-            @Nullable Pending pending) {}
+            @Nullable PendingPinCode pending) {}
 
-    record Unlock(
+    record OwnUnlock(
             UUID sessionId,
             UUID deviceId,
             String deviceName,
@@ -282,8 +282,8 @@ public class StaffPinController {
             @Nullable Instant endedAt,
             @Nullable String endedReason) {
 
-        static Unlock of(SessionHistoryRow row, Instant now) {
-            return new Unlock(
+        static OwnUnlock of(SessionHistoryRow row, Instant now) {
+            return new OwnUnlock(
                     row.id(), row.deviceId(), row.deviceName(), row.openedAt(), row.endedAt(), row.endedReasonAt(now));
         }
     }
@@ -292,8 +292,8 @@ public class StaffPinController {
             String status,
             @Nullable Instant setAt,
             @Nullable Instant lockedAt,
-            @Nullable Pending pending,
-            List<Unlock> unlocks) {}
+            @Nullable PendingPinCode pending,
+            List<OwnUnlock> unlocks) {}
 
     @SuppressWarnings("unused")
     private static Map<String, Object> none() {

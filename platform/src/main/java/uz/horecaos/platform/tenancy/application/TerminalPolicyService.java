@@ -60,33 +60,33 @@ public class TerminalPolicyService implements TerminalPolicySource {
     }
 
     /** A value and where the resolution chain found it. */
-    public record Setting<T>(T value, String source) {}
+    public record TerminalSetting<T>(T value, String source) {}
 
-    public record GuessOdds(int pinLength, long oneInNPerDay) {}
+    public record TerminalGuessOdds(int pinLength, long oneInNPerDay) {}
 
-    public record Lockout(int consecutiveFailures, long lockMinutes, int failuresPerDay) {}
+    public record TerminalLockoutRules(int consecutiveFailures, long lockMinutes, int failuresPerDay) {}
 
-    public record PolicyView(
-            Setting<Integer> pinLength,
-            Setting<Integer> autoLockSeconds,
-            Setting<Integer> sessionMaxHours,
-            Setting<String> rosterDisplay,
-            Setting<String> attributionDefault,
-            List<GuessOdds> guessOdds,
-            Lockout lockout) {}
+    public record TerminalPolicyView(
+            TerminalSetting<Integer> pinLength,
+            TerminalSetting<Integer> autoLockSeconds,
+            TerminalSetting<Integer> sessionMaxHours,
+            TerminalSetting<String> rosterDisplay,
+            TerminalSetting<String> attributionDefault,
+            List<TerminalGuessOdds> guessOdds,
+            TerminalLockoutRules lockout) {}
 
-    public PolicyView view(UUID tenantId) {
+    public TerminalPolicyView view(UUID tenantId) {
         ResourceScope scope = ResourceScope.tenant(tenantId);
-        return new PolicyView(
+        return new TerminalPolicyView(
                 setting(ConfigurationKeys.TERMINAL_PIN_LENGTH, scope, TerminalPolicy.DEFAULT_PIN_LENGTH),
                 setting(ConfigurationKeys.TERMINAL_AUTO_LOCK_SECONDS, scope, TerminalPolicy.DEFAULT_AUTO_LOCK_SECONDS),
                 setting(ConfigurationKeys.TERMINAL_SESSION_MAX_HOURS, scope, TerminalPolicy.DEFAULT_SESSION_MAX_HOURS),
                 setting(ConfigurationKeys.TERMINAL_ROSTER_DISPLAY, scope, RosterDisplay.NAME_INITIAL.name()),
                 setting(ConfigurationKeys.TERMINAL_ATTRIBUTION_DEFAULT, scope, AttributionMode.DEVICE_ONLY.name()),
                 List.of(
-                        new GuessOdds(4, TerminalLockout.guessOneIn(4)),
-                        new GuessOdds(6, TerminalLockout.guessOneIn(6))),
-                new Lockout(
+                        new TerminalGuessOdds(4, TerminalLockout.guessOneIn(4)),
+                        new TerminalGuessOdds(6, TerminalLockout.guessOneIn(6))),
+                new TerminalLockoutRules(
                         TerminalLockout.DEVICE_CONSECUTIVE_FAILURES,
                         TerminalLockout.DEVICE_LOCK.toMinutes(),
                         TerminalLockout.CREDENTIAL_FAILURES_PER_DAY));
@@ -105,7 +105,7 @@ public class TerminalPolicyService implements TerminalPolicySource {
      * and records one {@code terminal.policy.changed} fact (through {@code ChangeDocuments.diff}) naming the person who saved.
      */
     @Transactional
-    public PolicyView save(UUID tenantId, PolicyChange change, String actorSubject, String reason) {
+    public TerminalPolicyView save(UUID tenantId, PolicyChange change, String actorSubject, String reason) {
         ResourceScope scope = ResourceScope.tenant(tenantId);
         TerminalPolicy before = of(tenantId);
         ActorRef actor = ActorRef.user(actorSubject, null);
@@ -182,7 +182,7 @@ public class TerminalPolicyService implements TerminalPolicySource {
         }
     }
 
-    private <T> Setting<T> setting(ConfigurationKey<T> key, ResourceScope scope, T fallback) {
+    private <T> TerminalSetting<T> setting(ConfigurationKey<T> key, ResourceScope scope, T fallback) {
         Resolved<T> resolved = resolver.resolve(key, scope);
         T value = resolved.value() == null ? fallback : resolved.value();
         ResolutionTrace trace = resolved.trace();
@@ -191,6 +191,6 @@ public class TerminalPolicyService implements TerminalPolicySource {
                 : trace.winningScope() == null
                         ? "DEFAULT"
                         : trace.winningScope().name();
-        return new Setting<>(value, source);
+        return new TerminalSetting<>(value, source);
     }
 }

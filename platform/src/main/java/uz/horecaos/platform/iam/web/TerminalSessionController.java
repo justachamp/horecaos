@@ -131,7 +131,7 @@ public class TerminalSessionController {
                             + "and a person with no PIN all answer TERMINAL_UNLOCK_REFUSED alike; only a lock is distinguished "
                             + "(TERMINAL_PIN_LOCKED, with retryAfterSeconds when it will lift). No Idempotency-Key: the response "
                             + "carries a bearer.")
-    public ResponseEntity<SessionResponse> unlock(
+    public ResponseEntity<TerminalSessionResponse> unlock(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
@@ -155,7 +155,7 @@ public class TerminalSessionController {
                             + "single-use, expires, and is burned at the fifth wrong try; the PIN is refused with the reason stated "
                             + "when it is a run, a repeated digit, a common value or the last digits of the person's own phone or "
                             + "employee number (the code stays good). Success opens a session, as an unlock does.")
-    public ResponseEntity<SessionResponse> activate(
+    public ResponseEntity<TerminalSessionResponse> activate(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
@@ -272,7 +272,7 @@ public class TerminalSessionController {
         return token;
     }
 
-    private ResponseEntity<SessionResponse> opened(DevicePrincipalView device, OpenedSession opened) {
+    private ResponseEntity<TerminalSessionResponse> opened(DevicePrincipalView device, OpenedSession opened) {
         TerminalPolicy policy = policies.of(device.tenantId());
         String label = eligibility.roster(device, policy.rosterDisplay()).stream()
                 .filter(entry -> entry.memberId().equals(opened.memberId()))
@@ -281,7 +281,7 @@ public class TerminalSessionController {
                 .orElse("");
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
-                .body(new SessionResponse(
+                .body(new TerminalSessionResponse(
                         opened.token(),
                         new RosterMember(opened.memberId(), label, "ACTIVE"),
                         opened.idleSeconds(),
@@ -341,11 +341,11 @@ public class TerminalSessionController {
     record RosterResponse(
             String attributionMode, int idleSeconds, int sessionMaxHours, int pinLength, List<RosterMember> members) {}
 
-    record SessionResponse(String sessionToken, RosterMember member, int idleSeconds, Instant hardExpiresAt) {
+    record TerminalSessionResponse(String sessionToken, RosterMember member, int idleSeconds, Instant hardExpiresAt) {
 
         @Override
         public String toString() {
-            return "SessionResponse[sessionToken=<redacted>, member=" + member + "]";
+            return "TerminalSessionResponse[sessionToken=<redacted>, member=" + member + "]";
         }
     }
 }

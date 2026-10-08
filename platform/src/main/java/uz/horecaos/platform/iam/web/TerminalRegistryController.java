@@ -25,8 +25,8 @@ import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.iam.api.terminals.TerminalPolicy.AttributionMode;
 import uz.horecaos.platform.iam.application.terminals.TerminalRegistryService;
-import uz.horecaos.platform.iam.application.terminals.TerminalRegistryService.SessionPage;
 import uz.horecaos.platform.iam.application.terminals.TerminalRegistryService.Terminal;
+import uz.horecaos.platform.iam.application.terminals.TerminalRegistryService.TerminalSessionPage;
 import uz.horecaos.platform.iam.application.terminals.TerminalRegistryService.UnlockedNow;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -82,7 +82,7 @@ public class TerminalRegistryController {
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID deviceId,
-            @Valid @RequestBody ConfigureRequest body,
+            @Valid @RequestBody TerminalConfigureRequest body,
             HttpServletRequest request) {
 
         long expected = AggregateVersion.requireIfMatch(request);
@@ -108,12 +108,12 @@ public class TerminalRegistryController {
             description = "Its grant is revoked first, so the next request is refused whatever its token's remaining "
                     + "validity; its Keycloak client is disabled and its terminal sessions end. A second press on a "
                     + "revoked device is not an error.")
-    public ResponseEntity<RevokeResponse> revoke(
+    public ResponseEntity<TerminalRevokeResponse> revoke(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID deviceId,
-            @Valid @RequestBody RevokeRequest body) {
+            @Valid @RequestBody TerminalRevokeRequest body) {
 
         boolean changed = registry.revoke(
                 tenantId,
@@ -122,7 +122,7 @@ public class TerminalRegistryController {
                 deviceId,
                 body.reason(),
                 currentActor.get().subject());
-        return ResponseEntity.ok(new RevokeResponse(changed));
+        return ResponseEntity.ok(new TerminalRevokeResponse(changed));
     }
 
     @GetMapping("/{deviceId}/sessions")
@@ -132,7 +132,7 @@ public class TerminalRegistryController {
             description =
                     "Newest first, twenty-five to a page, opaque cursor. The label is the one the tenant chose for a "
                             + "shared screen; the non-personal reference rides beside it.")
-    public ResponseEntity<SessionPage> sessions(
+    public ResponseEntity<TerminalSessionPage> sessions(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
@@ -144,14 +144,14 @@ public class TerminalRegistryController {
 
     // ------------------------------------------------------------------------------------ bodies
 
-    record ConfigureRequest(
+    record TerminalConfigureRequest(
             @NotBlank @Size(max = 120) String displayName,
             @NotNull AttributionMode attributionMode,
             @Nullable Integer autoLockSeconds) {}
 
-    record RevokeRequest(@NotBlank @Size(max = 500) String reason) {}
+    record TerminalRevokeRequest(@NotBlank @Size(max = 500) String reason) {}
 
-    record RevokeResponse(boolean changed) {}
+    record TerminalRevokeResponse(boolean changed) {}
 
     record TerminalResponse(
             UUID deviceId,

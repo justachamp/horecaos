@@ -101,7 +101,7 @@ public class KioskDeviceController {
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable String userCode,
-            @Valid @RequestBody ApproveRequest body) {
+            @Valid @RequestBody KioskPairRequest body) {
 
         KioskDeviceView device = kiosks.approve(
                 tenantId,
@@ -141,7 +141,7 @@ public class KioskDeviceController {
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID deviceId,
-            @Valid @RequestBody ApproveRequest body,
+            @Valid @RequestBody KioskPairRequest body,
             HttpServletRequest request) {
 
         long expected = AggregateVersion.requireIfMatch(request);
@@ -167,12 +167,12 @@ public class KioskDeviceController {
                     + "next request whatever its access token's remaining validity; its Keycloak client is then "
                     + "disabled so no new token is minted. A second press on a revoked kiosk is not an error. "
                     + "'Replace' is revoke, then pair the new unit: there is no console-issued code.")
-    public ResponseEntity<RevokeResponse> revoke(
+    public ResponseEntity<KioskRevokeResponse> revoke(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID deviceId,
-            @Valid @RequestBody RevokeRequest body) {
+            @Valid @RequestBody KioskRevokeRequest body) {
 
         boolean changed = kiosks.revoke(
                 tenantId,
@@ -181,7 +181,7 @@ public class KioskDeviceController {
                 deviceId,
                 body.reason(),
                 currentActor.get().subject());
-        return ResponseEntity.ok(new RevokeResponse(changed));
+        return ResponseEntity.ok(new KioskRevokeResponse(changed));
     }
 
     @GetMapping("/configuration")
@@ -202,13 +202,13 @@ public class KioskDeviceController {
 
     // -------------------------------------------------------------------------- bodies
 
-    record ApproveRequest(
+    record KioskPairRequest(
             @NotBlank @Size(max = 120) String displayName,
             @NotNull UUID channelId) {}
 
-    record RevokeRequest(@NotBlank @Size(max = 500) String reason) {}
+    record KioskRevokeRequest(@NotBlank @Size(max = 500) String reason) {}
 
-    record RevokeResponse(boolean changed) {}
+    record KioskRevokeResponse(boolean changed) {}
 
     /**
      * @param requestedLabel what the device called itself: whatever it sent, never trusted, at most 120 characters,
@@ -223,14 +223,14 @@ public class KioskDeviceController {
         }
     }
 
-    record ChannelResponse(UUID channelId, String code, String displayName, String status) {}
+    record KioskChannelView(UUID channelId, String code, String displayName, String status) {}
 
     record KioskResponse(
             UUID deviceId,
             UUID locationId,
             String displayName,
             String status,
-            @Nullable ChannelResponse channel,
+            @Nullable KioskChannelView channel,
             int version,
             boolean needsAttention,
             @Nullable String enrolledBy,
@@ -249,7 +249,7 @@ public class KioskDeviceController {
                     view.status(),
                     view.channel() == null
                             ? null
-                            : new ChannelResponse(
+                            : new KioskChannelView(
                                     view.channel().channelId(),
                                     view.channel().code(),
                                     view.channel().displayName(),

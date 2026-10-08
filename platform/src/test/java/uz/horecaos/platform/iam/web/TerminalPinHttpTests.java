@@ -641,7 +641,7 @@ class TerminalPinHttpTests extends TerminalsFixture {
             assertThat(new TerminalSessionController.PinChangeRequest("482915", "735914").toString())
                     .doesNotContain("482915")
                     .doesNotContain("735914");
-            assertThat(new TerminalSessionController.SessionResponse(
+            assertThat(new TerminalSessionController.TerminalSessionResponse(
                                     token,
                                     new TerminalSessionController.RosterMember(UUID.randomUUID(), "Aziza K.", "ACTIVE"),
                                     300,

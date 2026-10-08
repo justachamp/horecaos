@@ -291,10 +291,10 @@ public class TerminalRegistryService {
     }
 
     /** One page of a device's unlock history: who, when, how it ended. */
-    public record SessionPage(
-            List<DeviceSession> sessions, @Nullable String nextCursor) {}
+    public record TerminalSessionPage(
+            List<TerminalDeviceSession> sessions, @Nullable String nextCursor) {}
 
-    public record DeviceSession(
+    public record TerminalDeviceSession(
             UUID sessionId,
             String who,
             String reference,
@@ -303,7 +303,7 @@ public class TerminalRegistryService {
             @Nullable String endedReason,
             Instant lastActivityAt) {}
 
-    public SessionPage sessionsOf(
+    public TerminalSessionPage sessionsOf(
             UUID tenantId, UUID brandId, UUID locationId, UUID deviceId, @Nullable String cursor) {
         if (devices.find(tenantId, deviceId)
                 .filter(found ->
@@ -332,10 +332,10 @@ public class TerminalRegistryService {
         Map<UUID, StaffTerminalFacts.Person> people = staff.persons(
                 tenantId,
                 page.stream().map(SessionHistoryRow::memberId).distinct().toList());
-        List<DeviceSession> out = new ArrayList<>();
+        List<TerminalDeviceSession> out = new ArrayList<>();
         for (SessionHistoryRow row : page) {
             StaffTerminalFacts.Person person = people.get(row.memberId());
-            out.add(new DeviceSession(
+            out.add(new TerminalDeviceSession(
                     row.id(),
                     person == null
                             ? row.memberReference()
@@ -354,7 +354,7 @@ public class TerminalRegistryService {
                     .encodeToString(
                             (last.openedAt() + "|" + last.id()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
         }
-        return new SessionPage(out, next);
+        return new TerminalSessionPage(out, next);
     }
 
     private int versionOf(UUID deviceId) {

@@ -51,7 +51,7 @@ export interface TerminalView {
   readonly version: number;
 }
 
-/** Mirrors `TerminalRegistryService.DeviceSession`. */
+/** Mirrors `TerminalRegistryService.TerminalDeviceSession`. */
 export interface TerminalSessionView {
   readonly sessionId: string;
   /** The label the tenant chose for a shared screen. */
@@ -78,7 +78,7 @@ export interface PolicySetting<T> {
 
 export type RosterDisplay = 'NAME_INITIAL' | 'REFERENCE';
 
-/** Mirrors `TerminalPolicyService.PolicyView`. */
+/** Mirrors `TerminalPolicyService.TerminalPolicyView`. */
 export interface TerminalPolicyView {
   readonly pinLength: PolicySetting<number>;
   readonly autoLockSeconds: PolicySetting<number>;

@@ -21,7 +21,7 @@ import uz.horecaos.platform.iam.api.terminals.TerminalPolicy.AttributionMode;
 import uz.horecaos.platform.iam.api.terminals.TerminalPolicy.RosterDisplay;
 import uz.horecaos.platform.tenancy.application.TerminalPolicyService;
 import uz.horecaos.platform.tenancy.application.TerminalPolicyService.PolicyChange;
-import uz.horecaos.platform.tenancy.application.TerminalPolicyService.PolicyView;
+import uz.horecaos.platform.tenancy.application.TerminalPolicyService.TerminalPolicyView;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
 /**
@@ -53,7 +53,7 @@ public class TerminalPolicyController {
             description =
                     "The five values, each with its source (DEFAULT, PLATFORM or TENANT), the guess odds of each PIN "
                             + "length stated against the lockout, and the lockout itself -- code constants, not settings.")
-    public ResponseEntity<PolicyView> read(@PathVariable UUID tenantId) {
+    public ResponseEntity<TerminalPolicyView> read(@PathVariable UUID tenantId) {
         return ResponseEntity.ok(policy.view(tenantId));
     }
 
@@ -65,7 +65,8 @@ public class TerminalPolicyController {
                     "Writes all five values in one transaction; every field is required. pinLength is 4 or 6 and applies "
                             + "to the next PIN set (an existing PIN keeps its length), autoLockSeconds 30 to 3,600, sessionMaxHours 1 "
                             + "to 16. attributionDefault is the mode a newly approved device starts in; existing devices keep theirs.")
-    public ResponseEntity<PolicyView> save(@PathVariable UUID tenantId, @Valid @RequestBody SavePolicyRequest body) {
+    public ResponseEntity<TerminalPolicyView> save(
+            @PathVariable UUID tenantId, @Valid @RequestBody TerminalPolicyRequest body) {
         PolicyChange change = new PolicyChange(
                 body.pinLength(),
                 body.autoLockSeconds(),
@@ -79,7 +80,7 @@ public class TerminalPolicyController {
                 policy.save(tenantId, change, currentActor.get().subject(), reason));
     }
 
-    record SavePolicyRequest(
+    record TerminalPolicyRequest(
             @NotNull Integer pinLength,
             @NotNull Integer autoLockSeconds,
             @NotNull Integer sessionMaxHours,
