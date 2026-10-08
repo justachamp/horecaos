@@ -46,4 +46,28 @@ export const loyaltyPolicyPaths = {
   redemptionPolicyRetirement(scope: BrandScope, policyId: string): string {
     return `${this.redemptionPolicies(scope)}/${encodeURIComponent(policyId)}/retire`;
   },
+
+  /**
+   * ADR 0171 (row 6.3b): the reconciliation between the points ledger and a till's bonus balance —
+   * `LoyaltyPosSyncController`, on the same brand-scoped prefix as the policy above.
+   */
+  posSync(scope: BrandScope): string {
+    return `${this.base(scope)}/pos-sync`;
+  },
+
+  posSyncRuns(scope: BrandScope): string {
+    return `${this.posSync(scope)}/runs`;
+  },
+
+  posSyncRun(scope: BrandScope, runId: string): string {
+    return `${this.posSyncRuns(scope)}/${encodeURIComponent(runId)}`;
+  },
+
+  posSyncDiscrepancies(scope: BrandScope): string {
+    return `${this.posSync(scope)}/discrepancies`;
+  },
+
+  posSyncResolution(scope: BrandScope, discrepancyId: string): string {
+    return `${this.posSyncDiscrepancies(scope)}/${encodeURIComponent(discrepancyId)}/resolutions`;
+  },
 } as const;

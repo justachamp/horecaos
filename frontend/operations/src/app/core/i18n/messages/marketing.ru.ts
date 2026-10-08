@@ -419,9 +419,112 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.loyalty.deposit.title': 'Депозитные счета',
   'marketing.loyalty.deposit.body':
     'Не реализовано, и это не пробел: ADR 0046 полностью исключил хранимую клиентскую стоимость из объёма работ. HorecaOS не держит деньги клиентов, поэтому депозитный счёт поднимает тот же вопрос, что и нелицензированная платёжная услуга — решение оставить только баллы.',
+
+  // ---------------------------------------------------------------- loyalty 6.3b POS balance sync (ADR 0171)
+  'marketing.loyalty.tab.programme': 'Программа',
+  'marketing.loyalty.tab.posSync': 'Синхронизация баланса с POS',
   'marketing.loyalty.posSync.title': 'Синхронизация баланса с POS',
   'marketing.loyalty.posSync.body':
-    'Не реализовано. Ни один ADR не описывает чтение или запись баланса лояльности POS-терминалом, и такая возможность провайдера нигде не заявлена — см. frontend-information-architecture.md §6.3.',
+    'Журнал баллов — единственная запись о том, чем владеет клиент. Касса, которая ведёт собственный бонусный баланс, сверяется с ним и приводится к нему; её число никогда не переписывается поверх журнала, а расхождение — это строка, которую решает человек, а не то, что исправляется молча.',
+  'marketing.loyalty.posSync.lag': 'Баланс здесь и на кассе может расходиться до пяти минут.',
+  'marketing.loyalty.posSync.notice':
+    'Касса этого бренда ведёт собственный бонусный баланс, и HorecaOS не видит и не может его менять. Баланс клиента здесь и на кассе может отличаться.',
+  'marketing.loyalty.posSync.error': 'Не удалось загрузить синхронизацию с POS.',
+  'marketing.loyalty.posSync.bindings.title': 'Подключённые терминалы',
+  'marketing.loyalty.posSync.bindings.empty': 'К этому бренду не подключён ни один терминал POS.',
+  'marketing.loyalty.posSync.binding.mode': 'Режим',
+  'marketing.loyalty.posSync.binding.matched': 'Сопоставлено клиентов',
+  'marketing.loyalty.posSync.binding.open': 'Открытых расхождений',
+  'marketing.loyalty.posSync.binding.lastPass': 'Последний проход',
+  'marketing.loyalty.posSync.binding.never': 'Ещё не было',
+  'marketing.loyalty.posSync.capability.SUPPORTED': 'Может синхронизировать',
+  'marketing.loyalty.posSync.capability.PARTIAL': 'Частично может синхронизировать',
+  'marketing.loyalty.posSync.capability.UNSUPPORTED': 'Не может синхронизировать',
+  'marketing.loyalty.posSync.capability.UNASSESSED': 'Не оценено',
+  'marketing.loyalty.posSync.capability.PARTIAL.note':
+    'Этот поставщик умеет часть синхронизации; недостающая половина названа в его оценке.',
+  'marketing.loyalty.posSync.capability.UNSUPPORTED.note':
+    'В системе этого поставщика нет бонусного баланса клиента, который можно прочитать или записать, поэтому его балансы здесь не отражаются.',
+  'marketing.loyalty.posSync.capability.UNASSESSED.note':
+    'Никто не оценил, что этот поставщик отдаёт по кошельку клиента, поэтому ему нельзя включить эту возможность, и его балансы здесь не отражаются.',
+  'marketing.loyalty.posSync.mode.REPORT_ONLY':
+    'Только отчёт: сверяет, ничего не применяет и не отправляет',
+  'marketing.loyalty.posSync.mode.PULL': 'Загружает то, что произошло на кассе',
+  'marketing.loyalty.posSync.mode.PULL_AND_PUSH': 'Загружает и отправляет баланс журнала',
+  'marketing.loyalty.posSync.reconcile.action': 'Сверить сейчас',
+  'marketing.loyalty.posSync.reconcile.running': 'Идёт сверка…',
+  'marketing.loyalty.posSync.runs.title': 'Отчёты о сверке',
+  'marketing.loyalty.posSync.runs.empty': 'Ни одного прохода ещё не было.',
+  'marketing.loyalty.posSync.runs.close': 'Закрыть',
+  'marketing.loyalty.posSync.runs.noDifferences': 'В этом проходе расхождений не найдено.',
+  'marketing.loyalty.posSync.runs.column.pass': 'Проход',
+  'marketing.loyalty.posSync.runs.column.compared': 'Сверено',
+  'marketing.loyalty.posSync.runs.column.matched': 'Равны',
+  'marketing.loyalty.posSync.runs.column.tillHigher': 'Касса больше',
+  'marketing.loyalty.posSync.runs.column.tillLower': 'Касса меньше',
+  'marketing.loyalty.posSync.runs.column.tillOnly': 'Только на кассе',
+  'marketing.loyalty.posSync.runs.column.platformOnly': 'Только в журнале',
+  'marketing.loyalty.posSync.runs.column.ambiguous': 'Неоднозначно',
+  'marketing.loyalty.posSync.runs.column.imported': 'Загружено',
+  'marketing.loyalty.posSync.runs.column.held': 'Задержано',
+  'marketing.loyalty.posSync.runs.column.unverifiable': 'Не проверено',
+  'marketing.loyalty.posSync.runs.column.pushed': 'Отправлено',
+  'marketing.loyalty.posSync.run.kind.PULL': 'Загрузка',
+  'marketing.loyalty.posSync.run.kind.PUSH': 'Отправка',
+  'marketing.loyalty.posSync.run.kind.RECONCILE': 'Сверка',
+  'marketing.loyalty.posSync.run.status.RUNNING': 'Идёт',
+  'marketing.loyalty.posSync.run.status.SUCCEEDED': 'Готово',
+  'marketing.loyalty.posSync.run.status.FAILED': 'Сбой',
+  'marketing.loyalty.posSync.discrepancies.title': 'Расхождения, которые нужно решить',
+  'marketing.loyalty.posSync.discrepancies.empty': 'Открытых расхождений нет.',
+  'marketing.loyalty.posSync.discrepancies.platform': 'Журнал',
+  'marketing.loyalty.posSync.discrepancies.till': 'Касса',
+  'marketing.loyalty.posSync.discrepancies.delta': 'Разница',
+  'marketing.loyalty.posSync.discrepancies.reason': 'Причина решения',
+  'marketing.loyalty.posSync.discrepancies.pending':
+    'Ждёт подписи второго человека. Пока ничего не начислено.',
+  'marketing.loyalty.posSync.kind.TILL_HIGHER': 'На кассе больше, чем в журнале',
+  'marketing.loyalty.posSync.kind.TILL_HIGHER.note':
+    'Касса показывает больше баллов, чем хранит журнал. Ни с одной стороны ничего не изменено.',
+  'marketing.loyalty.posSync.kind.TILL_LOWER': 'На кассе меньше, чем в журнале',
+  'marketing.loyalty.posSync.kind.TILL_LOWER.note':
+    'Касса показывает меньше баллов, чем хранит журнал. Ни с одной стороны ничего не изменено.',
+  'marketing.loyalty.posSync.kind.TILL_ONLY': 'Клиент кассы без счёта баллов',
+  'marketing.loyalty.posSync.kind.TILL_ONLY.note':
+    'Клиент на кассе не соответствует ни одному счёту баллов этого бренда. Счёт по записи кассы не создаётся.',
+  'marketing.loyalty.posSync.kind.PLATFORM_ONLY': 'Клиент журнала, которого касса больше не знает',
+  'marketing.loyalty.posSync.kind.PLATFORM_ONLY.note':
+    'Сопоставленный клиент больше не найден на кассе.',
+  'marketing.loyalty.posSync.kind.AMBIGUOUS_MATCH': 'Больше одного возможного совпадения',
+  'marketing.loyalty.posSync.kind.AMBIGUOUS_MATCH.note':
+    'Телефон с кассы подходит более чем одному счёту. Об этом сообщается, но совпадение не угадывается.',
+  'marketing.loyalty.posSync.kind.SPEND_EXCEEDS_BALANCE': 'Потрачено на кассе сверх баланса',
+  'marketing.loyalty.posSync.kind.SPEND_EXCEEDS_BALANCE.note':
+    'Клиент потратил на кассе больше, чем хранил журнал. Баланс покрыл часть; остальное несёт бренд, это видно в отчёте об обязательствах.',
+  'marketing.loyalty.posSync.kind.CREDIT_HELD': 'Начисление с кассы задержано для проверки',
+  'marketing.loyalty.posSync.kind.CREDIT_HELD.note':
+    'Начисление с кассы выше дневного лимита. Ничего не начислено, пока кто-то не решит.',
+  'marketing.loyalty.posSync.kind.RATIO_MISMATCH': 'Программа не «один балл — один сум»',
+  'marketing.loyalty.posSync.kind.RATIO_MISMATCH.note':
+    'Синхронизировать можно только программу «один к одному», поэтому этот терминал не привязан.',
+  'marketing.loyalty.posSync.kind.NOT_CONSENTED': 'Клиент не согласился на синхронизацию',
+  'marketing.loyalty.posSync.kind.NOT_CONSENTED.note':
+    'Клиент не участвует в синхронизации, пока не согласится.',
+  'marketing.loyalty.posSync.kind.UNVERIFIABLE': 'Не удалось проверить',
+  'marketing.loyalty.posSync.kind.UNVERIFIABLE.note':
+    'Касса не ответила или ответила в другой валюте. Это не то же самое, что расхождение.',
+  'marketing.loyalty.posSync.resolution.ACCEPT_TILL': 'Принять число кассы',
+  'marketing.loyalty.posSync.resolution.ACCEPT_TILL.hint':
+    'Применить разницу к журналу как корректировку. Выше порога ручной корректировки нужна подпись второго человека.',
+  'marketing.loyalty.posSync.resolution.ACCEPT_PLATFORM': 'Оставить число журнала',
+  'marketing.loyalty.posSync.resolution.ACCEPT_PLATFORM.hint':
+    'Отправить баланс журнала на кассу ещё раз.',
+  'marketing.loyalty.posSync.resolution.ABSORB': 'Бренд принимает на себя',
+  'marketing.loyalty.posSync.resolution.ABSORB.hint':
+    'Записать, что это замечено и бренд это принимает. Ничего не движется.',
+  'marketing.loyalty.posSync.resolution.SUSPEND': 'Не синхронизировать этого клиента',
+  'marketing.loyalty.posSync.resolution.SUSPEND.hint': 'Исключить этого клиента из синхронизации.',
+  'marketing.loyalty.liability.tillAbsorbed': 'Принято на себя по тратам на кассе: {amount}',
 
   // -------------------------------------------------------------- referrals 6.6 (a new ADR, wave 47)
   'marketing.referrals.title': 'Рефералы',

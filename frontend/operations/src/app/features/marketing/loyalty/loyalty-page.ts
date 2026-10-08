@@ -14,6 +14,7 @@ import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
+import { PosSyncPanel } from './pos-sync-panel';
 import { LocationView, LocationsApi } from '../../settings/locations/locations-api';
 import { ChannelView, SalesChannelsApi } from '../../settings/sales-channels/sales-channels-api';
 import {
@@ -57,7 +58,7 @@ type ScopeType = 'BRAND' | 'LOCATION' | 'CHANNEL';
  */
 @Component({
   selector: 'q-loyalty-page',
-  imports: [TPipe],
+  imports: [TPipe, PosSyncPanel],
   templateUrl: './loyalty-page.html',
   styleUrl: './loyalty-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -68,6 +69,9 @@ export class LoyaltyPage implements OnInit {
   private readonly channelsApi = inject(SalesChannelsApi);
   private readonly brand = inject(CurrentBrand);
   protected readonly i18n = inject(I18n);
+
+  /** ADR 0171: the programme's own numbers, or the till-balance sync's report. */
+  protected readonly tab = signal<'programme' | 'posSync'>('programme');
 
   protected readonly loading = signal(true);
   protected readonly denied = signal(false);

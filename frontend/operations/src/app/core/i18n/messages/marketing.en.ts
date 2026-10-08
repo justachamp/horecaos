@@ -415,9 +415,114 @@ export const marketingEn = {
   'marketing.loyalty.deposit.title': 'Deposit accounts',
   'marketing.loyalty.deposit.body':
     'Not built, and not a gap: ADR 0046 withdrew customer-funded stored value from scope outright. HorecaOS holds no customer funds, so a prepaid deposit account raises the same question as an unlicensed payment service, and the decision is to offer points only.',
+
+  // ---------------------------------------------------------------- loyalty 6.3b POS balance sync (ADR 0171)
+  'marketing.loyalty.tab.programme': 'Programme',
+  'marketing.loyalty.tab.posSync': 'POS balance sync',
   'marketing.loyalty.posSync.title': 'POS balance sync',
   'marketing.loyalty.posSync.body':
-    'Not built. No ADR owns a point-of-sale terminal reading or writing a loyalty balance, and no provider capability declares it — see frontend-information-architecture.md §6.3.',
+    'The points ledger is the single record of what a customer holds. A point-of-sale terminal that keeps a bonus balance of its own is compared with it and kept equal to it; its number is never copied over the ledger, and a difference is a row for a person to settle, not something corrected silently.',
+  'marketing.loyalty.posSync.lag':
+    'A balance here and at the till may differ for up to five minutes.',
+  'marketing.loyalty.posSync.notice':
+    'This brand’s till keeps its own bonus balance and HorecaOS cannot see or change it. A customer’s balance here and at the till can differ.',
+  'marketing.loyalty.posSync.error': 'The POS sync could not be loaded.',
+  'marketing.loyalty.posSync.bindings.title': 'Connected terminals',
+  'marketing.loyalty.posSync.bindings.empty':
+    'No point-of-sale terminal is connected to this brand.',
+  'marketing.loyalty.posSync.binding.mode': 'Mode',
+  'marketing.loyalty.posSync.binding.matched': 'Matched customers',
+  'marketing.loyalty.posSync.binding.open': 'Open differences',
+  'marketing.loyalty.posSync.binding.lastPass': 'Last pass',
+  'marketing.loyalty.posSync.binding.never': 'Never',
+  'marketing.loyalty.posSync.capability.SUPPORTED': 'Can sync',
+  'marketing.loyalty.posSync.capability.PARTIAL': 'Partly can sync',
+  'marketing.loyalty.posSync.capability.UNSUPPORTED': 'Cannot sync',
+  'marketing.loyalty.posSync.capability.UNASSESSED': 'Not assessed',
+  'marketing.loyalty.posSync.capability.PARTIAL.note':
+    'This vendor can do part of the sync; the missing half is named in its assessment.',
+  'marketing.loyalty.posSync.capability.UNSUPPORTED.note':
+    'This vendor’s system has no customer bonus balance to read or write, so its balances are not mirrored here.',
+  'marketing.loyalty.posSync.capability.UNASSESSED.note':
+    'Nobody has assessed what this vendor exposes for a customer wallet, so it cannot be given this capability and its balances are not mirrored here.',
+  'marketing.loyalty.posSync.mode.REPORT_ONLY': 'Report only: compares, applies and pushes nothing',
+  'marketing.loyalty.posSync.mode.PULL': 'Imports what happens at the till',
+  'marketing.loyalty.posSync.mode.PULL_AND_PUSH': 'Imports and sends the ledger’s balance',
+  'marketing.loyalty.posSync.reconcile.action': 'Reconcile now',
+  'marketing.loyalty.posSync.reconcile.running': 'Reconciling…',
+  'marketing.loyalty.posSync.runs.title': 'Reconciliation reports',
+  'marketing.loyalty.posSync.runs.empty': 'No pass has run yet.',
+  'marketing.loyalty.posSync.runs.close': 'Close',
+  'marketing.loyalty.posSync.runs.noDifferences': 'This pass found no differences.',
+  'marketing.loyalty.posSync.runs.column.pass': 'Pass',
+  'marketing.loyalty.posSync.runs.column.compared': 'Compared',
+  'marketing.loyalty.posSync.runs.column.matched': 'Equal',
+  'marketing.loyalty.posSync.runs.column.tillHigher': 'Till higher',
+  'marketing.loyalty.posSync.runs.column.tillLower': 'Till lower',
+  'marketing.loyalty.posSync.runs.column.tillOnly': 'Till only',
+  'marketing.loyalty.posSync.runs.column.platformOnly': 'Ledger only',
+  'marketing.loyalty.posSync.runs.column.ambiguous': 'Ambiguous',
+  'marketing.loyalty.posSync.runs.column.imported': 'Imported',
+  'marketing.loyalty.posSync.runs.column.held': 'Held',
+  'marketing.loyalty.posSync.runs.column.unverifiable': 'Unverifiable',
+  'marketing.loyalty.posSync.runs.column.pushed': 'Sent',
+  'marketing.loyalty.posSync.run.kind.PULL': 'Import',
+  'marketing.loyalty.posSync.run.kind.PUSH': 'Send',
+  'marketing.loyalty.posSync.run.kind.RECONCILE': 'Reconciliation',
+  'marketing.loyalty.posSync.run.status.RUNNING': 'Running',
+  'marketing.loyalty.posSync.run.status.SUCCEEDED': 'Done',
+  'marketing.loyalty.posSync.run.status.FAILED': 'Failed',
+  'marketing.loyalty.posSync.discrepancies.title': 'Differences to settle',
+  'marketing.loyalty.posSync.discrepancies.empty': 'No open differences.',
+  'marketing.loyalty.posSync.discrepancies.platform': 'Ledger',
+  'marketing.loyalty.posSync.discrepancies.till': 'Till',
+  'marketing.loyalty.posSync.discrepancies.delta': 'Difference',
+  'marketing.loyalty.posSync.discrepancies.reason': 'Reason for the decision',
+  'marketing.loyalty.posSync.discrepancies.pending':
+    'Waiting for a second person’s signature. Nothing has been credited yet.',
+  'marketing.loyalty.posSync.kind.TILL_HIGHER': 'Till higher than the ledger',
+  'marketing.loyalty.posSync.kind.TILL_HIGHER.note':
+    'The till shows more points than the ledger holds. Nothing has been changed on either side.',
+  'marketing.loyalty.posSync.kind.TILL_LOWER': 'Till lower than the ledger',
+  'marketing.loyalty.posSync.kind.TILL_LOWER.note':
+    'The till shows fewer points than the ledger holds. Nothing has been changed on either side.',
+  'marketing.loyalty.posSync.kind.TILL_ONLY': 'Till customer with no points account',
+  'marketing.loyalty.posSync.kind.TILL_ONLY.note':
+    'A customer at the till matches no points account of this brand. No account is created from a till record.',
+  'marketing.loyalty.posSync.kind.PLATFORM_ONLY': 'Ledger customer the till no longer knows',
+  'marketing.loyalty.posSync.kind.PLATFORM_ONLY.note':
+    'A matched customer is no longer found at the till.',
+  'marketing.loyalty.posSync.kind.AMBIGUOUS_MATCH': 'More than one possible match',
+  'marketing.loyalty.posSync.kind.AMBIGUOUS_MATCH.note':
+    'The till’s phone fits more than one account. It is reported and never guessed.',
+  'marketing.loyalty.posSync.kind.SPEND_EXCEEDS_BALANCE': 'Spent at the till beyond the balance',
+  'marketing.loyalty.posSync.kind.SPEND_EXCEEDS_BALANCE.note':
+    'The customer spent more at the till than the ledger held. The balance covered part of it; the brand carries the rest, shown on the liability report.',
+  'marketing.loyalty.posSync.kind.CREDIT_HELD': 'Credit from the till held for review',
+  'marketing.loyalty.posSync.kind.CREDIT_HELD.note':
+    'A credit from the till is above the daily cap. Nothing is credited until someone decides.',
+  'marketing.loyalty.posSync.kind.RATIO_MISMATCH': 'Programme is not one point to one som',
+  'marketing.loyalty.posSync.kind.RATIO_MISMATCH.note':
+    'Only a one-to-one programme can be synced, so this terminal is not bound.',
+  'marketing.loyalty.posSync.kind.NOT_CONSENTED': 'Customer has not agreed to the sync',
+  'marketing.loyalty.posSync.kind.NOT_CONSENTED.note':
+    'The customer is left out of the sync until they agree.',
+  'marketing.loyalty.posSync.kind.UNVERIFIABLE': 'Could not be checked',
+  'marketing.loyalty.posSync.kind.UNVERIFIABLE.note':
+    'The till did not answer, or answered in another currency. Not the same as a difference.',
+  'marketing.loyalty.posSync.resolution.ACCEPT_TILL': 'Accept the till’s number',
+  'marketing.loyalty.posSync.resolution.ACCEPT_TILL.hint':
+    'Apply the difference to the ledger as an adjustment. Above the manual-adjustment threshold a second person must sign.',
+  'marketing.loyalty.posSync.resolution.ACCEPT_PLATFORM': 'Keep the ledger’s number',
+  'marketing.loyalty.posSync.resolution.ACCEPT_PLATFORM.hint':
+    'Send the ledger’s balance to the till again.',
+  'marketing.loyalty.posSync.resolution.ABSORB': 'Brand carries it',
+  'marketing.loyalty.posSync.resolution.ABSORB.hint':
+    'Record that this is seen and the brand accepts it. Nothing moves.',
+  'marketing.loyalty.posSync.resolution.SUSPEND': 'Stop syncing this customer',
+  'marketing.loyalty.posSync.resolution.SUSPEND.hint':
+    'Leave this customer out of the sync from now on.',
+  'marketing.loyalty.liability.tillAbsorbed': 'Absorbed from till spends: {amount}',
 
   // -------------------------------------------------------------- referrals 6.6 (a new ADR, wave 47)
   'marketing.referrals.title': 'Referrals',

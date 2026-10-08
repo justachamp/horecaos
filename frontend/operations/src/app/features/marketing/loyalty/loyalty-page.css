@@ -230,3 +230,27 @@
   border-color: var(--q-hairline);
   color: var(--q-ink-muted);
 }
+
+/* ADR 0171: the programme and the till-balance sync are two tabs of one page */
+.loyalty__tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--q-hairline);
+  margin-bottom: 16px;
+}
+
+.loyalty__tab {
+  height: 36px;
+  padding: 0 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--q-ink-muted);
+  cursor: pointer;
+}
+
+.loyalty__tab--active {
+  color: var(--q-ink);
+  border-bottom-color: var(--q-primary);
+  font-weight: 600;
+}
