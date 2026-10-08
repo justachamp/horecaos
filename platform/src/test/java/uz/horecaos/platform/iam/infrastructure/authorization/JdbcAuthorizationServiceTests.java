@@ -458,7 +458,11 @@ class JdbcAuthorizationServiceTests {
                 // ADR 0148: whether a person holds a second factor, and when each authenticator was
                 // added. Ids, a name the person typed and dates -- never a secret or a code, which the
                 // platform does not hold -- so a suspended tenant's administrator may still see it.
-                Capability.IAM_STAFF_MFA_READ);
+                Capability.IAM_STAFF_MFA_READ,
+                // ADR 0156: a manager reading the rota and the timesheet, finance reading the hours
+                // that feed payroll. A suspended tenant reading what it already recorded takes
+                // nothing out; the clock, a manager's writes and the payroll export are not reads.
+                Capability.STAFF_SHIFT_READ);
 
         java.util.Set<Capability> classified = java.util.Arrays.stream(Capability.values())
                 .filter(Capability::isRead)
