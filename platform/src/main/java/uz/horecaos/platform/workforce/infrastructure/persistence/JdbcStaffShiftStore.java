@@ -257,19 +257,6 @@ public class JdbcStaffShiftStore {
                 .list();
     }
 
-    /** Closed shifts whose stored business date is {@code businessDate}: the day close's source. */
-    public List<ShiftRow> closedOn(UUID tenantId, LocalDate businessDate) {
-        return jdbc.sql("SELECT " + COLUMNS + """
-                         FROM workforce.staff_shifts
-                        WHERE tenant_id = :tenantId AND business_date = :businessDate AND status = 'CLOSED'
-                        ORDER BY location_id, started_at, id
-                        """)
-                .param("tenantId", tenantId)
-                .param("businessDate", businessDate)
-                .query(JdbcStaffShiftStore::map)
-                .list();
-    }
-
     /** The shifts a payroll range holds (voided ones are never payroll), in a stable order. */
     public List<ShiftRow> inRange(
             UUID tenantId,

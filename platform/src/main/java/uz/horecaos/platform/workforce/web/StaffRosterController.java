@@ -35,8 +35,8 @@ import uz.horecaos.platform.workforce.application.StaffRosterService.CreateEntry
 import uz.horecaos.platform.workforce.application.StaffRosterService.EntryView;
 import uz.horecaos.platform.workforce.application.StaffRosterService.WeekView;
 import uz.horecaos.platform.workforce.domain.ReasonCode;
-import uz.horecaos.platform.workforce.web.WorkforceResponses.EntryResponse;
 import uz.horecaos.platform.workforce.web.WorkforceResponses.PersonResponse;
+import uz.horecaos.platform.workforce.web.WorkforceResponses.StaffRosterEntryResponse;
 import uz.horecaos.platform.workforce.web.WorkforceResponses.WeekResponse;
 
 /**
@@ -87,7 +87,7 @@ public class StaffRosterController {
                 view.timezone(),
                 view.from(),
                 view.to(),
-                view.entries().stream().map(EntryResponse::of).toList());
+                view.entries().stream().map(StaffRosterEntryResponse::of).toList());
     }
 
     @GetMapping("/people")
@@ -110,7 +110,7 @@ public class StaffRosterController {
             description = "A DRAFT entry for an active person with a job at this branch. 409 ROSTER_OVERLAP when "
                     + "the person already has a live entry overlapping that time, at any branch. Sixteen hours "
                     + "is a data-sanity bound, not a legal limit.")
-    public ResponseEntity<EntryResponse> create(
+    public ResponseEntity<StaffRosterEntryResponse> create(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
@@ -121,7 +121,7 @@ public class StaffRosterController {
                 .location(URI.create("/api/v1/operations/tenants/%s/brands/%s/locations/%s/staff/roster/entries/%s"
                         .formatted(tenantId, brandId, locationId, created.id())))
                 .eTag(AggregateVersion.toETag(created.version()))
-                .body(EntryResponse.of(created));
+                .body(StaffRosterEntryResponse.of(created));
     }
 
     @PutMapping("/entries/{entryId}")
@@ -130,7 +130,7 @@ public class StaffRosterController {
             summary = "Move a draft or published entry",
             description = "Needs If-Match with the entry's version. The person cannot change: cancel and draft "
                     + "another, so the trail says who was taken off and who was put on.")
-    public ResponseEntity<EntryResponse> update(
+    public ResponseEntity<StaffRosterEntryResponse> update(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
@@ -147,7 +147,7 @@ public class StaffRosterController {
                 correlation());
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(updated.version()))
-                .body(EntryResponse.of(updated));
+                .body(StaffRosterEntryResponse.of(updated));
     }
 
     @PostMapping("/entries/{entryId}/cancellations")
@@ -161,7 +161,7 @@ public class StaffRosterController {
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID entryId,
-            @Valid @RequestBody ReasonRequest body,
+            @Valid @RequestBody RosterReasonRequest body,
             HttpServletRequest request) {
         roster.cancel(
                 new Branch(tenantId, brandId, locationId),
@@ -179,14 +179,14 @@ public class StaffRosterController {
             summary = "Publish a range of the rota",
             description = "DRAFT -> PUBLISHED for entries starting on the local days from..to (inclusive). "
                     + "Answers the count and the people by display reference, for the confirmation.")
-    public PublicationResponse publish(
+    public RosterPublicationResponse publish(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @Valid @RequestBody RangeRequest body) {
         var result = roster.publish(
                 new Branch(tenantId, brandId, locationId), body.from(), body.to(), actor(), correlation());
-        return new PublicationResponse(result.published(), result.people());
+        return new RosterPublicationResponse(result.published(), result.people());
     }
 
     @PostMapping("/copies")
@@ -234,13 +234,13 @@ public class StaffRosterController {
         }
     }
 
-    record ReasonRequest(@NotNull ReasonCode reasonCode) {}
+    record RosterReasonRequest(@NotNull ReasonCode reasonCode) {}
 
     record RangeRequest(@NotNull LocalDate from, @NotNull LocalDate to) {}
 
     record CopyRequest(@NotNull LocalDate fromWeek, @NotNull LocalDate toWeek) {}
 
-    record PublicationResponse(int published, List<String> people) {}
+    record RosterPublicationResponse(int published, List<String> people) {}
 
     record CopyResponse(int created, int skipped) {}
 }

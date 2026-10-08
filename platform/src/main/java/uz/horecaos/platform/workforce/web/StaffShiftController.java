@@ -41,7 +41,7 @@ import uz.horecaos.platform.workforce.application.StaffTodayService;
 import uz.horecaos.platform.workforce.domain.ReasonCode;
 import uz.horecaos.platform.workforce.infrastructure.persistence.JdbcStaffShiftStore.Cursor;
 import uz.horecaos.platform.workforce.web.WorkforceResponses.ShiftPageResponse;
-import uz.horecaos.platform.workforce.web.WorkforceResponses.ShiftResponse;
+import uz.horecaos.platform.workforce.web.WorkforceResponses.StaffShiftResponse;
 import uz.horecaos.platform.workforce.web.WorkforceResponses.TodayResponse;
 import uz.horecaos.platform.workforce.web.WorkforceResponses.TodayRowResponse;
 
@@ -135,11 +135,11 @@ public class StaffShiftController {
             description = "A manager opens a shift for an active person with a job here. The start is the "
                     + "request's, may not be in the future, and needs reasonCode when it is more than five "
                     + "minutes in the past. 409 SHIFT_ALREADY_OPEN when the person already has an open shift.")
-    public ResponseEntity<ShiftResponse> open(
+    public ResponseEntity<StaffShiftResponse> open(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
-            @Valid @RequestBody OpenRequest body) {
+            @Valid @RequestBody ShiftOpenRequest body) {
         ShiftView opened = shifts.openFor(
                 new Branch(tenantId, brandId, locationId),
                 body.memberId(),
@@ -149,7 +149,7 @@ public class StaffShiftController {
                 WorkforceWeb.correlation());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .eTag(AggregateVersion.toETag(opened.shift().version()))
-                .body(ShiftResponse.of(opened));
+                .body(StaffShiftResponse.of(opened));
     }
 
     @PostMapping("/{shiftId}/closures")
@@ -159,12 +159,12 @@ public class StaffShiftController {
             description = "Closes an open shift at endedAt (needs If-Match). The break defaults to the matched "
                     + "roster entry's planned break unless breakSeconds is set. Over the variance threshold "
                     + "the shift waits in AWAITING_APPROVAL and is out of payroll facts until approved.")
-    public ShiftResponse close(
+    public StaffShiftResponse close(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID shiftId,
-            @Valid @RequestBody CloseRequest body,
+            @Valid @RequestBody ShiftCloseRequest body,
             HttpServletRequest request) {
         ShiftView closed = shifts.closeFor(
                 new Branch(tenantId, brandId, locationId),
@@ -175,7 +175,7 @@ public class StaffShiftController {
                 body.reasonCode(),
                 actor(),
                 WorkforceWeb.correlation());
-        return ShiftResponse.of(closed);
+        return StaffShiftResponse.of(closed);
     }
 
     @PutMapping("/{shiftId}")
@@ -186,7 +186,7 @@ public class StaffShiftController {
                     + "carries the old and new times. A shift older than workforce.shift.retroactive_edit_days "
                     + "can be corrected only by a holder of staff.shift.approve. An earlier approval does not "
                     + "survive a change of the hours.")
-    public ShiftResponse correct(
+    public StaffShiftResponse correct(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
@@ -203,7 +203,7 @@ public class StaffShiftController {
                 body.reasonCode(),
                 actor(),
                 WorkforceWeb.correlation());
-        return ShiftResponse.of(corrected);
+        return StaffShiftResponse.of(corrected);
     }
 
     @PostMapping("/{shiftId}/voidings")
@@ -211,12 +211,12 @@ public class StaffShiftController {
     @Operation(
             summary = "Void a mistaken shift",
             description = "VOIDED with a reason and never deleted; it leaves payroll facts. If-Match is optional.")
-    public ShiftResponse voidShift(
+    public StaffShiftResponse voidShift(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID shiftId,
-            @Valid @RequestBody ReasonRequest body,
+            @Valid @RequestBody ShiftReasonRequest body,
             HttpServletRequest request) {
         ShiftView voided = shifts.voidShift(
                 new Branch(tenantId, brandId, locationId),
@@ -225,7 +225,7 @@ public class StaffShiftController {
                 body.reasonCode(),
                 actor(),
                 WorkforceWeb.correlation());
-        return ShiftResponse.of(voided);
+        return StaffShiftResponse.of(voided);
     }
 
     @PostMapping("/{shiftId}/approvals")
@@ -235,12 +235,12 @@ public class StaffShiftController {
             description = "AWAITING_APPROVAL -> CLOSED with a reason, one shift at a time (approval is not a bulk "
                     + "action), needs If-Match. The approver may be the person who edited the hours unless the "
                     + "tenant sets workforce.shift.approver_must_differ; the audit fact records both.")
-    public ShiftResponse approve(
+    public StaffShiftResponse approve(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID shiftId,
-            @Valid @RequestBody ReasonRequest body,
+            @Valid @RequestBody ShiftReasonRequest body,
             HttpServletRequest request) {
         ShiftView approved = shifts.approve(
                 new Branch(tenantId, brandId, locationId),
@@ -249,7 +249,7 @@ public class StaffShiftController {
                 body.reasonCode(),
                 actor(),
                 WorkforceWeb.correlation());
-        return ShiftResponse.of(approved);
+        return StaffShiftResponse.of(approved);
     }
 
     // ------------------------------------------------------------------------------- plumbing
@@ -280,7 +280,7 @@ public class StaffShiftController {
     static ShiftPageResponse page(StaffShiftQueryService.Page page) {
         return new ShiftPageResponse(
                 page.items().stream()
-                        .map(item -> ShiftResponse.of(item.shift(), item.person()))
+                        .map(item -> StaffShiftResponse.of(item.shift(), item.person()))
                         .toList(),
                 page.next() == null ? null : encode(page.next()));
     }
@@ -305,12 +305,12 @@ public class StaffShiftController {
     }
 
     /** Every optional field is nullable: Jackson 3 refuses a missing primitive. */
-    record OpenRequest(
+    record ShiftOpenRequest(
             @NotNull UUID memberId,
             @NotNull Instant startedAt,
             @Nullable ReasonCode reasonCode) {}
 
-    record CloseRequest(
+    record ShiftCloseRequest(
             @NotNull Instant endedAt,
             @Min(0) @Nullable Integer breakSeconds,
             @Nullable ReasonCode reasonCode) {}
@@ -321,5 +321,5 @@ public class StaffShiftController {
             @Min(0) @Nullable Integer breakSeconds,
             @NotNull ReasonCode reasonCode) {}
 
-    record ReasonRequest(@NotNull ReasonCode reasonCode) {}
+    record ShiftReasonRequest(@NotNull ReasonCode reasonCode) {}
 }

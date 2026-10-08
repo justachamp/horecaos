@@ -41,7 +41,7 @@ final class WorkforceResponses {
         }
     }
 
-    record EntryResponse(
+    record StaffRosterEntryResponse(
             UUID id,
             UUID locationId,
             @Nullable PersonResponse person,
@@ -51,8 +51,8 @@ final class WorkforceResponses {
             int plannedBreakMinutes,
             @Nullable Instant publishedAt,
             int version) {
-        static EntryResponse of(EntryView view) {
-            return new EntryResponse(
+        static StaffRosterEntryResponse of(EntryView view) {
+            return new StaffRosterEntryResponse(
                     view.id(),
                     view.locationId(),
                     PersonResponse.of(view.memberId(), view.person()),
@@ -65,9 +65,9 @@ final class WorkforceResponses {
         }
     }
 
-    record WeekResponse(String timezone, Instant from, Instant to, List<EntryResponse> entries) {}
+    record WeekResponse(String timezone, Instant from, Instant to, List<StaffRosterEntryResponse> entries) {}
 
-    record ShiftResponse(
+    record StaffShiftResponse(
             UUID id,
             UUID locationId,
             @Nullable PersonResponse person,
@@ -88,12 +88,12 @@ final class WorkforceResponses {
             @Nullable Instant approvedAt,
             @Nullable String voidReasonCode,
             int version) {
-        static ShiftResponse of(ShiftView view) {
+        static StaffShiftResponse of(ShiftView view) {
             return of(view.shift(), view.person());
         }
 
-        static ShiftResponse of(ShiftRow shift, @Nullable Person person) {
-            return new ShiftResponse(
+        static StaffShiftResponse of(ShiftRow shift, @Nullable Person person) {
+            return new StaffShiftResponse(
                     shift.id(),
                     shift.locationId(),
                     PersonResponse.of(shift.memberId(), person),
@@ -118,7 +118,7 @@ final class WorkforceResponses {
     }
 
     record ShiftPageResponse(
-            List<ShiftResponse> items, @Nullable String nextCursor) {}
+            List<StaffShiftResponse> items, @Nullable String nextCursor) {}
 
     record TodayRowResponse(
             @Nullable PersonResponse person,

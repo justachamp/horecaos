@@ -36,6 +36,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.application.staff.StaffMemberService;
@@ -362,14 +363,21 @@ class WorkforceEndpointTests {
 
     @Test
     @DisplayName(
-            "STAFF_ATTENDANCE needs staff.shift.read besides report.export: a report exporter who cannot read hours is refused")
+            "STAFF_ATTENDANCE needs staff.shift.read besides report.export: a role that exports reports and cannot read hours is refused")
     void theExportNeedsTheHoursCapability() throws Exception {
         enable();
-        grant("wf-exporter", PlatformRole.COURIER_DISPATCHER, "TENANT", TENANT);
+        customRole("wf-exporter-only", Capability.REPORT_EXPORT);
+        customRole("wf-exporter-reader", Capability.REPORT_EXPORT, Capability.STAFF_SHIFT_READ);
 
-        MvcResult refused = exportAttendance("wf-exporter");
+        MvcResult refused = exportAttendance("wf-exporter-only");
+        MvcResult accepted = exportAttendance("wf-exporter-reader");
 
         assertThat(refused.getResponse().getStatus()).isEqualTo(403);
+        assertThat(refused.getResponse().getContentAsString(UTF_8)).contains("staff.shift.read");
+        assertThat(accepted.getResponse().getStatus())
+                .as(
+                        "the same role with the hours capability added is let through, so the refusal above was about hours")
+                .isEqualTo(202);
     }
 
     @Test
@@ -471,6 +479,38 @@ class WorkforceEndpointTests {
                 .param("roleId", RoleRegistrySynchronizer.platformRoleId(role))
                 .param("scopeType", scopeType)
                 .param("scopeId", scopeId)
+                .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
+    /** A tenant-defined role holding exactly these capabilities, granted to {@code subject} across the tenant. */
+    private void customRole(String subject, Capability... capabilities) {
+        UUID roleId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO iam.roles (id, tenant_id, code, name, scope_type, status, is_platform_defined)
+                VALUES (:id, :tenantId, :code, :code, 'TENANT', 'ACTIVE', false)
+                """)
+                .param("id", roleId)
+                .param("tenantId", TENANT)
+                .param("code", subject + "-role")
+                .update();
+        for (Capability capability : capabilities) {
+            jdbc.sql("INSERT INTO iam.role_capabilities (role_id, capability_code) VALUES (:role, :code)")
+                    .param("role", roleId)
+                    .param("code", capability.code())
+                    .update();
+        }
+        jdbc.sql("""
+                INSERT INTO iam.grants
+                    (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
+                     status, granted_by, reason, valid_from)
+                VALUES (:id, :tenantId, :subject, :roleId, false, 'TENANT', :tenantId,
+                        'ACTIVE', 'test-fixture', 'workforce endpoint test', :validFrom)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("subject", subject)
+                .param("roleId", roleId)
                 .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
                 .update();
     }

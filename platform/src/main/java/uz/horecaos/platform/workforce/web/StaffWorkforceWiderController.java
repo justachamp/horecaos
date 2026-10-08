@@ -19,8 +19,8 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 import uz.horecaos.platform.workforce.application.StaffRosterService;
 import uz.horecaos.platform.workforce.application.StaffShiftQueryService;
-import uz.horecaos.platform.workforce.web.WorkforceResponses.EntryResponse;
 import uz.horecaos.platform.workforce.web.WorkforceResponses.ShiftPageResponse;
+import uz.horecaos.platform.workforce.web.WorkforceResponses.StaffRosterEntryResponse;
 import uz.horecaos.platform.workforce.web.WorkforceResponses.WeekResponse;
 
 /**
@@ -137,7 +137,7 @@ public class StaffWorkforceWiderController {
                 view.timezone(),
                 view.from(),
                 view.to(),
-                view.entries().stream().map(EntryResponse::of).toList());
+                view.entries().stream().map(StaffRosterEntryResponse::of).toList());
     }
 
     private boolean seesNames(ResourceScope scope) {

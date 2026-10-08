@@ -79,10 +79,10 @@ public class StaffSessionsController {
                     + "shared by every company the person works for. `keycloak: UNAVAILABLE` means Keycloak "
                     + "could not be asked and the list is the platform's own record. No address, header or "
                     + "position is ever returned.")
-    public SessionsResponse list(@PathVariable UUID tenantId, @AuthenticationPrincipal Jwt token) {
+    public OwnSessionsResponse list(@PathVariable UUID tenantId, @AuthenticationPrincipal Jwt token) {
         limit("staff.self.sessions.list", tenantId, LIST_LIMIT);
         SessionList list = sessions.list(tenantId, subject(), sessionIdOf(token));
-        return SessionsResponse.of(list);
+        return OwnSessionsResponse.of(list);
     }
 
     @PostMapping("/terminations")
@@ -168,7 +168,7 @@ public class StaffSessionsController {
 
     public record DeviceLabelResponse(DeviceLabel.Browser browser, DeviceLabel.Os os, DeviceLabel.Form form) {}
 
-    public record SessionResponse(
+    public record OwnSessionResponse(
             String id,
             @Nullable DeviceLabelResponse deviceLabel,
             Instant signedInAt,
@@ -177,9 +177,9 @@ public class StaffSessionsController {
             State state,
             @Nullable EndReason endReason) {
 
-        static SessionResponse of(Item item) {
+        static OwnSessionResponse of(Item item) {
             DeviceLabel label = item.deviceLabel();
-            return new SessionResponse(
+            return new OwnSessionResponse(
                     item.id(),
                     label == null ? null : new DeviceLabelResponse(label.browser(), label.os(), label.form()),
                     item.signedInAt(),
@@ -190,12 +190,12 @@ public class StaffSessionsController {
         }
     }
 
-    public record SessionsResponse(Availability keycloak, List<SessionResponse> items) {
+    public record OwnSessionsResponse(Availability keycloak, List<OwnSessionResponse> items) {
 
-        static SessionsResponse of(SessionList list) {
-            return new SessionsResponse(
+        static OwnSessionsResponse of(SessionList list) {
+            return new OwnSessionsResponse(
                     list.keycloak(),
-                    list.items().stream().map(SessionResponse::of).toList());
+                    list.items().stream().map(OwnSessionResponse::of).toList());
         }
     }
 }

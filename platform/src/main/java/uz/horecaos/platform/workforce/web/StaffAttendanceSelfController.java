@@ -26,7 +26,7 @@ import uz.horecaos.platform.web.idempotency.Idempotent;
 import uz.horecaos.platform.workforce.application.StaffAttendanceSelfService;
 import uz.horecaos.platform.workforce.application.StaffShiftService;
 import uz.horecaos.platform.workforce.application.StaffShiftService.ShiftView;
-import uz.horecaos.platform.workforce.web.WorkforceResponses.ShiftResponse;
+import uz.horecaos.platform.workforce.web.WorkforceResponses.StaffShiftResponse;
 import uz.horecaos.platform.workforce.web.WorkforceResponses.UpcomingEntryResponse;
 
 /**
@@ -90,10 +90,10 @@ public class StaffAttendanceSelfController {
                 .mine(tenantId, subject())
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such resource."));
         return new MyAttendanceResponse(
-                mine.open() == null ? null : ShiftResponse.of(mine.open(), null),
+                mine.open() == null ? null : StaffShiftResponse.of(mine.open(), null),
                 mine.upcoming().stream().map(UpcomingEntryResponse::of).toList(),
                 mine.recent().stream()
-                        .map(shift -> ShiftResponse.of(shift, null))
+                        .map(shift -> StaffShiftResponse.of(shift, null))
                         .toList());
     }
 
@@ -106,12 +106,13 @@ public class StaffAttendanceSelfController {
                     + "other branch answers 404, the answer an unknown branch gets. The start is the server's "
                     + "clock. No published roster entry is needed. 409 SHIFT_ALREADY_OPEN when a shift is open "
                     + "(a repeat with the same key replays the first answer). Ten a minute with clock-out.")
-    public ResponseEntity<ShiftResponse> clockIn(@PathVariable UUID tenantId, @Valid @RequestBody ClockInRequest body) {
+    public ResponseEntity<StaffShiftResponse> clockIn(
+            @PathVariable UUID tenantId, @Valid @RequestBody ClockInRequest body) {
         limit("staff.shift.clock", tenantId, CLOCK_LIMIT);
         ShiftView opened = shifts.clockIn(tenantId, subject(), body.locationId(), WorkforceWeb.correlation());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .eTag(AggregateVersion.toETag(opened.shift().version()))
-                .body(ShiftResponse.of(opened.shift(), null));
+                .body(StaffShiftResponse.of(opened.shift(), null));
     }
 
     @PostMapping("/me/attendance/clock-outs")
@@ -123,9 +124,9 @@ public class StaffAttendanceSelfController {
                     + "matched roster entry's planned break. Over the variance threshold the shift waits for a "
                     + "manager's approval and the answer says AWAITING_APPROVAL. 422 NO_OPEN_SHIFT when none is "
                     + "open. Ten a minute with clock-in.")
-    public ShiftResponse clockOut(@PathVariable UUID tenantId, @Valid @RequestBody ClockOutRequest body) {
+    public StaffShiftResponse clockOut(@PathVariable UUID tenantId, @Valid @RequestBody ClockOutRequest body) {
         limit("staff.shift.clock", tenantId, CLOCK_LIMIT);
-        return ShiftResponse.of(
+        return StaffShiftResponse.of(
                 shifts.clockOut(tenantId, subject(), WorkforceWeb.correlation()).shift(), null);
     }
 
@@ -156,7 +157,7 @@ public class StaffAttendanceSelfController {
     record AttendanceStatusResponse(boolean enabled) {}
 
     record MyAttendanceResponse(
-            @org.jspecify.annotations.Nullable ShiftResponse open,
+            @org.jspecify.annotations.Nullable StaffShiftResponse open,
             List<UpcomingEntryResponse> upcoming,
-            List<ShiftResponse> recent) {}
+            List<StaffShiftResponse> recent) {}
 }
