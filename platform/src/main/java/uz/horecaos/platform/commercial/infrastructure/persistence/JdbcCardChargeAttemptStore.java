@@ -274,6 +274,19 @@ public class JdbcCardChargeAttemptStore {
                 .list();
     }
 
+    /**
+     * How many statement charges are still waiting for an answer from the merchant account {@code
+     * installationId}: the ones whose card reference was minted under it, and the hand-typed ones, which go
+     * to whichever account is active. See {@link JdbcCardTopUpStore#countPendingUnder}.
+     */
+    public long countPendingUnder(UUID installationId) {
+        return jdbc.sql("SELECT count(*) FROM commercial.card_charge_attempts WHERE outcome = 'PENDING' AND "
+                        + CardReferenceSql.ASKED_THROUGH_INSTALLATION)
+                .param("installationId", installationId.toString())
+                .query(Long.class)
+                .single();
+    }
+
     /** Whether any statement charge of this tenant is still waiting for the provider's answer. */
     public boolean hasPending(UUID tenantId) {
         return jdbc.sql(

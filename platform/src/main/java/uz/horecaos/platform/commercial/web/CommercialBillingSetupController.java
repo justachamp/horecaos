@@ -137,11 +137,22 @@ public class CommercialBillingSetupController {
     @RequiresCapability(value = Capability.INTEGRATION_INSTALLATION_MANAGE, scope = ScopeType.PLATFORM, mutating = true)
     @Operation(
             summary = "Stop charging through this account",
-            description = "Every card tenant is then collected like an invoice tenant until an account is active.")
+            description = "Every card tenant is then collected like an invoice tenant until an account is active. "
+                    + "Refused with UNRESOLVED_CARD_CHARGES while top-ups or statement charges asked through this "
+                    + "account have no answer yet: an idempotency key means something only to the account it was "
+                    + "sent to, so the account that replaces this one cannot say whether they took the money. "
+                    + "They are resolved by the settlement sweep within minutes. acknowledgeUnresolvedCharges "
+                    + "suspends anyway, for an account that is unreachable; the charges then stay PENDING, "
+                    + "never declined, and resolve when this account is active again.")
     public ResponseEntity<CardInstallationView> suspend(
-            @PathVariable UUID installationId, @Valid @RequestBody TransitionRequest body) {
+            @PathVariable UUID installationId, @Valid @RequestBody SuspendRequest body) {
         return ResponseEntity.ok(CardInstallationView.of(installations.suspend(
-                installationId, body.expectedVersion(), actor(), body.reason(), correlationId())));
+                installationId,
+                body.expectedVersion(),
+                Boolean.TRUE.equals(body.acknowledgeUnresolvedCharges()),
+                actor(),
+                body.reason(),
+                correlationId())));
     }
 
     // ------------------------------------------------------------------ helpers
@@ -246,4 +257,13 @@ public class CommercialBillingSetupController {
     public record TransitionRequest(
             @NotNull @Min(0) Long expectedVersion,
             @NotBlank @Size(max = 1000) String reason) {}
+
+    /**
+     * {@link TransitionRequest} for a suspension. {@code acknowledgeUnresolvedCharges} is boxed, so a body
+     * that leaves it out reads as "no" and not as a malformed one.
+     */
+    public record SuspendRequest(
+            @NotNull @Min(0) Long expectedVersion,
+            @NotBlank @Size(max = 1000) String reason,
+            @Nullable Boolean acknowledgeUnresolvedCharges) {}
 }

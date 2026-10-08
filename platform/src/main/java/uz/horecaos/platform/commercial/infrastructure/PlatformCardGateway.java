@@ -100,7 +100,7 @@ public class PlatformCardGateway implements CardCharger, CardEnrolment, CardChar
         }
         Optional<String> providerToken = providerTokenFor(active.get(), cardTokenReference);
         if (providerToken.isEmpty()) {
-            return new Outcome.Failed("CARD_BOUND_UNDER_ANOTHER_MERCHANT_ACCOUNT");
+            return new Outcome.Failed(CardTokenReferences.BOUND_UNDER_ANOTHER_ACCOUNT);
         }
         return active.get()
                 .adapter()

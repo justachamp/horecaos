@@ -464,6 +464,40 @@ class CommercialWalletSelfServiceEndpointTests {
                 .isEqualTo("INVOICE");
     }
 
+    @Test
+    void staffAreToldWhichChargesAreStillWaitingBeforeTheyReplaceTheAccountAndMayAcknowledgeIt() throws Exception {
+        String installationId = staffActivatesTheFake();
+        ownerBindsCard(FakeCardProvider.UNANSWERING_CARD);
+        String pending = postAs(OWNER, WALLET + "/top-ups", "idem-pending", "{\"amountMinor\":400000}", 200);
+        assertThat(JSON.readTree(pending).get("outcome").asString()).isEqualTo("PENDING");
+        String suspension = STAFF_BASE + "/billing/card-installations/" + installationId + "/suspension";
+
+        // The console's body: the version and the reason, and nothing about acknowledging.
+        String refused = staffPost(suspension, "idem-s1", "{\"expectedVersion\":1,\"reason\":\"replacing it\"}", 409);
+
+        assertThat(refused)
+                .contains("UNRESOLVED_CARD_CHARGES")
+                .as("how many, so the person knows what they would be leaving")
+                .contains("unresolvedTopUps");
+        assertThat(JSON.readTree(mvc.perform(get("/api/v1/control-plane/billing/card-installations")
+                                        .with(tokenFor(STAFF)))
+                                .andReturn()
+                                .getResponse()
+                                .getContentAsString())
+                        .get(0)
+                        .get("status")
+                        .asString())
+                .as("nothing moved")
+                .isEqualTo("ACTIVE");
+
+        String suspended = staffPost(
+                suspension,
+                "idem-s2",
+                "{\"expectedVersion\":1,\"reason\":\"the account is unreachable\",\"acknowledgeUnresolvedCharges\":true}",
+                200);
+        assertThat(JSON.readTree(suspended).get("status").asString()).isEqualTo("SUSPENDED");
+    }
+
     // --------------------------------------------------------------------- invoices
 
     @Test

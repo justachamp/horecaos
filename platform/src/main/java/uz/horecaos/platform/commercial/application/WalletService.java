@@ -1214,6 +1214,20 @@ public class WalletService {
             countCardCharge("unanswered");
             return 0;
         }
+        if (attempt.reused() && CardCharger.saysNothingAboutAnAttemptAlreadyAsked(outcome)) {
+            // Asked before, under a merchant account that is not answering now (suspended or replaced). The
+            // first ask may have moved the money and lost the answer, and the account in front of us never saw
+            // the key: that is neither a decline nor "not configured", and settling it as either is final. It
+            // stays PENDING until the account that holds the key is active again. A card swapped in the
+            // meantime still supersedes it (beginCardAttempt), with its late success audited for finance.
+            log.warn(
+                    "A card charge for statement {} of tenant {} was asked under a merchant account that is not "
+                            + "the active one; it stays pending until that account is active again",
+                    statementId,
+                    tenantId);
+            countCardCharge("stranded");
+            return 0;
+        }
         return Objects.requireNonNull(unitOfWork.execute(status -> recordCardOutcome(tenantId, attempt, outcome)));
     }
 

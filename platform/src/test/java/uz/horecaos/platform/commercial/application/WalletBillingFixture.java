@@ -197,7 +197,8 @@ abstract class WalletBillingFixture {
         subscriptions = new SubscriptionService(subscriptionStore, planStore, entitlements, audit, clock);
         statements = new StatementService(
                 subscriptionStore, planStore, moduleStore, statementStore, usageStore, wallet, audit, clock);
-        installations = new PlatformCardInstallationService(installationStore, gateway, audit, clock);
+        installations =
+                new PlatformCardInstallationService(installationStore, gateway, topUpStore, attemptStore, audit, clock);
         cardOnFile = new CardOnFileService(walletStore, topUpStore, attemptStore, gateway, audit, transactions, clock);
         topUps = new CardTopUpService(topUpStore, walletStore, wallet, gateway, audit, meters, transactions, clock);
         billingSettings = new PlatformBillingSettingsService(settingsStore, approvals, audit, clock);

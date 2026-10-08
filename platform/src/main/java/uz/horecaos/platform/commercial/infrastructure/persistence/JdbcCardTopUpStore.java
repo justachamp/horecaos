@@ -133,6 +133,20 @@ public class JdbcCardTopUpStore {
                 == 1;
     }
 
+    /**
+     * How many attempts are still waiting for an answer from the merchant account {@code installationId}:
+     * the ones whose card reference was minted under it, and the hand-typed ones, which go to whichever
+     * account is active. Read before that account is suspended, because the account that replaces it has
+     * never heard of their keys and cannot say whether they were charged.
+     */
+    public long countPendingUnder(UUID installationId) {
+        return jdbc.sql("SELECT count(*) FROM commercial.card_top_ups WHERE outcome = 'PENDING' AND "
+                        + CardReferenceSql.ASKED_THROUGH_INSTALLATION)
+                .param("installationId", installationId.toString())
+                .query(Long.class)
+                .single();
+    }
+
     /** Attempts still waiting for an answer that were asked before {@code cutoff}, oldest first. */
     public List<CardTopUp> pendingRequestedBefore(Instant cutoff, int limit) {
         return jdbc.sql("SELECT " + COLUMNS
