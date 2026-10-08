@@ -43,11 +43,27 @@ and on the quote's own evidence. It is **not** in the quote's context hash: an i
 quote keeps the fee it was issued with across a monthly dataset refresh, and the next
 quote measures against the new map.
 
+## What the metres are
+
+OSRM routes between the points where the two requested coordinates meet the road network.
+Its route `distance` covers only that stretch of road, and each waypoint's `distance` says
+how far the engine had to move the requested coordinate to reach it. A pin in a courtyard
+800 m from the nearest street is therefore a short route plus an 800 m leg, and the route
+alone would price the door as if it stood on the street. `RoadRoute.meters` is the route plus
+the two legs (straight lines, so a lower bound on the walk), rounded once. The seconds are
+the engine's own and do not include the legs. The snap radius (`horecaos.routing.osrm.snap-radius-meters`,
+1,000 m) is sent as `radiuses` and enforced again on the answer: past it the pair is "no route"
+and the fee falls back to the straight line times the detour factor. The accuracy gate
+(`platform/tools/routing/accuracy_gate.py`) adds the same legs, so it compares the figure the
+fee uses.
+
 ## Outcome policy
 
 | Outcome | What the adapter does | Breaker | Why |
 |---|---|---|---|
-| Route found | Returns metres, seconds, `osrm`, the dataset tag; caches it for 24 hours | success | — |
+| Route found, both snap legs within the radius | Returns metres (the route plus the two snap legs), seconds, `osrm`, the dataset tag; caches it for 24 hours | success | — |
+| Route found, but a snap leg is longer than the snap radius | Empty (`no_route`) | success | The engine moved a pin further than the deployment allows (it was sent `radiuses` and should have said `NoSegment`); measuring from a road of another district would under-charge, so the fee falls back. The engine answered, so it is no fault |
+| 200 with a route and no usable `waypoints` | Empty | failure | The legs cannot be added, so the figure cannot be priced; an answer that is not a complete route is a broken engine |
 | `NoRoute` / `NoSegment` (HTTP 400) | Empty | success | The engine answered. A pin on the far side of a canal is the customer's, not the engine's fault |
 | Any other 4xx | Empty, logs the error code | success | Our request was wrong, not the engine; counting it would open the breaker on a healthy engine because of a bug here |
 | 5xx, refused connection | Empty | failure | The engine is unhealthy |

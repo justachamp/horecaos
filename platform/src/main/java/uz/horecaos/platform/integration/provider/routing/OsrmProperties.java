@@ -26,7 +26,9 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param snapRadiusMeters how far from a road a coordinate may be and still count as
  *                       on the network. Past it the engine says there is no segment
  *                       and the fee falls back, rather than measuring from the
- *                       nearest road of some other district
+ *                       nearest road of some other district. Within it, the distance
+ *                       from the coordinate to the road is added to the route's metres,
+ *                       so a pin in a courtyard is not priced as if it stood on the street
  * @param breakerMinimumCalls calls the breaker sees before it may open, so a couple
  *                       of early failures do not open it on an engine barely called
  * @param breakerOpenFor how long an open breaker answers empty without calling

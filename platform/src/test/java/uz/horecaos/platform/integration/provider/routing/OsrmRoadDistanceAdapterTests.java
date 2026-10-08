@@ -113,9 +113,10 @@ class OsrmRoadDistanceAdapterTests {
         Optional<RoadRoute> route =
                 adapter(OsrmProperties.enabledWith(DATASET)).measure(BRANCH, DOORSTEP, installation);
 
-        // Rounded to the nearest metre and second, and attributed to the map that
-        // measured it: a road figure with no dataset cannot be reproduced after a refresh.
-        assertThat(route).contains(new RoadRoute(4_322, 468, "osrm", DATASET));
+        // The route's 4,321.7 m plus the engine's 3.2 m and 1.9 m from the two pins to the road
+        // (the fake's default snap), rounded once to the nearest metre, and attributed to the map
+        // that measured it: a road figure with no dataset cannot be reproduced after a refresh.
+        assertThat(route).contains(new RoadRoute(4_327, 468, "osrm", DATASET));
         assertThat(count("ok")).isEqualTo(1.0);
     }
 
@@ -137,7 +138,8 @@ class OsrmRoadDistanceAdapterTests {
     @Test
     @DisplayName("a half metre rounds up, as the fee evidence will read it")
     void metresAreRoundedToTheNearest() {
-        engine.routeOf(1_234.5, 99.5);
+        // Both pins on the road, so the half metre is the whole answer.
+        engine.routeOf(1_234.5, 99.5, 0, 0);
 
         Optional<RoadRoute> route =
                 adapter(OsrmProperties.enabledWith(DATASET)).measure(BRANCH, DOORSTEP, installation);
@@ -242,6 +244,90 @@ class OsrmRoadDistanceAdapterTests {
         assertThat(count("breaker_open")).isEqualTo(1.0);
     }
 
+    // ----------------------------------------------------------------- the snap legs
+
+    @Test
+    @DisplayName("the walk from each pin to the road is part of the distance, not dropped")
+    void theLegsToTheRoadAreAdded() {
+        // A branch 120.4 m and a doorstep 80.4 m from the nearest road: the route between the
+        // two road points is 4,000 m, and the engine reports the two legs only in the waypoints.
+        engine.routeOf(4_000, 400, 120.4, 80.4);
+
+        Optional<RoadRoute> route =
+                adapter(OsrmProperties.enabledWith(DATASET)).measure(BRANCH, DOORSTEP, installation);
+
+        // 4,000 + 120.4 + 80.4 = 4,200.8, rounded once. Without the legs this is 4,000, and the
+        // customer in the courtyard is priced as if their door were on the road.
+        assertThat(route).map(RoadRoute::meters).contains(4_201);
+        assertThat(route)
+                .map(RoadRoute::seconds)
+                .as("the engine's seconds are the engine's")
+                .contains(400);
+    }
+
+    @Test
+    @DisplayName("a pin exactly at the snap radius is accepted and its leg is charged")
+    void aLegAtTheRadiusIsAcceptedAndCharged() {
+        engine.routeOf(4_000, 400, 0, 1_000);
+
+        Optional<RoadRoute> route =
+                adapter(OsrmProperties.enabledWith(DATASET)).measure(BRANCH, DOORSTEP, installation);
+
+        assertThat(route).map(RoadRoute::meters).contains(5_000);
+    }
+
+    @Test
+    @DisplayName("a pin the engine had to move beyond the snap radius is no route, whatever the engine allowed")
+    void aLegBeyondTheRadiusIsRefused() {
+        OsrmProperties properties = OsrmProperties.enabledWith(DATASET);
+        OsrmRoadDistanceAdapter adapter = adapter(properties);
+        // The request carries the radius, so a conforming engine says NoSegment (above). This is the
+        // engine that answered anyway: 1,001 m is past the 1,000 m the deployment allows.
+        engine.routeOf(4_000, 400, 10, properties.snapRadiusMeters() + 1);
+
+        for (int i = 0; i < 15; i++) {
+            GeoPoint elsewhere = new GeoPoint(41.33 + i * 0.001, 69.26);
+            assertThat(adapter.measure(BRANCH, elsewhere, installation)).isEmpty();
+        }
+
+        // The origin side is checked as well as the destination's.
+        engine.routeOf(4_000, 400, properties.snapRadiusMeters() + 1, 10);
+        assertThat(adapter.measure(BRANCH, new GeoPoint(41.40, 69.30), installation))
+                .isEmpty();
+
+        // The engine answered, so this is the engine working, and it is no fault: a run of
+        // pins in the same courtyard must not take a healthy engine offline.
+        assertThat(count("no_route")).isEqualTo(16.0);
+        assertThat(count("breaker_open")).isZero();
+        engine.routeOf(4_000, 400, 10, 10);
+        assertThat(adapter.measure(BRANCH, new GeoPoint(41.41, 69.31), installation))
+                .map(RoadRoute::meters)
+                .contains(4_020);
+    }
+
+    @Test
+    @DisplayName("an answer that does not say how far the pins were from the road cannot be priced")
+    void anAnswerWithoutWaypointsIsAFault() {
+        OsrmProperties properties =
+                new OsrmProperties(true, DATASET, Duration.ofMillis(500), 1_000, 3, Duration.ofMinutes(5));
+        OsrmRoadDistanceAdapter adapter = adapter(properties);
+        engine.routeWithoutWaypoints();
+
+        // A route with no legs would be a quiet under-charge, so it is refused like any other
+        // answer that is not a route, and it counts against the breaker.
+        for (int i = 0; i < 3; i++) {
+            assertThat(adapter.measure(BRANCH, new GeoPoint(41.331 + i * 0.001, 69.26), installation))
+                    .isEmpty();
+        }
+
+        assertThat(count("error")).isEqualTo(3.0);
+        int hits = engine.hits();
+        assertThat(adapter.measure(BRANCH, new GeoPoint(41.340, 69.26), installation))
+                .isEmpty();
+        assertThat(engine.hits()).isEqualTo(hits);
+        assertThat(count("breaker_open")).isEqualTo(1.0);
+    }
+
     // ---------------------------------------------------------------------- cache
 
     @Test
@@ -268,7 +354,7 @@ class OsrmRoadDistanceAdapterTests {
         assertThat(engine.hits())
                 .as("a different doorstep is a different question")
                 .isEqualTo(2);
-        assertThat(furtherAway).map(RoadRoute::meters).contains(9_000);
+        assertThat(furtherAway).map(RoadRoute::meters).contains(9_005);
     }
 
     @Test
@@ -284,7 +370,7 @@ class OsrmRoadDistanceAdapterTests {
         assertThat(engine.hits()).isEqualTo(2);
         assertThat(before).map(RoadRoute::datasetVersion).contains("2026-10-01");
         assertThat(after).map(RoadRoute::datasetVersion).contains("2026-11-01");
-        assertThat(after).map(RoadRoute::meters).contains(4_410);
+        assertThat(after).map(RoadRoute::meters).contains(4_415);
     }
 
     @Test
