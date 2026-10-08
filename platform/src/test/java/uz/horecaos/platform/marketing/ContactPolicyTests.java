@@ -332,7 +332,97 @@ class ContactPolicyTests {
         assertThat(held.deliverAt()).isEqualTo(Instant.parse("2026-08-23T06:00:00Z"));
     }
 
+    // ------------------------------------------------------------- broadcasts
+
+    @Test
+    @DisplayName(
+            "a broadcast obeys the same cap override a scenario step does: the capped guest is refused with the rule and its numbers")
+    void aBroadcastIsHeldToTheTenantsCap() {
+        UUID capped = h.reachableGuest("+998901200011");
+        UUID fresh = h.reachableGuest("+998901200012");
+        h.contactPolicy.set(TENANT, BRAND, override("SMS", "DAILY", 1, null, null), null, h.author, authorId(), "corr");
+        send(capped, START.minusSeconds(60));
+        UUID broadcast = h.launchedBroadcast(PURPOSE);
+
+        var outcome = h.sends.expandNextBatch(TENANT, broadcast);
+
+        // The guest who has had today's one message is refused, and the sentence names the
+        // rule: which channel, which purpose, the count and the cap.
+        assertThat(recipient(broadcast, capped)).satisfies(row -> {
+            assertThat(row.status()).isEqualTo("REFUSED");
+            assertThat(row.reason()).isEqualTo("FREQUENCY_CAP_REACHED");
+            assertThat(row.detail())
+                    .contains("1 already sent")
+                    .contains("DAILY")
+                    .contains("allows 1")
+                    .contains(PURPOSE);
+        });
+        // Nothing reached the delivery path for that guest, and the other guest was sent to.
+        assertThat(h.port.sent())
+                .extracting(message -> message.customerAccountId())
+                .containsExactly(fresh);
+        assertThat(recipient(broadcast, fresh).status()).isEqualTo("QUEUED");
+        assertThat(outcome.queued()).isEqualTo(1);
+        assertThat(outcome.refused()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a broadcast inside a tenant's wider quiet hours is held to the open boundary, and the row says when")
+    void aBroadcastIsHeldToTheTenantsQuietHours() {
+        UUID guest = h.reachableGuest("+998901200013");
+        h.contactPolicy.set(
+                TENANT,
+                BRAND,
+                override("SMS", "DAILY", null, LocalTime.of(20, 0), LocalTime.of(11, 0)),
+                null,
+                h.author,
+                authorId(),
+                "corr");
+        // 20:30 in Tashkent: open under the platform's 21:00, closed under this tenant's 20:00.
+        h.clock.set(Instant.parse("2026-08-22T15:30:00Z"));
+        UUID broadcast = h.launchedBroadcast(PURPOSE);
+
+        var outcome = h.sends.expandNextBatch(TENANT, broadcast);
+
+        Instant elevenNextMorning = Instant.parse("2026-08-23T06:00:00Z");
+        assertThat(h.port.sent()).singleElement().satisfies(message -> {
+            assertThat(message.customerAccountId()).isEqualTo(guest);
+            assertThat(message.scheduledAt()).isEqualTo(elevenNextMorning);
+        });
+        assertThat(recipient(broadcast, guest)).satisfies(row -> {
+            assertThat(row.status()).isEqualTo("DEFERRED");
+            assertThat(row.deferredUntil()).isEqualTo(elevenNextMorning);
+        });
+        assertThat(outcome.deferred()).isTrue();
+    }
+
     // ----------------------------------------------------------------- helpers
+
+    private record Recipient(
+            String status,
+            @Nullable String reason,
+            @Nullable String detail,
+            @Nullable Instant deferredUntil) {}
+
+    private Recipient recipient(UUID campaign, UUID guest) {
+        return h.jdbc.sql("""
+                        SELECT status, refusal_reason, refusal_detail, deferred_until
+                          FROM marketing.campaign_recipients
+                         WHERE tenant_id = :tenantId AND campaign_id = :campaignId AND customer_account_id = :guest
+                        """)
+                .param("tenantId", TENANT)
+                .param("campaignId", campaign)
+                .param("guest", guest)
+                .query((row, number) -> {
+                    var deferred = row.getObject("deferred_until", java.time.OffsetDateTime.class);
+                    return new Recipient(
+                            row.getString("status"),
+                            row.getString("refusal_reason"),
+                            row.getString("refusal_detail"),
+                            deferred == null ? null : deferred.toInstant());
+                })
+                .single();
+    }
 
     private ContactDecision decide(UUID guest) {
         return decide(guest, MarketingChannel.SMS, PURPOSE);

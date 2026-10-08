@@ -265,10 +265,19 @@ final class ScenarioHarness {
                 new AlwaysEntitledService(),
                 scenarioService,
                 clock);
-        sends = new CampaignSendService(
-                campaignStore, audienceStore, engagementStore, eligibility, estimator, port, enrolment, clock, 100);
-        suppressions = new MarketingSuppressionService(engagementStore, audit, clock);
         contactPolicy = new ContactPolicyService(contactPolicyStore, engagementStore, audit, clock);
+        sends = new CampaignSendService(
+                campaignStore,
+                audienceStore,
+                engagementStore,
+                eligibility,
+                contactPolicy,
+                estimator,
+                port,
+                enrolment,
+                clock,
+                100);
+        suppressions = new MarketingSuppressionService(engagementStore, audit, clock);
         presented = new PresentedOfferService(presentedStore, engagementStore, configuration, clock);
         offerService = new OfferService(
                 offerStore,
