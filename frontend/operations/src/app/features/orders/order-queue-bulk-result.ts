@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 
 import { TPipe } from '../../core/i18n/t.pipe';
 import { BulkActionResponse } from './order-bulk-actions-api';
@@ -27,6 +27,16 @@ export class OrderQueueBulkResult {
   readonly itemLabel = input.required<(orderId: string) => string>();
   /** The words for a failed item's problem code. */
   readonly problemLabel = input.required<(code: string | null | undefined) => string>();
+  /**
+   * ADR 0172: the words for an item's note (an applied assignment's `OVERRODE_DISPATCH_RULE`, a
+   * refusal's named reasons). Optional: ADVANCE and CANCEL items carry none.
+   */
+  readonly noteLabel = input<(note: string | null | undefined) => string>((note) => note ?? '');
+
+  /** Applied items that carry a note the operator should see beside the row (ADR 0172). */
+  protected readonly appliedWithNotes = computed(() =>
+    this.result().items.filter((item) => item.itemStatus === 'APPLIED' && !!item.note),
+  );
 
   readonly retryRequested = output<void>();
   readonly dismissRequested = output<void>();
@@ -37,6 +47,10 @@ export class OrderQueueBulkResult {
 
   protected bulkProblemLabel(code: string | null | undefined): string {
     return this.problemLabel()(code);
+  }
+
+  protected bulkNoteLabel(note: string | null | undefined): string {
+    return this.noteLabel()(note);
   }
 
   protected retryFailedBulkItems(): void {

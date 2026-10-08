@@ -1,0 +1,95 @@
+.assign-dialog__backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(22, 22, 22, 0.5);
+  z-index: 50;
+}
+
+.assign-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 460px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  padding: 20px;
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.assign-dialog__title {
+  margin: 0;
+}
+
+.assign-dialog__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assign-dialog__option {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}
+
+.assign-dialog__option--disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.assign-dialog__off {
+  color: var(--q-warning-text);
+}
+
+.assign-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.assign-dialog__input {
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.assign-dialog__error {
+  color: var(--q-warning-text);
+}
+
+.assign-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.assign-dialog__dismiss,
+.assign-dialog__confirm {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+}
+
+.assign-dialog__confirm:disabled,
+.assign-dialog__dismiss:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

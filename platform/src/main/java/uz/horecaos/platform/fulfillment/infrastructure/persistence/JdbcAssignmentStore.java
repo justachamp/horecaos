@@ -371,6 +371,101 @@ public class JdbcAssignmentStore {
     // ------------------------------------------------------------------- reads
 
     /**
+     * The attempt a derived idempotency key names, if one was ever opened (ADR 0172
+     * Decision 8). A bulk item is retried under the same key, and what it finds
+     * here decides whether it carries on with the attempt a crash left behind
+     * (REQUESTED), recognises its own finished work (ACCEPTED) or meets a key that
+     * is already spent.
+     */
+    public Optional<AttemptRef> findAttemptByKey(UUID tenantId, String idempotencyKey) {
+        return jdbc.sql("""
+                SELECT id, delivery_plan_id, courier_id, status, shipment_id
+                FROM fulfillment.assignment_attempts
+                WHERE tenant_id = :tenantId AND idempotency_key = :key
+                """)
+                .param("tenantId", tenantId)
+                .param("key", idempotencyKey)
+                .query((row, number) -> new AttemptRef(
+                        row.getObject("id", UUID.class),
+                        row.getObject("delivery_plan_id", UUID.class),
+                        row.getObject("courier_id", UUID.class),
+                        AttemptStatus.valueOf(row.getString("status")),
+                        row.getObject("shipment_id", UUID.class)))
+                .optional();
+    }
+
+    /**
+     * Whether somebody other than {@code idempotencyKey} holds a live attempt on the
+     * plan: an automated tick's offer, or another dispatcher's click a moment earlier.
+     * Neither is a person's to override.
+     */
+    public boolean hasLiveAttemptOtherThan(UUID tenantId, UUID planId, String idempotencyKey) {
+        return jdbc.sql("""
+                SELECT 1 FROM fulfillment.assignment_attempts
+                WHERE tenant_id = :tenantId AND delivery_plan_id = :planId
+                  AND status IN ('REQUESTED', 'OFFERED') AND idempotency_key <> :key
+                """)
+                .param("tenantId", tenantId)
+                .param("planId", planId)
+                .param("key", idempotencyKey)
+                .query(Integer.class)
+                .optional()
+                .isPresent();
+    }
+
+    /** An attempt whose outcome is unreconciled (ADR 0014: it stops further booking, because two couriers on one order is the failure the single-winner rule exists to prevent). */
+    public boolean hasUncertainAttempt(UUID tenantId, UUID planId) {
+        return jdbc.sql("""
+                SELECT 1 FROM fulfillment.assignment_attempts
+                WHERE tenant_id = :tenantId AND delivery_plan_id = :planId
+                  AND (status = 'UNCERTAIN' OR uncertain_outcome)
+                """)
+                .param("tenantId", tenantId)
+                .param("planId", planId)
+                .query(Integer.class)
+                .optional()
+                .isPresent();
+    }
+
+    /** Whether the tenant has such a courier at all (ordering validates a request's courier before any item runs). */
+    public boolean courierExists(UUID tenantId, UUID courierId) {
+        return jdbc.sql("SELECT 1 FROM fulfillment.couriers WHERE tenant_id = :tenantId AND id = :courierId")
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .query(Integer.class)
+                .optional()
+                .isPresent();
+    }
+
+    /**
+     * Locks the courier's row and counts what the courier is carrying (ADR 0172
+     * Decision 4). ADR 0042 says the ceiling is a conditional update because
+     * count-then-insert races two dispatchers into a third order; the lock is what
+     * makes this count-then-insert safe for two bulks aimed at one courier: the
+     * second waits for the first item's transaction and then counts its committed
+     * shipment. Must run inside the item's transaction.
+     *
+     * <p>Carried means a shipment that is neither {@code DELIVERED} nor
+     * {@code CANCELLED}, the predicate of {@code ix_shipment_courier_open}.
+     */
+    public int lockCourierAndCountCarried(UUID tenantId, UUID courierId) {
+        jdbc.sql("SELECT id FROM fulfillment.couriers WHERE tenant_id = :tenantId AND id = :courierId FOR UPDATE")
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .query(UUID.class)
+                .optional();
+        return jdbc.sql("""
+                SELECT count(*) FROM fulfillment.shipments
+                WHERE tenant_id = :tenantId AND courier_id = :courierId
+                  AND status NOT IN ('DELIVERED', 'CANCELLED')
+                """)
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .query(Integer.class)
+                .single();
+    }
+
+    /**
      * One shipment by its own id, whatever its status — the operator-facing
      * shipment-cancel endpoint's lookup (gap map row 1.2g), which must be able
      * to tell an already-cancelled shipment apart from one that never existed
@@ -576,6 +671,14 @@ public class JdbcAssignmentStore {
             Instant now) {}
 
     public record Opened(UUID attemptId, int sequenceNumber, AttemptStatus status, boolean fresh) {}
+
+    /** An attempt as a retried assignment finds it by its derived key. */
+    public record AttemptRef(
+            UUID id,
+            UUID planId,
+            @Nullable UUID courierId,
+            AttemptStatus status,
+            @Nullable UUID shipmentId) {}
 
     public record Shipment(
             UUID id,

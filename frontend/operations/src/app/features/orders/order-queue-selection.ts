@@ -122,3 +122,18 @@ export function bulkAdvanceTarget(selected: readonly OrderSummaryResponse[]): st
   }
   return target !== null && BULK_ADVANCE_TARGETS.has(target) ? target : null;
 }
+
+/**
+ * How many of the selected orders do **not** carry `ASSIGN_COURIER` in their server-supplied
+ * `actions[]` (ADR 0172, orders.md §2.10) — 0 means «Назначить курьера» is offered. The action
+ * is the order board's own prediction of what `DispatchController` would accept for that row
+ * (a delivery with a plan nobody carries, for a caller holding `delivery.manual_assign`); the
+ * bulk bar reads it and never invents its own rule for what an order status permits.
+ */
+export function bulkAssignIneligibleCount(selected: readonly OrderSummaryResponse[]): number {
+  return selected.filter((order) => !hasAction(order, 'ASSIGN_COURIER')).length;
+}
+
+export function bulkAssignEligible(selected: readonly OrderSummaryResponse[]): boolean {
+  return selected.length > 0 && bulkAssignIneligibleCount(selected) === 0;
+}

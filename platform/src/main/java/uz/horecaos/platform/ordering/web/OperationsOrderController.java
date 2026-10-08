@@ -1524,7 +1524,7 @@ public class OperationsOrderController {
     @PostMapping("/bulk-actions")
     @RequiresCapability(value = Capability.ORDER_BULK_ACTION, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
-            summary = "Apply ADVANCE or CANCEL to an operator's own order selection",
+            summary = "Apply ADVANCE, CANCEL or ASSIGN_COURIER to an operator's own order selection",
             description = "ADR 0039. N independent commands under one bulk operation id, never one "
                     + "all-or-nothing transaction: each order is applied through the same "
                     + "single-order service a lone request would use, in its own transaction, so "
@@ -1534,7 +1534,13 @@ public class OperationsOrderController {
                     + "GET .../reject-reasons' sibling, the tenant's outcome-reason registry, "
                     + "exactly like a single cancellation. A resubmission carrying the same "
                     + "Idempotency-Key changes nothing and returns the outcome already recorded, "
-                    + "applied or failed alike — a re-run does not retry the failures.")
+                    + "applied or failed alike — a re-run does not retry the failures. "
+                    + "ASSIGN_COURIER (ADR 0172) names one courierId and a reasonCode, assigns each "
+                    + "selected delivery order to that courier in submission order up to the courier "
+                    + "type's ceiling, and additionally requires delivery.manual_assign: holding "
+                    + "order.bulk-action alone answers 403 for the request. Problem codes are stable "
+                    + "per item; a person's assignment overrides a dispatch rule and says so in the "
+                    + "item's note. Never creates a run.")
     public ResponseEntity<BulkActionResponse> bulkAction(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -1546,6 +1552,19 @@ public class OperationsOrderController {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw new ApiException(
                     ErrorCode.IDEMPOTENCY_KEY_REQUIRED, "A bulk action carries an Idempotency-Key (ADR 0031)");
+        }
+
+        if (body.actionType() == BulkActionType.ASSIGN_COURIER
+                && !authorization.has(
+                        currentActor.get().subject(),
+                        Capability.DELIVERY_MANUAL_ASSIGN,
+                        ResourceScope.location(tenantId, brandId, locationId))) {
+            // ADR 0172: the declaration above covers order.bulk-action. Assigning is a
+            // second, narrower authority asked for here rather than on the method, because
+            // the same endpoint also advances and cancels and those need no courier grant.
+            throw new ApiException(
+                    ErrorCode.INSUFFICIENT_CAPABILITY,
+                    "A bulk assignment needs delivery.manual_assign as well as order.bulk-action");
         }
 
         try {
@@ -1565,7 +1584,8 @@ public class OperationsOrderController {
                             body.cancelNote(),
                             idempotencyKey,
                             "USER",
-                            currentActor.get().subject()));
+                            currentActor.get().subject(),
+                            body.courierId()));
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(BulkActionResponse.of(result));
         } catch (IllegalArgumentException invalid) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
@@ -1577,6 +1597,8 @@ public class OperationsOrderController {
      *                       {@code FULFILLING}
      * @param reasonCode     required for {@code ADVANCE}, exactly like a single state action
      * @param cancelReasonId required for {@code CANCEL}, from the tenant's outcome-reason registry
+     * @param courierId      required for {@code ASSIGN_COURIER} and refused for the others (ADR 0172);
+     *                       its {@code reasonCode} is then a code of {@code [A-Z0-9_]{1,48}}
      */
     public record BulkActionRequest(
             @NotNull BulkActionType actionType,
@@ -1584,7 +1606,8 @@ public class OperationsOrderController {
             @Nullable OrderStatus targetStatus,
             @Nullable String reasonCode,
             @Nullable UUID cancelReasonId,
-            @Nullable String cancelNote) {}
+            @Nullable String cancelNote,
+            @Nullable UUID courierId) {}
 
     public record BulkOrderRefRequest(
             @NotNull UUID orderId, @NotNull Integer expectedVersion) {}
@@ -1622,14 +1645,27 @@ public class OperationsOrderController {
                     value = DataClass.INTERNAL,
                     reason = "an order's version number; the name heuristic reads «resulTINg» as a tax number")
             @Nullable
-            Integer resultingOrderVersion) {
+            Integer resultingOrderVersion,
+
+            @Nullable UUID planId,
+            @Nullable UUID shipmentId,
+
+            @Classified(
+                    value = DataClass.INTERNAL,
+                    reason = "ADR 0172: stable assignment codes (OVERRODE_DISPATCH_RULE, NO_OPEN_SHIFT, ...), "
+                            + "never free text; the name heuristic reads «note» as a customer's own words")
+            @Nullable
+            String note) {
 
         static BulkActionItemResponse of(OrderBulkActionService.BulkItemOutcome outcome) {
             return new BulkActionItemResponse(
                     outcome.orderId(),
                     outcome.itemStatus().name(),
                     outcome.itemProblemCode(),
-                    outcome.resultingOrderVersion());
+                    outcome.resultingOrderVersion(),
+                    outcome.planId(),
+                    outcome.shipmentId(),
+                    outcome.note());
         }
     }
 

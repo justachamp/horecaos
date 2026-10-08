@@ -2,6 +2,8 @@ package uz.horecaos.platform.fulfillment.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,6 +20,7 @@ import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.fulfillment.application.ServiceZoneService.DeliveryResourceNotFoundException;
 import uz.horecaos.platform.fulfillment.domain.sourcing.AttemptStatus;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryPlan;
+import uz.horecaos.platform.fulfillment.domain.sourcing.PlanAssignability;
 import uz.horecaos.platform.fulfillment.domain.sourcing.PlanStatus;
 import uz.horecaos.platform.fulfillment.domain.sourcing.SourceType;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcAssignmentStore;
@@ -102,9 +105,49 @@ public class ManualDispatchService {
     @Transactional
     public DispatchOutcome assign(
             UUID tenantId, UUID planId, UUID courierId, int expectedPlanVersion, String reasonCode, ActorRef actor) {
+        return assign(
+                tenantId,
+                planId,
+                courierId,
+                expectedPlanVersion,
+                reasonCode,
+                actor,
+                UUID.randomUUID().toString(),
+                new AssignmentContext(planId.toString(), null, List.of()));
+    }
+
+    @Transactional
+    public DispatchOutcome assign(
+            UUID tenantId,
+            UUID planId,
+            UUID courierId,
+            int expectedPlanVersion,
+            String reasonCode,
+            ActorRef actor,
+            String attemptKey,
+            AssignmentContext context) {
         DeliveryPlan plan = requirePlan(tenantId, planId);
         if (plan.version() != expectedPlanVersion) {
             return DispatchOutcome.conflict(plan.status(), plan.version(), "STALE_VERSION");
+        }
+
+        // ADR 0172: the plan's own status decides whether a person may assign at
+        // all. Before this guard a CANCELLED plan with no shipment was handed a
+        // courier and then dragged back out of CANCELLED by the conditional status
+        // move below, and a COMPLETED one was handed a second.
+        switch (PlanAssignability.of(plan.status())) {
+            case NOT_OPEN -> {
+                return DispatchOutcome.conflict(plan.status(), plan.version(), "PLAN_NOT_OPEN");
+            }
+            case CARRIED -> {
+                return DispatchOutcome.conflict(plan.status(), plan.version(), "ALREADY_ASSIGNED");
+            }
+            case BEING_SOURCED -> {
+                return DispatchOutcome.conflict(plan.status(), plan.version(), "ALREADY_BEING_SOURCED");
+            }
+            case OPEN -> {
+                // Fall through to the attempt: a live one on an open plan is still caught below.
+            }
         }
 
         // ADR 0042's compliance lever, checked here too and not only by the
@@ -120,32 +163,58 @@ public class ManualDispatchService {
         }
 
         Instant now = clock.instant();
-        var opened = assignments.open(new NewAttempt(
-                tenantId,
-                planId,
-                SourceType.INTERNAL,
-                AttemptStatus.REQUESTED,
-                courierId,
-                null,
-                null,
-                UUID.randomUUID().toString(),
-                reasonCode,
-                null,
-                null,
-                null,
-                now));
 
-        if (opened.status() != AttemptStatus.REQUESTED) {
-            // A live attempt already exists for this plan — the scheduler's, or
-            // another operator's. Neither is this call's to override.
-            return DispatchOutcome.conflict(plan.status(), plan.version(), "ALREADY_BEING_SOURCED");
+        // The attempt, under the caller's key. A retried item arrives with the key it
+        // used before (ADR 0172 Decision 8) and must reach that attempt, not open a
+        // second: a crash between open and win leaves it REQUESTED, a crash after win
+        // leaves it ACCEPTED with the shipment the retry should simply report.
+        UUID attemptId;
+        var existing = assignments.findAttemptByKey(tenantId, attemptKey);
+        if (existing.isPresent()) {
+            var attempt = existing.get();
+            if (!attempt.planId().equals(planId) || !courierId.equals(attempt.courierId())) {
+                throw new IllegalStateException("Attempt key " + attemptKey + " names a different plan or courier");
+            }
+            if (attempt.status() == AttemptStatus.ACCEPTED && attempt.shipmentId() != null) {
+                return DispatchOutcome.applied(plan.status(), plan.version(), attempt.shipmentId());
+            }
+            if (attempt.status() != AttemptStatus.REQUESTED) {
+                throw new IllegalStateException("Attempt key " + attemptKey + " is spent");
+            }
+            attemptId = attempt.id();
+        } else {
+            var opened = assignments.open(new NewAttempt(
+                    tenantId,
+                    planId,
+                    SourceType.INTERNAL,
+                    AttemptStatus.REQUESTED,
+                    courierId,
+                    null,
+                    null,
+                    attemptKey,
+                    reasonCode,
+                    null,
+                    null,
+                    null,
+                    now));
+            if (!opened.fresh()) {
+                // A live attempt already exists for this plan -- the scheduler's, or
+                // another operator's. Neither is this call's to override, and the row
+                // returned is not this call's own: winning with it would book the
+                // courier it names.
+                return DispatchOutcome.conflict(plan.status(), plan.version(), "ALREADY_BEING_SOURCED");
+            }
+            attemptId = opened.attemptId();
         }
 
-        Optional<UUID> shipmentId = assignments.win(new WinningAttempt(
-                tenantId, opened.attemptId(), SourceType.INTERNAL, AttemptStatus.REQUESTED, null, null, now));
+        Optional<UUID> shipmentId = assignments.win(
+                new WinningAttempt(tenantId, attemptId, SourceType.INTERNAL, AttemptStatus.REQUESTED, null, null, now));
         if (shipmentId.isEmpty()) {
             // Somebody else's shipment already exists for this plan. Not an error:
-            // the order is carried, just not by the courier this call named.
+            // the order is carried, just not by the courier this call named. The
+            // attempt is closed rather than left REQUESTED, because a REQUESTED
+            // attempt holds ux_attempt_one_offered against the plan for ever.
+            assignments.close(tenantId, attemptId, AttemptStatus.CANCELLED, null, null, false, now);
             return DispatchOutcome.conflict(plan.status(), plan.version(), "ALREADY_ASSIGNED");
         }
 
@@ -160,6 +229,20 @@ public class ManualDispatchService {
             newPlanVersion = latest.version() + 1;
         }
 
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("status", PlanStatus.ASSIGNED.name());
+        after.put("courierId", courierId);
+        after.put("shipmentId", shipmentId.get());
+        if (context.bulkOperationId() != null) {
+            // ADR 0172 Decision 9: the assignment's own fact names the bulk, the rule
+            // the plan matched and what the assignment overrode, so "why did this go
+            // to a courier when the rule said Yandex" is a lookup.
+            after.put("bulkOperationId", context.bulkOperationId());
+            after.put("dispatchRuleId", plan.dispatch().ruleId());
+            if (!context.notes().isEmpty()) {
+                after.put("flags", String.join(",", context.notes()));
+            }
+        }
         audit.record(AuditFact.of("fulfillment.dispatch.assign", AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.location(tenantId, plan.brandId(), plan.locationId()))
@@ -167,16 +250,8 @@ public class ManualDispatchService {
                 .because(reasonCode)
                 // Staff 9.3a: "status" genuinely moves from the plan's prior
                 // status (read above, before the write) to ASSIGNED.
-                .changed(ChangeDocuments.diff(
-                        Map.of("status", plan.status().name()),
-                        Map.of(
-                                "status",
-                                PlanStatus.ASSIGNED.name(),
-                                "courierId",
-                                courierId,
-                                "shipmentId",
-                                shipmentId.get())))
-                .correlatedBy(planId.toString())
+                .changed(ChangeDocuments.diff(Map.of("status", plan.status().name()), after))
+                .correlatedBy(context.correlationId())
                 .occurredAt(now)
                 .build());
 
@@ -286,6 +361,9 @@ public class ManualDispatchService {
      *                   {@code ALREADY_BEING_SOURCED}, {@code ALREADY_ASSIGNED},
      *                   {@code CANNOT_UNASSIGN} otherwise
      */
+    public record AssignmentContext(
+            String correlationId, @Nullable UUID bulkOperationId, List<String> notes) {}
+
     public record DispatchOutcome(
             boolean applied,
             PlanStatus planStatus,

@@ -85,3 +85,73 @@ describe('OrderQueueBulkResult', () => {
     expect(requests).toEqual(['retry', 'dismiss']);
   });
 });
+
+describe('OrderQueueBulkResult: bulk courier assignment notes (ADR 0172)', () => {
+  beforeEach(() => {
+    TestBed.inject(I18n).setLocale('en');
+  });
+
+  function renderWithNotes(result: BulkActionResponse) {
+    const fixture = TestBed.createComponent(OrderQueueBulkResult);
+    fixture.componentRef.setInput('result', result);
+    fixture.componentRef.setInput('bulkBusy', false);
+    fixture.componentRef.setInput('itemLabel', (orderId: string) => `#${orderId}`);
+    fixture.componentRef.setInput(
+      'problemLabel',
+      (code: string | null | undefined) => `why:${code}`,
+    );
+    fixture.componentRef.setInput('noteLabel', (note: string | null | undefined) => `note:${note}`);
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  it('shows an applied item’s note beside the row, so an override is never silent', () => {
+    const host = renderWithNotes(
+      response({
+        appliedCount: 2,
+        failedCount: 0,
+        items: [
+          { orderId: 'a', itemStatus: 'APPLIED', note: 'OVERRODE_DISPATCH_RULE' },
+          { orderId: 'b', itemStatus: 'APPLIED' },
+        ],
+      } as Partial<BulkActionResponse>),
+    );
+
+    const notes = [
+      ...host.querySelectorAll('[data-testid="order-queue-bulk-result-applied-note"]'),
+    ].map((row) => row.textContent?.replace(/\s+/g, ' ').trim());
+    expect(notes).toEqual(['#a — note:OVERRODE_DISPATCH_RULE']);
+  });
+
+  it('shows no notes list at all when no applied item has one', () => {
+    const host = renderWithNotes(
+      response({
+        appliedCount: 1,
+        items: [{ orderId: 'a', itemStatus: 'APPLIED' }],
+      } as Partial<BulkActionResponse>),
+    );
+
+    expect(host.querySelector('[data-testid="order-queue-bulk-result-notes"]')).toBeNull();
+  });
+
+  it('puts a refusal’s named reasons next to its problem', () => {
+    const host = renderWithNotes(
+      response({
+        failedCount: 1,
+        items: [
+          {
+            orderId: 'c',
+            itemStatus: 'FAILED',
+            itemProblemCode: 'COURIER_NOT_ELIGIBLE',
+            note: 'REGISTRATION_LAPSED',
+          },
+        ],
+      } as Partial<BulkActionResponse>),
+    );
+
+    const row = host.querySelector('[data-testid="order-queue-bulk-result-item"]');
+    expect(row?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+      '#c — why:COURIER_NOT_ELIGIBLE (note:REGISTRATION_LAPSED)',
+    );
+  });
+});

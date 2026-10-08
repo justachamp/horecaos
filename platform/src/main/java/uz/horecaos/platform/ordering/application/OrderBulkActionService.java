@@ -10,9 +10,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
@@ -20,6 +22,7 @@ import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
+import uz.horecaos.platform.fulfillment.api.CourierAssignmentPort;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.ordering.domain.BulkActionType;
 import uz.horecaos.platform.ordering.domain.BulkItemStatus;
@@ -28,6 +31,7 @@ import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcBulkOperationStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcBulkOperationStore.BulkItemRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
+import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 
 /**
  * Applying one command to many orders at once (ADR 0039).
@@ -66,6 +70,9 @@ public class OrderBulkActionService {
     /** ADR 0039's own cap. */
     public static final int MAX_ORDERS = 200;
 
+    /** ADR 0172: the same shape as the single assignment's reason code. */
+    private static final Pattern ASSIGN_REASON_CODE = Pattern.compile("[A-Z0-9_]{1,48}");
+
     private static final Logger log = LoggerFactory.getLogger(OrderBulkActionService.class);
 
     private final JdbcOrderStore orders;
@@ -74,6 +81,8 @@ public class OrderBulkActionService {
     private final OrderOutcomeService outcomes;
     private final AuditRecorder audit;
     private final Clock clock;
+    private final CourierAssignmentPort courierAssignment;
+    private final boolean assignCourierEnabled;
 
     public OrderBulkActionService(
             JdbcOrderStore orders,
@@ -81,13 +90,17 @@ public class OrderBulkActionService {
             OrderStateService orderState,
             OrderOutcomeService outcomes,
             AuditRecorder audit,
-            Clock clock) {
+            Clock clock,
+            CourierAssignmentPort courierAssignment,
+            @Value("${horecaos.ordering.bulk.assign-courier.enabled:false}") boolean assignCourierEnabled) {
         this.orders = orders;
         this.bulkStore = bulkStore;
         this.orderState = orderState;
         this.outcomes = outcomes;
         this.audit = audit;
         this.clock = clock;
+        this.courierAssignment = courierAssignment;
+        this.assignCourierEnabled = assignCourierEnabled;
     }
 
     public BulkActionResult apply(UUID tenantId, UUID brandId, UUID locationId, BulkActionCommand command) {
@@ -109,6 +122,27 @@ public class OrderBulkActionService {
         if (command.actionType() == BulkActionType.CANCEL && command.cancelReasonId() == null) {
             throw new IllegalArgumentException(
                     "A bulk cancellation names a reason from the tenant's registry, exactly like a single one");
+        }
+        if (command.actionType() != BulkActionType.ASSIGN_COURIER && command.courierId() != null) {
+            throw new IllegalArgumentException("Only ASSIGN_COURIER names a courier");
+        }
+        if (command.actionType() == BulkActionType.ASSIGN_COURIER) {
+            // ADR 0172 rollout: refused by default, so the action is merged inert and a pilot
+            // branch turns it on. The same VALIDATION_FAILED the unsupported members get.
+            if (!assignCourierEnabled) {
+                throw new IllegalArgumentException("ASSIGN_COURIER is not enabled for this deployment");
+            }
+            if (command.courierId() == null) {
+                throw new IllegalArgumentException("A bulk assignment names the courier");
+            }
+            if (command.reasonCode() == null
+                    || !ASSIGN_REASON_CODE.matcher(command.reasonCode()).matches()) {
+                throw new IllegalArgumentException(
+                        "A bulk assignment names a reason code of 1 to 48 upper-case letters, digits or underscores");
+            }
+            if (!courierAssignment.courierExists(tenantId, command.courierId())) {
+                throw new IllegalArgumentException("The courier is not one of this tenant's");
+            }
         }
 
         Instant now = clock.instant();
@@ -140,7 +174,9 @@ public class OrderBulkActionService {
                 command.idempotencyKey(),
                 command.actorType(),
                 command.actorId(),
-                now));
+                now,
+                command.courierId(),
+                command.actionType() == BulkActionType.ASSIGN_COURIER ? command.reasonCode() : null));
 
         List<BulkItemOutcome> results = new ArrayList<>();
         int applied = 0;
@@ -184,7 +220,10 @@ public class OrderBulkActionService {
                     settled.orderId(),
                     settled.itemStatus(),
                     settled.itemProblemCode(),
-                    settled.resultingOrderVersion());
+                    settled.resultingOrderVersion(),
+                    settled.planId(),
+                    settled.shipmentId(),
+                    settled.note());
         }
         if (existingItem.isEmpty()) {
             bulkStore.insertPendingItem(tenantId, bulkOperationId, ref.orderId());
@@ -210,7 +249,12 @@ public class OrderBulkActionService {
                     "ORDER_NOT_FOUND_AT_LOCATION",
                     null,
                     now);
-            return new BulkItemOutcome(ref.orderId(), BulkItemStatus.FAILED, "ORDER_NOT_FOUND_AT_LOCATION", null);
+            return new BulkItemOutcome(
+                    ref.orderId(), BulkItemStatus.FAILED, "ORDER_NOT_FOUND_AT_LOCATION", null, null, null, null);
+        }
+
+        if (command.actionType() == BulkActionType.ASSIGN_COURIER) {
+            return assignItem(tenantId, brandId, locationId, bulkOperationId, command, ref, order);
         }
 
         try {
@@ -244,6 +288,8 @@ public class OrderBulkActionService {
                                                     command.actorId(),
                                                     null))
                                     .orderVersion();
+                        case ASSIGN_COURIER ->
+                            throw new IllegalStateException("ASSIGN_COURIER is decided by assignItem");
                     };
             Instant now = clock.instant();
             bulkStore.markItemApplied(tenantId, bulkOperationId, ref.orderId(), resultingVersion, now);
@@ -258,7 +304,7 @@ public class OrderBulkActionService {
                     null,
                     resultingVersion,
                     now);
-            return new BulkItemOutcome(ref.orderId(), BulkItemStatus.APPLIED, null, resultingVersion);
+            return new BulkItemOutcome(ref.orderId(), BulkItemStatus.APPLIED, null, resultingVersion, null, null, null);
         } catch (OrderStateService.StaleOrderException stale) {
             return fail(tenantId, order, bulkOperationId, command, "STALE_VERSION");
         } catch (OrderStateMachine.IllegalTransitionException illegal) {
@@ -281,6 +327,112 @@ public class OrderBulkActionService {
         }
     }
 
+    /**
+     * One order, assigned to the request's courier (ADR 0172 Decision 3). The first refusal is
+     * the answer: the order's own checks here, the plan's and the courier's in {@code fulfillment}.
+     * The call is the whole act and opens its own transaction; a failure it can name comes back
+     * as a stable code, and an exception becomes {@code UNEXPECTED_FAILURE} without its message.
+     */
+    private BulkItemOutcome assignItem(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID bulkOperationId,
+            BulkActionCommand command,
+            BulkOrderRef ref,
+            JdbcOrderStore.OrderRow order) {
+        if (order.version() != ref.expectedVersion()) {
+            return fail(tenantId, order, bulkOperationId, command, "STALE_VERSION");
+        }
+        if (order.fulfillmentMode() != FulfillmentMode.DELIVERY) {
+            return fail(tenantId, order, bulkOperationId, command, "NOT_A_DELIVERY_ORDER");
+        }
+        try {
+            CourierAssignmentPort.Outcome outcome = courierAssignment.assignForOrder(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    order.orderId(),
+                    Objects.requireNonNull(command.courierId()),
+                    Objects.requireNonNull(command.reasonCode()),
+                    attemptKey(command.idempotencyKey(), order.orderId()),
+                    bulkOperationId,
+                    actorOf(command.actorType(), command.actorId()));
+            String note = outcome.notes().isEmpty() ? null : String.join(",", outcome.notes());
+            Instant now = clock.instant();
+            if (!outcome.applied()) {
+                String problem = Objects.requireNonNull(outcome.problemCode());
+                bulkStore.markItemFailed(
+                        tenantId, bulkOperationId, order.orderId(), problem, now, outcome.planId(), note);
+                recordItemAudit(
+                        tenantId,
+                        order.brandId(),
+                        order.locationId(),
+                        order.orderId(),
+                        bulkOperationId,
+                        command,
+                        AuditFact.Outcome.FAILED,
+                        problem,
+                        null,
+                        now);
+                return new BulkItemOutcome(
+                        order.orderId(), BulkItemStatus.FAILED, problem, null, outcome.planId(), null, note);
+            }
+            // An assignment moves the plan and creates a shipment; it does not move the order's own
+            // version, so an applied item records the version the order already had.
+            bulkStore.markItemApplied(
+                    tenantId,
+                    bulkOperationId,
+                    order.orderId(),
+                    order.version(),
+                    now,
+                    outcome.planId(),
+                    outcome.shipmentId(),
+                    note);
+            recordItemAudit(
+                    tenantId,
+                    order.brandId(),
+                    order.locationId(),
+                    order.orderId(),
+                    bulkOperationId,
+                    command,
+                    AuditFact.Outcome.SUCCEEDED,
+                    null,
+                    order.version(),
+                    now);
+            return new BulkItemOutcome(
+                    order.orderId(),
+                    BulkItemStatus.APPLIED,
+                    null,
+                    order.version(),
+                    outcome.planId(),
+                    outcome.shipmentId(),
+                    note);
+        } catch (RuntimeException unexpected) {
+            log.error(
+                    "Bulk assignment of {} in operation {} failed unexpectedly",
+                    order.orderId(),
+                    bulkOperationId,
+                    unexpected);
+            return fail(tenantId, order, bulkOperationId, command, "UNEXPECTED_FAILURE");
+        }
+    }
+
+    /**
+     * ADR 0172 Decision 8: {@code bulk:{first 16 hex of sha256(bulkKey)}:{orderId}}. The attempt
+     * table's idempotency column is {@code varchar(160)} and a client's {@code Idempotency-Key}
+     * may be 255, so the key is hashed; 5 + 16 + 1 + 36 characters fit.
+     */
+    static String attemptKey(String bulkKey, UUID orderId) {
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(bulkKey.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return "bulk:" + java.util.HexFormat.of().formatHex(digest, 0, 8) + ":" + orderId;
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is a required JCA algorithm", impossible);
+        }
+    }
+
     private BulkItemOutcome fail(
             UUID tenantId,
             JdbcOrderStore.OrderRow order,
@@ -300,13 +452,19 @@ public class OrderBulkActionService {
                 problemCode,
                 null,
                 now);
-        return new BulkItemOutcome(order.orderId(), BulkItemStatus.FAILED, problemCode, null);
+        return new BulkItemOutcome(order.orderId(), BulkItemStatus.FAILED, problemCode, null, null, null, null);
     }
 
     private List<BulkItemOutcome> outcomesOf(UUID tenantId, UUID bulkOperationId) {
         return bulkStore.items(tenantId, bulkOperationId).stream()
                 .map(row -> new BulkItemOutcome(
-                        row.orderId(), row.itemStatus(), row.itemProblemCode(), row.resultingOrderVersion()))
+                        row.orderId(),
+                        row.itemStatus(),
+                        row.itemProblemCode(),
+                        row.resultingOrderVersion(),
+                        row.planId(),
+                        row.shipmentId(),
+                        row.note()))
                 .toList();
     }
 
@@ -363,9 +521,10 @@ public class OrderBulkActionService {
      * bulk_operation_items}, without repeating it as prose.
      */
     private static String auditReasonFor(BulkActionCommand command) {
-        return command.actionType() == BulkActionType.ADVANCE
-                ? Objects.requireNonNull(command.reasonCode())
-                : "BULK_CANCELLATION";
+        return switch (command.actionType()) {
+            case ADVANCE, ASSIGN_COURIER -> Objects.requireNonNull(command.reasonCode());
+            case CANCEL -> "BULK_CANCELLATION";
+        };
     }
 
     private void recordSummaryAudit(
@@ -427,13 +586,49 @@ public class OrderBulkActionService {
             @Nullable String cancelNote,
             String idempotencyKey,
             String actorType,
-            String actorId) {}
+            String actorId,
+            @Nullable UUID courierId) {
 
+        /** ADVANCE and CANCEL name no courier. */
+        public BulkActionCommand(
+                BulkActionType actionType,
+                List<BulkOrderRef> orders,
+                @Nullable OrderStatus targetStatus,
+                @Nullable String reasonCode,
+                @Nullable UUID cancelReasonId,
+                @Nullable String cancelNote,
+                String idempotencyKey,
+                String actorType,
+                String actorId) {
+            this(
+                    actionType,
+                    orders,
+                    targetStatus,
+                    reasonCode,
+                    cancelReasonId,
+                    cancelNote,
+                    idempotencyKey,
+                    actorType,
+                    actorId,
+                    null);
+        }
+    }
+
+    /**
+     * @param planId     an assignment's plan (ADR 0172), applied or refused
+     * @param shipmentId the shipment an applied assignment created
+     * @param note       an applied item's non-fatal notes ({@code OVERRODE_DISPATCH_RULE},
+     *                   {@code OUTSIDE_DISTANCE_BAND}) or a {@code COURIER_NOT_ELIGIBLE}
+     *                   refusal's named reasons, comma separated
+     */
     public record BulkItemOutcome(
             UUID orderId,
             BulkItemStatus itemStatus,
             @Nullable String itemProblemCode,
-            @Nullable Integer resultingOrderVersion) {}
+            @Nullable Integer resultingOrderVersion,
+            @Nullable UUID planId,
+            @Nullable UUID shipmentId,
+            @Nullable String note) {}
 
     public record BulkActionResult(
             UUID bulkOperationId,

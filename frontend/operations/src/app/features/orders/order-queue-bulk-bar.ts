@@ -27,10 +27,19 @@ export class OrderQueueBulkBar {
   readonly canBulkCancel = input.required<boolean>();
   /** Why cancel is unavailable for this selection, or null when it is available or nothing is selected. */
   readonly bulkCancelUnavailableMessage = input.required<string | null>();
+  /**
+   * ADR 0172: «Назначить курьера» is offered exactly when every selected row's `actions[]` carries
+   * `ASSIGN_COURIER` and the session holds both `order.bulk-action` and `delivery.manual_assign`
+   * at the location — a prediction, the server decides.
+   */
+  readonly canBulkAssign = input(false);
+  /** Why assigning is unavailable for this selection, or null when it is available or nothing is selected. */
+  readonly bulkAssignUnavailableMessage = input<string | null>(null);
   readonly bulkBusy = input.required<boolean>();
 
   readonly advanceRequested = output<void>();
   readonly cancelRequested = output<void>();
+  readonly assignRequested = output<void>();
   readonly clearRequested = output<void>();
 
   protected onBulkAdvanceClick(): void {
@@ -39,6 +48,10 @@ export class OrderQueueBulkBar {
 
   protected onBulkCancelClick(): void {
     this.cancelRequested.emit();
+  }
+
+  protected onBulkAssignClick(): void {
+    this.assignRequested.emit();
   }
 
   protected clearSelection(): void {

@@ -5,8 +5,8 @@ import { ApiClient } from '../../core/api/api-client';
 import { IntentCommandRegistry } from '../../core/api/idempotency';
 import { LocationScope, operationsPaths } from '../../core/api/operations-paths';
 
-/** `OrderBulkActionService.BulkActionType` — bulk courier assignment is explicitly out of scope (orders.md §2.10, wave P07). */
-export type BulkActionType = 'ADVANCE' | 'CANCEL';
+/** `BulkActionType` — `ASSIGN_COURIER` is ADR 0172's third member (orders.md §2.10). */
+export type BulkActionType = 'ADVANCE' | 'CANCEL' | 'ASSIGN_COURIER';
 
 /** `OrderBulkActionService.BulkItemStatus`. */
 export type BulkItemStatus = 'PENDING' | 'APPLIED' | 'FAILED';
@@ -22,6 +22,8 @@ export interface BulkOrderRef {
  * @property targetStatus required for `ADVANCE` — `PREPARING`, `READY` or `FULFILLING`
  * @property reasonCode required for `ADVANCE`, exactly like a single state action
  * @property cancelReasonId required for `CANCEL`, from the tenant's outcome-reason registry
+ * @property courierId required for `ASSIGN_COURIER` and refused for the others (ADR 0172); its
+ *           `reasonCode` is then `[A-Z0-9_]{1,48}`, the console pre-filling `OPERATIONS_BULK_ASSIGN`
  */
 export interface BulkActionRequest {
   readonly actionType: BulkActionType;
@@ -30,6 +32,7 @@ export interface BulkActionRequest {
   readonly reasonCode?: string;
   readonly cancelReasonId?: string;
   readonly cancelNote?: string;
+  readonly courierId?: string;
 }
 
 /** Mirrors `OperationsOrderController.BulkActionItemResponse`. */
@@ -38,6 +41,15 @@ export interface BulkActionItemResponse {
   readonly itemStatus: BulkItemStatus;
   readonly itemProblemCode?: string | null;
   readonly resultingOrderVersion?: number | null;
+  /** ADR 0172: the plan an assignment landed on, or was refused on. */
+  readonly planId?: string | null;
+  /** ADR 0172: the shipment an applied assignment created. */
+  readonly shipmentId?: string | null;
+  /**
+   * ADR 0172: an applied assignment's stable notes (`OVERRODE_DISPATCH_RULE`, `OUTSIDE_DISTANCE_BAND`,
+   * `NO_OPEN_SHIFT`), or a refused one's named reasons, comma separated. Codes only, never prose.
+   */
+  readonly note?: string | null;
 }
 
 /** Mirrors `OperationsOrderController.BulkActionResponse`. */
