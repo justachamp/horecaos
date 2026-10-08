@@ -357,7 +357,7 @@ public class JdbcReportingStore {
                 SELECT l.id, l.order_id, l.source_variant_id, l.product_name_snapshot,
                        l.quantity, l.base_amount_minor, l.final_amount_minor, resolved.category_id,
                        l.combo_selection_id, l.combo_container_variant_id, l.combo_quantity,
-                       l.combo_name_snapshot
+                       l.combo_name_snapshot, l.origin, l.auto_add_rule_id
                   FROM ordering.order_lines l
                   JOIN ordering.orders o ON o.id = l.order_id AND o.tenant_id = l.tenant_id
                   LEFT JOIN catalog.variants v
@@ -393,7 +393,9 @@ public class JdbcReportingStore {
                         row.getObject("combo_selection_id", UUID.class),
                         row.getObject("combo_container_variant_id", UUID.class),
                         row.getObject("combo_quantity", Integer.class),
-                        row.getString("combo_name_snapshot")))
+                        row.getString("combo_name_snapshot"),
+                        row.getString("origin"),
+                        row.getObject("auto_add_rule_id", UUID.class)))
                 .list();
     }
 
@@ -603,7 +605,9 @@ public class JdbcReportingStore {
             @Nullable UUID comboSelectionId,
             @Nullable UUID comboContainerVariantId,
             @Nullable Integer comboQuantity,
-            @Nullable String comboName) {
+            @Nullable String comboName,
+            String lineOrigin,
+            @Nullable UUID autoAddRuleId) {
 
         public SourceLine {
             quantity = Quantities.normalise(quantity);
@@ -894,18 +898,22 @@ public class JdbcReportingStore {
         params.put("comboContainerVariantId", fact.comboContainerVariantId());
         params.put("comboQuantity", fact.comboQuantity());
         params.put("comboName", fact.comboNameSnapshot());
+        params.put("lineOrigin", fact.lineOrigin());
+        params.put("autoAddRuleId", fact.autoAddRuleId());
 
         jdbc.sql("""
                 INSERT INTO reporting.fact_order_line (
                     tenant_id, business_date, order_id, line_id, location_id, variant_id,
                     category_id, product_name_snapshot, quantity, gross_som, discount_som, net_som,
                     occurred_at, legal_entity_id,
-                    combo_selection_id, combo_container_variant_id, combo_quantity, combo_name_snapshot)
+                    combo_selection_id, combo_container_variant_id, combo_quantity, combo_name_snapshot,
+                    line_origin, auto_add_rule_id)
                 VALUES (
                     :tenantId, :businessDate, :orderId, :lineId, :locationId, :variantId,
                     :categoryId, :productName, :quantity, :gross, :discount, :net, :occurredAt,
                     :legalEntityId,
-                    :comboSelectionId, :comboContainerVariantId, :comboQuantity, :comboName)
+                    :comboSelectionId, :comboContainerVariantId, :comboQuantity, :comboName,
+                    :lineOrigin, :autoAddRuleId)
                 """).params(params).update();
     }
 

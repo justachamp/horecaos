@@ -53,6 +53,7 @@ import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchro
 import uz.horecaos.platform.inventory.application.InventoryService;
 import uz.horecaos.platform.ordering.api.CustomerBotOrderingPort;
 import uz.horecaos.platform.ordering.api.OrderingConfigurationKeys;
+import uz.horecaos.platform.reporting.application.DayCloseService;
 import uz.horecaos.platform.support.StubJwtIssuer;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
@@ -106,6 +107,7 @@ class AutoAddCartHttpTests {
         registry.add("spring.security.oauth2.resourceserver.jwt.issuer-uri", () -> ISSUER);
         registry.add("horecaos.realtime.signals.publish", () -> "false");
         registry.add("horecaos.secrets.data_encryption.platform.kek", () -> "a-test-key-encryption-key");
+        registry.add("horecaos.realtime.signals.publish", () -> "false");
     }
 
     @Autowired
@@ -128,6 +130,9 @@ class AutoAddCartHttpTests {
 
     @Autowired
     private InventoryService inventory;
+
+    @Autowired
+    private DayCloseService dayClose;
 
     @Autowired
     private ConfigurationValueAuthor configuration;
@@ -163,6 +168,10 @@ class AutoAddCartHttpTests {
                     ordering.bulk_operation_items, ordering.bulk_operations, ordering.orders,
                     ordering.order_number_counters, ordering.checkout_attempts,
                     ordering.cart_auto_add_declines, ordering.cart_lines, ordering.carts CASCADE
+                """).update();
+        jdbc.sql("""
+                TRUNCATE TABLE reporting.fact_order_line, reporting.fact_order, reporting.fact_order_tender,
+                    reporting.fact_refund CASCADE
                 """).update();
         jdbc.sql("""
                 TRUNCATE TABLE payments.entitlement_redemptions, payments.remedy_entitlements,
@@ -658,6 +667,108 @@ class AutoAddCartHttpTests {
                 .contains("aa:" + rule);
     }
 
+    @Test
+    @DisplayName("a reservation that fails at checkout for an injected line drops the line and asks for a new "
+            + "quote, never a refusal that names the packaging")
+    void aReservationFailureForAnInjectedLineIsAReQuote() throws Exception {
+        UUID rule = activeRule(plainRule("cutlery", cutlery, "[\"PICKUP\"]"));
+        publish("STOREFRONT");
+        gate(true, false);
+        UUID cart = openCart("STOREFRONT", "PICKUP");
+        JsonNode view = putLine(cart, 1, "burger", burger, "1");
+        JsonNode priced = price(cart, view.get("version").asInt());
+        assertThat(lineKeys(view)).contains("aa:" + rule);
+
+        // Between the price and the checkout the cutlery runs out.
+        inventory.setAvailability(TENANT, LOCATION, cutlery, false, "SOLD_OUT", null);
+        MvcResult refused = rawCheckout(cart, priced, "checkout-sold-out");
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(409);
+        String body = refused.getResponse().getContentAsString();
+        assertThat(body).contains("PRICE_CHANGED").doesNotContain(cutlery.toString());
+        assertThat(count("ordering.cart_lines WHERE origin = 'AUTO_ADD'"))
+                .as("the line the customer never chose is gone from their basket")
+                .isZero();
+        assertThat(count("ordering.orders")).isZero();
+
+        // The customer's next attempt prices the basket as it is and goes through.
+        JsonNode refreshed =
+                JSON.readTree(mvc.perform(get(storefront() + "/carts/" + cart).with(customer()))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString());
+        JsonNode again = price(cart, refreshed.get("version").asInt());
+        assertThat(checkout(cart, again)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("the reporting fact says which lines a rule added, and the rule")
+    void theReportingFactCarriesTheOrigin() throws Exception {
+        UUID rule = activeRule(plainRule("cutlery", cutlery, "[\"PICKUP\"]"));
+        publish("STOREFRONT");
+        gate(true, false);
+        UUID cart = openCart("STOREFRONT", "PICKUP");
+        JsonNode view = putLine(cart, 1, "burger", burger, "1");
+        UUID orderId = checkout(cart, price(cart, view.get("version").asInt()));
+        advance(orderId, "PREPARING");
+        advance(orderId, "READY");
+        advance(orderId, "COMPLETED");
+
+        dayClose.close(TENANT, java.time.LocalDate.now(java.time.ZoneId.of("Asia/Tashkent")));
+
+        List<Map<String, Object>> facts = jdbc.sql("SELECT variant_id, line_origin, auto_add_rule_id "
+                        + "FROM reporting.fact_order_line WHERE order_id = :id ORDER BY line_origin")
+                .param("id", orderId)
+                .query()
+                .listOfRows();
+        assertThat(facts).hasSize(2);
+        assertThat(facts.get(0).get("line_origin")).isEqualTo("AUTO_ADD");
+        assertThat(facts.get(0).get("auto_add_rule_id")).isEqualTo(rule);
+        assertThat(facts.get(0).get("variant_id")).isEqualTo(cutlery);
+        assertThat(facts.get(1).get("line_origin")).isEqualTo("CUSTOMER");
+        assertThat(facts.get(1).get("auto_add_rule_id")).isNull();
+    }
+
+    @Test
+    @DisplayName("a line a rule injected never triggers another rule, so rules cannot chain")
+    void rulesCannotChain() throws Exception {
+        UUID addsTheBag = activeRule(plainRule("bag", bag, "[\"PICKUP\"]"));
+        // A second rule waits for a bag: the one the first rule injects must not count.
+        activeRule(triggeredRule("cutlery-per-bag", cutlery, "[\"PICKUP\"]", bag, null, 1));
+        publish("STOREFRONT");
+        gate(true, false);
+        UUID cart = openCart("STOREFRONT", "PICKUP");
+
+        JsonNode view = putLine(cart, 1, "burger", burger, "1");
+
+        assertThat(lineKeys(view))
+                .as("only the plain rule fired; the one triggered by a bag saw no bag in the customer's basket")
+                .containsExactly("aa:" + addsTheBag, "burger");
+        // The customer putting a bag of their own in does trigger it.
+        view = putLine(cart, view.get("version").asInt(), "own-bag", bag, "1");
+        assertThat(count("ordering.cart_lines WHERE variant_id = '" + cutlery + "'")).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("the operator's composer can take a rule's line off by sending its rule back as declined")
+    void theOperatorCanTakeAnAutoAddedLineOff() throws Exception {
+        UUID rule = activeRule(plainRule("cutlery", cutlery, "[\"PICKUP\"]", "[\"WEB\",\"CALL_CENTRE\"]"));
+        publish("CALLCENTRE");
+        gate(true, false);
+        String basket = """
+                "customerAccountId":"%s","channelCode":"CALLCENTRE","fulfillmentMode":"PICKUP",
+                 "paymentMethodCode":"CASH","lines":[{"variantId":"%s","quantity":1}]""".formatted(customerAccount, burger);
+
+        JsonNode with = operatorQuote("{" + basket + "}");
+        assertThat(with.get("autoAdded")).hasSize(1);
+        assertThat(with.get("autoAdded").get(0).get("ruleId").asText()).isEqualTo(rule.toString());
+        assertThat(with.get("totalMinor").asLong()).isEqualTo(42_000L);
+
+        JsonNode without = operatorQuote("{" + basket + ",\"declinedAutoAddRuleIds\":[\"" + rule + "\"]}");
+        assertThat(without.get("autoAdded")).isEmpty();
+        assertThat(without.get("totalMinor").asLong()).as("burger only").isEqualTo(40_000L);
+    }
+
     // ---------------------------------------------------------------------- a moved cart
 
     @Test
@@ -772,6 +883,52 @@ class AutoAddCartHttpTests {
         return UUID.fromString(JSON.readTree(result.getResponse().getContentAsString())
                 .get("orderId")
                 .asText());
+    }
+
+    private JsonNode operatorQuote(String body) throws Exception {
+        MvcResult quote = mvc.perform(post("/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION
+                                + "/orders/quote")
+                        .with(operator())
+                        .header(IDEMPOTENCY_HEADER, "quote-" + requests++)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andReturn();
+        assertThat(quote.getResponse().getStatus()).as(quote.getResponse().getContentAsString()).isEqualTo(200);
+        return JSON.readTree(quote.getResponse().getContentAsString());
+    }
+
+    private MvcResult rawCheckout(UUID cart, JsonNode priced, String idempotencyKey) throws Exception {
+        return mvc.perform(post(storefront() + "/checkouts")
+                        .with(customer())
+                        .header(IDEMPOTENCY_HEADER, idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"cartId\":\"" + cart + "\",\"cartVersion\":"
+                                + priced.get("cartVersion").asInt()
+                                + ",\"quoteId\":\"" + priced.get("quoteId").asText() + "\",\"contextHash\":\""
+                                + priced.get("contextHash").asText() + "\",\"paymentMethodCode\":\"CASH\"}"))
+                .andReturn();
+    }
+
+    private void advance(UUID orderId, String target) throws Exception {
+        String path =
+                "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION + "/orders/" + orderId;
+        int version = JSON.readTree(mvc.perform(get(path).with(operator()))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString())
+                .get("summary")
+                .get("version")
+                .asInt();
+        MvcResult moved = mvc.perform(post(path + "/state-actions")
+                        .with(operator())
+                        .header(IDEMPOTENCY_HEADER, "state-" + UUID.randomUUID())
+                        .header("If-Match", "\"" + version + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetStatus\":\"" + target + "\",\"reasonCode\":\"KITCHEN\"}"))
+                .andReturn();
+        assertThat(moved.getResponse().getStatus())
+                .as("-> " + target + ": " + moved.getResponse().getContentAsString())
+                .isEqualTo(200);
     }
 
     private static List<String> lineKeys(JsonNode cart) {
