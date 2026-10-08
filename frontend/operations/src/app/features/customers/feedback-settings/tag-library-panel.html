@@ -1,0 +1,303 @@
+<section class="panel" data-testid="tag-library">
+  <header class="panel__head">
+    <div>
+      <h2 class="q-subhead">{{ 'customers.feedback.tags.title' | t }}</h2>
+      <p class="q-body-sm muted">{{ 'customers.feedback.tags.hint' | t }}</p>
+    </div>
+    @if (state() === 'ready') {
+      <div class="panel__actions">
+        <span class="q-caption muted q-tnum" data-testid="tag-active-count">
+          {{
+            'customers.feedback.tags.count'
+              | t: { count: activeCount(), max: library()?.maximumActiveTags ?? 40 }
+          }}
+        </span>
+        @if (canWrite()) {
+          @if (canImportStarter()) {
+            <button
+              type="button"
+              class="secondary"
+              [disabled]="busy()"
+              (click)="importStarter()"
+              data-testid="tag-import-starter"
+            >
+              {{ 'customers.feedback.tags.importStarter' | t }}
+            </button>
+          }
+          <button
+            type="button"
+            class="primary"
+            [disabled]="busy() || draft() !== null"
+            (click)="startNew()"
+            data-testid="tag-new"
+          >
+            {{ 'customers.feedback.tags.new' | t }}
+          </button>
+        }
+      </div>
+    }
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.feedback.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm muted">{{ 'customers.feedback.denied' | t }}</p>
+    }
+    @case ('error') {
+      <div class="band band--error" role="alert">
+        <span class="q-body-sm">{{ errorText() }}</span>
+        <button type="button" class="secondary" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      @if (errorText(); as message) {
+        <div class="band band--error" role="alert" data-testid="tag-error">
+          <span class="q-body-sm">{{ message }}</span>
+        </div>
+      }
+      @if (notice(); as message) {
+        <div class="band band--info" role="status">
+          <span class="q-body-sm">{{ message }}</span>
+        </div>
+      }
+
+      @if (draft(); as d) {
+        <form class="editor" (submit)="$event.preventDefault(); save()" data-testid="tag-editor">
+          <h3 class="q-emphasis">
+            {{
+              d.id === null
+                ? ('customers.feedback.tags.editor.titleNew' | t)
+                : ('customers.feedback.tags.editor.titleEdit' | t)
+            }}
+          </h3>
+
+          <div class="editor__grid">
+            <label class="field">
+              <span class="q-caption">{{ 'customers.feedback.tags.editor.code' | t }}</span>
+              <input
+                class="control"
+                type="text"
+                maxlength="48"
+                autocomplete="off"
+                [value]="d.code"
+                [disabled]="d.id !== null"
+                (input)="onCode($any($event.target).value)"
+                data-testid="tag-code"
+              />
+              <span class="q-caption muted">{{
+                'customers.feedback.tags.editor.codeHint' | t
+              }}</span>
+            </label>
+
+            <label class="field">
+              <span class="q-caption">{{ 'customers.feedback.tags.editor.category' | t }}</span>
+              <select
+                class="control"
+                [value]="d.category"
+                [disabled]="d.used"
+                (change)="onCategory($any($event.target).value)"
+                data-testid="tag-category"
+              >
+                @for (category of categories; track category) {
+                  <option [value]="category" [selected]="category === d.category">
+                    {{ categoryKey(category) | t }}
+                  </option>
+                }
+              </select>
+            </label>
+
+            <label class="field">
+              <span class="q-caption">{{ 'customers.feedback.tags.editor.sentiment' | t }}</span>
+              <select
+                class="control"
+                [value]="d.sentiment"
+                [disabled]="d.used"
+                (change)="onSentiment($any($event.target).value)"
+                data-testid="tag-sentiment"
+              >
+                @for (sentiment of sentiments; track sentiment) {
+                  <option [value]="sentiment" [selected]="sentiment === d.sentiment">
+                    {{ sentimentKey(sentiment) | t }}
+                  </option>
+                }
+              </select>
+            </label>
+
+            <label class="field">
+              <span class="q-caption">{{ 'customers.feedback.tags.editor.sortOrder' | t }}</span>
+              <input
+                class="control"
+                type="number"
+                min="0"
+                [value]="d.sortOrder"
+                (input)="onSortOrder($any($event.target).value)"
+                data-testid="tag-sort-order"
+              />
+            </label>
+          </div>
+          @if (d.used) {
+            <p class="q-caption muted" data-testid="tag-frozen">
+              {{ 'customers.feedback.tags.editor.frozen' | t }}
+            </p>
+          }
+
+          <div class="field">
+            <span class="q-caption">{{ 'customers.feedback.tags.editor.wording' | t }}</span>
+            <q-localized-field-group
+              [locales]="locales()"
+              [activeLocale]="activeLocale()"
+              [defaultLocale]="defaultLocale()"
+              [completeness]="completeness()"
+              [localeLabels]="localeLabels()"
+              (activeLocaleChange)="activeLocale.set($event)"
+            />
+            <input
+              class="control"
+              type="text"
+              maxlength="80"
+              autocomplete="off"
+              [value]="wording()[activeLocale()] ?? ''"
+              (input)="onWording(activeLocale(), $any($event.target).value)"
+              data-testid="tag-wording"
+            />
+            @if ((wording()[defaultLocale()] ?? '').trim() === '') {
+              <span class="q-caption band--warn" data-testid="tag-wording-required">
+                {{
+                  'customers.feedback.tags.editor.wordingRequired'
+                    | t: { locale: localeLabels()[defaultLocale()] ?? defaultLocale() }
+                }}
+              </span>
+            }
+          </div>
+
+          <div class="field">
+            <span class="q-caption">{{ 'customers.feedback.tags.editor.icon' | t }}</span>
+            <div class="icon">
+              @if (iconPreview(); as src) {
+                <img class="icon__preview" [src]="src" alt="" data-testid="tag-icon-preview" />
+              } @else if (d.iconAssetId) {
+                <span class="q-caption muted" data-testid="tag-icon-set">✓</span>
+              }
+              <q-media-uploader
+                [aspectRatios]="iconRatios"
+                [accept]="iconAccept"
+                [maxSizeBytes]="iconMaximumBytes()"
+                [uploading]="uploading()"
+                (cropped)="uploadIcon($event)"
+                (selected)="uploadIcon($event)"
+                (rejected)="onIconRejected($event)"
+                data-testid="tag-icon-uploader"
+              />
+              @if (d.iconAssetId) {
+                <button
+                  type="button"
+                  class="secondary"
+                  (click)="removeIcon()"
+                  data-testid="tag-icon-remove"
+                >
+                  {{ 'customers.feedback.tags.editor.iconRemove' | t }}
+                </button>
+              }
+            </div>
+            <span class="q-caption muted">{{ 'customers.feedback.tags.editor.iconHint' | t }}</span>
+          </div>
+
+          <div class="editor__actions">
+            <button type="submit" class="primary" [disabled]="!canSave()" data-testid="tag-save">
+              {{ 'customers.feedback.tags.editor.save' | t }}
+            </button>
+            <button type="button" class="secondary" (click)="cancel()" data-testid="tag-cancel">
+              {{ 'customers.feedback.tags.editor.cancel' | t }}
+            </button>
+          </div>
+        </form>
+      }
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'customers.feedback.tags.column.wording' | t }}</th>
+            <th class="q-caption">{{ 'customers.feedback.tags.column.category' | t }}</th>
+            <th class="q-caption">{{ 'customers.feedback.tags.column.sentiment' | t }}</th>
+            <th class="q-caption">{{ 'customers.feedback.tags.column.status' | t }}</th>
+            <th class="q-caption">{{ 'customers.feedback.tags.column.used' | t }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (tag of tags(); track tag.id) {
+            <tr [class.row--retired]="tag.status === 'RETIRED'" data-testid="tag-row">
+              <td class="q-body-sm">
+                {{ label(tag) }}
+                <span class="q-caption muted q-mono">{{ tag.code }}</span>
+              </td>
+              <td class="q-body-sm">{{ categoryKey(tag.category) | t }}</td>
+              <td class="q-body-sm">
+                <span [class.tone--negative]="tag.sentiment === 'NEGATIVE'">
+                  {{ sentimentKey(tag.sentiment) | t }}
+                </span>
+              </td>
+              <td class="q-body-sm">{{ statusKey(tag.status) | t }}</td>
+              <td class="q-body-sm">
+                {{
+                  tag.used
+                    ? ('customers.feedback.tags.used' | t)
+                    : ('customers.feedback.tags.unused' | t)
+                }}
+              </td>
+              <td class="row__actions">
+                @if (canWrite()) {
+                  <button
+                    type="button"
+                    class="secondary"
+                    [disabled]="busy() || draft() !== null"
+                    (click)="edit(tag)"
+                    data-testid="tag-edit"
+                  >
+                    {{ 'customers.feedback.tags.edit' | t }}
+                  </button>
+                  @if (tag.status === 'ACTIVE') {
+                    <button
+                      type="button"
+                      class="secondary"
+                      [disabled]="busy()"
+                      (click)="setStatus(tag, 'RETIRED')"
+                      data-testid="tag-retire"
+                    >
+                      {{ 'customers.feedback.tags.retire' | t }}
+                    </button>
+                  } @else {
+                    <button
+                      type="button"
+                      class="secondary"
+                      [disabled]="busy()"
+                      (click)="setStatus(tag, 'ACTIVE')"
+                      data-testid="tag-restore"
+                    >
+                      {{ 'customers.feedback.tags.restore' | t }}
+                    </button>
+                  }
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="6">
+                {{ 'customers.feedback.tags.empty' | t }}
+                @if (canWrite()) {
+                  <span class="q-caption muted">{{
+                    'customers.feedback.tags.starterHint' | t
+                  }}</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  }
+</section>

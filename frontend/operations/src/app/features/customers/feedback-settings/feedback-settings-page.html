@@ -1,0 +1,77 @@
+<div class="feedback">
+  <h1 class="q-title">{{ 'customers.feedback.title' | t }}</h1>
+  <p class="q-body-sm subtitle">{{ 'customers.feedback.subtitle' | t }}</p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.feedback.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'customers.feedback.denied' | t }}</p>
+    }
+    @case ('ready') {
+      @if (scope(); as brandScope) {
+        <div class="bar">
+          <div class="tabs" role="tablist" [attr.aria-label]="'customers.feedback.tab.label' | t">
+            @for (t of tabs; track t) {
+              <button
+                type="button"
+                role="tab"
+                class="tab"
+                [class.tab--on]="tab() === t"
+                [attr.aria-selected]="tab() === t"
+                (click)="select(t)"
+                [attr.data-testid]="'feedback-tab-' + t"
+              >
+                {{ tabKey(t) | t }}
+              </button>
+            }
+          </div>
+          @if (showsTarget()) {
+            <label class="target">
+              <span class="q-caption">{{ 'customers.feedback.scope.label' | t }}</span>
+              <select
+                class="control"
+                [value]="target()"
+                (change)="setTarget($any($event.target).value)"
+                data-testid="feedback-target"
+              >
+                <option value="TENANT">{{ 'customers.feedback.scope.tenant' | t }}</option>
+                <option value="BRAND">{{ 'customers.feedback.scope.brand' | t }}</option>
+              </select>
+            </label>
+          }
+        </div>
+
+        @if (!canWrite()) {
+          <p class="q-body-sm read-only" data-testid="feedback-read-only">
+            {{ 'customers.feedback.readOnly' | t }}
+          </p>
+        }
+
+        @switch (tab()) {
+          @case ('tags') {
+            <q-tag-library-panel [scope]="brandScope" [canWrite]="canWrite()" />
+          }
+          @case ('prompt') {
+            <q-prompt-policy-panel
+              [scope]="brandScope"
+              [target]="target()"
+              [canWrite]="canWrite()"
+            />
+          }
+          @case ('recovery') {
+            <q-recovery-policy-panel
+              [scope]="brandScope"
+              [target]="target()"
+              [canWrite]="canWrite()"
+            />
+          }
+          @case ('visibility') {
+            <q-visibility-panel [scope]="brandScope" [target]="target()" [canWrite]="canWrite()" />
+          }
+        }
+      }
+    }
+  }
+</div>

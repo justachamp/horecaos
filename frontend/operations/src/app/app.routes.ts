@@ -235,37 +235,49 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/customers/segments/segments-page').then((m) => m.SegmentsPage),
           },
-          // 5.4 Reviews (ADR 0071, wave 59): a customer's own rating of their
-          // own completed order, read against its order and customer.
-          // Deliberately not the four-dimension service-recovery kanban
-          // statistics.md's own skip table and the IA's original §5.4 row
-          // described — see the ADR's own Alternatives table for why: it
-          // would duplicate the order-remedy console (ADR 0048) that already
-          // exists for acting on a bad review, and invent case-management
-          // state nobody asked to operate. §5.5 Feedback settings stays the
-          // honest not-built stub below — there is no tag library or prompt
-          // timing to author when this screen has neither.
+          // 5.4 Reviews: ADR 0071's filtered list of a customer's rating of their own order
+          // (wave 59), and since ADR 0159 two more views of the same entity under one small tab
+          // strip -- the service-recovery worklist (a board and a table of cases, each with an
+          // owner, two clocks and a history; `recovery.case.manage`) and the queue of comments
+          // customers agreed to show publicly (`review.moderate`). The list stays the default
+          // child: a reader who holds only `review.read` lands where they always did.
           {
             path: 'reviews',
             loadComponent: () =>
-              import('./features/customers/reviews/reviews-page').then((m) => m.ReviewsPage),
+              import('./features/customers/reviews/reviews-shell').then((m) => m.ReviewsShell),
+            children: [
+              {
+                path: '',
+                loadComponent: () =>
+                  import('./features/customers/reviews/reviews-page').then((m) => m.ReviewsPage),
+              },
+              {
+                path: 'recovery',
+                loadComponent: () =>
+                  import('./features/customers/reviews/recovery-worklist-page').then(
+                    (m) => m.RecoveryWorklistPage,
+                  ),
+              },
+              {
+                path: 'moderation',
+                loadComponent: () =>
+                  import('./features/customers/reviews/moderation-page').then(
+                    (m) => m.ModerationPage,
+                  ),
+              },
+            ],
           },
-          // 5.5 Feedback settings: the review entity 5.4 reads now exists
-          // (ADR 0071, wave 59), but the ADR's own "no moderation, no kanban"
-          // decision means there is still nothing here for a settings screen
-          // to author. Prompt timing and a review tag library both configure
-          // a moderation/tagging pipeline that ADR 0071 deliberately did not
-          // build — see its Alternatives table. Honest not-built rather than
-          // a settings editor with no feature behind it.
+          // 5.5 Feedback settings (ADR 0159): the review tag library (wording in every language,
+          // category, sentiment, a 3:2 icon), when a customer is asked to rate an order per
+          // order type and channel, which reviews open a recovery case, and what the public may
+          // see. It replaces the not-built page this route held while ADR 0071's "no moderation,
+          // no tag library, no prompt timing" stood; ADR 0159 supersedes that part.
           {
             path: 'feedback-settings',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: {
-              spec:
-                'frontend-information-architecture.md §5.5 (Feedback settings) — ADR 0071 ' +
-                'deliberately ships no moderation, tag library, or prompt-timing config',
-            },
+              import('./features/customers/feedback-settings/feedback-settings-page').then(
+                (m) => m.FeedbackSettingsPage,
+              ),
           },
           {
             path: '',

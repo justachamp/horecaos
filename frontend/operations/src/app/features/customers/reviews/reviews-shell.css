@@ -1,0 +1,24 @@
+.reviews-shell__tabs {
+  display: flex;
+  gap: 4px;
+  margin-block-end: 12px;
+}
+
+.reviews-shell__tab {
+  display: inline-block;
+  padding-block: 6px;
+  padding-inline: 12px;
+  color: var(--q-ink-muted);
+  text-decoration: none;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-family: var(--q-font-sans);
+  font-size: var(--q-type-body-sm);
+}
+
+.reviews-shell__tab--on {
+  color: var(--q-ink);
+  background: var(--q-surface-1);
+  border-color: var(--q-primary);
+  font-weight: 600;
+}

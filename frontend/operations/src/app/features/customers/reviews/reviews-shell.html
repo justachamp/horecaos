@@ -1,0 +1,34 @@
+<div class="reviews-shell">
+  <nav class="reviews-shell__tabs" [attr.aria-label]="'customers.reviews.tab.label' | t">
+    <a
+      class="reviews-shell__tab"
+      routerLink="/customers/reviews"
+      routerLinkActive="reviews-shell__tab--on"
+      [routerLinkActiveOptions]="{ exact: true }"
+      data-testid="reviews-tab-list"
+    >
+      {{ 'customers.reviews.tab.list' | t }}
+    </a>
+    @if (capabilities.has('RECOVERY_CASE_MANAGE')) {
+      <a
+        class="reviews-shell__tab"
+        routerLink="/customers/reviews/recovery"
+        routerLinkActive="reviews-shell__tab--on"
+        data-testid="reviews-tab-recovery"
+      >
+        {{ 'customers.reviews.tab.recovery' | t }}
+      </a>
+    }
+    @if (capabilities.has('REVIEW_MODERATE')) {
+      <a
+        class="reviews-shell__tab"
+        routerLink="/customers/reviews/moderation"
+        routerLinkActive="reviews-shell__tab--on"
+        data-testid="reviews-tab-moderation"
+      >
+        {{ 'customers.reviews.tab.moderation' | t }}
+      </a>
+    }
+  </nav>
+  <router-outlet />
+</div>

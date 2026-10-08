@@ -138,6 +138,8 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
   'refund.execute',
   'refund.request',
   'reporting.read',
+  'review.moderate',
+  'review.read',
   'reservation.manage',
   'reservation.read',
   'serviceability.manage',

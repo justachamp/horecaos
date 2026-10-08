@@ -1,0 +1,148 @@
+.moderation {
+  max-inline-size: 920px;
+}
+
+.subtitle {
+  color: var(--q-ink-muted);
+  margin-block: 4px 0;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-block-start: 16px;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-block: 6px;
+  padding-inline: 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.tab--on {
+  background: var(--q-surface-1);
+  color: var(--q-ink);
+  border-color: var(--q-primary);
+  font-weight: 600;
+}
+
+.tab__count {
+  color: var(--q-ink-subtle);
+}
+
+.queue {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.entry {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.entry__meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--q-ink-muted);
+}
+
+.entry__stars {
+  letter-spacing: 1px;
+  color: var(--q-ink);
+}
+
+.entry__reason {
+  color: var(--q-error-text);
+  font-weight: 600;
+}
+
+.entry__comment {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.entry__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag {
+  padding-block: 2px;
+  padding-inline: 8px;
+  border-radius: 999px;
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+}
+
+.tag--negative {
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.entry__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.entry__muted {
+  color: var(--q-ink-muted);
+}
+
+.hide-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.control {
+  block-size: 36px;
+  padding-inline: 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  max-inline-size: 360px;
+}
+
+.error-band {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-block-start: 12px;
+  padding-block: 8px;
+  padding-inline: 12px;
+  border-radius: var(--q-radius);
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.denied,
+.empty {
+  color: var(--q-ink-muted);
+}
+
+.load-more {
+  margin-block-start: 12px;
+}

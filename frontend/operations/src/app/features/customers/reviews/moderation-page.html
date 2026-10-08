@@ -1,0 +1,164 @@
+<div class="moderation">
+  <h1 class="q-title">{{ 'customers.moderation.title' | t }}</h1>
+  <p class="q-body-sm subtitle">{{ 'customers.moderation.subtitle' | t }}</p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.moderation.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'customers.moderation.denied' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ errorText() }}</span>
+        <button type="button" class="secondary" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      <div class="tabs" role="tablist" [attr.aria-label]="'customers.moderation.tabs' | t">
+        @for (s of queueStates; track s) {
+          <button
+            type="button"
+            role="tab"
+            class="tab"
+            [class.tab--on]="active() === s"
+            [attr.aria-selected]="active() === s"
+            (click)="select(s)"
+            [attr.data-testid]="'moderation-tab-' + s"
+          >
+            {{ stateKey(s) | t }}
+            <span class="tab__count q-tnum">{{ countOf(s) }}</span>
+          </button>
+        }
+      </div>
+
+      @if (errorText(); as message) {
+        <div class="error-band" role="alert" data-testid="moderation-error">
+          <span class="q-body-sm">{{ message }}</span>
+        </div>
+      }
+
+      <ul class="queue">
+        @for (entry of entries(); track entry.reviewId) {
+          <li class="entry" data-testid="moderation-entry">
+            <div class="entry__meta q-caption">
+              <span class="entry__stars" [attr.aria-label]="entry.rating + ' / 5'">
+                {{ stars(entry.rating) }}
+              </span>
+              <span>{{ locationName(entry.locationId) }}</span>
+              <span>{{ formatWritten(entry) }}</span>
+              @if (entry.reasonCode; as code) {
+                <span class="entry__reason" data-testid="entry-reason">{{
+                  reasonLabel(code)
+                }}</span>
+              }
+            </div>
+            <p class="q-body entry__comment" data-testid="entry-comment">{{ entry.comment }}</p>
+            @if (entry.tags.length > 0) {
+              <ul class="entry__tags">
+                @for (tag of entry.tags; track tag.id) {
+                  <li class="tag q-caption" [class.tag--negative]="tag.sentiment === 'NEGATIVE'">
+                    {{ tagLabel(tag.labels, tag.code) }}
+                  </li>
+                }
+              </ul>
+            }
+
+            @if (hiding() === entry.reviewId) {
+              <div class="hide-form" data-testid="hide-form">
+                <label class="q-caption" [for]="'reason-' + entry.reviewId">
+                  {{ 'customers.moderation.hide.reason' | t }}
+                </label>
+                <select
+                  class="control"
+                  [id]="'reason-' + entry.reviewId"
+                  [value]="reason()"
+                  (change)="onReasonChange($any($event.target).value)"
+                  data-testid="hide-reason"
+                >
+                  <option value="">{{ 'customers.moderation.hide.choose' | t }}</option>
+                  @for (code of reasons; track code) {
+                    <option [value]="code">{{ reasonKey(code) | t }}</option>
+                  }
+                </select>
+                <p class="q-caption entry__muted">{{ 'customers.moderation.hide.note' | t }}</p>
+                <div class="entry__actions">
+                  <button
+                    type="button"
+                    class="primary"
+                    [disabled]="reason() === '' || busyReview() !== null"
+                    (click)="confirmHide(entry)"
+                    data-testid="hide-confirm"
+                  >
+                    {{ 'customers.moderation.hide.confirm' | t }}
+                  </button>
+                  <button type="button" class="secondary" (click)="cancelHide()">
+                    {{ 'customers.moderation.hide.cancel' | t }}
+                  </button>
+                </div>
+              </div>
+            } @else {
+              <div class="entry__actions">
+                @if (entry.state === 'PENDING') {
+                  <button
+                    type="button"
+                    class="primary"
+                    [disabled]="busyReview() !== null"
+                    (click)="publish(entry)"
+                    data-testid="entry-publish"
+                  >
+                    {{ 'customers.moderation.publish' | t }}
+                  </button>
+                }
+                @if (entry.state === 'HIDDEN') {
+                  @if (restorable(entry)) {
+                    <button
+                      type="button"
+                      class="secondary"
+                      [disabled]="busyReview() !== null"
+                      (click)="publish(entry)"
+                      data-testid="entry-restore"
+                    >
+                      {{ 'customers.moderation.restore' | t }}
+                    </button>
+                  } @else {
+                    <span class="q-caption entry__muted" data-testid="entry-no-restore">
+                      {{ 'customers.moderation.noRestore' | t }}
+                    </span>
+                  }
+                } @else {
+                  <button
+                    type="button"
+                    class="secondary"
+                    [disabled]="busyReview() !== null"
+                    (click)="openHide(entry)"
+                    data-testid="entry-hide"
+                  >
+                    {{ 'customers.moderation.hide' | t }}
+                  </button>
+                }
+              </div>
+            }
+          </li>
+        } @empty {
+          <li class="q-body-sm empty">{{ emptyKey(active()) | t }}</li>
+        }
+      </ul>
+
+      @if (nextCursor() !== null) {
+        <button
+          type="button"
+          class="secondary load-more"
+          [disabled]="loadingMore()"
+          (click)="loadMore()"
+          data-testid="moderation-more"
+        >
+          {{ loadingMore() ? ('customers.moderation.loading' | t) : ('customers.loadMore' | t) }}
+        </button>
+      }
+    }
+  }
+</div>
