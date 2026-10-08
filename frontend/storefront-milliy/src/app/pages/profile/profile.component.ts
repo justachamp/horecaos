@@ -12,10 +12,18 @@ import { firstValueFrom } from 'rxjs';
 import { CustomerOtp } from '../../core/session/customer-otp';
 import { CustomerProfileService } from '../../services/customer-profile.service';
 import { HorecaOSApiError, messageKeyFor } from '../../core/api/problem-details';
+import { ConsentBoxComponent } from '../../shared/consent-box/consent-box.component';
 import { IconComponent } from '../../shared/icon/icon.component';
 import { LANG_LABELS, LangService } from '../../services/lang.service';
-import { type ApiOrder, OrdersService } from '../../services/orders.service';
-import { ReviewsService } from '../../services/reviews.service';
+import { OrdersService } from '../../services/orders.service';
+import {
+  type FeedbackConfig,
+  type OfferedTag,
+  type PublicDisplay,
+  ReviewsService,
+} from '../../services/reviews.service';
+import { MyReviewsComponent } from './my-reviews/my-reviews.component';
+import { TagPickerComponent } from '../../shared/tag-picker/tag-picker.component';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { TranslateService } from '../../services/translate.service';
 
@@ -47,17 +55,35 @@ type LoadState = 'loading' | 'ready' | 'error';
  *
  * <h2>Where the rating prompt comes from</h2>
  *
- * There is no endpoint that names "the order still awaiting a review" --
- * this reads a handful of the customer's most recent orders, keeps the
- * newest `COMPLETED` one, and cross-checks it against `ReviewsService.myReviews`
- * to skip anything already rated. Best-effort, like the delivery-fee preview
- * elsewhere in this app: a failure here hides the prompt rather than failing
- * the whole profile screen over it.
+ * When the restaurant has switched its feedback settings on (ADR 0159), the platform names the
+ * orders still awaiting a review itself (`GET .../reviews/pending`, inside the restaurant's own
+ * prompt window), and offers the tags a customer may tap with a rating and whether the restaurant
+ * shows comments publicly. Otherwise -- the settings are off, or the config could not be read --
+ * this falls back to what it always did: it reads a handful of the customer's most recent orders,
+ * keeps the newest `COMPLETED` one, and cross-checks it against `ReviewsService.myReviews` to skip
+ * anything already rated. Best-effort either way, like the delivery-fee preview elsewhere in this
+ * app: a failure here hides the prompt rather than failing the whole profile screen over it.
+ *
+ * <h2>Tags, the box and the customer's own reviews</h2>
+ *
+ * The tags offered follow the rating (praise for 4 and 5, complaints for 1 and 2, both for 3), at
+ * most as many as the platform allows. The box that lets the words of a review appear on the
+ * restaurant's page, without the customer's name, is shown only when the restaurant shows comments
+ * and there are words to show, and it is never ticked for the customer. Below the prompt the
+ * customer sees where each of their own comments stands -- waiting, on the page, or off it and why
+ * -- and can take one off the page at any time; that changes nothing about the rating the
+ * restaurant keeps.
  */
 @Component({
   selector: 'app-profile',
   standalone: true,
-  imports: [IconComponent, TranslatePipe],
+  imports: [
+    ConsentBoxComponent,
+    IconComponent,
+    MyReviewsComponent,
+    TagPickerComponent,
+    TranslatePipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './profile.component.html',
   styleUrl: './profile.component.scss',
@@ -79,7 +105,13 @@ export class ProfileComponent implements OnInit {
   protected readonly draftLastName = signal('');
   protected readonly savingName = signal(false);
 
-  protected readonly ratableOrder = signal<ApiOrder | null>(null);
+  protected readonly ratableOrder = signal<RatableOrder | null>(null);
+  protected readonly feedback = signal<FeedbackConfig | null>(null);
+  protected readonly selectedTagIds = signal<readonly string[]>([]);
+  protected readonly publicConsent = signal(false);
+  protected readonly submittedDisplay = signal<PublicDisplay | null>(null);
+  /** Bumped after a rating is submitted so the customer's own reviews are read again. */
+  protected readonly reviewsRefresh = signal(0);
   protected readonly rating = signal(0);
   protected readonly ratingComment = signal('');
   protected readonly submittingRating = signal(false);
@@ -90,6 +122,26 @@ export class ProfileComponent implements OnInit {
     () => this.profileService.profile()?.displayName?.trim() || null,
   );
   protected readonly initial = computed(() => (this.displayName() ?? '?').charAt(0).toUpperCase());
+
+  /** The tags that fit the rating picked so far: praise for 4 and 5, complaints for 1 and 2, both for 3. */
+  protected readonly offeredTags = computed<readonly OfferedTag[]>(() => {
+    const config = this.feedback();
+    const rating = this.rating();
+    if (!config?.enabled || rating < 1) {
+      return [];
+    }
+    if (rating >= 4) {
+      return config.positive;
+    }
+    return rating <= 2 ? config.negative : [...config.negative, ...config.positive];
+  });
+
+  /** The box means something only when the restaurant shows comments and the customer wrote one. */
+  protected readonly showConsent = computed(
+    () => this.feedback()?.publicComments === true && this.ratingComment().trim() !== '',
+  );
+
+  protected readonly maxTags = computed(() => this.feedback()?.maxTagsPerReview ?? 5);
 
   async ngOnInit(): Promise<void> {
     this.state.set('loading');
@@ -105,18 +157,41 @@ export class ProfileComponent implements OnInit {
 
   /** Best-effort: a failure here hides the prompt, never breaks the screen. */
   private async loadRatablePrompt(): Promise<void> {
+    const config = await this.readFeedbackConfig();
+    this.feedback.set(config);
     try {
-      const [recentOrders, reviewPage] = await Promise.all([
-        firstValueFrom(this.orders.getOrders([], 10)),
-        this.reviews.myReviews(),
-      ]);
-      const reviewed = new Set(reviewPage.items.map((review) => review.orderId));
-      const candidate = recentOrders.find(
-        (order) => order.status?.id === 'COMPLETED' && !reviewed.has(String(order.id)),
-      );
-      this.ratableOrder.set(candidate ?? null);
+      if (config?.enabled) {
+        const pending = await this.reviews.pending();
+        const next = pending[0];
+        this.ratableOrder.set(
+          next ? { id: next.orderId, label: next.publicOrderNumber || next.orderId } : null,
+        );
+      } else {
+        const [recentOrders, reviewPage] = await Promise.all([
+          firstValueFrom(this.orders.getOrders([], 10)),
+          this.reviews.myReviews(),
+        ]);
+        const reviewed = new Set(reviewPage.items.map((review) => review.orderId));
+        const candidate = recentOrders.find(
+          (order) => order.status?.id === 'COMPLETED' && !reviewed.has(String(order.id)),
+        );
+        this.ratableOrder.set(
+          candidate
+            ? { id: String(candidate.id), label: String(candidate.order_number ?? candidate.id) }
+            : null,
+        );
+      }
     } catch {
       this.ratableOrder.set(null);
+    }
+  }
+
+  /** The config is optional: failing to read it is the same as the restaurant not having it on. */
+  private async readFeedbackConfig(): Promise<FeedbackConfig | null> {
+    try {
+      return await this.reviews.feedbackConfig();
+    } catch {
+      return null;
     }
   }
 
@@ -161,6 +236,18 @@ export class ProfileComponent implements OnInit {
 
   protected setRating(value: number): void {
     this.rating.set(value);
+    // A tag that does not fit the new rating is dropped, so a 1-star review never carries a praise tag.
+    const fitting = new Set(this.offeredTags().map((tag) => tag.id));
+    this.selectedTagIds.update((ids) => ids.filter((id) => fitting.has(id)));
+  }
+
+  protected toggleTag(tag: OfferedTag): void {
+    this.selectedTagIds.update((ids) => {
+      if (ids.includes(tag.id)) {
+        return ids.filter((id) => id !== tag.id);
+      }
+      return ids.length >= this.maxTags() ? ids : [...ids, tag.id];
+    });
   }
 
   protected async submitRating(): Promise<void> {
@@ -171,8 +258,18 @@ export class ProfileComponent implements OnInit {
     this.submittingRating.set(true);
     this.ratingErrorKey.set(null);
     try {
-      await this.reviews.submit(String(order.id), this.rating(), this.ratingComment());
+      const tagIds = this.offeredTags().length > 0 ? this.selectedTagIds() : [];
+      const consent = this.showConsent() && this.publicConsent();
+      const submitted =
+        tagIds.length > 0 || consent
+          ? await this.reviews.submit(order.id, this.rating(), this.ratingComment(), {
+              tagIds,
+              publicConsent: consent,
+            })
+          : await this.reviews.submit(order.id, this.rating(), this.ratingComment());
+      this.submittedDisplay.set(submitted.publicDisplay ?? null);
       this.ratingSubmitted.set(true);
+      this.reviewsRefresh.update((count) => count + 1);
     } catch (failure) {
       this.ratingErrorKey.set(
         failure instanceof HorecaOSApiError ? messageKeyFor(failure) : 'errors.generic',
@@ -181,4 +278,10 @@ export class ProfileComponent implements OnInit {
       this.submittingRating.set(false);
     }
   }
+}
+
+/** The order the prompt is about: its id for the request and the number the customer knows it by. */
+interface RatableOrder {
+  readonly id: string;
+  readonly label: string;
 }

@@ -5,6 +5,7 @@ import { IconComponent } from '../../shared/icon/icon.component';
 import { LangService } from '../../services/lang.service';
 import { MenuGridComponent } from '../../shared/menu-grid/menu-grid.component';
 import { MenuService } from '../../services/menu.service';
+import { PublicReviewsComponent } from '../../shared/public-reviews/public-reviews.component';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import type { CategoryItem, MenuCategory } from '../../types/home.types';
 
@@ -19,6 +20,10 @@ type LoadState = 'loading' | 'ready' | 'error';
  * now as **sold out** or **not on sale right now** (rows 4.4c/4.4d, 4.2g)
  * rather than hiding it or leaving the customer to find out on its page.
  *
+ * Under the menu sits the restaurant's public rating and, if it has chosen to show them, the comments its
+ * customers agreed to make public (ADR 0159). That block renders nothing at all until the platform says
+ * there is something to show.
+ *
  * The design also shows a stories rail and a promotions carousel above the
  * menu; neither has a platform source, so neither is rendered here. They are
  * named in the component's own gap list rather than filled with placeholder
@@ -28,7 +33,7 @@ type LoadState = 'loading' | 'ready' | 'error';
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [IconComponent, MenuGridComponent, TranslatePipe],
+  imports: [IconComponent, MenuGridComponent, PublicReviewsComponent, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss',
