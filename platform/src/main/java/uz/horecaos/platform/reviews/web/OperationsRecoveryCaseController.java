@@ -116,11 +116,11 @@ public class OperationsRecoveryCaseController {
             summary = "Counts of the brand's cases by state and by where their clocks stand",
             description = "Optionally narrowed to one branch. Computed from the same clock arithmetic "
                     + "the list uses, as of now.")
-    public CountsResponse summary(
+    public CaseCountsResponse summary(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @RequestParam(required = false) @Nullable UUID locationId) {
-        return CountsResponse.of(cases.counts(new Scope(tenantId, brandId, locationId)));
+        return CaseCountsResponse.of(cases.counts(new Scope(tenantId, brandId, locationId)));
     }
 
     // =================================================================== one branch's cases
@@ -148,9 +148,9 @@ public class OperationsRecoveryCaseController {
     @GetMapping("/locations/{locationId}/recovery-cases/summary")
     @RequiresCapability(value = Capability.RECOVERY_CASE_MANAGE, scope = ScopeType.LOCATION)
     @Operation(summary = "Counts of one branch's cases by state and by where their clocks stand")
-    public CountsResponse summaryForLocation(
+    public CaseCountsResponse summaryForLocation(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
-        return CountsResponse.of(cases.counts(Scope.location(tenantId, brandId, locationId)));
+        return CaseCountsResponse.of(cases.counts(Scope.location(tenantId, brandId, locationId)));
     }
 
     @GetMapping("/locations/{locationId}/recovery-cases/{caseId}")
@@ -213,7 +213,7 @@ public class OperationsRecoveryCaseController {
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID caseId,
-            @Valid @RequestBody TransitionRequest body,
+            @Valid @RequestBody CaseTransitionRequest body,
             HttpServletRequest request) {
         int expected = ExpectedVersions.resolve(request, body.expectedVersion());
         CaseRow moved = cases.transition(
@@ -233,14 +233,14 @@ public class OperationsRecoveryCaseController {
             description = "Free text, so it is stored encrypted and returned only by the drawer: this "
                     + "response carries the new timeline entry's id and never the note. Allowed in any "
                     + "state.")
-    public ResponseEntity<NoteResponse> addNote(
+    public ResponseEntity<CaseNoteResponse> addNote(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID caseId,
-            @Valid @RequestBody NoteRequest body) {
+            @Valid @RequestBody CaseNoteRequest body) {
         UUID entryId = cases.addNote(Scope.location(tenantId, brandId, locationId), caseId, body.note(), actor());
-        return ResponseEntity.status(HttpStatus.CREATED).body(new NoteResponse(caseId, entryId));
+        return ResponseEntity.status(HttpStatus.CREATED).body(new CaseNoteResponse(caseId, entryId));
     }
 
     @PostMapping("/locations/{locationId}/recovery-cases/{caseId}/compensations")
@@ -282,13 +282,13 @@ public class OperationsRecoveryCaseController {
      * @param outcomeCode        required to close, absent otherwise
      * @param expectedVersion    the case's version, if not sent as If-Match
      */
-    public record TransitionRequest(
+    public record CaseTransitionRequest(
             @NotNull CaseState to,
             @Nullable UUID ownerStaffMemberId,
             @Nullable CaseOutcome outcomeCode,
             @Nullable Integer expectedVersion) {}
 
-    public record NoteRequest(
+    public record CaseNoteRequest(
             @NotNull @Size(min = 1, max = RecoveryCaseService.MAXIMUM_NOTE_LENGTH)
             String note) {}
 
@@ -355,14 +355,14 @@ public class OperationsRecoveryCaseController {
         }
     }
 
-    public record CountsResponse(Map<CaseState, Long> byState, Map<SlaState, Long> bySla) {
+    public record CaseCountsResponse(Map<CaseState, Long> byState, Map<SlaState, Long> bySla) {
 
-        static CountsResponse of(Counts counts) {
-            return new CountsResponse(counts.byState(), counts.bySla());
+        static CaseCountsResponse of(Counts counts) {
+            return new CaseCountsResponse(counts.byState(), counts.bySla());
         }
     }
 
-    public record TagResponse(
+    public record CaseTagResponse(
             UUID id,
             String code,
             String category,
@@ -370,12 +370,13 @@ public class OperationsRecoveryCaseController {
             Map<String, String> labels,
             @Nullable UUID iconAssetId) {}
 
-    public record OrderResponse(UUID id, String publicOrderNumber, String status, String currency, long totalMinor) {
+    public record CaseOrderResponse(
+            UUID id, String publicOrderNumber, String status, String currency, long totalMinor) {
 
-        static @Nullable OrderResponse of(@Nullable OrderSummary order) {
+        static @Nullable CaseOrderResponse of(@Nullable OrderSummary order) {
             return order == null
                     ? null
-                    : new OrderResponse(
+                    : new CaseOrderResponse(
                             order.orderId(),
                             order.publicOrderNumber(),
                             order.status(),
@@ -455,11 +456,11 @@ public class OperationsRecoveryCaseController {
      */
     public record CaseDetailResponse(
             CaseSummaryResponse summary,
-            List<TagResponse> tags,
+            List<CaseTagResponse> tags,
             boolean hasComment,
             @Nullable String comment,
             boolean commentWithheld,
-            @Nullable OrderResponse order,
+            @Nullable CaseOrderResponse order,
             List<TimelineResponse> timeline,
             List<CompensationResponse> compensations) {
 
@@ -467,7 +468,7 @@ public class OperationsRecoveryCaseController {
             return new CaseDetailResponse(
                     CaseSummaryResponse.of(detail.summary()),
                     detail.tags().stream()
-                            .map(tag -> new TagResponse(
+                            .map(tag -> new CaseTagResponse(
                                     tag.row().id(),
                                     tag.row().code(),
                                     tag.row().category().name(),
@@ -478,7 +479,7 @@ public class OperationsRecoveryCaseController {
                     detail.hasComment(),
                     detail.comment(),
                     detail.commentWithheld(),
-                    OrderResponse.of(detail.order()),
+                    CaseOrderResponse.of(detail.order()),
                     detail.timeline().stream().map(TimelineResponse::of).toList(),
                     detail.compensations().stream()
                             .map(CompensationResponse::of)
@@ -500,5 +501,5 @@ public class OperationsRecoveryCaseController {
         }
     }
 
-    public record NoteResponse(UUID caseId, UUID entryId) {}
+    public record CaseNoteResponse(UUID caseId, UUID entryId) {}
 }

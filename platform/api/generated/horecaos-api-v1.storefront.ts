@@ -265,6 +265,15 @@ export interface FavouritesResponse {
   productIds?: Array<string>;
 }
 
+export interface FeedbackConfigResponse {
+  consentTextKey?: string;
+  enabled?: boolean;
+  maxTagsPerReview?: number;
+  negative?: Array<OfferedTag>;
+  positive?: Array<OfferedTag>;
+  publicComments?: boolean;
+}
+
 export interface FulfillmentModeAvailability {
   mode?: "DELIVERY" | "PICKUP" | "DINE_IN";
   reason?: string;
@@ -470,6 +479,14 @@ export interface NutritionPer100 {
   proteinGramsPer100?: number;
 }
 
+export interface OfferedTag {
+  category?: string;
+  code?: string;
+  iconUrl?: string;
+  id?: string;
+  labels?: { [key: string]: string };
+}
+
 export interface OrderLineResponse {
   autoSelectedCharges?: Array<StorefrontOrderingControllerAutoSelectedChargeResponse>;
   autoSelectedModifiers?: Array<string>;
@@ -547,6 +564,13 @@ export interface PaymentSessionRequest {
   presentation?: string;
   pushRecipient?: string;
   returnUrl?: string;
+}
+
+export interface PendingReviewResponse {
+  locationId?: string;
+  orderId?: string;
+  placedAt?: string;
+  publicOrderNumber?: string;
 }
 
 export interface PhysicalFacts {
@@ -636,6 +660,42 @@ export interface ProfileResponse {
   version?: number;
 }
 
+export interface PublicComment {
+  branchName?: string;
+  comment?: string;
+  date?: string;
+  rating?: number;
+  tags?: Array<PublicTag>;
+}
+
+export interface PublicDisplayResponse {
+  reasonCode?: string;
+  state?: "NOT_SHARED" | "PENDING" | "PUBLISHED" | "HIDDEN";
+  withdrawable?: boolean;
+}
+
+export interface PublicList {
+  items?: Array<PublicComment>;
+  nextCursor?: string;
+  visibility?: "NONE" | "RATING_ONLY" | "RATING_AND_COMMENTS";
+}
+
+export interface PublicSummary {
+  average?: number;
+  count?: number;
+  distribution?: Array<number>;
+  ready?: boolean;
+  visibility?: "NONE" | "RATING_ONLY" | "RATING_AND_COMMENTS";
+}
+
+export interface PublicTag {
+  category?: "FOOD" | "SERVICE" | "COURIER" | "DELIVERY_TIME" | "OTHER";
+  code?: string;
+  iconUrl?: string;
+  labels?: { [key: string]: string };
+  sentiment?: "POSITIVE" | "NEGATIVE";
+}
+
 export interface PutLineRequest {
   comboPicks?: Array<ComboPickRequest>;
   commentPresetCodes?: Array<string>;
@@ -693,6 +753,15 @@ export interface ReorderPlanResponse {
 
 export interface RequestCodeRequest {
   phone: string;
+}
+
+export interface ReviewTag {
+  category?: string;
+  code?: string;
+  iconAssetId?: string;
+  id?: string;
+  labels?: { [key: string]: string };
+  sentiment?: string;
 }
 
 export interface SaveAddressRequest {
@@ -839,8 +908,10 @@ export interface StorefrontReviewControllerReviewResponse {
   comment?: string;
   id?: string;
   orderId?: string;
+  publicDisplay?: PublicDisplayResponse;
   rating?: number;
   submittedAt?: string;
+  tags?: Array<ReviewTag>;
 }
 
 export interface SubmitCodeRequest {
@@ -849,7 +920,9 @@ export interface SubmitCodeRequest {
 
 export interface SubmitReviewRequest {
   comment?: string;
+  publicConsent?: boolean;
   rating?: number;
+  tagIds?: Array<string>;
 }
 
 export interface TermsView {
@@ -885,6 +958,7 @@ export interface Operations {
   "applyPromoCode": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/promo-code"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } }; body: ApplyPromoCodeRequest }; responses: { "200": CartResponse } };
   "bindTable": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/table"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": CartResponse } };
   "checkout": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/checkouts"; request: { parameters: { header: { "Idempotency-Key": string; "X-Dine-In-Token"?: string }; path: { brandId: string; tenantId: string } }; body: CheckoutRequest }; responses: { "200": CheckoutResponse } };
+  "config": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/feedback/config"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": FeedbackConfigResponse } };
   "register": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/registrations"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RegisterRequest }; responses: { "200": RegistrationResponse } };
   "signIn": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/sessions"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: SignInRequest }; responses: { "200": CustomerSessionResponse } };
   "signOut": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/sessions/current"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": unknown } };
@@ -920,6 +994,10 @@ export interface Operations {
   "myReferral": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/me"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": MyReferralResponse } };
   "redeem": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/redemptions"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RedeemRequest }; responses: { "200": ReferralStorefrontControllerRedemptionResponse } };
   "myReviews": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PageStorefrontReviewControllerReviewResponse } };
+  "pending": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews/pending"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<PendingReviewResponse> } };
+  "comments": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews/public"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PublicList } };
+  "summary": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews/public/summary"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": PublicSummary } };
+  "withdraw": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews/{reviewId}/public-display/withdrawal"; request: { parameters: { path: { brandId: string; reviewId: string; tenantId: string } } }; responses: { "200": PublicDisplayResponse } };
   "faq": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/faq"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { locale?: string } } }; responses: { "200": Array<FaqResponse> } };
   "socialLinks": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/social-links"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<SocialLinkResponse> } };
   "unlink": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/link"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": unknown } };

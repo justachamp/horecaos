@@ -94,7 +94,9 @@ public class OperationsFeedbackSettingsController {
         TenantLocaleSet locales = tags.localeSet(tenantId);
         List<TagView> library = tags.list(tenantId);
         return new TagLibraryResponse(
-                library.stream().map(tag -> TagResponse.of(tenantId, tag)).toList(),
+                library.stream()
+                        .map(tag -> FeedbackTagResponse.of(tenantId, tag))
+                        .toList(),
                 locales.locales(),
                 locales.defaultLocale(),
                 FeedbackTagService.MAXIMUM_ACTIVE_TAGS,
@@ -111,8 +113,8 @@ public class OperationsFeedbackSettingsController {
                     + "iconAssetId, if given, must be a tenant-owned PUBLIC image, 3:2, at most 1 MB, "
                     + "uploaded and verified; anything else is VALIDATION_FAILED. At most 40 tags are "
                     + "active; a duplicate code is RESOURCE_CONFLICT.")
-    public ResponseEntity<TagResponse> createTag(
-            @PathVariable UUID tenantId, @Valid @RequestBody CreateTagRequest body) {
+    public ResponseEntity<FeedbackTagResponse> createTag(
+            @PathVariable UUID tenantId, @Valid @RequestBody NewFeedbackTagRequest body) {
         TagView created = tags.create(
                 tenantId,
                 new NewTag(
@@ -125,7 +127,7 @@ public class OperationsFeedbackSettingsController {
                 actor());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .eTag(AggregateVersion.toETag(created.row().version()))
-                .body(TagResponse.of(tenantId, created));
+                .body(FeedbackTagResponse.of(tenantId, created));
     }
 
     @PostMapping("/feedback/tags/starter-pack")
@@ -135,9 +137,9 @@ public class OperationsFeedbackSettingsController {
             description = "Six praise and six complain, in Russian, Uzbek (Latin) and English, with no "
                     + "icons and none about a courier. They are the tenant's to edit afterwards; "
                     + "RESOURCE_CONFLICT when any of them is already in the library.")
-    public ResponseEntity<List<TagResponse>> importStarterPack(@PathVariable UUID tenantId) {
-        List<TagResponse> imported = tags.importStarterPack(tenantId, actor()).stream()
-                .map(tag -> TagResponse.of(tenantId, tag))
+    public ResponseEntity<List<FeedbackTagResponse>> importStarterPack(@PathVariable UUID tenantId) {
+        List<FeedbackTagResponse> imported = tags.importStarterPack(tenantId, actor()).stream()
+                .map(tag -> FeedbackTagResponse.of(tenantId, tag))
                 .toList();
         return ResponseEntity.status(HttpStatus.CREATED).body(imported);
     }
@@ -151,7 +153,7 @@ public class OperationsFeedbackSettingsController {
                     + "review that carries it; there is no delete. labels names only the locales the "
                     + "editor showed: every other locale keeps its wording. category and sentiment cannot "
                     + "change once a review carries the tag (UNPROCESSABLE_STATE).")
-    public ResponseEntity<TagResponse> updateTag(
+    public ResponseEntity<FeedbackTagResponse> updateTag(
             @PathVariable UUID tenantId,
             @PathVariable UUID tagId,
             @Valid @RequestBody UpdateTagRequest body,
@@ -171,7 +173,7 @@ public class OperationsFeedbackSettingsController {
                 actor());
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(updated.row().version()))
-                .body(TagResponse.of(tenantId, updated));
+                .body(FeedbackTagResponse.of(tenantId, updated));
     }
 
     // =========================================================================== the prompt's timing
@@ -326,7 +328,7 @@ public class OperationsFeedbackSettingsController {
      * @param sortOrder   boxed and optional: 100 when absent
      * @param labels      locale to wording; the tenant's default locale is required
      */
-    public record CreateTagRequest(
+    public record NewFeedbackTagRequest(
             @NotBlank @Size(max = 48) String code,
             @NotNull TagCategory category,
             @NotNull TagSentiment sentiment,
@@ -348,7 +350,7 @@ public class OperationsFeedbackSettingsController {
             @Nullable Map<String, String> labels,
             @Nullable Integer expectedVersion) {}
 
-    public record TagResponse(
+    public record FeedbackTagResponse(
             UUID id,
             String code,
             TagCategory category,
@@ -361,8 +363,8 @@ public class OperationsFeedbackSettingsController {
             boolean used,
             int version) {
 
-        static TagResponse of(UUID tenantId, TagView view) {
-            return new TagResponse(
+        static FeedbackTagResponse of(UUID tenantId, TagView view) {
+            return new FeedbackTagResponse(
                     view.row().id(),
                     view.row().code(),
                     view.row().category(),
@@ -381,7 +383,7 @@ public class OperationsFeedbackSettingsController {
     }
 
     public record TagLibraryResponse(
-            List<TagResponse> tags,
+            List<FeedbackTagResponse> tags,
             List<String> locales,
             String defaultLocale,
             int maximumActiveTags,

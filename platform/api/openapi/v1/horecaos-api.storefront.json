@@ -762,6 +762,36 @@
         },
         "type" : "object"
       },
+      "FeedbackConfigResponse" : {
+        "properties" : {
+          "consentTextKey" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "maxTagsPerReview" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "negative" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OfferedTag"
+            },
+            "type" : "array"
+          },
+          "positive" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OfferedTag"
+            },
+            "type" : "array"
+          },
+          "publicComments" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "FulfillmentModeAvailability" : {
         "properties" : {
           "mode" : {
@@ -1391,6 +1421,30 @@
         },
         "type" : "object"
       },
+      "OfferedTag" : {
+        "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "iconUrl" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
       "OrderLineResponse" : {
         "properties" : {
           "autoSelectedCharges" : {
@@ -1656,6 +1710,26 @@
             "maxLength" : 512,
             "minLength" : 0,
             "pattern" : "^https://.*",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PendingReviewResponse" : {
+        "properties" : {
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "placedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "publicOrderNumber" : {
             "type" : "string"
           }
         },
@@ -1943,6 +2017,115 @@
         },
         "type" : "object"
       },
+      "PublicComment" : {
+        "properties" : {
+          "branchName" : {
+            "type" : "string"
+          },
+          "comment" : {
+            "type" : "string"
+          },
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "rating" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "tags" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PublicTag"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "PublicDisplayResponse" : {
+        "properties" : {
+          "reasonCode" : {
+            "type" : "string"
+          },
+          "state" : {
+            "enum" : [ "NOT_SHARED", "PENDING", "PUBLISHED", "HIDDEN" ],
+            "type" : "string"
+          },
+          "withdrawable" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "PublicList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PublicComment"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          },
+          "visibility" : {
+            "enum" : [ "NONE", "RATING_ONLY", "RATING_AND_COMMENTS" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PublicSummary" : {
+        "properties" : {
+          "average" : {
+            "type" : "number"
+          },
+          "count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "distribution" : {
+            "items" : {
+              "format" : "int64",
+              "type" : "integer"
+            },
+            "type" : "array"
+          },
+          "ready" : {
+            "type" : "boolean"
+          },
+          "visibility" : {
+            "enum" : [ "NONE", "RATING_ONLY", "RATING_AND_COMMENTS" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PublicTag" : {
+        "properties" : {
+          "category" : {
+            "enum" : [ "FOOD", "SERVICE", "COURIER", "DELIVERY_TIME", "OTHER" ],
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "iconUrl" : {
+            "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "sentiment" : {
+            "enum" : [ "POSITIVE", "NEGATIVE" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PutLineRequest" : {
         "properties" : {
           "comboPicks" : {
@@ -2145,6 +2328,34 @@
           }
         },
         "required" : [ "phone" ],
+        "type" : "object"
+      },
+      "ReviewTag" : {
+        "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "iconAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "sentiment" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "SaveAddressRequest" : {
@@ -2581,6 +2792,9 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "publicDisplay" : {
+            "$ref" : "#/components/schemas/PublicDisplayResponse"
+          },
           "rating" : {
             "format" : "int32",
             "type" : "integer"
@@ -2588,6 +2802,12 @@
           "submittedAt" : {
             "format" : "date-time",
             "type" : "string"
+          },
+          "tags" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ReviewTag"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -2610,11 +2830,23 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "publicConsent" : {
+            "type" : "boolean"
+          },
           "rating" : {
             "format" : "int32",
             "maximum" : 5,
             "minimum" : 1,
             "type" : "integer"
+          },
+          "tagIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 5,
+            "minItems" : 0,
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -3787,6 +4019,44 @@
         "summary" : "Turn a priced cart into an order",
         "tags" : [ "Storefront ordering" ],
         "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/feedback/config" : {
+      "get" : {
+        "description" : "Anonymous and cached for a minute. enabled is false, with no tags, while the tenant's feedback settings are off. Otherwise the active tags, split by sentiment (at most eight each, in the tenant's order), each with its wording in every locale and its icon. The storefront shows the positive tags for 4-5 stars, the negative for 1-2 and both for 3, and at most maxTagsPerReview may be sent. publicComments is true only when the brand shows comments publicly, which is when the consent box means anything; consentTextKey names the storefront's own translated sentence.",
+        "operationId" : "config",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FeedbackConfigResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The feedback tags a customer is offered, and whether to show the public-display box",
+        "tags" : [ "Public reviews" ],
+        "x-horecaos-surface" : "internal"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/registrations" : {
@@ -5157,7 +5427,7 @@
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/review" : {
       "post" : {
-        "description" : "Refused with RESOURCE_NOT_FOUND when the order is not the caller's own, UNPROCESSABLE_STATE when it has not reached COMPLETED yet, and RESOURCE_CONFLICT when it already has a review. There is no endpoint to edit or withdraw a review once submitted (ADR 0071's own open input).",
+        "description" : "Refused with RESOURCE_NOT_FOUND when the order is not the caller's own, UNPROCESSABLE_STATE when it has not reached COMPLETED yet, and RESOURCE_CONFLICT when it already has a review. tagIds are the tags the customer tapped: at most five, active, this tenant's, and matching the rating (positive for 4-5, negative for 1-2, either for 3); anything else is VALIDATION_FAILED. publicConsent is whether the customer ticked the box allowing their words on the restaurant's public page; it counts only with a comment. Both are ignored while the tenant's feedback settings are off. There is no endpoint to edit or withdraw a review once submitted (ADR 0071); only the public display of its comment can be withdrawn.",
         "operationId" : "submit",
         "parameters" : [ {
           "in" : "path",
@@ -5386,7 +5656,7 @@
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews" : {
       "get" : {
-        "description" : "Cursor-paginated per ADR 0031: pass the previous page's nextCursor, and a null nextCursor is the end.",
+        "description" : "Cursor-paginated per ADR 0031: pass the previous page's nextCursor, and a null nextCursor is the end. Each row carries its tags and where its comment stands for the public page (publicDisplay.state, and the reason code when it is hidden).",
         "operationId" : "myReviews",
         "parameters" : [ {
           "in" : "path",
@@ -5436,6 +5706,184 @@
         "summary" : "The caller's own reviews at this brand, newest first",
         "tags" : [ "Reviews" ],
         "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews/pending" : {
+      "get" : {
+        "description" : "The storefront's own rating prompt (ADR 0159, Decision 4): the caller's COMPLETED orders at this brand, newest first, that carry no review and were placed within the brand's inlineWindowDays (seven unless the rating-prompt policy says otherwise). Empty while the tenant's feedback settings are off, so the storefront shows exactly what it showed before.",
+        "operationId" : "pending",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PendingReviewResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Completed orders the caller has not yet rated, still inside the prompt window",
+        "tags" : [ "Reviews" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews/public" : {
+      "get" : {
+        "description" : "Anonymous, cached for a minute and evicted by every hide, withdrawal and erasure, rate limited. Empty unless the brand's public visibility is RATING_AND_COMMENTS. Each entry is a comment its author agreed to show and a moderator (or the brand's own setting) approved, with its rating, tags, the day it was written and the branch name: no name, no customer, no order number, no review id, no time of day. The cursor is opaque. A tenant cannot filter this list by rating, pin, reorder or feature a comment, or reply to one.",
+        "operationId" : "comments",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PublicList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The brand's published comments, newest first",
+        "tags" : [ "Public reviews" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews/public/summary" : {
+      "get" : {
+        "description" : "Anonymous, cached for five minutes, rate limited. While the brand's public visibility is NONE, or it has fewer than its minimum count of reviews, ready is false and every figure is null. Otherwise the count, the average to one decimal and the five-bar distribution (index 0 is one star). The average counts every review of the brand, whatever became of its comment: a rating is not words.",
+        "operationId" : "summary",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PublicSummary"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The brand's rating summary, or nothing but a flag",
+        "tags" : [ "Public reviews" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews/{reviewId}/public-display/withdrawal" : {
+      "post" : {
+        "description" : "The customer's own withdrawal of the consent they gave (ADR 0159, Decision 6): records a WITHDRAWN decision, hides the comment for CUSTOMER_WITHDREW and cannot be reversed by a moderator. Refused with UNPROCESSABLE_STATE for a comment that was never shared or is already off the page. Touches nothing else: the rating, the comment the restaurant's staff see and any case stay as they were.",
+        "operationId" : "withdraw",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "reviewId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PublicDisplayResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Take a comment off the restaurant's public page",
+        "tags" : [ "Reviews" ],
+        "x-horecaos-surface" : "internal"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/faq" : {
@@ -6096,20 +6544,8 @@
     "url" : "http://localhost"
   } ],
   "tags" : [ {
-    "description" : "Requesting a one-time code, proving a phone number, and becoming a customer",
-    "name" : "Customer identity"
-  }, {
-    "description" : "Continue with Telegram: mint a sign-in code and poll it into a session (ADR 0063)",
-    "name" : "Telegram sign-in"
-  }, {
     "description" : "A customer's own profile, their own saved addresses, and the products they marked",
     "name" : "Customer self-service"
-  }, {
-    "description" : "Public, non-secret analytics identifiers for a brand",
-    "name" : "Storefront analytics"
-  }, {
-    "description" : "What delivery costs here, and the evidence for it",
-    "name" : "Delivery fee"
   }, {
     "description" : "Opening a payment attempt and getting the checkout surface for it",
     "name" : "Storefront payments"
@@ -6119,9 +6555,6 @@
   }, {
     "description" : "Pictures on the published menu",
     "name" : "Storefront media"
-  }, {
-    "description" : "Scanning a table code, and the bill it leads to",
-    "name" : "QR dine-in"
   }, {
     "description" : "Row 10.5: resolve a Host header to a tenant and channel",
     "name" : "Storefront channel hostname lookup"
@@ -6138,12 +6571,6 @@
     "description" : "In-app offers a scenario has made a guest eligible to see (ADR 0112)",
     "name" : "Presented offers"
   }, {
-    "description" : "A customer's own referral code, and redeeming a friend's",
-    "name" : "Referrals"
-  }, {
-    "description" : "The tenant's own document, or the platform default (ADR 0068)",
-    "name" : "Storefront terms of service"
-  }, {
     "description" : "Availability and remaining quantity a customer can see",
     "name" : "Storefront inventory"
   }, {
@@ -6156,16 +6583,40 @@
     "description" : "The published menu a customer sees",
     "name" : "Storefront catalog"
   }, {
-    "description" : "A customer's points balance and its movements",
-    "name" : "Loyalty"
-  }, {
     "description" : "A customer's own 1:1 chat with the brand's bot (ADR 0058 stage 2)",
     "name" : "Customer Telegram linking"
   }, {
-    "description" : "Whether a location serves this channel and mode now",
-    "name" : "Serviceability"
-  }, {
     "description" : "A brand's FAQ and its social links",
     "name" : "Storefront support"
+  }, {
+    "description" : "Requesting a one-time code, proving a phone number, and becoming a customer",
+    "name" : "Customer identity"
+  }, {
+    "description" : "Continue with Telegram: mint a sign-in code and poll it into a session (ADR 0063)",
+    "name" : "Telegram sign-in"
+  }, {
+    "description" : "Public, non-secret analytics identifiers for a brand",
+    "name" : "Storefront analytics"
+  }, {
+    "description" : "What delivery costs here, and the evidence for it",
+    "name" : "Delivery fee"
+  }, {
+    "description" : "Scanning a table code, and the bill it leads to",
+    "name" : "QR dine-in"
+  }, {
+    "description" : "A restaurant's review summary, published comments and feedback tags",
+    "name" : "Public reviews"
+  }, {
+    "description" : "A customer's own referral code, and redeeming a friend's",
+    "name" : "Referrals"
+  }, {
+    "description" : "The tenant's own document, or the platform default (ADR 0068)",
+    "name" : "Storefront terms of service"
+  }, {
+    "description" : "A customer's points balance and its movements",
+    "name" : "Loyalty"
+  }, {
+    "description" : "Whether a location serves this channel and mode now",
+    "name" : "Serviceability"
   } ]
 }

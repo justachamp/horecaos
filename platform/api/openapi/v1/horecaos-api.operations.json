@@ -85,7 +85,7 @@
       "AccessCheckResponse" : {
         "properties" : {
           "capability" : {
-            "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "INVENTORY_AVAILABILITY_MANAGE", "INVENTORY_STOP_MANAGE", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PAYMENT_WINDOW_MANAGE", "ORDER_PLACE", "ORDER_POINTS_REVEAL", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "PAYMENT_METHOD_READ", "PAYMENT_METHOD_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "GEO_LOOKUP", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "DELIVERY_POLICY_READ", "DELIVERY_POLICY_WRITE", "DELIVERY_DISPATCH_RULES_READ", "DELIVERY_DISPATCH_RULES_WRITE", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "COURIER_BROADCAST_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_DISPLAY_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_SHIFT_RECEIVE", "MARKETPLACE_AVAILABILITY_PULL", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_VERIFY", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_CREATE", "CUSTOMER_PII_REVEAL", "CUSTOMER_LEAD_READ", "CUSTOMER_LEAD_MANAGE", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "STOREFRONT_APP_REGISTRY_MANAGE", "STOREFRONT_APP_AUTHORISE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_SYNC_MANAGE", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_ROUTING_MANAGE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "MARKETING_OFFER_MANAGE", "MARKETING_CONTACT_POLICY_MANAGE", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "MARKETING_LINK_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "COMMERCIAL_MODULE_READ", "COMMERCIAL_ARREARS_READ", "COMMERCIAL_WALLET_TOPUP", "COMMERCIAL_CARD_MANAGE", "COMMERCIAL_EINVOICE_SEND", "COMMERCIAL_EINVOICING_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "IAM_STAFF_MFA_READ", "IAM_STAFF_MFA_RESET", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "REPORT_EXPORT", "CUSTOMER_PII_EXPORT", "REPORTING_CLASSIFICATION_RUN", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_DELIVERY_READ", "COURIER_OFFER_ACCEPT", "COURIER_OFFER_DECLINE", "COURIER_DELIVERY_ADVANCE", "COURIER_DELIVERY_PAYMENT_CONFIRM", "COURIER_DELIVERY_LOCATION_REVEAL", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "ASSISTANT_READ", "ASSISTANT_KNOWLEDGE_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "STAFF_PROFILE_READ", "STAFF_PROFILE_MANAGE", "STAFF_EMERGENCY_CONTACT_READ", "STAFF_SELF_MANAGE", "PLATFORM_ADMIN" ],
+            "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "INVENTORY_AVAILABILITY_MANAGE", "INVENTORY_STOP_MANAGE", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PAYMENT_WINDOW_MANAGE", "ORDER_PLACE", "ORDER_POINTS_REVEAL", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "REVIEW_MODERATE", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "PAYMENT_METHOD_READ", "PAYMENT_METHOD_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "GEO_LOOKUP", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "DELIVERY_POLICY_READ", "DELIVERY_POLICY_WRITE", "DELIVERY_DISPATCH_RULES_READ", "DELIVERY_DISPATCH_RULES_WRITE", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "COURIER_BROADCAST_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_DISPLAY_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_SHIFT_RECEIVE", "MARKETPLACE_AVAILABILITY_PULL", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_VERIFY", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_CREATE", "CUSTOMER_PII_REVEAL", "CUSTOMER_LEAD_READ", "CUSTOMER_LEAD_MANAGE", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "STOREFRONT_APP_REGISTRY_MANAGE", "STOREFRONT_APP_AUTHORISE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_SYNC_MANAGE", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_ROUTING_MANAGE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "MARKETING_OFFER_MANAGE", "MARKETING_CONTACT_POLICY_MANAGE", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "MARKETING_LINK_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "COMMERCIAL_MODULE_READ", "COMMERCIAL_ARREARS_READ", "COMMERCIAL_WALLET_TOPUP", "COMMERCIAL_CARD_MANAGE", "COMMERCIAL_EINVOICE_SEND", "COMMERCIAL_EINVOICING_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "IAM_STAFF_MFA_READ", "IAM_STAFF_MFA_RESET", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "REPORT_EXPORT", "CUSTOMER_PII_EXPORT", "REPORTING_CLASSIFICATION_RUN", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_DELIVERY_READ", "COURIER_OFFER_ACCEPT", "COURIER_OFFER_DECLINE", "COURIER_DELIVERY_ADVANCE", "COURIER_DELIVERY_PAYMENT_CONFIRM", "COURIER_DELIVERY_LOCATION_REVEAL", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "ASSISTANT_READ", "ASSISTANT_KNOWLEDGE_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "STAFF_PROFILE_READ", "STAFF_PROFILE_MANAGE", "STAFF_EMERGENCY_CONTACT_READ", "STAFF_SELF_MANAGE", "PLATFORM_ADMIN" ],
             "type" : "string"
           },
           "entitlement" : {
@@ -1272,6 +1272,20 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "AttachRequest" : {
+        "properties" : {
+          "kind" : {
+            "enum" : [ "ORDER_REMEDY", "BENEFIT_GRANT" ],
+            "type" : "string"
+          },
+          "refId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "kind", "refId" ],
         "type" : "object"
       },
       "AttemptResponse" : {
@@ -3269,7 +3283,7 @@
           },
           "capabilities" : {
             "items" : {
-              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "INVENTORY_AVAILABILITY_MANAGE", "INVENTORY_STOP_MANAGE", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PAYMENT_WINDOW_MANAGE", "ORDER_PLACE", "ORDER_POINTS_REVEAL", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "PAYMENT_METHOD_READ", "PAYMENT_METHOD_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "GEO_LOOKUP", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "DELIVERY_POLICY_READ", "DELIVERY_POLICY_WRITE", "DELIVERY_DISPATCH_RULES_READ", "DELIVERY_DISPATCH_RULES_WRITE", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "COURIER_BROADCAST_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_DISPLAY_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_SHIFT_RECEIVE", "MARKETPLACE_AVAILABILITY_PULL", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_VERIFY", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_CREATE", "CUSTOMER_PII_REVEAL", "CUSTOMER_LEAD_READ", "CUSTOMER_LEAD_MANAGE", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "STOREFRONT_APP_REGISTRY_MANAGE", "STOREFRONT_APP_AUTHORISE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_SYNC_MANAGE", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_ROUTING_MANAGE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "MARKETING_OFFER_MANAGE", "MARKETING_CONTACT_POLICY_MANAGE", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "MARKETING_LINK_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "COMMERCIAL_MODULE_READ", "COMMERCIAL_ARREARS_READ", "COMMERCIAL_WALLET_TOPUP", "COMMERCIAL_CARD_MANAGE", "COMMERCIAL_EINVOICE_SEND", "COMMERCIAL_EINVOICING_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "IAM_STAFF_MFA_READ", "IAM_STAFF_MFA_RESET", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "REPORT_EXPORT", "CUSTOMER_PII_EXPORT", "REPORTING_CLASSIFICATION_RUN", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_DELIVERY_READ", "COURIER_OFFER_ACCEPT", "COURIER_OFFER_DECLINE", "COURIER_DELIVERY_ADVANCE", "COURIER_DELIVERY_PAYMENT_CONFIRM", "COURIER_DELIVERY_LOCATION_REVEAL", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "ASSISTANT_READ", "ASSISTANT_KNOWLEDGE_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "STAFF_PROFILE_READ", "STAFF_PROFILE_MANAGE", "STAFF_EMERGENCY_CONTACT_READ", "STAFF_SELF_MANAGE", "PLATFORM_ADMIN" ],
+              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "INVENTORY_AVAILABILITY_MANAGE", "INVENTORY_STOP_MANAGE", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PAYMENT_WINDOW_MANAGE", "ORDER_PLACE", "ORDER_POINTS_REVEAL", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "REVIEW_MODERATE", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "PAYMENT_METHOD_READ", "PAYMENT_METHOD_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "GEO_LOOKUP", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "DELIVERY_POLICY_READ", "DELIVERY_POLICY_WRITE", "DELIVERY_DISPATCH_RULES_READ", "DELIVERY_DISPATCH_RULES_WRITE", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "COURIER_BROADCAST_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_DISPLAY_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_SHIFT_RECEIVE", "MARKETPLACE_AVAILABILITY_PULL", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_VERIFY", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_CREATE", "CUSTOMER_PII_REVEAL", "CUSTOMER_LEAD_READ", "CUSTOMER_LEAD_MANAGE", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "STOREFRONT_APP_REGISTRY_MANAGE", "STOREFRONT_APP_AUTHORISE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_SYNC_MANAGE", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_ROUTING_MANAGE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "MARKETING_OFFER_MANAGE", "MARKETING_CONTACT_POLICY_MANAGE", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "MARKETING_LINK_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "COMMERCIAL_MODULE_READ", "COMMERCIAL_ARREARS_READ", "COMMERCIAL_WALLET_TOPUP", "COMMERCIAL_CARD_MANAGE", "COMMERCIAL_EINVOICE_SEND", "COMMERCIAL_EINVOICING_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "IAM_STAFF_MFA_READ", "IAM_STAFF_MFA_RESET", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "REPORT_EXPORT", "CUSTOMER_PII_EXPORT", "REPORTING_CLASSIFICATION_RUN", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_DELIVERY_READ", "COURIER_OFFER_ACCEPT", "COURIER_OFFER_DECLINE", "COURIER_DELIVERY_ADVANCE", "COURIER_DELIVERY_PAYMENT_CONFIRM", "COURIER_DELIVERY_LOCATION_REVEAL", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "ASSISTANT_READ", "ASSISTANT_KNOWLEDGE_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "STAFF_PROFILE_READ", "STAFF_PROFILE_MANAGE", "STAFF_EMERGENCY_CONTACT_READ", "STAFF_SELF_MANAGE", "PLATFORM_ADMIN" ],
               "type" : "string"
             },
             "type" : "array",
@@ -3376,6 +3390,268 @@
             "type" : "boolean"
           }
         },
+        "type" : "object"
+      },
+      "CaseCountsResponse" : {
+        "properties" : {
+          "bySla" : {
+            "additionalProperties" : {
+              "format" : "int64",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
+          "byState" : {
+            "additionalProperties" : {
+              "format" : "int64",
+              "type" : "integer"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
+      "CaseDetailResponse" : {
+        "properties" : {
+          "comment" : {
+            "type" : "string"
+          },
+          "commentWithheld" : {
+            "type" : "boolean"
+          },
+          "compensations" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CompensationResponse"
+            },
+            "type" : "array"
+          },
+          "hasComment" : {
+            "type" : "boolean"
+          },
+          "order" : {
+            "$ref" : "#/components/schemas/CaseOrderResponse"
+          },
+          "summary" : {
+            "$ref" : "#/components/schemas/CaseSummaryResponse"
+          },
+          "tags" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CaseTagResponse"
+            },
+            "type" : "array"
+          },
+          "timeline" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TimelineResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "CaseMutationResponse" : {
+        "properties" : {
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "outcomeCode" : {
+            "enum" : [ "REMEDY_GRANTED", "OFFLINE_GESTURE", "EXPLAINED_NO_REMEDY", "NO_REMEDY_NEEDED", "CUSTOMER_UNREACHABLE", "CUSTOMER_DECLINED", "COMPLAINT_NOT_UPHELD", "NOT_ACTIONABLE" ],
+            "type" : "string"
+          },
+          "ownerStaffMemberId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "state" : {
+            "enum" : [ "NEW", "IN_PROGRESS", "RESOLVED", "CLOSED_UNRESOLVED" ],
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CaseNoteRequest" : {
+        "properties" : {
+          "note" : {
+            "maxLength" : 2000,
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "note" ],
+        "type" : "object"
+      },
+      "CaseNoteResponse" : {
+        "properties" : {
+          "caseId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "entryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CaseOrderResponse" : {
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "publicOrderNumber" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "totalMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CaseSummaryResponse" : {
+        "properties" : {
+          "closedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "compensationCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "firstResponseAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "firstResponseBreached" : {
+            "type" : "boolean"
+          },
+          "firstResponseDueAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "orderNumber" : {
+            "type" : "string"
+          },
+          "outcomeCode" : {
+            "enum" : [ "REMEDY_GRANTED", "OFFLINE_GESTURE", "EXPLAINED_NO_REMEDY", "NO_REMEDY_NEEDED", "CUSTOMER_UNREACHABLE", "CUSTOMER_DECLINED", "COMPLAINT_NOT_UPHELD", "NOT_ACTIONABLE" ],
+            "type" : "string"
+          },
+          "owner" : {
+            "$ref" : "#/components/schemas/StaffResponse"
+          },
+          "rating" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "resolutionBreached" : {
+            "type" : "boolean"
+          },
+          "resolutionDueAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "reviewId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "slaState" : {
+            "enum" : [ "ON_TRACK", "AT_RISK", "BREACHED", "MET" ],
+            "type" : "string"
+          },
+          "source" : {
+            "type" : "string"
+          },
+          "state" : {
+            "enum" : [ "NEW", "IN_PROGRESS", "RESOLVED", "CLOSED_UNRESOLVED" ],
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CaseTagResponse" : {
+        "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "iconAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "sentiment" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CaseTransitionRequest" : {
+        "properties" : {
+          "expectedVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "outcomeCode" : {
+            "enum" : [ "REMEDY_GRANTED", "OFFLINE_GESTURE", "EXPLAINED_NO_REMEDY", "NO_REMEDY_NEEDED", "CUSTOMER_UNREACHABLE", "CUSTOMER_DECLINED", "COMPLAINT_NOT_UPHELD", "NOT_ACTIONABLE" ],
+            "type" : "string"
+          },
+          "ownerStaffMemberId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "to" : {
+            "enum" : [ "NEW", "IN_PROGRESS", "RESOLVED", "CLOSED_UNRESOLVED" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "to" ],
         "type" : "object"
       },
       "CashDeclarationRequest" : {
@@ -4188,6 +4464,41 @@
           },
           "total" : {
             "$ref" : "#/components/schemas/ApiMoney"
+          }
+        },
+        "type" : "object"
+      },
+      "CompensationResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "attachedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "attachedBy" : {
+            "$ref" : "#/components/schemas/StaffResponse"
+          },
+          "caseId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "enum" : [ "ORDER_REMEDY", "BENEFIT_GRANT" ],
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "refId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -8849,6 +9160,54 @@
         },
         "type" : "object"
       },
+      "FeedbackTagResponse" : {
+        "properties" : {
+          "category" : {
+            "enum" : [ "FOOD", "SERVICE", "COURIER", "DELIVERY_TIME", "OTHER" ],
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "iconAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "iconUrl" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "sentiment" : {
+            "enum" : [ "POSITIVE", "NEGATIVE" ],
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "enum" : [ "ACTIVE", "RETIRED" ],
+            "type" : "string"
+          },
+          "used" : {
+            "type" : "boolean"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "FiscalDocumentControllerResolutionRequest" : {
         "properties" : {
           "reason" : {
@@ -11389,6 +11748,43 @@
         },
         "type" : "object"
       },
+      "ModerationDecisionRequest" : {
+        "properties" : {
+          "expectedVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "reasonCode" : {
+            "type" : "string"
+          },
+          "to" : {
+            "enum" : [ "NOT_SHARED", "PENDING", "PUBLISHED", "HIDDEN" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "to" ],
+        "type" : "object"
+      },
+      "ModerationDecisionResponse" : {
+        "properties" : {
+          "reasonCode" : {
+            "type" : "string"
+          },
+          "reviewId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "state" : {
+            "enum" : [ "NOT_SHARED", "PENDING", "PUBLISHED", "HIDDEN" ],
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "ModuleEnded" : {
         "properties" : {
           "endedAt" : {
@@ -11507,6 +11903,39 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "NewFeedbackTagRequest" : {
+        "properties" : {
+          "category" : {
+            "enum" : [ "FOOD", "SERVICE", "COURIER", "DELIVERY_TIME", "OTHER" ],
+            "type" : "string"
+          },
+          "code" : {
+            "maxLength" : 48,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "iconAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "sentiment" : {
+            "enum" : [ "POSITIVE", "NEGATIVE" ],
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "category", "code", "labels", "sentiment" ],
         "type" : "object"
       },
       "NewRateCardRequest" : {
@@ -11936,6 +12365,16 @@
           }
         },
         "required" : [ "quantity", "reasonCode" ],
+        "type" : "object"
+      },
+      "OpenCaseRequest" : {
+        "properties" : {
+          "reviewId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "reviewId" ],
         "type" : "object"
       },
       "OpenShiftRequest" : {
@@ -12812,6 +13251,14 @@
       },
       "OperationsReviewControllerReviewResponse" : {
         "properties" : {
+          "caseId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "caseState" : {
+            "enum" : [ "NEW", "IN_PROGRESS", "RESOLVED", "CLOSED_UNRESOLVED" ],
+            "type" : "string"
+          },
           "comment" : {
             "type" : "string"
           },
@@ -12831,6 +13278,13 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "publicReasonCode" : {
+            "type" : "string"
+          },
+          "publicState" : {
+            "enum" : [ "NOT_SHARED", "PENDING", "PUBLISHED", "HIDDEN" ],
+            "type" : "string"
+          },
           "rating" : {
             "format" : "int32",
             "type" : "integer"
@@ -12838,6 +13292,12 @@
           "submittedAt" : {
             "format" : "date-time",
             "type" : "string"
+          },
+          "tags" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ReviewListTagResponse"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -14245,6 +14705,20 @@
           "items" : {
             "items" : {
               "$ref" : "#/components/schemas/AuditEventView"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PageCaseSummaryResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CaseSummaryResponse"
             },
             "type" : "array"
           },
@@ -16071,6 +16545,98 @@
         },
         "type" : "object"
       },
+      "PromptPolicyRequest" : {
+        "properties" : {
+          "inlineWindowDays" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PromptRowDto"
+            },
+            "type" : "array"
+          },
+          "sendWindow" : {
+            "$ref" : "#/components/schemas/SendWindowDto"
+          }
+        },
+        "required" : [ "reason", "rows" ],
+        "type" : "object"
+      },
+      "PromptPolicyResponse" : {
+        "properties" : {
+          "inlineWindowDays" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "isDefault" : {
+            "type" : "boolean"
+          },
+          "levels" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Level"
+            },
+            "type" : "array"
+          },
+          "policyId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "policyVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PromptRowDto"
+            },
+            "type" : "array"
+          },
+          "sendWindow" : {
+            "$ref" : "#/components/schemas/SendWindowDto"
+          },
+          "versionAtScope" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "winningScope" : {
+            "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PromptRowDto" : {
+        "properties" : {
+          "channel" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "delayMinutes" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "fulfillmentMode" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "giveUpAfterHours" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "channel", "delayMinutes", "enabled", "fulfillmentMode", "giveUpAfterHours" ],
+        "type" : "object"
+      },
       "PropagationResponse" : {
         "properties" : {
           "bindings" : {
@@ -16215,6 +16781,96 @@
               "$ref" : "#/components/schemas/RowResponse"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "QueueEntry" : {
+        "properties" : {
+          "comment" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "rating" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "reasonCode" : {
+            "type" : "string"
+          },
+          "reviewId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "state" : {
+            "enum" : [ "NOT_SHARED", "PENDING", "PUBLISHED", "HIDDEN" ],
+            "type" : "string"
+          },
+          "submittedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "tags" : {
+            "items" : {
+              "$ref" : "#/components/schemas/QueueTag"
+            },
+            "type" : "array"
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "QueueResponse" : {
+        "properties" : {
+          "counts" : {
+            "additionalProperties" : {
+              "format" : "int64",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/QueueEntry"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "QueueTag" : {
+        "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "sentiment" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -16889,6 +17545,178 @@
           }
         },
         "required" : [ "brandId", "direction", "outcome" ],
+        "type" : "object"
+      },
+      "RecoveryOutcomeRowResponse" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "cases" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "outcomeCode" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "RecoveryPolicyRequest" : {
+        "properties" : {
+          "alertOnBreach" : {
+            "type" : "boolean"
+          },
+          "alertOnOpen" : {
+            "type" : "boolean"
+          },
+          "autoOpenMaxRating" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "firstResponseMinutes" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "resolutionMinutes" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "autoOpenMaxRating", "firstResponseMinutes", "reason", "resolutionMinutes" ],
+        "type" : "object"
+      },
+      "RecoveryPolicyResponse" : {
+        "properties" : {
+          "alertOnBreach" : {
+            "type" : "boolean"
+          },
+          "alertOnOpen" : {
+            "type" : "boolean"
+          },
+          "autoOpenMaxRating" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "firstResponseMinutes" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "isDefault" : {
+            "type" : "boolean"
+          },
+          "levels" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Level"
+            },
+            "type" : "array"
+          },
+          "policyId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "policyVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "resolutionMinutes" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "versionAtScope" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "winningScope" : {
+            "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "RecoveryResponse" : {
+        "properties" : {
+          "outcomes" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RecoveryOutcomeRowResponse"
+            },
+            "type" : "array"
+          },
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "remedies" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RemedyRowResponse"
+            },
+            "type" : "array"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RecoveryRowResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "RecoveryRowResponse" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "breachRateBasisPoints" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "breached" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "closeMeanSeconds" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "closeP90Seconds" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "closed" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "compensations" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "firstResponseMeanSeconds" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "firstResponseP90Seconds" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "opened" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
         "type" : "object"
       },
       "RedefineAudienceRequest" : {
@@ -17726,6 +18554,26 @@
             "type" : "string"
           },
           "verificationState" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "RemedyRowResponse" : {
+        "properties" : {
+          "amountMinor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
             "type" : "string"
           }
         },
@@ -18769,6 +19617,89 @@
         },
         "type" : "object"
       },
+      "ReviewListTagResponse" : {
+        "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "iconAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "sentiment" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ReviewSummaryResponse" : {
+        "properties" : {
+          "provenance" : {
+            "$ref" : "#/components/schemas/ProvenanceResponse"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ReviewSummaryRowResponse"
+            },
+            "type" : "array"
+          },
+          "tags" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TagRowResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "ReviewSummaryRowResponse" : {
+        "properties" : {
+          "average" : {
+            "type" : "number"
+          },
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "distribution" : {
+            "items" : {
+              "format" : "int64",
+              "type" : "integer"
+            },
+            "type" : "array"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "ratingSum" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "reviews" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "withComment" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "RevisionResponse" : {
         "properties" : {
           "amendmentId" : {
@@ -19653,7 +20584,7 @@
         "properties" : {
           "capabilities" : {
             "items" : {
-              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "INVENTORY_AVAILABILITY_MANAGE", "INVENTORY_STOP_MANAGE", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PAYMENT_WINDOW_MANAGE", "ORDER_PLACE", "ORDER_POINTS_REVEAL", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "PAYMENT_METHOD_READ", "PAYMENT_METHOD_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "GEO_LOOKUP", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "DELIVERY_POLICY_READ", "DELIVERY_POLICY_WRITE", "DELIVERY_DISPATCH_RULES_READ", "DELIVERY_DISPATCH_RULES_WRITE", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "COURIER_BROADCAST_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_DISPLAY_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_SHIFT_RECEIVE", "MARKETPLACE_AVAILABILITY_PULL", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_VERIFY", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_CREATE", "CUSTOMER_PII_REVEAL", "CUSTOMER_LEAD_READ", "CUSTOMER_LEAD_MANAGE", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "STOREFRONT_APP_REGISTRY_MANAGE", "STOREFRONT_APP_AUTHORISE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_SYNC_MANAGE", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_ROUTING_MANAGE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "MARKETING_OFFER_MANAGE", "MARKETING_CONTACT_POLICY_MANAGE", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "MARKETING_LINK_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "COMMERCIAL_MODULE_READ", "COMMERCIAL_ARREARS_READ", "COMMERCIAL_WALLET_TOPUP", "COMMERCIAL_CARD_MANAGE", "COMMERCIAL_EINVOICE_SEND", "COMMERCIAL_EINVOICING_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "IAM_STAFF_MFA_READ", "IAM_STAFF_MFA_RESET", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "REPORT_EXPORT", "CUSTOMER_PII_EXPORT", "REPORTING_CLASSIFICATION_RUN", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_DELIVERY_READ", "COURIER_OFFER_ACCEPT", "COURIER_OFFER_DECLINE", "COURIER_DELIVERY_ADVANCE", "COURIER_DELIVERY_PAYMENT_CONFIRM", "COURIER_DELIVERY_LOCATION_REVEAL", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "ASSISTANT_READ", "ASSISTANT_KNOWLEDGE_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "STAFF_PROFILE_READ", "STAFF_PROFILE_MANAGE", "STAFF_EMERGENCY_CONTACT_READ", "STAFF_SELF_MANAGE", "PLATFORM_ADMIN" ],
+              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "INVENTORY_AVAILABILITY_MANAGE", "INVENTORY_STOP_MANAGE", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PAYMENT_WINDOW_MANAGE", "ORDER_PLACE", "ORDER_POINTS_REVEAL", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "REVIEW_MODERATE", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "PAYMENT_METHOD_READ", "PAYMENT_METHOD_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "GEO_LOOKUP", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "DELIVERY_POLICY_READ", "DELIVERY_POLICY_WRITE", "DELIVERY_DISPATCH_RULES_READ", "DELIVERY_DISPATCH_RULES_WRITE", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "COURIER_BROADCAST_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_DISPLAY_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_SHIFT_RECEIVE", "MARKETPLACE_AVAILABILITY_PULL", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_VERIFY", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_CREATE", "CUSTOMER_PII_REVEAL", "CUSTOMER_LEAD_READ", "CUSTOMER_LEAD_MANAGE", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "STOREFRONT_APP_REGISTRY_MANAGE", "STOREFRONT_APP_AUTHORISE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_SYNC_MANAGE", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_ROUTING_MANAGE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "MARKETING_OFFER_MANAGE", "MARKETING_CONTACT_POLICY_MANAGE", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "MARKETING_LINK_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "COMMERCIAL_MODULE_READ", "COMMERCIAL_ARREARS_READ", "COMMERCIAL_WALLET_TOPUP", "COMMERCIAL_CARD_MANAGE", "COMMERCIAL_EINVOICE_SEND", "COMMERCIAL_EINVOICING_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "IAM_STAFF_MFA_READ", "IAM_STAFF_MFA_RESET", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "REPORT_EXPORT", "CUSTOMER_PII_EXPORT", "REPORTING_CLASSIFICATION_RUN", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_DELIVERY_READ", "COURIER_OFFER_ACCEPT", "COURIER_OFFER_DECLINE", "COURIER_DELIVERY_ADVANCE", "COURIER_DELIVERY_PAYMENT_CONFIRM", "COURIER_DELIVERY_LOCATION_REVEAL", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "ASSISTANT_READ", "ASSISTANT_KNOWLEDGE_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "STAFF_PROFILE_READ", "STAFF_PROFILE_MANAGE", "STAFF_EMERGENCY_CONTACT_READ", "STAFF_SELF_MANAGE", "PLATFORM_ADMIN" ],
               "type" : "string"
             },
             "type" : "array",
@@ -19820,6 +20751,20 @@
           }
         },
         "required" : [ "body" ],
+        "type" : "object"
+      },
+      "SendWindowDto" : {
+        "properties" : {
+          "end" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "start" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "end", "start" ],
         "type" : "object"
       },
       "ServiceStateRequest" : {
@@ -20908,6 +21853,21 @@
           }
         },
         "required" : [ "refreshToken" ],
+        "type" : "object"
+      },
+      "StaffResponse" : {
+        "properties" : {
+          "displayReference" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "StaffSessionResponse" : {
@@ -22043,6 +23003,37 @@
         },
         "type" : "object"
       },
+      "TagLibraryResponse" : {
+        "properties" : {
+          "defaultLocale" : {
+            "type" : "string"
+          },
+          "iconAspectRatio" : {
+            "type" : "string"
+          },
+          "iconMaximumBytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "locales" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "maximumActiveTags" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "tags" : {
+            "items" : {
+              "$ref" : "#/components/schemas/FeedbackTagResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "TagResponse" : {
         "properties" : {
           "code" : {
@@ -22057,6 +23048,29 @@
           "tagId" : {
             "format" : "uuid",
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "TagRowResponse" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sentiment" : {
+            "type" : "string"
+          },
+          "tags" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -22844,6 +23858,43 @@
         },
         "type" : "object"
       },
+      "TimelineResponse" : {
+        "properties" : {
+          "actor" : {
+            "$ref" : "#/components/schemas/StaffResponse"
+          },
+          "actorType" : {
+            "type" : "string"
+          },
+          "detailCode" : {
+            "type" : "string"
+          },
+          "fromState" : {
+            "enum" : [ "NEW", "IN_PROGRESS", "RESOLVED", "CLOSED_UNRESOLVED" ],
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "enum" : [ "OPENED", "ASSIGNED", "STARTED", "RELEASED", "NOTE", "COMPENSATION_ATTACHED", "FIRST_RESPONSE_BREACHED", "RESOLUTION_BREACHED", "RESOLVED", "CLOSED_UNRESOLVED" ],
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "occurredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "toState" : {
+            "enum" : [ "NEW", "IN_PROGRESS", "RESOLVED", "CLOSED_UNRESOLVED" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "TimingResponse" : {
         "properties" : {
           "isDefaults" : {
@@ -23480,6 +24531,42 @@
           }
         },
         "required" : [ "expectedVersion", "windowEnd", "windowStart" ],
+        "type" : "object"
+      },
+      "UpdateTagRequest" : {
+        "properties" : {
+          "category" : {
+            "enum" : [ "FOOD", "SERVICE", "COURIER", "DELIVERY_TIME", "OTHER" ],
+            "type" : "string"
+          },
+          "expectedVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "iconAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "sentiment" : {
+            "enum" : [ "POSITIVE", "NEGATIVE" ],
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "enum" : [ "ACTIVE", "RETIRED" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "category", "sentiment", "sortOrder", "status" ],
         "type" : "object"
       },
       "UploadRequest" : {
@@ -24772,7 +25859,7 @@
     "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts" : {
       "post" : {
         "description" : "Refused while the engagement is not ACTIVE. A lapsed registration cannot open a shift; work already accepted still finishes and everything already accrued is still owed.",
-        "operationId" : "open_2",
+        "operationId" : "open_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -26659,7 +27746,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations" : {
       "get" : {
         "description" : "HANDED_TO_OPERATOR conversations first, then a FLOW_ACTIVE conversation whose newest message nobody has answered yet, then everything else by last activity. assistantActive marks a conversation the assistant is answering (ADR 0069), assistantInvolved one it has spoken in at all. No message bodies here — open a conversation for its decrypted history.",
-        "operationId" : "list_32",
+        "operationId" : "list_33",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -26709,7 +27796,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}" : {
       "get" : {
         "description" : "The envelope-decrypted free text is this screen's whole purpose (ADR 0059). The first time a given operator opens a given conversation this way, it writes a conversation.history.read audit fact (ADR 0027); a later poll of an already-open thread by the same operator does not repeat it.",
-        "operationId" : "detail_5",
+        "operationId" : "detail_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -27083,7 +28170,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}" : {
       "get" : {
         "description" : "activeVersion is absent for a tariff drafted but never activated. routing says what a ROAD version's distance is measured by right now (ADR 0147).",
-        "operationId" : "detail_4",
+        "operationId" : "detail_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -27279,6 +28366,169 @@
         },
         "summary" : "Make a rate table version live",
         "tags" : [ "Delivery tariffs" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/feedback/prompt-policy" : {
+      "get" : {
+        "description" : "Resolved brand then tenant then the built-in default; versionAtScope is the version authored at the brand itself (0 when it follows the tenant).",
+        "operationId" : "readBrandPromptPolicy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PromptPolicyResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The rating-prompt policy in force for a brand",
+        "tags" : [ "Feedback settings" ]
+      },
+      "put" : {
+        "description" : "As the tenant route, for one brand.",
+        "operationId" : "writeBrandPromptPolicy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PromptPolicyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PromptPolicyResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Publish a brand's own rating-prompt policy",
+        "tags" : [ "Feedback settings" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/feedback/recovery-policy" : {
+      "get" : {
+        "operationId" : "readBrandRecoveryPolicy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecoveryPolicyResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The recovery policy in force for a brand",
+        "tags" : [ "Feedback settings" ]
+      },
+      "put" : {
+        "description" : "As the tenant route, for one brand.",
+        "operationId" : "writeBrandRecoveryPolicy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RecoveryPolicyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecoveryPolicyResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Publish a brand's own recovery policy",
+        "tags" : [ "Feedback settings" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/fiscal-terminals" : {
@@ -28843,7 +30093,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/dispatch/queue" : {
       "get" : {
         "description" : "Unassigned and assigned alike, soonest source-at first. COMPLETED and CANCELLED plans are the only ones excluded.",
-        "operationId" : "queue",
+        "operationId" : "queue_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -29212,7 +30462,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/grants" : {
       "get" : {
         "description" : "ADR 0103: «the Chilonzor manager sees Chilonzor's team». Grants whose own scope is this location, active only unless includeInactive=true. Never a company-level or brand-level grant and never another branch's.",
-        "operationId" : "listForLocation",
+        "operationId" : "listForLocation_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -29690,6 +30940,430 @@
         "tags" : [ "Location service operations" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/recovery-cases" : {
+      "get" : {
+        "description" : "As the brand worklist, for a branch the caller works: only this branch's cases.",
+        "operationId" : "listForLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "state",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "NEW", "IN_PROGRESS", "RESOLVED", "CLOSED_UNRESOLVED" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "ownerStaffMemberId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "slaState",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "ON_TRACK", "AT_RISK", "BREACHED", "MET" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageCaseSummaryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One branch's service-recovery cases",
+        "tags" : [ "Service recovery" ]
+      },
+      "post" : {
+        "description" : "For a review the recovery policy did not flag. One case per review: a second is RESOURCE_CONFLICT. UNPROCESSABLE_STATE while service recovery is switched off for the tenant. The review must belong to this branch.",
+        "operationId" : "open_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OpenCaseRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CaseMutationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Open a case from a review, by hand",
+        "tags" : [ "Service recovery" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/recovery-cases/summary" : {
+      "get" : {
+        "operationId" : "summaryForLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CaseCountsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Counts of one branch's cases by state and by where their clocks stand",
+        "tags" : [ "Service recovery" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/recovery-cases/{caseId}" : {
+      "get" : {
+        "description" : "The rating, tags, order, timeline (with each note) and the linked compensation. The customer's comment is returned only if the caller also holds review.read at this location; otherwise commentWithheld is true and the comment is null, and the case can still be worked. The ETag is the version to send back as If-Match. A case outside this branch is RESOURCE_NOT_FOUND.",
+        "operationId" : "detail_4",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "caseId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CaseDetailResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One case: the drawer",
+        "tags" : [ "Service recovery" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/recovery-cases/{caseId}/compensations" : {
+      "post" : {
+        "description" : "The case links and never pays: the remedy was recorded through the order-remedy console (kind ORDER_REMEDY, refId its id, which must be a remedy of this case's own order) or the code minted through the benefit-grant mint (kind BENEFIT_GRANT, refId the grant's id, which must belong to this customer and brand). A remedy's amount and currency are copied onto the link now. Another tenant's, another order's and another customer's all answer RESOURCE_NOT_FOUND. A compensation belongs to at most one case (RESOURCE_CONFLICT). A closed case is final (UNPROCESSABLE_STATE).",
+        "operationId" : "attach",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "caseId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AttachRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CompensationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Link a remedy or an apology code to an open case",
+        "tags" : [ "Service recovery" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/recovery-cases/{caseId}/notes" : {
+      "post" : {
+        "description" : "Free text, so it is stored encrypted and returned only by the drawer: this response carries the new timeline entry's id and never the note. Allowed in any state.",
+        "operationId" : "addNote",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "caseId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CaseNoteRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CaseNoteResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Add a note to a case's timeline",
+        "tags" : [ "Service recovery" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/recovery-cases/{caseId}/transitions" : {
+      "post" : {
+        "description" : "Needs If-Match (or expectedVersion) with the case's version. NEW to IN_PROGRESS starts work: the caller becomes the owner unless ownerStaffMemberId names someone else, and it is the first response. IN_PROGRESS to NEW releases it. IN_PROGRESS to IN_PROGRESS with a new ownerStaffMemberId hands it over. Closing needs an outcomeCode from the closed list for the target state; REMEDY_GRANTED needs at least one attached compensation; NEW to CLOSED_UNRESOLVED takes NOT_ACTIONABLE only and dismisses the case without answering it. A terminal state is final. An edge the machine does not have is UNPROCESSABLE_STATE; a lost race is STALE_VERSION.",
+        "operationId" : "transition_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "caseId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CaseTransitionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CaseMutationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Move a case along NEW, IN_PROGRESS, RESOLVED and CLOSED_UNRESOLVED",
+        "tags" : [ "Service recovery" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/regional-formats" : {
       "get" : {
         "operationId" : "regionalFormats",
@@ -29932,7 +31606,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/staff/members" : {
       "get" : {
         "description" : "For a branch manager: names, masked phones and employment status of people holding an active job at this very branch, and no one else.",
-        "operationId" : "listForLocation_2",
+        "operationId" : "listForLocation_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -32116,6 +33790,136 @@
         "tags" : [ "Promotions" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/recovery-cases" : {
+      "get" : {
+        "description" : "Open cases most-urgent first (by resolution due time), closed ones most recently closed first. Filter by state, owner, branch and where the clocks stand (ON_TRACK, AT_RISK, BREACHED, or MET for a closed case in time). Cursor-paginated per ADR 0031. No comment and no note: they are in the drawer.",
+        "operationId" : "list_32",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "state",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "NEW", "IN_PROGRESS", "RESOLVED", "CLOSED_UNRESOLVED" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "ownerStaffMemberId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "slaState",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "ON_TRACK", "AT_RISK", "BREACHED", "MET" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageCaseSummaryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The brand's service-recovery cases",
+        "tags" : [ "Service recovery" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/recovery-cases/summary" : {
+      "get" : {
+        "description" : "Optionally narrowed to one branch. Computed from the same clock arithmetic the list uses, as of now.",
+        "operationId" : "summary_5",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locationId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CaseCountsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Counts of the brand's cases by state and by where their clocks stand",
+        "tags" : [ "Service recovery" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/referrals/programs" : {
       "get" : {
         "description" : "DRAFT, ACTIVE and RETIRED rows together, newest first within each status — an authoring screen needs the lineage, not only what is live.",
@@ -32320,7 +34124,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/referrals/summary" : {
       "get" : {
         "description" : "The marketer's headline numbers, computed from the same rows the redemption list below shows — never a separately maintained count that can drift from it.",
-        "operationId" : "summary_3",
+        "operationId" : "summary_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -32457,10 +34261,71 @@
         "tags" : [ "Reviews" ]
       }
     },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews/moderation-queue" : {
+      "get" : {
+        "description" : "state defaults to PENDING, the comments waiting for a decision. Each entry carries the comment (decrypted for this screen), its rating and tags, and the version to decide against. counts says how many sit in each state, so the tab can show the PENDING number. Cursor-paginated per ADR 0031. Only comments the customer agreed to share are ever queued.",
+        "operationId" : "queue",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "state",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "NOT_SHARED", "PENDING", "PUBLISHED", "HIDDEN" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/QueueResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The brand's comments in a publication state, longest-waiting first",
+        "tags" : [ "Review moderation" ]
+      }
+    },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews/summary" : {
       "get" : {
         "description" : "Computed directly from this brand's own rows, uncached and unregistered — ADR 0071 deliberately does not register this as an ADR 0043 metric while this is its only caller.",
-        "operationId" : "summary_2",
+        "operationId" : "summary_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -32516,6 +34381,61 @@
         },
         "summary" : "Count and average rating over the same filters the list accepts",
         "tags" : [ "Reviews" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews/{reviewId}/moderation-decisions" : {
+      "post" : {
+        "description" : "to is PUBLISHED or HIDDEN. The allowed moves are PENDING to PUBLISHED, PENDING to HIDDEN, PUBLISHED to HIDDEN and HIDDEN to PUBLISHED; anything else, or restoring a comment the customer took back, is UNPROCESSABLE_STATE. Hiding needs reasonCode: ABUSIVE_LANGUAGE, PERSONAL_DATA_OF_ANOTHER, NAMES_AN_INDIVIDUAL, SPAM_OR_UNRELATED or LEGAL_REQUEST; publishing gives none. Needs If-Match (or expectedVersion) with the version the queue returned. Changes the publication state only: never the rating, never the average. The brand's public list is evicted in this request. The response carries a state, a code and a version, never the comment.",
+        "operationId" : "decide_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "reviewId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ModerationDecisionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ModerationDecisionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Publish or hide a comment",
+        "tags" : [ "Review moderation" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones" : {
@@ -35890,6 +37810,283 @@
         },
         "summary" : "Which feature flags are on for this tenant",
         "tags" : [ "Feature flags" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/feedback/prompt-policy" : {
+      "get" : {
+        "description" : "Resolves reviews.feedback_prompt at tenant scope. isDefault is true when nothing was published, and the built-in default applies: Telegram on, SMS, email and push off, 30 minutes after completion, given up after 6 hours, inside 09:00-21:00. The ETag, and versionAtScope, are the version to send back as If-Match.",
+        "operationId" : "readPromptPolicy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PromptPolicyResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "When customers are asked to rate an order: the tenant's policy",
+        "tags" : [ "Feedback settings" ]
+      },
+      "put" : {
+        "description" : "Whole-document replace under If-Match. Rows are keyed by order type (DELIVERY, PICKUP, DINE_IN or *) and channel (TELEGRAM, SMS, EMAIL, PUSH or *); the most specific row wins, the order type before the channel, then the built-in default. delayMinutes 0-1440, giveUpAfterHours 1-72. A policy can only make a prompt rarer or later than today's immediate send. A prompt outside sendWindow (in the branch's time zone) moves to its next opening.",
+        "operationId" : "writePromptPolicy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PromptPolicyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PromptPolicyResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Publish the tenant's rating-prompt policy",
+        "tags" : [ "Feedback settings" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/feedback/recovery-policy" : {
+      "get" : {
+        "description" : "Resolves reviews.recovery at tenant scope. The built-in default: a rating of 2 or less opens a case, first touch within 240 minutes, resolution within 4320 (72 hours), wall-clock, no chat alerts.",
+        "operationId" : "readRecoveryPolicy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecoveryPolicyResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Which reviews open a service-recovery case, and the two clocks: the tenant's policy",
+        "tags" : [ "Feedback settings" ]
+      },
+      "put" : {
+        "description" : "Whole-document replace under If-Match. autoOpenMaxRating 0 (never) to 5, firstResponseMinutes 15-10080, resolutionMinutes 60-43200 and not shorter than the first. A case stores the version it opened under, so an edit never makes an old case late.",
+        "operationId" : "writeRecoveryPolicy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RecoveryPolicyRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecoveryPolicyResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Publish the tenant's recovery policy",
+        "tags" : [ "Feedback settings" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/feedback/tags" : {
+      "get" : {
+        "description" : "Every tag, active and retired, in the tenant's order, with its wording in every locale it was written in, its icon, and whether any review carries it (a used tag's code, category and sentiment are frozen). locales is the set the editor offers: the union of the tenant's brands' languages.",
+        "operationId" : "listTags",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TagLibraryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The tenant's feedback tag library",
+        "tags" : [ "Feedback settings" ]
+      },
+      "post" : {
+        "description" : "code is lower case letters, digits and underscores and never changes. The wording is required in the tenant's default language and optional in the others. iconAssetId, if given, must be a tenant-owned PUBLIC image, 3:2, at most 1 MB, uploaded and verified; anything else is VALIDATION_FAILED. At most 40 tags are active; a duplicate code is RESOURCE_CONFLICT.",
+        "operationId" : "createTag",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/NewFeedbackTagRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FeedbackTagResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Register a feedback tag",
+        "tags" : [ "Feedback settings" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/feedback/tags/starter-pack" : {
+      "post" : {
+        "description" : "Six praise and six complain, in Russian, Uzbek (Latin) and English, with no icons and none about a courier. They are the tenant's to edit afterwards; RESOURCE_CONFLICT when any of them is already in the library.",
+        "operationId" : "importStarterPack",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/FeedbackTagResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Import the twelve starter tags, once",
+        "tags" : [ "Feedback settings" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/feedback/tags/{tagId}" : {
+      "put" : {
+        "description" : "Whole-tag replace under If-Match (or expectedVersion) with the version the list returned. status RETIRED stops the tag being offered and leaves it on every review that carries it; there is no delete. labels names only the locales the editor showed: every other locale keeps its wording. category and sentiment cannot change once a review carries the tag (UNPROCESSABLE_STATE).",
+        "operationId" : "updateTag",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "tagId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateTagRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FeedbackTagResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Edit or retire a feedback tag",
+        "tags" : [ "Feedback settings" ]
       }
     },
     "/api/v1/operations/tenants/{tenantId}/integrations" : {
@@ -40457,7 +42654,7 @@
     "/api/v1/operations/tenants/{tenantId}/staff/mfa-summary" : {
       "get" : {
         "description" : "One row per person of the tenant: whether they hold a second factor and how many authenticators. Read from the cached Keycloak credential lists, a few at a time; a person Keycloak could not answer for is `unknown` and the rest still render.",
-        "operationId" : "summary_1",
+        "operationId" : "summary_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -40648,7 +42845,7 @@
           "name" : "capability",
           "required" : true,
           "schema" : {
-            "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "INVENTORY_AVAILABILITY_MANAGE", "INVENTORY_STOP_MANAGE", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PAYMENT_WINDOW_MANAGE", "ORDER_PLACE", "ORDER_POINTS_REVEAL", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "PAYMENT_METHOD_READ", "PAYMENT_METHOD_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "GEO_LOOKUP", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "DELIVERY_POLICY_READ", "DELIVERY_POLICY_WRITE", "DELIVERY_DISPATCH_RULES_READ", "DELIVERY_DISPATCH_RULES_WRITE", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "COURIER_BROADCAST_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_DISPLAY_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_SHIFT_RECEIVE", "MARKETPLACE_AVAILABILITY_PULL", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_VERIFY", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_CREATE", "CUSTOMER_PII_REVEAL", "CUSTOMER_LEAD_READ", "CUSTOMER_LEAD_MANAGE", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "STOREFRONT_APP_REGISTRY_MANAGE", "STOREFRONT_APP_AUTHORISE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_SYNC_MANAGE", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_ROUTING_MANAGE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "MARKETING_OFFER_MANAGE", "MARKETING_CONTACT_POLICY_MANAGE", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "MARKETING_LINK_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "COMMERCIAL_MODULE_READ", "COMMERCIAL_ARREARS_READ", "COMMERCIAL_WALLET_TOPUP", "COMMERCIAL_CARD_MANAGE", "COMMERCIAL_EINVOICE_SEND", "COMMERCIAL_EINVOICING_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "IAM_STAFF_MFA_READ", "IAM_STAFF_MFA_RESET", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "REPORT_EXPORT", "CUSTOMER_PII_EXPORT", "REPORTING_CLASSIFICATION_RUN", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_DELIVERY_READ", "COURIER_OFFER_ACCEPT", "COURIER_OFFER_DECLINE", "COURIER_DELIVERY_ADVANCE", "COURIER_DELIVERY_PAYMENT_CONFIRM", "COURIER_DELIVERY_LOCATION_REVEAL", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "ASSISTANT_READ", "ASSISTANT_KNOWLEDGE_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "STAFF_PROFILE_READ", "STAFF_PROFILE_MANAGE", "STAFF_EMERGENCY_CONTACT_READ", "STAFF_SELF_MANAGE", "PLATFORM_ADMIN" ],
+            "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "INVENTORY_AVAILABILITY_MANAGE", "INVENTORY_STOP_MANAGE", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PAYMENT_WINDOW_MANAGE", "ORDER_PLACE", "ORDER_POINTS_REVEAL", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "REVIEW_MODERATE", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "PAYMENT_METHOD_READ", "PAYMENT_METHOD_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "GEO_LOOKUP", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "DELIVERY_POLICY_READ", "DELIVERY_POLICY_WRITE", "DELIVERY_DISPATCH_RULES_READ", "DELIVERY_DISPATCH_RULES_WRITE", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "COURIER_BROADCAST_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_DISPLAY_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_SHIFT_RECEIVE", "MARKETPLACE_AVAILABILITY_PULL", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_VERIFY", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_CREATE", "CUSTOMER_PII_REVEAL", "CUSTOMER_LEAD_READ", "CUSTOMER_LEAD_MANAGE", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "STOREFRONT_APP_REGISTRY_MANAGE", "STOREFRONT_APP_AUTHORISE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_SYNC_MANAGE", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_ROUTING_MANAGE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "MARKETING_OFFER_MANAGE", "MARKETING_CONTACT_POLICY_MANAGE", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "MARKETING_LINK_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "COMMERCIAL_MODULE_READ", "COMMERCIAL_ARREARS_READ", "COMMERCIAL_WALLET_TOPUP", "COMMERCIAL_CARD_MANAGE", "COMMERCIAL_EINVOICE_SEND", "COMMERCIAL_EINVOICING_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "IAM_STAFF_MFA_READ", "IAM_STAFF_MFA_RESET", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "REPORT_EXPORT", "CUSTOMER_PII_EXPORT", "REPORTING_CLASSIFICATION_RUN", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_DELIVERY_READ", "COURIER_OFFER_ACCEPT", "COURIER_OFFER_DECLINE", "COURIER_DELIVERY_ADVANCE", "COURIER_DELIVERY_PAYMENT_CONFIRM", "COURIER_DELIVERY_LOCATION_REVEAL", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "ASSISTANT_READ", "ASSISTANT_KNOWLEDGE_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "STAFF_PROFILE_READ", "STAFF_PROFILE_MANAGE", "STAFF_EMERGENCY_CONTACT_READ", "STAFF_SELF_MANAGE", "PLATFORM_ADMIN" ],
             "type" : "string"
           }
         }, {
@@ -45357,7 +47554,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/leads" : {
       "get" : {
         "description" : "Only leads whose assigned branch is this one -- the query is written against the branch, so another branch's lead is not a row it could return.",
-        "operationId" : "listForLocation_1",
+        "operationId" : "listForLocation_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -45853,7 +48050,7 @@
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/operations/streams" : {
       "get" : {
         "description" : "A frame carries a signal, not state: the client is told that something in its subscribed scope changed and re-reads it through the ordinary authorized API. Two channels are registered exceptions and carry a bounded payload inline. There is no replay buffer — a reconnect with Last-Event-Id receives a resync frame telling it to re-read its whole scope. Every surface here also has a polling path that must work; this is an accelerator on top of it, and turning it off changes no other code.",
-        "operationId" : "open_3",
+        "operationId" : "open_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -57247,7 +59444,7 @@
     "/api/v1/tenants/{tenantId}/reporting/promotions/summary" : {
       "get" : {
         "description" : "One row per promotion over the closed business days in the range. Cancelled, rejected, expired and payment-failed orders are excluded here and stay in the log. The average check with and without is a comparison over the same brand and period, not a causal uplift: customers who use a promotion differ from those who do not.",
-        "operationId" : "summary",
+        "operationId" : "summary_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -57429,6 +59626,112 @@
         },
         "summary" : "One report export's status",
         "tags" : [ "Report exports" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/reviews/recovery" : {
+      "get" : {
+        "description" : "A case counts as opened on its opening business day and closed on its closing day, so the two counts and the two durations are over different sets. Means are whole seconds rounded to the nearest; the 90th percentile is continuous over the same set. The breach rate is in basis points. Remedy money is returned per currency as it was attached and is not a registered metric (recovery.remedy_money is declared unbuilt: ADR 0038 needs a legal entity the compensation link does not carry).",
+        "operationId" : "recovery",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RecoveryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "recovery.*: service-recovery cases per location - opened, closed by outcome, times, breach rate",
+        "tags" : [ "Review reporting" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/reporting/reviews/summary" : {
+      "get" : {
+        "description" : "One row per location over the closed business days in the range. Every review counts, whatever became of its comment: a rating is not words. The average is the sum of ratings over the count, half up to one decimal, and is null when the range holds no review. Tags are counted by category and sentiment, never by wording.",
+        "operationId" : "summary",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : true,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "brandId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReviewSummaryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "reviews.count, reviews.average_rating, reviews.tagged: reviews per location and the tags they carried",
+        "tags" : [ "Review reporting" ]
       }
     },
     "/api/v1/tenants/{tenantId}/reporting/sla-bucket-set" : {
@@ -57984,6 +60287,9 @@
     "description" : "A courier's own shift, breaks, and cash declaration",
     "name" : "Courier shift"
   }, {
+    "description" : "Publishing and hiding the comments customers agreed to show publicly",
+    "name" : "Review moderation"
+  }, {
     "description" : "Leaderboard, SLA buckets, tariff audit and external-delivery cost",
     "name" : "Courier reporting"
   }, {
@@ -57998,6 +60304,9 @@
   }, {
     "description" : "Unreported receipts, blocked work, and receipt coverage",
     "name" : "Fiscal documents"
+  }, {
+    "description" : "The worklist of cases about low reviews, with owners, clocks and a timeline",
+    "name" : "Service recovery"
   }, {
     "description" : "The merchant's own wallet, card and prepayment invoices",
     "name" : "Commercial wallet (merchant)"
@@ -58043,6 +60352,9 @@
   }, {
     "description" : "Per-tenant, per-brand, per-locale message wording and its versions",
     "name" : "Notification templates"
+  }, {
+    "description" : "Ratings, tags and service-recovery performance",
+    "name" : "Review reporting"
   }, {
     "description" : "The ADR 0065 write-only door: values enter, only references leave",
     "name" : "Secret ingress"
@@ -58091,6 +60403,9 @@
   }, {
     "description" : "A brand's own order reviews, against their orders and customers",
     "name" : "Reviews"
+  }, {
+    "description" : "The tag library, the rating prompt's timing and the recovery policy",
+    "name" : "Feedback settings"
   }, {
     "description" : "Map configuration and address lookup through the platform's map provider (ADR 0145)",
     "name" : "Geocoding"

@@ -50,14 +50,14 @@ public class ReviewReportController {
                     + "counts, whatever became of its comment: a rating is not words. The average is the sum "
                     + "of ratings over the count, half up to one decimal, and is null when the range holds "
                     + "no review. Tags are counted by category and sentiment, never by wording.")
-    public ResponseEntity<SummaryResponse> summary(
+    public ResponseEntity<ReviewSummaryResponse> summary(
             @PathVariable UUID tenantId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) @Nullable UUID brandId) {
         var result = queries.reviewSummary(tenantId, from, to, brandId);
-        return ResponseEntity.ok(new SummaryResponse(
-                result.rows().stream().map(SummaryRowResponse::of).toList(),
+        return ResponseEntity.ok(new ReviewSummaryResponse(
+                result.rows().stream().map(ReviewSummaryRowResponse::of).toList(),
                 result.tags().stream().map(TagRowResponse::of).toList(),
                 ReportingController.ProvenanceResponse.of(result.provenance())));
     }
@@ -80,7 +80,7 @@ public class ReviewReportController {
         var result = queries.recoverySummary(tenantId, from, to, brandId);
         return ResponseEntity.ok(new RecoveryResponse(
                 result.rows().stream().map(RecoveryRowResponse::of).toList(),
-                result.outcomes().stream().map(OutcomeRowResponse::of).toList(),
+                result.outcomes().stream().map(RecoveryOutcomeRowResponse::of).toList(),
                 result.remedies().stream().map(RemedyRowResponse::of).toList(),
                 ReportingController.ProvenanceResponse.of(result.provenance())));
     }
@@ -91,7 +91,7 @@ public class ReviewReportController {
      * @param average     one decimal, half up; null when the location received no review
      * @param distribution the count at one, two, three, four and five stars
      */
-    public record SummaryRowResponse(
+    public record ReviewSummaryRowResponse(
             UUID brandId,
             UUID locationId,
             long reviews,
@@ -100,8 +100,8 @@ public class ReviewReportController {
             long withComment,
             List<Long> distribution) {
 
-        static SummaryRowResponse of(JdbcReportingStore.ReviewSummaryRow row) {
-            return new SummaryRowResponse(
+        static ReviewSummaryRowResponse of(JdbcReportingStore.ReviewSummaryRow row) {
+            return new ReviewSummaryRowResponse(
                     row.brandId(),
                     row.locationId(),
                     row.reviews(),
@@ -126,8 +126,8 @@ public class ReviewReportController {
         }
     }
 
-    public record SummaryResponse(
-            List<SummaryRowResponse> rows,
+    public record ReviewSummaryResponse(
+            List<ReviewSummaryRowResponse> rows,
             List<TagRowResponse> tags,
             ReportingController.ProvenanceResponse provenance) {}
 
@@ -169,10 +169,10 @@ public class ReviewReportController {
         }
     }
 
-    public record OutcomeRowResponse(UUID brandId, UUID locationId, String outcomeCode, long cases) {
+    public record RecoveryOutcomeRowResponse(UUID brandId, UUID locationId, String outcomeCode, long cases) {
 
-        static OutcomeRowResponse of(JdbcReportingStore.RecoveryOutcomeRow row) {
-            return new OutcomeRowResponse(row.brandId(), row.locationId(), row.outcomeCode(), row.cases());
+        static RecoveryOutcomeRowResponse of(JdbcReportingStore.RecoveryOutcomeRow row) {
+            return new RecoveryOutcomeRowResponse(row.brandId(), row.locationId(), row.outcomeCode(), row.cases());
         }
     }
 
@@ -186,7 +186,7 @@ public class ReviewReportController {
 
     public record RecoveryResponse(
             List<RecoveryRowResponse> rows,
-            List<OutcomeRowResponse> outcomes,
+            List<RecoveryOutcomeRowResponse> outcomes,
             List<RemedyRowResponse> remedies,
             ReportingController.ProvenanceResponse provenance) {}
 }

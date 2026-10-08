@@ -130,7 +130,7 @@ public class OperationsReviewController {
             int rating,
             @Nullable String comment,
             Instant submittedAt,
-            List<TagResponse> tags,
+            List<ReviewListTagResponse> tags,
             CommentState publicState,
             @Nullable String publicReasonCode,
             @Nullable UUID caseId,
@@ -146,7 +146,7 @@ public class OperationsReviewController {
                     view.comment(),
                     view.submittedAt(),
                     view.tags().stream()
-                            .map(tag -> new TagResponse(
+                            .map(tag -> new ReviewListTagResponse(
                                     tag.row().id(),
                                     tag.row().code(),
                                     tag.row().category().name(),
@@ -161,7 +161,7 @@ public class OperationsReviewController {
         }
     }
 
-    public record TagResponse(
+    public record ReviewListTagResponse(
             UUID id,
             String code,
             String category,

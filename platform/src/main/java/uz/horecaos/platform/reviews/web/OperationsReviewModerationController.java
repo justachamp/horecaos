@@ -92,11 +92,11 @@ public class OperationsReviewModerationController {
                     + "state only: never the rating, never the average. The brand's public list is "
                     + "evicted in this request. The response carries a state, a code and a version, "
                     + "never the comment.")
-    public ResponseEntity<DecisionResponse> decide(
+    public ResponseEntity<ModerationDecisionResponse> decide(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID reviewId,
-            @Valid @RequestBody DecisionRequest body,
+            @Valid @RequestBody ModerationDecisionRequest body,
             HttpServletRequest request) {
         int expected = ExpectedVersions.resolve(request, body.expectedVersion());
         ModerationReason reason = null;
@@ -113,7 +113,9 @@ public class OperationsReviewModerationController {
                 reason,
                 expected,
                 currentActor.get().subject());
-        return ResponseEntity.ok().eTag(AggregateVersion.toETag(row.version())).body(DecisionResponse.of(row));
+        return ResponseEntity.ok()
+                .eTag(AggregateVersion.toETag(row.version()))
+                .body(ModerationDecisionResponse.of(row));
     }
 
     // ------------------------------------------------------------- wire shapes
@@ -122,16 +124,17 @@ public class OperationsReviewModerationController {
      * @param reasonCode a string and not the enum so an unknown code is a clean VALIDATION_FAILED, and a
      *                   system reason (CUSTOMER_WITHDREW) is refused by name
      */
-    public record DecisionRequest(
+    public record ModerationDecisionRequest(
             @NotNull CommentState to,
             @Nullable String reasonCode,
             @Nullable Integer expectedVersion) {}
 
-    public record DecisionResponse(
+    public record ModerationDecisionResponse(
             UUID reviewId, CommentState state, @Nullable String reasonCode, int version) {
 
-        static DecisionResponse of(PublicationRow row) {
-            return new DecisionResponse(row.reviewId(), row.commentState(), row.stateReasonCode(), row.version());
+        static ModerationDecisionResponse of(PublicationRow row) {
+            return new ModerationDecisionResponse(
+                    row.reviewId(), row.commentState(), row.stateReasonCode(), row.version());
         }
     }
 

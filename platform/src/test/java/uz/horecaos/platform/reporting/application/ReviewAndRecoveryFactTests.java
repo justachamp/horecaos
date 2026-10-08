@@ -607,7 +607,7 @@ class ReviewAndRecoveryFactTests {
         return id;
     }
 
-    private ReviewReportController.SummaryRowResponse reportRow() {
+    private ReviewReportController.ReviewSummaryRowResponse reportRow() {
         var body = Objects.requireNonNull(new ReviewReportController(queries)
                 .summary(TENANT, DAY, DAY, null)
                 .getBody());
