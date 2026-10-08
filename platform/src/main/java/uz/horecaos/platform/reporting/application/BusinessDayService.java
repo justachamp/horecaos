@@ -44,6 +44,18 @@ public class BusinessDayService {
     }
 
     /**
+     * The latest business date whose close has completed, if any day has closed yet.
+     *
+     * <p>The line between the facts {@code reporting} has already written and the days it has
+     * yet to build. A producer in another module that learns of something after this date (a
+     * courier accrual dated on its tap, an operator completing the order later) reads it to
+     * know the day it would belong to is closed (ADR 0043).
+     */
+    public Optional<LocalDate> lastClosedDate(UUID tenantId) {
+        return store.lastRunDate(tenantId, "CLOSE");
+    }
+
+    /**
      * Records a boundary. The caller is responsible for the ADR 0027 approval.
      *
      * @param recutCompletedThrough null to mark a recut outstanding — the normal

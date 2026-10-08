@@ -1029,6 +1029,11 @@ public class JdbcReportingStore {
      * as well — rather than trusting a column written by a different module —
      * keeps this read correct even if a future write path gets the stamp
      * wrong again.
+     *
+     * <p>The earning's {@code business_date} is also not the day this read files it under, on
+     * purpose: an earning accrued after its tap's day closed is booked on the first open day
+     * (its cost line with it), while {@code delivered_at} stays the tap. This read therefore
+     * still finds it under the closed day, which is how the recut sees what that day is missing.
      */
     public List<SourceDelivery> readSourceDeliveries(UUID tenantId, Instant from, Instant to) {
         return jdbc.sql("""

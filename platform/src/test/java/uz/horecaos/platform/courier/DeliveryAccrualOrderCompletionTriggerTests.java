@@ -30,6 +30,7 @@ import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.courier.api.BusinessDayWindows;
 import uz.horecaos.platform.courier.application.AdjustmentRuleEvaluator;
 import uz.horecaos.platform.courier.application.CourierAccrualService;
 import uz.horecaos.platform.courier.application.CourierAdjustmentService;
@@ -209,7 +210,17 @@ class DeliveryAccrualOrderCompletionTriggerTests {
                 policyResolver,
                 legalEntities,
                 protection,
-                (tenantId, at) -> at.atZone(ZoneId.of("Asia/Tashkent")).toLocalDate());
+                new BusinessDayWindows() {
+                    @Override
+                    public LocalDate businessDateOf(UUID tenantId, Instant at) {
+                        return at.atZone(ZoneId.of("Asia/Tashkent")).toLocalDate();
+                    }
+
+                    @Override
+                    public Optional<LocalDate> lastClosedBusinessDate(UUID tenantId) {
+                        return Optional.empty();
+                    }
+                });
         var rateCards = new CourierRateCardService(rateCardStore, audit, clock);
         deliveryCompletion = new JdbcDeliveryCompletionAdapter(jdbc);
         cashDue = new FakeCashDueLookupPort();
