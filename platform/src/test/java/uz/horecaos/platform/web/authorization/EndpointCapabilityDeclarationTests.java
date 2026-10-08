@@ -666,7 +666,12 @@ class EndpointCapabilityDeclarationTests {
                 || path.equals(base + "/sourcing-policy")
                 // ADR 0142 Decision 7: the unpaid-order window, an ordering policy shown on the same
                 // screen and authored by the identical scope-resolved shape.
-                || path.equals(base + "/payment-window");
+                || path.equals(base + "/payment-window")
+                // ADR 0168 and ADR 0163: the kitchen's two scope-resolved policy documents, the same shape
+                // again -- one document per scope, brandId/locationId optional request parameters, each
+                // handler calling authorization.require against the scope it resolves.
+                || path.equals(base + "/kitchen-paid-hold")
+                || path.equals(base + "/kitchen-productivity");
     }
 
     /** The side-effect-free {@code POST}: a simulation needs no {@code Idempotency-Key}, there is nothing to replay. */

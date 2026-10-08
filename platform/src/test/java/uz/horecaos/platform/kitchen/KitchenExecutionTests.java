@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -46,6 +48,10 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CapabilityView;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.protection.DataClass;
+import uz.horecaos.platform.iam.api.protection.FieldProtection;
+import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
+import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.inventory.api.InventoryReservationPort;
 import uz.horecaos.platform.inventory.api.ReservationResult;
 import uz.horecaos.platform.kitchen.application.KitchenOrderTerminalListener;
@@ -80,6 +86,15 @@ import uz.horecaos.platform.ordering.application.OrderStateService;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
+import uz.horecaos.platform.reporting.application.BusinessDayService;
+import uz.horecaos.platform.reporting.application.DayCloseService;
+import uz.horecaos.platform.reporting.application.DayCloseService.RebuildStatus;
+import uz.horecaos.platform.reporting.application.MetricDefinitionSynchronizer;
+import uz.horecaos.platform.reporting.application.ReportingFacts.StationLoadFact;
+import uz.horecaos.platform.reporting.application.StationLoadBackfill;
+import uz.horecaos.platform.reporting.application.SubjectPseudonym;
+import uz.horecaos.platform.reporting.domain.BusinessDayBoundary;
+import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
 import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.telemetry.api.RealtimeSignal;
@@ -2372,6 +2387,10 @@ class KitchenExecutionTests {
             now.updateAndGet(current -> current.plus(by));
         }
 
+        void set(Instant instant) {
+            now.set(instant);
+        }
+
         @Override
         public ZoneId getZone() {
             return ZoneOffset.UTC;
@@ -2877,6 +2896,491 @@ class KitchenExecutionTests {
             TicketRow fired = holds.release(TENANT, ticket.id(), ticket.version(), "RUSH", false, null, "cook", null);
 
             assertThat(fired.status()).isEqualTo(TicketStatus.FIRED);
+        }
+    }
+
+    // =========================================================== ADR 0163: the station-load fact
+
+    /**
+     * The portions each station fired (ADR 0163 Decision 1), derived by the real day close from tickets the
+     * real kitchen service opened, fired, started and amended. Nothing here writes the fact by hand: every
+     * row asserted is what {@code DayCloseService} stored, so a rule that only holds in the fixture cannot
+     * pass.
+     */
+    @Nested
+    class StationLoad {
+
+        private static final LocalDate DAY = LocalDate.of(2026, 8, 25);
+        private static final ZoneId TASHKENT = ZoneId.of("Asia/Tashkent");
+
+        private MutableClock clock;
+        private KitchenTicketService guarded;
+        private JdbcReportingStore reporting;
+        private BusinessDayService businessDays;
+        private DayCloseService close;
+        private StationLoadBackfill backfill;
+
+        @BeforeEach
+        void assemble() {
+            clock = new MutableClock(NOON);
+            guarded = new KitchenTicketService(
+                    store,
+                    new JdbcKitchenOrderSource(jdbc),
+                    proposals,
+                    audit,
+                    clock,
+                    new TransactionTemplate(new DataSourceTransactionManager(db.dataSource())),
+                    realtime);
+            jdbc.sql("""
+                    TRUNCATE TABLE reporting.fact_station_load, reporting.aggregate_divergences,
+                        reporting.close_runs, reporting.business_day_policies, reporting.agg_branch_day,
+                        reporting.agg_sla_bucket_day, reporting.fact_call_hour, reporting.fact_order,
+                        reporting.fact_order_line, reporting.fact_order_tender, reporting.fact_refund,
+                        reporting.metric_definitions
+                    """).update();
+            reporting = new JdbcReportingStore(jdbc);
+            businessDays = new BusinessDayService(reporting);
+            close = new DayCloseService(reporting, businessDays, new SubjectPseudonym(new NoProtection()), clock);
+            backfill = new StationLoadBackfill(close, reporting);
+            new MetricDefinitionSynchronizer(reporting).synchronizeAll();
+            brandRule(null, burger.productId(), null, StationRole.GRILL);
+            brandRule(null, salad.productId(), null, StationRole.COLD);
+        }
+
+        // ------------------------------------------------------------------ what counts
+
+        @Test
+        @DisplayName("a pre-order placed at noon for 20:00 counts in the 19:00 hour it fired in, not the 12:00 hour "
+                + "it was opened in")
+        void aTicketCountsAtItsFireInstant() {
+            fireAt(local(11, 5), "SL-2", burger);
+            // Opened at noon and held in the buffer for its 20:00 promise (25 minutes' prep, 20 on the road).
+            clock.set(local(12, 0));
+            UUID preorder = seedConfirmedOrder("SL-1p", local(20, 0), 25, 20, burger);
+            assertThat(guarded.open(TENANT, preorder, ReleaseMode.SCHEDULED).status())
+                    .isEqualTo(TicketStatus.HELD);
+            clock.set(local(19, 16));
+            assertThat(guarded.releaseDue(50)).as("the sweep fires it at 19:15").isEqualTo(1);
+            fireAt(local(19, 30), "SL-1", burger);
+
+            close.close(TENANT, DAY);
+
+            assertThat(rows(DAY))
+                    .extracting(
+                            StationLoadFact::operatingHour, f -> f.portions().intValue(), StationLoadFact::tickets)
+                    .containsExactly(
+                            org.assertj.core.api.Assertions.tuple(11, 1, 1),
+                            org.assertj.core.api.Assertions.tuple(19, 2, 2));
+            assertThat(rows(DAY)).allSatisfy(fact -> {
+                assertThat(fact.stationCode()).isEqualTo("GRILL");
+                assertThat(fact.stationRole()).isEqualTo("GRILL");
+                assertThat(fact.stationId()).isEqualTo(grillStation);
+                assertThat(fact.locationId()).isEqualTo(branch);
+            });
+        }
+
+        @Test
+        @DisplayName("a ticket voided after it fired still counts: the labour was spent")
+        void aVoidedFiredTicketStillCounts() {
+            TicketRow ticket = fireAt(local(12, 10), "SL-3", burger);
+            // No code voids a fired ticket today (ADR 0163 states the rule for the day one does).
+            jdbc.sql("UPDATE kitchen.tickets SET status = 'VOIDED' WHERE id = :id")
+                    .param("id", ticket.id())
+                    .update();
+
+            close.close(TENANT, DAY);
+
+            assertThat(total(rows(DAY))).isEqualByComparingTo("1");
+        }
+
+        @Test
+        @DisplayName("a ticket voided before it fired has no released_at and counts nothing")
+        void aTicketVoidedBeforeFiringCountsNothing() {
+            clock.set(local(12, 0));
+            UUID orderId = seedConfirmedOrder("SL-4", local(20, 0), 25, 20, burger);
+            TicketRow held = guarded.open(TENANT, orderId, ReleaseMode.SCHEDULED);
+            assertThat(held.status()).isEqualTo(TicketStatus.HELD);
+            assertThat(guarded.voidBufferedTicketOfOrder(TENANT, orderId)).isPresent();
+
+            close.close(TENANT, DAY);
+
+            assertThat(rows(DAY)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("two items on two stations split by station; one ticket is counted once at each")
+        void itemsSplitByStation() {
+            fireAt(local(13, 0), "SL-5", burger, salad);
+
+            close.close(TENANT, DAY);
+
+            assertThat(rows(DAY))
+                    .extracting(StationLoadFact::stationCode, f -> f.portions().intValue(), StationLoadFact::tickets)
+                    .containsExactlyInAnyOrder(
+                            org.assertj.core.api.Assertions.tuple("GRILL", 1, 1),
+                            org.assertj.core.api.Assertions.tuple("COLD", 1, 1));
+        }
+
+        @Test
+        @DisplayName("decimal quantities sum: half a portion and a whole one are one and a half")
+        void decimalQuantitiesSum() {
+            TicketRow ticket = fireAt(local(13, 0), "SL-6", burger, burger);
+            List<TicketItemRow> items = store.itemsOf(TENANT, ticket.id());
+            jdbc.sql("UPDATE kitchen.ticket_items SET quantity = 0.5 WHERE id = :id")
+                    .param("id", items.getFirst().id())
+                    .update();
+
+            close.close(TENANT, DAY);
+
+            assertThat(rows(DAY)).hasSize(1);
+            assertThat(rows(DAY).getFirst().portions()).isEqualByComparingTo("1.500");
+        }
+
+        @Test
+        @DisplayName("a line an amendment replaced before any cook started it counts once, as its replacement")
+        void aReplacedLineCountsOnceAsItsReplacement() {
+            TicketRow ticket = fireAt(local(13, 0), "SL-7", burger);
+            amendFirstLine(ticket.orderId(), salad);
+            guarded.syncAmendedLines(TENANT, ticket.orderId());
+
+            close.close(TENANT, DAY);
+
+            assertThat(store.itemsOf(TENANT, ticket.id()))
+                    .extracting(TicketItemRow::status)
+                    .containsExactlyInAnyOrder(TicketItemStatus.CANCELLED, TicketItemStatus.QUEUED);
+            assertThat(total(rows(DAY)))
+                    .as("the struck line is not counted, its replacement is, in the ticket's own hour")
+                    .isEqualByComparingTo("1");
+            assertThat(rows(DAY)).extracting(StationLoadFact::operatingHour).containsOnly(13);
+        }
+
+        @Test
+        @DisplayName("a line cancelled after a cook started it counts: the work was done")
+        void aLineCancelledAfterItStartedCounts() {
+            TicketRow ticket = fireAt(local(13, 0), "SL-8", burger);
+            UUID item = store.itemsOf(TENANT, ticket.id()).getFirst().id();
+            assertThat(guarded.start(TENANT, item, "cook", null).applied()).isTrue();
+            amendFirstLine(ticket.orderId(), salad);
+            guarded.syncAmendedLines(TENANT, ticket.orderId());
+
+            close.close(TENANT, DAY);
+
+            assertThat(store.itemsOf(TENANT, ticket.id()))
+                    .extracting(TicketItemRow::status)
+                    .contains(TicketItemStatus.CANCELLED);
+            assertThat(total(rows(DAY)))
+                    .as("the started line that was then struck, and its replacement")
+                    .isEqualByComparingTo("2");
+        }
+
+        @Test
+        @DisplayName("a 09:00 business day's hours are relative to its own start, and 01:10 after midnight is hour 16")
+        void hoursAreRelativeToTheTenantsBusinessDay() {
+            businessDays.setBoundary(
+                    TENANT,
+                    new BusinessDayBoundary(TASHKENT, LocalTime.of(9, 0), 2),
+                    LocalDate.of(2026, 8, 1),
+                    LocalDate.of(2026, 8, 31));
+            fireAt(local(11, 30), "SL-9a", burger);
+            fireAt(local(11, 30).plus(Duration.ofHours(14)).plusSeconds(-1200), "SL-9b", burger); // 01:10 next day
+            fireAt(local(8, 30).plus(Duration.ofDays(1)), "SL-9c", burger); // 08:30 next day, still this day
+            fireAt(local(9, 5).plus(Duration.ofDays(1)), "SL-9d", burger); // 09:05 next day, the next day
+
+            close.close(TENANT, DAY);
+
+            assertThat(rows(DAY))
+                    .extracting(StationLoadFact::operatingHour)
+                    .as("hour 2 (11:30), 16 (01:10) and 23 (08:30); 09:05 belongs to the next business date")
+                    .containsExactly(2, 16, 23);
+            assertThat(rows(DAY))
+                    .allSatisfy(fact -> assertThat(fact.boundaryVersion()).isEqualTo(2));
+        }
+
+        // ------------------------------------------------------------------ rebuild and recut
+
+        @Test
+        @DisplayName("rebuilding a closed day reproduces its rows byte for byte and leaves every other fact alone")
+        void rebuildIsByteIdenticalAndTouchesNothingElse() {
+            fireAt(local(12, 0), "SL-10a", burger, salad);
+            fireAt(local(19, 30), "SL-10b", burger);
+            close.close(TENANT, DAY);
+            insertSentinelFacts();
+            String before = snapshot("fact_station_load");
+            String otherBefore = snapshot("fact_call_hour") + snapshot("agg_branch_day");
+
+            DayCloseService.StationLoadRebuild rebuilt = close.rebuildStationLoad(TENANT, DAY);
+
+            assertThat(rebuilt.status()).isEqualTo(RebuildStatus.REBUILT);
+            assertThat(rebuilt.rows()).isEqualTo(3);
+            assertThat(snapshot("fact_station_load")).isEqualTo(before);
+            assertThat(snapshot("fact_call_hour") + snapshot("agg_branch_day"))
+                    .as("a rebuild is fact-scoped: it never calls clearDay, so a sentinel in another fact survives")
+                    .isEqualTo(otherBefore);
+            assertThat(snapshot("fact_call_hour")).contains("sentinel-operator");
+        }
+
+        @Test
+        @DisplayName("a rebuild picks up a ticket the stored rows missed, and a second rebuild changes nothing")
+        void rebuildRewritesFromTheTickets() {
+            fireAt(local(12, 0), "SL-11a", burger);
+            close.close(TENANT, DAY);
+            fireAt(local(12, 30), "SL-11b", burger);
+
+            assertThat(close.rebuildStationLoad(TENANT, DAY).status()).isEqualTo(RebuildStatus.REBUILT);
+            String once = snapshot("fact_station_load");
+
+            assertThat(total(rows(DAY))).isEqualByComparingTo("2");
+            assertThat(close.rebuildStationLoad(TENANT, DAY).status()).isEqualTo(RebuildStatus.REBUILT);
+            assertThat(snapshot("fact_station_load")).isEqualTo(once);
+        }
+
+        @Test
+        @DisplayName("a day closed under another boundary version is refused, and a day never closed is not rebuilt")
+        void rebuildRefusesABoundaryChangeAndAnUnclosedDay() {
+            fireAt(local(12, 0), "SL-12", burger);
+            close.close(TENANT, DAY);
+            businessDays.setBoundary(
+                    TENANT,
+                    new BusinessDayBoundary(TASHKENT, LocalTime.MIDNIGHT, 7),
+                    LocalDate.of(2026, 8, 1),
+                    LocalDate.of(2026, 8, 31));
+
+            assertThat(close.rebuildStationLoad(TENANT, DAY).status()).isEqualTo(RebuildStatus.BOUNDARY_CHANGED);
+            assertThat(close.rebuildStationLoad(TENANT, DAY.minusDays(3)).status())
+                    .isEqualTo(RebuildStatus.NOT_CLOSED);
+            assertThat(rows(DAY.minusDays(3))).isEmpty();
+        }
+
+        @Test
+        @DisplayName(
+                "a ticket that fires after the close is a kitchen_station_portions divergence, and nothing is written")
+        void recutReportsAndNeverWrites() {
+            fireAt(local(12, 0), "SL-13a", burger);
+            close.close(TENANT, DAY);
+            String before = snapshot("fact_station_load");
+
+            assertThat(close.recut(TENANT, DAY).divergences())
+                    .as("over unchanged tickets the recut reports none for this metric")
+                    .noneMatch(d -> d.metricName().equals("kitchen_station_portions"));
+
+            fireAt(local(12, 40), "SL-13b", burger);
+            var divergences = close.recut(TENANT, DAY).divergences().stream()
+                    .filter(d -> d.metricName().equals("kitchen_station_portions"))
+                    .toList();
+
+            assertThat(divergences).hasSize(1);
+            assertThat(divergences.getFirst().metricVersion()).isEqualTo(1);
+            assertThat(divergences.getFirst().storedValue())
+                    .as("thousandths of a portion")
+                    .isEqualTo(1000);
+            assertThat(divergences.getFirst().recutValue()).isEqualTo(2000);
+            assertThat(divergences.getFirst().dimension()).contains(grillStation.toString());
+            assertThat(snapshot("fact_station_load"))
+                    .as("the recut does not write")
+                    .isEqualTo(before);
+        }
+
+        // ------------------------------------------------------------------ the backfill
+
+        @Test
+        @DisplayName("the backfill rebuilds the 56 dates before the cutover oldest first, lists a changed boundary, "
+                + "and a second run changes nothing")
+        void theBackfillRebuildsBeforeTheCutover() {
+            LocalDate cutover = LocalDate.of(2026, 8, 28);
+            LocalDate changed = LocalDate.of(2026, 8, 24);
+            LocalDate neverClosed = LocalDate.of(2026, 8, 23);
+
+            // Closed under the original boundary, then the boundary moves on.
+            fireOn(changed, "SL-14a");
+            close.close(TENANT, changed);
+            businessDays.setBoundary(
+                    TENANT,
+                    new BusinessDayBoundary(TASHKENT, LocalTime.MIDNIGHT, 7),
+                    LocalDate.of(2026, 8, 1),
+                    LocalDate.of(2026, 8, 31));
+            List<LocalDate> closedLater = List.of(LocalDate.of(2026, 8, 20), LocalDate.of(2026, 8, 22), DAY);
+            for (LocalDate date : closedLater) {
+                fireOn(date, "SL-14-" + date);
+                close.close(TENANT, date);
+            }
+            fireOn(neverClosed, "SL-14c");
+            // These days closed before the fact existed: that is the state the backfill is for.
+            jdbc.sql("DELETE FROM reporting.fact_station_load").update();
+
+            StationLoadBackfill.Report report = backfill.run(TENANT, cutover);
+
+            assertThat(report.dates()).hasSize(56);
+            assertThat(report.dates().getFirst().businessDate()).isEqualTo(cutover.minusDays(56));
+            assertThat(report.dates().getLast().businessDate()).isEqualTo(cutover.minusDays(1));
+            assertThat(report.dates())
+                    .isSortedAccordingTo(
+                            java.util.Comparator.comparing(DayCloseService.StationLoadRebuild::businessDate));
+            assertThat(report.count(RebuildStatus.REBUILT)).isEqualTo(3);
+            assertThat(report.boundaryChanged()).containsExactly(changed);
+            assertThat(report.count(RebuildStatus.NOT_CLOSED)).isEqualTo(56 - 3 - 1);
+            for (LocalDate date : closedLater) {
+                assertThat(rows(date)).as("rebuilt %s", date).isNotEmpty();
+            }
+            assertThat(rows(changed))
+                    .as("a changed boundary is listed, not rebuilt")
+                    .isEmpty();
+            assertThat(rows(neverClosed)).isEmpty();
+
+            String once = snapshot("fact_station_load");
+            StationLoadBackfill.Report again = backfill.run(TENANT, cutover);
+
+            assertThat(snapshot("fact_station_load"))
+                    .as("re-runnable: unchanged tickets, identical rows")
+                    .isEqualTo(once);
+            assertThat(again.count(RebuildStatus.REBUILT)).isEqualTo(3);
+        }
+
+        @Test
+        @DisplayName(
+                "the backfill refuses a date on or after the cutover, so a day a manager planned from is never rewritten")
+        void theBackfillRefusesTheCutoverAndAfter() {
+            fireAt(local(12, 0), "SL-15", burger);
+            close.close(TENANT, DAY);
+            String before = snapshot("fact_station_load");
+
+            assertThat(catchThrowable(() -> backfill.rebuildDate(TENANT, DAY, DAY)))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("cutover");
+            assertThat(catchThrowable(() -> backfill.rebuildDate(TENANT, DAY.plusDays(1), DAY)))
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThat(backfill.run(TENANT, DAY).dates())
+                    .as("a run covers only the dates before the cutover")
+                    .allSatisfy(rebuild -> assertThat(rebuild.businessDate()).isBefore(DAY));
+            assertThat(snapshot("fact_station_load"))
+                    .as("the cutover day was not touched")
+                    .isEqualTo(before);
+        }
+
+        @Test
+        @DisplayName("the fact stores counts and station identity only: no column typed to an order or a person")
+        void theFactHoldsNoOrderOrPersonColumn() {
+            List<String> columns = jdbc.sql("""
+                            SELECT column_name FROM information_schema.columns
+                            WHERE table_schema = 'reporting' AND table_name = 'fact_station_load'
+                            """).query(String.class).list();
+
+            assertThat(columns)
+                    .containsExactlyInAnyOrder(
+                            "tenant_id",
+                            "business_date",
+                            "location_id",
+                            "station_id",
+                            "station_code",
+                            "station_role",
+                            "operating_hour",
+                            "portions",
+                            "tickets",
+                            "boundary_version",
+                            "metric_calculation_version");
+        }
+
+        // ------------------------------------------------------------------ fixtures
+
+        private Instant local(int hour, int minute) {
+            return DAY.atTime(hour, minute).atZone(TASHKENT).toInstant();
+        }
+
+        private TicketRow fireAt(Instant at, String number, Catalogue... lines) {
+            clock.set(at);
+            UUID orderId = seedConfirmedOrder(number, at.plus(Duration.ofMinutes(30)), 25, 20, lines);
+            TicketRow ticket = guarded.open(TENANT, orderId, ReleaseMode.AUTO_ON_CONFIRM);
+            assertThat(ticket.status()).as("fired at open").isEqualTo(TicketStatus.FIRED);
+            return ticket;
+        }
+
+        private void fireOn(LocalDate date, String number) {
+            fireAt(date.atTime(12, 0).atZone(TASHKENT).toInstant(), number, burger);
+        }
+
+        private List<StationLoadFact> rows(LocalDate day) {
+            return reporting.readStationLoadFacts(TENANT, day);
+        }
+
+        private BigDecimal total(List<StationLoadFact> facts) {
+            return facts.stream().map(StationLoadFact::portions).reduce(BigDecimal.ZERO, BigDecimal::add);
+        }
+
+        /** Every row of one reporting table as ordered JSON text: equal strings are byte-identical rows. */
+        private String snapshot(String table) {
+            return jdbc.sql("SELECT coalesce(string_agg(to_jsonb(t)::text, E'\\n' ORDER BY to_jsonb(t)::text), '') "
+                            + "FROM reporting." + table + " t")
+                    .query(String.class)
+                    .single();
+        }
+
+        /** A row in two other facts for the closed day, which only a clearDay could remove. */
+        private void insertSentinelFacts() {
+            jdbc.sql("""
+                    INSERT INTO reporting.fact_call_hour (tenant_id, business_date, hour_of_day, location_id,
+                        brand_id, operator_principal_id, boundary_version, metric_calculation_version,
+                        offered_count)
+                    VALUES (:t, :day, 12, :loc, :brand, 'sentinel-operator', 1, 1, 9)
+                    """)
+                    .param("t", TENANT)
+                    .param("day", DAY)
+                    .param("loc", branch)
+                    .param("brand", BRAND)
+                    .update();
+        }
+
+        /**
+         * What an ADR 0039 amendment does to ordering's lines: it closes the line it replaces and appends
+         * the replacement at the next revision. The kitchen's own sync then reads the order as it stands.
+         */
+        private void amendFirstLine(UUID orderId, Catalogue replacement) {
+            UUID quote = jdbc.sql("SELECT pricing_quote_id FROM ordering.orders WHERE id = :id")
+                    .param("id", orderId)
+                    .query(UUID.class)
+                    .single();
+            jdbc.sql("""
+                    INSERT INTO ordering.order_revisions (order_id, revision, tenant_id, source, amendment_id,
+                        pricing_quote_id, pricing_context_hash, currency, subtotal_minor, tax_minor, total_minor)
+                    VALUES (:orderId, 2, :t, 'AMENDMENT', :amendment, :quote, 'hash', 'UZS', 50000, 0, 50000)
+                    """)
+                    .param("orderId", orderId)
+                    .param("t", TENANT)
+                    .param("amendment", UUID.randomUUID())
+                    .param("quote", quote)
+                    .update();
+            jdbc.sql("UPDATE ordering.order_lines SET revision_to = 2 WHERE order_id = :id AND line_number = 1")
+                    .param("id", orderId)
+                    .update();
+            jdbc.sql("""
+                    INSERT INTO ordering.order_lines (id, tenant_id, order_id, line_number, source_product_id,
+                        source_variant_id, product_name_snapshot, quantity, unit_amount_minor, base_amount_minor,
+                        final_amount_minor, tax_amount_minor, revision_from)
+                    VALUES (:id, :t, :orderId, 2, :product, :variant, 'Dish', 1, 50000, 50000, 50000, 0, 2)
+                    """)
+                    .param("id", UUID.randomUUID())
+                    .param("t", TENANT)
+                    .param("orderId", orderId)
+                    .param("product", replacement.productId())
+                    .param("variant", replacement.variantId())
+                    .update();
+        }
+    }
+
+    /** Reporting stores no protected value; the day close needs a pseudonym source only to be constructed. */
+    private static final class NoProtection implements FieldProtection {
+
+        @Override
+        public ProtectedValue protect(UUID tenantId, DataClass dataClass, RecordRef record, String plaintext) {
+            throw new UnsupportedOperationException("Reporting stores no protected values");
+        }
+
+        @Override
+        public String reveal(UUID tenantId, ProtectedValue value, RecordRef record, String purpose) {
+            throw new UnsupportedOperationException("Reporting reveals nothing");
+        }
+
+        @Override
+        public String lookupHash(UUID tenantId, String lookupDomain, String normalizedValue) {
+            return Integer.toHexString((tenantId + "|" + lookupDomain + "|" + normalizedValue).hashCode());
         }
     }
 }

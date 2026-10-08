@@ -1,0 +1,152 @@
+<section class="card" data-testid="headcount-card">
+  <h2 class="q-subhead">{{ 'kitchen.capacity.card2.title' | t }}</h2>
+  <p class="q-body-sm headcount__rota" data-testid="headcount-not-a-rota">
+    {{ 'kitchen.headcount.notARota' | t }}
+  </p>
+
+  <q-productivity-editor
+    [scope]="scope()"
+    [stations]="stations()"
+    [canManage]="canManage()"
+    (saved)="reload()"
+  />
+
+  <div class="headcount__toolbar">
+    <span class="q-caption">{{ 'kitchen.headcount.weekday' | t }}</span>
+    <q-day-of-week-toggle
+      mode="single"
+      [selected]="weekdaySelection()"
+      (selectedChange)="onWeekday($event)"
+      data-testid="headcount-weekday"
+    />
+  </div>
+
+  @if (loading() && !plan()) {
+    <p class="q-body-sm headcount__state" data-testid="headcount-loading">
+      {{ 'kitchen.headcount.loading' | t }}
+    </p>
+  } @else if (denied()) {
+    <p class="q-body-sm headcount__state" data-testid="headcount-denied">
+      {{ 'kitchen.headcount.denied' | t }}
+    </p>
+  } @else if (loadError(); as message) {
+    <div class="headcount__state headcount__error" role="alert" data-testid="headcount-error">
+      <p class="q-body-sm">{{ 'kitchen.headcount.loadError' | t }}</p>
+      <p class="q-caption">{{ message }}</p>
+    </div>
+  } @else if (plan(); as current) {
+    @if (current.status === 'TOO_FEW_DATES') {
+      <p class="q-body-sm" data-testid="headcount-too-few">
+        {{ 'kitchen.headcount.tooFewDates' | t: { count: current.sampleDates.length } }}
+      </p>
+      @if (current.history.length > 0) {
+        <h3 class="q-body headcount__subhead">{{ 'kitchen.headcount.history.title' | t }}</h3>
+        <table class="headcount__table" data-testid="headcount-history">
+          <thead>
+            <tr>
+              <th>{{ 'kitchen.headcount.column.date' | t }}</th>
+              <th>{{ 'kitchen.headcount.column.station' | t }}</th>
+              <th>{{ 'kitchen.headcount.column.hour' | t }}</th>
+              <th>{{ 'kitchen.headcount.column.portions' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (cell of current.history; track $index) {
+              <tr>
+                <td>{{ cell.date }}</td>
+                <td>{{ cell.stationCode }}</td>
+                <td class="q-tnum">{{ hourLabel(cell.hour) }}</td>
+                <td class="q-tnum">{{ cell.portions }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    } @else if (current.rows.length === 0) {
+      <p class="q-body-sm" data-testid="headcount-empty">{{ 'kitchen.headcount.empty' | t }}</p>
+    } @else {
+      @if (nothingStated()) {
+        <div class="headcount__nopolicy" data-testid="headcount-no-policy">
+          <p class="q-body">{{ 'kitchen.headcount.noPolicy.title' | t }}</p>
+          <p class="q-body-sm">{{ 'kitchen.headcount.noPolicy.body' | t }}</p>
+        </div>
+      } @else {
+        @if (current.peak; as peak) {
+          <p class="q-body headcount__peak" data-testid="headcount-peak">
+            {{
+              'kitchen.headcount.peak'
+                | t
+                  : {
+                      hour: hourLabel(peak.hour),
+                      cooks: peak.cooksExpected,
+                      bandCooks: peak.cooksAtPeakOfBand,
+                    }
+            }}
+          </p>
+        }
+
+        <div class="headcount__scroll">
+          <table class="headcount__table headcount__grid" data-testid="headcount-grid">
+            <thead>
+              <tr>
+                <th>{{ 'kitchen.headcount.column.station' | t }}</th>
+                @for (hour of hours(); track hour) {
+                  <th class="q-tnum">{{ hourLabel(hour) }}</th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (line of lines(); track line.stationId) {
+                <tr [attr.data-testid]="'headcount-line-' + line.stationId">
+                  <th scope="row">{{ line.label }}</th>
+                  @for (hour of hours(); track hour) {
+                    @let cell = line.rows.get(hour);
+                    @if (cell && cell.status === 'OK') {
+                      <td
+                        class="q-tnum headcount__cell"
+                        [class.headcount__cell--limited]="cell.plantLimited"
+                        [title]="cellDetail(cell)"
+                        [attr.data-testid]="'headcount-cell-' + line.stationId + '-' + hour"
+                      >
+                        <strong>{{ cell.cooksExpected }}</strong>
+                        <span class="q-caption headcount__band">{{ cell.cooksAtPeakOfBand }}</span>
+                        @if (cell.plantLimited) {
+                          <span class="headcount__flag" aria-hidden="true">!</span>
+                        }
+                      </td>
+                    } @else {
+                      <td class="headcount__cell headcount__cell--none">
+                        {{ 'kitchen.headcount.cell.noPolicy' | t }}
+                      </td>
+                    }
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <p class="q-caption headcount__hint">{{ 'kitchen.headcount.hoursNote' | t }}</p>
+
+        @if (plantLimits().length > 0) {
+          <ul class="headcount__limits" data-testid="headcount-plant-limits">
+            @for (row of plantLimits(); track row.stationId + '-' + row.hour) {
+              <li class="q-body-sm">{{ plantLimitText(row) }}</li>
+            }
+          </ul>
+        }
+        @if (current.stationsWithoutFigure.length > 0) {
+          <p class="q-body-sm" data-testid="headcount-without-figure">
+            {{
+              'kitchen.headcount.withoutFigure'
+                | t: { stations: current.stationsWithoutFigure.join(', ') }
+            }}
+          </p>
+        }
+      }
+
+      <p class="q-caption headcount__hint" data-testid="headcount-sample">
+        {{ 'kitchen.headcount.sampleDates' | t: { dates: dateList(current) } }}
+      </p>
+    }
+  }
+</section>

@@ -50,6 +50,9 @@ public final class MetricRegistry {
     /** P39 (7.1c/7.3b): when {@code reporting.fact_order_tender} started being written. */
     private static final LocalDate P39_TENDER_FACT = LocalDate.of(2026, 9, 14);
 
+    /** ADR 0163: the first business date the day close writes {@code fact_station_load}. */
+    private static final LocalDate ADR_0163_STATION_LOAD = LocalDate.of(2026, 10, 8);
+
     /** P27 (7.1): when this build started registering the elapsed-time metrics below — the source column (
      * {@code fact_order.seconds_total}) is older, but no definition named it until this wave. */
     private static final LocalDate P27_FULFILMENT_TIME = LocalDate.of(2026, 9, 14);
@@ -456,6 +459,34 @@ public final class MetricRegistry {
                             + "or fee — that is a payments-module concern this figure does not "
                             + "answer.",
                     P39_TENDER_FACT),
+            // ADR 0163: the portions a station fired, by operating hour. Read by the headcount plan
+            // (GET .../kitchen/headcount-plan) and by nothing on a request path that touches
+            // kitchen.ticket_items: the day close writes the fact and this is the only name a number
+            // read from it has. Unit COUNT with three decimals (a half portion is half a plate, ADR 0137).
+            new MetricDefinition(
+                    new MetricId("kitchen_station_portions", 1),
+                    Grain.DAY_LOCATION_STATION_HOUR,
+                    "reporting.fact_station_load.portions",
+                    true,
+                    Aggregation.SUM,
+                    "FIRED_AND_NOT_STRUCK_BEFORE_STARTED",
+                    CurrencyRule.NONE,
+                    "Three decimals: a half portion (ADR 0137) is half a plate",
+                    MetricUnit.COUNT,
+                    "Sum of ticket_items.quantity, per station and operating hour, counted at the instant "
+                            + "the ticket fired (kitchen.tickets.released_at) because that is when a cook "
+                            + "starts work.",
+                    "Items of tickets that fired, except a line struck before any cook started it. Work a "
+                            + "cook began keeps its portions even if the line was then struck or its ticket "
+                            + "voided: the labour was spent.",
+                    "Tickets voided before they fired (they have no fire instant), lines struck before any "
+                            + "cook started them (an amendment's replaced line: the replacement counts once), "
+                            + "and the pass (EXPO), which cooks nothing.",
+                    "Not applicable: a refund is a payment event and moves no portion.",
+                    "Computed at the instant a ticket fired, not the order's creation: a pre-order placed at "
+                            + "11:00 for 20:00 is the 19:00 hour here and the 11:00 hour in fact_order. A "
+                            + "station renamed or archived keeps its code and role as they were that day.",
+                    ADR_0163_STATION_LOAD),
             // Wave T06 (7.3): the branch leaderboard's «В норме %» column needs a
             // denominator. orders.late.v1 already counts the numerator (closed,
             // promised, late); promised_count has been written to

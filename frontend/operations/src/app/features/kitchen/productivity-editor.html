@@ -1,0 +1,129 @@
+<div class="pace" data-testid="pace">
+  <h3 class="q-body pace__title">{{ 'kitchen.pace.title' | t }}</h3>
+  <p class="q-caption pace__lead">{{ 'kitchen.pace.lead' | t }}</p>
+
+  @if (loadError(); as message) {
+    <p class="q-body-sm pace__error" role="alert" data-testid="pace-load-error">{{ message }}</p>
+  } @else if (!editing()) {
+    @if (canManage()) {
+      <q-inherited-field
+        [label]="'kitchen.pace.field' | t"
+        [resolution]="resolution()"
+        [loading]="loading()"
+        currentScopeType="LOCATION"
+        [settableScopes]="editableScopes"
+        [formatValue]="formatValue"
+        [revertable]="false"
+        (override)="startEditing()"
+        (setValueRequested)="startEditing()"
+      />
+    } @else {
+      <p class="q-body-sm" data-testid="pace-readonly">
+        {{ formatValue(resolution()?.value) }}
+      </p>
+    }
+    @if (justSaved()) {
+      <p class="q-caption pace__saved" role="status" data-testid="pace-saved">
+        {{ 'kitchen.pace.saved' | t }}
+      </p>
+    }
+  } @else {
+    <div class="pace__form" data-testid="pace-form">
+      <label class="pace__field">
+        <span class="q-caption">{{ 'kitchen.pace.scope' | t }}</span>
+        <select
+          [value]="level()"
+          (change)="onLevelChange($any($event.target).value)"
+          data-testid="pace-level"
+        >
+          @for (option of levels; track option) {
+            <option [value]="option" [selected]="option === level()">
+              {{ levelLabel(option) }}
+            </option>
+          }
+        </select>
+      </label>
+      <p class="q-caption pace__lead">{{ 'kitchen.pace.replaces' | t }}</p>
+
+      <fieldset class="pace__group">
+        <legend class="q-caption">{{ 'kitchen.pace.byRole' | t }}</legend>
+        @for (role of roles; track role) {
+          <label class="pace__field pace__field--row">
+            <span class="q-body-sm">{{ roleLabel(role) }}</span>
+            <input
+              type="number"
+              min="1"
+              max="1000"
+              step="1"
+              [value]="roleDraft()[role] ?? ''"
+              (input)="setRole(role, $any($event.target).value)"
+              [attr.data-testid]="'pace-role-' + role"
+            />
+          </label>
+        }
+      </fieldset>
+
+      @if (cookingStations().length > 0) {
+        <fieldset class="pace__group">
+          <legend class="q-caption">{{ 'kitchen.pace.byStation' | t }}</legend>
+          @for (station of cookingStations(); track station.stationId) {
+            <label class="pace__field pace__field--row">
+              <span class="q-body-sm">{{ stationName(station) }} · {{ station.code }}</span>
+              <input
+                type="number"
+                min="1"
+                max="1000"
+                step="1"
+                [value]="stationDraft()[station.code] ?? ''"
+                (input)="setStation(station.code, $any($event.target).value)"
+                [attr.data-testid]="'pace-station-' + station.code"
+              />
+            </label>
+          }
+        </fieldset>
+      }
+
+      <label class="pace__field">
+        <span class="q-caption">{{ 'kitchen.pace.reason' | t }}</span>
+        <input
+          type="text"
+          maxlength="1000"
+          [value]="reason()"
+          (input)="reason.set($any($event.target).value)"
+          data-testid="pace-reason"
+        />
+      </label>
+
+      @if (invalid()) {
+        <p class="q-caption pace__hint" data-testid="pace-invalid">
+          {{ 'kitchen.pace.invalid' | t }}
+        </p>
+      }
+      @if (stale()) {
+        <p class="q-caption pace__error" role="alert" data-testid="pace-stale">
+          {{ 'kitchen.pace.stale' | t }}
+        </p>
+      }
+      @if (saveError(); as message) {
+        <p class="q-caption pace__error" role="alert" data-testid="pace-save-error">
+          {{ message }}
+        </p>
+      }
+
+      <div class="pace__actions">
+        <button
+          type="button"
+          class="primary"
+          [disabled]="!canSave()"
+          (click)="save()"
+          data-testid="pace-save"
+        >
+          {{ saving() ? ('kitchen.pace.saving' | t) : ('kitchen.pace.save' | t) }}
+        </button>
+        <button type="button" (click)="cancelEditing()" data-testid="pace-cancel">
+          {{ 'kitchen.pace.cancel' | t }}
+        </button>
+      </div>
+    </div>
+  }
+</div>

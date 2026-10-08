@@ -216,9 +216,7 @@ export const kitchenUzLatn: AreaMessages<typeof kitchenEn> = {
   'kitchen.capacity.edit.cancel': 'Bekor qilish',
   'kitchen.capacity.delete.button': 'Oʻchirish',
   'kitchen.capacity.delete.confirm': 'Bu oʻtkazuvchanlik chegarasi oʻchirilsinmi?',
-  'kitchen.capacity.card2.title': 'Oshpazlar sonini hisoblash',
-  'kitchen.capacity.card2.body':
-    'Qurilmagan. Kerakli oshpazlar sonini hisoblash uchun talab prognozi va bir oshpazga porsiya normativi kerak — bularning ikkalasi ham platformada hali yoʻq, qarang: frontend-information-architecture.md §2.6 va ADR 0041.',
+  'kitchen.capacity.card2.title': 'Kerakli oshpazlar',
   'kitchen.capacity.weekday.1': 'Dushanba',
   'kitchen.capacity.weekday.2': 'Seshanba',
   'kitchen.capacity.weekday.3': 'Chorshanba',
@@ -226,6 +224,64 @@ export const kitchenUzLatn: AreaMessages<typeof kitchenEn> = {
   'kitchen.capacity.weekday.5': 'Juma',
   'kitchen.capacity.weekday.6': 'Shanba',
   'kitchen.capacity.weekday.7': 'Yakshanba',
+  // Cook headcount plan and pace (ADR 0163, row 2.6a)
+  'kitchen.headcount.notARota':
+    'Bu rejalashtirish uchun yordamchi, ish jadvali emas. U filial oxirgi shu hafta kunlarida tayyorlashga bergan porsiyalarni siz har bir bekat uchun koʻrsatgan tezlikka boʻladi. Unda hech kimning ismi yoʻq, u hech kimni smenaga qoʻymaydi va tiketlarni, ishga tushirish vaqtini yoki limitlarni oʻzgartirmaydi.',
+  'kitchen.headcount.weekday': 'Hafta kuni',
+  'kitchen.headcount.loading': 'Hisob-kitob yuklanmoqda',
+  'kitchen.headcount.denied': 'Bu filial uchun oshpazlar sonini hisoblashga ruxsat yoʻq',
+  'kitchen.headcount.loadError': 'Oshpazlar sonini hisoblashni yuklab boʻlmadi',
+  'kitchen.headcount.noPolicy.title': 'Oshpaz tezligi hali koʻrsatilmagan',
+  'kitchen.headcount.noPolicy.body':
+    'Platforma oʻz raqamini qoʻymaydi. Har bir bekatda bir oshpaz soatiga nechta porsiya tayyorlashini koʻrsating — shunda soatlar boʻyicha oshpazlar soni shu yerda chiqadi.',
+  'kitchen.headcount.empty':
+    'Tanlangan sanalarda hech bir bekat hech narsa tayyorlamagan, hisoblash uchun maʼlumot yoʻq.',
+  'kitchen.headcount.tooFewDates':
+    'Bu hafta kuni uchun hozircha {count} ta sana bor; raqam koʻrsatish uchun kamida 3 ta kerak. Quyida har bir sana boʻyicha porsiyalar.',
+  'kitchen.headcount.sampleDates': 'Hisob {dates} sanalardagi porsiyalar asosida qurilgan.',
+  'kitchen.headcount.column.station': 'Bekat',
+  'kitchen.headcount.column.hour': 'Soat',
+  'kitchen.headcount.column.date': 'Sana',
+  'kitchen.headcount.column.portions': 'Porsiyalar',
+  'kitchen.headcount.hoursNote':
+    'Soatlar ish kunining boshidan sanaladi. Kichik raqam — bashorat diapazonining yuqori chegarasida kerak boʻladigan oshpazlar.',
+  'kitchen.headcount.cell.detail':
+    'kutilayotgan porsiyalar: {portions} ({low}–{high}); diapazon yuqori chegarasida oshpazlar: {bandCooks}',
+  'kitchen.headcount.cell.noPolicy': 'norma yoʻq',
+  'kitchen.headcount.peak':
+    'Eng gavjum soat {hour}: oshpazlar {cooks} ta, diapazon yuqori chegarasida {bandCooks} ta',
+  'kitchen.headcount.plantLimited':
+    'Bekat chegarasi: «{station}» soat {hour} da soatiga koʻpi bilan {ceiling} porsiya tayyorlaydi — bu bashorat diapazonining yuqori chegarasidan past, koʻproq oshpaz yordam bermaydi.',
+  'kitchen.headcount.withoutFigure':
+    '{stations} uchun norma koʻrsatilmagan; ular jami hisobga kirmaydi.',
+  'kitchen.headcount.history.title': 'Har bir sana boʻyicha porsiyalar',
+  'kitchen.pace.title': 'Oshpaz tezligi',
+  'kitchen.pace.lead':
+    'Bir oshpaz soatiga nechta porsiya tayyorlashi, bekatlar boʻyicha. Buni siz koʻrsatasiz: platforma oʻz qiymatini qoʻymaydi.',
+  'kitchen.pace.field': 'Oshpaz-soatiga porsiyalar',
+  'kitchen.pace.none': 'Koʻrsatilmagan',
+  'kitchen.pace.scope': 'Qaysi daraja uchun',
+  'kitchen.pace.scope.location': 'Shu filial',
+  'kitchen.pace.scope.brand': 'Shu brend',
+  'kitchen.pace.scope.tenant': 'Butun biznes',
+  'kitchen.pace.replaces':
+    'Bu darajadagi hujjat yuqoridagisini toʻliq almashtiradi, unga qoʻshilmaydi.',
+  'kitchen.pace.byRole': 'Bekat turi boʻyicha',
+  'kitchen.pace.byStation': 'Bekat boʻyicha (turdan ustun)',
+  'kitchen.pace.role.HOT': 'Issiq bekat',
+  'kitchen.pace.role.COLD': 'Sovuq bekat',
+  'kitchen.pace.role.GRILL': 'Gril',
+  'kitchen.pace.role.BAR': 'Bar',
+  'kitchen.pace.role.BAKERY': 'Nonvoyxona',
+  'kitchen.pace.role.PACKING': 'Qadoqlash',
+  'kitchen.pace.reason': 'Oʻzgartirish sababi',
+  'kitchen.pace.save': 'Saqlash',
+  'kitchen.pace.saving': 'Saqlanmoqda…',
+  'kitchen.pace.cancel': 'Bekor qilish',
+  'kitchen.pace.invalid': 'Har bir raqam 1 dan 1000 gacha butun son, sabab majburiy.',
+  'kitchen.pace.stale':
+    'Siz tahrirlayotganda bu raqamlarni boshqa kishi oʻzgartirdi. Oynani yopib, qayta oching — uning qiymatlaridan boshlaysiz.',
+  'kitchen.pace.saved': 'Oshpaz tezligi saqlandi',
 
   // Oshxona qurilmalari (2/X.2-qator, ADR 0079) — P17-toʻlqin
   'kitchen.devices.title': 'Oshxona qurilmalari',

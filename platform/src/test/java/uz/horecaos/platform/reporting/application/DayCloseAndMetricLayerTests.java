@@ -611,9 +611,14 @@ class DayCloseAndMetricLayerTests {
         // per-refund" category this assertion already tolerates for every
         // other source read derive() runs, not the N+1 this test exists to
         // catch.
+        //
+        // ADR 0163: the budget moved from 57 to 59 when close() gained the station-load fact -- one
+        // more fixed source read (readSourceStationLoad, kitchen's tickets) and one more table in
+        // clearDay's fixed list. Both are once per close, not per refund: the category this assertion
+        // already tolerates for every other source read and every other fact table.
         assertThat(used)
                 .as("a busy Saturday's close should not spend a round-trip per refund")
-                .isLessThanOrEqualTo(57);
+                .isLessThanOrEqualTo(59);
     }
 
     // ----------------------------------------------------- the settle recut

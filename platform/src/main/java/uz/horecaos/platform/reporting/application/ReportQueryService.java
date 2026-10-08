@@ -65,6 +65,12 @@ public class ReportQueryService {
                         metric.id().code(),
                         metric.openQuestion() == null ? "its source fact does not exist" : metric.openQuestion());
             }
+            if (metric.grain() == Grain.DAY_LOCATION_STATION_HOUR) {
+                // ADR 0163: the kitchen's own fact is not in agg_branch_day, and a station-hour series is
+                // read by the headcount plan, never composed from branch slices.
+                throw new ReportingRefusals.NonScalarMetricException(
+                        metric.id().code(), "GET .../kitchen/headcount-plan");
+            }
             switch (metric.aggregation()) {
                 case MEDIAN ->
                     throw new ReportingRefusals.NonScalarMetricException(

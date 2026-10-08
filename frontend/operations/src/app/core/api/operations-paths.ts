@@ -682,6 +682,23 @@ export const operationsPaths = {
   },
 
   /**
+   * The cook-headcount plan of one branch (ADR 0163, `KitchenHeadcountController`): `GET` only,
+   * `?weekday=1..7&sampleSize=&holidayMode=`. Cooks per station and operating hour, a planning aid.
+   */
+  kitchenHeadcountPlan(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/headcount-plan`;
+  },
+
+  /**
+   * The tenant's own portions-per-cook-hour figures (ADR 0163, `KitchenProductivityController`).
+   * Tenant-keyed on the operations surface; the brand and location it is read or written at travel
+   * as `?brandId=&locationId=`, exactly as the payment window's do.
+   */
+  kitchenProductivity(tenantId: string): string {
+    return `${OPERATIONS}/tenants/${encodeURIComponent(tenantId)}/kitchen-productivity`;
+  },
+
+  /**
    * One throughput ceiling — `PUT` corrects it, `DELETE` removes it (wave
    * T02, gap map row 2.6). Both take `expectedVersion` in the body, the same
    * convention {@link kitchenStationCapacity}'s own `POST` sibling keeps.

@@ -183,9 +183,8 @@
       }
     </section>
 
-    <section class="card">
-      <h2 class="q-subhead">{{ 'kitchen.capacity.card2.title' | t }}</h2>
-      <p class="q-body-sm">{{ 'kitchen.capacity.card2.body' | t }}</p>
-    </section>
+    @if (scope(); as current) {
+      <q-headcount-card [scope]="current" [stations]="stations()" [canManage]="canManagePace()" />
+    }
   }
 </div>
