@@ -91,6 +91,31 @@ export const financePaths = {
     return `${TENANT}/${enc(tenantId)}/fiscal/documents/${enc(documentId)}/unblocks`;
   },
 
+  // ---------------------------------------------------------- 8.2 Fiscal evidence (ADR 0166)
+
+  /** `OperationsFiscalEvidenceController.forOrder` -- identifiers masked unless `?purpose=` is sent. */
+  fiscalEvidence(tenantId: string, orderId: string): string {
+    return `${OPERATIONS}/${enc(tenantId)}/orders/${enc(orderId)}/fiscal-evidence`;
+  },
+
+  /** `OperationsFiscalEvidenceController.paymentTypes` -- derived from the registry and the bindings. */
+  fiscalPaymentTypes(tenantId: string): string {
+    return `${OPERATIONS}/${enc(tenantId)}/fiscal/payment-types`;
+  },
+
+  /** `OperationsFiscalEvidenceController.openRequests` -- the aged worklist of requests the agent has not answered. */
+  fiscalCorrectionRequests(tenantId: string): string {
+    return `${OPERATIONS}/${enc(tenantId)}/fiscal/correction-requests`;
+  },
+
+  fiscalDocumentCorrectionRequests(tenantId: string, documentId: string): string {
+    return `${OPERATIONS}/${enc(tenantId)}/fiscal/documents/${enc(documentId)}/correction-requests`;
+  },
+
+  fiscalCorrectionAttachments(tenantId: string, requestId: string): string {
+    return `${OPERATIONS}/${enc(tenantId)}/fiscal/correction-requests/${enc(requestId)}/attachments`;
+  },
+
   // ---------------------------------------------------------- 8.3 Cash reconciliation
 
   /** `OperationsCourierController.cashHandovers` / the fleet worklist — wave 39. */

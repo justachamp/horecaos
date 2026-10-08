@@ -328,6 +328,13 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     'uz-Latn': 'Fiskalizatsiya xatolarini hal qilish',
     en: 'Resolve fiscal document failures',
   },
+  'fiscal.evidence.reveal': {
+    area: 'fiscal',
+    ru: 'Открывать идентификаторы фискального чека целиком (каждый просмотр записывается с целью)',
+    'uz-Latn':
+      'Fiskal chek identifikatorlarini toʻliq ochish (har bir koʻrish maqsadi bilan yoziladi)',
+    en: 'Open fiscal receipt identifiers in full (each look is recorded with its purpose)',
+  },
 
   'refund.request': {
     area: 'refund',

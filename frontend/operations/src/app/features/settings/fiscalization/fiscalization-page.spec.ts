@@ -11,7 +11,7 @@ import { I18n } from '../../../core/i18n/i18n';
 import { CatalogApi } from '../../catalog/catalog-api';
 import { TaxProfile } from '../../catalog/catalog-domain';
 import { PricingApi } from '../../catalog/pricing-api';
-import { PaymentMethodView, PaymentMethodsApi } from '../payment-methods/payment-methods-api';
+import { FiscalEvidenceApi, FiscalPaymentTypeView } from '../../finance/fiscal/fiscal-evidence-api';
 import {
   FiscalCoverageSummary,
   FiscalizationApi,
@@ -81,33 +81,45 @@ const VAT_PROFILE: TaxProfile = {
   version: 1,
 };
 
-function method(
+function paymentType(
   code: string,
   displayName: string,
-  responsibility: PaymentMethodView['responsibility'],
-  status: PaymentMethodView['status'] = 'ACTIVE',
-): PaymentMethodView {
+  responsibility: FiscalPaymentTypeView['responsibility'],
+  options: Partial<FiscalPaymentTypeView> = {},
+): FiscalPaymentTypeView {
   return {
-    id: `method-${code}`,
     code,
     displayName,
-    localizedNames: {},
+    methodStatus: 'ACTIVE',
     responsibility,
-    settlesFromBalance: false,
-    status,
-    icon: null,
-    sortOrder: 0,
-    providerInstallationId: null,
-    contractReference: null,
-    version: 1,
+    path: 'PARTNER_ACCOUNT',
+    live: true,
+    reasonCode: null,
+    note: null,
+    entries: [],
+    ...options,
   };
 }
 
-const METHODS: readonly PaymentMethodView[] = [
-  method('CASH', 'Cash', 'OPERATOR'),
-  method('CLICK', 'Click', 'PARTNER'),
-  method('PAYME', 'Payme', 'PARTNER'),
-  method('EXPRESS24', 'Express24', 'MARKETPLACE', 'DISABLED'),
+/**
+ * What `GET .../fiscal/payment-types` answers: derived from the registry, the merchant accounts and the
+ * terminals. Cash is registered as an OPERATOR method and has no path, which the screen must say rather
+ * than leave looking fiscalized; Click has a live merchant account; Payme is registered and has none.
+ */
+const PAYMENT_TYPES: readonly FiscalPaymentTypeView[] = [
+  paymentType('CASH', 'Cash', 'OPERATOR', {
+    path: 'NONE',
+    live: false,
+    reasonCode: 'NO_FISCAL_PATH',
+    note: 'OPERATOR_RESPONSIBILITY_UNIMPLEMENTED',
+  }),
+  paymentType('CLICK', 'Click', 'PARTNER'),
+  paymentType('PAYME', 'Payme', 'PARTNER', { live: false, reasonCode: 'NO_FISCAL_PATH' }),
+  paymentType('EXPRESS24', 'Express24', 'MARKETPLACE', {
+    methodStatus: 'DISABLED',
+    path: 'AGGREGATOR',
+    live: false,
+  }),
 ];
 
 class FakeCurrentLocation {
@@ -143,7 +155,7 @@ describe('FiscalizationPage', () => {
     backfillCodes: ReturnType<typeof vi.fn>;
   };
   let taxProfiles: ReturnType<typeof vi.fn>;
-  let paymentMethods: ReturnType<typeof vi.fn>;
+  let paymentTypes: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     api = {
@@ -175,7 +187,7 @@ describe('FiscalizationPage', () => {
     };
 
     taxProfiles = vi.fn(() => of([VAT_PROFILE]));
-    paymentMethods = vi.fn().mockResolvedValue(METHODS);
+    paymentTypes = vi.fn().mockResolvedValue(PAYMENT_TYPES);
 
     await TestBed.configureTestingModule({
       imports: [FiscalizationPage],
@@ -183,7 +195,7 @@ describe('FiscalizationPage', () => {
         provideRouter([]),
         { provide: FiscalizationApi, useValue: api },
         { provide: PricingApi, useValue: { taxProfiles } },
-        { provide: PaymentMethodsApi, useValue: { list: paymentMethods } },
+        { provide: FiscalEvidenceApi, useValue: { paymentTypes } },
         // The official ИКПУ list has never been imported: every lookup answers with nothing.
         { provide: CatalogApi, useValue: { searchMxikReference: () => of([]) } },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
@@ -633,14 +645,52 @@ describe('FiscalizationPage', () => {
       expect(normalised('fiscal-vat-defaults')).toContain('Exclusive');
     });
 
-    it('groups the registry’s payment methods by the responsibility each was registered under', async () => {
+    it('groups the derived payment types by the responsibility each was registered under', async () => {
       await openClassification();
 
-      expect(paymentMethods).toHaveBeenCalledWith(SCOPE);
+      expect(paymentTypes).toHaveBeenCalledWith(SCOPE.tenantId);
       expect(normalised('fiscal-resp-PARTNER')).toContain('Click');
       expect(normalised('fiscal-resp-PARTNER')).toContain('Payme');
       expect(normalised('fiscal-resp-OPERATOR')).toContain('Cash');
       expect(normalised('fiscal-resp-PARTNER')).not.toContain('Cash');
+    });
+
+    it('says, beside each method, whether a receipt can be issued today or nobody can issue one', async () => {
+      await openClassification();
+
+      expect(byTestId('fiscal-resp-state-CLICK')?.getAttribute('data-state')).toBe('live');
+      expect(normalised('fiscal-resp-state-CLICK')).toBe('receipt can be issued');
+      expect(byTestId('fiscal-resp-state-PAYME')?.getAttribute('data-state')).toBe('noPath');
+      expect(normalised('fiscal-resp-state-PAYME')).toBe('no fiscal path');
+      expect(
+        normalised('fiscal-resp-state-CASH'),
+        'cash is registered under a responsibility nothing implements, and must not read as fiscalized',
+      ).toBe('no fiscal path');
+    });
+
+    it('says that a balance tender has nothing to receipt, rather than that it has no path', async () => {
+      paymentTypes.mockResolvedValue([
+        paymentType('POINTS', 'Loyalty points', 'OPERATOR', {
+          path: 'NOT_A_FISCAL_PATH',
+          live: false,
+          note: 'BALANCE_IS_A_LINE_DISCOUNT',
+        }),
+      ]);
+      await openClassification();
+
+      expect(byTestId('fiscal-resp-state-POINTS')?.getAttribute('data-state')).toBe(
+        'notApplicable',
+      );
+      expect(normalised('fiscal-resp-state-POINTS')).toBe('nothing to receipt');
+    });
+
+    it('states that the projection is read from the derived model and cannot be set', async () => {
+      await openClassification();
+
+      expect(normalised('fiscal-responsibility-lead')).toContain(
+        'same model as the Payments screen',
+      );
+      expect(normalised('fiscal-responsibility-lead')).toContain('cannot be set here');
     });
 
     it('draws every responsibility, an empty one included, and leaves a disabled method out', async () => {
@@ -661,7 +711,7 @@ describe('FiscalizationPage', () => {
       taxProfiles.mockReturnValue(
         throwError(() => new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null)),
       );
-      paymentMethods.mockRejectedValue(new ApiError('INTERNAL_ERROR', 500, null, null));
+      paymentTypes.mockRejectedValue(new ApiError('INTERNAL_ERROR', 500, null, null));
       await openClassification();
 
       expect(byTestId('fiscal-vat-denied')).not.toBeNull();
@@ -671,12 +721,12 @@ describe('FiscalizationPage', () => {
 
     it('reads the references when the classification tab is opened, not before', async () => {
       expect(taxProfiles).not.toHaveBeenCalled();
-      expect(paymentMethods).not.toHaveBeenCalled();
+      expect(paymentTypes).not.toHaveBeenCalled();
 
       await openClassification();
 
       expect(taxProfiles).toHaveBeenCalledTimes(1);
-      expect(paymentMethods).toHaveBeenCalledTimes(1);
+      expect(paymentTypes).toHaveBeenCalledTimes(1);
     });
   });
 });

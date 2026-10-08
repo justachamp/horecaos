@@ -6,6 +6,13 @@ import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { OrderLookupApi } from '../../../core/api/order-lookup-api';
 import { I18n } from '../../../core/i18n/i18n';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
+import { SessionCapabilities } from '../../../core/auth/session-capabilities';
+import {
+  FiscalEvidenceApi,
+  FiscalEvidenceDocumentView,
+  FiscalEvidenceView,
+  FiscalPaymentTypeView,
+} from '../fiscal/fiscal-evidence-api';
 import { OrderPaymentView, PaymentsApi, RemedyView } from './payments-api';
 import { PaymentsPage } from './payments-page';
 
@@ -119,6 +126,108 @@ const UNVERIFIED_REMEDY: RemedyView = {
   deliveryFeeBasis: null,
 };
 
+const PAYMENT_TYPES: readonly FiscalPaymentTypeView[] = [
+  {
+    code: 'CLICK',
+    displayName: 'Click',
+    methodStatus: 'ACTIVE',
+    responsibility: 'PARTNER',
+    path: 'PARTNER_ACCOUNT',
+    live: true,
+    reasonCode: null,
+    note: null,
+    entries: [
+      {
+        legalEntityId: 'entity-1',
+        tin: '123456789',
+        legalName: 'Fiskal A MCHJ',
+        bindingId: 'binding-1',
+        accountReferenceMasked: '****e-77',
+        capableTerminals: 0,
+        supportsPartnerFiscalization: true,
+      },
+    ],
+  },
+  {
+    code: 'CASH',
+    displayName: 'Cash',
+    methodStatus: 'ACTIVE',
+    responsibility: 'TERMINAL',
+    path: 'TERMINAL',
+    live: false,
+    reasonCode: 'NO_FISCAL_PATH',
+    note: null,
+    entries: [],
+  },
+  {
+    code: 'LOYALTY_POINTS',
+    displayName: 'Balance',
+    methodStatus: 'ACTIVE',
+    responsibility: 'OPERATOR',
+    path: 'NOT_A_FISCAL_PATH',
+    live: false,
+    reasonCode: null,
+    note: 'BALANCE_IS_A_LINE_DISCOUNT',
+    entries: [],
+  },
+];
+
+function fiscalDocument(
+  overrides: Partial<FiscalEvidenceDocumentView> = {},
+): FiscalEvidenceDocumentView {
+  return {
+    documentId: 'doc-2',
+    documentType: 'SALE',
+    correctsDocumentId: null,
+    status: 'ISSUED',
+    reasonCode: 'PARTNER_FISCALIZED',
+    reasonNote: 'issued',
+    responsibility: 'PARTNER',
+    providerType: 'CLICK',
+    seller: {
+      legalEntityId: 'entity-1',
+      tin: '123456789',
+      name: 'Fiskal A MCHJ',
+      source: 'OPENING',
+    },
+    merchantAccount: null,
+    tenderId: 'tender-2',
+    paymentIntentId: null,
+    hasEvidence: true,
+    identifiers: {
+      revealed: false,
+      fiscalSign: '****B6D8',
+      receiptNumber: '****1234',
+      receiptUrl: '****6D8',
+      terminalId: '****0042',
+    },
+    registeredAt: '2026-10-08T09:00:00Z',
+    providerStatusCode: null,
+    lines: { state: 'NOT_SENT', synthetic: false, items: [], markingCodesTransmitted: null },
+    tenderSplit: null,
+    correction: null,
+    submittedAt: null,
+    issuedAt: '2026-10-08T09:00:00Z',
+    blockedAt: null,
+    attemptCount: 1,
+    version: 2,
+    createdAt: '2026-10-08T09:00:00Z',
+    ...overrides,
+  };
+}
+
+function evidenceOf(...documents: FiscalEvidenceDocumentView[]): FiscalEvidenceView {
+  return {
+    orderId: 'order-3',
+    publicOrderNumber: '484',
+    retention: { years: 7, provisional: true },
+    marks: { state: 'NOT_BUILT', required: null, captured: null },
+    revealed: false,
+    purpose: null,
+    documents,
+  };
+}
+
 class FakeCurrentTenant {
   readonly tenantId = signal<string | null>(TENANT_ID);
   readonly denied = signal(false);
@@ -144,6 +253,10 @@ describe('PaymentsPage', () => {
     verifyRemedy: ReturnType<typeof vi.fn>;
   };
   let orderLookup: { byNumber: ReturnType<typeof vi.fn> };
+  let evidenceApi: {
+    paymentTypes: ReturnType<typeof vi.fn>;
+    forOrder: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(async () => {
     api = {
@@ -176,6 +289,10 @@ describe('PaymentsPage', () => {
       verifyRemedy: vi.fn().mockResolvedValue({ recorded: true }),
     };
     orderLookup = { byNumber: vi.fn().mockResolvedValue([]) };
+    evidenceApi = {
+      paymentTypes: vi.fn().mockResolvedValue(PAYMENT_TYPES),
+      forOrder: vi.fn().mockResolvedValue(evidenceOf()),
+    };
 
     await TestBed.configureTestingModule({
       imports: [PaymentsPage],
@@ -183,6 +300,8 @@ describe('PaymentsPage', () => {
         { provide: PaymentsApi, useValue: api },
         { provide: OrderLookupApi, useValue: orderLookup },
         { provide: CurrentTenant, useValue: new FakeCurrentTenant() },
+        { provide: FiscalEvidenceApi, useValue: evidenceApi },
+        { provide: SessionCapabilities, useValue: { has: () => false } },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -235,9 +354,11 @@ describe('PaymentsPage', () => {
     // The old "one tender only, split settlement has not shipped" note is gone.
     expect(text).not.toContain('has not shipped');
 
+    // The tenders table, found by the cell only it has: the page now carries other tables that name a
+    // payment method (the fiscal payment types), and a text match would count them too.
     const rows = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll('table.table tbody tr'),
-    ).filter((row) => row.textContent?.includes('Balance') || row.textContent?.includes('CLICK'));
+      (fixture.nativeElement as HTMLElement).querySelectorAll('[data-testid="tender-fiscal"]'),
+    ).map((cell) => cell.closest('tr') as HTMLElement);
     expect(rows).toHaveLength(2);
 
     const firstCells = Array.from(rows[0].querySelectorAll('td')).map((cell) =>
@@ -585,5 +706,140 @@ describe('PaymentsPage', () => {
     fixture.detectChanges();
 
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('already paid');
+  });
+
+  // ---------------------------------------------------------------- fiscal evidence (row X.2, ADR 0166)
+
+  async function lookUp(orderId: string): Promise<void> {
+    const input = fixture.nativeElement.querySelector('#order-id') as HTMLInputElement;
+    input.value = orderId;
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+        (button) => button.textContent?.trim() === 'Look up',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  }
+
+  const byTestId = (id: string): HTMLElement | null =>
+    (fixture.nativeElement as HTMLElement).querySelector(`[data-testid="${id}"]`);
+
+  describe('which payment types are fiscalized', () => {
+    it('reads the derived model for the tenant on init, not an order', () => {
+      expect(evidenceApi.paymentTypes).toHaveBeenCalledWith(TENANT_ID);
+    });
+
+    it('says, per method, who issues the receipt, under which path, and whether it can be issued today', () => {
+      const click = byTestId('fiscal-payment-type-CLICK');
+      expect(click?.textContent).toContain('Issued through the provider’s merchant account');
+      expect(click?.textContent).toContain('Provider merchant account');
+      expect(
+        click?.querySelector('[data-testid="fiscal-payment-type-state"]')?.textContent,
+      ).toContain('A receipt can be issued');
+      // The entity and the account it is issued under, the INN a tax inspector asks for first.
+      const entry = click?.querySelector('[data-testid="fiscal-payment-type-entry"]');
+      expect(entry?.textContent).toContain('Fiskal A MCHJ');
+      expect(entry?.textContent).toContain('123456789');
+      expect(entry?.textContent).toContain('****e-77');
+    });
+
+    it('says a registered method with no terminal behind it has no fiscal path, rather than that it is fiscalized', () => {
+      const cash = byTestId('fiscal-payment-type-CASH');
+      expect(
+        cash?.querySelector('[data-testid="fiscal-payment-type-state"]')?.textContent,
+      ).toContain('No fiscal path');
+    });
+
+    it('says a balance tender has nothing to receipt, and why', () => {
+      const balance = byTestId('fiscal-payment-type-LOYALTY_POINTS');
+      expect(
+        balance?.querySelector('[data-testid="fiscal-payment-type-state"]')?.textContent,
+      ).toContain('Nothing to receipt');
+      expect(balance?.textContent).toContain('per-line discount');
+    });
+
+    it('offers no way to set it: it is a table, not a form', () => {
+      const section = byTestId('fiscal-payment-types') as HTMLElement;
+      expect(section.querySelectorAll('input, select, textarea, button')).toHaveLength(0);
+    });
+
+    it('says plainly when the role cannot read it', async () => {
+      evidenceApi.paymentTypes.mockRejectedValue(
+        new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null),
+      );
+      fixture = TestBed.createComponent(PaymentsPage);
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(byTestId('fiscal-payment-types-denied')).not.toBeNull();
+    });
+
+    it('says it failed on any other error', async () => {
+      evidenceApi.paymentTypes.mockRejectedValue(new ApiError('INTERNAL_ERROR', 500, null, null));
+      fixture = TestBed.createComponent(PaymentsPage);
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(byTestId('fiscal-payment-types-error')).not.toBeNull();
+    });
+  });
+
+  describe('a tender links to its fiscal document', () => {
+    it('reads the fiscal evidence of the order that was looked up, for this tenant', async () => {
+      api.orderPayment.mockResolvedValue(SPLIT_TENDER_ORDER);
+      evidenceApi.forOrder.mockResolvedValue(evidenceOf(fiscalDocument()));
+      await lookUp('order-3');
+
+      expect(evidenceApi.forOrder).toHaveBeenCalledWith(TENANT_ID, 'order-3');
+      expect(byTestId('fiscal-evidence')).not.toBeNull();
+    });
+
+    it('shows the receipt status beside the tender that document is, and none beside a tender it is not', async () => {
+      api.orderPayment.mockResolvedValue(SPLIT_TENDER_ORDER);
+      evidenceApi.forOrder.mockResolvedValue(evidenceOf(fiscalDocument()));
+      await lookUp('order-3');
+
+      const cells = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll('[data-testid="tender-fiscal"]'),
+      );
+      expect(cells).toHaveLength(2);
+      // tender-1 is the balance tender: a discount on the money tender's receipt, so no document of its own.
+      expect(cells[0].textContent).toContain('No receipt document');
+      expect(cells[1].textContent).toContain('Issued');
+      expect(cells[1].querySelector('[data-testid="tender-fiscal-open"]')).not.toBeNull();
+    });
+
+    it('takes the operator to that document’s evidence card and puts the focus on it', async () => {
+      api.orderPayment.mockResolvedValue(SPLIT_TENDER_ORDER);
+      evidenceApi.forOrder.mockResolvedValue(evidenceOf(fiscalDocument()));
+      await lookUp('order-3');
+
+      (byTestId('tender-fiscal-open') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      const card = (fixture.nativeElement as HTMLElement).querySelector('#fiscal-doc-doc-2');
+      expect(card).not.toBeNull();
+      expect(document.activeElement).toBe(card);
+    });
+
+    it('drops the previous order’s documents when another order is looked up', async () => {
+      api.orderPayment.mockResolvedValue(SPLIT_TENDER_ORDER);
+      evidenceApi.forOrder.mockResolvedValue(evidenceOf(fiscalDocument()));
+      await lookUp('order-3');
+      expect(byTestId('tender-fiscal-open')).not.toBeNull();
+
+      api.orderPayment.mockResolvedValue(SPLIT_TENDER_ORDER);
+      evidenceApi.forOrder.mockResolvedValue(evidenceOf());
+      await lookUp('order-3');
+
+      expect(byTestId('tender-fiscal-open')).toBeNull();
+    });
   });
 });

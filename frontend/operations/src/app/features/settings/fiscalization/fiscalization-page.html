@@ -794,7 +794,10 @@
 
       <section class="reference" data-testid="fiscal-responsibility">
         <h3 class="q-subhead">{{ 'settings.fiscalization.responsibility' | t }}</h3>
-        @switch (paymentMethodsState()) {
+        <p class="q-body-sm hint" data-testid="fiscal-responsibility-lead">
+          {{ 'settings.fiscalization.responsibility.lead' | t }}
+        </p>
+        @switch (paymentTypesState()) {
           @case ('loading') {
             <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
           }
@@ -817,11 +820,16 @@
                 >
                   <dt class="q-body-sm">{{ responsibilityLabel(group.responsibility) }}</dt>
                   <dd class="q-body-sm">
-                    @for (method of group.methods; track method.id) {
-                      <span
-                        class="method"
-                        [attr.data-testid]="'fiscal-resp-method-' + method.code"
-                        >{{ method.displayName }}</span
+                    @for (method of group.methods; track method.code) {
+                      <span class="method" [attr.data-testid]="'fiscal-resp-method-' + method.code"
+                        >{{ method.displayName }}
+                        <span
+                          class="q-caption state"
+                          [class.state--warning]="typeState(method) === 'noPath'"
+                          [attr.data-testid]="'fiscal-resp-state-' + method.code"
+                          [attr.data-state]="typeState(method)"
+                          >{{ typeStateLabel(method) }}</span
+                        ></span
                       >
                     } @empty {
                       <span class="q-caption hint" data-testid="fiscal-resp-none">—</span>
