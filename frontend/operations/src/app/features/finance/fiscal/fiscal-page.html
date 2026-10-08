@@ -155,7 +155,17 @@
               <td class="q-body-sm">
                 <span class="status-badge">{{ document.status }}</span>
               </td>
-              <td class="q-body-sm">{{ document.reasonCode }}</td>
+              <td class="q-body-sm">
+                {{ document.reasonCode }}
+                @if (document.marks; as marks) {
+                  <span class="q-caption marks" data-testid="fiscal-marks-progress">
+                    {{
+                      'finance.fiscal.marks.progress'
+                        | t: { captured: marks.captured, required: marks.required }
+                    }}
+                  </span>
+                }
+              </td>
               <td class="q-body-sm">{{ document.reasonNote ?? '—' }}</td>
               <td class="q-body-sm q-mono">{{ document.attemptCount }}</td>
               <td class="q-body-sm">

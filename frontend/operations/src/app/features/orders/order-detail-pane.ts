@@ -80,6 +80,7 @@ import { describeApiError, mutationErrorNotice } from './order-errors';
 import { OrderFiscalPanel } from './order-fiscal-panel';
 import { OrderDetailActions } from './order-detail-actions';
 import { OrderDetailLines } from './order-detail-lines';
+import { OrderMarkingPanel } from './order-marking-panel';
 import { OrderWeighingPanel } from './order-weighing-panel';
 import { OrderDetailMoney } from './order-detail-money';
 import { OrderHandoverPanel } from './order-handover-panel';
@@ -217,6 +218,7 @@ type DialogKind =
     OrderDetailActions,
     OrderDetailLines,
     OrderWeighingPanel,
+    OrderMarkingPanel,
     OrderDetailMoney,
     OrderPosExportPanel,
     // ---------------------------------------------------- wave 10 financial commands

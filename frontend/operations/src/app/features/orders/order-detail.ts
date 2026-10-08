@@ -32,6 +32,12 @@ export interface OrderLine {
    */
   readonly catchweight?: OrderLineCatchweight | null;
   /**
+   * ADR 0161: present on a marked line while marked-goods capture is on for the tenant -- the units that
+   * must be scanned before the order may leave the pass, and how many are. Counts only: no screen shows
+   * a code.
+   */
+  readonly marking?: OrderLineMarking | null;
+  /**
    * ADR 0137: the step this line may be amended in — the published portion size of a splittable
    * dish — present only while the order can still be amended. Absent means whole units, whatever
    * `quantity` currently holds: it is the menu's rule and not a property of the line.
@@ -77,6 +83,12 @@ export interface OrderLineCombo {
 export interface OrderLineAutoCharge {
   readonly name: string;
   readonly amountMinor: number;
+}
+
+/** `OperationsOrderController.LineMarkingResponse`. */
+export interface OrderLineMarking {
+  readonly required: number;
+  readonly captured: number;
 }
 
 /** `OperationsOrderController.OrderLineCatchweightResponse`. */

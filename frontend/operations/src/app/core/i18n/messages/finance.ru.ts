@@ -225,6 +225,7 @@ export const financeRu: AreaMessages<typeof financeEn> = {
   'finance.fiscal.field.blockedAt': 'Заблокирован',
   'finance.fiscal.evidence.yes': 'Есть',
   'finance.fiscal.evidence.no': 'Нет',
+  'finance.fiscal.marks.progress': 'Отсканировано {captured} из {required}',
   'finance.fiscal.action.retry': 'Запросить снова',
   'finance.fiscal.action.retry.reason': 'Зачем запрашивать снова',
   'finance.fiscal.action.retry.submit': 'Запросить снова',

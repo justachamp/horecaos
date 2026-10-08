@@ -1,0 +1,70 @@
+:host {
+  display: block;
+}
+
+.dmx {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+}
+
+/*
+ * The field a scanner types into. It has to be focusable and it must never be seen: a person looks at the
+ * count, not at the keystrokes of a code. Hidden with clipping rather than `display: none` or
+ * `visibility: hidden`, either of which takes it out of the focus order and the scanner's keystrokes with it.
+ */
+.dmx__field {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  pointer-events: none;
+}
+
+.dmx__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.dmx__state {
+  color: var(--q-ink-subtle);
+}
+
+.dmx--armed .dmx__state {
+  color: var(--q-success);
+}
+
+.dmx__button {
+  padding: 6px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.dmx__sound {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--q-ink-subtle);
+}
+
+.dmx__video {
+  inline-size: min(100%, 320px);
+  border-radius: var(--q-radius);
+  background: var(--q-surface-sunken, var(--q-hairline));
+}
+
+.dmx__live {
+  margin: 0;
+  min-block-size: 1.2em;
+}

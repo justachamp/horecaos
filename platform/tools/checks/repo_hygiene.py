@@ -540,6 +540,26 @@ def check_deploy_copies_match() -> None:
            problems, f"Copy from {src}/ into deploy/infra/, never the other way round.")
 
 
+def check_marking_vectors_match() -> None:
+    """Marked goods (ADR 0161): the browser and the server normalise a marking code the same way.
+
+    The console clears what a scanner reads in the tick it reads it and shows instant feedback from its own
+    copy of the normalisation; the server runs the authoritative one. Both are held to one vector file, and
+    this is the check that the two copies of that file are still the same bytes. Two diverging copies would
+    each pass their own suite while the browser accepted a code the server refuses, or the other way round.
+    """
+    server = ROOT / "src/test/resources/marking/normalisation-vectors.json"
+    console = ROOT.parent / "frontend/operations/src/testing/marking-normalisation-vectors.json"
+    problems = []
+    for copy in (server, console):
+        if not copy.exists():
+            problems.append(f"{copy.relative_to(ROOT.parent)} is missing")
+    if not problems and server.read_bytes() != console.read_bytes():
+        problems.append(f"{console.relative_to(ROOT.parent)} differs from {server.relative_to(ROOT.parent)}")
+    result("marking: the console and the platform share one vector file", problems,
+           "Copy the platform's file over the console's (or the other way round, after editing both suites).")
+
+
 def check_deploy_environment_segment() -> None:
     """Deploy: nothing in deploy/ names an OpenBao environment segment outright.
 
@@ -628,6 +648,7 @@ def check_runbook_documents_preprod_profile() -> None:
 CHECKS = [
     check_storefront_api_routing,
     check_deploy_copies_match,
+    check_marking_vectors_match,
     check_deploy_environment_segment,
     check_runbook_documents_preprod_profile,
     check_unique_versions,

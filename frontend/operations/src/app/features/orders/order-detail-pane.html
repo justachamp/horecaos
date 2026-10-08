@@ -118,6 +118,13 @@
           [currency]="detail.value.summary.currency"
           (orderChanged)="refreshOrder()"
         />
+        <q-order-marking-panel
+          [scope]="scope"
+          [orderId]="detail.value.summary.orderId"
+          [status]="detail.value.summary.status"
+          [lines]="detail.value.lines"
+          (marksChanged)="refreshOrder()"
+        />
       }
     </section>
 

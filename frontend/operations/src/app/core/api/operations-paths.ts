@@ -229,6 +229,32 @@ export const operationsPaths = {
   },
 
   /**
+   * ADR 0161: the marked lines of an order and the units scanned against them (GET, `order.read`).
+   * Never returns a code.
+   */
+  orderMarks(scope: LocationScope, orderId: string): string {
+    return `${this.order(scope, orderId)}/marks`;
+  },
+
+  /**
+   * ADR 0161: capture one scanned unit of a marked line (POST, `order.advance`, `Idempotency-Key`, no
+   * `If-Match`: a scan does not bump the order's version). The code travels only in the request body.
+   */
+  orderLineMarks(scope: LocationScope, orderId: string, lineId: string): string {
+    return `${this.order(scope, orderId)}/lines/${encodeURIComponent(lineId)}/marks`;
+  },
+
+  /** ADR 0161: take one scanned unit back (POST, `order.advance`, `Idempotency-Key`). */
+  orderLineMarkRemovals(
+    scope: LocationScope,
+    orderId: string,
+    lineId: string,
+    markId: string,
+  ): string {
+    return `${this.orderLineMarks(scope, orderId, lineId)}/${encodeURIComponent(markId)}/removals`;
+  },
+
+  /**
    * Reveal the customer's phone in full.
    *
    * A separate capability and a separate audited call requiring a stated purpose

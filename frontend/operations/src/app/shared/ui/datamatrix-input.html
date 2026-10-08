@@ -1,0 +1,56 @@
+<div class="dmx" [class.dmx--armed]="active()" data-testid="datamatrix-input">
+  <input
+    #field
+    class="dmx__field"
+    type="text"
+    autocomplete="off"
+    autocapitalize="off"
+    autocorrect="off"
+    spellcheck="false"
+    inputmode="none"
+    [attr.aria-label]="'orders.marking.scanner.fieldLabel' | t"
+    [attr.tabindex]="active() ? 0 : -1"
+    [disabled]="!active()"
+    (keydown)="onKeydown($event)"
+    (paste)="onPaste($event)"
+    (blur)="onBlur($event)"
+    data-testid="datamatrix-field"
+  />
+  <div class="dmx__bar">
+    <span class="dmx__state q-caption" data-testid="datamatrix-state">
+      {{ (active() ? 'orders.marking.scanner.ready' : 'orders.marking.scanner.idle') | t }}
+    </span>
+    @if (cameraOffered()) {
+      <button
+        type="button"
+        class="dmx__button"
+        (click)="toggleCamera()"
+        data-testid="datamatrix-camera-toggle"
+      >
+        {{
+          (cameraOn() ? 'orders.marking.scanner.cameraOff' : 'orders.marking.scanner.cameraOn') | t
+        }}
+      </button>
+    }
+    <label class="dmx__sound q-caption">
+      <input
+        type="checkbox"
+        [checked]="soundOn()"
+        (change)="setSound($any($event.target).checked)"
+        data-testid="datamatrix-sound"
+      />
+      {{ 'orders.marking.scanner.sound' | t }}
+    </label>
+  </div>
+  <video
+    #video
+    class="dmx__video"
+    [hidden]="!cameraOn()"
+    playsinline
+    muted
+    [attr.aria-label]="'orders.marking.scanner.cameraLabel' | t"
+  ></video>
+  <p class="dmx__live q-caption" role="status" aria-live="polite" data-testid="datamatrix-live">
+    {{ announcement() }}
+  </p>
+</div>

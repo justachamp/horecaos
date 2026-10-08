@@ -1,0 +1,254 @@
+{
+  "description": "ADR 0161 shared vectors: the Java suite (MarkingCodeTests) and the Angular spec (marking-code.spec.ts) read byte-identical copies of this file, and tools/checks/repo_hygiene.py fails when the copies differ.",
+  "normalisation": [
+    {
+      "name": "a plain code is its own canonical form",
+      "input": "010460000000001521Zq8mK2pXr4Wd",
+      "canonical": "010460000000001521Zq8mK2pXr4Wd",
+      "note": ""
+    },
+    {
+      "name": "a code with group separators keeps them",
+      "input": "0114782000103051215Ab9\u001d91EE10\u001d92dGVzdA==",
+      "canonical": "0114782000103051215Ab9\u001d91EE10\u001d92dGVzdA==",
+      "note": "GS (U+001D) is part of the code"
+    },
+    {
+      "name": "a leading ]d2 identifier is stripped",
+      "input": "]d2010460000000001521Zq8mK2pXr4Wd",
+      "canonical": "010460000000001521Zq8mK2pXr4Wd",
+      "note": ""
+    },
+    {
+      "name": "a leading ]d1 identifier is stripped",
+      "input": "]d1010460000000001521Zq8mK2pXr4Wd",
+      "canonical": "010460000000001521Zq8mK2pXr4Wd",
+      "note": ""
+    },
+    {
+      "name": "another symbology identifier is not stripped",
+      "input": "]C1010460000000001521Zq8mK2pXr4Wd",
+      "canonical": "]C1010460000000001521Zq8mK2pXr4Wd",
+      "note": "kept; the structure check is what refuses it"
+    },
+    {
+      "name": "a trailing CR LF terminator is stripped",
+      "input": "010460000000001521Zq8mK2pXr4Wd\r\n",
+      "canonical": "010460000000001521Zq8mK2pXr4Wd",
+      "note": ""
+    },
+    {
+      "name": "a trailing LF is stripped",
+      "input": "010460000000001521Zq8mK2pXr4Wd\n",
+      "canonical": "010460000000001521Zq8mK2pXr4Wd",
+      "note": ""
+    },
+    {
+      "name": "a trailing CR is stripped",
+      "input": "010460000000001521Zq8mK2pXr4Wd\r",
+      "canonical": "010460000000001521Zq8mK2pXr4Wd",
+      "note": ""
+    },
+    {
+      "name": "a trailing TAB is stripped",
+      "input": "010460000000001521Zq8mK2pXr4Wd\t",
+      "canonical": "010460000000001521Zq8mK2pXr4Wd",
+      "note": ""
+    },
+    {
+      "name": "surrounding spaces are stripped",
+      "input": "  010460000000001521Zq8mK2pXr4Wd  ",
+      "canonical": "010460000000001521Zq8mK2pXr4Wd",
+      "note": ""
+    },
+    {
+      "name": "an identifier, a code and a terminator",
+      "input": "]d20114782000103051215Ab9\u001d91EE10\u001d92dGVzdA==\r",
+      "canonical": "0114782000103051215Ab9\u001d91EE10\u001d92dGVzdA==",
+      "note": ""
+    },
+    {
+      "name": "a space inside the code is kept",
+      "input": "010460000000001521AB CDefghijkl",
+      "canonical": "010460000000001521AB CDefghijkl",
+      "note": ""
+    },
+    {
+      "name": "exactly 19 characters is accepted",
+      "input": "0123xxxxxxxxxxxxxxx",
+      "canonical": "0123xxxxxxxxxxxxxxx",
+      "note": ""
+    },
+    {
+      "name": "exactly 300 characters is accepted",
+      "input": "0123xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "canonical": "0123xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "note": ""
+    },
+    {
+      "name": "a group separator at the end is kept (it is part of the code, not a terminator)",
+      "input": "010460000000001521Zq8mK2pXr4Wd\u001d",
+      "canonical": "010460000000001521Zq8mK2pXr4Wd\u001d",
+      "note": ""
+    },
+    {
+      "name": "empty input is refused",
+      "input": "",
+      "canonical": null,
+      "note": ""
+    },
+    {
+      "name": "only whitespace is refused",
+      "input": "   \r\n",
+      "canonical": null,
+      "note": ""
+    },
+    {
+      "name": "18 characters is too short",
+      "input": "0123xxxxxxxxxxxxxx",
+      "canonical": null,
+      "note": ""
+    },
+    {
+      "name": "301 characters is too long",
+      "input": "0123xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "canonical": null,
+      "note": ""
+    },
+    {
+      "name": "a control character inside the code is refused",
+      "input": "010460000000001521AB\u0007CDEFGHIJ",
+      "canonical": null,
+      "note": ""
+    },
+    {
+      "name": "an inner CR is not a terminator and is refused",
+      "input": "010460000000001521AB\rCDEFGHIJ",
+      "canonical": null,
+      "note": ""
+    },
+    {
+      "name": "an inner NUL is refused",
+      "input": "010460000000001521AB\u0000CDEFGHIJ",
+      "canonical": null,
+      "note": ""
+    },
+    {
+      "name": "DEL (U+007F) is refused",
+      "input": "010460000000001521AB\u007fCDEFGHIJ",
+      "canonical": null,
+      "note": ""
+    },
+    {
+      "name": "a non-ASCII letter is refused",
+      "input": "010460000000001521AB\u0416CDEFGHIJ",
+      "canonical": null,
+      "note": ""
+    },
+    {
+      "name": "a non-breaking space is refused",
+      "input": "010460000000001521AB\u00a0CDEFGHIJ",
+      "canonical": null,
+      "note": ""
+    },
+    {
+      "name": "a code that is short only once the identifier and terminator go is refused",
+      "input": "]d20123xxxxxxxxxxxxxx\r\n",
+      "canonical": null,
+      "note": ""
+    }
+  ],
+  "structure": [
+    {
+      "name": "a code with a serial and nothing after it",
+      "canonical": "010460000000001521Zq8mK2pXr4Wd",
+      "gs1Valid": true,
+      "gtin": "04600000000015",
+      "reason": null
+    },
+    {
+      "name": "a code with further elements after a separator",
+      "canonical": "0114782000103051215Ab9\u001d91EE10\u001d92dGVzdA==",
+      "gs1Valid": true,
+      "gtin": "14782000103051",
+      "reason": null
+    },
+    {
+      "name": "a serial with no separator runs to the end of the code",
+      "canonical": "010460000000001521Abcdefghijklmno",
+      "gs1Valid": true,
+      "gtin": "04600000000015",
+      "reason": null
+    },
+    {
+      "name": "a serial of 1 character ended by a separator",
+      "canonical": "010460000000001521A\u001d91EE10zzzzzz",
+      "gs1Valid": true,
+      "gtin": "04600000000015",
+      "reason": null
+    },
+    {
+      "name": "a serial of exactly 20 characters",
+      "canonical": "010460000000001521SSSSSSSSSSSSSSSSSSSS",
+      "gs1Valid": true,
+      "gtin": "04600000000015",
+      "reason": null
+    },
+    {
+      "name": "a serial of 21 characters",
+      "canonical": "010460000000001521SSSSSSSSSSSSSSSSSSSSS",
+      "gs1Valid": false,
+      "gtin": null,
+      "reason": "serial_too_long"
+    },
+    {
+      "name": "a wrong GTIN check digit",
+      "canonical": "010460000000001621Zq8mK2pXr4Wd",
+      "gs1Valid": false,
+      "gtin": null,
+      "reason": "bad_check_digit"
+    },
+    {
+      "name": "a non-digit in the GTIN",
+      "canonical": "0104600X0000001521Zq8mK2pXr4Wd",
+      "gs1Valid": false,
+      "gtin": null,
+      "reason": "gtin_not_digits"
+    },
+    {
+      "name": "a code that does not start with 01",
+      "canonical": "020460000000001521Zq8mK2pXr4Wd",
+      "gs1Valid": false,
+      "gtin": null,
+      "reason": "no_gtin"
+    },
+    {
+      "name": "a code that has no 21 after the GTIN",
+      "canonical": "010460000000001522Zq8mK2pXr4Wd",
+      "gs1Valid": false,
+      "gtin": null,
+      "reason": "no_serial_element"
+    },
+    {
+      "name": "an empty serial",
+      "canonical": "010460000000001521\u001d91EE10zzzzzzzzzz",
+      "gs1Valid": false,
+      "gtin": null,
+      "reason": "serial_empty"
+    },
+    {
+      "name": "a symbology identifier left in the code",
+      "canonical": "]C1010460000000001521Zq8mK2pXr4Wd",
+      "gs1Valid": false,
+      "gtin": null,
+      "reason": "no_gtin"
+    },
+    {
+      "name": "a code that is too short to hold a GTIN and a serial",
+      "canonical": "0104600000021ABzzzzzzzzzzz",
+      "gs1Valid": false,
+      "gtin": null,
+      "reason": "gtin_not_digits"
+    }
+  ]
+}

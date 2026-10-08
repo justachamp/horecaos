@@ -109,6 +109,8 @@ export const kitchenRu: AreaMessages<typeof kitchenEn> = {
   'kitchen.item.weight.estimate': '≈ {weight} (оценка)',
   'kitchen.item.weight.weighed': '{weight}, взвешено',
   'kitchen.expo.weighFirst': 'Взвесьте весовые позиции, прежде чем выдавать заказ.',
+  'kitchen.expo.scanFirst':
+    'Отсканируйте каждую единицу маркированных товаров, прежде чем выдавать заказ.',
 
   'kitchen.stopList.tab.all': 'Все',
   'kitchen.stopList.tab.available': 'В продаже',

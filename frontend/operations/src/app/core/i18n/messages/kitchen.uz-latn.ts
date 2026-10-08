@@ -110,6 +110,8 @@ export const kitchenUzLatn: AreaMessages<typeof kitchenEn> = {
   'kitchen.item.weight.weighed': '{weight}, tortilgan',
   'kitchen.expo.weighFirst':
     'Topshirishdan oldin ogʻirlik boʻyicha sotiladigan pozitsiyalarni torting.',
+  'kitchen.expo.scanFirst':
+    'Buyurtmani topshirishdan oldin markirovkalangan tovarlarning har bir birligini skanerlang.',
 
   'kitchen.stopList.tab.all': 'Barchasi',
   'kitchen.stopList.tab.available': 'Sotuvda',
