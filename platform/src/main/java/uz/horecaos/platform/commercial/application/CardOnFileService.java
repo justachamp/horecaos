@@ -225,9 +225,16 @@ public class CardOnFileService {
     }
 
     /**
-     * Neither removing the card nor leaving CARD while a charge asked under it has no answer yet. Revoking
-     * the reference could make the provider forget the very charge the attempt is waiting to learn about,
-     * and a charge nobody is looking for any more is money taken and never recorded.
+     * Neither removing the card nor leaving CARD while a charge asked under it has no answer yet. A tenant
+     * that is no longer CARD with a card on file is not looked at by the statement sweep, so a statement
+     * charge waiting for its answer would be a charge nobody is looking for any more: money taken and never
+     * recorded. A top-up is held the same way, conservatively.
+     *
+     * <p>Replacing the card is deliberately not refused (ADR 0095): the tenant stays CARD with a card on
+     * file, so the sweep still looks. A statement attempt is superseded and a top-up keeps the card it was
+     * asked about, and the replaced reference is revoked at once. That is safe because the adapter contract
+     * keeps a charge answerable and replayable after its card is revoked ({@link CardProviderAdapter}), not
+     * because the revocation waits.
      */
     private void requireNoChargeInFlight(UUID tenantId) {
         if (topUps.findPending(tenantId).isPresent() || attempts.hasPending(tenantId)) {
