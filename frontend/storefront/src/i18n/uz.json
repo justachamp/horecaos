@@ -165,6 +165,13 @@
     "placeOrder": "Buyurtma berish",
     "repeat": "Buyurtmani takrorlash",
     "repeatAddedAll": "{{count}} ta taom savatga qo'shildi",
+    "receipt": {
+      "title": "Chek",
+      "open": "Chekni ochish",
+      "openRefund": "Qaytarish chekini ochish",
+      "openCorrection": "Tuzatish chekini ochish",
+      "hint": "Chek soliq xizmatining saytida ochiladi."
+    },
     "cancel": "Bekor qilish",
     "cancelConfirm": "Ushbu buyurtmani bekor qilishga ishonchingiz komilmi?",
     "order": "Buyurtma",

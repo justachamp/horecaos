@@ -165,6 +165,13 @@
     "placeOrder": "Place order",
     "repeat": "Repeat order",
     "repeatAddedAll": "{{count}} dishes added to your cart",
+    "receipt": {
+      "title": "Receipt",
+      "open": "Open the receipt",
+      "openRefund": "Open the refund receipt",
+      "openCorrection": "Open the corrected receipt",
+      "hint": "The receipt opens on the tax authority’s website."
+    },
     "cancel": "Cancel",
     "cancelConfirm": "Are you sure you want to cancel this order?",
     "order": "Order",
