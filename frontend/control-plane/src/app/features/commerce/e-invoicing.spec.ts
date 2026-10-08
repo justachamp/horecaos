@@ -534,6 +534,18 @@ describe('EInvoicing', () => {
     expect(el('[role="status"]').textContent).toContain('PROVIDER_UNAVAILABLE');
   });
 
+  it('offers no refresh for a document the operator has settled', async () => {
+    await create({
+      prepare: (fake) =>
+        fake.tenantEInvoices.mockResolvedValue([
+          { ...SENT, operatorState: 'SIGNED', operatorStatus: '2' },
+        ]),
+    });
+
+    expect(el('[data-einvoice="ei-1"]')).not.toBeNull();
+    expect(el('[data-einvoice="ei-1"] .refresh')).toBeNull();
+  });
+
   it('shows the document that was sent, line by line', async () => {
     await create({ prepare: (fake) => fake.tenantEInvoices.mockResolvedValue([SENT]) });
     await click('[data-einvoice="ei-1"] .showDetail');

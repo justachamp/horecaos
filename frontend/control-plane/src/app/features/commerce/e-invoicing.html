@@ -439,7 +439,8 @@
               <div class="actions left">
                 @if (
                   canSend() &&
-                  (attempt.delivery === 'SUBMITTED' || attempt.delivery === 'UNCERTAIN')
+                  (attempt.delivery === 'SUBMITTED' || attempt.delivery === 'UNCERTAIN') &&
+                  !settled(attempt)
                 ) {
                   <button
                     type="button"

@@ -909,6 +909,81 @@ class EInvoicingServiceTests {
     }
 
     @Test
+    @DisplayName("a settled document is not asked about again, and nothing the operator says moves it")
+    void aSettledDocumentIsNotRefreshed() {
+        connect(true);
+        UUID statement = statement("S-2026-09-000001", "ISSUED", "UZS", plan());
+        didox.sends.add(() -> new EInvoiceSendOutcome.Accepted("DOC-1", EInvoiceOperatorState.DRAFT, "created"));
+        StatementEInvoice sent = send(statement);
+        didox.states.add(() -> new EInvoiceStateOutcome.Known("DOC-1", EInvoiceOperatorState.SIGNED, "2"));
+        StatementEInvoice signed =
+                service.refresh(TENANT, sent.id(), STAFF, "c").einvoice();
+        assertThat(signed.operatorState()).isEqualTo(EInvoiceOperatorState.SIGNED);
+        didox.asked.clear();
+
+        // A status code the adapter does not map reads as UNKNOWN; before the guard one click rewrote the invoice.
+        didox.states.add(() -> new EInvoiceStateOutcome.Known("DOC-1", EInvoiceOperatorState.UNKNOWN, "5"));
+        assertThatThrownBy(() -> service.refresh(TENANT, sent.id(), STAFF, "c"))
+                .isInstanceOfSatisfying(ApiException.class, refusal -> {
+                    assertThat(refusal.errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
+                    assertThat(refusal.properties()).containsEntry("reason", "SETTLED_AT_OPERATOR");
+                });
+
+        assertThat(didox.asked).as("a settled document is not even asked about").isEmpty();
+        StatementEInvoice unchanged = store.find(TENANT, sent.id()).orElseThrow();
+        assertThat(unchanged.operatorState()).isEqualTo(EInvoiceOperatorState.SIGNED);
+        assertThat(unchanged.operatorStatus()).isEqualTo("2");
+        assertThat(unchanged.version()).isEqualTo(signed.version());
+    }
+
+    @Test
+    @DisplayName("a refused attempt is not revived into the live index while its statement stands on another")
+    void aRefusedAttemptStaysDead() {
+        connect(true);
+        UUID statement = statement("S-2026-09-000001", "ISSUED", "UZS", plan());
+        didox.sends.add(() -> new EInvoiceSendOutcome.Accepted("DOC-A", EInvoiceOperatorState.DRAFT, "created"));
+        StatementEInvoice first = send(statement);
+        didox.states.add(() -> new EInvoiceStateOutcome.Known("DOC-A", EInvoiceOperatorState.REFUSED, "3"));
+        StatementEInvoice refused =
+                service.refresh(TENANT, first.id(), STAFF, "c").einvoice();
+        didox.sends.add(() -> new EInvoiceSendOutcome.Accepted("DOC-B", EInvoiceOperatorState.DRAFT, "created"));
+        StatementEInvoice second = send(statement);
+
+        // The operator no longer lists a refused document: before the guard A became UNKNOWN, hence live,
+        // beside B, and the update ran into the live index.
+        didox.states.add(EInvoiceStateOutcome.NotFound::new);
+        assertThatThrownBy(() -> service.refresh(TENANT, first.id(), STAFF, "c"))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refusal -> assertThat(refusal.properties()).containsEntry("reason", "SETTLED_AT_OPERATOR"));
+
+        StatementEInvoice after = store.find(TENANT, first.id()).orElseThrow();
+        assertThat(after.operatorState()).isEqualTo(EInvoiceOperatorState.REFUSED);
+        assertThat(after.live()).isFalse();
+        assertThat(after.version()).isEqualTo(refused.version());
+        assertThat(store.find(TENANT, second.id()).orElseThrow().live()).isTrue();
+    }
+
+    @Test
+    @DisplayName("the database write itself refuses to move a settled document, whoever asks")
+    void theStoreDoesNotMoveASettledDocument() {
+        connect(true);
+        UUID statement = statement("S-2026-09-000001", "ISSUED", "UZS", plan());
+        didox.sends.add(() -> new EInvoiceSendOutcome.Accepted("DOC-1", EInvoiceOperatorState.DRAFT, "created"));
+        StatementEInvoice sent = send(statement);
+        didox.states.add(() -> new EInvoiceStateOutcome.Known("DOC-1", EInvoiceOperatorState.CANCELLED, "4"));
+        StatementEInvoice cancelled =
+                service.refresh(TENANT, sent.id(), STAFF, "c").einvoice();
+
+        assertThat(store.recordState(
+                        cancelled.id(), cancelled.version(), "DOC-1", EInvoiceOperatorState.UNKNOWN, "5", NOW))
+                .isFalse();
+        assertThat(store.touchChecked(cancelled.id(), cancelled.version(), NOW)).isFalse();
+        assertThat(store.find(TENANT, sent.id()).orElseThrow().operatorState())
+                .isEqualTo(EInvoiceOperatorState.CANCELLED);
+    }
+
+    @Test
     @DisplayName("only an attempt that reached an operator can be asked about, and only through a connected account")
     void whatMayBeRefreshed() {
         connect(true);

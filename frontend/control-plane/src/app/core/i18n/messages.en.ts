@@ -2177,6 +2177,8 @@ export const en = {
     'A connected account keeps its secret reference and the seller’s identity. Suspend it first.',
   'einvoicing.error.NOTHING_AT_OPERATOR':
     'That attempt reached no operator, so there is nothing to ask about.',
+  'einvoicing.error.SETTLED_AT_OPERATOR':
+    'The operator has settled this document (signed, refused or cancelled); there is nothing further to ask.',
   'einvoicing.link': 'E-invoice',
 };
 

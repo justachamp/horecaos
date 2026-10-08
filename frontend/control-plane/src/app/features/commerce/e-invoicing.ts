@@ -433,6 +433,15 @@ export class EInvoicing {
     return `einvoicing.state.${state}` as MessageKey;
   }
 
+  /** Whether the operator has settled this document: signed, refused or cancelled is final, and asking again is refused. */
+  protected settled(attempt: EInvoiceView): boolean {
+    return (
+      attempt.operatorState === 'SIGNED' ||
+      attempt.operatorState === 'REFUSED' ||
+      attempt.operatorState === 'CANCELLED'
+    );
+  }
+
   /** The newest attempt that is standing as the statement's invoice, if any. */
   protected live(entry: SentStatement): EInvoiceView | null {
     return entry.attempts.find((attempt) => attempt.live) ?? null;

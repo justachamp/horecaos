@@ -2195,5 +2195,7 @@ export const uzLatn: Messages = {
     'Ulangan akkaunt maxfiy ma’lumotga havola va sotuvchi ma’lumotlarini saqlab turishi kerak. Avval uni to‘xtating.',
   'einvoicing.error.NOTHING_AT_OPERATOR':
     'Bu urinish operatorga yetib bormagan, so‘raladigan narsa yo‘q.',
+  'einvoicing.error.SETTLED_AT_OPERATOR':
+    'Operator bu hujjatni yakunlagan (imzolangan, rad etilgan yoki bekor qilingan), so‘raladigan narsa qolmagan.',
   'einvoicing.link': 'Elektron hisob-faktura',
 };

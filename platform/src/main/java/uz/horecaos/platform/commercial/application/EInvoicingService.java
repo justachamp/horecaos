@@ -801,6 +801,13 @@ public class EInvoicingService {
     /** The code of a lookup that found only a document recorded against another attempt for the same statement. */
     static final String ANOTHER_ATTEMPTS_DOCUMENT = "DOCUMENT_OF_ANOTHER_ATTEMPT";
 
+    /** The code of a refresh refused, or answered unread, because the operator has settled the document. */
+    static final String SETTLED_AT_OPERATOR = "SETTLED_AT_OPERATOR";
+
+    private static boolean settledAtOperator(StatementEInvoice row) {
+        return row.operatorState() != null && row.operatorState().settled();
+    }
+
     /** What asking the operator did: the document as it stands, and why nothing could be learned if so. */
     public record Refreshed(
             StatementEInvoice einvoice, @Nullable String unavailableCode) {}
@@ -816,6 +823,15 @@ public class EInvoicingService {
                     ErrorCode.UNPROCESSABLE_STATE,
                     "Nothing stands at an operator for an attempt that is " + row.delivery(),
                     Map.of("reason", "NOTHING_AT_OPERATOR"));
+        }
+        if (settledAtOperator(row)) {
+            // Signed, refused and cancelled are final. The sweep never asks about them, so neither does
+            // a click: an answer such as "not found" for a refused document would otherwise read as
+            // UNKNOWN, which stands as live again beside the attempt that replaced it.
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "The operator has settled this document as " + row.operatorState() + "; there is nothing to ask",
+                    Map.of("reason", SETTLED_AT_OPERATOR));
         }
         EInvoicingOperator operator = operators.get(row.providerType());
         EInvoicingInstallation installation = store.installation(row.installationId())
@@ -902,6 +918,10 @@ public class EInvoicingService {
             UUID tenantId, UUID einvoiceId, EInvoiceStateOutcome outcome, ActorRef actor, String correlationId) {
         StatementEInvoice row = find(tenantId, einvoiceId);
         Instant now = clock.instant();
+        if (settledAtOperator(row)) {
+            // Settled between asking and recording (another click, the sweep): the answer is not applied.
+            return new Refreshed(row, SETTLED_AT_OPERATOR);
+        }
         switch (outcome) {
             case EInvoiceStateOutcome.Known known -> {
                 if (row.operatorDocumentId() == null

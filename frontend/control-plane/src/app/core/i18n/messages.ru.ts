@@ -2177,5 +2177,7 @@ export const ru: Messages = {
   'einvoicing.error.ACTIVE_NEEDS_CONFIGURATION':
     'У подключённого аккаунта должны оставаться ссылка на секрет и данные продавца. Сначала приостановите его.',
   'einvoicing.error.NOTHING_AT_OPERATOR': 'Эта попытка не дошла до оператора, спрашивать не о чем.',
+  'einvoicing.error.SETTLED_AT_OPERATOR':
+    'Оператор уже закрыл этот документ (подписан, отклонён или аннулирован), спрашивать больше не о чем.',
   'einvoicing.link': 'Электронная счёт-фактура',
 };
