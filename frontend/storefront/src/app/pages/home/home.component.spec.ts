@@ -4,6 +4,7 @@ import { signal } from '@angular/core';
 
 import { HomeComponent } from './home.component';
 import { MenuService } from '../../services/menu.service';
+import { ReviewsService } from '../../services/reviews.service';
 import { FavouritesService } from '../../services/favourites.service';
 import { LangService } from '../../services/lang.service';
 import { UiCartService } from '../../services/ui-cart.service';
@@ -124,6 +125,20 @@ function setUp() {
     providers: [
       provideRouter([]),
       { provide: MenuService, useValue: menu },
+      // The public rating block is not under test here: the platform reports nothing to show.
+      {
+        provide: ReviewsService,
+        useValue: {
+          publicSummary: vi.fn(async () => ({
+            visibility: 'NONE',
+            ready: false,
+            count: null,
+            average: null,
+            distribution: null,
+          })),
+          publicComments: vi.fn(),
+        },
+      },
       { provide: FavouritesService, useValue: favourites },
       { provide: LangService, useClass: FakeLangService },
       { provide: UiCartService, useValue: cart },

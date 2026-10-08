@@ -12,6 +12,7 @@ import {
 import { NotificationService } from '../../services/notification.service';
 import { TranslateService } from '../../services/translate.service';
 import { TranslatePipe } from '../translate/translate.pipe';
+import { RateOrderComponent } from '../rate-order/rate-order.component';
 import { NavigationHistoryService } from '../../services/navigation-history.service';
 import { LangService } from '../../services/lang.service';
 import { formatQuantity, formatWeight } from '../../utils/physical';
@@ -45,6 +46,13 @@ import {
  * `OrdersComponent`, which restricts itself to the newest history row for
  * exactly that reason). There is no list here to economise across.
  *
+ * <h2>Rating the order</h2>
+ *
+ * The same screen carries the rating card (ADR 0159): {@link RateOrderComponent} asks the platform
+ * whether this order is still awaiting a review and shows the form only if it is, shows the customer's
+ * own review (and where its comment stands for the public page) if there is one, and shows nothing
+ * otherwise -- including whenever the restaurant has not switched its feedback settings on.
+ *
  * <h2>Hidden, not greyed</h2>
  *
  * The button appears only when the plan's `verdict` is `READY`. `PARTIAL` --
@@ -56,7 +64,7 @@ import {
 @Component({
   selector: 'app-order-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslatePipe],
+  imports: [CommonModule, RouterLink, TranslatePipe, RateOrderComponent],
   templateUrl: './order-detail.component.html',
   styleUrl: './order-detail.component.scss',
 })

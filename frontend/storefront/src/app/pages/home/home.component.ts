@@ -16,6 +16,7 @@ import { SectionHeaderComponent } from '../../shared/section-header/section-head
 import { FoodCarouselComponent } from '../../shared/food-carousel/food-carousel.component';
 import { FoodCardComponent } from '../../shared/food-card/food-card.component';
 import { TopBarComponent } from '../../shared/top-bar/top-bar.component';
+import { PublicReviewsComponent } from '../../shared/public-reviews/public-reviews.component';
 import { CartHintBadgeComponent } from '../../shared/cart-hint-badge/cart-hint-badge.component';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { TranslateService } from '../../services/translate.service';
@@ -75,6 +76,7 @@ function persistMode(mode: UiMode): void {
     FoodCardComponent,
     TopBarComponent,
     CartHintBadgeComponent,
+    PublicReviewsComponent,
     TranslatePipe,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
