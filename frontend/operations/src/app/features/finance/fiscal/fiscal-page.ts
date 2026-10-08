@@ -8,6 +8,8 @@ import { ApiError } from '../../../core/api/problem-details';
 import { describeApiError } from '../../orders/order-errors';
 import { orderStatusLabel } from '../../orders/order-status';
 import { FiscalApi, FiscalCoverageView, FiscalDocumentView } from './fiscal-api';
+import { FiscalEvidence, correctionKindKey, correctionReasonKey } from './fiscal-evidence';
+import { FiscalCorrectionRequestView, FiscalEvidenceApi } from './fiscal-evidence-api';
 
 /** `FiscalReasonCode.BLOCKING` (Java), mirrored so the filter offers exactly the same set. */
 export const BLOCKING_REASON_CODES = [
@@ -20,6 +22,11 @@ export const BLOCKING_REASON_CODES = [
 
 type ResolveAction = 'retry' | 'unblock';
 
+/** What the order lookup needs to know of an order: which one, and the number it is known by. */
+type OrderIdentity = Pick<OrderNumberMatchView, 'orderId' | 'publicOrderNumber'>;
+
+const MS_PER_DAY = 86_400_000;
+
 /**
  * 8.2 Fiscal receipts — `operations-spec/finance.md` §8.2.
  *
@@ -29,23 +36,26 @@ type ResolveAction = 'retry' | 'unblock';
  * is the console operations never had for a queue that has been computing
  * itself the whole time.
  *
- * **What is deliberately absent.** No fiscal sign, receipt URL or marking
- * code appears on this screen. The controller's own doc says why: that
- * evidence is ADR 0029-protected and reached through "the payments module's
- * authorized order-payment view, with a recorded purpose" — a view that does
- * not exist yet. A worklist needs to know a document *has* evidence
- * (`hasEvidence`), not what the evidence says, and that is all this renders.
+ * **What the worklists leave out.** No fiscal sign, receipt URL or marking
+ * code appears in the blocked worklist or the per-order table. That evidence
+ * is ADR 0029-protected and read with a recorded purpose; a worklist needs to
+ * know a document *has* evidence (`hasEvidence`), not what it says. Once an
+ * order is looked up, the evidence card beneath its table (`q-fiscal-evidence`,
+ * ADR 0166) shows it, masked until a purpose is given, with the INN each
+ * document was filed under and the lines as filed.
  */
 @Component({
   selector: 'q-fiscal-page',
-  imports: [TPipe],
+  imports: [TPipe, FiscalEvidence],
   templateUrl: './fiscal-page.html',
   styleUrl: './fiscal-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class FiscalPage {
   private readonly tenant = inject(CurrentTenant);
+  protected readonly tenantId = this.tenant.tenantId;
   private readonly api = inject(FiscalApi);
+  private readonly evidenceApi = inject(FiscalEvidenceApi);
   private readonly orderLookup = inject(OrderLookupApi);
   protected readonly i18n = inject(I18n);
 
@@ -56,7 +66,7 @@ export class FiscalPage {
   protected readonly orderLookupLoading = signal(false);
   protected readonly orderLookupError = signal<string | null>(null);
   protected readonly orderCandidates = signal<readonly OrderNumberMatchView[]>([]);
-  protected readonly selectedOrder = signal<OrderNumberMatchView | null>(null);
+  protected readonly selectedOrder = signal<OrderIdentity | null>(null);
   protected readonly orderDocumentsLoading = signal(false);
   protected readonly orderDocuments = signal<readonly FiscalDocumentView[]>([]);
 
@@ -73,6 +83,12 @@ export class FiscalPage {
   protected readonly resolveReason = signal('');
   protected readonly resolveSubmitting = signal(false);
   protected readonly resolveError = signal<string | null>(null);
+
+  // -------------------------------------------------------------- correction requests (ADR 0166)
+  protected readonly requestsLoading = signal(true);
+  protected readonly requestsDenied = signal(false);
+  protected readonly requestsError = signal(false);
+  protected readonly requests = signal<readonly FiscalCorrectionRequestView[]>([]);
 
   // -------------------------------------------------------------- coverage
   protected readonly coverageLoading = signal(false);
@@ -93,7 +109,11 @@ export class FiscalPage {
       this.blockedDenied.set(this.tenant.denied());
       return;
     }
-    await Promise.all([this.loadBlocked(tenantId), this.loadCoverage(tenantId)]);
+    await Promise.all([
+      this.loadBlocked(tenantId),
+      this.loadCoverage(tenantId),
+      this.loadRequests(tenantId),
+    ]);
   }
 
   // -------------------------------------------------------------- order lookup (per-order documents)
@@ -135,7 +155,7 @@ export class FiscalPage {
     }
   }
 
-  protected async selectOrder(order: OrderNumberMatchView): Promise<void> {
+  protected async selectOrder(order: OrderIdentity): Promise<void> {
     const tenantId = this.tenant.tenantId();
     this.orderCandidates.set([]);
     this.selectedOrder.set(order);
@@ -159,6 +179,62 @@ export class FiscalPage {
   /** `document.orderId` is a UUID nobody outside this console has ever seen. */
   protected documentOrderLabel(document: FiscalDocumentView): string {
     return document.publicOrderNumber ?? document.orderId;
+  }
+
+  // -------------------------------------------------------------- correction requests
+
+  /**
+   * The requests the tenant's fiscal agent has not answered, longest-waiting first (`GET
+   * .../fiscal/correction-requests`). Aged and not alarmed: HorecaOS records a request and the agent
+   * issues, and no legal deadline per path is enforced here, so a number of days is all it can honestly say.
+   */
+  private async loadRequests(tenantId: string): Promise<void> {
+    this.requestsLoading.set(true);
+    this.requestsDenied.set(false);
+    this.requestsError.set(false);
+    try {
+      this.requests.set(await this.evidenceApi.openCorrections(tenantId));
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 403) {
+        this.requestsDenied.set(true);
+      } else {
+        this.requestsError.set(true);
+      }
+    } finally {
+      this.requestsLoading.set(false);
+    }
+  }
+
+  /** Whole days a request has waited; never negative, whatever the clocks say. */
+  protected requestAgeDays(request: FiscalCorrectionRequestView): number {
+    return Math.max(0, Math.floor((Date.now() - Date.parse(request.requestedAt)) / MS_PER_DAY));
+  }
+
+  protected requestKindLabel(request: FiscalCorrectionRequestView): string {
+    const key = correctionKindKey(request.kind);
+    return key ? this.i18n.t(key) : request.kind;
+  }
+
+  protected requestReasonLabel(request: FiscalCorrectionRequestView): string {
+    const key = correctionReasonKey(request.reasonCode);
+    return key ? this.i18n.t(key) : request.reasonCode;
+  }
+
+  /** The number an operator knows the order by; the id only for an order that cannot be resolved. */
+  protected requestOrderLabel(request: FiscalCorrectionRequestView): string {
+    return request.publicOrderNumber ?? request.orderId;
+  }
+
+  /** Opens that order's documents and evidence above, where the agent's reference is attached. */
+  protected async openRequestOrder(request: FiscalCorrectionRequestView): Promise<void> {
+    this.orderNumberInput.set(request.publicOrderNumber ?? '');
+    this.orderLookupError.set(null);
+    this.orderCandidates.set([]);
+    this.orderDocuments.set([]);
+    await this.selectOrder({
+      orderId: request.orderId,
+      publicOrderNumber: this.requestOrderLabel(request),
+    });
   }
 
   // -------------------------------------------------------------- blocked worklist

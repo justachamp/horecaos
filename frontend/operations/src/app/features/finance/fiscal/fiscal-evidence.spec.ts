@@ -653,6 +653,58 @@ describe('FiscalEvidence: the fiscal evidence of one order (row X.2, ADR 0166)',
       );
     });
 
+    it('draws the order it was last asked about, however late the answer for an earlier one arrives', async () => {
+      let answerFirst: (value: FiscalEvidenceView) => void = () => {};
+      const first = new Promise<FiscalEvidenceView>((resolve) => {
+        answerFirst = resolve;
+      });
+      const api = configure({ masked: view([]) });
+      api.forOrder.mockImplementation(async (_tenant: string, order: string) =>
+        order === ORDER
+          ? first
+          : view([document_({ documentId: 'doc-of-order-2' })], { orderId: 'order-2' }),
+      );
+      const fixture = TestBed.createComponent(FiscalEvidence);
+      fixture.componentRef.setInput('tenantId', TENANT);
+      fixture.componentRef.setInput('orderId', ORDER);
+      fixture.detectChanges();
+
+      fixture.componentRef.setInput('orderId', 'order-2');
+      await settle(fixture);
+      expect(allByTestId(fixture, 'fiscal-evidence-document').map((card) => card.id)).toEqual([
+        evidenceDocumentAnchor('doc-of-order-2'),
+      ]);
+
+      answerFirst(view([document_({ documentId: 'doc-of-order-1' })]));
+      await settle(fixture);
+
+      expect(
+        allByTestId(fixture, 'fiscal-evidence-document').map((card) => card.id),
+        'the late answer for the first order must not replace the second',
+      ).toEqual([evidenceDocumentAnchor('doc-of-order-2')]);
+    });
+
+    it('does not keep the previous order on screen while the next one loads', async () => {
+      let answerSecond: (value: FiscalEvidenceView) => void = () => {};
+      const second = new Promise<FiscalEvidenceView>((resolve) => {
+        answerSecond = resolve;
+      });
+      const api = configure({ masked: view([document_({ documentId: 'doc-of-order-1' })]) });
+      const fixture = await render();
+      expect(allByTestId(fixture, 'fiscal-evidence-document')).toHaveLength(1);
+
+      api.forOrder.mockImplementation(async () => second);
+      fixture.componentRef.setInput('orderId', 'order-2');
+      fixture.detectChanges();
+
+      expect(allByTestId(fixture, 'fiscal-evidence-document')).toHaveLength(0);
+      answerSecond(view([document_({ documentId: 'doc-of-order-2' })]));
+      await settle(fixture);
+      expect(allByTestId(fixture, 'fiscal-evidence-document')[0].id).toBe(
+        evidenceDocumentAnchor('doc-of-order-2'),
+      );
+    });
+
     it('hands the host the documents it read, so a tender can link to its own', async () => {
       configure({ masked: view([document_()]) });
       const fixture = TestBed.createComponent(FiscalEvidence);

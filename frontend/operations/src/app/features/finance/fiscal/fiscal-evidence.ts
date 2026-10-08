@@ -87,6 +87,16 @@ const LINE_KIND_KEYS: Readonly<Record<string, MessageKey>> = {
   SYNTHETIC: 'finance.fiscalEvidence.lines.kind.SYNTHETIC',
 };
 
+/** The words for a correction kind, for a screen that lists requests without drawing the evidence card. */
+export function correctionKindKey(kind: string): MessageKey | null {
+  return (KIND_KEYS as Readonly<Record<string, MessageKey>>)[kind] ?? null;
+}
+
+/** The words for a correction reason; null for a reason this client does not know, which the caller shows raw. */
+export function correctionReasonKey(reason: string): MessageKey | null {
+  return (REASON_KEYS as Readonly<Record<string, MessageKey>>)[reason] ?? null;
+}
+
 /** The tender-and-document pair the payments page links with: the document a tender's receipt is. */
 export function documentOfTender(
   documents: readonly FiscalEvidenceDocumentView[],
@@ -171,6 +181,10 @@ export class FiscalEvidence {
   protected readonly revealError = signal<string | null>(null);
   private hideTimer: ReturnType<typeof setTimeout> | null = null;
 
+  /** Which read is the latest asked for, so the answer to an older one is dropped and not drawn. */
+  private loadTicket = 0;
+  private shown = '';
+
   // ------------------------------------------------------------ correction request
   protected readonly requestingFor = signal<string | null>(null);
   protected readonly requestKind = signal<FiscalCorrectionKind>('CORRECTION');
@@ -200,6 +214,13 @@ export class FiscalEvidence {
         this.hide();
         this.closeForms();
         this.notice.set(null);
+        const order = `${tenantId}/${orderId}`;
+        if (order !== this.shown) {
+          // Another order, not a re-read of this one: its predecessor's documents must not stay on the
+          // screen while it loads.
+          this.shown = order;
+          this.masked.set(null);
+        }
         void this.load(tenantId, orderId);
       });
     });
@@ -209,18 +230,21 @@ export class FiscalEvidence {
   // ------------------------------------------------------------ loading
 
   private async load(tenantId: string, orderId: string): Promise<void> {
+    const ticket = ++this.loadTicket;
     this.loading.set(true);
     this.denied.set(false);
     this.failed.set(false);
     try {
       const view = await this.api.forOrder(tenantId, orderId);
-      // A reply for an order that is no longer the one shown is dropped, not drawn.
-      if (tenantId !== this.tenantId() || orderId !== this.orderId()) {
+      if (ticket !== this.loadTicket) {
         return;
       }
       this.masked.set(view);
       this.loaded.emit(view.documents);
     } catch (error) {
+      if (ticket !== this.loadTicket) {
+        return;
+      }
       this.masked.set(null);
       if (error instanceof ApiError && error.status === 403) {
         this.denied.set(true);
@@ -228,7 +252,9 @@ export class FiscalEvidence {
         this.failed.set(true);
       }
     } finally {
-      this.loading.set(false);
+      if (ticket === this.loadTicket) {
+        this.loading.set(false);
+      }
     }
   }
 
@@ -245,8 +271,13 @@ export class FiscalEvidence {
     }
     this.revealing.set(true);
     this.revealError.set(null);
+    const order = this.shown;
     try {
       const view = await this.api.forOrder(this.tenantId(), this.orderId(), purpose);
+      if (order !== this.shown) {
+        // The order changed while this look was in flight. It was asked for about the one before.
+        return;
+      }
       this.opened.set(view);
       this.armTimer();
     } catch (error) {

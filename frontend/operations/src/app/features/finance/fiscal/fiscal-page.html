@@ -99,7 +99,71 @@
             }
           </tbody>
         </table>
+        <!-- What each of those was filed as and under which INN, with identifiers masked until a purpose
+             is given (row X.2, ADR 0166) -- the same card the order's own panel and the payments page draw. -->
+        @if (tenantId(); as evidenceTenant) {
+          <q-fiscal-evidence [tenantId]="evidenceTenant" [orderId]="order.orderId" />
+        }
       }
+    }
+  </section>
+
+  <section class="requests" data-testid="fiscal-requests">
+    <h2 class="q-subhead">{{ 'finance.fiscalEvidence.requests.title' | t }}</h2>
+    <p class="q-body-sm note">{{ 'finance.fiscalEvidence.requests.lead' | t }}</p>
+
+    @if (requestsLoading()) {
+      <p class="q-body-sm">{{ 'finance.fiscal.loading' | t }}</p>
+    } @else if (requestsDenied()) {
+      <p class="q-body-sm denied" data-testid="fiscal-requests-denied">
+        {{ 'finance.scope.denied' | t }}
+      </p>
+    } @else if (requestsError()) {
+      <p class="q-body-sm error" role="alert" data-testid="fiscal-requests-error">
+        {{ 'finance.fiscalEvidence.requests.error' | t }}
+      </p>
+    } @else {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'finance.fiscal.field.order' | t }}</th>
+            <th class="q-caption">{{ 'finance.fiscalEvidence.requests.column.kind' | t }}</th>
+            <th class="q-caption">{{ 'finance.fiscalEvidence.requests.column.reason' | t }}</th>
+            <th class="q-caption">{{ 'finance.fiscalEvidence.requests.column.requested' | t }}</th>
+            <th class="q-caption">{{ 'finance.fiscalEvidence.requests.column.waiting' | t }}</th>
+            <th class="q-caption"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (request of requests(); track request.requestId) {
+            <tr data-testid="fiscal-request-row">
+              <td class="q-body-sm q-mono">{{ requestOrderLabel(request) }}</td>
+              <td class="q-body-sm">{{ requestKindLabel(request) }}</td>
+              <td class="q-body-sm">{{ requestReasonLabel(request) }}</td>
+              <td class="q-body-sm">{{ request.requestedAt }}</td>
+              <td class="q-body-sm q-mono" data-testid="fiscal-request-age">
+                {{ 'finance.fiscalEvidence.requests.days' | t: { days: requestAgeDays(request) } }}
+              </td>
+              <td class="q-body-sm actions">
+                <button
+                  type="button"
+                  class="q-body-sm link"
+                  (click)="openRequestOrder(request)"
+                  data-testid="fiscal-request-open"
+                >
+                  {{ 'finance.fiscalEvidence.requests.open' | t }}
+                </button>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="6" data-testid="fiscal-requests-empty">
+                {{ 'finance.fiscalEvidence.requests.empty' | t }}
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
     }
   </section>
 

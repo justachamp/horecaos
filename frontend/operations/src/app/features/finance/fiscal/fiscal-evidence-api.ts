@@ -188,6 +188,8 @@ export interface FiscalCorrectionRequestView {
   readonly requestId: string;
   readonly documentId: string;
   readonly orderId: string;
+  /** The number the order is known by; null only if the order cannot be resolved. Show this, never `orderId`. */
+  readonly publicOrderNumber: string | null;
   readonly kind: FiscalCorrectionKind;
   readonly reasonCode: string;
   readonly status: string;

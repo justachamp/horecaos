@@ -868,4 +868,15 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
   'finance.payments.tenders.fiscal': 'Fiskal chek',
   'finance.payments.tenders.fiscal.open': 'Maʻlumotni koʻrsatish',
   'finance.payments.tenders.fiscal.none': 'Hujjat yoʻq',
+  'finance.fiscalEvidence.requests.title': 'Tuzatish va bekor qilish soʻrovlari',
+  'finance.fiscalEvidence.requests.lead':
+    'Restoranning oʻz fiskal agentidan soʻralgan va hali bajarilmagan; eng uzoq kutayotganlari yuqorida. HorecaOS soʻrovni qayd etadi, tuzatishni esa agent chiqaradi; qonuniy muddat bu yerda nazorat qilinmaydi, shuning uchun faqat kunlar sanaladi.',
+  'finance.fiscalEvidence.requests.empty': 'Fiskal agentni kutayotgan soʻrov yoʻq.',
+  'finance.fiscalEvidence.requests.error': 'Tuzatish soʻrovlarini yuklab boʻlmadi.',
+  'finance.fiscalEvidence.requests.column.kind': 'Nima soʻralgan',
+  'finance.fiscalEvidence.requests.column.reason': 'Sabab',
+  'finance.fiscalEvidence.requests.column.requested': 'Soʻralgan vaqt',
+  'finance.fiscalEvidence.requests.column.waiting': 'Kutmoqda',
+  'finance.fiscalEvidence.requests.days': '{days} kun',
+  'finance.fiscalEvidence.requests.open': 'Buyurtmani ochish',
 };

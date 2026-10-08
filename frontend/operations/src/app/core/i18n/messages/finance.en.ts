@@ -861,4 +861,15 @@ export const financeEn = {
   'finance.payments.tenders.fiscal': 'Fiscal receipt',
   'finance.payments.tenders.fiscal.open': 'Show evidence',
   'finance.payments.tenders.fiscal.none': 'No receipt document',
+  'finance.fiscalEvidence.requests.title': 'Correction and void requests',
+  'finance.fiscalEvidence.requests.lead':
+    'Asked of the restaurant’s own fiscal agent and not answered yet, longest waiting first. HorecaOS records the request and the agent issues the correction; no legal deadline is enforced here, so this only counts the days.',
+  'finance.fiscalEvidence.requests.empty': 'No request is waiting for the fiscal agent.',
+  'finance.fiscalEvidence.requests.error': 'The correction requests could not be loaded.',
+  'finance.fiscalEvidence.requests.column.kind': 'Asked for',
+  'finance.fiscalEvidence.requests.column.reason': 'Reason',
+  'finance.fiscalEvidence.requests.column.requested': 'Requested at',
+  'finance.fiscalEvidence.requests.column.waiting': 'Waiting',
+  'finance.fiscalEvidence.requests.days': '{days} d',
+  'finance.fiscalEvidence.requests.open': 'Open the order',
 } as const;

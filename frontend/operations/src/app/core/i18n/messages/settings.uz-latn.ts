@@ -1344,7 +1344,7 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.noAccess': 'Ruxsat yoʻq',
   'settings.fiscalization.responsibility': 'Chekni kim beradi',
   'settings.fiscalization.responsibility.lead':
-    '“Toʻlovlar” ekrani bilan bir xil modeldan oʻqiladi: roʻyxat toʻlov usuli cheki uchun kim javobgarligini, merchant hisoblari va fiskal terminallar esa buni bugun bajarish mumkinligini aytadi. Bu yerda sozlanmaydi: bogʻlamalardan farq qiladigan sozlama soliq hujjati haqida yolgʻon maʼlumot boʻlar edi.',
+    '“Toʻlovlar” ekrani bilan bir xil modeldan oʻqiladi: roʻyxat toʻlov usuli cheki uchun kim javobgarligini, merchant hisoblari va fiskal terminallar esa buni bugun bajarish mumkinligini aytadi. Bu yerda sozlanmaydi: bogʻlamalardan farq qiladigan sozlama soliq hujjati haqida yolgʻon maʻlumot boʻlar edi.',
   'settings.fiscalization.responsibility.state.live': 'chek berish mumkin',
   'settings.fiscalization.responsibility.state.noPath': 'fiskal yoʻl yoʻq',
   'settings.fiscalization.responsibility.state.notApplicable': 'chek kerak emas',

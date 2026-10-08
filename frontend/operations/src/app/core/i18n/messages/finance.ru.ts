@@ -863,4 +863,15 @@ export const financeRu: AreaMessages<typeof financeEn> = {
   'finance.payments.tenders.fiscal': 'Фискальный чек',
   'finance.payments.tenders.fiscal.open': 'Показать данные',
   'finance.payments.tenders.fiscal.none': 'Документа нет',
+  'finance.fiscalEvidence.requests.title': 'Запросы на коррекцию и аннулирование',
+  'finance.fiscalEvidence.requests.lead':
+    'Запрошены у фискального агента самого ресторана и ещё не выполнены; дольше всех ждущие — сверху. HorecaOS фиксирует запрос, а коррекцию выпускает агент; законный срок здесь не контролируется, поэтому считаются только дни.',
+  'finance.fiscalEvidence.requests.empty': 'Нет запросов, ожидающих фискального агента.',
+  'finance.fiscalEvidence.requests.error': 'Не удалось загрузить запросы на коррекцию.',
+  'finance.fiscalEvidence.requests.column.kind': 'Что запрошено',
+  'finance.fiscalEvidence.requests.column.reason': 'Причина',
+  'finance.fiscalEvidence.requests.column.requested': 'Запрошено',
+  'finance.fiscalEvidence.requests.column.waiting': 'Ждёт',
+  'finance.fiscalEvidence.requests.days': '{days} дн.',
+  'finance.fiscalEvidence.requests.open': 'Открыть заказ',
 };
