@@ -52,6 +52,18 @@ public class ConsentTypeService {
                     "Xizmat ko'rsatish shartlari",
                     "Terms of service",
                     "Acceptance of the storefront's published terms.",
+                    false),
+            // ADR 0159, Decision 6: the customer's tick, at brand scope, that lets the words of one review
+            // appear on the restaurant's public page without their name. Policy version 1; the wording is
+            // product's and legal's to confirm (open input 2). V0543 inserts the same row for every tenant
+            // that already has a registry, because this bootstrap runs only for a tenant with none.
+            new DefaultConsentType(
+                    "review.public_display",
+                    "Показать мой отзыв на странице ресторана без моего имени",
+                    "Sharhimni restoran sahifasida ismimsiz ko'rsatish",
+                    "Show my review on the restaurant's page without my name",
+                    "The customer agrees that the words of one review may appear on the restaurant's public "
+                            + "page, without their name, number or order.",
                     false));
 
     private final JdbcConsentTypeStore store;

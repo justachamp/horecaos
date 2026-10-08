@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +19,8 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.reviews.application.ReviewQueryService;
 import uz.horecaos.platform.reviews.application.ReviewQueryService.ReviewView;
 import uz.horecaos.platform.reviews.application.ReviewQueryService.UnknownCursorException;
+import uz.horecaos.platform.reviews.domain.CaseState;
+import uz.horecaos.platform.reviews.domain.CommentState;
 import uz.horecaos.platform.reviews.infrastructure.persistence.JdbcReviewStore.Summary;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -28,12 +31,14 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * §5.4 Reviews: a brand's own order reviews, filtered, read against the order
  * and the customer each one is attached to (ADR 0071).
  *
- * <p>Deliberately read-only — there is no write endpoint here because there
- * is nothing an operator writes: a review is customer-authored and immutable.
- * No moderation action exists either; the ADR's own "no moderation, no
- * kanban" decision means acting on a bad review goes through the order's own
- * remedy tools ({@code OperationsRemedyController}, ADR 0048), not a
- * review-specific one.
+ * <p>Read-only — there is no write endpoint here because there is nothing an
+ * operator writes to a review: it is customer-authored and immutable. Since ADR
+ * 0159 each row also says which tags it carries, where its comment stands for
+ * the public page, and which service-recovery case (if any) answers it; working
+ * a case is {@code OperationsRecoveryCaseController}, deciding a comment is
+ * {@code OperationsReviewModerationController}, and compensating the customer is
+ * still the order's own remedy tools ({@code OperationsRemedyController}, ADR
+ * 0048), which a case links to and never replaces.
  */
 @RestController
 @RequestMapping("/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews")
@@ -110,6 +115,13 @@ public class OperationsReviewController {
 
     // ------------------------------------------------------------- wire shapes
 
+    /**
+     * @param tags        the tags it carries
+     * @param publicState NOT_SHARED, PENDING, PUBLISHED or HIDDEN: where the comment stands for the public page
+     * @param publicReasonCode why it is hidden
+     * @param caseId      the service-recovery case that answers it, or null
+     * @param caseState   that case's state
+     */
     public record ReviewResponse(
             UUID id,
             UUID orderId,
@@ -117,7 +129,12 @@ public class OperationsReviewController {
             UUID customerAccountId,
             int rating,
             @Nullable String comment,
-            Instant submittedAt) {
+            Instant submittedAt,
+            List<TagResponse> tags,
+            CommentState publicState,
+            @Nullable String publicReasonCode,
+            @Nullable UUID caseId,
+            @Nullable CaseState caseState) {
 
         static ReviewResponse of(ReviewView view) {
             return new ReviewResponse(
@@ -127,9 +144,30 @@ public class OperationsReviewController {
                     view.customerAccountId(),
                     view.rating(),
                     view.comment(),
-                    view.submittedAt());
+                    view.submittedAt(),
+                    view.tags().stream()
+                            .map(tag -> new TagResponse(
+                                    tag.row().id(),
+                                    tag.row().code(),
+                                    tag.row().category().name(),
+                                    tag.row().sentiment().name(),
+                                    tag.labels(),
+                                    tag.row().iconAssetId()))
+                            .toList(),
+                    view.publicState(),
+                    view.publicReasonCode(),
+                    view.caseLink() == null ? null : view.caseLink().caseId(),
+                    view.caseLink() == null ? null : view.caseLink().state());
         }
     }
+
+    public record TagResponse(
+            UUID id,
+            String code,
+            String category,
+            String sentiment,
+            Map<String, String> labels,
+            @Nullable UUID iconAssetId) {}
 
     public record SummaryResponse(long reviewCount, double averageRating) {}
 }

@@ -10,13 +10,16 @@ import org.jspecify.annotations.Nullable;
  * acceptance table.
  *
  * <p>Deliberately narrower than {@link uz.horecaos.platform.customers.application.ConsentService}
- * itself, which stays internal: this port only ever grants, on behalf of the
- * customer whose own action this is, and takes plain strings rather than
- * {@code ConsentService}'s application-layer enums so a caller outside this
- * module never needs to import them. A withdrawal, an import-sourced
- * decision, or a support agent acting on somebody's behalf are different
- * acts with different evidence, and stay behind {@code ConsentService}
- * itself, used only from inside {@code customers}.
+ * itself, which stays internal: this port only ever records what the customer
+ * themselves did in their own storefront session -- {@link #recordGrant a
+ * grant}, and (ADR 0159) {@link #recordWithdrawal the withdrawal of a purpose
+ * they granted} -- and takes plain strings rather than {@code ConsentService}'s
+ * application-layer enums so a caller outside this module never needs to
+ * import them. An import-sourced decision, a backdated one, or a support agent
+ * acting on somebody's behalf are different acts with different evidence, and
+ * stay behind {@code ConsentService} itself, used only from inside
+ * {@code customers}. A customer's own storefront withdrawal is the one
+ * withdrawal this port records.
  *
  * <p>Distinct from {@link ConsentDirectory}, whose own Javadoc is emphatic
  * that reading a decision must never become forming one. This is the write
@@ -47,6 +50,32 @@ public interface ConsentRecorder {
      * @return the new {@code consent_decisions} row id
      */
     UUID recordGrant(
+            UUID tenantId,
+            UUID accountId,
+            @Nullable UUID brandId,
+            String purpose,
+            @Nullable String channel,
+            String policyVersion,
+            String source,
+            @Nullable String evidenceReference);
+
+    /**
+     * Records that the customer withdrew a consent they had granted, right now (ADR 0159, Decision 6).
+     *
+     * <p>The one withdrawal this port records: a customer's own act, in their own storefront session, of
+     * taking back a purpose they granted through their own storefront action -- the review comment they
+     * agreed to show publicly, and then did not want shown. It is refused for any other source
+     * ({@code IMPORT}, {@code MIGRATION}, {@code SUPPORT_AGENT}, {@code API}), because a withdrawal made
+     * by anybody else is a different act with different evidence, and refused when the purpose is not
+     * currently granted, because withdrawing nothing would write a decision that never happened. Always
+     * dated now, never backdated.
+     *
+     * @param source must be {@code STOREFRONT}
+     * @return the new {@code WITHDRAWN} {@code consent_decisions} row id
+     * @throws IllegalArgumentException when {@code source} is not {@code STOREFRONT}
+     * @throws IllegalStateException    when the purpose is not currently granted
+     */
+    UUID recordWithdrawal(
             UUID tenantId,
             UUID accountId,
             @Nullable UUID brandId,

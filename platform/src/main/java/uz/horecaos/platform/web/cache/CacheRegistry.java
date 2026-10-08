@@ -171,7 +171,39 @@ public enum CacheRegistry {
             "assistant.grounded_replies",
             Duration.ofMinutes(5),
             5_000,
-            "None needed: the key carries a digest of the retrieved facts, so changed facts miss");
+            "None needed: the key carries a digest of the retrieved facts, so changed facts miss"),
+
+    /**
+     * ADR 0159: the anonymous public review summary of one brand -- the count, the sum of ratings and the
+     * five-bar distribution, keyed by tenant and brand.
+     *
+     * <p>Five minutes, per the record. It holds numbers and no words, and a hide, a withdrawal or an
+     * erasure never moves the average (a rating is not moderated), so nothing evicts it: the TTL is the
+     * whole staleness budget, and a new review shows within it. What the endpoint reveals is decided on
+     * every request from the brand's current visibility setting and minimum count, never from this
+     * entry, so a brand that switches its page off stops serving at once.
+     */
+    REVIEWS_PUBLIC_SUMMARY(
+            "reviews.public_summary",
+            Duration.ofSeconds(300),
+            5_000,
+            "none: counts only, and the TTL is the budget; visibility is re-read on every request"),
+
+    /**
+     * ADR 0159: the anonymous public list of one brand's published comments, keyed by tenant and brand.
+     *
+     * <p>Sixty seconds, and the one cache here that holds decrypted personal text: a published, consented
+     * and approved comment sits in process memory in the clear for up to a minute (ADR 0029's
+     * named-purpose rule holds for the public read through {@code reviews.public.display}). Because of
+     * that it is evicted by the writer: a moderation decision, a customer's withdrawal and an erasure
+     * each evict the brand's entry in the same request, after the commit, so the next read cannot return
+     * the comment. It never holds a {@code PENDING}, {@code HIDDEN} or unconsented comment.
+     */
+    REVIEWS_PUBLIC_LIST(
+            "reviews.public_list",
+            Duration.ofSeconds(60),
+            5_000,
+            "ReviewCommentModerated, a customer's withdrawal and an erasure (evicted in the same request, after the commit)");
 
     private static final Map<String, CacheRegistry> BY_NAME = Arrays.stream(values())
             .collect(Collectors.toUnmodifiableMap(CacheRegistry::cacheName, Function.identity()));

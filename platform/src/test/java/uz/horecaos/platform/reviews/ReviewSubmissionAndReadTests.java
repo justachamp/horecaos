@@ -22,10 +22,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
-import uz.horecaos.platform.iam.api.secrets.SecretResolver;
-import uz.horecaos.platform.iam.infrastructure.protection.DataEncryptionKeyProvider;
-import uz.horecaos.platform.iam.infrastructure.protection.EnvelopeFieldProtection;
-import uz.horecaos.platform.iam.infrastructure.secrets.EnvironmentSecretResolver;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderDirectory;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
@@ -105,11 +101,12 @@ class ReviewSubmissionAndReadTests {
         JdbcOrderStore orderStore = new JdbcOrderStore(jdbc);
         orderDirectory = new JdbcOrderDirectory(orderStore, jdbc);
 
-        SecretResolver secrets = new EnvironmentSecretResolver(
-                Map.of("horecaos.secrets.data_encryption.platform.kek", "a-test-key-encryption-key")::get, CLOCK);
-        protection = new EnvelopeFieldProtection(new DataEncryptionKeyProvider(secrets, "local"));
-        submission = new ReviewSubmissionService(reviewStore, orderDirectory, protection, CLOCK);
-        query = new ReviewQueryService(reviewStore, protection);
+        // The module wired by hand over this database, with both ADR 0159 flags off, so what these tests
+        // pin is ADR 0071 exactly as it was: no tags, no consent, no case, nothing public.
+        ReviewsWiring wiring = ReviewsWiring.over(jdbc, CLOCK);
+        protection = wiring.protection;
+        submission = wiring.submission;
+        query = wiring.query;
 
         Seed seed = seedTenancy(TENANT_A, BRAND_A);
         locationId = seed.locationId();
@@ -363,8 +360,7 @@ class ReviewSubmissionAndReadTests {
         // back to an id-order this test cannot predict. Keyset pagination is
         // exactly the property under test, so the timestamps must actually differ.
         MutableClock advancing = new MutableClock(NOW);
-        ReviewSubmissionService orderedSubmission =
-                new ReviewSubmissionService(reviewStore, orderDirectory, protection, advancing);
+        ReviewSubmissionService orderedSubmission = ReviewsWiring.over(jdbc, advancing).submission;
 
         UUID customer = newCustomer(TENANT_A);
         UUID orderIdOne = order(TENANT_A, BRAND_A, customer, "COMPLETED");
@@ -406,8 +402,7 @@ class ReviewSubmissionAndReadTests {
         // random id comparison rather than submission order, so this test needs
         // its own advancing clock too.
         MutableClock advancing = new MutableClock(NOW);
-        ReviewSubmissionService orderedSubmission =
-                new ReviewSubmissionService(reviewStore, orderDirectory, protection, advancing);
+        ReviewSubmissionService orderedSubmission = ReviewsWiring.over(jdbc, advancing).submission;
 
         UUID customerOne = newCustomer(TENANT_A);
         UUID customerTwo = newCustomer(TENANT_A);

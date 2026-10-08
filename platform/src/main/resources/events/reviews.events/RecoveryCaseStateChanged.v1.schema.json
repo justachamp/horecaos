@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/reviews.events/RecoveryCaseStateChanged.v1.schema.json",
+  "title": "RecoveryCaseStateChanged v1 payload",
+  "description": "A service-recovery case moved between states (ADR 0159). The owner is the staff member's non-personal display reference such as S-0142, never a name.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "caseId",
+    "orderId",
+    "brandId",
+    "locationId",
+    "fromState",
+    "toState",
+    "changedAt"
+  ],
+  "properties": {
+    "caseId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "brandId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "locationId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "fromState": {
+      "type": "string",
+      "enum": [
+        "NEW",
+        "IN_PROGRESS",
+        "RESOLVED",
+        "CLOSED_UNRESOLVED"
+      ]
+    },
+    "toState": {
+      "type": "string",
+      "enum": [
+        "NEW",
+        "IN_PROGRESS",
+        "RESOLVED",
+        "CLOSED_UNRESOLVED"
+      ]
+    },
+    "outcomeCode": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "REMEDY_GRANTED",
+        "OFFLINE_GESTURE",
+        "EXPLAINED_NO_REMEDY",
+        "NO_REMEDY_NEEDED",
+        "CUSTOMER_UNREACHABLE",
+        "CUSTOMER_DECLINED",
+        "COMPLAINT_NOT_UPHELD",
+        "NOT_ACTIONABLE",
+        null
+      ]
+    },
+    "ownerReference": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^S-[0-9]{4,}$"
+    },
+    "changedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

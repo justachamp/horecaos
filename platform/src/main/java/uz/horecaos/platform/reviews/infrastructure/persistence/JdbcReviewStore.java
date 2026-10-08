@@ -5,7 +5,11 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -95,6 +99,77 @@ public class JdbcReviewStore {
         return new Row(
                 id, tenantId, brandId, locationId, orderId, customerAccountId, rating, commentProtected, submittedAt);
     }
+
+    /** One review of this tenant by id, or empty. The scope a caller must still apply (brand, location, customer) is its own. */
+    public Optional<Row> findById(UUID tenantId, UUID reviewId) {
+        return jdbc.sql("""
+                SELECT id, tenant_id, brand_id, location_id, order_id, customer_account_id,
+                       rating, comment_protected, submitted_at
+                  FROM reviews.order_reviews
+                 WHERE tenant_id = :tenantId AND id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("id", reviewId)
+                .query((rs, n) -> map(rs))
+                .optional();
+    }
+
+    // ------------------------------------------------------- tags (ADR 0159)
+
+    /** Records the tags a review carries. Insert only: a review's tags never change. */
+    public void insertTags(UUID tenantId, UUID reviewId, Collection<UUID> tagIds) {
+        for (UUID tagId : tagIds) {
+            jdbc.sql("""
+                    INSERT INTO reviews.order_review_tags (tenant_id, review_id, tag_id)
+                    VALUES (:tenantId, :reviewId, :tagId)
+                    """)
+                    .param("tenantId", tenantId)
+                    .param("reviewId", reviewId)
+                    .param("tagId", tagId)
+                    .update();
+        }
+    }
+
+    /** The tag ids each of these reviews carries. A review with none is absent from the map. */
+    public Map<UUID, List<UUID>> tagIdsFor(UUID tenantId, Collection<UUID> reviewIds) {
+        Map<UUID, List<UUID>> byReview = new LinkedHashMap<>();
+        if (reviewIds.isEmpty()) {
+            return byReview;
+        }
+        jdbc.sql("""
+                SELECT review_id, tag_id FROM reviews.order_review_tags
+                 WHERE tenant_id = :tenantId AND review_id IN (:reviewIds)
+                 ORDER BY review_id, tag_id
+                """)
+                .param("tenantId", tenantId)
+                .param("reviewIds", reviewIds)
+                .query((org.springframework.jdbc.core.RowCallbackHandler)
+                        rs -> byReview.computeIfAbsent(rs.getObject("review_id", UUID.class), id -> new ArrayList<>())
+                                .add(rs.getObject("tag_id", UUID.class)));
+        return byReview;
+    }
+
+    /**
+     * An erasure: nulls the comment of every review this customer left and returns which reviews and
+     * brands that touched. The one UPDATE this table allows, narrowed to one column by the grant and
+     * to "to null" by the trigger (V0543).
+     */
+    public List<ErasedComment> eraseCommentsOf(UUID tenantId, UUID customerAccountId) {
+        return jdbc.sql("""
+                UPDATE reviews.order_reviews
+                   SET comment_protected = NULL
+                 WHERE tenant_id = :tenantId AND customer_account_id = :accountId
+                   AND comment_protected IS NOT NULL
+                RETURNING id, brand_id
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", customerAccountId)
+                .query((rs, n) ->
+                        new ErasedComment(rs.getObject("id", UUID.class), rs.getObject("brand_id", UUID.class)))
+                .list();
+    }
+
+    public record ErasedComment(UUID reviewId, UUID brandId) {}
 
     // ------------------------------------------------------- storefront: "my reviews"
 
@@ -259,6 +334,27 @@ public class JdbcReviewStore {
                         submittedTo == null ? null : OffsetDateTime.ofInstant(submittedTo, ZoneOffset.UTC))
                 .query((rs, n) -> new Summary(rs.getLong("review_count"), rs.getDouble("average_rating")))
                 .single();
+    }
+
+    /**
+     * How many reviews of the brand carry each rating, one to five, every review counted whatever its
+     * comment's publication state (ADR 0159, Decision 5: a rating is not words, and an average that leaves
+     * out the unwelcome ones is not an average).
+     *
+     * @return five counts, the first for one star
+     */
+    public long[] distributionForBrand(UUID tenantId, UUID brandId) {
+        long[] counts = new long[5];
+        jdbc.sql("""
+                SELECT rating, count(*) AS n FROM reviews.order_reviews
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId
+                 GROUP BY rating
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query((org.springframework.jdbc.core.RowCallbackHandler)
+                        rs -> counts[rs.getInt("rating") - 1] = rs.getLong("n"));
+        return counts;
     }
 
     /** @param averageRating {@code 0} when {@code reviewCount} is also {@code 0} — never a divide-by-zero NaN */

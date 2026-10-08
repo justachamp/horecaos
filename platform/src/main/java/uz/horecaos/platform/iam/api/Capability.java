@@ -285,6 +285,21 @@ public enum Capability {
     REVIEW_READ("review.read", "review", "read"),
 
     /**
+     * ADR 0159: deciding whether a customer's comment may be shown on the brand's public page, and
+     * reading the queue of comments waiting for that decision.
+     *
+     * <p>Moderation hides words and never numbers: a holder moves a comment between {@code PENDING},
+     * {@code PUBLISHED} and {@code HIDDEN} for one of five coded reasons and cannot touch a rating, so
+     * the capability changes who may read a sentence and nothing about the average. Held where the
+     * decision to put a customer's words on a restaurant's page is made -- the owner, the administrator
+     * and the brand manager -- and at brand scope, because the public page is a brand's.
+     *
+     * <p>Separate from {@link #REVIEW_READ}: reading a review is a look, hiding one is a decision with an
+     * audit fact, and a suspended tenant keeps the first and loses the second.
+     */
+    REVIEW_MODERATE("review.moderate", "review", "moderate"),
+
+    /**
      * ADR 0013: reading an order's payment — the intent, its attempts, and the
      * provider states recorded beside HorecaOS's own.
      *

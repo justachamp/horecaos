@@ -42,15 +42,25 @@ public final class ConfigurationValueRules {
      */
     static final int DISCLOSURE_TEXT_MAXIMUM_CHARACTERS = 500;
 
-    private static final Map<String, Consumer<Object>> RULES = Map.of(
-            "ordering.late_colour", ConfigurationValueRules::requireBlankOrHexColour,
-            "ordering.at_risk_before_minutes", ConfigurationValueRules::requireMinutesWithinADay,
-            "iam.staff_mfa_requirement", ConfigurationValueRules::requireMfaRequirementMode,
-            "ordering.late_order_threshold_minutes", ConfigurationValueRules::requireLateOrderThreshold,
-            "kitchen.display.not_seen_after_minutes", ConfigurationValueRules::requireNotSeenAfterMinutes,
-            "assistant.disclosure_text_en", value -> requirePlainShortText("assistant.disclosure_text_en", value),
-            "assistant.disclosure_text_ru", value -> requirePlainShortText("assistant.disclosure_text_ru", value),
-            "assistant.disclosure_text_uz", value -> requirePlainShortText("assistant.disclosure_text_uz", value));
+    private static final Map<String, Consumer<Object>> RULES = Map.ofEntries(
+            Map.entry("ordering.late_colour", ConfigurationValueRules::requireBlankOrHexColour),
+            Map.entry("ordering.at_risk_before_minutes", ConfigurationValueRules::requireMinutesWithinADay),
+            Map.entry("iam.staff_mfa_requirement", ConfigurationValueRules::requireMfaRequirementMode),
+            Map.entry("ordering.late_order_threshold_minutes", ConfigurationValueRules::requireLateOrderThreshold),
+            Map.entry("kitchen.display.not_seen_after_minutes", ConfigurationValueRules::requireNotSeenAfterMinutes),
+            Map.entry(
+                    "assistant.disclosure_text_en",
+                    value -> requirePlainShortText("assistant.disclosure_text_en", value)),
+            Map.entry(
+                    "assistant.disclosure_text_ru",
+                    value -> requirePlainShortText("assistant.disclosure_text_ru", value)),
+            Map.entry(
+                    "assistant.disclosure_text_uz",
+                    value -> requirePlainShortText("assistant.disclosure_text_uz", value)),
+            // ADR 0159: a mistyped visibility must be refused, never quietly read as NONE, and the minimum
+            // count is a count a person can read off the public page.
+            Map.entry("feedback.public_visibility", ConfigurationValueRules::requirePublicVisibility),
+            Map.entry("feedback.public_minimum_reviews", ConfigurationValueRules::requirePublicMinimumReviews));
 
     private ConfigurationValueRules() {}
 
@@ -108,6 +118,23 @@ public final class ConfigurationValueRules {
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED,
                     code + " must be plain text: no control characters other than a line break");
+        }
+    }
+
+    private static void requirePublicVisibility(Object value) {
+        String text = String.valueOf(value);
+        if (!"NONE".equals(text) && !"RATING_ONLY".equals(text) && !"RATING_AND_COMMENTS".equals(text)) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "feedback.public_visibility must be NONE, RATING_ONLY or RATING_AND_COMMENTS");
+        }
+    }
+
+    private static void requirePublicMinimumReviews(Object value) {
+        int count = ((Number) value).intValue();
+        if (count < 0 || count > 1000) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "feedback.public_minimum_reviews must be between 0 and 1000");
         }
     }
 

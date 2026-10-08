@@ -104,7 +104,11 @@ public final class NotificationVariableCatalog {
                                 "approvalDeadlineAt", "When the pending order's approval window closes, ISO-8601."),
                         new Variable("runId", "The affected onboarding run's own id."),
                         new Variable("tenantId", "The tenant the alert is about (control-plane audience alerts)."),
-                        new Variable("subscriptionId", "The affected commercial subscription's own id.")));
+                        new Variable("subscriptionId", "The affected commercial subscription's own id."),
+                        // ReviewsOperationsAlertTrigger (ADR 0159): a service-recovery case, by id only.
+                        new Variable("caseId", "The service-recovery case's own id."),
+                        new Variable("clock", "Which clock a case passed: FIRST_RESPONSE or RESOLUTION."),
+                        new Variable("dueAt", "When the clock was due, ISO-8601.")));
 
         return Map.copyOf(catalog);
     }

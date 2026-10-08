@@ -103,6 +103,13 @@ public final class EventCatalog {
     public static final String CUSTOMERS_EVENTS_TOPIC = KafkaTopicCatalog.CUSTOMERS_EVENTS;
 
     /**
+     * ADR 0159 review facts. Its own topic: a consumer of "a case breached its clock" should not read
+     * ordering's volume to find it, and the producer is the reviews module. Nothing on it carries a
+     * comment, a case note, a tag label or a name.
+     */
+    public static final String REVIEWS_EVENTS_TOPIC = KafkaTopicCatalog.REVIEWS_EVENTS;
+
+    /**
      * ADR 0018 pricing facts. Its own topic rather than a share of {@code
      * tenancy.events}: nothing that reads price-book activations should have to
      * filter out tenant and brand creations to get them, and the two have
@@ -593,6 +600,63 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "A lead became the order or the reservation it was for (ADR 0111): exactly one of the "
                             + "two ids."),
+            new EventContract(
+                    "ReviewSubmitted",
+                    1,
+                    "reviews",
+                    REVIEWS_EVENTS_TOPIC,
+                    "orderId",
+                    "events/reviews.events/ReviewSubmitted.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A customer rated a completed order (ADR 0159): the rating, whether there is a comment "
+                            + "and how many tags -- never the comment or the tags' wording."),
+            new EventContract(
+                    "ReviewCommentModerated",
+                    1,
+                    "reviews",
+                    REVIEWS_EVENTS_TOPIC,
+                    "orderId",
+                    "events/reviews.events/ReviewCommentModerated.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A review's comment moved between publication states (ADR 0159): a moderator's decision, "
+                            + "the customer's withdrawal or an erasure. Two states, a reason code and who "
+                            + "acted; a rating is never moderated."),
+            new EventContract(
+                    "RecoveryCaseOpened",
+                    1,
+                    "reviews",
+                    REVIEWS_EVENTS_TOPIC,
+                    "orderId",
+                    "events/reviews.events/RecoveryCaseOpened.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A service-recovery case opened about a review (ADR 0159), with its source, the rating "
+                            + "and the two clocks' due times."),
+            new EventContract(
+                    "RecoveryCaseStateChanged",
+                    1,
+                    "reviews",
+                    REVIEWS_EVENTS_TOPIC,
+                    "orderId",
+                    "events/reviews.events/RecoveryCaseStateChanged.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A service-recovery case moved between states (ADR 0159): NEW, IN_PROGRESS, RESOLVED, "
+                            + "CLOSED_UNRESOLVED, with the outcome code and the owner as a non-personal "
+                            + "display reference such as S-0142."),
+            new EventContract(
+                    "RecoveryCaseSlaBreached",
+                    1,
+                    "reviews",
+                    REVIEWS_EVENTS_TOPIC,
+                    "orderId",
+                    "events/reviews.events/RecoveryCaseSlaBreached.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "An open service-recovery case passed its first-response or resolution clock (ADR 0159). "
+                            + "Published once per clock, and only while the case was open."),
             new EventContract(
                     "MarketplaceAvailabilityPushed",
                     1,

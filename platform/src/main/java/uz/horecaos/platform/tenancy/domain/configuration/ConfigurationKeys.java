@@ -844,6 +844,62 @@ public final class ConfigurationKeys {
                     + "Switching it on ends the affected accounts' sessions so the next sign-in is asked.")
             .build();
 
+    // ADR 0159 / ADR 0082: the reviews module's scalar keys, declared identically in
+    // reviews.api.ReviewsConfigurationKeys -- the registry the startup validator and the write path
+    // consult lives here and cannot import it. ReviewsConfigurationKeysTests fails the build if the two
+    // ever drift apart.
+
+    public static final ConfigurationKey<Boolean> FEATURE_SERVICE_RECOVERY = ConfigurationKey.of(
+                    "feature.service_recovery", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("reviews")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Opens a service-recovery case from a low review and shows the worklist "
+                    + "(ADR 0159). Off: no new case opens; existing cases and every review stay.")
+            .build();
+
+    public static final ConfigurationKey<Boolean> FEATURE_FEEDBACK_SETTINGS = ConfigurationKey.of(
+                    "feature.feedback_settings", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("reviews")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Offers feedback tags with a review, governs when the rating prompt is sent, and "
+                    + "serves the public review endpoints (ADR 0159). Off: the prompt is sent at once, as "
+                    + "before, and nothing is public.")
+            .build();
+
+    public static final ConfigurationKey<String> FEEDBACK_PUBLIC_VISIBILITY = ConfigurationKey.of(
+                    "feedback.public_visibility", String.class)
+            .defaultValue("NONE")
+            .ownedBy("reviews")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("How much of the brand's reviews its public page shows: NONE, RATING_ONLY or "
+                    + "RATING_AND_COMMENTS (ADR 0159). Off by default.")
+            .build();
+
+    public static final ConfigurationKey<Integer> FEEDBACK_PUBLIC_MINIMUM_REVIEWS = ConfigurationKey.of(
+                    "feedback.public_minimum_reviews", Integer.class)
+            .defaultValue(10)
+            .ownedBy("reviews")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("How many reviews a brand must have before its public summary shows an average "
+                    + "(0 to 1000, ADR 0159).")
+            .build();
+
+    public static final ConfigurationKey<Boolean> FEEDBACK_COMMENTS_REQUIRE_APPROVAL = ConfigurationKey.of(
+                    "feedback.comments_require_approval", Boolean.class)
+            .defaultValue(true)
+            .ownedBy("reviews")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("Whether a comment the customer agreed to show publicly waits for a moderator "
+                    + "before it appears (ADR 0159).")
+            .build();
+
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             CART_EXPIRY_MINUTES,
             ORDERING_CART_RETENTION_DAYS,
@@ -898,7 +954,12 @@ public final class ConfigurationKeys {
             DELIVERY_OUT_OF_ZONE_POLICY,
             MARKETING_CHANNEL_PRIORITY_ORDER,
             MARKETING_IN_APP_SHOW_CAP_PER_DAY,
-            MARKETING_SCENARIO_CONTROL_GROUP_PERCENT_DEFAULT));
+            MARKETING_SCENARIO_CONTROL_GROUP_PERCENT_DEFAULT,
+            FEATURE_SERVICE_RECOVERY,
+            FEATURE_FEEDBACK_SETTINGS,
+            FEEDBACK_PUBLIC_VISIBILITY,
+            FEEDBACK_PUBLIC_MINIMUM_REVIEWS,
+            FEEDBACK_COMMENTS_REQUIRE_APPROVAL));
 
     private ConfigurationKeys() {}
 

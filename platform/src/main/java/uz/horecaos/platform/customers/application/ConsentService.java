@@ -153,6 +153,50 @@ public class ConsentService implements ConsentDirectory, ConsentRecorder {
                 null);
     }
 
+    /**
+     * {@link ConsentRecorder#recordWithdrawal}: a customer's own storefront withdrawal of a purpose they
+     * granted (ADR 0159).
+     *
+     * <p>The only way a {@link Decision#WITHDRAWN} reaches {@code customer.consent_decisions} from outside
+     * this module, and deliberately the narrowest: source {@code STOREFRONT} only, so an import, a
+     * migration, a support agent or an API client cannot withdraw a customer's consent through the port;
+     * and only when the purpose is currently {@code GRANTED}, so the append-only evidence never records a
+     * withdrawal of something that was not given. It is dated now.
+     */
+    @Override
+    @Transactional
+    public UUID recordWithdrawal(
+            UUID tenantId,
+            UUID accountId,
+            @Nullable UUID brandId,
+            String purpose,
+            @Nullable String channel,
+            String policyVersion,
+            String source,
+            @Nullable String evidenceReference) {
+        if (!Source.STOREFRONT.name().equals(source)) {
+            throw new IllegalArgumentException(
+                    "Only a customer's own storefront withdrawal is recorded through this port, not " + source);
+        }
+        boolean granted = store.currentConsent(tenantId, accountId, brandId, purpose, channel)
+                .map(row -> "GRANTED".equals(row.decision()))
+                .orElse(false);
+        if (!granted) {
+            throw new IllegalStateException("There is no granted consent for " + purpose + " to withdraw");
+        }
+        return record(
+                tenantId,
+                accountId,
+                brandId,
+                purpose,
+                channel,
+                Decision.WITHDRAWN,
+                policyVersion,
+                Source.STOREFRONT,
+                evidenceReference,
+                null);
+    }
+
     /** The full decision history. This is what a subject-access request produces. */
     @Transactional(readOnly = true)
     public List<ConsentHistoryRow> history(UUID tenantId, UUID accountId) {

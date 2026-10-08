@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/reviews.events/ReviewSubmitted.v1.schema.json",
+  "title": "ReviewSubmitted v1 payload",
+  "description": "A customer rated a completed order (ADR 0159). The rating, whether there is a comment and how many tags: never the comment, the tags' wording or the customer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "reviewId",
+    "orderId",
+    "brandId",
+    "locationId",
+    "rating",
+    "hasComment",
+    "tagCount",
+    "submittedAt"
+  ],
+  "properties": {
+    "reviewId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "brandId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "locationId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "rating": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5
+    },
+    "hasComment": {
+      "type": "boolean"
+    },
+    "tagCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5
+    },
+    "submittedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
