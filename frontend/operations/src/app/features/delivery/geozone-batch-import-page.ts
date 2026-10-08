@@ -22,6 +22,7 @@ import {
   DeliveryZonesApi,
   RowOutcomeResponse,
 } from './delivery-zones-api';
+import { DeliveryTariffsApi } from './delivery-tariffs-api';
 import { FALLBACK_MAP_CENTRE, MapRegionService } from './map-region';
 import { OrderVerdict, ParsedGeoJson, parseGeoJson, regionVerdict } from './zone-geometry';
 import { ZoneOutlineReview } from './zone-outline-review';
@@ -82,6 +83,7 @@ interface RowGeometry {
 })
 export class GeozoneBatchImportPage implements OnInit {
   private readonly api = inject(DeliveryZonesApi);
+  private readonly tariffsApi = inject(DeliveryTariffsApi);
   private readonly brand = inject(CurrentBrand);
   private readonly toasts = inject(Toasts);
   private readonly regions = inject(MapRegionService);
@@ -106,7 +108,12 @@ export class GeozoneBatchImportPage implements OnInit {
     readonly version: number;
     readonly code: string;
     readonly regionId: string | null;
+    /** The tariff the imported draft is bound to: the row's own, which the import stored as sent. */
+    readonly tariffId: string | null;
   } | null>(null);
+  /** Tariff names by id, read the first time a review opens; empty until then, or if unreadable. */
+  private readonly tariffNames = signal<ReadonlyMap<string, string>>(new Map());
+  private tariffNamesRequested = false;
   protected readonly reviewBusy = signal(false);
   protected readonly reviewError = signal<string | null>(null);
   /** Versions this page activated, so a row says so and does not offer it twice. */
@@ -237,7 +244,34 @@ export class GeozoneBatchImportPage implements OnInit {
       version: outcome.version,
       code: row.code,
       regionId: row.regionId ?? null,
+      tariffId: row.deliveryTariffId ?? null,
     });
+    void this.loadTariffNames();
+  }
+
+  /**
+   * What the review says about the fee: the tariff's name, or its id when the brand's list could
+   * not be read — a bound tariff is never reported as "no tariff" because a lookup failed — and
+   * `null` only for a row that carries none.
+   */
+  protected readonly reviewTariff = computed<string | null>(() => {
+    const id = this.reviewing()?.tariffId;
+    return id ? (this.tariffNames().get(id) ?? id) : null;
+  });
+
+  private async loadTariffNames(): Promise<void> {
+    const scope = this.brand.scope();
+    if (!scope || this.tariffNamesRequested) {
+      return;
+    }
+    this.tariffNamesRequested = true;
+    try {
+      const summaries = await this.tariffsApi.list(scope);
+      this.tariffNames.set(new Map(summaries.map((t) => [t.tariffId, `${t.code} — ${t.name}`])));
+    } catch {
+      // The id still tells the reviewer a tariff is bound; the name is a convenience.
+      this.tariffNamesRequested = false;
+    }
   }
 
   protected closeReview(): void {

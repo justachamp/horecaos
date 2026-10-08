@@ -637,6 +637,7 @@ describe('DeliveryZonesPage', () => {
     versions: ZoneVersionResponse[],
     api: Partial<DeliveryZonesApi> = {},
     regions: readonly RegionResponse[] = [SAMARKAND],
+    tariffSummaries: readonly TariffSummaryResponse[] = [PAID_TARIFF],
   ): Promise<void> {
     await render(
       {
@@ -648,7 +649,7 @@ describe('DeliveryZonesPage', () => {
         outline: vi.fn().mockResolvedValue(outlineOf()),
         ...api,
       },
-      { list: vi.fn().mockResolvedValue([PAID_TARIFF]) },
+      { list: vi.fn().mockResolvedValue(tariffSummaries) },
       'en',
       new FakeLocaleSet(),
       regions,
@@ -831,6 +832,61 @@ describe('DeliveryZonesPage', () => {
     expect(activate).toHaveBeenCalledTimes(1);
     expect(host().querySelector('[data-testid="zone-review"]')).not.toBeNull();
     expect(host().querySelector('[data-testid="zone-review-error"]')).not.toBeNull();
+  });
+
+  describe('the tariff the activation review reports (ADR 0037: look before geometry governs a fee)', () => {
+    function reviewedTariff(): string {
+      return host().querySelector('[data-testid="zone-review-tariff"]')?.textContent?.trim() ?? '';
+    }
+
+    it('reports the tariff of the draft being activated when the zone has no active version bound to one', async () => {
+      // ZONE's summary is the ACTIVE version's: no tariff. The draft is bound to a paid one.
+      await expandWithVersions(
+        [versionRow({ version: 2, deliveryTariffId: PAID_TARIFF.tariffId })],
+        {},
+      );
+
+      press('zone-activate');
+      await settle();
+
+      expect(reviewedTariff()).toBe('Tariff: CITY — City tariff');
+    });
+
+    it('reports the draft’s tariff, not the active version’s, when the two differ', async () => {
+      const boundToFree: ZoneSummaryResponse = { ...ZONE, deliveryTariffId: FREE_TARIFF.tariffId };
+      await expandWithVersions(
+        [
+          versionRow({ version: 2, deliveryTariffId: PAID_TARIFF.tariffId }),
+          versionRow({ version: 1, status: 'ACTIVE', deliveryTariffId: FREE_TARIFF.tariffId }),
+        ],
+        { list: vi.fn().mockResolvedValue([boundToFree]) },
+        [SAMARKAND],
+        [PAID_TARIFF, FREE_TARIFF],
+      );
+
+      press('zone-activate');
+      await settle();
+
+      expect(reviewedTariff()).toContain('CITY — City tariff');
+      expect(reviewedTariff()).not.toContain('Free ring');
+    });
+
+    it('says the draft has no tariff when it has none, even though the active version is bound to one', async () => {
+      const boundToPaid: ZoneSummaryResponse = { ...ZONE, deliveryTariffId: PAID_TARIFF.tariffId };
+      await expandWithVersions(
+        [
+          versionRow({ version: 2, deliveryTariffId: null }),
+          versionRow({ version: 1, status: 'ACTIVE', deliveryTariffId: PAID_TARIFF.tariffId }),
+        ],
+        { list: vi.fn().mockResolvedValue([boundToPaid]) },
+      );
+
+      press('zone-activate');
+      await settle();
+
+      expect(reviewedTariff()).not.toContain('City tariff');
+      expect(reviewedTariff()).toContain('No tariff is bound');
+    });
   });
 
   it('shows a version on the map without offering to activate it', async () => {

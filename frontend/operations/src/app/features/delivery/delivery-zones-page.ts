@@ -195,6 +195,12 @@ export class DeliveryZonesPage implements OnInit {
     readonly version: number;
     readonly mode: 'view' | 'activate';
     readonly regionId: string | null;
+    /**
+     * The tariff bound to **this version**, which is what the review must disclose. The zone
+     * summary's `deliveryTariffId` is the *active* version's, and a draft that changes the tariff
+     * (or a zone with no active version at all) would otherwise be reviewed under the wrong fee.
+     */
+    readonly tariffId: string | null;
   } | null>(null);
 
   protected readonly brandScope = computed(() => this.brand.scope());
@@ -219,7 +225,7 @@ export class DeliveryZonesPage implements OnInit {
     if (review === null) {
       return null;
     }
-    const label = this.tariffLabel(review.zone);
+    const label = this.tariffLabelOf(review.tariffId);
     return label === '—' ? null : label;
   });
 
@@ -316,7 +322,11 @@ export class DeliveryZonesPage implements OnInit {
   // ---------------------------------------------------------------- reading
 
   protected tariffLabel(zone: ZoneSummaryResponse): string {
-    const id = zone.deliveryTariffId;
+    return this.tariffLabelOf(zone.deliveryTariffId);
+  }
+
+  /** The tariff's name, its id when the brand's list does not carry it, and a dash when there is none. */
+  private tariffLabelOf(id: string | null | undefined): string {
     if (!id) {
       return '—';
     }
@@ -691,6 +701,7 @@ export class DeliveryZonesPage implements OnInit {
       version: version.version,
       mode,
       regionId: version.regionId ?? null,
+      tariffId: version.deliveryTariffId ?? null,
     });
   }
 
