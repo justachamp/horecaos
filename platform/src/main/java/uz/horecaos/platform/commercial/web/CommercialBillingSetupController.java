@@ -145,7 +145,7 @@ public class CommercialBillingSetupController {
                     + "suspends anyway, for an account that is unreachable; the charges then stay PENDING, "
                     + "never declined, and resolve when this account is active again.")
     public ResponseEntity<CardInstallationView> suspend(
-            @PathVariable UUID installationId, @Valid @RequestBody SuspendRequest body) {
+            @PathVariable UUID installationId, @Valid @RequestBody CardInstallationSuspendRequest body) {
         return ResponseEntity.ok(CardInstallationView.of(installations.suspend(
                 installationId,
                 body.expectedVersion(),
@@ -262,7 +262,7 @@ public class CommercialBillingSetupController {
      * {@link TransitionRequest} for a suspension. {@code acknowledgeUnresolvedCharges} is boxed, so a body
      * that leaves it out reads as "no" and not as a malformed one.
      */
-    public record SuspendRequest(
+    public record CardInstallationSuspendRequest(
             @NotNull @Min(0) Long expectedVersion,
             @NotBlank @Size(max = 1000) String reason,
             @Nullable Boolean acknowledgeUnresolvedCharges) {}
