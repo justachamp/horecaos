@@ -720,18 +720,31 @@ class ReviewFeedbackEndpointTests {
     void thePublicReadsAreRateLimited() throws Exception {
         switchOn("feature.feedback_settings");
         setBrandSetting("feedback.public_visibility", "stringValue", "\"RATING_ONLY\"");
-        int limited = 0;
-        for (int call = 0; call < 130; call++) {
+        // The limiter refills continuously, so how many calls fit before the first refusal depends on how
+        // fast the machine answers. Asserting a fixed number refused out of a fixed number sent would be
+        // asserting the machine's speed; what is stable is that a refusal arrives, after at least the
+        // burst the policy allows, carries the ADR 0031 code, and tells the caller when to come back.
+        int allowed = 0;
+        @Nullable MvcResult refused = null;
+        for (int call = 0; call < 600 && refused == null; call++) {
             MvcResult result =
                     mvc.perform(get(storefront() + "/reviews/public/summary")).andReturn();
             if (result.getResponse().getStatus() == 429) {
-                limited++;
-                assertThat(result.getResponse().getContentAsString()).contains("RATE_LIMIT_EXCEEDED");
+                refused = result;
+            } else {
+                assertThat(result.getResponse().getStatus()).isEqualTo(200);
+                allowed++;
             }
         }
-        assertThat(limited)
-                .as("120 a minute, so the last few of 130 are refused")
-                .isGreaterThanOrEqualTo(5);
+        assertThat(refused)
+                .as("a caller who asks 600 times is refused at some point")
+                .isNotNull();
+        assertThat(allowed)
+                .as("the whole burst of 120 a minute is served first")
+                .isGreaterThanOrEqualTo(120);
+        assertThat(Objects.requireNonNull(refused).getResponse().getContentAsString())
+                .contains("RATE_LIMIT_EXCEEDED")
+                .contains("retryAfterSeconds");
     }
 
     // ===================================================================== the settings
