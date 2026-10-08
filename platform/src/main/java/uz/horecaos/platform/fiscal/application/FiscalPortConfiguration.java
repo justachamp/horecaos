@@ -44,6 +44,18 @@ public class FiscalPortConfiguration {
     }
 
     /**
+     * The evidence surface's seam to ADR 0161's mark store, standing in until that store exists
+     * (ADR 0166 Decision 7). Answers that there is no mark store, which the evidence block shows as
+     * «marks not built» with no count, and which is not the same statement as "this order needs no
+     * marks".
+     */
+    @Bean
+    @ConditionalOnMissingBean(OrderMarkCounts.class)
+    OrderMarkCounts unbuiltOrderMarkCounts() {
+        return (tenantId, orderId) -> java.util.Optional.empty();
+    }
+
+    /**
      * Records the ask and reports that nothing was sent.
      *
      * <p>{@link PartnerFiscalizationPort.Outcome#NOT_WIRED} rather than an

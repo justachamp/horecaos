@@ -267,6 +267,10 @@ public enum PlatformRole {
                     PAYMENT_METHOD_MANAGE,
                     FISCAL_DOCUMENT_READ,
                     FISCAL_DOCUMENT_RESOLVE,
+                    // ADR 0166: the full identifiers of a filed receipt, for a declared
+                    // purpose and with a trail. The people who answer a complaint or a tax
+                    // inquiry, and not everyone who may read the worklist.
+                    FISCAL_EVIDENCE_REVEAL,
                     DELIVERY_PLAN_READ,
                     DELIVERY_MANUAL_ASSIGN,
                     SHIPMENT_CANCEL,
@@ -656,6 +660,10 @@ public enum PlatformRole {
                     PAYMENT_ATTEMPT_RESOLVE,
                     FISCAL_DOCUMENT_READ,
                     FISCAL_DOCUMENT_RESOLVE,
+                    // ADR 0166: the full identifiers of a filed receipt, for a declared
+                    // purpose and with a trail. The people who answer a complaint or a tax
+                    // inquiry, and not everyone who may read the worklist.
+                    FISCAL_EVIDENCE_REVEAL,
                     // Which company sells where is exactly what a fiscal document and a
                     // merchant binding both resolve against; finance reads it for the
                     // same reason it reads those, and registering one stays with the

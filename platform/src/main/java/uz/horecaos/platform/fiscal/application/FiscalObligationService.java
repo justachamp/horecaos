@@ -363,6 +363,23 @@ public class FiscalObligationService {
                         claim.legalEntityId(),
                         claim.providerType());
             }
+            case LINES_NOT_BUILT -> {
+                // Nothing was sent, and a claim over a request that never left would be blocked an
+                // hour later as "the provider did not report" about a provider nobody asked. It is
+                // blocked now, with the reason that is true: there is no real receipt to file and
+                // the placeholder may not be (ADR 0166, Decision 6).
+                documents.blockUnsent(
+                        claim.tenantId(),
+                        claim.documentId(),
+                        FiscalReasonCode.LINES_NOT_BUILT,
+                        "the receipt line builder does not exist and a placeholder receipt may not be filed here",
+                        now);
+                log.warn(
+                        "Fiscal document {} for order {} is BLOCKED: {}.",
+                        claim.documentId(),
+                        claim.orderId(),
+                        FiscalReasonCode.LINES_NOT_BUILT);
+            }
             case ISSUED, ALREADY_ISSUED, REJECTED, UNCERTAIN -> {
                 // Payments wrote the outcome and its evidence as the provider
                 // answered. Nothing to add, and nothing this module is entitled to

@@ -165,7 +165,10 @@ public class JdbcFiscalDocumentStore {
                 SET status = :status,
                     reason_code = :reasonCode,
                     submitted_at = :submittedAt,
-                    protected_request_reference = :protectedRequest,
+                    -- Kept when this call has none to give: the sent request is recorded by
+                    -- recordSentEvidence just before the status moves (ADR 0166), and a submission
+                    -- that passes null here is not an instruction to forget it.
+                    protected_request_reference = COALESCE(:protectedRequest, protected_request_reference),
                     version = version + 1,
                     updated_at = :submittedAt
                 WHERE tenant_id = :tenantId AND id = :id
@@ -178,6 +181,44 @@ public class JdbcFiscalDocumentStore {
                 .param("protectedRequest", protectedRequestReference)
                 .param("submittedAt", utc(submittedAt))
                 .update();
+    }
+
+    /**
+     * Keeps what was sent: the protected lines, the protected tender split, whether the lines were
+     * the placeholder, and the merchant account the request went through (ADR 0166).
+     *
+     * <p>Last write wins while the document owes a receipt: a resubmission replaces the sent
+     * request with the one that actually went, and the earlier request is no longer what the
+     * provider holds. Refused once the document holds a receipt, for the reason
+     * {@link #recordEvidence} is: what is on file with the tax authority is not rewritten by a late
+     * duplicate. Does not touch the status or the version; the status write that follows is the
+     * transition.
+     */
+    public boolean recordSentEvidence(
+            UUID tenantId,
+            UUID documentId,
+            UUID merchantBindingId,
+            boolean linesSynthetic,
+            String protectedRequestReference,
+            String sentTenderSplitReference) {
+        return jdbc.sql("""
+                UPDATE payments.fiscal_documents
+                SET protected_request_reference = :request,
+                    sent_tender_split_reference = :split,
+                    lines_synthetic = :synthetic,
+                    merchant_binding_id = :binding
+                WHERE tenant_id = :tenantId AND id = :id
+                  AND status NOT IN ('ISSUED', 'CORRECTION_REQUESTED', 'VOID_REQUESTED',
+                                     'CORRECTED', 'VOIDED')
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", documentId)
+                        .param("request", protectedRequestReference)
+                        .param("split", sentTenderSplitReference)
+                        .param("synthetic", linesSynthetic)
+                        .param("binding", merchantBindingId)
+                        .update()
+                == 1;
     }
 
     /**
@@ -230,7 +271,9 @@ public class JdbcFiscalDocumentStore {
                     issued_at = CASE WHEN :status = 'ISSUED' THEN :issuedAt ELSE issued_at END,
                     version = version + 1,
                     updated_at = :issuedAt
-                WHERE tenant_id = :tenantId AND id = :id AND status <> 'ISSUED'
+                WHERE tenant_id = :tenantId AND id = :id
+                  AND status NOT IN ('ISSUED', 'CORRECTION_REQUESTED', 'VOID_REQUESTED',
+                                     'CORRECTED', 'VOIDED')
                 """).params(parameters).update();
 
         return updated == 1;

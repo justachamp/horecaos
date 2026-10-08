@@ -166,7 +166,20 @@ public enum ApprovalAction {
      * perform them alone. A platform-scope request is HorecaOS's own decision about its own
      * staff, so it is raised at platform scope and listed on the platform queue.
      */
-    IAM_STAFF_MFA_RESET("iam.staff.mfa.reset", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY, Worklist.PLATFORM);
+    IAM_STAFF_MFA_RESET("iam.staff.mfa.reset", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY, Worklist.PLATFORM),
+
+    /**
+     * ADR 0166, Decision 8: asking the tenant's own fiscal agent to correct or void an issued
+     * receipt. HorecaOS records the request and never issues the correction, but it moves the
+     * document out of {@code ISSUED}, and what the tenant then files with the tax authority cannot
+     * be taken back, so a second person signs.
+     *
+     * <p>Fail-closed, like {@link #PRICING_PROMOTION_ACTIVATE}, and governed from the first day by
+     * the platform-scope floor {@code V0551} seeds; the request itself is the tenant's own decision,
+     * raised in a tenant-owned scope and listed on that tenant's worklist. A deployment that
+     * deleted the policy should stop corrections, not let one person decide them alone.
+     */
+    FISCAL_CORRECTION_REQUEST("fiscal.correction.request", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY);
 
     /**
      * Which worklist a request for the action reaches once it is {@code PENDING}.

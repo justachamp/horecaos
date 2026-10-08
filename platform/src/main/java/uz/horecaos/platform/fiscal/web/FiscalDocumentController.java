@@ -159,7 +159,10 @@ public class FiscalDocumentController {
                     + "corrected, never deleted. On the Click path the adapter reads back through "
                     + "GET payment/ofd_data first — a populated qrCodeURL means the earlier "
                     + "submission worked — because Click does not document submit_items as "
-                    + "idempotent.")
+                    + "idempotent. Answers 409 with reasonCode FISCAL_LINES_NOT_BUILT, sending "
+                    + "nothing, while the real receipt line builder does not exist and the "
+                    + "environment is not a sandbox where the platform allows the placeholder "
+                    + "line (ADR 0166).")
     public ResponseEntity<ResolutionResponse> retry(
             @PathVariable UUID tenantId,
             @PathVariable UUID documentId,
@@ -197,6 +200,10 @@ public class FiscalDocumentController {
                     ErrorCode.RESOURCE_CONFLICT,
                     unsellable.getMessage(),
                     Map.of("reasonCode", FiscalReasonCode.NO_FISCAL_PATH));
+        } catch (FiscalDocumentService.LinesNotBuiltException notBuilt) {
+            // ADR 0166, Decision 6: a 409 a client can branch on, and nothing was sent.
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT, notBuilt.getMessage(), Map.of("reasonCode", "FISCAL_LINES_NOT_BUILT"));
         } catch (FiscalDocumentService.StaleDocumentException stale) {
             throw ApiException.staleVersion(stale.expected(), stale.actual());
         }

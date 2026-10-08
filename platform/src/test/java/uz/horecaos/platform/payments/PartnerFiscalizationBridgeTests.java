@@ -18,7 +18,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.fiscal.api.FiscalEvidencePolicies;
 import uz.horecaos.platform.fiscal.api.PartnerFiscalizationPort.Outcome;
+import uz.horecaos.platform.fiscal.api.SentReceiptEvidence;
+import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.integration.api.payment.MerchantApiCall;
 import uz.horecaos.platform.integration.api.payment.MerchantApiTransport;
 import uz.horecaos.platform.integration.provider.JdbcProviderActivityRecorder;
@@ -27,6 +32,8 @@ import uz.horecaos.platform.payments.application.FiscalReceiptPort;
 import uz.horecaos.platform.payments.application.PartnerFiscalizationBridge;
 import uz.horecaos.platform.payments.application.PaymentBindingResolver;
 import uz.horecaos.platform.payments.application.PaymentFiscalService;
+import uz.horecaos.platform.payments.application.ProtectedSentEvidenceRecorder;
+import uz.horecaos.platform.payments.application.SyntheticLineGate;
 import uz.horecaos.platform.payments.domain.CaptureTiming;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.domain.FiscalStatus;
@@ -36,6 +43,7 @@ import uz.horecaos.platform.payments.domain.PaymentIntentStatus;
 import uz.horecaos.platform.payments.domain.PaymentMethod;
 import uz.horecaos.platform.payments.domain.PaymentProviderType;
 import uz.horecaos.platform.payments.domain.PaymentTender;
+import uz.horecaos.platform.payments.domain.SentReceipt;
 import uz.horecaos.platform.payments.domain.SomAmount;
 import uz.horecaos.platform.payments.infrastructure.click.ClickFiscalAdapter;
 import uz.horecaos.platform.payments.infrastructure.click.ClickMerchantApi;
@@ -44,8 +52,11 @@ import uz.horecaos.platform.payments.infrastructure.persistence.JdbcFiscalDocume
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentAttemptStore;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentBindingResolver;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentIntentStore;
+import uz.horecaos.platform.payments.infrastructure.persistence.JdbcSyntheticLineGate;
+import uz.horecaos.platform.support.InMemoryPlatformPolicies;
 import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.support.TestProtection;
 import uz.horecaos.platform.tenancy.api.LegalEntityDirectory;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcLegalEntityStore;
 
@@ -81,6 +92,7 @@ class PartnerFiscalizationBridgeTests {
     private PaymentBindingResolver bindings;
     private OrderDirectory orders;
     private LegalEntityDirectory legalEntities;
+    private SyntheticLineGate syntheticLines = binding -> true;
 
     @BeforeAll
     static void startDatabase() {
@@ -203,8 +215,8 @@ class PartnerFiscalizationBridgeTests {
             }
         };
 
-        PartnerFiscalizationBridge bridge =
-                new PartnerFiscalizationBridge(fiscalService, refusingResolver, intents, orders, legalEntities, CLOCK);
+        PartnerFiscalizationBridge bridge = new PartnerFiscalizationBridge(
+                fiscalService, refusingResolver, intents, orders, legalEntities, binding -> true, CLOCK);
 
         Outcome outcome = bridge.retry(TENANT, documentId, "idem-2");
 
@@ -326,6 +338,135 @@ class PartnerFiscalizationBridgeTests {
     }
 
     // -----------------------------------------------------------------------
+    // ADR 0166, Decision 6: the placeholder line is a sandbox tool, not a fallback
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+            "a production environment never files the placeholder, whatever the platform's flag says, and sends nothing")
+    void aProductionEnvironmentRefusesThePlaceholder() {
+        seedClickBinding();
+        jdbc.sql("UPDATE integration.provider_environments SET is_production = true"
+                        + " WHERE code = 'click-bridge-tests'")
+                .update();
+        InMemoryPlatformPolicies policies = platformAllowsPlaceholders(true);
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        ScriptedClick click = new ScriptedClick();
+
+        Outcome outcome = realGateBridge(policies, click).retry(TENANT, documentId, "idem-prod");
+
+        assertThat(outcome).isEqualTo(Outcome.LINES_NOT_BUILT);
+        assertThat(click.submitted)
+                .as("nothing is sent to a tax authority that cannot be told it was a stand-in")
+                .isEmpty();
+        assertThat(sentEvidenceOf(documentId).get("protected_request_reference"))
+                .isNull();
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .isEqualTo(FiscalStatus.PENDING);
+    }
+
+    @Test
+    @DisplayName("a sandbox environment still refuses until the platform has allowed the placeholder")
+    void aSandboxNeedsThePlatformsPermission() {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        ScriptedClick click = new ScriptedClick();
+
+        // Nothing authored: the built-in default is no.
+        assertThat(realGateBridge(new InMemoryPlatformPolicies(), click).retry(TENANT, documentId, "idem-default"))
+                .isEqualTo(Outcome.LINES_NOT_BUILT);
+        // Authored false: no.
+        assertThat(realGateBridge(platformAllowsPlaceholders(false), click).retry(TENANT, documentId, "idem-false"))
+                .isEqualTo(Outcome.LINES_NOT_BUILT);
+        assertThat(click.submitted).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "a sandbox with the platform's permission files exactly one placeholder line, says so, and keeps what it sent")
+    void aPermittedSandboxFilesOnePlaceholderLineAndRecordsIt() {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        ScriptedClick click = new ScriptedClick();
+
+        Outcome outcome =
+                realGateBridge(platformAllowsPlaceholders(true), click).retry(TENANT, documentId, "idem-ok");
+
+        assertThat(outcome).isEqualTo(Outcome.UNCERTAIN);
+        assertThat(click.submitted).singleElement().satisfies(sent -> {
+            assertThat(sent.lines()).hasSize(1);
+            assertThat(sent.lines().getFirst().mxikCode()).isEqualTo("00000000000000000");
+        });
+
+        Map<String, Object> row = sentEvidenceOf(documentId);
+        assertThat(row.get("lines_synthetic")).isEqualTo(true);
+        assertThat(row.get("merchant_binding_id")).isNotNull();
+
+        String lines = TestProtection.envelope()
+                .reveal(
+                        TENANT,
+                        ProtectedValue.deserialize(
+                                java.util.Objects.requireNonNull((String) row.get("protected_request_reference"))),
+                        SentReceiptEvidence.requestRecord(documentId),
+                        "test");
+        assertThat(lines)
+                .contains("\"synthetic\":true")
+                .contains("\"kind\":\"SYNTHETIC\"")
+                .contains("\"markingCodeCount\":0")
+                .contains("\"unitPriceMinor\":15000");
+        String split = TestProtection.envelope()
+                .reveal(
+                        TENANT,
+                        ProtectedValue.deserialize(
+                                java.util.Objects.requireNonNull((String) row.get("sent_tender_split_reference"))),
+                        SentReceiptEvidence.splitRecord(documentId),
+                        "test");
+        assertThat(split).contains("\"receivedCardMinor\":15000").contains("\"receivedCashMinor\":0");
+    }
+
+    @Test
+    @DisplayName(
+            "a request that never left is not recorded as sent: a deferred submission keeps no evidence of a request")
+    void aRequestThatNeverLeftIsNotRecorded() {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        ScriptedClick click = new ScriptedClick();
+        click.sends = false;
+
+        realGateBridge(platformAllowsPlaceholders(true), click).retry(TENANT, documentId, "idem-deferred");
+
+        assertThat(click.submitted).hasSize(1);
+        assertThat(sentEvidenceOf(documentId).get("protected_request_reference"))
+                .as("the adapter answered without sending, so there is no request to keep")
+                .isNull();
+        assertThat(sentEvidenceOf(documentId).get("lines_synthetic")).isEqualTo(false);
+    }
+
+    @Test
+    @DisplayName("a late duplicate cannot replace the request recorded for a document that already holds its receipt")
+    void sentEvidenceIsNotRewrittenOnceTheReceiptExists() {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        ScriptedClick click = new ScriptedClick();
+        realGateBridge(platformAllowsPlaceholders(true), click).retry(TENANT, documentId, "idem-first");
+        String first = (String) sentEvidenceOf(documentId).get("protected_request_reference");
+        fiscalService.attachEvidence(
+                TENANT,
+                documentId,
+                new FiscalDocument.FiscalEvidence(
+                        "R-1", "SIGN-1", "TERM-1", "R-1", CLOCK.instant(), "https://ofd.soliq.uz/epi?r=1", null, null),
+                "protected-response-1",
+                CLOCK.instant());
+
+        boolean rewritten =
+                documents.recordSentEvidence(TENANT, documentId, INTEGRATION_BINDING, false, "other", "other");
+
+        assertThat(rewritten).isFalse();
+        assertThat(sentEvidenceOf(documentId).get("protected_request_reference"))
+                .isEqualTo(first);
+    }
+
+    // -----------------------------------------------------------------------
     // Payme's silence: a missing SetFiscalData is the documented normal case
     // -----------------------------------------------------------------------
 
@@ -354,8 +495,70 @@ class PartnerFiscalizationBridgeTests {
 
     // ------------------------------------------------------------------- helpers
 
+    private InMemoryPlatformPolicies platformAllowsPlaceholders(boolean allowed) {
+        InMemoryPlatformPolicies policies = new InMemoryPlatformPolicies();
+        policies.author(
+                FiscalEvidencePolicies.SYNTHETIC_LINES_ALLOWED,
+                ResourceScope.platform(),
+                new FiscalEvidencePolicies.SyntheticLines(allowed),
+                ActorRef.user("platform-admin", "Platform"),
+                "bridge test");
+        return policies;
+    }
+
+    /**
+     * The bridge as production wires it: the real gate (the environment row and the platform policy)
+     * and the real recorder behind the real envelope protection, over a Click port that records what
+     * it is asked to send and answers like the real adapter does for a request that left.
+     */
+    private PartnerFiscalizationBridge realGateBridge(InMemoryPlatformPolicies policies, ScriptedClick click) {
+        PaymentFiscalService service = new PaymentFiscalService(
+                documents,
+                List.of(click),
+                event -> {},
+                new RecordingProviderActivityRecorder(),
+                new ProtectedSentEvidenceRecorder(
+                        TestProtection.envelope(),
+                        documents,
+                        tools.jackson.databind.json.JsonMapper.builder().build()));
+        return new PartnerFiscalizationBridge(
+                service, bindings, intents, orders, legalEntities, new JdbcSyntheticLineGate(jdbc, policies), CLOCK);
+    }
+
+    private Map<String, Object> sentEvidenceOf(UUID documentId) {
+        return jdbc.sql("""
+                        SELECT lines_synthetic, protected_request_reference, sent_tender_split_reference,
+                               merchant_binding_id
+                          FROM fiscal.fiscal_documents WHERE id = :id
+                        """).param("id", documentId).query().singleRow();
+    }
+
+    /** A Click port that records the receipts it is asked to file, and answers as the real adapter does. */
+    private static final class ScriptedClick implements FiscalReceiptPort {
+
+        final List<SentReceipt> submitted = new java.util.ArrayList<>();
+        boolean sends = true;
+
+        @Override
+        public FiscalSubmission submit(
+                FiscalDocument document, uz.horecaos.platform.payments.domain.ProviderBinding binding) {
+            SomAmount total = document.lines().getFirst().lineTotal();
+            SentReceipt wire = new SentReceipt(
+                    document.lines(), total, new SomAmount(0, total.currency()), new SomAmount(0, total.currency()));
+            submitted.add(wire);
+            FiscalSubmission accepted = FiscalSubmission.accepted(CLOCK.instant());
+            return sends ? accepted.withSent(wire) : accepted;
+        }
+
+        @Override
+        public PaymentProviderType providerType() {
+            return PaymentProviderType.CLICK;
+        }
+    }
+
     private PartnerFiscalizationBridge bridge() {
-        return new PartnerFiscalizationBridge(fiscalService, bindings, intents, orders, legalEntities, CLOCK);
+        return new PartnerFiscalizationBridge(
+                fiscalService, bindings, intents, orders, legalEntities, syntheticLines, CLOCK);
     }
 
     /** Fails the test if the fake provider transport is ever reached. */

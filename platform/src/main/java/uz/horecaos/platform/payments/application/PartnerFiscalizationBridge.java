@@ -50,9 +50,16 @@ import uz.horecaos.platform.tenancy.api.LegalEntityDirectory;
  * catalog data this class has no capability to read is not this change's to add.
  * {@link #syntheticLine} is the honest stand-in until that exists: one line for the
  * whole order total, named and coded as visibly synthetic rather than presented as
- * real classification data. A tenant that goes live with Click before that lands
- * needs a real line builder before its receipts are correct, not before its receipts
- * exist at all.
+ * real classification data.
+ *
+ * <p><strong>The stand-in is a sandbox tool, not a fallback (ADR 0166, Decision 6).</strong>
+ * Filed with the tax authority a one-line receipt with a placeholder classification, VAT 0 and
+ * possibly a zero TIN can only be corrected, never withdrawn. So it goes out only where the
+ * binding's provider environment is a sandbox and the platform has allowed it
+ * ({@link SyntheticLineGate}); everywhere else a document with no stored lines answers
+ * {@link Outcome#LINES_NOT_BUILT}, sends nothing, and stays blocked with its reason. The real
+ * line builder is the prerequisite for every production Click receipt; when it ships the
+ * placeholder is deleted, not merely refused.
  */
 @Service
 public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
@@ -77,6 +84,7 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
     private final JdbcPaymentIntentStore intents;
     private final OrderDirectory orders;
     private final LegalEntityDirectory legalEntities;
+    private final SyntheticLineGate syntheticLines;
     private final Clock clock;
 
     public PartnerFiscalizationBridge(
@@ -85,12 +93,14 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
             JdbcPaymentIntentStore intents,
             OrderDirectory orders,
             LegalEntityDirectory legalEntities,
+            SyntheticLineGate syntheticLines,
             Clock clock) {
         this.fiscalDocuments = fiscalDocuments;
         this.bindings = bindings;
         this.intents = intents;
         this.orders = orders;
         this.legalEntities = legalEntities;
+        this.syntheticLines = syntheticLines;
         this.clock = clock;
     }
 
@@ -129,9 +139,17 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
             return Outcome.NO_PROVIDER_PATH;
         }
 
-        FiscalDocument submittable = document.lines().isEmpty() ? withSyntheticLines(document) : document;
+        boolean placeholder = document.lines().isEmpty();
+        if (placeholder && !syntheticLines.permitted(binding.get())) {
+            // ADR 0166, Decision 6. No real lines are stored and there is no builder to make
+            // them, so the only receipt that could go out is the placeholder -- and that is filed
+            // only where it cannot be mistaken for a sale. Nothing is sent and nothing is
+            // recorded as though it had been: the caller blocks the document with its reason.
+            return Outcome.LINES_NOT_BUILT;
+        }
+        FiscalDocument submittable = placeholder ? withSyntheticLines(document) : document;
 
-        FiscalStatus result = fiscalDocuments.submit(submittable, binding.get(), clock.instant());
+        FiscalStatus result = fiscalDocuments.submit(submittable, binding.get(), clock.instant(), placeholder);
         return switch (result) {
             case ISSUED -> Outcome.ISSUED;
             case FAILED -> Outcome.REJECTED;

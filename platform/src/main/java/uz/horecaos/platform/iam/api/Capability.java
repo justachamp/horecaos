@@ -394,6 +394,23 @@ public enum Capability {
      */
     FISCAL_DOCUMENT_RESOLVE("fiscal.document.resolve", "fiscal", "document.resolve"),
 
+    /**
+     * ADR 0166: seeing the identifiers of a filed receipt in full — the fiscal sign, the receipt
+     * number and the receipt link — for a declared purpose, with a SECURITY audit fact for each
+     * look.
+     *
+     * <p>Separate from {@link #FISCAL_DOCUMENT_READ} on purpose, and not held by everyone who
+     * holds it. The order's evidence read shows structure, the INN that issued the receipt, the
+     * lines as filed and the identifiers masked to their last four characters; reading a
+     * worklist and handing a colleague a receipt link are different acts, and ADR 0029's rule is
+     * that the second one leaves a trail saying who looked and why. A branch manager can read the
+     * first; the tenant owner and finance, who answer a complaint or a tax inquiry, hold this.
+     *
+     * <p>It is not a power to read a marking code. ADR 0161 keeps every code off every screen and
+     * gives it no reveal, so no purpose on this capability returns one.
+     */
+    FISCAL_EVIDENCE_REVEAL("fiscal.evidence.reveal", "fiscal", "evidence.reveal"),
+
     REFUND_REQUEST("refund.request", "refund", "request"),
     REFUND_APPROVE("refund.approve", "refund", "approve"),
     REFUND_EXECUTE("refund.execute", "refund", "execute"),
