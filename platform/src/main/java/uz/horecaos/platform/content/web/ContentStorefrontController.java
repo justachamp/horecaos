@@ -2,22 +2,14 @@ package uz.horecaos.platform.content.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.time.Duration;
-import java.util.HexFormat;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
-import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import tools.jackson.databind.SerializationFeature;
-import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.content.application.ContentHomeService;
 import uz.horecaos.platform.content.application.ContentMetrics;
 import uz.horecaos.platform.content.application.HomeDocument;
@@ -40,14 +32,6 @@ import uz.horecaos.platform.web.api.ErrorCode;
 @RequestMapping("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content")
 @Tag(name = "Storefront content", description = "The home content a brand has published")
 public class ContentStorefrontController {
-
-    /** How long a browser or an edge may reuse the document without asking. */
-    static final Duration MAX_AGE = Duration.ofSeconds(60);
-
-    /** Serialises with map entries in key order, so two equal documents always digest alike. */
-    private static final JsonMapper DIGEST_MAPPER = JsonMapper.builder()
-            .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
-            .build();
 
     private final ContentHomeService home;
     private final ContentMetrics metrics;
@@ -83,20 +67,7 @@ public class ContentStorefrontController {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such brand or channel");
         }
         metrics.read("ok");
-        return ResponseEntity.ok()
-                // There is no timestamp in the body, so the digest moves only when content does.
-                .eTag("\"" + digest(document) + "\"")
-                .cacheControl(CacheControl.maxAge(MAX_AGE).cachePublic())
-                .body(document);
-    }
-
-    private static String digest(HomeDocument document) {
-        try {
-            return HexFormat.of()
-                    .formatHex(MessageDigest.getInstance("SHA-256")
-                            .digest(DIGEST_MAPPER.writeValueAsString(document).getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException("SHA-256 is required of every JVM", impossible);
-        }
+        // There is no timestamp in the body, so the digest moves only when content does.
+        return StorefrontCaching.cacheable(document);
     }
 }

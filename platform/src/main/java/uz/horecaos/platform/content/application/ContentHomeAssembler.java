@@ -489,39 +489,14 @@ public class ContentHomeAssembler {
      * them, so an item built on one would show every customer a broken image.
      */
     private @Nullable Media mediaOf(UUID asset, String alt, @Nullable JsonNode posterNode, Context context) {
-        Creative creative = context.creatives().get(asset);
-        if (creative == null || !creative.servable()) {
-            return null;
-        }
-        String base = "/api/v1/storefront/tenants/" + context.tenantId() + "/media/";
-        if (creative.kind() == MediaCreativeLookup.Kind.VIDEO) {
-            UUID posterId = posterNode == null ? null : uuidOrNull(posterNode);
-            Creative poster = posterId == null ? null : context.creatives().get(posterId);
-            if (poster == null || !poster.servable() || poster.renditions().isEmpty()) {
-                return null;
-            }
-            var posterRendition = poster.renditions().stream()
-                    .filter(r -> r.widthPx() >= 400)
-                    .min(Comparator.comparingInt(MediaCreativeLookup.Rendition::widthPx))
-                    .orElse(poster.renditions().getLast());
-            return new Media(
-                    "VIDEO",
-                    alt,
-                    creative.widthPx(),
-                    creative.heightPx(),
-                    List.of(),
-                    base + asset,
-                    base + posterId + "?variant=" + posterRendition.code(),
-                    creative.durationMs());
-        }
-        if (creative.renditions().isEmpty()) {
-            return null;
-        }
-        List<HomeDocument.Rendition> renditions = creative.renditions().stream()
-                .sorted(Comparator.comparingInt(MediaCreativeLookup.Rendition::widthPx))
-                .map(r -> new HomeDocument.Rendition(r.widthPx(), base + asset + "?variant=" + r.code()))
-                .toList();
-        return new Media("IMAGE", alt, creative.widthPx(), creative.heightPx(), renditions, null, null, null);
+        // One implementation for the home read and the editorial reads, so an asset cannot be servable
+        // on one and broken on the other.
+        return MediaViews.of(
+                context.tenantId(),
+                asset,
+                alt,
+                posterNode == null ? null : uuidOrNull(posterNode),
+                context.creatives());
     }
 
     private Link link(JsonNode node, Context context) {
