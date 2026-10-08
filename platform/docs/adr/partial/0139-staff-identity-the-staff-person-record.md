@@ -55,7 +55,7 @@
   strength of `operations-spec/staff-and-access.md` §11.1.
 - Depends on: ADR 0003, ADR 0009, ADR 0010, ADR 0025, ADR 0026, ADR 0027,
   ADR 0029, ADR 0031, ADR 0033, ADR 0043, ADR 0060, ADR 0097, ADR 0116
-- Supersedes / Superseded by: —
+- Supersedes / Superseded by: Narrowed by [ADR 0155](../partial/0155-terminals-and-staff-pins.md) for the «Password, MFA, sessions → Keycloak» row, by a terminal PIN that attributes and never authenticates (it signs nobody in to the console). Everything else in this record is unchanged
 - Open inputs:
   - Whether ADR 0079's revisit trigger for per-action human attribution (a badge
     or PIN on a shared kitchen screen) has fired, and whether terminals and PINs

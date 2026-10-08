@@ -1,32 +1,19 @@
 # ADR 0162: Kiosk device pairing
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Not started — a kiosk can be registered as a sales channel and
-  cannot be paired, listed or revoked as a device, and no kiosk client exists. What is
-  there is the channel and the primitive, side by side and unjoined. The channel:
-  `SalesChannelSystemType.KIOSK` and `ck_sales_channel_system_type` (V0020);
-  `tenant.sales_channels` (with `guest_orders_allowed` and a nullable
-  `provider_installation_id`) and `tenant.sales_channel_locations`, which says where a
-  channel sells; `QrKioskHallPricing` and `catalog.qr_kiosk_price_plane` (a kiosk takes the
-  hall's prices, built, `4.4d`); `PromotionValidator`'s channel set and the stop and
-  notification-template channel variants (V0392, V0407, V0462) all name KIOSK;
-  `FiscalTerminalKind.KIOSK` and `fiscal.fiscal_terminals` (V0247) give a kiosk its fiscal
-  identity "at the cost of one row" (ADR 0038), unlinked to any device; the console's
-  channel-setup hub renders the KIOSK section as a locked card reading «Not built yet»
-  (`channel-setup-page.html`, `settings.channelSetup.kiosk.locked`). The primitive:
-  `DevicePrincipalClass` has one constant, `KITCHEN_KDS`, and V0192's
-  `ck_device_principal_class` and `ck_device_enrolment_class` accept only it;
-  `DeviceEnrolmentController.begin` takes the class from the request body and its
-  response carries no console link; approval exists only as
-  `KitchenDeviceController`/`KitchenDeviceService` under `kitchen.station.manage`, which
-  hard-codes the role `kitchen-device`, while `DeviceEnrolmentService.approve` reads the
-  *requested* class off the pending row and the role from the caller, so with a second class
-  in the enum nothing in code stops one class's code being approved with the other's role.
-  The ADR 0119 shell hard-codes `deviceClass: 'KITCHEN_KDS'` (`device-session.ts`),
-  asks the installer to type tenant, brand and location, and renders a QR of the user
-  code alone. No kiosk application exists: the information architecture lists "the kiosk
-  device app" among three separate deployables, and what the console has is `q-kiosk-frame`
-  (`shared/ui/kiosk-frame.ts`), a 9:16 preview of the menu (`X.28`).
+- Implementation status: Partial — built and tested in this tree (batch 20, wave `w2-terminals-kiosk`): `V0524` (the `KIOSK` device
+  class), `V0526` (`tenant.kiosk_devices`, a kiosk bound to a KIOSK channel at one branch by tenant-bearing composite keys);
+  `DeviceEnrolmentService` owning the class-to-role map and refusing a code approved as another class
+  (`DEVICE_CLASS_MISMATCH`), with ADR 0151's narrowing unchanged; `approvalUrl` on the begin response for a kiosk only,
+  never holding the device code; `KioskDeviceService` and `KioskDeviceController` (peek, channels, approve, list, rename
+  and rebind against `If-Match`, revoke, and the configuration read under `kiosk.device.read`); `PlatformRole.KIOSK_DEVICE`;
+  the ADR 0151 self-read answering a kiosk with its channel; the dark flag `feature.kiosk_devices`; the audit facts; the
+  KIOSK card in Channel setup, the approval page at `settings/channel-setup/kiosk-pairing`, and the shell's kiosk mode (the
+  class choice, the QR of the approval link with a countdown and an automatic fresh code, and a status screen naming the
+  channel and branch); `docs/runbooks/terminals-and-kiosks.md`. Proved by `KioskPairingHttpTests`,
+  `DeviceEnrolmentServiceTests` and the frontend specs. Not done, so not `Built`: no kiosk application exists beyond the
+  shell's status screen (the kiosk cannot yet place an order, which this record does not claim), no unit has been paired at a
+  pilot branch, and the OS lockdown the record relies on is a procedure in the runbook that has not been exercised.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
@@ -41,7 +28,7 @@
   [ADR 0087](../built/0087-a-module-is-sold-on-its-own-unit-and-switches-features-on.md),
   [ADR 0119](../partial/0119-wave-p17-device-shell-auth-and-qr-pairing.md),
   [ADR 0151](../built/0151-a-wall-display-device-class.md),
-  [ADR 0155](../not-started/0155-terminals-and-staff-pins.md) (still Proposed: see the
+  [ADR 0155](../partial/0155-terminals-and-staff-pins.md) (still Proposed: see the
   open input on accepting this record before it)
 - Supersedes / Superseded by: Supersedes ADR 0079's note that `roleCode` is a parameter of
   `ApproveEnrolment`, for every class; supersedes ADR 0151 Decision 3's placement of the

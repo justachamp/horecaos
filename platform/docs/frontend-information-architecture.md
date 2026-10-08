@@ -257,6 +257,7 @@ platform blue, dense tables, never a tenant accent.
 | 9.2 | People | The staff directory. **Owns:** operator records; branch bindings; contact persons; **operator ↔ POS operator ID mapping**; the definition of created-by and accepted-by attribution. | 2 |
 | 9.3 | Activity & audit | **Owns:** История изменений with **field-level before/after diff**; a named human actor even for background paths (never "server"); a bulk action producing N records, not one. | 2 |
 | 9.4 | Approvals | **Owns:** approval queue for discretionary discounts, penalties levied against a worker, PII exports, refunds above a threshold. | 3 |
+| 9.6 | Terminals | The branch's every screen that signs in as a device, of any class (kitchen tablet, wall display, kiosk). **Owns:** the one *last seen* they share; who is unlocked at each now; the attribution mode (the device acts / a person may unlock / a person must unlock) and the idle lock; rename and revoke with a reason; the unlock history of a tablet; the company's *PIN policy* card (length with the odds of guessing it beside it, idle lock, longest session, how the roster labels people, the default mode). **Not here:** approval, which stays with the screen that owns the class (*Kitchen → Devices*, *Channel setup → KIOSK*), and any way to type, choose or read a PIN. A person's own PIN, the code they can ask for and their last twenty unlocks are on *Мой профиль*; a manager's *issue a code* and *reset* are on the person card (ADR 0155). | 2 |
 
 ---
 
