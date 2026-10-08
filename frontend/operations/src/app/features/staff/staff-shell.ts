@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { TPipe } from '../../core/i18n/t.pipe';
 
 /**
@@ -28,4 +29,7 @@ import { TPipe } from '../../core/i18n/t.pipe';
   styleUrl: './staff-shell.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class StaffShell {}
+export class StaffShell {
+  /** Терминалы (ADR 0155) is a tab only for someone who may read the registry somewhere; the server decides the rest. */
+  protected readonly capabilities = inject(SessionCapabilities);
+}

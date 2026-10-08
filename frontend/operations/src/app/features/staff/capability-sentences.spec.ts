@@ -147,6 +147,8 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
   'staff.profile.read',
   'staff.self.manage',
   'suppression.manage',
+  'terminal.manage',
+  'terminal.read',
   'tenant.onboarding.manage',
   'tenant.read',
   'tenant.write',

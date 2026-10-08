@@ -440,6 +440,12 @@
             [memberVersion]="person.version"
             [isOwnAccount]="person.principalSubject === ownSubject()"
           />
+          <!-- ADR 0155: the state of the terminal PIN, an activation code and a reset; never a PIN. -->
+          <q-staff-pin-panel
+            [tenantId]="tenantId() ?? ''"
+            [memberId]="person.memberId"
+            [isOwnAccount]="person.principalSubject === ownSubject()"
+          />
         }
 
         <p class="q-caption not-built-note">{{ 'staff.detail.security.notBuilt' | t }}</p>

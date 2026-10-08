@@ -562,6 +562,14 @@ export const routes: Routes = [
               import('./features/staff/approvals-page').then((m) => m.ApprovalsPage),
           },
           {
+            // Терминалы (ADR 0155, Decisions 6 and 7): the class-neutral registry of a branch's devices and the
+            // tenant's Policy card. A tab beside Approvals; declared before the empty-path Люди child for the same
+            // reason `roles`, `activity` and `approvals` are.
+            path: 'terminals',
+            loadComponent: () =>
+              import('./features/staff/terminals/terminals-page').then((m) => m.TerminalsPage),
+          },
+          {
             // 9.5 Проверка доступа (ADR 0109, wave W03): a debugging tool
             // used a handful of times a year, deliberately not a
             // `staff-shell.html` tab — reached only from the link at the

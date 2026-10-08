@@ -58,6 +58,7 @@ export const CAPABILITY_AREAS: Readonly<Record<string, Localized>> = {
   shipment: { ru: 'Отправления', 'uz-Latn': 'Joʻnatmalar', en: 'Shipments' },
   courier: { ru: 'Курьеры', 'uz-Latn': 'Kuryerlar', en: 'Couriers' },
   kitchen: { ru: 'Кухня', 'uz-Latn': 'Oshxona', en: 'Kitchen' },
+  terminal: { ru: 'Терминалы', 'uz-Latn': 'Terminallar', en: 'Terminals' },
   dinein: { ru: 'Зал', 'uz-Latn': 'Zal', en: 'Dine-in' },
   reservation: { ru: 'Бронирования', 'uz-Latn': 'Bronlar', en: 'Reservations' },
   marketplace: { ru: 'Агрегаторы', 'uz-Latn': 'Agregatorlar', en: 'Marketplaces' },
@@ -520,6 +521,18 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     en: 'Approve a courier shift variance',
   },
 
+  'terminal.read': {
+    area: 'terminal',
+    ru: 'Видеть устройства филиала и кто за ними работает',
+    'uz-Latn': 'Filial qurilmalarini va ular oldida kim ishlayotganini koʻrish',
+    en: 'See the devices of the branch and who is working at them',
+  },
+  'terminal.manage': {
+    area: 'terminal',
+    ru: 'Переименовывать и отключать устройства, настраивать вход по PIN',
+    'uz-Latn': 'Qurilmalarni qayta nomlash va oʻchirish, PIN bilan kirishni sozlash',
+    en: 'Rename and switch off devices, and set how PIN sign-in works',
+  },
   'kitchen.display.read': {
     area: 'kitchen',
     ru: 'Видеть экран выдачи кухни',

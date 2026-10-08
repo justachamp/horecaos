@@ -17,6 +17,11 @@
     <a class="shell__tab" routerLink="/staff/approvals" routerLinkActive="shell__tab--on">
       {{ 'staff.shell.approvals' | t }}
     </a>
+    @if (capabilities.has('TERMINAL_READ')) {
+      <a class="shell__tab" routerLink="/staff/terminals" routerLinkActive="shell__tab--on">
+        {{ 'staff.shell.terminals' | t }}
+      </a>
+    }
   </nav>
   <router-outlet />
 </div>

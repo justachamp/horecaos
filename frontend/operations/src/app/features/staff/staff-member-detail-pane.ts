@@ -36,6 +36,7 @@ import {
 import { StaffJobDialog } from './staff-job-dialog';
 import { StaffMembersApi } from './staff-members-api';
 import { StaffMfaPanel } from './staff-mfa-panel';
+import { StaffPinPanel } from './staff-pin-panel';
 import { ProfileDraft, toManagerRequest } from './staff-profile-draft';
 import { StaffProfileForm } from './staff-profile-form';
 import { roleLabel, scopeLevelLabel } from './staff-role-labels';
@@ -79,6 +80,7 @@ interface CapabilityGroup {
     StaffProfileForm,
     StaffEmergencyContacts,
     StaffMfaPanel,
+    StaffPinPanel,
   ],
   templateUrl: './staff-member-detail-pane.html',
   styleUrl: './staff-member-detail-pane.css',

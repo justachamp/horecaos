@@ -18,6 +18,7 @@ import { StaffApi, TelegramLinkCodeResponse } from './staff-api';
 import { StaffMembersApi } from './staff-members-api';
 import { ProfileDraft, draftOf, toSelfRequest } from './staff-profile-draft';
 import { MyProfileMfaCard } from './my-profile-mfa-card';
+import { MyProfilePinCard } from './my-profile-pin-card';
 import { StaffProfileForm } from './staff-profile-form';
 import { roleLabel, scopeLevelLabel } from './staff-role-labels';
 
@@ -74,7 +75,7 @@ interface CapabilityGroup {
  */
 @Component({
   selector: 'q-my-profile-page',
-  imports: [TPipe, StaffProfileForm, MyProfileMfaCard],
+  imports: [TPipe, StaffProfileForm, MyProfileMfaCard, MyProfilePinCard],
   templateUrl: './my-profile-page.html',
   styleUrl: './my-profile-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

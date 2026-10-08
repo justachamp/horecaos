@@ -1,0 +1,47 @@
+:host {
+  display: block;
+}
+
+.section {
+  margin-top: 24px;
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.error {
+  color: var(--q-error-text);
+}
+
+.code {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.code__value {
+  font-size: 1.5rem;
+  letter-spacing: 0.08em;
+  margin: 0 0 8px;
+}
+
+.unlocks__title {
+  margin-top: 16px;
+}
+
+.unlocks {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.unlocks__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
