@@ -35,6 +35,7 @@ import {
   ItemSaleWindow,
   MediaRelation,
   ModifierGroupSummary,
+  MxikReferenceStatus,
   ProductDetail,
   PublicationResult,
   RecommendationItem,
@@ -288,6 +289,8 @@ export class ProductEditorPage implements OnInit {
   protected readonly tabs = TABS;
   /** The brand the editor writes under, for the cards that own their own reads and writes. */
   protected readonly brandScope = computed(() => this.brand.scope());
+  /** The national ИКПУ/MXIK list's state for the fiscal tab's note; null until read (or when it cannot be). */
+  protected readonly mxikStatus = signal<MxikReferenceStatus | null>(null);
   protected readonly tabLabel = TAB_LABEL;
   /**
    * Row 10.12: the brand's own supported locales (default first, mapped to
@@ -493,6 +496,7 @@ export class ProductEditorPage implements OnInit {
       this.mxikQuery.set(
         Object.fromEntries(product.variants.map((v) => [v.variantId, v.fiscal?.mxikCode ?? ''])),
       );
+      void this.loadMxikStatus(scope);
       void this.loadReadiness(product);
       void this.loadPrices(product);
       void this.loadKitchenRouting(product);
@@ -508,6 +512,18 @@ export class ProductEditorPage implements OnInit {
       }
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  /**
+   * The national list's state (ADR 0173), so the classification field's note says what is true: not loaded,
+   * or loaded with its dataset, size and age. A failed read leaves the old generic note.
+   */
+  private async loadMxikStatus(scope: BrandScope): Promise<void> {
+    try {
+      this.mxikStatus.set(await firstValueFrom(this.api.mxikReferenceStatus(scope)));
+    } catch {
+      this.mxikStatus.set(null);
     }
   }
 

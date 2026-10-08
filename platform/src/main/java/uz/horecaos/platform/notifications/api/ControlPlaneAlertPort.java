@@ -33,4 +33,13 @@ package uz.horecaos.platform.notifications.api;
 public interface ControlPlaneAlertPort {
 
     void raise(ControlPlaneAlert alert);
+
+    /**
+     * Resolves the open incident of this class and subject, if there is one (ADR 0173): a successful import
+     * is what ends "the reference list is not loaded" and "the reference list is stale".
+     *
+     * <p>Defaulted to nothing so a port that keeps no incidents (a test double, the log-only form) is not
+     * obliged to; {@code ControlPlaneAlertService} resolves the stored incident.
+     */
+    default void resolve(String eventClass, String subjectType, String subjectId, String by, String note) {}
 }

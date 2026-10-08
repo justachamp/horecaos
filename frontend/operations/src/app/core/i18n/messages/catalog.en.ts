@@ -280,6 +280,10 @@ export const catalogEn = {
     'Marking scheme, excise, alcohol % and age gate are stored but not yet enforced by publication — ADR 0038',
   'catalog.editor.fiscal.mxikReferenceNote':
     'Empty results mean the official ИКПУ/MXIK list has never been imported for this platform — not that nothing matched.',
+  'catalog.editor.fiscal.mxikNotLoaded':
+    'The national ИКПУ/MXIK list has not been loaded on the platform yet, so a search finds nothing. Typing a code still works.',
+  'catalog.editor.fiscal.mxikLoaded': 'National ИКПУ/MXIK list: dataset {version}, {valid} codes.',
+  'catalog.editor.fiscal.mxikStale': 'The list was last refreshed {days} days ago.',
   'catalog.editor.physical.intro':
     'What the variant physically is: its weight or volume, whether it is sold by a weight known only at handover, whether it can be ordered by the portion, and its nutrition. Leave everything empty for an ordinary fixed unit.',
   'catalog.editor.physical.loading': 'Loading…',

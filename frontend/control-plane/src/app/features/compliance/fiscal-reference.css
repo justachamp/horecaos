@@ -79,3 +79,115 @@
   color: var(--q-ink-subtle);
   font-weight: 400;
 }
+
+h2.q-heading,
+h3.q-heading {
+  margin-top: 24px;
+}
+
+.statusBlock,
+.importBlock,
+.browseBlock {
+  max-width: 920px;
+}
+
+.importForm {
+  display: grid;
+  grid-template-columns: max-content minmax(220px, 420px);
+  gap: 8px 12px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.importForm button {
+  grid-column: 2;
+  justify-self: start;
+}
+
+.importForm select,
+.importForm input[type='date'] {
+  border: 1px solid var(--q-hairline);
+  padding: 8px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.validateButton,
+.applyButton,
+.moreButton {
+  border: none;
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.rejectButton,
+.linkButton {
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.linkButton {
+  padding: 4px 8px;
+}
+
+.validateButton:disabled,
+.applyButton:disabled,
+.rejectButton:disabled {
+  background: var(--q-hairline);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}
+
+.runBlock {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-surface-1);
+}
+
+.runStatus {
+  margin-left: 8px;
+  color: var(--q-ink-muted);
+  font-weight: 400;
+}
+
+.decide {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ackInput {
+  display: block;
+  margin-top: 8px;
+  border: 1px solid var(--q-hairline);
+  padding: 8px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  width: 160px;
+}
+
+.outcome {
+  margin-top: 12px;
+  color: var(--q-ink);
+}
+
+.withdrawnRow td {
+  color: var(--q-ink-subtle);
+}
+
+.withdrawnNote {
+  display: block;
+  color: var(--q-warning-text);
+}
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}

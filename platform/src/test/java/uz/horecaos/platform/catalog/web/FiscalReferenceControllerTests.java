@@ -3,6 +3,7 @@ package uz.horecaos.platform.catalog.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
@@ -13,7 +14,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.catalog.application.MxikReferenceStatusService;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
+import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMxikImportStore;
+import uz.horecaos.platform.support.FakeConfigurationResolver;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.api.ApiException;
 
@@ -50,7 +54,9 @@ class FiscalReferenceControllerTests {
         jdbc = JdbcClient.create(db.dataSource());
         jdbc.sql("TRUNCATE TABLE catalog.mxik_reference CASCADE").update();
         controller = new FiscalReferenceController(
-                new JdbcCatalogStore(jdbc, JsonMapper.builder().build()));
+                new JdbcCatalogStore(jdbc, JsonMapper.builder().build()),
+                new MxikReferenceStatusService(
+                        new JdbcMxikImportStore(jdbc), new FakeConfigurationResolver(), Clock.systemUTC()));
     }
 
     @Test
@@ -68,17 +74,17 @@ class FiscalReferenceControllerTests {
         mxik("07131100020000000", "Сушёные овощи", "2020-01-01", null);
         mxik("09999999990000000", "Withdrawn item", "2015-01-01", "2020-01-01");
 
-        var byLabel = controller.search("овощи", null);
+        var byLabel = controller.search("овощи", null, null);
         assertThat(byLabel.items())
                 .as("the expired row must not appear even though its own label does not match here")
                 .hasSize(2);
 
-        var byCode = controller.search("07131100010000000", null);
+        var byCode = controller.search("07131100010000000", null, null);
         assertThat(byCode.items())
                 .singleElement()
                 .satisfies(row -> assertThat(row.labelRu()).isEqualTo("Свежие овощи"));
 
-        var expired = controller.search("Withdrawn", null);
+        var expired = controller.search("Withdrawn", null, null);
         assertThat(expired.items())
                 .as("a lapsed classification is not offered for a new receipt")
                 .isEmpty();
@@ -86,8 +92,8 @@ class FiscalReferenceControllerTests {
 
     @Test
     void refusesAQueryShorterThanTwoCharacters() {
-        assertThatThrownBy(() -> controller.search("a", null)).isInstanceOf(ApiException.class);
-        assertThatThrownBy(() -> controller.search("  ", null)).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> controller.search("a", null, null)).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> controller.search("  ", null, null)).isInstanceOf(ApiException.class);
     }
 
     private void mxik(String code, String labelRu, String validFrom, @Nullable String validUntil) {

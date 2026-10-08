@@ -32,6 +32,7 @@ import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ModifierAttachment;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
+import uz.horecaos.platform.catalog.domain.MxikFacts;
 import uz.horecaos.platform.catalog.domain.PhysicalAttributes;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.media.api.MediaAssetId;
@@ -532,16 +533,52 @@ public class CatalogValidator {
         if (!snapshot.fiscal().referenceLoaded() || fiscal.mxikCode() == null) {
             return;
         }
-        if (!snapshot.fiscal().referenceCodes().contains(fiscal.mxikCode())) {
+        String code = fiscal.mxikCode();
+        MxikFacts facts = snapshot.fiscal().referenceFacts().get(code);
+        if (snapshot.fiscal().referenceCodes().contains(code)) {
+            // Valid on the date. The list's own package codes are evidence for a person, never a rule: a list
+            // that may not be exhaustive cannot refuse a code a tenant typed (ADR 0173 Decision 8).
+            if (facts != null
+                    && !facts.defaultPackageCodes().isEmpty()
+                    && fiscal.packageCode() != null
+                    && !facts.defaultPackageCodes().contains(fiscal.packageCode())) {
+                findings.add(ValidationFinding.warning(
+                        "FISCAL_PACKAGE_CODE_NOT_LISTED_FOR_MXIK",
+                        type,
+                        entityId,
+                        entityCode,
+                        "Package code %s is not among the package codes the official list names for ИКПУ/MXIK %s (%s). "
+                                        .formatted(
+                                                fiscal.packageCode(),
+                                                code,
+                                                String.join(", ", facts.defaultPackageCodes()))
+                                + "The list may not be exhaustive, so this is for a person to check, not a refusal"));
+            }
+            return;
+        }
+        if (facts != null && facts.withdrawnOn(snapshot.fiscal().validationDate())) {
+            // Warns and never blocks (ADR 0173 Decision 7): an issued receipt keeps the code it went out under,
+            // and a menu is not to stop selling on the day the authority retires a code.
+            String successor = facts.replacedByCode() == null
+                    ? ""
+                    : "; the list names " + facts.replacedByCode() + " as its successor";
             findings.add(ValidationFinding.warning(
-                    "FISCAL_MXIK_CODE_UNKNOWN",
+                    "FISCAL_MXIK_CODE_WITHDRAWN",
                     type,
                     entityId,
                     entityCode,
-                    "ИКПУ/MXIK %s is not in the imported reference list. A code the tax ".formatted(fiscal.mxikCode())
-                            + "authority does not recognise is a classification error on a "
-                            + "legal document, and it is most often a transcription slip"));
+                    "ИКПУ/MXIK %s was withdrawn from the official list on %s%s"
+                            .formatted(code, facts.validUntil(), successor)));
+            return;
         }
+        findings.add(ValidationFinding.warning(
+                "FISCAL_MXIK_CODE_UNKNOWN",
+                type,
+                entityId,
+                entityCode,
+                "ИКПУ/MXIK %s is not in the imported reference list. A code the tax ".formatted(code)
+                        + "authority does not recognise is a classification error on a "
+                        + "legal document, and it is most often a transcription slip"));
     }
 
     /** Names the missing fields rather than the fact that some are missing. */
@@ -1340,14 +1377,37 @@ public class CatalogValidator {
      *                            unrecognised codes are different problems with
      *                            different owners
      * @param referenceCodes      the subset of this catalog's codes the reference
-     *                            recognises
+     *                            lists and that is valid on {@code validationDate}
+     * @param referenceFacts      what the list says about each of this catalog's codes it
+     *                            lists at all, valid or not (ADR 0173): the window, the
+     *                            default package codes, a named successor
+     * @param validationDate      the date the codes were judged on
      */
     public record FiscalContext(
             Map<UUID, FiscalClassification> byNode,
             List<Fee> fees,
             boolean brandOffersDelivery,
             boolean referenceLoaded,
-            Set<String> referenceCodes) {
+            Set<String> referenceCodes,
+            Map<String, MxikFacts> referenceFacts,
+            java.time.LocalDate validationDate) {
+
+        /** The context before the list carried withdrawal: codes are "known" or not, on no particular date. */
+        public FiscalContext(
+                Map<UUID, FiscalClassification> byNode,
+                List<Fee> fees,
+                boolean brandOffersDelivery,
+                boolean referenceLoaded,
+                Set<String> referenceCodes) {
+            this(
+                    byNode,
+                    fees,
+                    brandOffersDelivery,
+                    referenceLoaded,
+                    referenceCodes,
+                    Map.of(),
+                    java.time.LocalDate.EPOCH);
+        }
 
         /** For a test or a caller with nothing fiscal to say. */
         public static FiscalContext empty() {

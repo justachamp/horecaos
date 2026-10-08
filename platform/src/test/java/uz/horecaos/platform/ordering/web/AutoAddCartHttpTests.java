@@ -746,7 +746,8 @@ class AutoAddCartHttpTests {
                 .containsExactly("aa:" + addsTheBag, "burger");
         // The customer putting a bag of their own in does trigger it.
         view = putLine(cart, view.get("version").asInt(), "own-bag", bag, "1");
-        assertThat(count("ordering.cart_lines WHERE variant_id = '" + cutlery + "'")).isEqualTo(1);
+        assertThat(count("ordering.cart_lines WHERE variant_id = '" + cutlery + "'"))
+                .isEqualTo(1);
     }
 
     @Test
@@ -893,7 +894,9 @@ class AutoAddCartHttpTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andReturn();
-        assertThat(quote.getResponse().getStatus()).as(quote.getResponse().getContentAsString()).isEqualTo(200);
+        assertThat(quote.getResponse().getStatus())
+                .as(quote.getResponse().getContentAsString())
+                .isEqualTo(200);
         return JSON.readTree(quote.getResponse().getContentAsString());
     }
 

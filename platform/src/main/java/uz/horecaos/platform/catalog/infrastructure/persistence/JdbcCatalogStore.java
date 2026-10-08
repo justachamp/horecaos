@@ -37,6 +37,8 @@ import uz.horecaos.platform.catalog.domain.CompositeProducts.Visibility;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.FiscalClassification.MarkingScheme;
 import uz.horecaos.platform.catalog.domain.ItemSaleSchedule;
+import uz.horecaos.platform.catalog.domain.MxikFacts;
+import uz.horecaos.platform.catalog.domain.MxikValidity;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.configuration.Ids;
@@ -1165,7 +1167,7 @@ public class JdbcCatalogStore {
     }
 
     /**
-     * The subset of {@code codes} the imported ИКПУ/MXIK reference recognises.
+     * The subset of {@code codes} the imported ИКПУ/MXIK reference lists and that is valid today.
      *
      * <p>Returns empty when the reference table is empty, which the caller must
      * treat as "the import has not run" rather than as "every code is wrong".
@@ -1173,15 +1175,53 @@ public class JdbcCatalogStore {
      * {@link #mxikReferenceIsLoaded()} exists separately.
      */
     public Set<String> knownMxikCodes(Set<String> codes) {
+        return knownMxikCodes(codes, java.time.LocalDate.now(java.time.ZoneOffset.UTC));
+    }
+
+    /**
+     * The subset of {@code codes} that is valid on {@code on}, by the one definition of valid in
+     * {@link MxikValidity} (ADR 0173): the same predicate the search, the validator and the coverage read use.
+     */
+    public Set<String> knownMxikCodes(Set<String> codes, java.time.LocalDate on) {
         if (codes.isEmpty()) {
             return Set.of();
         }
-        return Set.copyOf(jdbc.sql("""
-                SELECT code FROM catalog.mxik_reference WHERE code = ANY(:codes)
-                """)
+        return Set.copyOf(jdbc.sql("SELECT code FROM catalog.mxik_reference WHERE code = ANY(:codes) AND "
+                        + MxikValidity.SQL_VALID_ON)
                 .param("codes", codes.toArray(String[]::new))
+                .param("on", on)
                 .query(String.class)
                 .list());
+    }
+
+    /**
+     * What the list says about each of these codes, valid or not (ADR 0173): the validity window, the dataset's
+     * own default package codes and a successor it names. A code the list does not contain is absent.
+     */
+    public Map<String, MxikFacts> mxikFacts(Set<String> codes) {
+        if (codes.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, MxikFacts> facts = new java.util.HashMap<>();
+        jdbc.sql("""
+                        SELECT code, valid_from, valid_until, default_package_codes, replaced_by_code
+                          FROM catalog.mxik_reference WHERE code = ANY(:codes)
+                        """)
+                .param("codes", codes.toArray(String[]::new))
+                .query((rs, rowNumber) -> {
+                    facts.put(
+                            rs.getString("code"),
+                            new MxikFacts(
+                                    rs.getDate("valid_from").toLocalDate(),
+                                    rs.getDate("valid_until") == null
+                                            ? null
+                                            : rs.getDate("valid_until").toLocalDate(),
+                                    toStringList(rs.getArray("default_package_codes")),
+                                    rs.getString("replaced_by_code")));
+                    return rowNumber;
+                })
+                .list();
+        return Map.copyOf(facts);
     }
 
     /** Whether the official list has been imported at all. */
@@ -1203,12 +1243,25 @@ public class JdbcCatalogStore {
      * calls it without a {@code tenantId} at all.
      */
     public List<MxikReferenceRow> searchMxikReference(String query, int limit) {
+        return searchMxikReference(query, limit, null);
+    }
+
+    /**
+     * The same browse, as of a date (ADR 0173). Without a date it returns what is valid today and nothing
+     * about withdrawal. With one it also returns codes withdrawn by then, each marked, with the successor the
+     * file names: a picker shows a withdrawn code in muted ink with its date instead of hiding that it existed,
+     * and a receipt builder passes the order's business date.
+     */
+    public List<MxikReferenceRow> searchMxikReference(String query, int limit, java.time.@Nullable LocalDate asOf) {
         String pattern = "%" + query.trim() + "%";
+        boolean dated = asOf != null;
+        java.time.LocalDate on = asOf == null ? java.time.LocalDate.now(java.time.ZoneOffset.UTC) : asOf;
         return jdbc.sql("""
                         SELECT code, parent_code, label_ru, label_uz, label_en,
-                               default_package_codes, default_unit_codes, valid_from, valid_until
+                               default_package_codes, default_unit_codes, valid_from, valid_until, replaced_by_code
                           FROM catalog.mxik_reference
-                         WHERE (valid_until IS NULL OR valid_until >= CURRENT_DATE)
+                         WHERE (""" + (dated ? "valid_from <= :on" : MxikValidity.SQL_VALID_ON) + """
+                               )
                            AND (code ILIKE :pattern OR label_ru ILIKE :pattern
                                 OR label_uz ILIKE :pattern OR label_en ILIKE :pattern)
                          ORDER BY code
@@ -1216,17 +1269,23 @@ public class JdbcCatalogStore {
                         """)
                 .param("pattern", pattern)
                 .param("limit", limit)
-                .query((rs, rowNumber) -> new MxikReferenceRow(
-                        rs.getString("code"),
-                        rs.getString("parent_code"),
-                        rs.getString("label_ru"),
-                        rs.getString("label_uz"),
-                        rs.getString("label_en"),
-                        toStringList(rs.getArray("default_package_codes")),
-                        rs.getDate("valid_from").toLocalDate(),
-                        rs.getDate("valid_until") == null
-                                ? null
-                                : rs.getDate("valid_until").toLocalDate()))
+                .param("on", on)
+                .query((rs, rowNumber) -> {
+                    java.time.LocalDate validUntil = rs.getDate("valid_until") == null
+                            ? null
+                            : rs.getDate("valid_until").toLocalDate();
+                    return new MxikReferenceRow(
+                            rs.getString("code"),
+                            rs.getString("parent_code"),
+                            rs.getString("label_ru"),
+                            rs.getString("label_uz"),
+                            rs.getString("label_en"),
+                            toStringList(rs.getArray("default_package_codes")),
+                            rs.getDate("valid_from").toLocalDate(),
+                            validUntil,
+                            dated ? (validUntil != null && !on.isBefore(validUntil)) : null,
+                            dated ? rs.getString("replaced_by_code") : null);
+                })
                 .list();
     }
 
@@ -1247,7 +1306,23 @@ public class JdbcCatalogStore {
             @Nullable String labelEn,
             List<String> defaultPackageCodes,
             java.time.LocalDate validFrom,
-            java.time.@Nullable LocalDate validUntil) {}
+            java.time.@Nullable LocalDate validUntil,
+            @Nullable Boolean withdrawn,
+            @Nullable String replacedByCode) {
+
+        /** The browse without a date: nothing is said about withdrawal. */
+        public MxikReferenceRow(
+                String code,
+                @Nullable String parentCode,
+                String labelRu,
+                String labelUz,
+                @Nullable String labelEn,
+                List<String> defaultPackageCodes,
+                java.time.LocalDate validFrom,
+                java.time.@Nullable LocalDate validUntil) {
+            this(code, parentCode, labelRu, labelUz, labelEn, defaultPackageCodes, validFrom, validUntil, null, null);
+        }
+    }
 
     // ------------------------------------------------------------------- reads
 

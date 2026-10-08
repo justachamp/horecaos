@@ -1115,6 +1115,67 @@ export const en = {
   'fiscalReference.column.labelRu': 'Label (RU)',
   'fiscalReference.column.labelUz': 'Label (UZ)',
   'fiscalReference.column.packages': 'Default packages',
+  'fiscalReference.status.title': 'List status',
+  'fiscalReference.status.dataset': 'Dataset {version}, imported {importedAt}.',
+  'fiscalReference.status.counts': '{valid} codes valid, {withdrawn} withdrawn.',
+  'fiscalReference.status.source': 'Published by the authority on {date}.',
+  'fiscalReference.status.stale':
+    'The list was last imported {days} days ago; it is expected to be refreshed at least every {max} days. Import the current file.',
+  'fiscalReference.import.title': 'Import the official file',
+  'fiscalReference.import.lead':
+    'Upload the file downloaded from the State Tax Committee. An upload is only a dry run: nothing in the list changes until you apply it.',
+  'fiscalReference.import.file': 'File (.xlsx or .csv)',
+  'fiscalReference.import.mode': 'Mode',
+  'fiscalReference.import.mode.FULL_SNAPSHOT':
+    'Full snapshot: codes missing from the file are withdrawn',
+  'fiscalReference.import.mode.PARTIAL': 'Partial: inserts and updates only, withdraws nothing',
+  'fiscalReference.import.publishedOn': 'Published by the authority on',
+  'fiscalReference.import.validate': 'Check the file (dry run)',
+  'fiscalReference.import.working': 'Working…',
+  'fiscalReference.run.title': 'Dry run',
+  'fiscalReference.run.status.VALIDATED': 'Ready to apply',
+  'fiscalReference.run.status.HELD_FOR_REVIEW': 'Held for review',
+  'fiscalReference.run.status.APPLYING': 'Applying',
+  'fiscalReference.run.status.APPLIED': 'Applied',
+  'fiscalReference.run.status.FAILED': 'Failed',
+  'fiscalReference.run.status.REJECTED': 'Rejected',
+  'fiscalReference.run.counts':
+    '{total} rows: {added} new, {changed} changed, {unchanged} unchanged, {withdrawn} to withdraw, {reinstated} to reinstate, {errors} with errors (not loaded).',
+  'fiscalReference.run.borrowed': '{count} rows had one label only and took it in both languages.',
+  'fiscalReference.run.lengths': 'Code lengths in the file (length: rows): {lengths}.',
+  'fiscalReference.run.partialNote':
+    'A partial file withdraws nothing, however many codes it does not contain.',
+  'fiscalReference.run.held':
+    'This file would withdraw {count} codes, more than {percent}% of the list. That is usually a truncated or wrong file. Apply it only if the authority really retired them.',
+  'fiscalReference.run.acknowledge': 'Type {count} to confirm',
+  'fiscalReference.run.apply': 'Apply to the list',
+  'fiscalReference.run.reject': 'Reject',
+  'fiscalReference.run.applied': 'Applied as dataset {version}.',
+  'fiscalReference.run.rejected': 'Rejected. The list is unchanged.',
+  'fiscalReference.findings.title': 'Findings',
+  'fiscalReference.findings.kind.ROW_ERROR': 'Row not loaded',
+  'fiscalReference.findings.kind.WITHDRAWN': 'Will be withdrawn',
+  'fiscalReference.findings.kind.REINSTATED': 'Will be reinstated',
+  'fiscalReference.findings.kind.PACKAGE_DEFAULTS_CHANGED': 'Package defaults change',
+  'fiscalReference.findings.more': 'Show more',
+  'fiscalReference.recent.title': 'Recent imports',
+  'fiscalReference.recent.open': 'Open',
+  'fiscalReference.browse.title': 'Browse the list',
+  'fiscalReference.browse.includeWithdrawn': 'Include codes withdrawn by today',
+  'fiscalReference.browse.withdrawn': 'Withdrawn {date}.',
+  'fiscalReference.browse.successor': 'Successor: {code}.',
+  'fiscalReference.refusal.UNKNOWN_HEADER':
+    'The file has a column this importer does not know, so nothing was read. The profile has to be updated for this file.',
+  'fiscalReference.refusal.REQUIRED_COLUMN_MISSING':
+    'The file has no code column, or no Russian or Uzbek name column.',
+  'fiscalReference.refusal.FILE_TOO_LARGE': 'The file is larger than the importer accepts.',
+  'fiscalReference.refusal.FILE_UNREADABLE': 'The file could not be read as a list.',
+  'fiscalReference.refusal.RUN_IS_STALE':
+    'The list changed after this file was checked. Upload the file again.',
+  'fiscalReference.refusal.RUN_NOT_APPLICABLE': 'This run can no longer be applied or rejected.',
+  'fiscalReference.refusal.WITHDRAWAL_ACKNOWLEDGEMENT_REQUIRED':
+    'The number typed is not the number of codes this file would withdraw.',
+  'fiscalReference.refusal.UPLOAD_FAILED': 'The file could not be uploaded.',
 
   'staff.title': 'Staff & roles',
   'staff.lead':

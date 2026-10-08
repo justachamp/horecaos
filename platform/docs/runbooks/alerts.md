@@ -43,6 +43,8 @@ Loud inside the window, in the morning digest outside it.
 | An onboarding run has not moved for an hour | [onboarding-run-stalled.md](onboarding-run-stalled.md) |
 | ROAD delivery fees falling back to the straight line for more than 5% of quotes (ADR 0147) | [load-uzbekistan-routing-dataset.md](load-uzbekistan-routing-dataset.md), "When it goes wrong" |
 | The routing dataset is more than 60 days old (ADR 0147) | [load-uzbekistan-routing-dataset.md](load-uzbekistan-routing-dataset.md), "The monthly refresh" |
+| The national ИКПУ/MXIK list is not loaded while a tenant has classified a node (`FISCAL_REFERENCE_NOT_LOADED`, ADR 0173) | [mxik-reference-import.md](mxik-reference-import.md), steps 1 to 4 |
+| The national ИКПУ/MXIK list is older than 45 days (`FISCAL_REFERENCE_STALE`, ADR 0173) | [mxik-reference-import.md](mxik-reference-import.md), "The monthly refresh" |
 
 ## Not an alert, on purpose
 

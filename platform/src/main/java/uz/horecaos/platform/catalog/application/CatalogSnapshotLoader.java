@@ -34,6 +34,7 @@ import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ModifierAttachment;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
+import uz.horecaos.platform.catalog.domain.MxikFacts;
 import uz.horecaos.platform.catalog.domain.PhysicalAttributes;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
@@ -341,15 +342,21 @@ public class CatalogSnapshotLoader {
                         && offering.fulfillmentModes().stream().anyMatch(DELIVERY_MODE::equalsIgnoreCase));
 
         boolean referenceLoaded = store.mxikReferenceIsLoaded();
-        Set<String> knownCodes = referenceLoaded
-                ? store.knownMxikCodes(byNode.values().stream()
-                        .map(FiscalClassification::mxikCode)
-                        .filter(java.util.Objects::nonNull)
-                        .collect(Collectors.toUnmodifiableSet()))
-                : Set.of();
+        // One date for the whole validation: the publication's own. A future receipt builder passes the order's
+        // business date instead (ADR 0038), so last month's receipt is judged on last month's list.
+        java.time.LocalDate on = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+        Set<String> classified = byNode.values().stream()
+                .map(FiscalClassification::mxikCode)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toUnmodifiableSet());
+        Map<String, MxikFacts> facts = referenceLoaded ? store.mxikFacts(classified) : Map.of();
+        Set<String> knownCodes = facts.entrySet().stream()
+                .filter(entry -> entry.getValue().validOn(on))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toUnmodifiableSet());
 
         return new CatalogValidator.FiscalContext(
-                byNode, store.feesForBrand(tenantId, brandId), offersDelivery, referenceLoaded, knownCodes);
+                byNode, store.feesForBrand(tenantId, brandId), offersDelivery, referenceLoaded, knownCodes, facts, on);
     }
 
     /**

@@ -32,6 +32,7 @@ import {
   ModifierGroupDetail,
   ModifierGroupSummary,
   MxikReferenceRow,
+  MxikReferenceStatus,
   ProductCreated,
   ProductDetail,
   ProductListStatus,
@@ -135,6 +136,11 @@ export class CatalogApi {
         params: { query, limit },
       }),
     ).pipe(map((page) => page.items));
+  }
+
+  /** The national ИКПУ/MXIK list's state, for the picker's note (ADR 0173). */
+  mxikReferenceStatus(scope: BrandScope): Observable<MxikReferenceStatus> {
+    return unwrap(this.api.get<MxikReferenceStatus>(catalogPaths.mxikReferenceStatus(scope)));
   }
 
   /**
