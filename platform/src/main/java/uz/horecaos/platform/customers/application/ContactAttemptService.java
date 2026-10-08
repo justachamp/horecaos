@@ -16,6 +16,7 @@ import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
+import uz.horecaos.platform.customers.api.HistoryCursor;
 import uz.horecaos.platform.customers.domain.BlockingReason;
 import uz.horecaos.platform.customers.domain.ContactDirection;
 import uz.horecaos.platform.customers.domain.ContactOutcome;
@@ -114,7 +115,8 @@ public class ContactAttemptService {
     }
 
     @Transactional(readOnly = true)
-    public List<ContactAttemptView> forCustomer(UUID tenantId, UUID accountId, @Nullable Instant before, int limit) {
+    public List<ContactAttemptView> forCustomer(
+            UUID tenantId, UUID accountId, @Nullable HistoryCursor before, int limit) {
         return attempts.forAccount(tenantId, accountId, before, limit).stream()
                 .map(ContactAttemptService::view)
                 .toList();

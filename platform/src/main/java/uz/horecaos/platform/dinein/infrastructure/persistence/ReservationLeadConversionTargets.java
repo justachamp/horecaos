@@ -1,5 +1,6 @@
 package uz.horecaos.platform.dinein.infrastructure.persistence;
 
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -40,5 +41,20 @@ public class ReservationLeadConversionTargets implements LeadConversionTargets {
                         .query(Long.class)
                         .single()
                 > 0;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<UUID> reservationCustomer(UUID tenantId, UUID brandId, UUID reservationId) {
+        return jdbc.sql("""
+                SELECT customer_account_id FROM dinein.reservations
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND id = :reservationId
+                   AND customer_account_id IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("reservationId", reservationId)
+                .query(UUID.class)
+                .optional();
     }
 }

@@ -60,9 +60,13 @@
         <div class="field">
           <dt class="q-caption">{{ 'customers.leads.detail.customer' | t }}</dt>
           <dd class="q-body-sm">
-            <a class="link" [routerLink]="['/customers', accountId]">{{
-              'customers.leads.detail.open' | t
-            }}</a>
+            @if (canOpenCustomer()) {
+              <a class="link" [routerLink]="['/customers', accountId]">{{
+                'customers.leads.detail.open' | t
+              }}</a>
+            } @else {
+              <span data-testid="lead-linked">{{ 'customers.leads.detail.linked' | t }}</span>
+            }
           </dd>
         </div>
       }
@@ -72,9 +76,24 @@
       <div class="hint" data-testid="lead-hint-accounts">
         <p class="q-caption">{{ 'customers.leads.detail.hints.accounts' | t }}</p>
         @for (accountId of lead.possibleAccountIds; track accountId) {
-          <a class="link" [routerLink]="['/customers', accountId]">{{
-            'customers.leads.detail.open' | t
-          }}</a>
+          <div class="hint-account">
+            @if (canOpenCustomer()) {
+              <a class="link" [routerLink]="['/customers', accountId]">{{
+                'customers.leads.detail.open' | t
+              }}</a>
+            }
+            @if (canLink()) {
+              <button
+                type="button"
+                class="secondary"
+                [disabled]="busy()"
+                (click)="linkTo(accountId)"
+                data-testid="lead-link-customer"
+              >
+                {{ 'customers.leads.detail.hints.link' | t }}
+              </button>
+            }
+          </div>
         }
       </div>
     }

@@ -4,6 +4,7 @@ import { authGuard } from './core/auth/auth.guard';
 import { capabilityGuard } from './core/auth/capability.guard';
 import { messagesGuard } from './core/i18n/messages.guard';
 import { platformLocalesGuard } from './core/i18n/platform-locales';
+import { customersLandingGuard } from './features/customers/customers-landing.guard';
 import { NAV_ITEMS } from './shell/navigation';
 
 /**
@@ -269,6 +270,8 @@ export const routes: Routes = [
           },
           {
             path: '',
+            // A brand manager holds the lead queue and not the customer list (ADR 0111): she lands on it.
+            canActivate: [customersLandingGuard],
             loadComponent: () =>
               import('./features/customers/customers-page').then((m) => m.CustomersPage),
             children: [

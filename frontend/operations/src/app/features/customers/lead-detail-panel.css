@@ -42,6 +42,13 @@
   margin: 0;
 }
 
+.hint-account {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 .muted {
   color: var(--q-ink-muted);
   margin: 0;

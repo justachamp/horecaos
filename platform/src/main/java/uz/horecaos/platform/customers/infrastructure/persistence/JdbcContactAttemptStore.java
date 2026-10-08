@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import uz.horecaos.platform.customers.api.HistoryCursor;
 
 /**
  * The voice contact journal (ADR 0111 §8): insert and read, and no other statement exists.
@@ -91,19 +92,21 @@ public class JdbcContactAttemptStore {
     }
 
     /** Every attempt about one guest -- against the account itself or against a lead linked to it. */
-    public List<AttemptRow> forAccount(UUID tenantId, UUID accountId, @Nullable Instant before, int limit) {
+    public List<AttemptRow> forAccount(UUID tenantId, UUID accountId, @Nullable HistoryCursor before, int limit) {
         return jdbc.sql("SELECT " + COLUMNS + """
                  FROM customer.contact_attempts a
                  WHERE a.tenant_id = :tenantId
                    AND (a.customer_account_id = :accountId
                         OR a.lead_id IN (SELECT l.id FROM customer.leads l
                                           WHERE l.tenant_id = :tenantId AND l.customer_account_id = :accountId))
-                   AND (CAST(:before AS timestamptz) IS NULL OR a.occurred_at < CAST(:before AS timestamptz))
+                   AND (CAST(:before AS timestamptz) IS NULL
+                        OR (a.occurred_at, a.id) < (CAST(:before AS timestamptz), CAST(:beforeId AS uuid)))
                  ORDER BY a.occurred_at DESC, a.id DESC LIMIT :limit
                 """)
                 .param("tenantId", tenantId)
                 .param("accountId", accountId)
-                .param("before", before == null ? null : at(before))
+                .param("before", before == null ? null : at(before.occurredAt()))
+                .param("beforeId", before == null ? null : before.referenceId().toString())
                 .param("limit", limit)
                 .query(JdbcContactAttemptStore::toRow)
                 .list();

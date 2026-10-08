@@ -1,6 +1,5 @@
 package uz.horecaos.platform.notifications.infrastructure.persistence;
 
-import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -12,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.customers.api.CustomerHistoryEntry;
 import uz.horecaos.platform.customers.api.CustomerHistoryEntry.Kind;
 import uz.horecaos.platform.customers.api.CustomerHistorySource;
+import uz.horecaos.platform.customers.api.HistoryCursor;
 
 /**
  * What the platform has tried to say to one guest, for the customer card (ADR 0111 §8): the
@@ -45,18 +45,20 @@ public class JdbcCustomerCommunicationHistory implements CustomerHistorySource {
     @Override
     @Transactional(readOnly = true)
     public List<CustomerHistoryEntry> history(
-            UUID tenantId, UUID customerAccountId, @Nullable Instant before, int limit) {
+            UUID tenantId, UUID customerAccountId, @Nullable HistoryCursor before, int limit) {
         return jdbc.sql("""
                 SELECT id, channel, template_key, status, suppression_reason, subject_type, subject_id, created_at
                   FROM notifications.notifications
                  WHERE tenant_id = :tenantId AND recipient_account_id = :accountId
-                   AND (CAST(:before AS timestamptz) IS NULL OR created_at < CAST(:before AS timestamptz))
+                   AND (CAST(:before AS timestamptz) IS NULL
+                        OR (created_at, id) < (CAST(:before AS timestamptz), CAST(:beforeId AS uuid)))
                  ORDER BY created_at DESC, id DESC
                  LIMIT :limit
                 """)
                 .param("tenantId", tenantId)
                 .param("accountId", customerAccountId)
-                .param("before", before == null ? null : before.atOffset(ZoneOffset.UTC))
+                .param("before", before == null ? null : before.occurredAt().atOffset(ZoneOffset.UTC))
+                .param("beforeId", before == null ? null : before.referenceId().toString())
                 .param("limit", limit)
                 .query((rs, n) -> new CustomerHistoryEntry(
                         Kind.NOTIFICATION,

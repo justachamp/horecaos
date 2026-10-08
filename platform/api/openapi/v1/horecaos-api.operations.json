@@ -6398,6 +6398,10 @@
             "format" : "date-time",
             "type" : "string"
           },
+          "nextBeforeId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "preferredLocale" : {
             "type" : "string"
           },
@@ -10241,6 +10245,16 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "LinkLeadCustomerRequest" : {
+        "properties" : {
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "customerAccountId" ],
         "type" : "object"
       },
       "ListVariantRequest" : {
@@ -41698,6 +41712,61 @@
         "tags" : [ "Leads" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/leads/{leadId}/customer" : {
+      "post" : {
+        "description" : "The operator's confirmation of the hint the detail gives (an account holding the same number): the lead is linked to that account, appears on its card, and is erased with it. Never made by the platform on a number match alone. Allowed at any status; an account merged away is followed to the account it became. Needs If-Match with the lead's version.",
+        "operationId" : "linkCustomer",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "leadId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LinkLeadCustomerRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LeadView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Identify the guest behind a lead",
+        "tags" : [ "Leads" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/leads/{leadId}/transitions" : {
       "post" : {
         "description" : "Needs If-Match with the lead's version. CONVERTED needs exactly one of an order and a reservation of this brand; DECLINED and LOST need a coded reason; CALLBACK_SCHEDULED needs a time. An edge the machine does not have is 422.",
@@ -45698,6 +45767,69 @@
           }
         },
         "summary" : "Record a call about a lead handed to this branch",
+        "tags" : [ "Leads" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/leads/{leadId}/customer" : {
+      "post" : {
+        "description" : "As the brand route, for a lead this branch was handed: the branch that rings the guest is the one that learns who she is.",
+        "operationId" : "linkCustomerForLocation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "leadId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LinkLeadCustomerRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LeadView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Identify the guest behind a lead handed to this branch",
         "tags" : [ "Leads" ]
       }
     },
@@ -53852,7 +53984,7 @@
     },
     "/api/v1/tenants/{tenantId}/customers/{accountId}/card" : {
       "get" : {
-        "description" : "The guest's status, whether she is blacklisted right now, her leads, and a history merged by time from the messages sent to her, the campaigns that reached her, the promotions she redeemed, the reviews she left and the calls an operator made or took -- each owned and read from the module that holds it. Writes one audit fact per call. `before` pages further back: pass the previous page's nextBefore.",
+        "description" : "The guest's status, whether she is blacklisted right now, her leads, and a history merged by time from the messages sent to her, the campaigns that reached her, the promotions she redeemed, the reviews she left and the calls an operator made or took -- each owned and read from the module that holds it. Writes one audit fact per call. `before` and `beforeId` page further back: pass the previous page's nextBefore and nextBeforeId together, so entries that share the last one's instant are not lost. `before` alone means strictly older.",
         "operationId" : "card",
         "parameters" : [ {
           "in" : "path",
@@ -53876,6 +54008,14 @@
           "required" : false,
           "schema" : {
             "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "beforeId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
             "type" : "string"
           }
         }, {
@@ -53997,7 +54137,7 @@
     },
     "/api/v1/tenants/{tenantId}/customers/{accountId}/contact-attempts" : {
       "get" : {
-        "description" : "Against the account itself and against any lead linked to it. Ids, codes and instants only.",
+        "description" : "Against the account itself and against any lead linked to it. Ids, codes and instants only. `before` and `beforeId` page further back from the last row of the previous page; `before` alone means strictly older.",
         "operationId" : "attempts",
         "parameters" : [ {
           "in" : "path",
@@ -54021,6 +54161,14 @@
           "required" : false,
           "schema" : {
             "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "beforeId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
             "type" : "string"
           }
         }, {

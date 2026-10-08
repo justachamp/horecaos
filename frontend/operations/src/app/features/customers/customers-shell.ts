@@ -17,9 +17,10 @@ import { TPipe } from '../../core/i18n/t.pipe';
  * docked layout leaves it.
  *
  * **Обратные звонки** (ADR 0111, the call centre's lead queue) is a tab only for an operator who holds
- * `customer.lead.read` somewhere: the rail's own capability is `CUSTOMER_READ`, and a line cook with neither
- * should not be offered a queue of people to ring. The route itself still answers for itself — a direct
- * URL to it is refused by the server, not by this tab's absence.
+ * `customer.lead.read` somewhere, and the list a tab only for one who holds `customer.read`: the rail admits a
+ * section on either (`NavItem.alsoAdmittedBy`), because a brand manager runs the queue and reads no customer
+ * list, and a line cook with neither should be offered neither. The route itself still answers for itself — a
+ * direct URL to it is refused by the server, not by a tab's absence.
  *
  * 5.5 routes to the same shared `NotBuiltPage` 5.4 does, and for the same
  * reason: a review tag library and prompt-timing settings configure a review/

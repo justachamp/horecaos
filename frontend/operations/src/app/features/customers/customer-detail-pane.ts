@@ -185,6 +185,17 @@ export class CustomerDetailPane {
   protected readonly cardLoadingMore = signal(false);
   protected readonly cardError = signal<string | null>(null);
   protected readonly recordBusy = signal(false);
+  /** Why the last call was refused, shown under the form that stays open; null once one is written. */
+  protected readonly recordError = signal<string | null>(null);
+  /** Calls written for the guest on show; the form closes when this moves, and not on submit. */
+  protected readonly recordedCount = signal(0);
+
+  /**
+   * Which showing of the card a response belongs to. Every request that writes the card remembers the
+   * number it started under and drops its answer if the pane has moved on -- to another guest, or back
+   * to this one -- so a slow page of guest A's history can never land in guest B's pane.
+   */
+  private cardEpoch = 0;
 
   constructor() {
     // The route reuses this component across an `:accountId` change (default
@@ -233,7 +244,13 @@ export class CustomerDetailPane {
     this.loading.set(true);
     this.loadError.set(null);
     this.resetTabState();
+    // This showing's number, taken *here* and carried down: reading `cardEpoch` later, after an await,
+    // would read the number of whichever account is on show by then.
+    const epoch = this.cardEpoch;
     await this.baseLocation.ensureLoaded();
+    if (epoch !== this.cardEpoch) {
+      return;
+    }
     const scope = this.scope();
     if (!scope) {
       this.denied.set(this.baseLocation.denied());
@@ -242,17 +259,26 @@ export class CustomerDetailPane {
     }
     this.denied.set(false);
     try {
-      this.profile.set(await this.api.profile(scope, accountId));
-      void this.openCard(scope.tenantId, accountId);
+      const profile = await this.api.profile(scope, accountId);
+      if (epoch !== this.cardEpoch) {
+        return;
+      }
+      this.profile.set(profile);
+      void this.openCard(epoch, scope.tenantId, accountId);
       this.loadTabData(this.activeTab());
     } catch (error) {
+      if (epoch !== this.cardEpoch) {
+        return;
+      }
       if (error instanceof ApiError) {
         this.loadError.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
       } else {
         throw error;
       }
     } finally {
-      this.loading.set(false);
+      if (epoch === this.cardEpoch) {
+        this.loading.set(false);
+      }
     }
   }
 
@@ -292,23 +318,28 @@ export class CustomerDetailPane {
 
   // ------------------------------------------------------------------ the card (ADR 0111)
 
-  private async openCard(tenantId: string, accountId: string): Promise<void> {
+  private async openCard(epoch: number, tenantId: string, accountId: string): Promise<void> {
     this.cardLoading.set(true);
     this.cardError.set(null);
     try {
       const opened = await this.leadsApi.openCard(tenantId, accountId, REVEAL_PURPOSE.openCard);
-      // The pane may have moved to another account while the card was loading.
-      if (this.accountId() === accountId) {
+      // The pane may have moved to another account while the card was loading, or back to this one.
+      if (epoch === this.cardEpoch) {
         this.card.set(opened);
       }
     } catch (error) {
+      if (epoch !== this.cardEpoch) {
+        return;
+      }
       if (error instanceof ApiError) {
         this.cardError.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
       } else {
         throw error;
       }
     } finally {
-      this.cardLoading.set(false);
+      if (epoch === this.cardEpoch) {
+        this.cardLoading.set(false);
+      }
     }
   }
 
@@ -318,23 +349,39 @@ export class CustomerDetailPane {
     if (!scope || !current || current.nextBefore === null || this.cardLoadingMore()) {
       return;
     }
+    const epoch = this.cardEpoch;
     this.cardLoadingMore.set(true);
     try {
       const older = await this.leadsApi.openCard(
         scope.tenantId,
-        this.accountId(),
+        current.customerAccountId,
         REVEAL_PURPOSE.openCard,
         current.nextBefore,
+        current.nextBeforeId ?? undefined,
       );
-      this.card.set({
-        ...current,
-        history: [...current.history, ...older.history],
-        nextBefore: older.nextBefore,
-      });
+      if (epoch !== this.cardEpoch) {
+        return;
+      }
+      // Merged into the card as it is now, not as it was when the request left: a call recorded
+      // meanwhile is already at the top of it.
+      this.card.update((latest) =>
+        latest === null
+          ? latest
+          : {
+              ...latest,
+              history: [...latest.history, ...older.history],
+              nextBefore: older.nextBefore,
+              nextBeforeId: older.nextBeforeId,
+            },
+      );
     } catch (error) {
-      this.noticeFrom(error);
+      if (epoch === this.cardEpoch) {
+        this.noticeFrom(error);
+      }
     } finally {
-      this.cardLoadingMore.set(false);
+      if (epoch === this.cardEpoch) {
+        this.cardLoadingMore.set(false);
+      }
     }
   }
 
@@ -342,21 +389,31 @@ export class CustomerDetailPane {
     return this.capabilities.has('CUSTOMER_LEAD_MANAGE');
   }
 
-  /** Records a call with this guest and shows it at the top, without re-opening the card. */
+  /**
+   * Records a call with this guest and shows it at the top, without re-opening the card.
+   *
+   * The form is not closed here: it closes when {@link recordedCount} moves, so a refusal leaves it open
+   * with what was typed and a retry carries the same attempt id.
+   */
   protected async recordCall(request: RecordContactAttemptRequest): Promise<void> {
     const scope = this.scope();
     const current = this.card();
     if (!scope || !current || this.recordBusy()) {
       return;
     }
+    const epoch = this.cardEpoch;
     this.recordBusy.set(true);
+    this.recordError.set(null);
     try {
       const recorded = await this.leadsApi.recordCustomerAttempt(
         scope.tenantId,
-        this.accountId(),
+        current.customerAccountId,
         scope.brandId,
         request,
       );
+      if (epoch !== this.cardEpoch) {
+        return;
+      }
       const entry: HistoryEntry = {
         kind: 'VOICE_CONTACT',
         occurredAt: recorded.occurredAt,
@@ -368,17 +425,35 @@ export class CustomerDetailPane {
         rating: null,
         label: recorded.direction,
       };
-      this.card.set({ ...current, history: [entry, ...current.history] });
+      this.card.update((latest) =>
+        latest === null ? latest : { ...latest, history: [entry, ...latest.history] },
+      );
+      this.recordedCount.update((count) => count + 1);
     } catch (error) {
-      this.noticeFrom(error);
+      if (epoch !== this.cardEpoch) {
+        return;
+      }
+      if (error instanceof ApiError) {
+        this.recordError.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
+      } else {
+        throw error;
+      }
     } finally {
-      this.recordBusy.set(false);
+      if (epoch === this.cardEpoch) {
+        this.recordBusy.set(false);
+      }
     }
   }
 
   private resetTabState(): void {
+    this.cardEpoch++;
     this.card.set(null);
     this.cardError.set(null);
+    this.cardLoading.set(false);
+    this.cardLoadingMore.set(false);
+    this.recordBusy.set(false);
+    this.recordError.set(null);
+    this.recordedCount.set(0);
     this.revealedContacts.set(null);
     this.dateOfBirth.set(undefined);
     this.editingProfile.set(false);

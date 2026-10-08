@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Versioned } from '../../core/api/aggregate-version';
 import { LocationScope } from '../../core/api/operations-paths';
+import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { Auth } from '../../core/auth/auth';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { Capability, SessionCapabilities } from '../../core/auth/session-capabilities';
@@ -12,7 +13,7 @@ import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { BrandProfileApi } from '../settings/brand-profile/brand-profile-api';
 import { addressEditorFakes } from './address-editor-fakes.testing';
-import { CustomerCard, LeadsApi } from './leads-api';
+import { ContactAttempt, CustomerCard, LeadsApi } from './leads-api';
 import { ReviewsApi } from './reviews/reviews-api';
 import {
   BlacklistStatus,
@@ -60,6 +61,7 @@ function fakeCapabilities(
     'CUSTOMER_MANAGE',
     'CUSTOMER_PII_REVEAL',
     'CUSTOMER_ERASURE_EXECUTE',
+    'CUSTOMER_LEAD_MANAGE',
     'LOYALTY_ADJUST',
   ],
 ): { has: (capability: Capability) => boolean } {
@@ -95,11 +97,57 @@ const CARD: CustomerCard = {
     },
   ],
   nextBefore: null,
+  nextBeforeId: null,
 };
 
 const FAKE_LEADS_API = {
   openCard: vi.fn().mockResolvedValue(CARD),
   recordCustomerAttempt: vi.fn(),
+};
+
+/** A promise the test settles by hand, to answer requests in the order that exposes a race. */
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((onResolve, onReject) => {
+    resolve = onResolve;
+    reject = onReject;
+  });
+  return { promise, resolve, reject };
+}
+
+function cardOf(
+  accountId: string,
+  detailCode: string,
+  nextBefore: string | null = null,
+): CustomerCard {
+  return {
+    ...CARD,
+    customerAccountId: accountId,
+    nextBefore,
+    nextBeforeId: nextBefore === null ? null : `cursor-${detailCode}`,
+    history: [{ ...CARD.history[0], detailCode, referenceId: `n-${detailCode}` }],
+  };
+}
+
+const RECORDED: ContactAttempt = {
+  id: 'attempt-row-1',
+  brandId: 'brand-1',
+  leadId: null,
+  customerAccountId: 'customer-1',
+  direction: 'OUTBOUND',
+  attemptId: 'a-1',
+  outcome: 'CONNECTED',
+  blockingReason: null,
+  operatorActorId: 'operator-subject-1',
+  occurredAt: '2026-10-08T09:00:00Z',
+  recordedAt: '2026-10-08T09:00:00Z',
+  nextAction: null,
+  nextActionAt: null,
 };
 
 async function flushMicrotasks(): Promise<void> {
@@ -112,7 +160,8 @@ describe('CustomerDetailPane', () => {
   let api: Record<string, ReturnType<typeof vi.fn>>;
 
   beforeEach(async () => {
-    FAKE_LEADS_API.openCard.mockClear();
+    FAKE_LEADS_API.openCard.mockReset().mockResolvedValue(CARD);
+    FAKE_LEADS_API.recordCustomerAttempt.mockReset();
     api = {
       profile: vi.fn().mockResolvedValue(PROFILE),
       updateProfile: vi.fn().mockResolvedValue(PROFILE.value),
@@ -850,6 +899,228 @@ describe('CustomerDetailPane', () => {
       const points = host.querySelectorAll('[data-testid="address-card-point"]');
       expect(points).toHaveLength(1);
       expect(points[0].textContent).toContain('41.31');
+    });
+  });
+
+  describe('the card across a change of guest and a lost or refused call (ADR 0111)', () => {
+    const host = (): HTMLElement => fixture.nativeElement;
+
+    async function settle(): Promise<void> {
+      await flushMicrotasks();
+      fixture.detectChanges();
+    }
+
+    async function showGuest(accountId: string): Promise<void> {
+      fixture.componentRef.setInput('accountId', accountId);
+      fixture.detectChanges();
+      await settle();
+    }
+
+    async function openHistoryTab(): Promise<void> {
+      (host().querySelector('[data-testid="tab-history"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      await settle();
+    }
+
+    function timeline(): string {
+      return host().querySelector('[data-testid="card-timeline"]')?.textContent ?? '';
+    }
+
+    it('drops the slow card of the guest first shown instead of putting it in the pane of the guest now shown', async () => {
+      const slowFirst = deferred<CustomerCard>();
+      FAKE_LEADS_API.openCard.mockImplementation((_tenant: string, accountId: string) =>
+        accountId === 'guest-a'
+          ? slowFirst.promise
+          : Promise.resolve(cardOf('guest-b', 'for-guest-b')),
+      );
+      await openHistoryTab();
+
+      await showGuest('guest-a');
+      await showGuest('guest-b');
+      expect(timeline()).toContain('for-guest-b');
+
+      slowFirst.resolve(cardOf('guest-a', 'for-guest-a'));
+      await settle();
+
+      expect(timeline()).toContain('for-guest-b');
+      expect(timeline()).not.toContain('for-guest-a');
+    });
+
+    it('drops the answer to a guest it was moved back from: the number is the showing, not the guest', async () => {
+      const firstShowing = deferred<CustomerCard>();
+      FAKE_LEADS_API.openCard
+        .mockImplementationOnce(() => firstShowing.promise)
+        .mockImplementation(() => Promise.resolve(cardOf('guest-a', 'second-showing')));
+      await openHistoryTab();
+
+      await showGuest('guest-a');
+      await showGuest('guest-b');
+      await showGuest('guest-a');
+      firstShowing.resolve(cardOf('guest-a', 'first-showing'));
+      await settle();
+
+      expect(timeline()).toContain('second-showing');
+      expect(timeline()).not.toContain('first-showing');
+    });
+
+    it('does not let the loading flag of a guest already left clear the loading of the one now shown', async () => {
+      const slowFirst = deferred<CustomerCard>();
+      const slowSecond = deferred<CustomerCard>();
+      FAKE_LEADS_API.openCard.mockImplementation((_tenant: string, accountId: string) =>
+        accountId === 'guest-a' ? slowFirst.promise : slowSecond.promise,
+      );
+      await openHistoryTab();
+      await showGuest('guest-a');
+      await showGuest('guest-b');
+
+      slowFirst.resolve(cardOf('guest-a', 'for-guest-a'));
+      await settle();
+
+      expect(host().textContent).toContain('Loading the card');
+      slowSecond.resolve(cardOf('guest-b', 'for-guest-b'));
+      await settle();
+      expect(timeline()).toContain('for-guest-b');
+    });
+
+    it('drops an older page requested for the guest left behind', async () => {
+      const olderOfA = deferred<CustomerCard>();
+      FAKE_LEADS_API.openCard.mockImplementation(
+        (_tenant: string, accountId: string, _purpose: string, before?: string) => {
+          if (accountId === 'guest-a' && before === undefined) {
+            return Promise.resolve(cardOf('guest-a', 'newest-of-a', '2026-08-01T00:00:00Z'));
+          }
+          if (accountId === 'guest-b') {
+            return Promise.resolve(cardOf('guest-b', 'for-guest-b'));
+          }
+          return olderOfA.promise;
+        },
+      );
+      await openHistoryTab();
+      await showGuest('guest-a');
+      (host().querySelector('[data-testid="card-older"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      await settle();
+
+      await showGuest('guest-b');
+      olderOfA.resolve(cardOf('guest-a', 'older-of-a'));
+      await settle();
+
+      expect(timeline()).toContain('for-guest-b');
+      expect(timeline()).not.toContain('older-of-a');
+      expect(host().querySelector('[data-testid="card-older"]')).toBeNull();
+    });
+
+    it('asks for the older page with the instant and the id the card handed out, and moves both on', async () => {
+      FAKE_LEADS_API.openCard.mockResolvedValueOnce(
+        cardOf('guest-a', 'newest-of-a', '2026-08-01T00:00:00Z'),
+      );
+      await openHistoryTab();
+      await showGuest('guest-a');
+      FAKE_LEADS_API.openCard.mockResolvedValueOnce(
+        cardOf('guest-a', 'older-of-a', '2026-07-01T00:00:00Z'),
+      );
+
+      (host().querySelector('[data-testid="card-older"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      await settle();
+
+      expect(FAKE_LEADS_API.openCard).toHaveBeenLastCalledWith(
+        'tenant-1',
+        'guest-a',
+        'Operations console: open customer card',
+        '2026-08-01T00:00:00Z',
+        'cursor-newest-of-a',
+      );
+      expect(timeline()).toContain('newest-of-a');
+      expect(timeline()).toContain('older-of-a');
+
+      FAKE_LEADS_API.openCard.mockResolvedValueOnce(cardOf('guest-a', 'oldest-of-a'));
+      (host().querySelector('[data-testid="card-older"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      await settle();
+
+      expect(FAKE_LEADS_API.openCard).toHaveBeenLastCalledWith(
+        'tenant-1',
+        'guest-a',
+        'Operations console: open customer card',
+        '2026-07-01T00:00:00Z',
+        'cursor-older-of-a',
+      );
+      expect(host().querySelector('[data-testid="card-older"]')).toBeNull();
+    });
+
+    async function submitCall(): Promise<void> {
+      (host().querySelector('[data-testid="recorder-submit"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      await settle();
+    }
+
+    async function openCallForm(): Promise<void> {
+      await openHistoryTab();
+      (host().querySelector('[data-testid="card-record-call"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+    }
+
+    it('keeps the call form open with the reason when the call is refused, and a retry is the same call', async () => {
+      FAKE_LEADS_API.recordCustomerAttempt
+        .mockRejectedValueOnce(new ApiError(ApiErrorCode.NETWORK_UNREACHABLE, 0, null, null))
+        .mockResolvedValueOnce(RECORDED);
+      await openCallForm();
+
+      await submitCall();
+
+      expect(host().querySelector('[data-testid="call-recorder"]')).not.toBeNull();
+      expect(host().querySelector('[data-testid="card-record-error"]')).not.toBeNull();
+      expect(host().querySelectorAll('[data-testid="card-entry"]')).toHaveLength(1);
+
+      await submitCall();
+
+      const [first, second] = FAKE_LEADS_API.recordCustomerAttempt.mock.calls;
+      expect(second[3].attemptId).toBeTruthy();
+      expect(second[3].attemptId).toBe(first[3].attemptId);
+      expect(host().querySelector('[data-testid="call-recorder"]')).toBeNull();
+      expect(host().querySelector('[data-testid="card-record-error"]')).toBeNull();
+      expect(host().querySelectorAll('[data-testid="card-entry"]')).toHaveLength(2);
+      expect(host().querySelector('[data-testid="card-entry"]')!.textContent).toContain(
+        'Spoke to them',
+      );
+    });
+
+    it('does not write a call answered after the pane moved to another guest into that guest’s card', async () => {
+      const slowCall = deferred<ContactAttempt>();
+      FAKE_LEADS_API.recordCustomerAttempt.mockReturnValue(slowCall.promise);
+      await openCallForm();
+      await submitCall();
+      FAKE_LEADS_API.openCard.mockResolvedValue(cardOf('guest-b', 'for-guest-b'));
+
+      await showGuest('guest-b');
+      slowCall.resolve(RECORDED);
+      await settle();
+
+      expect(host().querySelectorAll('[data-testid="card-entry"]')).toHaveLength(1);
+      expect(timeline()).toContain('for-guest-b');
+      expect(host().querySelector('[data-testid="call-recorder"]')).toBeNull();
+    });
+
+    it('lets the next guest be recorded straight away: a call still in flight for the last one does not hold the form busy', async () => {
+      const slowCall = deferred<ContactAttempt>();
+      FAKE_LEADS_API.recordCustomerAttempt.mockReturnValueOnce(slowCall.promise);
+      await openCallForm();
+      await submitCall();
+      FAKE_LEADS_API.openCard.mockResolvedValue(cardOf('guest-b', 'for-guest-b'));
+      await showGuest('guest-b');
+      FAKE_LEADS_API.recordCustomerAttempt.mockResolvedValueOnce({
+        ...RECORDED,
+        customerAccountId: 'guest-b',
+      });
+
+      (host().querySelector('[data-testid="card-record-call"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      await submitCall();
+
+      expect(FAKE_LEADS_API.recordCustomerAttempt).toHaveBeenCalledTimes(2);
+      expect(FAKE_LEADS_API.recordCustomerAttempt.mock.calls[1][1]).toBe('guest-b');
+      expect(host().querySelectorAll('[data-testid="card-entry"]')).toHaveLength(2);
     });
   });
 });

@@ -107,18 +107,26 @@ describe('LeadsApi', () => {
     expect((await promise).phone).toBe('+998901234567');
   });
 
-  it('opens the card with the purpose, and pages back with the instant it was handed', async () => {
+  it('opens the card with the purpose, and pages back with the instant and the id it was handed', async () => {
     const promise = api.openCard(
       't1',
       'c1',
       'Operations console: open customer card',
       '2026-09-01T00:00:00Z',
+      '018f9f10-7000-7000-8000-0000000000aa',
     );
 
     const request = http.expectOne((r) => r.url === url('/api/v1/tenants/t1/customers/c1/card'));
     expect(request.request.params.get('purpose')).toBe('Operations console: open customer card');
     expect(request.request.params.get('before')).toBe('2026-09-01T00:00:00Z');
-    request.flush({ customerAccountId: 'c1', history: [], leads: [], nextBefore: null });
+    expect(request.request.params.get('beforeId')).toBe('018f9f10-7000-7000-8000-0000000000aa');
+    request.flush({
+      customerAccountId: 'c1',
+      history: [],
+      leads: [],
+      nextBefore: null,
+      nextBeforeId: null,
+    });
 
     expect((await promise).customerAccountId).toBe('c1');
   });

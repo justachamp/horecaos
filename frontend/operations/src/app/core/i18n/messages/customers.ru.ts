@@ -380,8 +380,10 @@ export const customersRu: AreaMessages<typeof customersEn> = {
   'customers.leads.detail.customer': 'Клиент',
   'customers.leads.detail.open': 'Открыть',
   'customers.leads.detail.hints.accounts':
-    'Клиенты с этим номером — проверьте, прежде чем объединять',
+    'Клиенты с этим номером — проверьте, прежде чем привязывать',
   'customers.leads.detail.hints.leads': 'Другие открытые заявки с этим номером',
+  'customers.leads.detail.hints.link': 'Это он или она',
+  'customers.leads.detail.linked': 'Привязан к клиенту',
   'customers.leads.detail.reveal': 'Показать номер, имя и заметки',
   'customers.leads.detail.revealing': 'Показываю…',
   'customers.leads.detail.revealNote': 'Фиксируется в журнале аудита.',

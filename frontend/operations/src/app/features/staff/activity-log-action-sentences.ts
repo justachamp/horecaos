@@ -815,6 +815,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Лид передан в филиал',
       'uz-Latn': 'Lid filialga topshirildi',
     },
+    'customer.lead.linked': {
+      en: 'Lead identified as a customer',
+      ru: 'Лид опознан как клиент',
+      'uz-Latn': 'Lid mijoz sifatida aniqlandi',
+    },
     'customer.lead.registered': {
       en: 'Lead registered',
       ru: 'Лид зарегистрирован',

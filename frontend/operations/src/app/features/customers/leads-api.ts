@@ -94,7 +94,7 @@ export interface Lead {
   readonly version: number;
   readonly createdAt: string;
   readonly updatedAt: string;
-  /** Accounts holding the same number — a hint to confirm, never a link. */
+  /** Accounts holding the same number — a hint to confirm with `linkCustomer`, never a link of its own. */
   readonly possibleAccountIds: readonly string[];
   readonly otherOpenLeadIds: readonly string[];
 }
@@ -200,8 +200,13 @@ export interface CustomerCard {
   readonly blacklisted: boolean;
   readonly leads: readonly Lead[];
   readonly history: readonly HistoryEntry[];
-  /** Pass as `before` for the next older page; null at the end. */
+  /** Pass as `before`, with {@link nextBeforeId}, for the next older page; null at the end. */
   readonly nextBefore: string | null;
+  /**
+   * Pass as `beforeId` with {@link nextBefore}. The pair is one position: entries that share the last
+   * one's instant and did not fit are on the next page, and an instant alone would skip them.
+   */
+  readonly nextBeforeId: string | null;
 }
 
 export interface LeadFilters {
@@ -284,6 +289,25 @@ export class LeadsApi {
     );
   }
 
+  /**
+   * Confirms the guest behind a lead (ADR 0111 §4): the operator looked at an account the detail hinted at
+   * and says it is her. The lead then belongs to that account's card, and to its erasure.
+   */
+  linkCustomer(
+    reach: LeadReach,
+    leadId: string,
+    customerAccountId: string,
+    expectedVersion: number,
+  ): Promise<Lead> {
+    return firstValueFrom(
+      this.api.post<{ customerAccountId: string }, Lead>(
+        leadPaths.customerLink(reach, leadId),
+        command({ customerAccountId }),
+        { expectedVersion },
+      ),
+    );
+  }
+
   /** `customer.pii.reveal`, with the purpose the audit fact names. */
   reveal(reach: LeadReach, leadId: string, purpose: string): Promise<RevealedLeadContact> {
     return firstValueFrom(
@@ -320,10 +344,11 @@ export class LeadsApi {
     accountId: string,
     purpose: string,
     before?: string,
+    beforeId?: string,
   ): Promise<CustomerCard> {
     const result = await firstValueFrom(
       this.api.get<CustomerCard>(leadPaths.card(tenantId, accountId), {
-        params: { purpose, before },
+        params: { purpose, before, beforeId },
       }),
     );
     return result.value;

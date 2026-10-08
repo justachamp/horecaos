@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.customers.api.HistoryCursor;
 import uz.horecaos.platform.customers.application.ContactAttemptService;
 import uz.horecaos.platform.customers.application.ContactAttemptService.ContactAttemptView;
 import uz.horecaos.platform.customers.application.CustomerCardAssemblyService;
@@ -30,6 +31,8 @@ import uz.horecaos.platform.customers.domain.ContactOutcome;
 import uz.horecaos.platform.customers.domain.NextAction;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.web.api.ApiException;
+import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.api.Page;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
@@ -76,18 +79,20 @@ public class CustomerCardController {
                     + "history merged by time from the messages sent to her, the campaigns that reached "
                     + "her, the promotions she redeemed, the reviews she left and the calls an operator "
                     + "made or took -- each owned and read from the module that holds it. Writes one "
-                    + "audit fact per call. `before` pages further back: pass the previous page's "
-                    + "nextBefore.")
+                    + "audit fact per call. `before` and `beforeId` page further back: pass the previous "
+                    + "page's nextBefore and nextBeforeId together, so entries that share the last one's "
+                    + "instant are not lost. `before` alone means strictly older.")
     public CustomerCard card(
             @PathVariable UUID tenantId,
             @PathVariable UUID accountId,
             @RequestParam(required = false) @Nullable Instant before,
+            @RequestParam(required = false) @Nullable UUID beforeId,
             @RequestParam(required = false) @Nullable Integer limit,
             @RequestParam(required = false) @Nullable @Size(max = 200) String purpose) {
         return cards.open(
                 tenantId,
                 accountId,
-                before,
+                cursor(before, beforeId),
                 Page.limitOrDefault(limit),
                 purpose == null || purpose.isBlank() ? DEFAULT_PURPOSE : purpose,
                 actor());
@@ -97,14 +102,27 @@ public class CustomerCardController {
     @RequiresCapability(Capability.CUSTOMER_READ)
     @Operation(
             summary = "Every voice contact about this guest, newest first",
-            description =
-                    "Against the account itself and against any lead linked to it. Ids, codes and " + "instants only.")
+            description = "Against the account itself and against any lead linked to it. Ids, codes and "
+                    + "instants only. `before` and `beforeId` page further back from the last row of the "
+                    + "previous page; `before` alone means strictly older.")
     public List<ContactAttemptView> attempts(
             @PathVariable UUID tenantId,
             @PathVariable UUID accountId,
             @RequestParam(required = false) @Nullable Instant before,
+            @RequestParam(required = false) @Nullable UUID beforeId,
             @RequestParam(required = false) @Nullable Integer limit) {
-        return attempts.forCustomer(tenantId, accountId, before, Page.limitOrDefault(limit));
+        return attempts.forCustomer(tenantId, accountId, cursor(before, beforeId), Page.limitOrDefault(limit));
+    }
+
+    /** {@code before} and {@code beforeId} are one position; the id alone names none. */
+    private static @Nullable HistoryCursor cursor(@Nullable Instant before, @Nullable UUID beforeId) {
+        if (before == null) {
+            if (beforeId != null) {
+                throw new ApiException(ErrorCode.VALIDATION_FAILED, "beforeId needs before");
+            }
+            return null;
+        }
+        return beforeId == null ? HistoryCursor.olderThan(before) : new HistoryCursor(before, beforeId);
     }
 
     @PostMapping("/contact-attempts")
