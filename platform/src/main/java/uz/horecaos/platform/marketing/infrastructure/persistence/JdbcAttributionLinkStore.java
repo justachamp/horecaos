@@ -2,6 +2,7 @@ package uz.horecaos.platform.marketing.infrastructure.persistence;
 
 import java.sql.ResultSet;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -111,18 +112,87 @@ public class JdbcAttributionLinkStore {
                 == 1;
     }
 
-    /** Incremented by whichever surface actually serves the link — see the table's own comment. */
-    public boolean recordClick(UUID tenantId, UUID id, Instant now) {
+    /**
+     * Counts one click on a link named by its public token (ADR 0167 Decision 4/5, tier 1).
+     *
+     * <p>One statement, so the running total and the day's series cannot disagree: the link is
+     * updated only if it is {@code ACTIVE}, of the named brand and inside its validity window, and the
+     * series row is upserted from what that update returned. An unknown, archived, out-of-window or
+     * other-brand token updates nothing and inserts nothing -- the caller cannot tell which, and the
+     * endpoint answers all of them alike. The "day" is the tenant's own calendar day (its default
+     * timezone), the same day a manager reads the series on.
+     *
+     * <p>Records no address, no user agent and no cookie, because none reaches this method.
+     *
+     * @return whether a click was counted
+     */
+    public boolean recordPublicClick(UUID tenantId, UUID brandId, String token, Instant now) {
         return jdbc.sql("""
-                UPDATE marketing.attribution_links
-                   SET click_count = click_count + 1, version = version + 1, updated_at = :now
-                 WHERE tenant_id = :tenantId AND id = :id
+                WITH hit AS (
+                    UPDATE marketing.attribution_links
+                       SET click_count = click_count + 1
+                     WHERE tenant_id = :tenantId AND brand_id = :brandId AND token = :token
+                       AND status = 'ACTIVE'
+                       AND valid_from <= :now AND (valid_until IS NULL OR valid_until > :now)
+                    RETURNING id, tenant_id
+                )
+                INSERT INTO marketing.attribution_link_clicks_day (tenant_id, link_id, day, clicks)
+                SELECT hit.tenant_id, hit.id,
+                       (CAST(:now AS timestamptz) AT TIME ZONE
+                           (SELECT t.default_timezone FROM tenant.tenants t WHERE t.id = hit.tenant_id))::date,
+                       1
+                  FROM hit
+                ON CONFLICT (tenant_id, link_id, day)
+                DO UPDATE SET clicks = marketing.attribution_link_clicks_day.clicks + 1
                 """)
                         .param("tenantId", tenantId)
-                        .param("id", id)
+                        .param("brandId", brandId)
+                        .param("token", token)
                         .param("now", utc(now))
                         .update()
                 == 1;
+    }
+
+    /** Clicks per link over {@code [from, to]}, for one brand or (null) every brand of the tenant. */
+    public List<LinkClicksRow> clicksBetween(UUID tenantId, @Nullable UUID brandId, LocalDate from, LocalDate to) {
+        return jdbc.sql("""
+                SELECT l.id, l.brand_id, l.label, l.channel, l.status, sum(c.clicks) AS clicks
+                  FROM marketing.attribution_link_clicks_day c
+                  JOIN marketing.attribution_links l
+                    ON l.id = c.link_id AND l.tenant_id = c.tenant_id
+                 WHERE c.tenant_id = :tenantId
+                   AND c.day >= :from AND c.day <= :to
+                   AND (CAST(:brandId AS uuid) IS NULL OR l.brand_id = CAST(:brandId AS uuid))
+                 GROUP BY l.id, l.brand_id, l.label, l.channel, l.status
+                HAVING sum(c.clicks) > 0
+                 ORDER BY sum(c.clicks) DESC, l.label, l.id
+                """)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .param("brandId", brandId)
+                .query((row, number) -> new LinkClicksRow(
+                        row.getObject("id", UUID.class),
+                        row.getObject("brand_id", UUID.class),
+                        row.getString("label"),
+                        row.getString("channel"),
+                        row.getString("status"),
+                        row.getLong("clicks")))
+                .list();
+    }
+
+    public long countClickSeriesOlderThan(LocalDate cutoff) {
+        Long count = jdbc.sql("SELECT count(*) FROM marketing.attribution_link_clicks_day WHERE day < :cutoff")
+                .param("cutoff", cutoff)
+                .query(Long.class)
+                .single();
+        return count == null ? 0 : count;
+    }
+
+    public int deleteClickSeriesOlderThan(LocalDate cutoff) {
+        return jdbc.sql("DELETE FROM marketing.attribution_link_clicks_day WHERE day < :cutoff")
+                .param("cutoff", cutoff)
+                .update();
     }
 
     private static AttributionLinkRow toRow(ResultSet row, int number) throws java.sql.SQLException {
@@ -153,6 +223,8 @@ public class JdbcAttributionLinkStore {
     private static @Nullable OffsetDateTime utc(@Nullable Instant instant) {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
+
+    public record LinkClicksRow(UUID linkId, UUID brandId, String label, String channel, String status, long clicks) {}
 
     public record AttributionLinkRow(
             UUID id,

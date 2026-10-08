@@ -139,7 +139,8 @@ class EndpointCapabilityDeclarationTests {
                     || isDeviceEnrolmentBootstrapEndpoint(handler)
                     || isScopeResolvedCourierPolicyEndpoint(handler)
                     || isPreAccountPickupLocationSearchEndpoint(handler)
-                    || isDeliveryFeePreviewEndpoint(handler)) {
+                    || isDeliveryFeePreviewEndpoint(handler)
+                    || isAttributionLinkClickEndpoint(handler)) {
                 continue;
             }
             if (authorizationDeclarationCount(handler) == 0) {
@@ -269,6 +270,7 @@ class EndpointCapabilityDeclarationTests {
                     || isDeviceEnrolmentBootstrapEndpoint(handler)
                     || isPreAccountPickupLocationSearchEndpoint(handler)
                     || isDeliveryFeePreviewEndpoint(handler)
+                    || isAttributionLinkClickEndpoint(handler)
                     || isDispatchRuleSimulationEndpoint(handler)
                     || isPromotionSimulationEndpoint(handler)
                     || isGeocodeLookupEndpoint(handler)) {
@@ -691,6 +693,25 @@ class EndpointCapabilityDeclarationTests {
      */
     private static boolean isPreAccountPickupLocationSearchEndpoint(Method handler) {
         return pathOf(handler).equals("/api/v1/storefront/pickup-locations");
+    }
+
+    /**
+     * ADR 0167 Decision 4/5: the public click on an attribution link, {@code POST
+     * .../brands/{brandId}/attribution-links/{token}/clicks}. A {@code ?ref=} landing has no
+     * principal and never will, so there is no capability to declare -- the record says the endpoint
+     * "declares no capability because there is nobody to authorise" -- and it carries no {@code
+     * Idempotency-Key} because it is non-idempotent by design: each open of a link is one click.
+     * What stands in for authorization is that it can only add one to a counter, answers every token
+     * alike, records no address, user agent or cookie, and is rate limited per token and visitor.
+     *
+     * <p>Replay protection is exempt for the reason the delivery-fee preview gives and one more: the
+     * counter is the effect, and a replayed request is another visit. Matched on the exact path, the
+     * discipline every other exemption here keeps, so the staff click this replaced -- removed from the
+     * contract -- cannot come back under the same name without this test noticing.
+     */
+    private static boolean isAttributionLinkClickEndpoint(Method handler) {
+        return pathOf(handler)
+                .equals("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/attribution-links/{token}/clicks");
     }
 
     /**

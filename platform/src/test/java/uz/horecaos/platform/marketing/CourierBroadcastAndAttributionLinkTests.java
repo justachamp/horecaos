@@ -326,17 +326,6 @@ class CourierBroadcastAndAttributionLinkTests {
         assertThatThrownBy(() -> links.archive(TENANT, id, AUTHOR)).isInstanceOf(ApiException.class);
     }
 
-    @Test
-    @DisplayName("recording a click increments the count and nothing else")
-    void recordClickIncrementsTheCount() {
-        UUID id = links.mint(TENANT, BRAND, "x", null, "WEB", "STOREFRONT_HOME", null, null, AUTHOR);
-
-        links.recordClick(TENANT, id);
-        links.recordClick(TENANT, id);
-
-        assertThat(links.require(TENANT, id).clickCount()).isEqualTo(2);
-    }
-
     // ------------------------------------------------------------------- fixtures
 
     private void seedTenancy() {

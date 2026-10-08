@@ -62,7 +62,24 @@ public enum Grain {
      * from a different fact table than every other {@code /queries} metric.
      */
     DAY_LOCATION_LEGAL_ENTITY_CUSTOMER_TYPE(
-            List.of(Dimension.LOCATION, Dimension.LEGAL_ENTITY, Dimension.CUSTOMER_TYPE));
+            List.of(Dimension.LOCATION, Dimension.LEGAL_ENTITY, Dimension.CUSTOMER_TYPE)),
+
+    /**
+     * ADR 0167 (7.6c): the customer funnel's grain, over {@code reporting.fact_funnel_day} and
+     * {@code fact_registration_day}. Per brand and sales channel and never per location -- a cart is
+     * not placed at a branch until checkout, so a branch cut of "baskets started" would be a number
+     * the source cannot honestly produce. Not money, so no legal entity. Answered by its own
+     * {@code GET .../reporting/customer-funnel}, not {@code /queries}: a funnel is several stages
+     * per slice, one of which is deliberately "not measured".
+     */
+    DAY_BRAND_CHANNEL(List.of(Dimension.BRAND, Dimension.CHANNEL)),
+
+    /**
+     * ADR 0167 (7.6c): the acquisition-source grain -- registrations by account origin, link clicks
+     * by link, orders by channel, side by side and never attributed to one another. Own endpoint,
+     * for the reason {@link #DAY_BRAND_CHANNEL} gives.
+     */
+    DAY_BRAND_ORIGIN(List.of(Dimension.BRAND, Dimension.ORIGIN));
 
     /** The axes a reporting query may group by. */
     public enum Dimension {
@@ -93,7 +110,17 @@ public enum Grain {
          * excluded from this dimension entirely rather than folded into
          * either bucket.
          */
-        CUSTOMER_TYPE
+        CUSTOMER_TYPE,
+
+        /** ADR 0167: the brand a funnel or acquisition count belongs to. */
+        BRAND,
+
+        /**
+         * ADR 0167: how an account came to exist ({@code SELF_SERVICE}, {@code OPERATOR},
+         * {@code IMPORT}, {@code AGGREGATOR}, {@code MIGRATION}) -- the one acquisition cut that
+         * needs no new personal data.
+         */
+        ORIGIN
     }
 
     // ImmutableEnumChecker judges by the field's declared type, which is the

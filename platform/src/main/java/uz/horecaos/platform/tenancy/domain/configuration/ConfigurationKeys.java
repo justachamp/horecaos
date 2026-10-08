@@ -844,6 +844,21 @@ public final class ConfigurationKeys {
                     + "Switching it on ends the affected accounts' sessions so the next sign-in is asked.")
             .build();
 
+    /**
+     * ADR 0167 Decision 7: days the customer funnel, registration and link-click count rows are kept.
+     * Declared here so a stored row for it passes the startup validator, and declared identically in
+     * {@code reporting.api.ReportingConfigurationKeys} where it is consumed, for the reason recorded on
+     * {@link #COMMERCIAL_ENFORCEMENT_CEILING}.
+     */
+    public static final ConfigurationKey<Integer> REPORTING_FUNNEL_RETENTION_DAYS = ConfigurationKey.of(
+                    "reporting.funnel_retention_days", Integer.class)
+            .defaultValue(400)
+            .ownedBy("reporting")
+            .settableAt(ScopeType.PLATFORM)
+            .describedAs("Days the customer funnel, registration and attribution-link click counts are "
+                    + "kept, by business date. The rows hold counts and no personal data.")
+            .build();
+
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             CART_EXPIRY_MINUTES,
             ORDERING_CART_RETENTION_DAYS,
@@ -860,6 +875,7 @@ public final class ConfigurationKeys {
             AUDIT_SECURITY_RETENTION_DAYS,
             AUDIT_BUSINESS_RETENTION_DAYS,
             IAM_STAFF_MFA_REQUIREMENT,
+            REPORTING_FUNNEL_RETENTION_DAYS,
             CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN,
             CUSTOMERS_OTP_DELIVERY_CHANNEL_ORDER,
             CUSTOMERS_PII_EXPORT_APPROVAL_THRESHOLD_ROWS,

@@ -48,7 +48,9 @@ import uz.horecaos.platform.web.api.Quantities;
  *
  * <p>{@link #recut} re-derives the same day after the settle window and
  * <em>compares</em>. It writes divergence rows and touches neither the facts nor
- * the aggregates. That is the ADR's rule and it is worth being explicit about why
+ * the aggregates. (The one thing it repeats is the customer funnel's count capture, ADR 0167:
+ * a count of activity and not a financial snapshot, idempotent, and unable to replace a recorded
+ * count with "not recorded".) That is the ADR's rule and it is worth being explicit about why
  * a self-correcting projection is the wrong design here: the correction hides the
  * bug that caused the drift, and — the operational half of the same argument —
  * somebody has already acted on the earlier figure. A manager who ordered stock
@@ -64,16 +66,28 @@ public class DayCloseService {
     private final SubjectPseudonym pseudonym;
     private final Clock clock;
     private final @Nullable PromotionRedemptionSource promotionRedemptions;
+    private final @Nullable FunnelCaptureService funnelCapture;
 
     public DayCloseService(
             JdbcReportingStore store, BusinessDayService businessDays, SubjectPseudonym pseudonym, Clock clock) {
-        this(store, businessDays, pseudonym, clock, null);
+        this(store, businessDays, pseudonym, clock, null, null);
+    }
+
+    public DayCloseService(
+            JdbcReportingStore store,
+            BusinessDayService businessDays,
+            SubjectPseudonym pseudonym,
+            Clock clock,
+            @Nullable PromotionRedemptionSource promotionRedemptions) {
+        this(store, businessDays, pseudonym, clock, promotionRedemptions, null);
     }
 
     /**
      * @param promotionRedemptions ADR 0140: where the redemption fact (7.9) comes from, read
      *        through the {@code pricing.api} port and never from pricing's tables (ADR 0023);
      *        null builds no promotion facts, which is what a close with no pricing wired does
+     * @param funnelCapture ADR 0167 (7.6c): the customer funnel's daily counts, captured inside the
+     *        close's own transaction; null captures none, which is what a close with no funnel wired does
      */
     @Autowired
     public DayCloseService(
@@ -81,12 +95,14 @@ public class DayCloseService {
             BusinessDayService businessDays,
             SubjectPseudonym pseudonym,
             Clock clock,
-            @Nullable PromotionRedemptionSource promotionRedemptions) {
+            @Nullable PromotionRedemptionSource promotionRedemptions,
+            @Nullable FunnelCaptureService funnelCapture) {
         this.store = store;
         this.businessDays = businessDays;
         this.pseudonym = pseudonym;
         this.clock = clock;
         this.promotionRedemptions = promotionRedemptions;
+        this.funnelCapture = funnelCapture;
     }
 
     /**
@@ -154,6 +170,12 @@ public class DayCloseService {
         // ADR 0140 (7.9): the promotion redemption fact, in the same transaction for the
         // same "a day is written whole or not at all" reason.
         derived.promotionRedemptions().forEach(store::insertPromotionRedemptionFact);
+        // ADR 0167 (7.6c): the customer funnel's daily counts, in the same transaction for the same
+        // "a day is written whole or not at all" reason -- and read from the live carts here because
+        // the retention sweeper deletes them, so this is the one moment the basket count can be had.
+        if (funnelCapture != null) {
+            funnelCapture.capture(tenantId, businessDate, boundary, derived.orders());
+        }
 
         store.completeRun(runId, derived.orders().size(), derived.lines().size(), 0, clock.instant());
 
@@ -250,6 +272,13 @@ public class DayCloseService {
 
         comparePromotionFacts(divergences, tenantId, businessDate, derived.promotionRedemptions());
         comparePaymentMix(divergences, tenantId, businessDate, derived.tenders());
+
+        // ADR 0167: the funnel is a count of activity and not a financial snapshot, so the recut
+        // repeats its capture rather than reporting a divergence from it. Idempotent, and it leaves a
+        // count already recorded alone for a day whose carts the sweeper has since deleted.
+        if (funnelCapture != null) {
+            funnelCapture.capture(tenantId, businessDate, boundary, derived.orders());
+        }
 
         for (Divergence divergence : divergences) {
             store.insertDivergence(
