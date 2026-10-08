@@ -1,0 +1,71 @@
+<table class="grid" data-testid="roster-week-grid">
+  <caption class="q-caption grid__caption">{{ 'staff.shifts.week.caption' | t }}</caption>
+  <thead>
+    <tr>
+      <th scope="col" class="grid__person q-caption">{{ 'staff.shifts.week.person' | t }}</th>
+      @for (day of days(); track day.iso) {
+        <th
+          scope="col"
+          class="grid__day q-caption"
+          [class.grid__day--today]="day.isToday"
+          [attr.aria-current]="day.isToday ? 'date' : null"
+          [attr.data-testid]="day.isToday ? 'roster-today-column' : null"
+        >
+          {{ day.label }}
+        </th>
+      }
+    </tr>
+  </thead>
+  <tbody>
+    @for (row of rows(); track row.memberId; let rowIndex = $index) {
+      <tr>
+        <th scope="row" class="grid__person q-body-sm" data-testid="roster-row-person">
+          {{ label(row.person) }}
+          @if (row.person.name !== null) {
+            <span class="q-caption grid__reference q-mono">{{ row.person.displayReference }}</span>
+          }
+        </th>
+        @for (cell of row.cells; track cell.day.iso; let columnIndex = $index) {
+          <td class="grid__cell" [class.grid__cell--today]="cell.day.isToday">
+            @for (entry of cell.entries; track entry.id) {
+              <button
+                type="button"
+                class="grid__entry q-body-sm"
+                [class.grid__entry--draft]="entry.status === 'DRAFT'"
+                [class.grid__entry--missed]="entry.status === 'MISSED'"
+                [attr.data-cell]="rowIndex + ':' + columnIndex"
+                [attr.aria-label]="window(entry) + ', ' + statusLabel(entry.status)"
+                (click)="open.emit(entry)"
+                (keydown)="onKeydown($event, rowIndex, columnIndex)"
+                [disabled]="!canManage()"
+                data-testid="roster-entry"
+              >
+                <span class="q-tnum">{{ window(entry) }}</span>
+                <span class="q-caption grid__status">{{ statusLabel(entry.status) }}</span>
+              </button>
+            } @empty {
+              <button
+                type="button"
+                class="grid__empty"
+                [attr.data-cell]="rowIndex + ':' + columnIndex"
+                [attr.aria-label]="'staff.shifts.week.addFor' | t"
+                (click)="addFor(cell.day, row.memberId)"
+                (keydown)="onKeydown($event, rowIndex, columnIndex)"
+                [disabled]="!canManage()"
+                data-testid="roster-empty-cell"
+              >
+                <span aria-hidden="true">+</span>
+              </button>
+            }
+          </td>
+        }
+      </tr>
+    } @empty {
+      <tr>
+        <td [attr.colspan]="days().length + 1" class="grid__none q-body-sm" data-testid="roster-none">
+          {{ 'staff.shifts.week.none' | t }}
+        </td>
+      </tr>
+    }
+  </tbody>
+</table>

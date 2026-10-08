@@ -36,11 +36,13 @@ import {
 import { StaffJobDialog } from './staff-job-dialog';
 import { StaffMembersApi } from './staff-members-api';
 import { StaffMfaPanel } from './staff-mfa-panel';
+import { AttendanceStatus } from './shifts/attendance-status';
+import { PersonShiftsTab } from './shifts/person-shifts-tab';
 import { ProfileDraft, toManagerRequest } from './staff-profile-draft';
 import { StaffProfileForm } from './staff-profile-form';
 import { roleLabel, scopeLevelLabel } from './staff-role-labels';
 
-type StaffTab = 'access' | 'profile' | 'contacts' | 'security';
+type StaffTab = 'access' | 'profile' | 'contacts' | 'shifts' | 'security';
 
 interface CapabilityGroup {
   readonly area: string;
@@ -51,11 +53,12 @@ interface CapabilityGroup {
  * Карточка сотрудника — the person record (operations IA §9.1, staff-and-access.md
  * §3): the identity block (photo, the name the tenant keeps, the `S-0142`
  * reference, employment, today's orders, a deep link into the activity log) and
- * four tabs -- **Доступ**, **Профиль**, **Контакты** and **Безопасность**.
- * **Активность** and **Смены** are left off entirely rather than built
- * half-way — both are person-scoped slices of screens the IA tiers at 2
- * (9.8 Журнал действий, 9.6 Смены), and neither's backend exists yet either
- * (§11.6, §11.11, §11.13).
+ * four tabs -- **Доступ**, **Профиль**, **Контакты** and **Безопасность** -- and,
+ * for a tenant that records attendance and a viewer who may read shifts,
+ * **Смены** (ADR 0156: that person's recorded shifts at the branch in view).
+ * **Активность** is left off entirely rather than built half-way — it is a
+ * person-scoped slice of a screen the IA tiers at 2 (9.8 Журнал действий), and
+ * its backend does not exist yet either (§11.6, §11.11).
  *
  * The person is the tenant's own record of them (ADR 0139), read singly so the
  * full phone, the employee number and a short-lived photo link are present --
@@ -79,6 +82,7 @@ interface CapabilityGroup {
     StaffProfileForm,
     StaffEmergencyContacts,
     StaffMfaPanel,
+    PersonShiftsTab,
   ],
   templateUrl: './staff-member-detail-pane.html',
   styleUrl: './staff-member-detail-pane.css',
@@ -97,6 +101,7 @@ export class StaffMemberDetailPane {
   private readonly route = inject(ActivatedRoute);
   protected readonly i18n = inject(I18n);
   private readonly registry = inject(PlatformLocales);
+  private readonly attendance = inject(AttendanceStatus);
 
   /** Route param, bound by `withComponentInputBinding()` — see `location-detail-pane.ts` for the same idiom. */
   readonly subjectId = input.required<string>();
@@ -186,6 +191,13 @@ export class StaffMemberDetailPane {
   protected readonly canReadEmergency = computed(() =>
     this.capabilities.has('STAFF_EMERGENCY_CONTACT_READ'),
   );
+  /**
+   * «Смены» is offered only when the tenant records attendance and the viewer may read shifts
+   * (ADR 0156): a tenant that has not switched it on is told nothing is missing.
+   */
+  protected readonly showsShifts = computed(
+    () => this.attendance.enabled() === true && this.capabilities.has('STAFF_SHIFT_READ'),
+  );
 
   /** The name the tenant keeps, else the `S-0142` reference, else the identifier -- never blank. */
   protected readonly title = computed(() => {
@@ -235,6 +247,10 @@ export class StaffMemberDetailPane {
   );
 
   constructor() {
+    // Read only for a viewer who could use the answer, so a card for everyone else makes no extra call.
+    if (this.capabilities.has('STAFF_SHIFT_READ')) {
+      void this.attendance.ensureLoaded();
+    }
     // Re-reads on a `:subjectId` change under the docked outlet's default
     // RouteReuseStrategy — the same reason `location-detail-pane.ts` keys its
     // load off an `effect()` rather than the constructor alone.

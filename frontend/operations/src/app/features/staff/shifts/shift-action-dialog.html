@@ -1,0 +1,115 @@
+<q-modal
+  [title]="titleKey() | t"
+  [dismissible]="!busy()"
+  (dismiss)="dismiss.emit()"
+  data-testid="shift-action-dialog"
+>
+  @if (subject(); as who) {
+    <p class="q-body-sm action__subject" data-testid="shift-action-subject">{{ who }}</p>
+  }
+  <p class="q-caption action__lead">{{ leadKey() | t }}</p>
+
+  @if (kind() === 'open') {
+    <label class="action__field">
+      <span class="q-body-sm">{{ 'staff.shifts.entry.person' | t }}</span>
+      <select
+        class="action__input q-body-sm"
+        [value]="selectedMember()"
+        (change)="setMember($any($event.target).value)"
+        data-testid="shift-action-member"
+      >
+        <option value="">{{ 'staff.shifts.entry.personPlaceholder' | t }}</option>
+        @for (person of people(); track person.memberId) {
+          <option [value]="person.memberId" [selected]="person.memberId === selectedMember()">
+            {{ personLabel(person) }}
+          </option>
+        }
+      </select>
+    </label>
+  }
+
+  @if (showsStart()) {
+    <label class="action__field">
+      <span class="q-body-sm">{{ 'staff.shifts.action.started' | t }}</span>
+      <input
+        type="datetime-local"
+        class="action__input q-body-sm"
+        [value]="start()"
+        (input)="setStart($any($event.target).value)"
+        data-testid="shift-action-start"
+      />
+    </label>
+  }
+
+  @if (showsEnd()) {
+    <label class="action__field">
+      <span class="q-body-sm">{{ 'staff.shifts.action.ended' | t }}</span>
+      <input
+        type="datetime-local"
+        class="action__input q-body-sm"
+        [value]="end()"
+        (input)="setEnd($any($event.target).value)"
+        data-testid="shift-action-end"
+      />
+    </label>
+  }
+
+  @if (showsBreak()) {
+    <label class="action__field">
+      <span class="q-body-sm">{{ 'staff.shifts.action.break' | t }}</span>
+      <input
+        type="number"
+        min="0"
+        step="5"
+        class="action__input q-body-sm"
+        [value]="breakMinutes()"
+        (input)="setBreak($any($event.target).value)"
+        data-testid="shift-action-break"
+      />
+      <span class="q-caption action__hint">{{ 'staff.shifts.action.breakHint' | t }}</span>
+    </label>
+  }
+
+  <label class="action__field">
+    <span class="q-body-sm">
+      {{ 'staff.shifts.action.reason' | t }}
+      @if (!reasonRequired()) {
+        <span class="q-caption action__hint">({{ 'staff.shifts.action.reasonOptional' | t }})</span>
+      }
+    </span>
+    <select
+      class="action__input q-body-sm"
+      [value]="reason()"
+      (change)="setReason($any($event.target).value)"
+      [attr.aria-invalid]="reasonMissing() ? 'true' : null"
+      data-testid="shift-action-reason"
+    >
+      <option value="">{{ 'staff.shifts.reason.placeholder' | t }}</option>
+      @for (code of reasons(); track code) {
+        <option [value]="code">{{ reasonLabel(code) }}</option>
+      }
+    </select>
+    @if (reasonMissing()) {
+      <span class="q-caption action__error">{{ 'staff.shifts.action.reasonRequired' | t }}</span>
+    }
+  </label>
+
+  @if (failure(); as message) {
+    <p class="q-body-sm action__error" role="alert" data-testid="shift-action-failure">{{ message }}</p>
+  }
+
+  <ng-container qModalActions>
+    <button type="button" class="action__dismiss q-body-sm" (click)="dismiss.emit()" [disabled]="busy()">
+      {{ 'staff.shifts.entry.close' | t }}
+    </button>
+    <button
+      type="button"
+      class="action__confirm q-body-sm"
+      (click)="submit()"
+      [disabled]="busy()"
+      data-testid="shift-action-confirm"
+    >
+      {{ confirmKey() | t }}
+    </button>
+  </ng-container>
+</q-modal>

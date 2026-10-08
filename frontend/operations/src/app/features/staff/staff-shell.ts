@@ -1,7 +1,9 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { AttendanceStatus } from './shifts/attendance-status';
 
 /**
  * The Staff section's own shell (IA §9): a small top-level switch between
@@ -13,6 +15,8 @@ import { TPipe } from '../../core/i18n/t.pipe';
  * Активность or Approvals should render docked beside the Люди list the way
  * a person's own Карточка does (`staff-page.ts`'s own `<router-outlet>` is
  * for exactly one thing: `:subjectId`).
+ *
+ * **Смены** (IA 9.6, ADR 0156) joins the switch once a tenant records attendance.
  *
  * IA 9.2 People has no tab of its own: its content — the staff directory,
  * branch bindings — is what 9.1's grants-derived list already shows, and its
@@ -28,4 +32,30 @@ import { TPipe } from '../../core/i18n/t.pipe';
   styleUrl: './staff-shell.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class StaffShell {}
+export class StaffShell {
+  private readonly capabilities = inject(SessionCapabilities);
+  private readonly attendance = inject(AttendanceStatus);
+
+  /**
+   * **Смены** (ADR 0156) is a tab once the tenant records attendance and the viewer may read shifts --
+   * and, while it is still off, for the person who can switch it on, who would otherwise have nowhere
+   * to find the switch. Everyone else on a tenant that has not enabled it sees no tab, and is told
+   * nothing is missing.
+   */
+  protected readonly showsShifts = computed(() => {
+    if (this.attendance.enabled() === true) {
+      return this.capabilities.has('STAFF_SHIFT_READ') || this.capabilities.has('STAFF_SHIFT_MANAGE');
+    }
+    return this.capabilities.has('TENANT_CONFIGURATION_WRITE');
+  });
+
+  constructor() {
+    if (
+      this.capabilities.has('STAFF_SHIFT_READ') ||
+      this.capabilities.has('STAFF_SHIFT_MANAGE') ||
+      this.capabilities.has('TENANT_CONFIGURATION_WRITE')
+    ) {
+      void this.attendance.ensureLoaded();
+    }
+  }
+}

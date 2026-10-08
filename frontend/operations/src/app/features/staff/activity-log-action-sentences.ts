@@ -1711,4 +1711,49 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Голос экран всплытие звонящий номер раскрыто',
       'uz-Latn': 'Ovoz ekran chiqib kelish qoʻngʻiroq qiluvchi raqam ochib berildi',
     },
+    'workforce.roster.cancelled': {
+      en: 'A shift was taken off the rota',
+      ru: 'Смена снята с графика',
+      'uz-Latn': 'Smena jadvaldan olib tashlandi',
+    },
+    'workforce.roster.drafted': {
+      en: 'A shift was added to the rota as a draft',
+      ru: 'Смена добавлена в график черновиком',
+      'uz-Latn': 'Smena jadvalga qoralama sifatida qoʻshildi',
+    },
+    'workforce.roster.published': {
+      en: 'Rota shifts were published',
+      ru: 'Смены графика опубликованы',
+      'uz-Latn': 'Jadval smenalari eʼlon qilindi',
+    },
+    'workforce.roster.revised': {
+      en: 'A rota shift was changed',
+      ru: 'Смена в графике изменена',
+      'uz-Latn': 'Jadvaldagi smena oʻzgartirildi',
+    },
+    'workforce.shift.approved': {
+      en: 'A shift was approved after a variance from the plan',
+      ru: 'Смена подтверждена после отклонения от плана',
+      'uz-Latn': 'Rejadan farq qilgan smena tasdiqlandi',
+    },
+    'workforce.shift.closed': {
+      en: 'A shift was closed',
+      ru: 'Смена закрыта',
+      'uz-Latn': 'Smena yopildi',
+    },
+    'workforce.shift.corrected': {
+      en: 'The hours of a shift were corrected',
+      ru: 'Часы смены исправлены',
+      'uz-Latn': 'Smena soatlari tuzatildi',
+    },
+    'workforce.shift.opened': {
+      en: 'A shift was started',
+      ru: 'Смена начата',
+      'uz-Latn': 'Smena boshlandi',
+    },
+    'workforce.shift.voided': {
+      en: 'A shift was voided',
+      ru: 'Смена аннулирована',
+      'uz-Latn': 'Smena bekor qilindi',
+    },
   };

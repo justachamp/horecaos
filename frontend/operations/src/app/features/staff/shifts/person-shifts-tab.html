@@ -1,0 +1,42 @@
+<div class="person-shifts" data-testid="person-shifts-tab">
+  <p class="q-caption person-shifts__lead">{{ 'staff.shifts.person.lead' | t }}</p>
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm person-shifts__muted" data-testid="person-shifts-denied">
+        {{ 'settings.scope.denied' | t }}
+      </p>
+    }
+    @case ('error') {
+      <p class="q-body-sm person-shifts__error" role="alert">{{ failure() }}</p>
+    }
+    @case ('ready') {
+      @if (shifts().length === 0) {
+        <p class="q-body-sm person-shifts__muted" data-testid="person-shifts-none">
+          {{ 'staff.shifts.person.none' | t }}
+        </p>
+      } @else {
+        <table class="person-shifts__table" data-testid="person-shifts-table">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'staff.shifts.column.recorded' | t }}</th>
+              <th class="q-caption">{{ 'staff.shifts.column.paid' | t }}</th>
+              <th class="q-caption">{{ 'staff.shifts.column.status' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (shift of shifts(); track shift.id) {
+              <tr data-testid="person-shifts-row">
+                <td class="q-body-sm q-tnum">{{ window(shift) }}</td>
+                <td class="q-body-sm q-tnum">{{ hours(shift.paidSeconds) }}</td>
+                <td class="q-body-sm">{{ statusLabel(shift.status) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    }
+  }
+</div>

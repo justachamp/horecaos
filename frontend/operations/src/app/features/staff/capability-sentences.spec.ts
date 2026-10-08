@@ -146,6 +146,11 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
   'staff.profile.manage',
   'staff.profile.read',
   'staff.self.manage',
+  'staff.shift.approve',
+  'staff.shift.clock',
+  'staff.shift.export',
+  'staff.shift.manage',
+  'staff.shift.read',
   'suppression.manage',
   'tenant.onboarding.manage',
   'tenant.read',
@@ -165,6 +170,22 @@ describe('CAPABILITY_SENTENCES', () => {
     }
     expect(CAPABILITY_SENTENCES['staff.emergency-contact.read'].en).toContain('recorded');
     expect(CAPABILITY_SENTENCES['staff.emergency-contact.read'].ru).toContain('записывается');
+  });
+
+  it('describes the five staff-hours capabilities (ADR 0156) in plain words, the export saying it is recorded', () => {
+    for (const code of [
+      'staff.shift.read',
+      'staff.shift.manage',
+      'staff.shift.approve',
+      'staff.shift.export',
+      'staff.shift.clock',
+    ]) {
+      expect(CAPABILITY_SENTENCES[code], code).toBeDefined();
+      expect(CAPABILITY_SENTENCES[code].area).toBe('staff');
+    }
+    expect(CAPABILITY_SENTENCES['staff.shift.export'].en).toContain('recorded');
+    expect(CAPABILITY_SENTENCES['staff.shift.manage'].en).toContain('recorded');
+    expect(CAPABILITY_SENTENCES['staff.shift.approve'].ru).toContain('по одной');
   });
 
   it('describes the two chat-assistant capabilities (ADR 0069) as what a person can do, under their own heading', () => {

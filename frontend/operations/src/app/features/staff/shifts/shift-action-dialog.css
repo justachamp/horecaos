@@ -1,0 +1,54 @@
+.action__subject {
+  margin: 0;
+  font-weight: 600;
+}
+
+.action__lead,
+.action__hint {
+  color: var(--q-ink-muted);
+}
+
+.action__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.action__input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--q-surface-2);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.action__error {
+  color: var(--q-danger-text, var(--q-ink));
+}
+
+.action__dismiss,
+.action__confirm {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: var(--q-radius);
+  cursor: pointer;
+}
+
+.action__dismiss {
+  border: 1px solid var(--q-hairline);
+  background: transparent;
+  color: var(--q-ink);
+}
+
+.action__confirm {
+  border: 0;
+  background: var(--q-primary);
+  color: var(--q-on-primary, #fff);
+}
+
+.action__confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

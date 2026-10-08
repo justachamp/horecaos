@@ -562,6 +562,14 @@ export const routes: Routes = [
               import('./features/staff/approvals-page').then((m) => m.ApprovalsPage),
           },
           {
+            // 9.6 Смены (ADR 0156): the rota, today and the timesheet. Lazy, so the
+            // initial bundle does not carry it; declared before the empty-path Люди
+            // child for the same reason `roles` is.
+            path: 'shifts',
+            loadComponent: () =>
+              import('./features/staff/shifts/staff-shifts-page').then((m) => m.StaffShiftsPage),
+          },
+          {
             // 9.5 Проверка доступа (ADR 0109, wave W03): a debugging tool
             // used a handful of times a year, deliberately not a
             // `staff-shell.html` tab — reached only from the link at the

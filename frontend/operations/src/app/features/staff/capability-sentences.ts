@@ -882,6 +882,40 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     'uz-Latn': 'Telefonini yoʻqotgan xodimning ikkinchi omilini tiklash (har bir tiklash yoziladi)',
     en: 'Reset the second factor of a person who lost their phone (each reset is recorded)',
   },
+  // ADR 0156: staff hours. A timesheet and never a permission -- the sentences say what a person
+  // can do with other people's hours, and that finance sees names only inside the payroll file.
+  'staff.shift.read': {
+    area: 'staff',
+    ru: 'Смотреть график смен и табель сотрудников филиала',
+    'uz-Latn': 'Filial xodimlarining smena jadvali va tabelini koʻrish',
+    en: 'See the branch’s staff rota and timesheet',
+  },
+  'staff.shift.manage': {
+    area: 'staff',
+    ru: 'Составлять график смен, отмечать приход и уход сотрудников и исправлять часы (старое и новое время записываются)',
+    'uz-Latn':
+      'Smena jadvalini tuzish, xodimlarning kelish-ketishini belgilash va soatlarni tuzatish (eski va yangi vaqt yoziladi)',
+    en: 'Plan the rota, record when staff start and finish, and correct hours (old and new times are recorded)',
+  },
+  'staff.shift.approve': {
+    area: 'staff',
+    ru: 'Подтверждать смены с большим отклонением от графика, по одной',
+    'uz-Latn': 'Jadvaldan katta farq qilgan smenalarni birma-bir tasdiqlash',
+    en: 'Approve, one at a time, shifts that differ a lot from the rota',
+  },
+  'staff.shift.export': {
+    area: 'staff',
+    ru: 'Получать файл часов для зарплаты с именами и табельными номерами (каждая выгрузка записывается)',
+    'uz-Latn':
+      'Ish haqi uchun soatlar faylini ism va tabel raqamlari bilan olish (har bir yuklab olish yoziladi)',
+    en: 'Download the payroll hours file with names and employee numbers (each download is recorded)',
+  },
+  'staff.shift.clock': {
+    area: 'staff',
+    ru: 'Отмечать свой приход и уход на смене',
+    'uz-Latn': 'Oʻz smenasiga kelish va ketishini belgilash',
+    en: 'Clock yourself in and out of a shift',
+  },
   'staff.self.manage': {
     area: 'staff',
     ru: 'Менять свои имя, телефон, фото и языки',

@@ -26,6 +26,7 @@ import {
   PaymentMethodView,
   PaymentMethodsApi,
 } from '../settings/payment-methods/payment-methods-api';
+import { MyAttendanceCard } from '../staff/shifts/my-attendance-card';
 import { MyWorkApi, MyWorkChannelMixSlice } from './my-work-api';
 
 /** Same placeholder as `today-page.ts`/`order-queue.ts` — no call in this chain returns a tenant timezone yet. */
@@ -72,7 +73,7 @@ interface PaymentMixSlice {
  */
 @Component({
   selector: 'q-my-work-page',
-  imports: [TPipe, RouterLink, BarChart, DonutChart, DeniedState, LockedState],
+  imports: [TPipe, RouterLink, BarChart, DonutChart, DeniedState, LockedState, MyAttendanceCard],
   templateUrl: './my-work-page.html',
   styleUrl: './my-work-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
