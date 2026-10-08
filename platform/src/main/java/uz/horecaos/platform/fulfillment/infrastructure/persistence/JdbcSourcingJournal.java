@@ -101,7 +101,10 @@ public class JdbcSourcingJournal implements SourcingJournal {
                 offer.policyId(),
                 version(offer.policyId(), offer.policyVersion()),
                 offer.expiresAt(),
-                offer.now()));
+                offer.now(),
+                offer.runStamp().runIncrement() ? "RUN_INCREMENT" : "DIRECT",
+                offer.runStamp().mergeDistanceMeters(),
+                offer.runStamp().leadShipmentId()));
 
         return new OpenAttempt(opened.attemptId(), opened.sequenceNumber(), opened.status(), opened.fresh());
     }

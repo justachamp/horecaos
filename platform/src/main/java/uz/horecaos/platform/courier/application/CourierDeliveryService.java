@@ -90,6 +90,7 @@ public class CourierDeliveryService {
     private final CashDueLookupPort cashDue;
     private final AuditRecorder audit;
     private final Clock clock;
+    private final CourierOfferQuoteService quotes;
 
     public CourierDeliveryService(
             CourierJobsPort jobs,
@@ -97,13 +98,34 @@ public class CourierDeliveryService {
             JdbcCourierStore couriers,
             CashDueLookupPort cashDue,
             AuditRecorder audit,
-            Clock clock) {
+            Clock clock,
+            CourierOfferQuoteService quotes) {
         this.jobs = jobs;
         this.policies = policies;
         this.couriers = couriers;
         this.cashDue = cashDue;
         this.audit = audit;
         this.clock = clock;
+        this.quotes = quotes;
+    }
+
+    /**
+     * One offer as the courier sees it, with the earning it is quoted at (ADR 0170 Decision 5).
+     *
+     * <p>The quote is computed here, in {@code courier}, from the offer's stamp and the card that resolves for
+     * this courier; {@code fulfillment} supplies only the stamp. No quote when no card resolves.
+     */
+    private OfferView viewOf(UUID tenantId, Offer offer, boolean revealable, UUID courierId) {
+        Instant now = clock.instant();
+        Integer mergeDistance = "RUN_INCREMENT".equals(offer.payBasis()) ? offer.runMergeDistanceMeters() : null;
+        Optional<CourierOfferQuoteService.Quote> quote = quotes.quote(
+                tenantId, offer.brandId(), offer.locationId(), courierId, offer.distanceMeters(), mergeDistance, now);
+        return new OfferView(
+                offer,
+                revealable,
+                quote.map(CourierOfferQuoteService.Quote::amountMinor).orElse(null),
+                quote.map(CourierOfferQuoteService.Quote::currency).orElse(null),
+                quote.map(CourierOfferQuoteService.Quote::distanceMeters).orElse(null));
     }
 
     /** Which branch's policy a call is held to. A courier works one branch at a time. */
@@ -129,7 +151,12 @@ public class CourierDeliveryService {
     }
 
     /** An offer as the courier sees it, with the policy facts the app needs to draw it. */
-    public record OfferView(Offer offer, boolean customerLocationRevealable) {}
+    public record OfferView(
+            Offer offer,
+            boolean customerLocationRevealable,
+            @Nullable Long quotedEarningMinor,
+            @Nullable String quoteCurrency,
+            @Nullable Integer quotedDistanceMeters) {}
 
     /** A delivery as the courier sees it. */
     public record DeliveryView(Job job, long cashDueMinor, boolean paymentConfirmationRequired) {}
@@ -163,7 +190,7 @@ public class CourierDeliveryService {
                 .filter(offer -> sameBranch(where, offer.brandId(), offer.locationId()))
                 .filter(offer ->
                         DeliveryGate.kitchen(policy, offer.kitchenReady()).isEmpty())
-                .map(offer -> new OfferView(offer, revealable))
+                .map(offer -> viewOf(where.tenantId(), offer, revealable, courierId))
                 .toList();
     }
 

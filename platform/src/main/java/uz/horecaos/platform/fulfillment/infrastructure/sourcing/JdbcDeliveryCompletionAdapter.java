@@ -87,14 +87,50 @@ public class JdbcDeliveryCompletionAdapter implements DeliveryCompletionPort {
                         closed.distanceSource(),
                         closed.promisedDeliveryEnd(),
                         closed.pickupWindowEnd(),
-                        closed.prepaid()));
+                        closed.prepaid(),
+                        payBasisOf(tenantId, closed, attempt),
+                        closed.runKey(),
+                        runIncrement(tenantId, closed, attempt) ? attempt.runMergeDistanceMeters() : null));
+    }
+
+    /**
+     * What this delivery is paid as (ADR 0170 Decisions 2 and 4): the basis stamped on the offer, which is
+     * the quote the courier accepted, unless the run behind it has gone away.
+     *
+     * <p>It only ever improves for the courier after the offer. A {@code RUN_INCREMENT} order is paid its
+     * full distance when, by the time it is delivered, every other shipment of its run was cancelled before
+     * anyone picked it up: there was never a run to carry it in. A lead cancelled <em>after</em> pickup, or
+     * delivered, keeps the run alive; and a lead cancelled after this order was already delivered cannot
+     * change this order, because the accrual was written when it was delivered and is written once.
+     */
+    private String payBasisOf(UUID tenantId, ShipmentRow shipment, AttemptRow attempt) {
+        return runIncrement(tenantId, shipment, attempt) ? "RUN_INCREMENT" : "DIRECT";
+    }
+
+    private boolean runIncrement(UUID tenantId, ShipmentRow shipment, AttemptRow attempt) {
+        if (!"RUN_INCREMENT".equals(attempt.payBasis())
+                || attempt.runMergeDistanceMeters() == null
+                || shipment.runKey() == null) {
+            return false;
+        }
+        return jdbc.sql("""
+                        SELECT count(*) FROM fulfillment.shipments other
+                        WHERE other.tenant_id = :tenantId AND other.run_key = :runKey AND other.id <> :shipmentId
+                          AND (other.status <> 'CANCELLED' OR other.picked_up_at IS NOT NULL)
+                        """)
+                        .param("tenantId", tenantId)
+                        .param("runKey", shipment.runKey())
+                        .param("shipmentId", shipment.id())
+                        .query(Long.class)
+                        .single()
+                > 0;
     }
 
     /** The order's one live (non-cancelled) shipment, if any — {@code ux_shipment_one_active_per_plan} guarantees at most one. */
     private Optional<ShipmentRow> findLiveShipment(UUID tenantId, UUID orderId) {
         return jdbc.sql("""
                 SELECT s.id, s.status, s.source_type, s.courier_id, s.brand_id, s.location_id,
-                       s.picked_up_at, s.delivered_at,
+                       s.picked_up_at, s.delivered_at, s.run_key,
                        p.distance_meters, p.distance_source, p.promised_delivery_end, p.pickup_window_end,
                        o.payment_status_projection
                   FROM fulfillment.shipments s
@@ -119,7 +155,8 @@ public class JdbcDeliveryCompletionAdapter implements DeliveryCompletionPort {
                         row.getString("distance_source"),
                         instant(row, "promised_delivery_end"),
                         instant(row, "pickup_window_end"),
-                        isPrepaid(row.getString("payment_status_projection"))))
+                        isPrepaid(row.getString("payment_status_projection")),
+                        row.getObject("run_key", UUID.class)))
                 .optional();
     }
 
@@ -153,7 +190,7 @@ public class JdbcDeliveryCompletionAdapter implements DeliveryCompletionPort {
     /** The attempt that won this shipment — {@code ux_attempt_one_accepted} guarantees at most one. */
     private Optional<AttemptRow> findAcceptedAttempt(UUID tenantId, UUID shipmentId) {
         return jdbc.sql("""
-                SELECT id, accepted_at
+                SELECT id, accepted_at, pay_basis, run_merge_distance_m
                   FROM fulfillment.assignment_attempts
                  WHERE tenant_id = :tenantId AND shipment_id = :shipmentId AND status = 'ACCEPTED'
                 """)
@@ -161,7 +198,9 @@ public class JdbcDeliveryCompletionAdapter implements DeliveryCompletionPort {
                 .param("shipmentId", shipmentId)
                 .query((ResultSet row, int number) -> new AttemptRow(
                         Objects.requireNonNull(row.getObject("id", UUID.class)),
-                        Objects.requireNonNull(instant(row, "accepted_at"))))
+                        Objects.requireNonNull(instant(row, "accepted_at")),
+                        Objects.requireNonNull(row.getString("pay_basis")),
+                        row.getObject("run_merge_distance_m", Integer.class)))
                 .optional();
     }
 
@@ -187,7 +226,12 @@ public class JdbcDeliveryCompletionAdapter implements DeliveryCompletionPort {
             @Nullable String distanceSource,
             @Nullable Instant promisedDeliveryEnd,
             @Nullable Instant pickupWindowEnd,
-            boolean prepaid) {}
+            boolean prepaid,
+            @Nullable UUID runKey) {}
 
-    private record AttemptRow(UUID id, Instant acceptedAt) {}
+    private record AttemptRow(
+            UUID id,
+            Instant acceptedAt,
+            String payBasis,
+            @Nullable Integer runMergeDistanceMeters) {}
 }

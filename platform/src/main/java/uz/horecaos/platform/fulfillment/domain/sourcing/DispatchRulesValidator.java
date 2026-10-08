@@ -69,8 +69,11 @@ public final class DispatchRulesValidator {
      * @param locations     ids of the branches the document's scope covers
      * @param timing        the {@code fulfillment.sourcing} numbers in force at the scope, for the
      *                      "leaves no time for a partner" check
-     * @param groupingAllowed whether this deployment lets a rule enable grouping (see the ADR's open
-     *                      input on how a courier is paid for a run)
+     * @param groupingAllowed whether this deployment lets a rule enable grouping (the platform's kill switch)
+     * @param runPayModeDecided whether the {@code courier.compensation} resolved at the document's scope has
+     *                      decided how a run of several orders is paid (ADR 0170 Decision 6). Grouping changes
+     *                      what a courier earns for the same kilometres, so a rule cannot turn it on while this is
+     *                      false
      */
     public record Context(
             Set<UUID> installations,
@@ -78,7 +81,19 @@ public final class DispatchRulesValidator {
             Set<UUID> channels,
             Set<UUID> locations,
             DeliverySourcingPolicy timing,
-            boolean groupingAllowed) {
+            boolean groupingAllowed,
+            boolean runPayModeDecided) {
+
+        /** A context whose pay mode is decided: every caller that predates ADR 0170. */
+        public Context(
+                Set<UUID> installations,
+                Set<UUID> zones,
+                Set<UUID> channels,
+                Set<UUID> locations,
+                DeliverySourcingPolicy timing,
+                boolean groupingAllowed) {
+            this(installations, zones, channels, locations, timing, groupingAllowed, true);
+        }
 
         public Context {
             installations = Set.copyOf(installations);
@@ -234,9 +249,12 @@ public final class DispatchRulesValidator {
         Grouping grouping = action.grouping();
         if (grouping != null) {
             if (!context.groupingAllowed()) {
+                found.add(label + ": grouping is not enabled on this deployment");
+            }
+            if (!context.runPayModeDecided()) {
                 found.add(label
-                        + ": grouping is not available yet -- how a courier is paid for one run of several orders "
-                        + "has to be decided first");
+                        + ": grouping needs the courier pay for a run to be decided first (RUN_PAY_MODE_UNDECIDED): "
+                        + "choose how a run of several orders is paid in the courier policy");
             }
             if (grouping.mergeRadiusMeters() < Grouping.MIN_RADIUS_METERS
                     || grouping.mergeRadiusMeters() > Grouping.MAX_RADIUS_METERS) {
@@ -254,6 +272,11 @@ public final class DispatchRulesValidator {
                 found.add(label
                         + ": the longest wait for a grouped courier is %d minutes"
                                 .formatted(Grouping.MAX_WAIT_SECONDS / 60));
+            } else if (grouping.maxWaitSeconds() > 0) {
+                found.add(label
+                        + ": waiting for a grouped courier is not available (GROUPING_WAIT_NOT_AVAILABLE): grouping "
+                        + "is a ranking bias only, and the wait stays zero until a month of ranking-only offers "
+                        + "shows how often a groupable courier existed");
             }
             if (!action.mode().usesFleet()) {
                 found.add(label + ": grouping biases the in-house fleet, which " + action.mode() + " never asks");

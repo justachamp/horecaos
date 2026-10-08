@@ -191,6 +191,23 @@ public class JdbcDispatchRuleStore {
 
     public record InstallationRow(UUID id, String providerType, String displayName, String status) {}
 
+    /**
+     * The highest {@code max_concurrent_assignments} of any of this tenant's courier types (ADR 0170): the most
+     * orders any courier here could carry at once. Zero when the tenant has defined no courier type. A rule that
+     * groups more orders into a run than this cannot be honoured, and the simulator says so.
+     */
+    public int highestCourierConcurrency(UUID tenantId) {
+        Integer highest = jdbc.sql("""
+                        SELECT max(max_concurrent_assignments) FROM fulfillment.courier_types
+                        WHERE tenant_id = :tenantId AND status = 'ACTIVE'
+                        """)
+                .param("tenantId", tenantId)
+                .query((row, number) -> row.getObject(1, Integer.class))
+                .optional()
+                .orElse(null);
+        return highest == null ? 0 : highest;
+    }
+
     public record ZoneRow(
             UUID id, UUID brandId, String code, String nameEn, String nameRu, String nameUz, String status) {}
 

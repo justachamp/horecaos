@@ -48,6 +48,12 @@
         }
       </div>
 
+      @if (pendingApproval(); as request) {
+        <p class="q-body-sm policy__pending" role="status" data-testid="policy-pending-approval">
+          {{ 'delivery.policy.runPayMode.pendingApproval' | t: { request: request } }}
+        </p>
+      }
+
       @if (!editing()) {
         <dl class="policy__rows">
           @for (row of rows(); track row.key) {
@@ -160,6 +166,38 @@
           <p class="policy__consequence q-caption">
             {{ 'delivery.policy.consequence.postDeliveryPaymentCheckRequired' | t }}
           </p>
+
+          <label class="q-caption" for="policy-run-pay-mode">{{
+            'delivery.policy.runPayMode' | t
+          }}</label>
+          <select
+            id="policy-run-pay-mode"
+            class="q-body field"
+            [value]="draftRunPayMode()"
+            (change)="draftRunPayMode.set($any($event.target).value)"
+            data-testid="policy-input-runPayMode"
+          >
+            <option value="UNDECIDED">{{ 'delivery.policy.runPayMode.UNDECIDED' | t }}</option>
+            <option value="PER_ORDER">{{ 'delivery.policy.runPayMode.PER_ORDER' | t }}</option>
+            <option value="FIRST_FULL_THEN_INCREMENT">
+              {{ 'delivery.policy.runPayMode.FIRST_FULL_THEN_INCREMENT' | t }}
+            </option>
+          </select>
+          <p class="policy__consequence q-caption">
+            {{ 'delivery.policy.consequence.runPayMode' | t }}
+          </p>
+          @if (needsAcknowledgement()) {
+            <label class="checkbox q-body" for="policy-run-pay-ack">
+              <input
+                id="policy-run-pay-ack"
+                type="checkbox"
+                [checked]="draftAcknowledgesEngagementTerms()"
+                (change)="draftAcknowledgesEngagementTerms.set($any($event.target).checked)"
+                data-testid="policy-input-acknowledgeEngagementTerms"
+              />
+              {{ 'delivery.policy.runPayMode.acknowledge' | t }}
+            </label>
+          }
 
           <label class="checkbox q-body" for="policy-gps-enabled">
             <input

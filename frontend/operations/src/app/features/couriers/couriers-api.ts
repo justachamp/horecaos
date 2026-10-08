@@ -425,10 +425,22 @@ export interface CourierPolicyView {
   readonly postDeliveryPaymentCheckRequired: boolean;
   /** Gap map row 3.3: the roster's online threshold. The one field of the six-minus-two this wave actually enforces. */
   readonly onlineWithinMinutes: number;
+  /**
+   * ADR 0170: how a courier is paid for one run of several orders. Null is "not decided" and pays every
+   * order in full, exactly as `PER_ORDER` does; grouping cannot be switched on while it is null.
+   */
+  readonly runPayMode?: RunPayMode | null;
+  /**
+   * Set instead of a new version when publishing `FIRST_FULL_THEN_INCREMENT` needs a second signature
+   * (ADR 0050): the document in force is unchanged and the same publication succeeds once it is approved.
+   */
+  readonly pendingApprovalRequestId?: string | null;
   readonly winningScope: string;
   readonly policyId: string;
   readonly policyVersion: number;
 }
+
+export type RunPayMode = 'PER_ORDER' | 'FIRST_FULL_THEN_INCREMENT';
 
 /** Mirrors `OperationsCourierController.CourierPolicyWriteRequest` — every field required (whole-document publish). */
 export interface CourierPolicyWriteInput {
@@ -447,6 +459,10 @@ export interface CourierPolicyWriteInput {
   readonly revealCustomerLocationTiming: 'BEFORE_ACCEPT' | 'AFTER_ACCEPT';
   readonly postDeliveryPaymentCheckRequired: boolean;
   readonly onlineWithinMinutes: number;
+  /** ADR 0170. Null leaves the pay mode undecided. */
+  readonly runPayMode?: RunPayMode | null;
+  /** ADR 0170. Required, and true, when this publication moves the pay mode to `FIRST_FULL_THEN_INCREMENT`. */
+  readonly acknowledgeEngagementTerms?: boolean | null;
   readonly reason: string;
 }
 

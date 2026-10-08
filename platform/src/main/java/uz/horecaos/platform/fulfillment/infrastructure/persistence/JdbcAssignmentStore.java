@@ -80,6 +80,9 @@ public class JdbcAssignmentStore {
         params.put("policyVersion", attempt.policyVersion());
         params.put("requestedAt", utc(attempt.now()));
         params.put("expiresAt", utc(attempt.expiresAt()));
+        params.put("payBasis", attempt.payBasis());
+        params.put("runMergeDistance", attempt.runMergeDistanceMeters());
+        params.put("runLeadShipmentId", attempt.runLeadShipmentId());
 
         Optional<Opened> inserted;
         try {
@@ -87,12 +90,14 @@ public class JdbcAssignmentStore {
                     INSERT INTO fulfillment.assignment_attempts (
                         id, tenant_id, delivery_plan_id, sequence_number, source_type,
                         courier_id, provider_binding_id, quote_id, status, idempotency_key,
-                        decision_reason, policy_id, policy_version, requested_at, expires_at)
+                        decision_reason, policy_id, policy_version, requested_at, expires_at,
+                        pay_basis, run_merge_distance_m, run_lead_shipment_id)
                     SELECT :id, :tenantId, :planId,
                            coalesce(max(existing.sequence_number), 0) + 1,
                            :sourceType, :courierId, :bindingId, :quoteId, :status,
                            :idempotencyKey, :reason, :policyId, :policyVersion,
-                           :requestedAt, :expiresAt
+                           :requestedAt, :expiresAt,
+                           :payBasis, :runMergeDistance, :runLeadShipmentId
                     FROM fulfillment.assignment_attempts AS existing
                     WHERE existing.tenant_id = :tenantId AND existing.delivery_plan_id = :planId
                     ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
@@ -242,6 +247,7 @@ public class JdbcAssignmentStore {
         }
         Optional<UUID> shipment = win(
                 new WinningAttempt(tenantId, attemptId, SourceType.INTERNAL, AttemptStatus.OFFERED, null, null, now));
+        shipment.ifPresent(created -> joinRun(tenantId, attemptId, created));
         if (shipment.isEmpty()) {
             // Somebody else is already carrying this order. The offer is closed
             // rather than left OFFERED, because an offer that goes on holding
@@ -251,6 +257,61 @@ public class JdbcAssignmentStore {
         }
         return shipment;
     }
+
+    /**
+     * ADR 0170 Decision 1: a shipment accepted on a {@code RUN_INCREMENT} offer joins the run of the shipment
+     * the offer was measured to, and that shipment is given the run's key at the join if it had none. There is
+     * no trip, no route order and no stored coordinates; a run is just the set of shipments sharing a key.
+     *
+     * <p>Idempotent and quiet: a {@code DIRECT} attempt has nothing to join, and a lead that has since been
+     * cancelled still names a key it can lend (the follower's pay rule at delivery decides whether the run
+     * still counts). One statement per row, inside the accepting transaction.
+     */
+    private void joinRun(UUID tenantId, UUID attemptId, UUID shipmentId) {
+        Optional<RunStamp> stamp = jdbc.sql("""
+                SELECT run_merge_distance_m, run_lead_shipment_id
+                FROM fulfillment.assignment_attempts
+                WHERE tenant_id = :tenantId AND id = :attemptId AND pay_basis = 'RUN_INCREMENT'
+                """)
+                .param("tenantId", tenantId)
+                .param("attemptId", attemptId)
+                .query((row, number) -> new RunStamp(
+                        row.getInt("run_merge_distance_m"), row.getObject("run_lead_shipment_id", UUID.class)))
+                .optional();
+        if (stamp.isEmpty()) {
+            return;
+        }
+        UUID runKey = jdbc.sql("""
+                        SELECT run_key FROM fulfillment.shipments
+                        WHERE tenant_id = :tenantId AND id = :leadId
+                        """)
+                .param("tenantId", tenantId)
+                .param("leadId", stamp.get().leadShipmentId())
+                .query((row, number) -> row.getObject("run_key", UUID.class))
+                .optional()
+                .orElseGet(UUID::randomUUID);
+        jdbc.sql("""
+                UPDATE fulfillment.shipments
+                SET run_key = :runKey
+                WHERE tenant_id = :tenantId AND id = :leadId AND run_key IS NULL
+                """)
+                .param("runKey", runKey)
+                .param("tenantId", tenantId)
+                .param("leadId", stamp.get().leadShipmentId())
+                .update();
+        jdbc.sql("""
+                UPDATE fulfillment.shipments
+                SET run_key = :runKey, run_merge_distance_m = :distance
+                WHERE tenant_id = :tenantId AND id = :shipmentId
+                """)
+                .param("runKey", runKey)
+                .param("distance", stamp.get().mergeDistanceMeters())
+                .param("tenantId", tenantId)
+                .param("shipmentId", shipmentId)
+                .update();
+    }
+
+    private record RunStamp(int mergeDistanceMeters, UUID leadShipmentId) {}
 
     /** The attempt ended without a shipment. */
     public boolean close(
@@ -653,7 +714,45 @@ public class JdbcAssignmentStore {
             @Nullable UUID policyId,
             @Nullable Integer policyVersion,
             @Nullable Instant expiresAt,
-            Instant now) {}
+            Instant now,
+            String payBasis,
+            @Nullable Integer runMergeDistanceMeters,
+            @Nullable UUID runLeadShipmentId) {
+
+        /** An attempt paid on the order's own distance: a partner booking, a manual assignment, a plain offer. */
+        public NewAttempt(
+                UUID tenantId,
+                UUID planId,
+                SourceType sourceType,
+                AttemptStatus status,
+                @Nullable UUID courierId,
+                @Nullable UUID bindingId,
+                @Nullable UUID quoteId,
+                String idempotencyKey,
+                String decisionReason,
+                @Nullable UUID policyId,
+                @Nullable Integer policyVersion,
+                @Nullable Instant expiresAt,
+                Instant now) {
+            this(
+                    tenantId,
+                    planId,
+                    sourceType,
+                    status,
+                    courierId,
+                    bindingId,
+                    quoteId,
+                    idempotencyKey,
+                    decisionReason,
+                    policyId,
+                    policyVersion,
+                    expiresAt,
+                    now,
+                    "DIRECT",
+                    null,
+                    null);
+        }
+    }
 
     /**
      * The attempt being promoted to the plan's winner, and the status it must still hold.

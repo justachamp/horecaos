@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,7 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.fulfillment.api.CourierPayTermsPort;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliverySourcingPolicy;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument.Action;
@@ -77,7 +79,20 @@ public class DispatchRulesAuthoringService {
     private final AuditRecorder audit;
     private final Clock clock;
     private final boolean groupingAllowed;
+    private final @Nullable CourierPayTermsPort payTerms;
 
+    /** Without a pay port the pay mode is taken as decided: every test that predates ADR 0170. */
+    public DispatchRulesAuthoringService(
+            PolicyResolver policies,
+            PolicyAuthor author,
+            JdbcDispatchRuleStore store,
+            AuditRecorder audit,
+            Clock clock,
+            boolean groupingAllowed) {
+        this(policies, author, store, audit, clock, groupingAllowed, null);
+    }
+
+    @Autowired
     public DispatchRulesAuthoringService(
             PolicyResolver policies,
             PolicyAuthor author,
@@ -88,13 +103,15 @@ public class DispatchRulesAuthoringService {
             // several orders, given ADR 0042 prices per delivery. "The pay treatment must be decided
             // before any tenant enables it" -- so this is off, and grouping is refused at publish, until
             // someone who may decide it flips it. The assignment bias is built; the switch is not ours.
-            @Value("${horecaos.fulfillment.dispatch.grouping-enabled:false}") boolean groupingAllowed) {
+            @Value("${horecaos.fulfillment.dispatch.grouping-enabled:false}") boolean groupingAllowed,
+            @Nullable CourierPayTermsPort payTerms) {
         this.policies = policies;
         this.author = author;
         this.store = store;
         this.audit = audit;
         this.clock = clock;
         this.groupingAllowed = groupingAllowed;
+        this.payTerms = payTerms;
     }
 
     /**
@@ -133,6 +150,7 @@ public class DispatchRulesAuthoringService {
             String reason) {
 
         requireSettable(scope);
+        refuseUnavailableGrouping(scope, document);
         List<String> violations = violations(scope, document);
         if (!violations.isEmpty()) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, String.join("; ", violations));
@@ -166,6 +184,43 @@ public class DispatchRulesAuthoringService {
         return editorOf(scope, published, published.policyVersion());
     }
 
+    /**
+     * The two refusals ADR 0170 gives their own stable codes: a rule that groups while the courier pay for a run
+     * is undecided ({@code RUN_PAY_MODE_UNDECIDED}), and one that names a wait above zero ({@code
+     * GROUPING_WAIT_NOT_AVAILABLE}). Checked before the general list so the client can tell them from the rest;
+     * {@link #violations} carries the same sentences, which is what the simulator reports for a draft.
+     */
+    private void refuseUnavailableGrouping(ResourceScope scope, DispatchRulesDocument document) {
+        List<DispatchRulesDocument.Action> actions = new java.util.ArrayList<>();
+        document.rules().forEach(rule -> actions.add(rule.then()));
+        actions.add(document.fallback());
+        for (DispatchRulesDocument.Action action : actions) {
+            DispatchRulesDocument.Grouping grouping = action.grouping();
+            if (grouping == null) {
+                continue;
+            }
+            if (grouping.maxWaitSeconds() > 0
+                    && grouping.maxWaitSeconds() <= DispatchRulesDocument.Grouping.MAX_WAIT_SECONDS) {
+                throw new ApiException(
+                        ErrorCode.GROUPING_WAIT_NOT_AVAILABLE,
+                        "Waiting for a grouped courier is not available: grouping is a ranking bias only, so "
+                                + "maxWaitSeconds must be zero");
+            }
+            if (groupingAllowed && !runPayModeDecided(scope)) {
+                throw new ApiException(
+                        ErrorCode.RUN_PAY_MODE_UNDECIDED,
+                        "Grouping needs the courier pay for a run of several orders to be decided first: choose it "
+                                + "in the courier policy at this scope");
+            }
+        }
+    }
+
+    private boolean runPayModeDecided(ResourceScope scope) {
+        return payTerms == null
+                || payTerms.runPayTerms(tenantOf(scope), scope.brandId(), scope.locationId())
+                        .decided();
+    }
+
     /** Why {@code document} may not be published at {@code scope}; empty when it may. Also what the simulator reports for a draft. */
     public List<String> violations(ResourceScope scope, DispatchRulesDocument document) {
         return DispatchRulesValidator.violations(document, contextFor(scope));
@@ -189,7 +244,8 @@ public class DispatchRulesAuthoringService {
                         .map(LocationRow::id)
                         .collect(Collectors.toSet()),
                 timing,
-                groupingAllowed);
+                groupingAllowed,
+                runPayModeDecided(scope));
     }
 
     /** The lists the editor draws its pickers from: everything a rule at this scope may name. */

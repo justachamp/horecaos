@@ -1,5 +1,7 @@
 package uz.horecaos.platform.courier.domain;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * The ADR 0030 policy document behind ADR 0042's configurable numbers.
  *
@@ -62,6 +64,10 @@ package uz.horecaos.platform.courier.domain;
  *                                  by default — an operator seeing a pin the
  *                                  map still trusts must not see the same
  *                                  courier marked offline on the roster
+ * @param runPayMode                ADR 0170: how a run of several orders is paid. Null is «not decided» and
+ *                                  pays every order in full, exactly as {@link RunPayMode#PER_ORDER} does; a
+ *                                  dispatch rule cannot turn grouping on while it is null. A document stored
+ *                                  before this field existed has no value for it and reads as null
  */
 public record CourierCompensationPolicy(
         int reverificationDays,
@@ -78,7 +84,52 @@ public record CourierCompensationPolicy(
         boolean kitchenReadyOnly,
         RevealTiming revealCustomerLocationTiming,
         boolean postDeliveryPaymentCheckRequired,
-        int onlineWithinMinutes) {
+        int onlineWithinMinutes,
+        @Nullable RunPayMode runPayMode) {
+
+    /**
+     * A document without a run pay mode: how every document read before ADR 0170 resolves, and what the
+     * fifteen-argument callers that predate it build.
+     */
+    public CourierCompensationPolicy(
+            int reverificationDays,
+            int warningDays,
+            int settlementPeriodDays,
+            long cashCeilingMinor,
+            long penaltyApprovalThresholdMinor,
+            ShiftEnforcement shiftEnforcement,
+            int graceSeconds,
+            int confirmationPointRetentionDays,
+            boolean gpsVerificationEnabled,
+            int gpsAcceptRadiusMeters,
+            int gpsStatusChangeRadiusMeters,
+            boolean kitchenReadyOnly,
+            RevealTiming revealCustomerLocationTiming,
+            boolean postDeliveryPaymentCheckRequired,
+            int onlineWithinMinutes) {
+        this(
+                reverificationDays,
+                warningDays,
+                settlementPeriodDays,
+                cashCeilingMinor,
+                penaltyApprovalThresholdMinor,
+                shiftEnforcement,
+                graceSeconds,
+                confirmationPointRetentionDays,
+                gpsVerificationEnabled,
+                gpsAcceptRadiusMeters,
+                gpsStatusChangeRadiusMeters,
+                kitchenReadyOnly,
+                revealCustomerLocationTiming,
+                postDeliveryPaymentCheckRequired,
+                onlineWithinMinutes,
+                null);
+    }
+
+    /** The mode a run is paid under: not decided reads as every order in full. */
+    public RunPayMode effectiveRunPayMode() {
+        return runPayMode == null ? RunPayMode.PER_ORDER : runPayMode;
+    }
 
     /** ADR 0042's provisional values, in force until finance and operations answer. */
     public static final CourierCompensationPolicy DEFAULTS = new CourierCompensationPolicy(
@@ -96,7 +147,8 @@ public record CourierCompensationPolicy(
             false,
             RevealTiming.AFTER_ACCEPT,
             false,
-            10);
+            10,
+            null);
 
     public CourierCompensationPolicy {
         if (reverificationDays < 1 || warningDays < 1 || settlementPeriodDays < 1) {

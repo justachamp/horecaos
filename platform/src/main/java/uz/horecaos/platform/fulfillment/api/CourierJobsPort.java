@@ -211,6 +211,11 @@ public interface CourierJobsPort {
      * @param kitchenReady  the order is {@code READY} or later. The courier policy's
      *                      kitchen-ready-only switch reads this
      * @param prepaid       HorecaOS already holds the money, so nothing is collected at the door
+     * @param payBasis      ADR 0170: {@code DIRECT} (the order's own distance) or {@code RUN_INCREMENT}, stamped
+     *                      when the offer was made and never lowered. {@code courier} computes the quote the
+     *                      courier sees from it and the rate card
+     * @param runMergeDistanceMeters the distance a {@code RUN_INCREMENT} order is paid on when it is shorter than
+     *                      {@code distanceMeters}; null for {@code DIRECT}
      */
     record Offer(
             UUID offerId,
@@ -231,7 +236,55 @@ public interface CourierJobsPort {
             Instant pickupWindowStart,
             Instant pickupWindowEnd,
             @Nullable Instant promisedDeliveryEnd,
-            Pickup pickup) {}
+            Pickup pickup,
+            String payBasis,
+            @Nullable Integer runMergeDistanceMeters) {
+
+        /** The offer as every order was before runs: paid on its own distance. */
+        public Offer(
+                UUID offerId,
+                int version,
+                UUID planId,
+                UUID orderId,
+                UUID brandId,
+                UUID locationId,
+                String orderReference,
+                Instant offeredAt,
+                Instant expiresAt,
+                String currency,
+                long orderTotalMinor,
+                boolean prepaid,
+                boolean kitchenReady,
+                @Nullable String destinationLabel,
+                @Nullable Integer distanceMeters,
+                Instant pickupWindowStart,
+                Instant pickupWindowEnd,
+                @Nullable Instant promisedDeliveryEnd,
+                Pickup pickup) {
+            this(
+                    offerId,
+                    version,
+                    planId,
+                    orderId,
+                    brandId,
+                    locationId,
+                    orderReference,
+                    offeredAt,
+                    expiresAt,
+                    currency,
+                    orderTotalMinor,
+                    prepaid,
+                    kitchenReady,
+                    destinationLabel,
+                    distanceMeters,
+                    pickupWindowStart,
+                    pickupWindowEnd,
+                    promisedDeliveryEnd,
+                    pickup,
+                    "DIRECT",
+                    null);
+        }
+    }
 
     /**
      * One shipment a courier carries (or carried).

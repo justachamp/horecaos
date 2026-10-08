@@ -26,6 +26,16 @@ public enum ApprovalAction {
     COURIER_ADJUSTMENT_CREATE("courier.adjustment.create", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
 
     /**
+     * ADR 0170: moving the tenant's pay for a run of several orders to {@code FIRST_FULL_THEN_INCREMENT}.
+     * It changes what a self-employed courier earns for the same kilometres, so it is a labour-relations
+     * decision as much as a configuration one. A brand-new action with no prior single-signature behaviour to
+     * preserve, so {@code ALLOW_WITHOUT_APPROVAL} is the honest starting mode ADR 0050 asks of a new action: the
+     * publisher's explicit acknowledgement of the engagement terms is recorded either way, and a tenant that
+     * wants two signatures authors an {@code audit.approval_policies} row naming this code.
+     */
+    COURIER_RUN_PAY_CHANGE("courier.run-pay.change", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
+
+    /**
      * ADR 0042 already makes a manual penalty four-eyes unconditionally. Its
      * missing-policy mode is therefore fail closed from the outset; this replaces
      * the former generic "not granted" error with a stable configuration error.
