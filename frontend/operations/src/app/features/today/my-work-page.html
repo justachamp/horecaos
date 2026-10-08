@@ -84,8 +84,12 @@
         </a>
       </section>
 
-      <section class="my-work__band" data-testid="my-work-locked-band">
-        <q-locked-state titleKey="myWork.locked.title" askKey="myWork.locked.ask" />
+      <section class="my-work__band" data-testid="my-work-interface-band">
+        <h2 class="q-emphasis">{{ 'staff.myProfile.interface.title' | t }}</h2>
+        <p class="q-body-sm my-work__empty">{{ 'myWork.interface.body' | t }}</p>
+        <a class="q-body-sm" routerLink="/my-profile" data-testid="my-work-interface-link">
+          {{ 'myWork.interface.link' | t }}
+        </a>
       </section>
     }
   }

@@ -1,0 +1,49 @@
+.q-column-picker {
+  position: relative;
+  display: inline-block;
+}
+
+.q-column-picker__toggle {
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.q-column-picker__menu {
+  position: absolute;
+  inset-inline-end: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  min-width: 220px;
+  padding: 8px 12px;
+  background: var(--q-canvas);
+  /* Hairline elevation, never a shadow. */
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.q-column-picker__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  white-space: nowrap;
+}
+
+.q-column-picker__reset {
+  margin-block-start: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--q-ink-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.q-column-picker__note {
+  margin: 8px 0 0;
+  color: var(--q-ink-subtle);
+}

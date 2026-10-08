@@ -131,16 +131,18 @@ export const routes: Routes = [
         path: 'my-profile',
         // `auth` as well: the «Второй фактор» card shares its enrolment form (and its words,
         // namespace `mfa`) with the page a refused sign-in sends an account to (ADR 0148).
-        canActivate: [messagesGuard('staff', 'auth')],
+        // `orders` too: «Интерфейс» names a saved view's tab and refuses a view's name in the order
+        // board's own words (ADR 0160), so the two screens say the same thing.
+        canActivate: [messagesGuard('staff', 'auth', 'orders')],
         loadComponent: () =>
           import('./features/staff/my-profile-page').then((m) => m.MyProfilePage),
       },
       // IA 0.2 (My work), wave T01: `0.2a`/`0.2b` are real (the actor-grouped
       // channel read is self-scoped by the token's own subject, per
       // MyWorkQueryService's own doc); `0.2c` is «Мой профиль» (ADR 0139),
-      // linked from a band inside the page, and `0.2d` stays an honest locked
-      // band inside the page itself rather than a second not-built route —
-      // see `my-work-page.ts`'s own doc for the boundary.
+      // linked from a band inside the page, and `0.2d` (ADR 0160) is the «Интерфейс»
+      // section of that same profile, linked the same way — see `my-work-page.ts`'s
+      // own doc for the boundary.
       {
         path: 'today/my-work',
         canActivate: [messagesGuard('today', 'staff')],

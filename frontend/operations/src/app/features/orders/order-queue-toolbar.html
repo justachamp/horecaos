@@ -20,6 +20,8 @@
   </div>
 
   <div class="order-queue__status">
+    <!-- The queue's own controls for this strip (saved views, the column picker), projected in. -->
+    <ng-content />
     <q-connection-state-banner [state]="connectionState()" />
     @if (updatedStamp(); as stamp) {
       <span

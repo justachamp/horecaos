@@ -274,6 +274,19 @@ export const staffPaths = {
     return `${OPERATIONS}/operations/tenants/${enc(tenantId)}/staff/me`;
   },
 
+  /**
+   * `StaffPreferencesController` (ADR 0160) -- the caller's own interface preferences. Like {@link
+   * me} it names no member and no subject: the server resolves the rows from the token.
+   */
+  mePreferences(tenantId: string): string {
+    return `${this.me(tenantId)}/preferences`;
+  },
+
+  /** One surface of the caller's preferences: `PUT` saves it, `DELETE` resets it. */
+  mePreference(tenantId: string, surface: string): string {
+    return `${this.mePreferences(tenantId)}/${enc(surface)}`;
+  },
+
   /** `StaffSelfController.setPhoto` -- the body is the image itself, at most 1 MiB. */
   mePhoto(tenantId: string): string {
     return `${this.me(tenantId)}/photo`;

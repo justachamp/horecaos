@@ -448,4 +448,36 @@ export const staffEn = {
   'staff.mfa.policy.save': 'Save',
   'staff.mfa.policy.saved': 'Saved. People already signed in are asked at their next sign-in.',
   'staff.mfa.policy.failed': 'Could not save the setting. Try again in a moment.',
+
+  'staff.myProfile.interface.title': 'Interface',
+  'staff.myProfile.interface.sessionOnly':
+    'This organisation keeps no staff record for this sign-in: your settings last only until the session ends.',
+  'staff.myProfile.interface.writeFailed':
+    'The last change could not be saved. It shows here but did not reach your account.',
+  'staff.myProfile.interface.language.title': 'Language',
+  'staff.myProfile.interface.language.current': 'Interface language: {language}.',
+  'staff.myProfile.interface.language.deviceOnly':
+    '"{language}" is chosen on this device only. To use it everywhere, set your language in Personal data.',
+  'staff.myProfile.interface.language.override':
+    'This device uses "{device}"; your account says "{account}". The choice made on this device wins here.',
+  'staff.myProfile.interface.language.useMine': 'Use my language on this device',
+  'staff.myProfile.interface.branch.title': 'Default branch',
+  'staff.myProfile.interface.branch.none': 'None (the first in the list)',
+  'staff.myProfile.interface.branch.hint':
+    'The console opens on it wherever this device has not picked a branch.',
+  'staff.myProfile.interface.branch.stale': 'You no longer work at this branch, so it is ignored.',
+  'staff.myProfile.interface.branch.single': 'You have one branch, so there is nothing to choose.',
+  'staff.myProfile.interface.views.title': 'My order board views',
+  'staff.myProfile.interface.views.empty':
+    'No views yet. Save one with "My views" on the order board.',
+  'staff.myProfile.interface.views.rename': 'Rename',
+  'staff.myProfile.interface.views.delete': 'Delete',
+  'staff.myProfile.interface.views.save': 'Save',
+  'staff.myProfile.interface.views.cancel': 'Cancel',
+  'staff.myProfile.interface.columns.title': 'Order board columns',
+  'staff.myProfile.interface.columns.reset': 'Restore the default columns',
+  'staff.myProfile.interface.reset.board': 'Reset everything for the board (columns and views)',
+  'staff.myProfile.interface.reset.confirm':
+    'Your columns and every saved view will be deleted. This cannot be undone.',
+  'staff.myProfile.interface.reset.yes': 'Yes, reset',
 } as const;

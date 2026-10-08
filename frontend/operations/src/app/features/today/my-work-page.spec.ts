@@ -216,20 +216,24 @@ describe('MyWorkPage', () => {
     });
   });
 
-  describe('0.2d — the locked band', () => {
-    it('is still a named lock for interface personalization, never an empty section and never the plan wall', async () => {
+  describe('0.2d — interface personalization lives in «Мой профиль»', () => {
+    it('links to the Interface section of the profile instead of locking a band that has nothing behind it', async () => {
       configure({});
       const fixture = await render();
 
-      const locked = fixture.nativeElement.querySelector('[data-testid="my-work-locked-band"]');
-      expect(locked).not.toBeNull();
-      expect(locked.querySelector('[data-testid="q-locked-state"]')).not.toBeNull();
-      expect(locked.textContent).toContain('personalization');
-      // The staff-identity ADR is decided and built: the lock must not still blame it.
-      expect(locked.textContent).not.toContain('staff-identity ADR');
-      // Not the entitlement wall's own default title — this is a build gap,
-      // not an unpurchased plan, and must not read as one.
-      expect(locked.textContent).not.toContain('Not included in this plan');
+      const band = fixture.nativeElement.querySelector('[data-testid="my-work-interface-band"]');
+      expect(band).not.toBeNull();
+      expect(band.textContent).toContain('Interface');
+      expect(
+        fixture.nativeElement
+          .querySelector('[data-testid="my-work-interface-link"]')
+          .getAttribute('href'),
+      ).toBe('/my-profile');
+      // The named lock it replaces says personalization is not built; it is, and the band must not
+      // say otherwise, and neither the old test id nor the shared lock widget may be left on the page.
+      expect(fixture.nativeElement.querySelector('[data-testid="my-work-locked-band"]')).toBeNull();
+      expect(fixture.nativeElement.querySelector('[data-testid="q-locked-state"]')).toBeNull();
+      expect(band.textContent).not.toContain('not built');
     });
   });
 });

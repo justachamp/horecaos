@@ -7,9 +7,10 @@ import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { StaffMember } from '../../core/api/staff-member';
 import { Auth } from '../../core/auth/auth';
 import { MfaApi } from '../../core/auth/mfa-api';
-import { CurrentLocation } from '../../core/auth/current-location';
+import { CurrentLocation, LocationOption } from '../../core/auth/current-location';
 import { CurrentTenant } from '../../core/auth/current-tenant';
 import { OwnProfile } from '../../core/auth/own-profile';
+import { OwnPreferences } from '../../core/preferences/own-preferences';
 import { ScopeGrant } from '../../core/auth/session-context';
 import { I18n } from '../../core/i18n/i18n';
 import { MyProfilePage } from './my-profile-page';
@@ -26,6 +27,7 @@ class FakeCurrentTenant {
 
 class FakeCurrentLocation {
   readonly scope = signal<LocationScope | null>(null);
+  readonly options = signal<readonly LocationOption[]>([]);
   ensureLoaded = vi.fn().mockResolvedValue(undefined);
 }
 
@@ -53,7 +55,11 @@ async function setUp(
     setMyPhoto: vi.fn(),
     ...overrides,
   };
-  const ownProfile = { apply: vi.fn() };
+  const ownProfile = {
+    apply: vi.fn(),
+    adoptStoredLanguage: vi.fn(),
+    member: signal<StaffMember | null>(null),
+  };
   const tenant = new FakeCurrentTenant();
   tenant.scopes.set(scopes);
   const currentLocation = new FakeCurrentLocation();
@@ -67,6 +73,19 @@ async function setUp(
       { provide: CurrentTenant, useValue: tenant },
       { provide: CurrentLocation, useValue: currentLocation },
       { provide: Auth, useValue: { displayName: signal('Aziza') } },
+      // «Интерфейс» (ADR 0160) has its own spec; here it only has to render.
+      {
+        provide: OwnPreferences,
+        useValue: {
+          shell: signal({}),
+          orderBoard: signal({}),
+          persistent: signal(true),
+          writeFailed: signal(false),
+          updateShell: vi.fn(),
+          updateOrderBoard: vi.fn(),
+          reset: vi.fn().mockResolvedValue(undefined),
+        },
+      },
       // The second-factor card (ADR 0148) has its own spec; here it only has to render.
       {
         provide: MfaApi,
@@ -279,20 +298,34 @@ describe('MyProfilePage: «Личные данные» (ADR 0139, rows 0.2c and 
     ).toBe('Azizakhon');
   });
 
-  it('puts a chosen interface language to work on this device straight away', async () => {
+  it('hands a saved account language to the profile service, which applies it where this device has no choice of its own', async () => {
     const updated = staffMemberDetail({ principalSubject: 'me', uiLocale: 'en', version: 7 });
-    const { fixture } = await setUp([], null, ME, {
+    const { fixture, ownProfile } = await setUp([], null, ME, {
       updateMe: vi.fn().mockResolvedValue(updated),
     });
-    const i18n = TestBed.inject(I18n);
 
     click(fixture, 'my-profile-edit');
     type(fixture, 'staff-profile-ui-locale', 'en');
     click(fixture, 'staff-profile-save');
     await settle(fixture);
 
-    expect(i18n.locale()).toBe('en');
-    i18n.setLocale('ru');
+    // ADR 0160: the account's language is not this device's. Whether it shows up here at once is the
+    // profile service's call (it does where nobody has chosen a language on this browser, and does not
+    // where somebody has: the device's choice wins), and `own-profile.spec.ts` holds that rule.
+    expect(ownProfile.adoptStoredLanguage).toHaveBeenCalledWith(updated);
+  });
+
+  it('does not touch the language when the save did not change it', async () => {
+    const same = staffMemberDetail({ principalSubject: 'me', uiLocale: 'ru', version: 7 });
+    const { fixture, ownProfile } = await setUp([], null, ME, {
+      updateMe: vi.fn().mockResolvedValue(same),
+    });
+
+    click(fixture, 'my-profile-edit');
+    click(fixture, 'staff-profile-save');
+    await settle(fixture);
+
+    expect(ownProfile.adoptStoredLanguage).not.toHaveBeenCalled();
   });
 
   it('uploads a chosen photo as the image itself with my record’s version', async () => {

@@ -432,4 +432,15 @@ export const coreRu: AreaMessages<typeof coreEn> = {
   'settings.orderPolicy.field.reason': 'Причина изменения',
   'settings.orderPolicy.publish': 'Опубликовать',
   'settings.orderPolicy.publishing': 'Публикация…',
+
+  'shared.columnPicker.toggle': 'Столбцы',
+  'shared.columnPicker.label': 'Столбцы таблицы',
+  'shared.columnPicker.reset': 'Вернуть столбцы по умолчанию',
+  'shared.columnPicker.saved':
+    'Выбор сохраняется в вашей учётной записи и виден на всех ваших устройствах.',
+  'shared.columnPicker.session': 'Выбор действует только до конца этого сеанса.',
+  'shell.localeScope.thisDevice': 'Язык выбран только для этого устройства.',
+  'shell.localeScope.allDevices': 'Для всех моих устройств',
+  'shell.localeScope.keep': 'Только на этом устройстве',
+  'shell.localeScope.failed': 'Не удалось сохранить язык. Он остаётся только на этом устройстве.',
 };

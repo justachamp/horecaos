@@ -47,8 +47,9 @@ export const todayUzLatn: AreaMessages<typeof todayEn> = {
   'myWork.channel.empty': 'Bugun sizda hali buyurtmalar yoʻq',
   'myWork.payment.title': 'Toʻlov usuli boʻyicha tushum',
   'myWork.payment.empty': 'Bugun hali tushumlar qayd etilmagan',
-  'myWork.locked.title': 'Hali mavjud emas',
-  'myWork.locked.ask':
-    'Interfeysni shaxsiylashtirish (saqlangan filtrlar, joylashuv) hali qurilmagan.',
   'myWork.profile.body': 'Ism, telefon, rasm va tillar profilingizda oʻzgartiriladi.',
+
+  'myWork.interface.body':
+    'Til, standart filial, ustunlar va buyurtmalar doskasining saqlangan koʻrinishlari profilingizda oʻzgartiriladi.',
+  'myWork.interface.link': 'Interfeysni sozlash',
 };

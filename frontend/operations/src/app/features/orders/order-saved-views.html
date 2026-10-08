@@ -1,0 +1,107 @@
+<div class="order-saved-views">
+  <button
+    type="button"
+    class="order-saved-views__toggle q-body-sm"
+    aria-haspopup="true"
+    [attr.aria-expanded]="open()"
+    (click)="toggleMenu()"
+    data-testid="saved-views-toggle"
+  >
+    {{ 'orders.queue.views.toggle' | t }}
+    @if (views().length > 0) {
+      <span class="order-saved-views__count q-caption q-tnum">{{ views().length }}</span>
+    }
+  </button>
+
+  @if (open()) {
+    <div
+      class="order-saved-views__menu"
+      role="group"
+      [attr.aria-label]="'orders.queue.views.label' | t"
+      data-testid="saved-views-menu"
+    >
+      @for (view of views(); track view.id) {
+        <div class="order-saved-views__row">
+          <button
+            type="button"
+            class="order-saved-views__apply q-body-sm"
+            (click)="apply(view)"
+            data-testid="saved-view-apply"
+          >
+            <span class="order-saved-views__name">{{ view.label }}</span>
+            <span class="order-saved-views__tab q-caption">{{ tabLabelKey(view) | t }}</span>
+          </button>
+          <button
+            type="button"
+            class="order-saved-views__remove"
+            [attr.aria-label]="'orders.queue.views.remove' | t: { label: view.label }"
+            (click)="remove(view, $event)"
+            data-testid="saved-view-remove"
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+      } @empty {
+        <p class="order-saved-views__empty q-caption" data-testid="saved-views-empty">
+          {{ 'orders.queue.views.empty' | t }}
+        </p>
+      }
+
+      @if (naming()) {
+        <div class="order-saved-views__form">
+          <input
+            type="text"
+            class="order-saved-views__input q-body-sm"
+            [value]="draft()"
+            (input)="onDraft($any($event.target).value)"
+            (keydown.enter)="save()"
+            [attr.maxlength]="maxLabel * 2"
+            [attr.placeholder]="'orders.queue.views.name.placeholder' | t"
+            [attr.aria-label]="'orders.queue.views.name.label' | t"
+            [attr.aria-invalid]="problemKey() !== null"
+            data-testid="saved-view-name"
+          />
+          <button
+            type="button"
+            class="order-saved-views__save q-body-sm"
+            (click)="save()"
+            data-testid="saved-view-save"
+          >
+            {{ 'orders.queue.views.confirm' | t }}
+          </button>
+        </div>
+        @if (problemKey(); as problem) {
+          <p
+            class="order-saved-views__problem q-caption"
+            role="alert"
+            data-testid="saved-view-problem"
+          >
+            {{ problem | t: { max: maxLabel } }}
+          </p>
+        }
+        @if (leftOut()) {
+          <p class="order-saved-views__note q-caption" data-testid="saved-view-left-out">
+            {{ 'orders.queue.views.leftOut' | t }}
+          </p>
+        }
+      } @else if (atLimit()) {
+        <p class="order-saved-views__note q-caption" data-testid="saved-views-limit">
+          {{ 'orders.queue.views.limit' | t }}
+        </p>
+      } @else {
+        <button
+          type="button"
+          class="order-saved-views__new q-body-sm"
+          (click)="startNaming()"
+          data-testid="saved-view-new"
+        >
+          {{ 'orders.queue.views.save' | t }}
+        </button>
+      }
+
+      <p class="order-saved-views__note q-caption" data-testid="saved-views-note">
+        {{ (persistent() ? 'orders.queue.views.saved' : 'orders.queue.views.session') | t }}
+      </p>
+    </div>
+  }
+</div>

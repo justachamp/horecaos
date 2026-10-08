@@ -32,6 +32,15 @@ export const DEFAULT_LOCALE: Locale = 'ru';
 /** Exported for `i18n.spec.ts`'s cold-start test; not otherwise a public API. */
 export const STORAGE_KEY = 'horecaos.operations.locale';
 
+/**
+ * The signed-in person's **account** language, remembered on this browser only so the first paint after
+ * a reload is already in it (ADR 0160). It is not a choice made on this device and never counts as one:
+ * {@link STORAGE_KEY} is the device's own choice, and this key is a mirror of the staff record's
+ * `uiLocale` that {@link forgetAccountLocale} removes at sign-out, so the next person on a shared PC
+ * inherits nothing of it.
+ */
+export const ACCOUNT_STORAGE_KEY = 'horecaos.operations.accountLocale';
+
 /** One area's messages in one locale, as its module exports them. */
 type Messages = Readonly<Record<string, string>>;
 
@@ -329,14 +338,38 @@ export function isLocale(value: unknown): value is Locale {
  */
 export function peekStoredLocale(): Locale {
   try {
-    const stored = globalThis.localStorage?.getItem(STORAGE_KEY);
-    if (isLocale(stored)) {
-      return stored;
+    // ADR 0160, one rule for language and branch: a choice made on this device wins, the person's
+    // account default applies where this device has none, and the platform default applies last.
+    const device = globalThis.localStorage?.getItem(STORAGE_KEY);
+    if (isLocale(device)) {
+      return device;
+    }
+    const account = globalThis.localStorage?.getItem(ACCOUNT_STORAGE_KEY);
+    if (isLocale(account)) {
+      return account;
     }
   } catch {
     // Fall through to the default.
   }
   return DEFAULT_LOCALE;
+}
+
+/** Remembers the account language for the next first paint on this browser; `null` forgets it. */
+export function rememberAccountLocale(locale: Locale | null): void {
+  try {
+    if (locale === null) {
+      globalThis.localStorage?.removeItem(ACCOUNT_STORAGE_KEY);
+    } else {
+      globalThis.localStorage?.setItem(ACCOUNT_STORAGE_KEY, locale);
+    }
+  } catch {
+    // Storage is a convenience; a browser without it paints in the platform default once.
+  }
+}
+
+/** Sign-out: the next person on this browser inherits no language from the last one. */
+export function forgetAccountLocale(): void {
+  rememberAccountLocale(null);
 }
 
 /**
@@ -349,6 +382,25 @@ export function hasStoredLocale(): boolean {
     return isLocale(globalThis.localStorage?.getItem(STORAGE_KEY));
   } catch {
     return false;
+  }
+}
+
+/** Gives up this device's own language choice, so the account language (or the default) applies again. */
+function clearPersistedLocale(): void {
+  try {
+    globalThis.localStorage?.removeItem(STORAGE_KEY);
+  } catch {
+    // Nothing to give up on a browser that keeps nothing.
+  }
+}
+
+/** The device's own stored choice, or `null`. */
+function peekDeviceLocale(): Locale | null {
+  try {
+    const stored = globalThis.localStorage?.getItem(STORAGE_KEY);
+    return isLocale(stored) ? stored : null;
+  } catch {
+    return null;
   }
 }
 
@@ -416,6 +468,15 @@ export class I18n {
   private readonly current = signal<Locale>(peekStoredLocale());
 
   readonly locale: Signal<Locale> = this.current.asReadonly();
+
+  /**
+   * The language somebody chose **on this device** (ADR 0160), or `null` when nobody has: what makes a
+   * device override visible to «Мой профиль», which offers to give it up. Not the language in effect --
+   * that is {@link locale} -- because a person whose account carries a language and who never touched
+   * the switcher here is reading in it without having chosen anything on this machine.
+   */
+  private readonly device = signal<Locale | null>(peekDeviceLocale());
+  readonly deviceLocale: Signal<Locale | null> = this.device.asReadonly();
 
   /**
    * The messages actually backing {@link t} right now: every area of the active locale that is in
@@ -496,17 +557,33 @@ export class I18n {
    * Requests a locale. See the class doc comment for exactly what "requests"
    * means when the messages are not already cached.
    */
-  setLocale(locale: Locale): void {
+  setLocale(locale: Locale, options: { readonly persist?: boolean } = {}): void {
     this.lastRequested = locale;
     // Persisted immediately, not after the messages resolve: a reload
     // before the import ever finishes should still request this locale, not
     // fall back to whatever loaded last time -- see `main.ts`.
-    persistLocale(locale);
+    //
+    // `persist: false` is the account language being applied (ADR 0160): it is read, not chosen, so
+    // it does not become this device's override.
+    if (options.persist !== false) {
+      persistLocale(locale);
+      this.device.set(locale);
+    }
     if (this.missingIn(locale).length === 0) {
       this.applyLoaded(locale);
       return;
     }
     void this.applyOnceLoaded(locale);
+  }
+
+  /**
+   * Gives up this device's own choice (ADR 0160, «Использовать мой язык на этом устройстве»): the
+   * language in effect does not change by itself -- the caller applies the account language next --
+   * but a reload no longer pins the device to the old choice.
+   */
+  clearDeviceLocale(): void {
+    clearPersistedLocale();
+    this.device.set(null);
   }
 
   private missingIn(locale: Locale): MessageArea[] {

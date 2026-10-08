@@ -5,7 +5,7 @@ import { ApiClient } from '../api/api-client';
 import { ApiError } from '../api/problem-details';
 import { StaffMember, hasName } from '../api/staff-member';
 import { staffPaths } from '../api/staff-paths';
-import { I18n, hasStoredLocale, isLocale } from '../i18n/i18n';
+import { I18n, hasStoredLocale, isLocale, rememberAccountLocale } from '../i18n/i18n';
 import { PlatformLocales } from '../i18n/platform-locales';
 import { Auth } from './auth';
 import { CurrentTenant } from './current-tenant';
@@ -30,11 +30,14 @@ import { CurrentTenant } from './current-tenant';
  * have no record in the tenant (404), and the chip then falls back to the token
  * claim exactly as it did before this record existed.
  *
- * **The interface language follows the person to a new device, once.** The
- * record carries the language a person chose (`uiLocale`); on a browser where
- * nobody has chosen one yet, the first load applies it. A browser that already
- * has a chosen language keeps it -- the language switcher in the rail is a
- * per-device decision and a stored default must not fight it on every sign-in.
+ * **The interface language follows the person to a new device (ADR 0160).** The record carries the
+ * language a person chose for all their devices (`uiLocale`); a browser where nobody has chosen one *on
+ * that device* reads in it. The two are different things and are kept apart: the language switcher in the
+ * rail is a per-device decision (`horecaos.operations.locale`) and it always wins, while the account
+ * language is applied without being persisted as a choice, so it never turns into a device override
+ * behind the person's back. It is remembered only as a mirror for the next first paint
+ * (`rememberAccountLocale`), which sign-out clears. Precedence, the same rule as the default branch: this
+ * device's choice, then the account language, then Russian.
  */
 @Injectable({ providedIn: 'root' })
 export class OwnProfile {
@@ -85,18 +88,20 @@ export class OwnProfile {
     }
   }
 
-  private adoptStoredLanguage(member: StaffMember): void {
-    if (hasStoredLocale()) {
-      return;
-    }
-    if (member.uiLocale === null) {
-      return;
-    }
+  /**
+   * Applies the account language where this device has no choice of its own, and remembers it for the
+   * next first paint. Called on every load and after the person saves a new one, so an account language
+   * changed on another machine reaches this one at its next sign-in.
+   */
+  adoptStoredLanguage(member: StaffMember): void {
     // The record holds the registry's tag; a bare `uz` from an older record is read as `uz-Latn`.
-    const tag = this.registry.canonical(member.uiLocale);
-    if (isLocale(tag)) {
-      this.i18n.setLocale(tag);
+    const tag = member.uiLocale === null ? null : this.registry.canonical(member.uiLocale);
+    const accountLocale = tag !== null && isLocale(tag) ? tag : null;
+    rememberAccountLocale(accountLocale);
+    if (accountLocale === null || hasStoredLocale()) {
+      return;
     }
+    this.i18n.setLocale(accountLocale, { persist: false });
   }
 
   private async load(subject: string): Promise<void> {

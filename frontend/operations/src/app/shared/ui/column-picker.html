@@ -1,0 +1,45 @@
+<div class="q-column-picker">
+  <button
+    type="button"
+    class="q-column-picker__toggle q-body-sm"
+    aria-haspopup="true"
+    [attr.aria-expanded]="open()"
+    (click)="toggleMenu()"
+    data-testid="column-picker-toggle"
+  >
+    {{ 'shared.columnPicker.toggle' | t }}
+  </button>
+  @if (open()) {
+    <div
+      class="q-column-picker__menu"
+      role="group"
+      [attr.aria-label]="'shared.columnPicker.label' | t"
+      data-testid="column-picker-menu"
+    >
+      @for (item of columns(); track item.key) {
+        <label class="q-column-picker__item q-body-sm">
+          <input
+            type="checkbox"
+            [checked]="item.shown"
+            (change)="toggle(item)"
+            [attr.data-testid]="'column-picker-item-' + item.key"
+          />
+          {{ item.label }}
+        </label>
+      }
+      @if (canReset()) {
+        <button
+          type="button"
+          class="q-column-picker__reset q-caption"
+          (click)="resetRequested.emit()"
+          data-testid="column-picker-reset"
+        >
+          {{ 'shared.columnPicker.reset' | t }}
+        </button>
+      }
+      <p class="q-column-picker__note q-caption" data-testid="column-picker-note">
+        {{ (persistent() ? 'shared.columnPicker.saved' : 'shared.columnPicker.session') | t }}
+      </p>
+    </div>
+  }
+</div>

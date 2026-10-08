@@ -458,4 +458,38 @@ export const staffUzLatn: AreaMessages<typeof staffEn> = {
   'staff.mfa.policy.save': 'Saqlash',
   'staff.mfa.policy.saved': 'Saqlandi. Allaqachon kirganlardan keyingi kirishda soʻraladi.',
   'staff.mfa.policy.failed': 'Sozlamani saqlab boʻlmadi. Birozdan keyin qayta urinib koʻring.',
+
+  'staff.myProfile.interface.title': 'Interfeys',
+  'staff.myProfile.interface.sessionOnly':
+    'Ushbu kirish uchun tashkilotda xodim kartochkasi yoʻq: sozlamalar faqat seans tugaguncha amal qiladi.',
+  'staff.myProfile.interface.writeFailed':
+    'Soʻnggi oʻzgarishni saqlab boʻlmadi. U bu yerda koʻrinadi, ammo hisobga tushmadi.',
+  'staff.myProfile.interface.language.title': 'Til',
+  'staff.myProfile.interface.language.current': 'Interfeys tili: {language}.',
+  'staff.myProfile.interface.language.deviceOnly':
+    '«{language}» tili faqat shu qurilmada tanlangan. Hamma joyda amal qilishi uchun «Shaxsiy maʻlumotlar»da tilni belgilang.',
+  'staff.myProfile.interface.language.override':
+    'Ushbu qurilmada «{device}» tili tanlangan, hisobingizda esa «{account}». Bu yerda shu qurilmada tanlangani amal qiladi.',
+  'staff.myProfile.interface.language.useMine': 'Mening tilimdan shu qurilmada foydalanish',
+  'staff.myProfile.interface.branch.title': 'Standart filial',
+  'staff.myProfile.interface.branch.none': 'Tanlanmagan (roʻyxatdagi birinchisi)',
+  'staff.myProfile.interface.branch.hint':
+    'Konsol bu qurilmada filial tanlanmagan joyda shu filialda ochiladi.',
+  'staff.myProfile.interface.branch.stale':
+    'Bu filialga endi ruxsatingiz yoʻq, shuning uchun u ishlatilmaydi.',
+  'staff.myProfile.interface.branch.single': 'Sizga bitta filial ochiq — tanlash shart emas.',
+  'staff.myProfile.interface.views.title': 'Buyurtmalar doskasi koʻrinishlarim',
+  'staff.myProfile.interface.views.empty':
+    'Koʻrinishlar yoʻq. Buyurtmalar doskasidagi «Mening koʻrinishlarim» tugmasi bilan saqlang.',
+  'staff.myProfile.interface.views.rename': 'Qayta nomlash',
+  'staff.myProfile.interface.views.delete': 'Oʻchirish',
+  'staff.myProfile.interface.views.save': 'Saqlash',
+  'staff.myProfile.interface.views.cancel': 'Bekor qilish',
+  'staff.myProfile.interface.columns.title': 'Buyurtmalar doskasi ustunlari',
+  'staff.myProfile.interface.columns.reset': 'Ustunlarni standart holatga qaytarish',
+  'staff.myProfile.interface.reset.board':
+    'Doska uchun hammasini tiklash (ustunlar va koʻrinishlar)',
+  'staff.myProfile.interface.reset.confirm':
+    'Ustunlar va barcha saqlangan koʻrinishlar oʻchiriladi. Buni qaytarib boʻlmaydi.',
+  'staff.myProfile.interface.reset.yes': 'Ha, tiklash',
 };
