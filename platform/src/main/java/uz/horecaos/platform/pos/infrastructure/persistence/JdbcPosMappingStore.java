@@ -165,6 +165,43 @@ public class JdbcPosMappingStore {
         return id;
     }
 
+    /**
+     * Records a mapping a machine found, {@code ACTIVE} immediately (ADR 0171): the loyalty sync pairs a till
+     * customer with a points account by phone and records it here as {@code DISCOVERED}.
+     *
+     * @return the new mapping's id, or empty when either side is already claimed for this binding and type
+     *         ({@code uq_mapping_external} and {@code uq_mapping_horecaos} are table-wide, so a RETIRED row's
+     *         ids are burned too -- a conflict is a fact to report, never a reason to overwrite)
+     */
+    public Optional<UUID> createDiscovered(
+            UUID tenantId,
+            UUID installationId,
+            UUID bindingId,
+            MappingEntityType type,
+            UUID horecaosEntityId,
+            String externalEntityId,
+            Instant now) {
+        UUID id = Ids.newId();
+        int inserted = jdbc.sql("""
+                INSERT INTO integration.provider_entity_mappings
+                    (id, tenant_id, installation_id, binding_id, entity_type, horecaos_entity_id,
+                     external_entity_id, status, mapping_source, version, created_at, updated_at, last_seen_at)
+                VALUES (:id, :tenantId, :installationId, :bindingId, :entityType, :horecaosId,
+                        :externalId, 'ACTIVE', 'DISCOVERED', 0, :now, :now, :now)
+                ON CONFLICT DO NOTHING
+                """)
+                .param("id", id)
+                .param("tenantId", tenantId)
+                .param("installationId", installationId)
+                .param("bindingId", bindingId)
+                .param("entityType", type.storedAs())
+                .param("horecaosId", horecaosEntityId)
+                .param("externalId", externalEntityId)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .update();
+        return inserted == 1 ? Optional.of(id) : Optional.empty();
+    }
+
     /** @return false when the mapping does not exist for this tenant, is already RETIRED, or {@code expectedVersion} is stale */
     public boolean retire(UUID tenantId, UUID mappingId, long expectedVersion, Instant now) {
         int updated = jdbc.sql("""
@@ -429,6 +466,9 @@ public class JdbcPosMappingStore {
             // store never decrypts. A caller that may show a name (the mapping
             // pane, behind pos.sync.read) upgrades it from the staff cards.
             case OPERATOR -> resolveById(tenantId, "iam.staff_members", "display_reference", ids);
+            // ADR 0171: a points account has no name and must not gain one here -- this names the row, not the
+            // person behind it. Brand-scoped like the other brand-owned types.
+            case LOYALTY_CUSTOMER -> resolveLoyaltyAccountNames(tenantId, brandId, ids);
         };
     }
 
@@ -463,6 +503,25 @@ public class JdbcPosMappingStore {
             UUID tenantId, @Nullable UUID brandId, MappingEntityType type, UUID horecaosEntityId) {
         return !resolveHorecaosNames(tenantId, brandId, type, Set.of(horecaosEntityId))
                 .isEmpty();
+    }
+
+    private Map<UUID, String> resolveLoyaltyAccountNames(UUID tenantId, @Nullable UUID brandId, Set<UUID> ids) {
+        if (brandId == null) {
+            return Map.of();
+        }
+        return jdbc
+                .sql("""
+                SELECT a.id, 'Points account' AS name
+                  FROM loyalty.accounts a
+                 WHERE a.tenant_id = :tenantId AND a.brand_id = :brandId AND a.id = ANY(:ids)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("ids", ids.toArray(UUID[]::new))
+                .query((row, number) -> Map.entry(row.getObject("id", UUID.class), row.getString("name")))
+                .list()
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     private Map<UUID, String> resolveProductNames(UUID tenantId, @Nullable UUID brandId, Set<UUID> ids) {

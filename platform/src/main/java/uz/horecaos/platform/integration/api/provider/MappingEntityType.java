@@ -33,7 +33,8 @@ import java.util.Optional;
  * per-modifier candidate list, so their external side is always {@code
  * sourced=false}: an operator types the provider's own code by hand, the same
  * fallback {@link #COURIER} and {@link #CANCELLATION_REASON} already use.
- * {@link #OPERATOR} (ADR 0139) joins them on the same footing.
+ * {@link #OPERATOR} (ADR 0139) joins them on the same footing, and {@link #LOYALTY_CUSTOMER}
+ * (ADR 0171) is the one pairing nobody types: the loyalty sync discovers it.
  */
 public enum MappingEntityType {
     PRODUCT("VARIANT_PARENT"),
@@ -60,7 +61,20 @@ public enum MappingEntityType {
      * {@code OrderExport#operatorExternalId}, which had a reader and no author
      * until this value existed.
      */
-    OPERATOR("OPERATOR");
+    OPERATOR("OPERATOR"),
+
+    /**
+     * A customer of the tillside loyalty programme (ADR 0171, gap-map row 6.3b): which till customer is
+     * this points account. {@code horecaos_entity_id} is the points account's id ({@code
+     * loyalty.accounts.id}), {@code external_entity_id} the till's own customer id.
+     *
+     * <p>Never typed by a person and never sourced from a list: the sync finds each pair by the phone the
+     * till returns, through the customers module, and records it here as {@code DISCOVERED} only when the
+     * phone resolves to exactly one account that holds a points account at the binding's brand. No match,
+     * or more than one, is reported and never guessed (ADR 0015 forbids the auto-merge a guess would be),
+     * and no account is created from a till record.
+     */
+    LOYALTY_CUSTOMER("LOYALTY_CUSTOMER");
 
     private final String storedAs;
 

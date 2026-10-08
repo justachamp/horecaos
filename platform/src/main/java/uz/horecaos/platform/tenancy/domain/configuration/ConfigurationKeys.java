@@ -859,6 +859,52 @@ public final class ConfigurationKeys {
                     + "kept, by business date. The rows hold counts and no personal data.")
             .build();
 
+    /**
+     * ADR 0171 Decision 5: the most points one customer may be credited from a till in one business day
+     * without a person looking. Declared here so a stored row passes the startup validator, and declared
+     * identically in {@code loyalty.api.LoyaltyConfigurationKeys} where it is consumed, for the reason
+     * recorded on {@link #COMMERCIAL_ENFORCEMENT_CEILING}.
+     */
+    public static final ConfigurationKey<Long> LOYALTY_POS_SYNC_MAX_AUTO_CREDIT_MINOR = ConfigurationKey.of(
+                    "loyalty.pos_sync.max_auto_credit_minor", Long.class)
+            .defaultValue(100_000L)
+            .ownedBy("loyalty")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("Points one customer may be credited from the till in one business day before the "
+                    + "credit is held for review.")
+            .build();
+
+    /** ADR 0171 Decision 5: the same bound for a whole binding in one business day. */
+    public static final ConfigurationKey<Long> LOYALTY_POS_SYNC_MAX_BINDING_CREDIT_MINOR_PER_DAY = ConfigurationKey.of(
+                    "loyalty.pos_sync.max_binding_credit_minor_per_day", Long.class)
+            .defaultValue(2_000_000L)
+            .ownedBy("loyalty")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("Points one point-of-sale binding may credit from the till in one business day "
+                    + "before further credits are held for review.")
+            .build();
+
+    /** ADR 0171 Decision 8: the tenant says this brand's till keeps a bonus balance of its own. */
+    public static final ConfigurationKey<Boolean> LOYALTY_POS_TILL_KEEPS_BALANCE = ConfigurationKey.of(
+                    "loyalty.pos.till_keeps_balance", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("loyalty")
+            .tenantVisible()
+            .settableAt(ScopeType.BRAND)
+            .describedAs("Whether this brand's point-of-sale terminal keeps a customer bonus balance of its own.")
+            .build();
+
+    /** ADR 0171 Decision 3/4: seconds between pulls of what happened at a till. */
+    public static final ConfigurationKey<Integer> LOYALTY_POS_SYNC_PULL_INTERVAL_SECONDS = ConfigurationKey.of(
+                    "loyalty.pos_sync.pull_interval_seconds", Integer.class)
+            .defaultValue(300)
+            .ownedBy("loyalty")
+            .settableAt(ScopeType.PLATFORM)
+            .describedAs("Seconds between pulls of the movements that happened at a point-of-sale terminal.")
+            .build();
+
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             CART_EXPIRY_MINUTES,
             ORDERING_CART_RETENTION_DAYS,
@@ -876,6 +922,10 @@ public final class ConfigurationKeys {
             AUDIT_BUSINESS_RETENTION_DAYS,
             IAM_STAFF_MFA_REQUIREMENT,
             REPORTING_FUNNEL_RETENTION_DAYS,
+            LOYALTY_POS_SYNC_MAX_AUTO_CREDIT_MINOR,
+            LOYALTY_POS_SYNC_MAX_BINDING_CREDIT_MINOR_PER_DAY,
+            LOYALTY_POS_TILL_KEEPS_BALANCE,
+            LOYALTY_POS_SYNC_PULL_INTERVAL_SECONDS,
             CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN,
             CUSTOMERS_OTP_DELIVERY_CHANNEL_ORDER,
             CUSTOMERS_PII_EXPORT_APPROVAL_THRESHOLD_ROWS,

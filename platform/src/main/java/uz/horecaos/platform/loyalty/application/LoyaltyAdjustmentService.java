@@ -78,8 +78,16 @@ public class LoyaltyAdjustmentService {
      * that account need a second pair of eyes for something nobody chose — and an
      * approval queue full of those is an approval queue nobody reads.
      */
-    private static final List<String> UNCOUNTED_REASONS =
-            List.of(REASON_ACCOUNT_MERGE, REASON_LEGACY_OPENING_BALANCE, REASON_ORDER_ACCRUAL_CLAWBACK);
+    private static final List<String> UNCOUNTED_REASONS = List.of(
+            REASON_ACCOUNT_MERGE,
+            REASON_LEGACY_OPENING_BALANCE,
+            REASON_ORDER_ACCRUAL_CLAWBACK,
+            // ADR 0171: what happened at the till is the till's, not an operator's discretion. The caps on a
+            // system actor are the sync's own; counting a day's till earnings here would put the next routine
+            // goodwill credit on that account in front of an approver for something nobody chose.
+            // POS_SYNC_CORRECTION is deliberately not listed: a person chose that one.
+            PosBalanceSyncReasons.EARN,
+            PosBalanceSyncReasons.SPEND);
 
     /**
      * How far back the aggregate looks.
@@ -281,6 +289,137 @@ public class LoyaltyAdjustmentService {
                 command.correlationId(),
                 null,
                 now));
+    }
+
+    /**
+     * What happened at a till, written into the ledger as the one order-free movement the ledger admits (ADR 0171
+     * Decision 4): an {@code ADJUSTMENT} with a reason code the sync alone writes and a system actor.
+     *
+     * @param earn        true for points the customer earned at the till (a credit that grants a lot, expiring on the
+     *                    platform's schedule like every credited adjustment); false for points spent there (a debit
+     *                    consuming lots oldest-expiry-first)
+     * @param amountMinor positive: the till's own movement, whatever its direction
+     * @param actor       {@code system:pos-sync:<bindingId>}; an opaque component name, never a person
+     */
+    public record TillMovementCommand(
+            UUID tenantId,
+            UUID brandId,
+            UUID accountId,
+            boolean earn,
+            long amountMinor,
+            String reasonCode,
+            String actor,
+            String idempotencyKey,
+            String correlationId) {}
+
+    /**
+     * @param appliedMinor  what moved the balance
+     * @param absorbedMinor what a till spend took beyond the balance; the brand carries it, the balance never goes
+     *                      negative (ADR 0046), and the caller records it as a discrepancy
+     * @param entryId       the ledger entry, null when nothing moved
+     * @param duplicate     true when the idempotency key had already been used and nothing was written
+     */
+    public record TillMovementResult(
+            long appliedMinor, long absorbedMinor, @Nullable UUID entryId, boolean duplicate) {}
+
+    /**
+     * Applies one till movement. The same arithmetic as {@link #adjust}, without its approval, because the caps that
+     * bound a system actor are the caller's (ADR 0171 Decision 5): a credit above them never reaches this method.
+     *
+     * <p>A spend larger than the balance applies what the balance covers. Both halves keep the invariants this
+     * ledger lives by: the entry equals the balance movement, the lots equal the balance, and the account never goes
+     * below zero.
+     */
+    @Transactional
+    public TillMovementResult applyTillMovement(TillMovementCommand command) {
+        if (command.amountMinor() <= 0) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "A till movement moves a positive amount");
+        }
+        Instant now = clock.instant();
+        AccountRow account = store.findAccountById(command.tenantId(), command.accountId())
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such points account"));
+
+        long applied = command.earn() ? command.amountMinor() : Math.min(command.amountMinor(), account.balanceMinor());
+        long absorbed = command.amountMinor() - applied;
+        if (applied == 0) {
+            return new TillMovementResult(0L, absorbed, null, false);
+        }
+
+        long signed = command.earn() ? applied : -applied;
+        long balanceAfter = account.balanceMinor() + signed;
+        UUID entryId = UUID.randomUUID();
+        boolean recorded = store.appendEntry(
+                new JdbcLoyaltyStore.NewEntry(
+                        entryId,
+                        command.tenantId(),
+                        account.id(),
+                        EntryType.ADJUSTMENT,
+                        signed,
+                        balanceAfter,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        command.reasonCode(),
+                        command.actor(),
+                        null,
+                        command.idempotencyKey(),
+                        now),
+                now);
+        if (!recorded) {
+            return new TillMovementResult(0L, 0L, null, true);
+        }
+
+        if (command.earn()) {
+            store.creditBalance(command.tenantId(), account.id(), applied, 0L, now);
+            store.insertLot(
+                    UUID.randomUUID(),
+                    command.tenantId(),
+                    account.id(),
+                    entryId,
+                    applied,
+                    now,
+                    now.plus(Duration.ofDays(180)),
+                    LotStatus.ACTIVE,
+                    0,
+                    now);
+        } else {
+            consumeFromOldestLots(command.tenantId(), account.id(), applied, now);
+            if (!store.destroyBalance(command.tenantId(), account.id(), applied, now)) {
+                // A redemption committed between the read above and this statement. Rolling back is the whole of the
+                // repair: the entry goes with it and the next pull imports the movement again.
+                throw new IllegalStateException("The balance moved inside a till movement on account " + account.id());
+            }
+        }
+
+        audit.record(new AuditFact(
+                UUID.randomUUID(),
+                AuditClass.BUSINESS,
+                "loyalty.balance.adjust",
+                ActorRef.service(command.actor()),
+                ResourceScope.brand(command.tenantId(), command.brandId()),
+                "loyalty.account",
+                account.id(),
+                (long) account.version(),
+                AuditFact.Outcome.SUCCEEDED,
+                "A movement at the point of sale",
+                Map.of(
+                        "amountMinor",
+                        signed,
+                        "reasonCode",
+                        command.reasonCode(),
+                        "balanceAfterMinor",
+                        balanceAfter,
+                        "absorbedMinor",
+                        absorbed),
+                null,
+                "loyalty.adjust",
+                null,
+                command.correlationId(),
+                null,
+                now));
+        return new TillMovementResult(applied, absorbed, entryId, false);
     }
 
     /**
