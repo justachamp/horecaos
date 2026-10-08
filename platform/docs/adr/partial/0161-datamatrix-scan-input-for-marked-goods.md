@@ -1,38 +1,41 @@
 # ADR 0161: DataMatrix scan input for marked goods
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Not started — the display half of row `X.35` is built
-  and the scan half has nothing behind it. `q-qr-code`
-  (`frontend/operations/src/app/shared/ui/qr-code.ts`) renders a QR bitmap and,
-  by ADR 0119's own sentence, "performs no scanning and no camera access"; no
-  file under `frontend/operations/src`, `frontend/storefront/src` or `mobile/lib`
-  reads a barcode, calls `BarcodeDetector` or listens for a scanner's keystrokes
-  (the only `barcode` in the console is a text field in the product editor,
-  `catalog-domain.ts` and `product-editor-page.ts`). The catalog half of marking
-  is built: `catalog.fiscal_classifications.marking_required` and
-  `marking_scheme` (`NONE` or `DATA_MATRIX`, V0028, with
-  `ck_fiscal_classification_marking_agrees`), the `barcode varchar(13)` beside
-  them, the partial index `ix_fiscal_classifications_marked`, the publication
-  blocker `PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING` (`CatalogValidator`), and
-  `catalog.api.FiscalNodeFacts.markedNodes` / `requiresMarkingCapablePayment`,
-  implemented by `CatalogFiscalFacts` and **called by nobody**: no payments code
-  reads it and `payments.payment_methods.supports_marking`, which ADR 0038 says
-  removes Payme from a marked cart, exists in no migration. The receipt half is
-  half built: `FiscalReceiptLine.markingCodes` carries Click's `Labels` and
-  `ClickFiscalAdapter` sends them, `PaymeReceiptDetail` refuses a marked line
-  (`MARKING_CODES_UNSUPPORTED`), but `PartnerFiscalizationBridge` still submits
-  one visibly synthetic aggregate line for the whole order, so no real line, and
-  no code, reaches a receipt. The capture half is absent: `fiscal.fiscal_unit_marks`
-  does not exist (V0039 says so and why), `FiscalReasonCode.MARKS_INCOMPLETE` has
-  no producer, `OperationsOrderWeighingController` records that "no such endpoint
-  exists yet (marking is not built)", `OrderStateService` holds `FULFILLING` and
-  `COMPLETED` behind `CATCHWEIGHT_NOT_RECONCILED` and behind nothing about marks,
-  `ordering.order_lines` carries no marking fact, and `AmendmentCommandType`
-  refuses `REMOVE_LINES`. One live hazard follows from the gaps: a tenant
-  administrator can already set `marking_required` on a variant through
-  `PUT .../variants/{id}/fiscal-classification` and sell it, with no capture, to a
-  customer paying through Payme. No tenant sells a marked SKU today (V0028 says
-  so), which is the only reason it has not mattered.
+- Implementation status: Partial — the whole path from the scanner to the receipt is built
+  behind `feature.marked_goods`, which is off for every tenant and stays off until the
+  preconditions this record names hold, so no operator can use any of it today.
+  `ordering.order_line_marks` (V0557) holds one mark per physical unit: the code is an
+  ADR 0029 `FINANCIAL` envelope bound to its row with a per-tenant keyed lookup hash, a
+  live code is unique in the tenant, and a mark is released and never deleted.
+  `OperationsOrderMarksController` captures, takes back and reads under `order.advance`
+  and `order.read` with an `Idempotency-Key` and no `If-Match`; `OrderMarkService`
+  normalises the code the way the console does (one vector file, held identical on both
+  sides by `repo_hygiene.py`), checks its shape per `fiscal.marking.structure_check`,
+  checks the GTIN against the classification's barcode when it has one, derives the stage
+  from the status, takes the order-row lock before it reads and rate-limits to 240 a
+  minute per principal. The handover guard `OrderMarksGuard` refuses `advance` and the
+  kitchen proposal with `MARKS_INCOMPLETE`, cancellation releases the marks, and an
+  amendment that would replace a scanned line is refused `MARKS_ALREADY_CAPTURED`. In the
+  console `q-datamatrix-input` turns a keyboard-wedge scanner (or the browser's
+  `BarcodeDetector`, loaded on demand) into a scan and keeps nothing, and
+  `q-order-marking-panel` is embedded in the order detail and on the expo ticket, which
+  will not hand an order over while a marked line is short. The receipt half is built:
+  `MarkedOrderReceiptProjection` builds a marked order's lines with their codes (decrypted
+  once, under a recorded purpose, and only for a provider that can carry them) so a marked
+  order never takes the synthetic aggregate line, `PartnerFiscalizationBridge` reports
+  `BLOCKED_MARKS`, `FiscalReasonCode.MARKS_INCOMPLETE` now has its producer,
+  `MarksCompletedReopener` reopens such a document when the marks complete, and the
+  blocked fiscal worklist shows captured of required. Publishing a marked classification is
+  refused while the flag is off (`MARKED_GOODS_NOT_ENABLED`), which closes the hazard this
+  record named. What is not done: the real Asl Belgisi code shape, the scanner profile and
+  Click's `Labels` cardinality are open inputs (the GS1 shape is an assumption with a
+  switch, and a unit-per-item split would live in the projection alone); nothing has run
+  on a scanner or a camera; the state system's check is a seam (`MarkingVerificationPort`,
+  `NOT_WIRED`); the Payme payment-options exclusion
+  (`payments.payment_methods.supports_marking`) is not built, so a marked Payme document
+  is refused at the projection and not hidden at checkout; the receipt's VAT percent is
+  derived from the quote's tax share until ADR 0166's line builder replaces it; inventory
+  is not a scan point in v1; and the gap-map row `X.35` is for the owner to re-audit.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides

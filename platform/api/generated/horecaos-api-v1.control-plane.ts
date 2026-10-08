@@ -366,6 +366,7 @@ export interface BlockedDocumentResponse {
   documentType?: string;
   hasEvidence?: boolean;
   legalEntityId?: string;
+  marks?: MarkProgressResponse;
   orderId?: string;
   providerType?: string;
   publicOrderNumber?: string;
@@ -2006,6 +2007,11 @@ export interface MappingView {
   status?: string;
   updatedAt?: string;
   version?: number;
+}
+
+export interface MarkProgressResponse {
+  captured?: number;
+  required?: number;
 }
 
 export interface MarketView {
