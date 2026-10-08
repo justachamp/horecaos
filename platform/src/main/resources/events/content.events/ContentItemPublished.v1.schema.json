@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/content.events/ContentItemPublished.v1.schema.json",
+  "title": "ContentItemPublished v1 payload",
+  "description": "An item of brand-authored storefront content was published, or its next revision was (ADR 0157). Ids, the kind, the placement, the revision number, the schedule and the channel codes. Never the text, which is in the revision, and never a URL.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["itemId", "brandId", "kind", "revisionNo", "channelCodes"],
+  "properties": {
+    "itemId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": "string", "format": "uuid" },
+    "kind": {
+      "type": "string",
+      "enum": ["BANNER", "PROMO_CARD", "PRODUCT_GROUP", "STORY_GROUP", "POPUP", "NEWS", "GALLERY_ALBUM", "RECIPE", "VACANCY"]
+    },
+    "placement": {
+      "type": ["string", "null"],
+      "enum": ["HOME_CAROUSEL", "HOME_GROUPS", "STORY_RAIL", "PROMO_GRID", "ENTRY_MODAL", null]
+    },
+    "revisionNo": { "type": "integer", "minimum": 1 },
+    "startsAt": { "type": ["string", "null"], "format": "date-time" },
+    "endsAt": { "type": ["string", "null"], "format": "date-time" },
+    "channelCodes": { "type": "array", "items": { "type": "string", "maxLength": 32 } }
+  }
+}

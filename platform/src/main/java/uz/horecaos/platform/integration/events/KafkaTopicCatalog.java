@@ -40,6 +40,12 @@ public final class KafkaTopicCatalog {
     /** ADR 0112: scenario decisions, a guest's run ending, and an offer being published. */
     public static final String MARKETING_EVENTS = "marketing.events";
 
+    /**
+     * ADR 0157: an item of brand-authored storefront content was published or withdrawn. Ids, kinds,
+     * placements and instants only -- never text, never a URL.
+     */
+    public static final String CONTENT_EVENTS = "content.events";
+
     /** ADR 0111 lead facts: a lead was registered, moved, handed to a branch or converted. */
     public static final String CUSTOMERS_EVENTS = "customers.events";
 
@@ -79,6 +85,10 @@ public final class KafkaTopicCatalog {
             // back that scenario alone. Shares tenancy's partition count: a pilot's
             // audiences are hundreds, not hundreds of thousands.
             new TopicSpecification(MARKETING_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
+            // ADR 0157. A brand publishes a handful of items a week, so this is the lightest
+            // business-fact topic there is and shares tenancy's partition count; keyed by item, so
+            // one item's facts stay in order. Nothing on it is text.
+            new TopicSpecification(CONTENT_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
             // ADR 0040. A confirmed availability push is one record per dish per binding and
             // a brand-wide stop across a pilot's bound venues is hundreds, not thousands a
             // minute, so this shares tenancy's partition count: keyed by binding, so one

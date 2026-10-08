@@ -2793,6 +2793,28 @@ public class JdbcCatalogStore {
                 > 0;
     }
 
+    /**
+     * Which of these ids a publication holds, for one entity type (ADR 0157): one indexed read
+     * however many ids are asked about. Tenant-scoped, so an id of another tenant is absent.
+     */
+    public java.util.Set<UUID> publicationEntityIds(
+            UUID publicationId, UUID tenantId, EntityType entityType, java.util.Collection<UUID> entityIds) {
+        if (entityIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return new java.util.HashSet<>(jdbc.sql("""
+                        SELECT entity_id FROM catalog.publication_items
+                        WHERE publication_id = :publicationId AND tenant_id = :tenantId
+                          AND entity_type = :entityType AND entity_id = ANY(:entityIds)
+                        """)
+                .param("publicationId", publicationId)
+                .param("tenantId", tenantId)
+                .param("entityType", entityType.name())
+                .param("entityIds", entityIds.toArray(UUID[]::new))
+                .query(UUID.class)
+                .list());
+    }
+
     /** Reads a published snapshot. The storefront's only source. */
     public List<PublicationItem> publicationItems(UUID publicationId, EntityType entityType) {
         return jdbc.sql("""

@@ -119,6 +119,12 @@ public final class EventCatalog {
     public static final String MARKETING_EVENTS_TOPIC = KafkaTopicCatalog.MARKETING_EVENTS;
 
     /**
+     * ADR 0157 content facts. Its own topic: nothing about a banner being published has anything in
+     * common with a scenario decision per guest per step, and nothing on it carries text or a URL.
+     */
+    public static final String CONTENT_EVENTS_TOPIC = KafkaTopicCatalog.CONTENT_EVENTS;
+
+    /**
      * ADR 0012's durable scheduler. A command, not a fact: {@code PosSyncRequested}
      * says "start a catalog import now", and the durable timer that decided it was
      * due lives in {@code integration.pos_sync_schedules}, never in Kafka.
@@ -691,6 +697,30 @@ public final class EventCatalog {
                     "An offer version was put in front of campaigns (ADR 0112). The offer, its brand "
                             + "and its version number; never the promotion or rule it references, which a "
                             + "consumer reads through the authorized offers API."),
+            new EventContract(
+                    "ContentItemPublished",
+                    1,
+                    "content",
+                    CONTENT_EVENTS_TOPIC,
+                    "itemId",
+                    "events/content.events/ContentItemPublished.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "An item of brand-authored storefront content was published, or its next revision was "
+                            + "(ADR 0157). Ids, the kind, the placement, the revision number, the schedule and the "
+                            + "channel codes -- never the text, which is in the revision, and never a URL."),
+            new EventContract(
+                    "ContentItemWithdrawn",
+                    1,
+                    "content",
+                    CONTENT_EVENTS_TOPIC,
+                    "itemId",
+                    "events/content.events/ContentItemWithdrawn.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "An item of storefront content was taken out of front of customers (ADR 0157), by a "
+                            + "withdrawal or by archiving it while live. Ids, the kind, the placement and the reason "
+                            + "code; every revision is kept."),
             // ADR 0012's durable scheduler command. The claim that decided this
             // command should exist happened in PostgreSQL, under FOR UPDATE SKIP
             // LOCKED, in the same transaction that advanced the schedule's

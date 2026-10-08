@@ -139,7 +139,8 @@ class EndpointCapabilityDeclarationTests {
                     || isDeviceEnrolmentBootstrapEndpoint(handler)
                     || isScopeResolvedCourierPolicyEndpoint(handler)
                     || isPreAccountPickupLocationSearchEndpoint(handler)
-                    || isDeliveryFeePreviewEndpoint(handler)) {
+                    || isDeliveryFeePreviewEndpoint(handler)
+                    || isContentCounterEndpoint(handler)) {
                 continue;
             }
             if (authorizationDeclarationCount(handler) == 0) {
@@ -269,6 +270,7 @@ class EndpointCapabilityDeclarationTests {
                     || isDeviceEnrolmentBootstrapEndpoint(handler)
                     || isPreAccountPickupLocationSearchEndpoint(handler)
                     || isDeliveryFeePreviewEndpoint(handler)
+                    || isContentCounterEndpoint(handler)
                     || isDispatchRuleSimulationEndpoint(handler)
                     || isPromotionSimulationEndpoint(handler)
                     || isGeocodeLookupEndpoint(handler)) {
@@ -723,6 +725,31 @@ class EndpointCapabilityDeclarationTests {
     private static boolean isDeliveryFeePreviewEndpoint(Method handler) {
         return pathOf(handler)
                 .equals("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/delivery-fee");
+    }
+
+    /**
+     * ADR 0157, Release 2: the storefront's anonymous content counters, {@code POST
+     * /api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/events}.
+     *
+     * <p>A mutating endpoint with no principal, exempt from both tests above for the reasons
+     * {@link #isPreAccountIdentityEndpoint} and {@link #isDeliveryFeePreviewEndpoint} give. The caller
+     * is a customer's browser before it has any account and reports that a banner was shown; an ADR
+     * 0025 capability would decide nothing and {@code @CustomerOwned} would be a lie, there being no
+     * row of theirs to own.
+     *
+     * <p>No {@code Idempotency-Key}: {@code IdempotencyInterceptor} scopes a key by the calling
+     * subject and an anonymous caller has none. The counters are client-reported, labelled so, and
+     * inflatable by anyone (ADR 0157, Accepted trade-offs), so a retried batch counting twice is inside
+     * what is already accepted; the controls are the batch cap of twenty in the service and the per-IP
+     * budget on the {@code @storefront_content_events} path in both Caddyfiles. It stores no identifier
+     * of any kind.
+     *
+     * <p>Matched on the exact path and never on a prefix, like every exemption here: the rest of
+     * {@code /content} is read-only on the storefront and the staff surface under
+     * {@code /api/v1/tenants} declares a capability on every handler.
+     */
+    private static boolean isContentCounterEndpoint(Method handler) {
+        return pathOf(handler).equals("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/events");
     }
 
     /**

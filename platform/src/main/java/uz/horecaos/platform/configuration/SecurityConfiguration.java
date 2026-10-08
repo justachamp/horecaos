@@ -101,6 +101,28 @@ public class SecurityConfiguration {
                                 // publication rows, never authoring tables, so
                                 // there is no path from here to a draft.
                                 "/api/v1/storefront/tenants/*/brands/*/locations/*/menu",
+                                // ADR 0157: the brand's home content -- banners, promo cards,
+                                // product groups, and from later releases stories, a promo grid and
+                                // a pop-up. The same document for every visitor of a brand, a
+                                // channel and a language, with no personal data in it: ADR 0112's
+                                // personalised offers stay a separate, authenticated read and never
+                                // enter it. Without this line an anonymous visitor is answered 401
+                                // whatever the edge does. Listed one path at a time like the menu.
+                                "/api/v1/storefront/tenants/*/brands/*/content/home",
+                                // ADR 0157, Release 5: the editorial tier. The routes exist for a
+                                // brand only when the content.editorial.enabled entitlement and the
+                                // brand's content.editorial policy both say yes; opened here so that
+                                // an anonymous visitor reads them, and answered 404 by the service
+                                // when either does not.
+                                "/api/v1/storefront/tenants/*/brands/*/content/features",
+                                "/api/v1/storefront/tenants/*/brands/*/content/news",
+                                "/api/v1/storefront/tenants/*/brands/*/content/news/*",
+                                "/api/v1/storefront/tenants/*/brands/*/content/gallery",
+                                "/api/v1/storefront/tenants/*/brands/*/content/gallery/*",
+                                "/api/v1/storefront/tenants/*/brands/*/content/recipes",
+                                "/api/v1/storefront/tenants/*/brands/*/content/recipes/*",
+                                "/api/v1/storefront/tenants/*/brands/*/content/careers",
+                                "/api/v1/storefront/tenants/*/brands/*/content/careers/*",
                                 // Rows 4.4c/4.4d: whether one variant is orderable
                                 // here right now, and its remaining count where
                                 // QUANTITY tracking applies -- StorefrontInventoryController's
@@ -202,6 +224,16 @@ public class SecurityConfiguration {
                                 // — see the POST pair below — and authorised by the
                                 // X-Dine-In-Token the handler resolves to a row.
                                 "/api/v1/storefront/dine-in/sessions/*")
+                        .permitAll()
+                        // ADR 0157, Release 2: anonymous per-day counters (impressions, clicks,
+                        // dismissals, story completions) reported by the storefront in batches of
+                        // at most twenty. A mutating endpoint with no principal, opened by exact
+                        // path; it stores no identifier of any kind, takes no Idempotency-Key
+                        // (IdempotencyInterceptor scopes a key by the calling subject and an
+                        // anonymous caller has none, and the counters are client-reported and
+                        // inflatable by anyone -- a retried batch counting twice is inside what
+                        // is already accepted), and is rate-limited per IP at the edge.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/storefront/tenants/*/brands/*/content/events")
                         .permitAll()
                         // ADR 0037's delivery-fee companion, moved from GET to POST on
                         // 2026-09-21 (audit follow-up (b)) so the customer's coordinate

@@ -316,6 +316,35 @@ public final class EntitlementKeys {
             .describedAs("Assistant turns answered by the language model in the plan's billing period.")
             .build();
 
+    /**
+     * ADR 0157: whether a tenant's brands may run the editorial tier -- news, gallery albums,
+     * recipes and a vacancy listing -- at all. The platform owner's switch per tenant.
+     *
+     * <p>{@code safeDefault(FALSE)}, matching {@link #TELEGRAM_DIGESTS_ENABLED} and
+     * {@link #ASSISTANT_ANSWERING_ENABLED}: a tenant that was never sold it must not grow a news
+     * section. The tenant's own choice of which of the four kinds to run is the brand-scoped
+     * {@code content.editorial} policy; both must say yes. Gated by name through
+     * {@code iam.api.EntitlementGate}, so {@code content} has no edge to this module.
+     */
+    public static final EntitlementKey<Boolean> CONTENT_EDITORIAL_ENABLED = EntitlementKey.feature(
+                    "content.editorial.enabled")
+            .safeDefault(Boolean.FALSE)
+            .ownedBy("content")
+            .describedAs("Whether the tenant's brands may publish news, gallery albums, recipes and a vacancy "
+                    + "listing on their storefronts (ADR 0157).")
+            .build();
+
+    /**
+     * ADR 0157, Release 3: video upload and playback in storefront content. {@code safeDefault(FALSE)}:
+     * video is the expensive medium (storage, egress, a decoder on the customer's phone), so it is
+     * opt-in per tenant by the platform owner and counted by the existing storage entitlement.
+     */
+    public static final EntitlementKey<Boolean> CONTENT_VIDEO_ENABLED = EntitlementKey.feature("content.video.enabled")
+            .safeDefault(Boolean.FALSE)
+            .ownedBy("content")
+            .describedAs("Whether the tenant's brands may upload and play video in storefront content (ADR 0157).")
+            .build();
+
     private static final Map<String, EntitlementKey<?>> BY_CODE = index(List.of(
             BRANDS_MAX_COUNT,
             LOCATIONS_MAX_COUNT,
@@ -337,7 +366,9 @@ public final class EntitlementKeys {
             TELEGRAM_CONVERSATIONS_ENABLED,
             TELEGRAM_BROADCASTS_ENABLED,
             ASSISTANT_ANSWERING_ENABLED,
-            ASSISTANT_TURNS_MONTHLY_INCLUDED));
+            ASSISTANT_TURNS_MONTHLY_INCLUDED,
+            CONTENT_EDITORIAL_ENABLED,
+            CONTENT_VIDEO_ENABLED));
 
     private EntitlementKeys() {}
 
