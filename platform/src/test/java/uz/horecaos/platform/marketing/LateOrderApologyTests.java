@@ -11,6 +11,7 @@ import static uz.horecaos.platform.marketing.ScenarioHarness.TENANT;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -32,6 +33,7 @@ import uz.horecaos.platform.marketing.application.AutomationRulePreviewService;
 import uz.horecaos.platform.marketing.application.AutomationRuleService;
 import uz.horecaos.platform.marketing.application.AutomationSweepService;
 import uz.horecaos.platform.marketing.application.ContactPolicyService.OverrideRequest;
+import uz.horecaos.platform.marketing.domain.AutomationGuardKeys;
 import uz.horecaos.platform.marketing.domain.AutomationTriggerType;
 import uz.horecaos.platform.marketing.domain.MarketingChannel;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAutomationRuleStore;
@@ -516,6 +518,107 @@ class LateOrderApologyTests {
             assertThat(run.status()).isEqualTo("REFUSED");
             assertThat(run.refusalReason()).isEqualTo("CONSENT_WITHHELD");
         });
+    }
+
+    // ------------------------------------------------------------ once per order, across rules
+
+    @Test
+    @DisplayName(
+            "two armed rules that both fit one late order apologise for it once, and the other says why it did not")
+    void anOrderIsApologisedForOnceWhateverTheNumberOfRules() {
+        UUID guest = h.reachableGuest("+998901500020");
+        UUID order = lateOrder(guest, Duration.ofMinutes(90));
+        UUID gentle = armedRule(15);
+        UUID firm = armedRule(LATE_BY);
+
+        sweeps.sweepLateOrderApology();
+        sweeps.sweepLateOrderApology();
+
+        // One message for one order, whichever rule found it first. Per-rule guard keys alone
+        // would let each rule claim its own row and each send.
+        assertThat(h.port.sent()).hasSize(1);
+        List<AutomationRunRow> all = new ArrayList<>(runs(gentle));
+        all.addAll(runs(firm));
+        assertThat(all).hasSize(2);
+        assertThat(all.stream().map(AutomationRunRow::status)).containsExactlyInAnyOrder("FIRED", "CANCELLED");
+        assertThat(all.stream()
+                        .filter(run -> run.status().equals("CANCELLED"))
+                        .findFirst()
+                        .orElseThrow()
+                        .cancelledReason())
+                .contains("Another rule");
+        // The delivery path is keyed by the order and not by the rule that found it, and the
+        // frequency ledger counted the apology once.
+        assertThat(h.port.sent().getFirst().idempotencyKey())
+                .contains(AutomationGuardKeys.order(order))
+                .doesNotContain(gentle.toString())
+                .doesNotContain(firm.toString());
+        assertThat(h.engagementStore.sendsWithin(
+                        TENANT, BRAND, guest, h.clock.instant().minus(Duration.ofDays(1))))
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName(
+            "the database holds an order to one apology across rules, and a firing that was refused does not hold it")
+    void theDatabaseHoldsOneApologyPerOrder() {
+        UUID guest = h.reachableGuest("+998901500021");
+        UUID order = lateOrder(guest, Duration.ofMinutes(90));
+        UUID other = lateOrder(guest, Duration.ofMinutes(80));
+        UUID first = armedRule(15);
+        UUID second = armedRule(LATE_BY);
+        String type = AutomationTriggerType.LATE_ORDER_APOLOGY.name();
+        UUID firstRun = UUID.randomUUID();
+
+        assertThat(runStore.claim(
+                        firstRun,
+                        TENANT,
+                        BRAND,
+                        first,
+                        guest,
+                        type,
+                        AutomationGuardKeys.order(order),
+                        order,
+                        h.clock.instant()))
+                .isTrue();
+        // In flight, the first rule's firing holds the order: a second rule that raced past the
+        // service's check meets the unique index instead of sending.
+        assertThat(runStore.claim(
+                        UUID.randomUUID(),
+                        TENANT,
+                        BRAND,
+                        second,
+                        guest,
+                        type,
+                        AutomationGuardKeys.order(order),
+                        order,
+                        h.clock.instant()))
+                .isFalse();
+        // Another order is another apology.
+        assertThat(runStore.claim(
+                        UUID.randomUUID(),
+                        TENANT,
+                        BRAND,
+                        second,
+                        guest,
+                        type,
+                        AutomationGuardKeys.order(other),
+                        other,
+                        h.clock.instant()))
+                .isTrue();
+        // A firing that was refused sent nothing, so another rule may still reach the guest.
+        runStore.markRefused(TENANT, firstRun, "CONSENT_WITHHELD");
+        assertThat(runStore.claim(
+                        UUID.randomUUID(),
+                        TENANT,
+                        BRAND,
+                        second,
+                        guest,
+                        type,
+                        AutomationGuardKeys.order(order),
+                        order,
+                        h.clock.instant()))
+                .isTrue();
     }
 
     // ----------------------------------------------------------------- helpers
