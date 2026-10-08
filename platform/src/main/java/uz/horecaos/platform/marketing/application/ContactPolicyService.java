@@ -8,6 +8,7 @@ import java.time.LocalTime;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -256,44 +257,90 @@ public class ContactPolicyService {
             }
         }
 
-        EngagementPolicy effective = withQuietHours(base, applicable);
-        if (effective.isQuiet(now)) {
-            Instant open = effective.nextOpenBoundary(now);
+        List<EngagementPolicy> windows = quietWindows(base, applicable);
+        EngagementPolicy holding = holdingWindow(windows, now);
+        if (holding != null) {
+            Instant open = openAt(windows, now);
             return ContactDecision.allowAt(
                     open,
                     "Held to %s: quiet hours %s to %s (%s) apply to this channel"
-                            .formatted(
-                                    open,
-                                    effective.quietHoursStart(),
-                                    effective.quietHoursEnd(),
-                                    effective.timezone()));
+                            .formatted(open, holding.quietHoursStart(), holding.quietHoursEnd(), holding.timezone()));
         }
         return ContactDecision.allowAt(now, null);
     }
 
-    /** The brand policy with every override's wider closed window folded in. Never narrower than the brand's. */
-    static EngagementPolicy withQuietHours(EngagementPolicy base, List<OverrideRow> applicable) {
-        LocalTime start = base.quietHoursStart();
-        LocalTime end = base.quietHoursEnd();
+    /**
+     * Every closed window that bears on a send: the brand's own first, then one for each
+     * override that states quiet hours.
+     *
+     * <p><strong>The allowed time is the intersection of the windows' allowed times.</strong>
+     * A send may leave only when no window holds it, so an override can add closed time and
+     * can never remove any. The previous reading folded the overrides into one window by
+     * taking the earliest start and the latest end, which is the union of two windows only
+     * while both wrap midnight: an override of 05:00 to 11:00 satisfies "starts no later than
+     * 21:00 and ends no earlier than 10:00" and does not wrap, and folding it in left the
+     * window 05:00 to 11:00 and opened the whole evening. Asking each window on its own
+     * has no such case, whatever a row says.
+     */
+    static List<EngagementPolicy> quietWindows(EngagementPolicy base, List<OverrideRow> applicable) {
+        List<EngagementPolicy> windows = new ArrayList<>();
+        windows.add(base);
         for (OverrideRow override : applicable) {
             if (override.quietHoursStart() == null || override.quietHoursEnd() == null) {
                 continue;
             }
-            if (override.quietHoursStart().isBefore(start)) {
-                start = override.quietHoursStart();
-            }
-            if (override.quietHoursEnd().isAfter(end)) {
-                end = override.quietHoursEnd();
+            windows.add(new EngagementPolicy(
+                    override.quietHoursStart(),
+                    override.quietHoursEnd(),
+                    base.timezone(),
+                    base.messagesPer7Days(),
+                    base.messagesPer30Days(),
+                    base.smsPricePerSegmentMinor(),
+                    base.currency()));
+        }
+        return windows;
+    }
+
+    /** The window that holds {@code moment} for longest, or null when none does. */
+    static @Nullable EngagementPolicy holdingWindow(List<EngagementPolicy> windows, Instant moment) {
+        EngagementPolicy holding = null;
+        for (EngagementPolicy window : windows) {
+            if (window.isQuiet(moment)
+                    && (holding == null || window.nextOpenBoundary(moment).isAfter(holding.nextOpenBoundary(moment)))) {
+                holding = window;
             }
         }
-        return new EngagementPolicy(
-                start,
-                end,
-                base.timezone(),
-                base.messagesPer7Days(),
-                base.messagesPer30Days(),
-                base.smsPricePerSegmentMinor(),
-                base.currency());
+        return holding;
+    }
+
+    /**
+     * The first instant at or after {@code moment} at which every window is open.
+     *
+     * <p>Leaving one window can land inside another, so the answer is walked forward until
+     * a moment is open to all. Each step passes the end of at least one window, so a handful
+     * of steps is the most that two or three windows can need; the bound is only there so a
+     * window that is never open (a start equal to its end reads as always quiet) cannot spin.
+     */
+    static Instant openAt(List<EngagementPolicy> windows, Instant moment) {
+        Instant at = moment;
+        for (int step = 0; step < windows.size() * 2 + 2; step++) {
+            Instant latest = at;
+            boolean held = false;
+            for (EngagementPolicy window : windows) {
+                if (window.isQuiet(at)) {
+                    held = true;
+                    Instant open = window.nextOpenBoundary(at);
+                    if (open.isAfter(latest)) {
+                        latest = open;
+                    }
+                }
+            }
+            if (!held) {
+                return at;
+            }
+            at = latest;
+        }
+        return at;
     }
 
     /** Where a period's count begins: a calendar day or week in the brand's zone, or a rolling window. */
@@ -357,6 +404,14 @@ public class ContactPolicyService {
             if (request.quietHoursEnd().isBefore(EngagementPolicy.DEFAULT_QUIET_END)) {
                 throw invalid(("Quiet hours may be tightened and never loosened: an end of %s is earlier than %s")
                         .formatted(request.quietHoursEnd(), EngagementPolicy.DEFAULT_QUIET_END));
+            }
+            // The closed window is the evening and the morning, so it wraps midnight: it starts
+            // after it ends. A start before its end is a window inside one day, which can
+            // satisfy both bounds above (05:00 to 11:00) and still leave the evening open.
+            if (!request.quietHoursStart().isAfter(request.quietHoursEnd())) {
+                throw invalid(("Quiet hours may be tightened and never loosened: %s to %s does not wrap midnight, "
+                                + "so it would leave open hours the platform keeps closed")
+                        .formatted(request.quietHoursStart(), request.quietHoursEnd()));
             }
         }
     }

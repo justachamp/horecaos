@@ -185,6 +185,7 @@ final class ScenarioHarness {
     final MutableConfiguration configuration = new MutableConfiguration();
     final OrdersByGuest orders = new OrdersByGuest();
     final List<Object> events = new CopyOnWriteArrayList<>();
+    final SwitchableEntitlements entitlements = new SwitchableEntitlements();
     final FakeCampaignMessagePort port = new FakeCampaignMessagePort()
             .withBody("ru", "Скидка для вас, {{name}}!")
             .withBody("uz-Latn", "Sizga chegirma, {{name}}!")
@@ -253,7 +254,7 @@ final class ScenarioHarness {
         projection = new CustomerMetricProjectionService(metricStore, clock);
         audiences = new AudienceService(audienceStore, metricStore, engagementStore, eligibility, audit, clock);
         scenarioService = new ScenarioService(
-                campaignStore, scenarioStore, offerStore, engagementStore, audiences, port, audit, clock);
+                campaignStore, scenarioStore, offerStore, engagementStore, audiences, estimator, port, audit, clock);
         enrolment = new ScenarioEnrolmentService(campaignStore, audienceStore, scenarioStore);
         campaigns = new CampaignService(
                 campaignStore,
@@ -262,13 +263,22 @@ final class ScenarioHarness {
                 estimator,
                 port,
                 audit,
-                new AlwaysEntitledService(),
+                entitlements,
                 scenarioService,
                 clock);
-        sends = new CampaignSendService(
-                campaignStore, audienceStore, engagementStore, eligibility, estimator, port, enrolment, clock, 100);
-        suppressions = new MarketingSuppressionService(engagementStore, audit, clock);
         contactPolicy = new ContactPolicyService(contactPolicyStore, engagementStore, audit, clock);
+        sends = new CampaignSendService(
+                campaignStore,
+                audienceStore,
+                engagementStore,
+                eligibility,
+                contactPolicy,
+                estimator,
+                port,
+                enrolment,
+                clock,
+                100);
+        suppressions = new MarketingSuppressionService(engagementStore, audit, clock);
         presented = new PresentedOfferService(presentedStore, engagementStore, configuration, clock);
         offerService = new OfferService(
                 offerStore,
@@ -291,6 +301,7 @@ final class ScenarioHarness {
                 estimator,
                 presented,
                 orders,
+                entitlements,
                 configuration,
                 publisher,
                 transactions,
@@ -389,6 +400,31 @@ final class ScenarioHarness {
                 BRAND,
                 new EngagementOverride(null, null, null, null, null, minorPerSegment, "UZS"),
                 clock.instant());
+    }
+
+    /** A template that is one SMS segment in every locale. */
+    static final String SHORT_TEMPLATE = "SHORT_NOTICE";
+
+    /** A template that is three SMS segments in every locale: 150 Cyrillic characters, or 400 Latin ones. */
+    static final String LONG_TEMPLATE = "LONG_NOTICE";
+
+    /**
+     * Gives the two templates above their wording, so that what a step costs depends on which step
+     * it is. The fake port's default wording is one segment whatever the key, which prices a
+     * three-step scenario as three times its first message and cannot tell the two apart.
+     */
+    void templatesOfOneAndThreeSegments() {
+        port.withTemplateBody(SHORT_TEMPLATE, "ru", "\u041f\u0440\u0438\u0432\u0435\u0442")
+                .withTemplateBody(SHORT_TEMPLATE, "uz-Latn", "Salom")
+                .withTemplateBody(SHORT_TEMPLATE, "en", "Hi")
+                .withTemplateBody(LONG_TEMPLATE, "ru", "\u0430".repeat(150))
+                .withTemplateBody(LONG_TEMPLATE, "uz-Latn", "a".repeat(400))
+                .withTemplateBody(LONG_TEMPLATE, "en", "a".repeat(400));
+    }
+
+    /** A Telegram step: no marginal cost, and a channel only some plans include. */
+    static StepDraft telegramStep(int waitSeconds) {
+        return new StepDraft("MESSAGING_APP", null, "TELEGRAM_NOTICE", waitSeconds, null, null);
     }
 
     /** An SMS step with no wait, no offer and no conditions. */
@@ -558,6 +594,37 @@ final class ScenarioHarness {
                         BRAND,
                         created.id(),
                         created.rowVersion(),
+                        approver,
+                        UUID.fromString(approver.subject()),
+                        "corr")
+                .id();
+    }
+
+    /**
+     * A newer version of the offer's lineage, drafted and published: what the offer's author does when
+     * the wording or the window changes. The version passed in becomes SUPERSEDED.
+     */
+    UUID publishedNewVersion(UUID offerId) {
+        var current = offerService.require(TENANT, BRAND, offerId);
+        OfferService.OfferDraft draft = new OfferService.OfferDraft(
+                current.displayName() + " (revised)",
+                current.pricingPromotionId(),
+                current.loyaltyAccrualRuleId(),
+                current.validFrom(),
+                current.validUntil(),
+                current.audienceId(),
+                current.allowedChannels(),
+                current.templateKey(),
+                current.templateVersion(),
+                current.bannerImageReference());
+        var next = offerService.newVersion(
+                TENANT, BRAND, offerId, draft, author, UUID.fromString(author.subject()), "corr");
+        return offerService
+                .publish(
+                        TENANT,
+                        BRAND,
+                        next.id(),
+                        next.rowVersion(),
                         approver,
                         UUID.fromString(approver.subject()),
                         "corr")

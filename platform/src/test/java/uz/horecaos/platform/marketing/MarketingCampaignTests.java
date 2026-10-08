@@ -51,6 +51,7 @@ import uz.horecaos.platform.marketing.application.CampaignExpansionScheduler;
 import uz.horecaos.platform.marketing.application.CampaignScheduledSendScheduler;
 import uz.horecaos.platform.marketing.application.CampaignSendService;
 import uz.horecaos.platform.marketing.application.CampaignService;
+import uz.horecaos.platform.marketing.application.ContactPolicyService;
 import uz.horecaos.platform.marketing.application.CustomerMetricProjectionService;
 import uz.horecaos.platform.marketing.application.MarketingEligibility;
 import uz.horecaos.platform.marketing.application.MarketingSuppressionService;
@@ -65,6 +66,7 @@ import uz.horecaos.platform.marketing.domain.RefusalReason;
 import uz.horecaos.platform.marketing.domain.SuppressionReason;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAudienceStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCampaignStore;
+import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcContactPolicyStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCustomerMetricStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcEngagementStore;
 import uz.horecaos.platform.support.TestDatabase;
@@ -200,7 +202,16 @@ class MarketingCampaignTests {
         campaigns = new CampaignService(
                 campaignStore, engagementStore, audiences, estimator, port, audit, new AlwaysEntitledService(), clock);
         sends = new CampaignSendService(
-                campaignStore, audienceStore, engagementStore, eligibility, estimator, port, clock, 100);
+                campaignStore,
+                audienceStore,
+                engagementStore,
+                eligibility,
+                new ContactPolicyService(new JdbcContactPolicyStore(jdbc), engagementStore, audit, clock),
+                estimator,
+                port,
+                null,
+                clock,
+                100);
         suppressions = new MarketingSuppressionService(engagementStore, audit, clock);
     }
 

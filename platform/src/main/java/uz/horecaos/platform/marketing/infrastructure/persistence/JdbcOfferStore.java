@@ -186,12 +186,17 @@ public class JdbcOfferStore {
                 == 1;
     }
 
-    /** Retires a version: it stops being selectable, and every scenario that already references it stops applying it. */
+    /**
+     * Retires a version: it stops being selectable, and every scenario that already references it stops applying it.
+     *
+     * <p>A superseded version can be retired too. Supersession leaves it in the hands of the
+     * campaigns approved with it, so retirement is the one act that takes it back from them.
+     */
     public boolean retire(UUID tenantId, UUID offerId, int expectedRowVersion, Instant now) {
         return jdbc.sql("""
                 UPDATE marketing.offers
                    SET status = 'RETIRED', row_version = row_version + 1, updated_at = :now
-                 WHERE tenant_id = :tenantId AND id = :id AND status IN ('DRAFT', 'PUBLISHED')
+                 WHERE tenant_id = :tenantId AND id = :id AND status IN ('DRAFT', 'PUBLISHED', 'SUPERSEDED')
                    AND row_version = :expected
                 """)
                         .param("now", utc(now))
@@ -280,9 +285,24 @@ public class JdbcOfferStore {
             Instant createdAt,
             Instant updatedAt) {
 
-        /** Whether this version may be handed to a guest at {@code now}: published and inside its window. */
-        public boolean appliesAt(Instant now) {
-            return "PUBLISHED".equals(status)
+        /**
+         * Whether a campaign that was approved with this version still carries it.
+         *
+         * <p>Publishing a newer version supersedes this one for anyone <em>choosing</em> an
+         * offer from now on (authoring a step still requires a published version), and does
+         * nothing to a campaign approved with it: an approved scenario keeps
+         * the version it was approved with until it is revised and approved again (ADR 0112),
+         * for the reason an approver signs a specific offer and not a name. Only a retirement,
+         * which is somebody saying this offer must stop, or the end of its own window,
+         * takes it away.
+         */
+        public boolean carriedByApprovedCampaigns() {
+            return "PUBLISHED".equals(status) || "SUPERSEDED".equals(status);
+        }
+
+        /** {@link #carriedByApprovedCampaigns} and inside the version's own validity window at {@code now}. */
+        public boolean honouredAt(Instant now) {
+            return carriedByApprovedCampaigns()
                     && !validFrom.isAfter(now)
                     && (validUntil == null || validUntil.isAfter(now));
         }

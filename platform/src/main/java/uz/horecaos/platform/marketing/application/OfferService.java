@@ -184,6 +184,10 @@ public class OfferService {
     /**
      * Puts a draft in force, superseding the lineage's previous published version.
      *
+     * <p>Superseding changes what a new author can choose and nothing else. A campaign that
+     * was approved with the previous version keeps it, step by step, until it is revised and
+     * approved again; only {@link #retire} or the version's own validity window ends it.
+     *
      * <p>The fact is appended in the same transaction ({@code BEFORE_COMMIT}), so an offer
      * is never published without anything downstream being able to hear of it.
      */
@@ -226,7 +230,12 @@ public class OfferService {
         return after;
     }
 
-    /** Takes a version out of use. Every scenario that references it stops applying it at the next step. */
+    /**
+     * Takes a version out of use. Every scenario that references it stops applying it at the next step.
+     *
+     * <p>This is the act that ends a campaign's use of a version that has been superseded: publishing
+     * a newer version does not.
+     */
     @Transactional
     public OfferRow retire(
             UUID tenantId,
@@ -239,7 +248,7 @@ public class OfferService {
         OfferRow before = require(tenantId, brandId, offerId);
         Instant now = clock.instant();
         if (!offers.retire(tenantId, offerId, expectedRowVersion, now)) {
-            if (!List.of("DRAFT", "PUBLISHED").contains(before.status())) {
+            if (!List.of("DRAFT", "PUBLISHED", "SUPERSEDED").contains(before.status())) {
                 throw new ApiException(ErrorCode.UNPROCESSABLE_STATE, "This version is already " + before.status());
             }
             throw ApiException.staleVersion(expectedRowVersion, before.rowVersion());

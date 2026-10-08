@@ -72,7 +72,8 @@ public class JdbcPresentedOfferStore {
                   JOIN marketing.offers o ON o.id = p.offer_id AND o.tenant_id = p.tenant_id
                  WHERE p.tenant_id = :tenantId AND p.brand_id = :brandId AND p.customer_account_id = :accountId
                    AND p.surface = :surface AND p.dismissed_at IS NULL
-                   AND o.status = 'PUBLISHED' AND o.valid_from <= :now
+                   AND (o.status = 'PUBLISHED' OR (o.status = 'SUPERSEDED' AND p.campaign_id IS NOT NULL))
+                   AND o.valid_from <= :now
                    AND (o.valid_until IS NULL OR o.valid_until > :now)
                  ORDER BY p.created_at, p.id
                 """)
