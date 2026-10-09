@@ -256,13 +256,14 @@ public class SchedulingConfiguration {
      * branches that could not see each other: the scenario runner's scheduler (ADR
      * 0112), the SMS delivery-receipt sweeper (ADR 0146), the card top-up settlement
      * sweeper (ADR 0095) and the e-invoice state sweeper (ADR 0096). Batch 20 added
-     * two so far: {@code StaffSignInSweeper.sweepOnce} (ADR 0176), which ends the
+     * three so far: {@code StaffSignInSweeper.sweepOnce} (ADR 0176), which ends the
      * records of sessions Keycloak no longer lists and deletes sign-in history past
-     * its retention, and {@code RosterMissedSweeper.sweepOnce} (ADR 0156), which marks
-     * a published roster entry whose shift ended without anyone clocking in. The
+     * its retention, {@code RosterMissedSweeper.sweepOnce} (ADR 0156), which marks
+     * a published roster entry whose shift ended without anyone clocking in, and the
+     * service-recovery SLA sweeper ({@code RecoverySlaSweeper}, ADR 0159). The
      * pool-size test counts them.
      */
-    static final int DEFAULT_POOL_SIZE = 82;
+    static final int DEFAULT_POOL_SIZE = 83;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

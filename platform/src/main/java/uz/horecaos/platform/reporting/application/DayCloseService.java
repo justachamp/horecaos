@@ -34,6 +34,8 @@ import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingSt
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceOrder;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceRefund;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceTender;
+import uz.horecaos.platform.reviews.api.RecoveryFactSource;
+import uz.horecaos.platform.reviews.api.ReviewFactSource;
 import uz.horecaos.platform.web.api.Quantities;
 import uz.horecaos.platform.workforce.api.StaffShiftFactSource;
 
@@ -67,30 +69,57 @@ public class DayCloseService {
     private final Clock clock;
     private final @Nullable PromotionRedemptionSource promotionRedemptions;
     private final @Nullable StaffShiftFactSource staffShifts;
+    private final @Nullable ReviewFactSource reviewFacts;
+    private final @Nullable RecoveryFactSource recoveryFacts;
 
     public DayCloseService(
             JdbcReportingStore store, BusinessDayService businessDays, SubjectPseudonym pseudonym, Clock clock) {
-        this(store, businessDays, pseudonym, clock, null);
+        this(store, businessDays, pseudonym, clock, null, null, null, null);
     }
 
-    /**
-     * @param promotionRedemptions ADR 0140: where the redemption fact (7.9) comes from, read
-     *        through the {@code pricing.api} port and never from pricing's tables (ADR 0023);
-     *        null builds no promotion facts, which is what a close with no pricing wired does
-     */
     public DayCloseService(
             JdbcReportingStore store,
             BusinessDayService businessDays,
             SubjectPseudonym pseudonym,
             Clock clock,
             @Nullable PromotionRedemptionSource promotionRedemptions) {
-        this(store, businessDays, pseudonym, clock, promotionRedemptions, null);
+        this(store, businessDays, pseudonym, clock, promotionRedemptions, null, null, null);
+    }
+
+    /** The close with the promotion and the workforce sources wired and no review or recovery source. */
+    public DayCloseService(
+            JdbcReportingStore store,
+            BusinessDayService businessDays,
+            SubjectPseudonym pseudonym,
+            Clock clock,
+            @Nullable PromotionRedemptionSource promotionRedemptions,
+            @Nullable StaffShiftFactSource staffShifts) {
+        this(store, businessDays, pseudonym, clock, promotionRedemptions, staffShifts, null, null);
+    }
+
+    /** The close with the promotion and the review and recovery sources wired and no workforce source. */
+    public DayCloseService(
+            JdbcReportingStore store,
+            BusinessDayService businessDays,
+            SubjectPseudonym pseudonym,
+            Clock clock,
+            @Nullable PromotionRedemptionSource promotionRedemptions,
+            @Nullable ReviewFactSource reviewFacts,
+            @Nullable RecoveryFactSource recoveryFacts) {
+        this(store, businessDays, pseudonym, clock, promotionRedemptions, null, reviewFacts, recoveryFacts);
     }
 
     /**
+     * @param promotionRedemptions ADR 0140: where the redemption fact (7.9) comes from, read
+     *        through the {@code pricing.api} port and never from pricing's tables (ADR 0023);
+     *        null builds no promotion facts, which is what a close with no pricing wired does
      * @param staffShifts ADR 0156: where the staff-hours fact comes from, read through the {@code
      *        workforce.api} port and never from workforce's tables (ADR 0023); null builds no staff
      *        shift facts, which is what a close with no workforce wired does
+     * @param reviewFacts ADR 0159: where the review and tag facts come from, read through the
+     *        {@code reviews.api} port; null builds none
+     * @param recoveryFacts ADR 0159: where the service-recovery case fact comes from, through the
+     *        same module's other port; null builds none
      */
     @Autowired
     public DayCloseService(
@@ -99,13 +128,17 @@ public class DayCloseService {
             SubjectPseudonym pseudonym,
             Clock clock,
             @Nullable PromotionRedemptionSource promotionRedemptions,
-            @Nullable StaffShiftFactSource staffShifts) {
+            @Nullable StaffShiftFactSource staffShifts,
+            @Nullable ReviewFactSource reviewFacts,
+            @Nullable RecoveryFactSource recoveryFacts) {
         this.store = store;
         this.businessDays = businessDays;
         this.pseudonym = pseudonym;
         this.clock = clock;
         this.promotionRedemptions = promotionRedemptions;
         this.staffShifts = staffShifts;
+        this.reviewFacts = reviewFacts;
+        this.recoveryFacts = recoveryFacts;
     }
 
     /**
@@ -140,6 +173,13 @@ public class DayCloseService {
                 tenantId,
                 derived.promotionRedemptions().stream()
                         .map(ReportingFacts.PromotionRedemptionFact::redemptionId)
+                        .toList(),
+                businessDate);
+        // The review fact is keyed by review alone, for the same reason.
+        store.clearMisfiledReviews(
+                tenantId,
+                derived.reviews().stream()
+                        .map(ReportingFacts.ReviewFact::reviewId)
                         .toList(),
                 businessDate);
 
@@ -182,13 +222,18 @@ public class DayCloseService {
         derived.promotionRedemptions().forEach(store::insertPromotionRedemptionFact);
         // ADR 0156: closed staff shifts, in the same transaction for the same reason.
         derived.staffShifts().forEach(store::insertStaffShiftFact);
+        // ADR 0159 (5.4/5.5): the review facts with the day, the case fact upserted because a case is
+        // opened on one day and closed on another. The same "written whole or not at all" reason.
+        derived.reviews().forEach(store::insertReviewFact);
+        derived.reviewTags().forEach(store::insertReviewTagFact);
+        derived.recoveryCases().forEach(store::upsertRecoveryCaseFact);
 
         store.completeRun(runId, derived.orders().size(), derived.lines().size(), 0, clock.instant());
 
         log.info(
                 "Closed business day {} for tenant {}: {} orders, {} lines, {} tenders, {} refunds, "
                         + "{} call-hours, {} deliveries, {} fee resolutions, {} external-delivery costs, "
-                        + "{} promotion redemptions, {} staff shifts",
+                        + "{} promotion redemptions, {} staff shifts, {} reviews, {} recovery cases",
                 businessDate,
                 tenantId,
                 derived.orders().size(),
@@ -200,7 +245,9 @@ public class DayCloseService {
                 derived.feeResolutions().size(),
                 derived.externalDeliveryCosts().size(),
                 derived.promotionRedemptions().size(),
-                derived.staffShifts().size());
+                derived.staffShifts().size(),
+                derived.reviews().size(),
+                derived.recoveryCases().size());
 
         return new CloseResult(
                 runId,
@@ -279,6 +326,8 @@ public class DayCloseService {
 
         comparePromotionFacts(divergences, tenantId, businessDate, derived.promotionRedemptions());
         compareStaffShifts(divergences, tenantId, businessDate, derived.staffShifts());
+        compareReviewFacts(divergences, tenantId, businessDate, derived.reviews());
+        compareRecoveryFacts(divergences, tenantId, businessDate, derived.recoveryCases());
         comparePaymentMix(divergences, tenantId, businessDate, derived.tenders());
 
         for (Divergence divergence : divergences) {
@@ -525,6 +574,68 @@ public class DayCloseService {
                                 source.startedAt(),
                                 source.endedAt()))
                         .toList();
+        // ADR 0159 (5.4/5.5): the reviews submitted in the window and the cases opened or closed in it,
+        // through the reviews.api ports. The customer becomes the ADR 0029 keyed pseudonym here and
+        // never travels as an account id; no comment, note, tag label or courier crosses the port.
+        List<ReportingFacts.ReviewFact> reviewFactList = new ArrayList<>();
+        List<ReportingFacts.ReviewTagFact> reviewTagFactList = new ArrayList<>();
+        if (reviewFacts != null) {
+            for (ReviewFactSource.ReviewFact source : reviewFacts.submittedBetween(tenantId, from, to)) {
+                reviewFactList.add(new ReportingFacts.ReviewFact(
+                        tenantId,
+                        source.reviewId(),
+                        businessDate,
+                        boundary.version(),
+                        MetricRegistry.CALCULATION_VERSION,
+                        source.brandId(),
+                        source.locationId(),
+                        source.orderId(),
+                        pseudonym.of(tenantId, source.customerAccountId()),
+                        source.rating(),
+                        source.hasComment(),
+                        source.tags().size()));
+                for (ReviewFactSource.TagFact tag : source.tags()) {
+                    reviewTagFactList.add(new ReportingFacts.ReviewTagFact(
+                            tenantId,
+                            source.reviewId(),
+                            tag.tagId(),
+                            businessDate,
+                            boundary.version(),
+                            MetricRegistry.CALCULATION_VERSION,
+                            source.brandId(),
+                            source.locationId(),
+                            tag.category(),
+                            tag.sentiment()));
+                }
+            }
+        }
+        List<ReportingFacts.RecoveryCaseFact> recoveryCaseFacts = new ArrayList<>();
+        if (recoveryFacts != null) {
+            for (RecoveryFactSource.CaseFact source : recoveryFacts.touchedBetween(tenantId, from, to)) {
+                Instant closedAt = source.closedAt();
+                recoveryCaseFacts.add(new ReportingFacts.RecoveryCaseFact(
+                        tenantId,
+                        source.caseId(),
+                        boundary.dateOf(source.openedAt()),
+                        closedAt == null ? null : boundary.dateOf(closedAt),
+                        boundary.version(),
+                        MetricRegistry.CALCULATION_VERSION,
+                        source.brandId(),
+                        source.locationId(),
+                        source.orderId(),
+                        source.reviewId(),
+                        source.rating(),
+                        source.state(),
+                        source.outcomeCode(),
+                        seconds(source.openedAt(), source.firstResponseAt()),
+                        seconds(source.openedAt(), closedAt),
+                        source.firstResponseBreached(),
+                        source.resolutionBreached(),
+                        source.compensationCount(),
+                        source.remedyMoneyMinor(),
+                        source.remedyMoneyMinor() > 0 ? source.remedyCurrency() : null));
+            }
+        }
 
         return new DerivedDay(
                 orders,
@@ -538,7 +649,14 @@ public class DayCloseService {
                 feeResolutions,
                 externalDeliveryCosts,
                 promotionFacts,
-                staffShiftFacts);
+                staffShiftFacts,
+                reviewFactList,
+                reviewTagFactList,
+                recoveryCaseFacts);
+    }
+
+    private static @Nullable Long seconds(Instant from, @Nullable Instant to) {
+        return to == null ? null : Duration.between(from, to).toSeconds();
     }
 
     /**
@@ -787,6 +905,72 @@ public class DayCloseService {
     }
 
     /**
+     * ADR 0159: the review count, the sum of ratings and the tag count per brand, against the rows
+     * the close stored. A review is final once submitted, but an erasure or a repair of a row after
+     * the day closed is a divergence for recut to report, not a silent rewrite.
+     */
+    private void compareReviewFacts(
+            List<Divergence> into, UUID tenantId, LocalDate businessDate, List<ReportingFacts.ReviewFact> derived) {
+        Map<UUID, long[]> stored = new LinkedHashMap<>();
+        store.readReviewDayTotals(tenantId, businessDate)
+                .forEach(total ->
+                        stored.put(total.brandId(), new long[] {total.reviews(), total.ratingSum(), total.tags()}));
+        Map<UUID, long[]> fresh = new LinkedHashMap<>();
+        for (var fact : derived) {
+            long[] totals = fresh.computeIfAbsent(fact.brandId(), brand -> new long[3]);
+            totals[0]++;
+            totals[1] += fact.rating();
+            totals[2] += fact.tagCount();
+        }
+        java.util.Set<UUID> brands = new java.util.LinkedHashSet<>(stored.keySet());
+        brands.addAll(fresh.keySet());
+        long[] none = new long[3];
+        for (UUID brand : brands) {
+            long[] before = stored.getOrDefault(brand, none);
+            long[] after = fresh.getOrDefault(brand, none);
+            String dimension = "brand=%s".formatted(brand);
+            compare(into, dimension, "reviews.count", 1, before[0], after[0]);
+            compare(into, dimension, "reviews.rating_sum", 1, before[1], after[1]);
+            compare(into, dimension, "reviews.tagged", 1, before[2], after[2]);
+        }
+    }
+
+    /**
+     * ADR 0159: the cases opened on the day and the cases closed on it, per brand. A case that
+     * closes after its opening day closed does not diverge that day: it is opened there, and it is
+     * counted as closed on the later day, which is what the close of that day stores.
+     */
+    private void compareRecoveryFacts(
+            List<Divergence> into,
+            UUID tenantId,
+            LocalDate businessDate,
+            List<ReportingFacts.RecoveryCaseFact> derived) {
+        Map<UUID, long[]> stored = new LinkedHashMap<>();
+        store.readRecoveryDayTotals(tenantId, businessDate)
+                .forEach(total -> stored.put(total.brandId(), new long[] {total.opened(), total.closed()}));
+        Map<UUID, long[]> fresh = new LinkedHashMap<>();
+        for (var fact : derived) {
+            long[] totals = fresh.computeIfAbsent(fact.brandId(), brand -> new long[2]);
+            if (businessDate.equals(fact.openedBusinessDate())) {
+                totals[0]++;
+            }
+            if (businessDate.equals(fact.closedBusinessDate())) {
+                totals[1]++;
+            }
+        }
+        java.util.Set<UUID> brands = new java.util.LinkedHashSet<>(stored.keySet());
+        brands.addAll(fresh.keySet());
+        long[] none = new long[2];
+        for (UUID brand : brands) {
+            long[] before = stored.getOrDefault(brand, none);
+            long[] after = fresh.getOrDefault(brand, none);
+            String dimension = "brand=%s".formatted(brand);
+            compare(into, dimension, "recovery.cases_opened", 1, before[0], after[0]);
+            compare(into, dimension, "recovery.cases_closed", 1, before[1], after[1]);
+        }
+    }
+
+    /**
      * ADR 0115 ({@code payment_mix.amount.v1}): the net tendered amount per (branch, legal
      * entity, payment method), over the tenders the metric's inclusion rule counts, against the
      * rows the close stored.
@@ -862,7 +1046,10 @@ public class DayCloseService {
                     externalDeliveryCosts,
             List<uz.horecaos.platform.reporting.application.ReportingFacts.PromotionRedemptionFact>
                     promotionRedemptions,
-            List<StaffShiftFact> staffShifts) {}
+            List<StaffShiftFact> staffShifts,
+            List<ReportingFacts.ReviewFact> reviews,
+            List<ReportingFacts.ReviewTagFact> reviewTags,
+            List<ReportingFacts.RecoveryCaseFact> recoveryCases) {}
 
     /**
      * One slice whose re-derived figure disagrees with the stored one.

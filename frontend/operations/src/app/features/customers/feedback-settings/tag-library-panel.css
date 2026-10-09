@@ -1,0 +1,151 @@
+.panel {
+  margin-block-start: 16px;
+}
+
+.panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.panel__head h2,
+.panel__head p {
+  margin: 0;
+}
+
+.panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.band {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-block-start: 12px;
+  padding-block: 8px;
+  padding-inline: 12px;
+  border-radius: var(--q-radius);
+}
+
+.band--error {
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.band--info {
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+}
+
+.band--warn {
+  color: var(--q-warning-text);
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-block-start: 16px;
+  padding: 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.editor h3 {
+  margin: 0;
+}
+
+.editor__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.editor__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.control {
+  block-size: 36px;
+  padding-inline: 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font: inherit;
+}
+
+.control:disabled {
+  background: var(--q-surface-1);
+  color: var(--q-ink-muted);
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.icon__preview {
+  inline-size: 72px;
+  block-size: 48px;
+  object-fit: cover;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  margin-block-start: 16px;
+}
+
+.table thead th {
+  text-align: start;
+  color: var(--q-ink-muted);
+  padding-block: 10px;
+  padding-inline: 14px;
+  border-block-end: 1px solid var(--q-hairline);
+}
+
+.table tbody td {
+  padding-block: 10px;
+  padding-inline: 14px;
+  border-block-end: 1px solid var(--q-hairline);
+  vertical-align: middle;
+}
+
+.row--retired {
+  opacity: 0.6;
+}
+
+.row__actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.tone--negative {
+  color: var(--q-error-text);
+}
+
+.empty {
+  color: var(--q-ink-muted);
+  text-align: center;
+}

@@ -97,3 +97,113 @@ describe('ReviewsService.myReviews', () => {
     );
   });
 });
+
+describe('ReviewsService.submit -- tags and the public-display box (ADR 0159)', () => {
+  const review = {
+    id: 'r1',
+    orderId: 'order-1',
+    rating: 1,
+    comment: 'cold',
+    submittedAt: new Date().toISOString(),
+  };
+
+  it('sends the tags tapped and the ticked box, and nothing else besides the rating and the words', async () => {
+    const { service, api } = setUp();
+    api.mutate.mockResolvedValue(review);
+
+    await service.submit('order-1', 1, 'cold', { tagIds: ['tag-1', 'tag-2'], publicConsent: true });
+
+    const body = api.mutate.mock.calls[0][2]?.body as Record<string, unknown>;
+    expect(body).toEqual(
+      expect.objectContaining({
+        rating: 1,
+        comment: 'cold',
+        tagIds: ['tag-1', 'tag-2'],
+        publicConsent: true,
+      }),
+    );
+    expect(
+      Object.keys(body)
+        .filter((key) => body[key] !== undefined)
+        .sort(),
+    ).toEqual(['comment', 'publicConsent', 'rating', 'tagIds']);
+  });
+
+  it('leaves an empty tag list and an unticked box out of the request, which is what the server defaults to', async () => {
+    const { service, api } = setUp();
+    api.mutate.mockResolvedValue(review);
+
+    await service.submit('order-1', 4, 'good', { tagIds: [], publicConsent: false });
+
+    const body = api.mutate.mock.calls[0][2]?.body as Record<string, unknown>;
+    expect(body['tagIds']).toBeUndefined();
+    expect(body['publicConsent']).toBeUndefined();
+  });
+});
+
+describe('ReviewsService -- the feedback surface (ADR 0159)', () => {
+  it('reads the feedback config without a bearer token: it is the same for everybody', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({ enabled: false });
+
+    await service.feedbackConfig();
+
+    expect(api.get).toHaveBeenCalledWith(
+      expect.stringContaining('/feedback/config'),
+      expect.objectContaining({ anonymous: true }),
+    );
+  });
+
+  it('reads the customer’s own pending orders with the customer’s token', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue([]);
+
+    await service.pending();
+
+    expect(api.get.mock.calls[0][0]).toContain('/reviews/pending');
+    expect(api.get.mock.calls[0][1]).toBeUndefined();
+  });
+
+  it('withdraws the public display of one review with an idempotency key and no body', async () => {
+    const { service, api } = setUp();
+    api.mutate.mockResolvedValue({
+      state: 'HIDDEN',
+      reasonCode: 'CUSTOMER_WITHDREW',
+      withdrawable: false,
+    });
+
+    const display = await service.withdrawPublicDisplay('review-9');
+
+    expect(api.mutate).toHaveBeenCalledWith(
+      'POST',
+      expect.stringContaining('/reviews/review-9/public-display/withdrawal'),
+      expect.objectContaining({ idempotencyKey: expect.any(String) }),
+    );
+    expect(api.mutate.mock.calls[0][2]?.body).toBeUndefined();
+    expect(display.state).toBe('HIDDEN');
+  });
+
+  it('reads the public summary and the public comments anonymously, the comments from the cursor given', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({ ready: false });
+
+    await service.publicSummary();
+    await service.publicComments('3', 5);
+
+    expect(api.get.mock.calls[0][0]).toContain('/reviews/public/summary');
+    expect(api.get.mock.calls[0][1]).toEqual(expect.objectContaining({ anonymous: true }));
+    expect(api.get.mock.calls[1][0]).toMatch(/\/reviews\/public$/);
+    expect(api.get.mock.calls[1][1]).toEqual(
+      expect.objectContaining({ anonymous: true, query: { cursor: '3', limit: 5 } }),
+    );
+  });
+
+  it('sends no cursor for the first page of comments', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({ items: [], nextCursor: null });
+
+    await service.publicComments();
+
+    expect(api.get.mock.calls[0][1]?.query).toEqual({ cursor: undefined, limit: 10 });
+  });
+});

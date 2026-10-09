@@ -11,6 +11,7 @@ import {
   type ReorderVerdict,
 } from '../../services/orders.service';
 import { NotificationService } from '../../services/notification.service';
+import { ReviewsService } from '../../services/reviews.service';
 import { NavigationHistoryService } from '../../services/navigation-history.service';
 import { TranslateService } from '../../services/translate.service';
 import { UiCartService } from '../../services/ui-cart.service';
@@ -113,6 +114,15 @@ function setUp(
         },
       },
       { provide: OrdersService, useValue: ordersService },
+      // The rating card is not under test here: the restaurant's feedback settings are off.
+      {
+        provide: ReviewsService,
+        useValue: {
+          feedbackConfig: vi.fn(async () => ({ enabled: false })),
+          pending: vi.fn(async () => []),
+          myReviews: vi.fn(async () => ({ items: [], nextCursor: null })),
+        },
+      },
       { provide: NotificationService, useValue: { show: vi.fn() } },
       { provide: NavigationHistoryService, useValue: { back: vi.fn() } },
       { provide: TranslateService, useClass: FakeTranslateService },

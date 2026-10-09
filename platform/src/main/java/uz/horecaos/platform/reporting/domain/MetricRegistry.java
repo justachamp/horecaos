@@ -89,6 +89,11 @@ public final class MetricRegistry {
 
     /** ADR 0156 (batch 20): staff hours, from fact_staff_shift (V0530). */
     private static final LocalDate W20_STAFF_HOURS = LocalDate.of(2026, 10, 8);
+    /**
+     * Wave 20 w7-service-recovery (ADR 0159, rows 5.4 and 5.5): when this build started writing
+     * {@code fact_review}, {@code fact_review_tag} and {@code fact_recovery_case} at day close.
+     */
+    private static final LocalDate W20_REVIEWS_AND_RECOVERY = LocalDate.of(2026, 10, 8);
 
     private static final Map<String, MetricDefinition> BY_CODE = index(List.of(
             new MetricDefinition(
@@ -870,7 +875,190 @@ public final class MetricRegistry {
                     "Not applicable.",
                     "A sum of signed variances lets overruns and early finishes cancel; read it beside the "
                             + "per-shift list, not instead of it. No working-time rule is applied.",
-                    W20_STAFF_HOURS)));
+                    W20_STAFF_HOURS),
+            // Wave 20 w7-service-recovery (ADR 0159, ADR 0043): the review and service-recovery
+            // metrics. All version 1 and provisional until finance signs them. Each is answered by
+            // GET .../reporting/reviews/... and not by /queries, which reads pre-aggregated
+            // agg_branch_day: a mean and a percentile cannot be composed from per-slice figures.
+            // No metric has a courier dimension (ADR 0159, open input 8).
+            new MetricDefinition(
+                    new MetricId("reviews.count", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_review",
+                    true,
+                    Aggregation.COUNT,
+                    "EVERY_SUBMITTED_REVIEW",
+                    CurrencyRule.NONE,
+                    "Whole reviews",
+                    MetricUnit.COUNT,
+                    "Reviews submitted in the requested range at the requested location, on the "
+                            + "business day each was submitted.",
+                    "Every review, whatever became of its comment: shared or not, approved, hidden, "
+                            + "withdrawn or erased. A rating is not words.",
+                    "Nothing. A review the customer's erasure emptied of its comment still counts, "
+                            + "because only the comment is erased.",
+                    "Not applicable: a refund does not change what the customer rated.",
+                    null,
+                    W20_REVIEWS_AND_RECOVERY),
+            new MetricDefinition(
+                    new MetricId("reviews.average_rating", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_review.rating",
+                    true,
+                    Aggregation.AVERAGE,
+                    "EVERY_SUBMITTED_REVIEW",
+                    CurrencyRule.NONE,
+                    "Sum of ratings over count, half-up to one decimal",
+                    MetricUnit.STARS,
+                    "The sum of the ratings of the reviews submitted in the range over their count, "
+                            + "to one decimal, half up. The public summary computes it live from the "
+                            + "reviews themselves, and a test pins the two to the same number.",
+                    "Every review, so the unwelcome ones are in it.",
+                    "Nothing. A location's figure is never the mean of other locations' means: the "
+                            + "sum and the count are summed, then divided.",
+                    "Not applicable.",
+                    "Null rather than zero when the range holds no review. The public page shows "
+                            + "nothing below the brand's own minimum count; this figure is not "
+                            + "limited by it, because it is for the restaurant, not the public.",
+                    W20_REVIEWS_AND_RECOVERY),
+            new MetricDefinition(
+                    new MetricId("reviews.tagged", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_review_tag",
+                    true,
+                    Aggregation.COUNT,
+                    "TAGS_ON_SUBMITTED_REVIEWS",
+                    CurrencyRule.NONE,
+                    "Whole tags",
+                    MetricUnit.COUNT,
+                    "Tags that reviews submitted in the range carried, grouped by the tag's category "
+                            + "and sentiment: which part of the experience is getting worse.",
+                    "Every tag on every review, by the two code-owned dimensions (food, service, "
+                            + "courier, delivery time, other) and (positive, negative).",
+                    "A tag's wording: the library is the restaurant's to rename, and a count by "
+                            + "wording would change meaning when it did. Courier is a category and "
+                            + "never a person (ADR 0159, open input 8).",
+                    "Not applicable.",
+                    null,
+                    W20_REVIEWS_AND_RECOVERY),
+            new MetricDefinition(
+                    new MetricId("recovery.cases_opened", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_recovery_case.opened_business_date",
+                    true,
+                    Aggregation.COUNT,
+                    "CASES_OPENED_IN_RANGE",
+                    CurrencyRule.NONE,
+                    "Whole cases",
+                    MetricUnit.COUNT,
+                    "Service-recovery cases opened in the range, on the business day each was opened, "
+                            + "whether the system opened it from a low rating or a person opened it.",
+                    "Automatic and manual cases alike.",
+                    "A case never opened: a rating above the brand's threshold, or the feature " + "switched off.",
+                    "Not applicable.",
+                    null,
+                    W20_REVIEWS_AND_RECOVERY),
+            new MetricDefinition(
+                    new MetricId("recovery.cases_closed", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_recovery_case.closed_business_date",
+                    true,
+                    Aggregation.COUNT,
+                    "CASES_CLOSED_IN_RANGE",
+                    CurrencyRule.NONE,
+                    "Whole cases",
+                    MetricUnit.COUNT,
+                    "Service-recovery cases closed in the range, on the business day each was closed, "
+                            + "split by the outcome it closed with. A case opened on one day and closed "
+                            + "on another is counted on each, as a refund lands on its own date.",
+                    "Resolved cases and cases closed unresolved, by outcome.",
+                    "Cases still open.",
+                    "Not applicable.",
+                    null,
+                    W20_REVIEWS_AND_RECOVERY),
+            new MetricDefinition(
+                    new MetricId("recovery.first_response_seconds", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_recovery_case.seconds_to_first_response",
+                    true,
+                    Aggregation.AVERAGE,
+                    "CASES_OPENED_IN_RANGE_WITH_A_FIRST_RESPONSE",
+                    CurrencyRule.NONE,
+                    "Whole seconds, rounded to the nearest",
+                    MetricUnit.SECONDS,
+                    "Mean seconds from a case opening to a person starting work on it, across cases "
+                            + "opened in the range. The report gives the 90th percentile (continuous) "
+                            + "over the same set beside it.",
+                    "Cases opened in the range that somebody has started.",
+                    "Cases nobody has started: they have no response yet, and a zero would read as an "
+                            + "instant one. The share that breached is recovery.sla_breach_rate.",
+                    "Not applicable.",
+                    "A case started after its day closed is rewritten by the close of the day it "
+                            + "closes on, so the figure for a recent range can move.",
+                    W20_REVIEWS_AND_RECOVERY),
+            new MetricDefinition(
+                    new MetricId("recovery.close_seconds", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_recovery_case.seconds_to_close",
+                    true,
+                    Aggregation.AVERAGE,
+                    "CASES_CLOSED_IN_RANGE",
+                    CurrencyRule.NONE,
+                    "Whole seconds, rounded to the nearest",
+                    MetricUnit.SECONDS,
+                    "Mean seconds from a case opening to its closing, across cases closed in the "
+                            + "range. The report gives the 90th percentile (continuous) beside it.",
+                    "Resolved cases and cases closed unresolved.",
+                    "Cases still open.",
+                    "Not applicable.",
+                    null,
+                    W20_REVIEWS_AND_RECOVERY),
+            new MetricDefinition(
+                    new MetricId("recovery.sla_breach_rate", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_recovery_case.first_response_breached, resolution_breached",
+                    true,
+                    Aggregation.RATIO,
+                    "CASES_OPENED_IN_RANGE",
+                    CurrencyRule.NONE,
+                    "Basis points, rounded to the nearest",
+                    MetricUnit.BASIS_POINTS,
+                    "The share of cases opened in the range for which the first-response clock or "
+                            + "the resolution clock was marked breached, in basis points.",
+                    "A breach is the sweeper's mark, not a read-time calculation: a case closed in "
+                            + "the gap before the sweeper reached it is not counted as breached.",
+                    "A case at risk but not yet breached.",
+                    "Not applicable.",
+                    "The mark is taken when the day's close last saw the case, which is its "
+                            + "opening day or its closing day. An open case that breached in between "
+                            + "shows as breached from the close of the day it next closes on.",
+                    W20_REVIEWS_AND_RECOVERY),
+            // Declared unbuilt on purpose, the way delivery_cost_variance.v1 is. The compensation link
+            // carries an amount and a currency but no legal entity, and ADR 0038 forbids a money metric
+            // below a legal-entity grain, so the metric is declared at the grain it will need and its
+            // source is not available. The figure exists per case in fact_recovery_case and the recovery
+            // report returns it as plain per-currency amounts.
+            new MetricDefinition(
+                    new MetricId("recovery.remedy_money", 1),
+                    Grain.DAY_LOCATION_LEGAL_ENTITY,
+                    "reporting.fact_recovery_case.remedy_money_minor",
+                    false,
+                    Aggregation.SUM,
+                    "ORDER_REMEDIES_ATTACHED_TO_CASES",
+                    CurrencyRule.UZS_SOM,
+                    "Whole som; no sub-unit exists and nothing divides by a hundred",
+                    MetricUnit.MONEY_SOM,
+                    "Money given back to customers through service-recovery cases, as it was attached "
+                            + "to the case. A benefit grant is a count and never money.",
+                    "Order remedies attached to a case.",
+                    "Benefit grants and apology codes, which are not money.",
+                    "Not applicable: the remedy is already the refund.",
+                    "Not built as a metric. The compensation link carries an amount and a currency but "
+                            + "no legal entity, and ADR 0038 forbids a money metric below a "
+                            + "legal-entity grain. The per-case figure is in fact_recovery_case and the "
+                            + "recovery report returns it per currency; every surface naming this "
+                            + "metric must render it unbuilt rather than zero.",
+                    null)));
 
     private MetricRegistry() {}
 

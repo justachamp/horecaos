@@ -209,6 +209,8 @@
     </div>
   }
 
+  <app-rate-order [orderId]="order()!.id" [orderNumber]="order()!.orderNumber"></app-rate-order>
+
   @if (order()!.actions?.includes('cancel')) {
     <div class="mt-6 px-4 pb-6">
       <button

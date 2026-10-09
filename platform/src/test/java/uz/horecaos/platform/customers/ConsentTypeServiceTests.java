@@ -73,7 +73,7 @@ class ConsentTypeServiceTests {
 
         assertThat(types)
                 .extracting(ConsentTypeRow::code)
-                .containsExactlyInAnyOrder("MARKETING_PROMOTIONS", "TERMS_OF_SERVICE");
+                .containsExactlyInAnyOrder("MARKETING_PROMOTIONS", "TERMS_OF_SERVICE", "review.public_display");
         assertThat(types).allSatisfy(row -> assertThat(row.active()).isTrue());
     }
 
@@ -83,12 +83,26 @@ class ConsentTypeServiceTests {
         consentTypes.list(TENANT, ACTOR);
         List<ConsentTypeRow> secondRead = consentTypes.list(TENANT, ACTOR);
 
-        assertThat(secondRead).hasSize(2);
+        assertThat(secondRead).hasSize(3);
         assertThat(jdbc.sql("SELECT count(*) FROM customer.consent_types WHERE tenant_id = :t")
                         .param("t", TENANT)
                         .query(Long.class)
                         .single())
-                .isEqualTo(2L);
+                .isEqualTo(3L);
+    }
+
+    @Test
+    @DisplayName(
+            "the review purpose is a default of every registry, so a customer's tick has a purpose to be recorded against")
+    void theReviewPurposeIsADefault() {
+        assertThat(consentTypes.list(TENANT, ACTOR))
+                .filteredOn(row -> "review.public_display".equals(row.code()))
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.active()).isTrue();
+                    assertThat(row.labelRu()).isNotBlank();
+                    assertThat(row.labelEn()).contains("without my name");
+                });
     }
 
     @Test
@@ -103,8 +117,8 @@ class ConsentTypeServiceTests {
                         .param("t", TENANT)
                         .query(Long.class)
                         .single())
-                .as("tenant A's own two defaults are untouched by tenant B's read")
-                .isEqualTo(2L);
+                .as("tenant A's own three defaults are untouched by tenant B's read")
+                .isEqualTo(3L);
     }
 
     private void insertTenant(UUID id, String slug) {

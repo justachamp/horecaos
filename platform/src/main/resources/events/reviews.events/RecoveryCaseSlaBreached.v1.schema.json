@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/reviews.events/RecoveryCaseSlaBreached.v1.schema.json",
+  "title": "RecoveryCaseSlaBreached v1 payload",
+  "description": "An open service-recovery case passed one of its clocks (ADR 0159). Published once per clock, and only while the case was open: a case closed before the worker reached it is never marked.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "caseId",
+    "orderId",
+    "brandId",
+    "locationId",
+    "kind",
+    "dueAt",
+    "breachedAt"
+  ],
+  "properties": {
+    "caseId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "brandId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "locationId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "FIRST_RESPONSE",
+        "RESOLUTION"
+      ]
+    },
+    "dueAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "breachedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

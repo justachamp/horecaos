@@ -670,7 +670,11 @@ public class JdbcReportingStore {
                 // with the day like every other fact beside it.
                 "fact_promotion_redemption",
                 // ADR 0156: closed staff shifts, cleared and rewritten with the day.
-                "fact_staff_shift")) {
+                "fact_staff_shift",
+                // ADR 0159 (5.4/5.5): the review facts, cleared and rewritten with the day. The
+                // recovery case fact is keyed by case alone and is upserted, never cleared by day.
+                "fact_review_tag",
+                "fact_review")) {
             jdbc.sql("DELETE FROM reporting.%s WHERE tenant_id = :tenantId AND business_date = :day".formatted(table))
                     .param("tenantId", tenantId)
                     .param("day", businessDate)
@@ -811,6 +815,72 @@ public class JdbcReportingStore {
                         row.getLong("redemptions"),
                         row.getLong("discount_minor"),
                         row.getLong("markup_minor")))
+                .list();
+    }
+
+    /**
+     * Removes the review facts for these reviews that are filed under another day.
+     *
+     * <p>{@code fact_review}'s key is {@code (tenant_id, review_id)} with no business date, so a
+     * boundary change that moves a review across the seam would otherwise make the next close insert
+     * it again, violate the key and roll the whole close back. The same job {@link
+     * #clearMisfiledPromotionRedemptions} does for the promotion fact, on this fact's own key.
+     */
+    public void clearMisfiledReviews(UUID tenantId, List<UUID> reviewIds, LocalDate keep) {
+        if (reviewIds.isEmpty()) {
+            return;
+        }
+        for (String table : List.of("fact_review_tag", "fact_review")) {
+            jdbc.sql("""
+                    DELETE FROM reporting.%s
+                     WHERE tenant_id = :tenantId AND review_id IN (:reviewIds)
+                       AND business_date <> :keep
+                    """.formatted(table))
+                    .param("tenantId", tenantId)
+                    .param("reviewIds", reviewIds)
+                    .param("keep", keep)
+                    .update();
+        }
+    }
+
+    /** One brand's stored review facts for a day, summed: what a recut compares against. */
+    public record ReviewDayTotal(UUID brandId, long reviews, long ratingSum, long tags) {}
+
+    public List<ReviewDayTotal> readReviewDayTotals(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql("""
+                SELECT brand_id, count(*) AS reviews, COALESCE(sum(rating), 0) AS rating_sum,
+                       COALESCE(sum(tag_count), 0) AS tags
+                  FROM reporting.fact_review
+                 WHERE tenant_id = :tenantId AND business_date = :day
+                 GROUP BY brand_id
+                """)
+                .param("tenantId", tenantId)
+                .param("day", businessDate)
+                .query((ResultSet row, int number) -> new ReviewDayTotal(
+                        row.getObject("brand_id", UUID.class),
+                        row.getLong("reviews"),
+                        row.getLong("rating_sum"),
+                        row.getLong("tags")))
+                .list();
+    }
+
+    /** One brand's stored case facts for a day: those opened on it and those closed on it. */
+    public record RecoveryDayTotal(UUID brandId, long opened, long closed) {}
+
+    public List<RecoveryDayTotal> readRecoveryDayTotals(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql("""
+                SELECT brand_id,
+                       count(*) FILTER (WHERE opened_business_date = :day) AS opened,
+                       count(*) FILTER (WHERE closed_business_date = :day) AS closed
+                  FROM reporting.fact_recovery_case
+                 WHERE tenant_id = :tenantId
+                   AND (opened_business_date = :day OR closed_business_date = :day)
+                 GROUP BY brand_id
+                """)
+                .param("tenantId", tenantId)
+                .param("day", businessDate)
+                .query((ResultSet row, int number) -> new RecoveryDayTotal(
+                        row.getObject("brand_id", UUID.class), row.getLong("opened"), row.getLong("closed")))
                 .list();
     }
 
@@ -1337,6 +1407,306 @@ public class JdbcReportingStore {
                 .query(Long.class)
                 .single();
     }
+
+    /** ADR 0159. One row per review, whatever became of its comment. */
+    public void insertReviewFact(ReportingFacts.ReviewFact fact) {
+        jdbc.sql("""
+                INSERT INTO reporting.fact_review (
+                    tenant_id, review_id, business_date, boundary_version, metric_calculation_version,
+                    brand_id, location_id, order_id, customer_subject_hash, rating, has_comment, tag_count)
+                VALUES (
+                    :tenantId, :reviewId, :businessDate, :boundaryVersion, :calculationVersion,
+                    :brandId, :locationId, :orderId, :subjectHash, :rating, :hasComment, :tagCount)
+                """)
+                .param("tenantId", fact.tenantId())
+                .param("reviewId", fact.reviewId())
+                .param("businessDate", fact.businessDate())
+                .param("boundaryVersion", fact.boundaryVersion())
+                .param("calculationVersion", fact.metricCalculationVersion())
+                .param("brandId", fact.brandId())
+                .param("locationId", fact.locationId())
+                .param("orderId", fact.orderId())
+                .param("subjectHash", fact.customerSubjectHash())
+                .param("rating", fact.rating())
+                .param("hasComment", fact.hasComment())
+                .param("tagCount", fact.tagCount())
+                .update();
+    }
+
+    /** ADR 0159. One row per (review, tag): category and sentiment, never the tag's label. */
+    public void insertReviewTagFact(ReportingFacts.ReviewTagFact fact) {
+        jdbc.sql("""
+                INSERT INTO reporting.fact_review_tag (
+                    tenant_id, review_id, tag_id, business_date, boundary_version, metric_calculation_version,
+                    brand_id, location_id, category, sentiment)
+                VALUES (
+                    :tenantId, :reviewId, :tagId, :businessDate, :boundaryVersion, :calculationVersion,
+                    :brandId, :locationId, :category, :sentiment)
+                """)
+                .param("tenantId", fact.tenantId())
+                .param("reviewId", fact.reviewId())
+                .param("tagId", fact.tagId())
+                .param("businessDate", fact.businessDate())
+                .param("boundaryVersion", fact.boundaryVersion())
+                .param("calculationVersion", fact.metricCalculationVersion())
+                .param("brandId", fact.brandId())
+                .param("locationId", fact.locationId())
+                .param("category", fact.category())
+                .param("sentiment", fact.sentiment())
+                .update();
+    }
+
+    /**
+     * ADR 0159. One row per case, written again whenever a close sees the case touched: it is opened
+     * on one day and closed on another, so the row is rewritten and never re-filed.
+     */
+    public void upsertRecoveryCaseFact(ReportingFacts.RecoveryCaseFact fact) {
+        jdbc.sql("""
+                INSERT INTO reporting.fact_recovery_case (
+                    tenant_id, case_id, opened_business_date, closed_business_date, boundary_version,
+                    metric_calculation_version, brand_id, location_id, order_id, review_id, rating, state,
+                    outcome_code, seconds_to_first_response, seconds_to_close, first_response_breached,
+                    resolution_breached, compensation_count, remedy_money_minor, currency)
+                VALUES (
+                    :tenantId, :caseId, :openedDate, :closedDate, :boundaryVersion,
+                    :calculationVersion, :brandId, :locationId, :orderId, :reviewId, :rating, :state,
+                    :outcome, :firstResponse, :toClose, :firstBreached,
+                    :resolutionBreached, :compensations, :remedy, :currency)
+                ON CONFLICT (tenant_id, case_id) DO UPDATE SET
+                    opened_business_date = EXCLUDED.opened_business_date,
+                    closed_business_date = EXCLUDED.closed_business_date,
+                    boundary_version = EXCLUDED.boundary_version,
+                    metric_calculation_version = EXCLUDED.metric_calculation_version,
+                    brand_id = EXCLUDED.brand_id,
+                    location_id = EXCLUDED.location_id,
+                    order_id = EXCLUDED.order_id,
+                    review_id = EXCLUDED.review_id,
+                    rating = EXCLUDED.rating,
+                    state = EXCLUDED.state,
+                    outcome_code = EXCLUDED.outcome_code,
+                    seconds_to_first_response = EXCLUDED.seconds_to_first_response,
+                    seconds_to_close = EXCLUDED.seconds_to_close,
+                    first_response_breached = EXCLUDED.first_response_breached,
+                    resolution_breached = EXCLUDED.resolution_breached,
+                    compensation_count = EXCLUDED.compensation_count,
+                    remedy_money_minor = EXCLUDED.remedy_money_minor,
+                    currency = EXCLUDED.currency,
+                    built_at = now()
+                """)
+                .param("tenantId", fact.tenantId())
+                .param("caseId", fact.caseId())
+                .param("openedDate", fact.openedBusinessDate())
+                .param("closedDate", fact.closedBusinessDate())
+                .param("boundaryVersion", fact.boundaryVersion())
+                .param("calculationVersion", fact.metricCalculationVersion())
+                .param("brandId", fact.brandId())
+                .param("locationId", fact.locationId())
+                .param("orderId", fact.orderId())
+                .param("reviewId", fact.reviewId())
+                .param("rating", fact.rating())
+                .param("state", fact.state())
+                .param("outcome", fact.outcomeCode())
+                .param("firstResponse", fact.secondsToFirstResponse())
+                .param("toClose", fact.secondsToClose())
+                .param("firstBreached", fact.firstResponseBreached())
+                .param("resolutionBreached", fact.resolutionBreached())
+                .param("compensations", fact.compensationCount())
+                .param("remedy", fact.remedyMoneyMinor())
+                .param("currency", fact.currency())
+                .update();
+    }
+
+    /**
+     * ADR 0159 (5.4/5.5): the reviews a location received in a closed range -- how many, the sum of
+     * their ratings, how many carried words, and the count at each star. The average is derived from
+     * the two sums by the caller, so two locations are never averaged into a third.
+     */
+    public List<ReviewSummaryRow> readReviewSummary(
+            UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId) {
+        return jdbc.sql("""
+                SELECT brand_id, location_id, count(*) AS reviews, COALESCE(sum(rating), 0) AS rating_sum,
+                       count(*) FILTER (WHERE has_comment) AS with_comment,
+                       count(*) FILTER (WHERE rating = 1) AS one,
+                       count(*) FILTER (WHERE rating = 2) AS two,
+                       count(*) FILTER (WHERE rating = 3) AS three,
+                       count(*) FILTER (WHERE rating = 4) AS four,
+                       count(*) FILTER (WHERE rating = 5) AS five
+                  FROM reporting.fact_review
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND (CAST(:brandId AS uuid) IS NULL OR brand_id = CAST(:brandId AS uuid))
+                 GROUP BY brand_id, location_id
+                 ORDER BY brand_id, location_id
+                """)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .param("brandId", brandId)
+                .query((ResultSet row, int number) -> new ReviewSummaryRow(
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getLong("reviews"),
+                        row.getLong("rating_sum"),
+                        row.getLong("with_comment"),
+                        List.of(
+                                row.getLong("one"),
+                                row.getLong("two"),
+                                row.getLong("three"),
+                                row.getLong("four"),
+                                row.getLong("five"))))
+                .list();
+    }
+
+    /** The tags those reviews carried, by category and sentiment: "which part is getting worse". */
+    public List<ReviewTagRow> readReviewTags(UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId) {
+        return jdbc.sql("""
+                SELECT brand_id, location_id, category, sentiment, count(*) AS tags
+                  FROM reporting.fact_review_tag
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND (CAST(:brandId AS uuid) IS NULL OR brand_id = CAST(:brandId AS uuid))
+                 GROUP BY brand_id, location_id, category, sentiment
+                 ORDER BY brand_id, location_id, category, sentiment
+                """)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .param("brandId", brandId)
+                .query((ResultSet row, int number) -> new ReviewTagRow(
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getString("category"),
+                        row.getString("sentiment"),
+                        row.getLong("tags")))
+                .list();
+    }
+
+    /**
+     * ADR 0159: the cases of a closed range, per location. A case counts as opened on its opening
+     * date and closed on its closing date, so the two counts and the two durations are over different
+     * sets and the row says so. The mean is whole seconds rounded to the nearest and the 90th
+     * percentile is the continuous one over the same set.
+     */
+    public List<RecoverySummaryRow> readRecoverySummary(
+            UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId) {
+        return jdbc.sql("""
+                SELECT brand_id, location_id,
+                       count(*) FILTER (WHERE opened_business_date BETWEEN :from AND :to) AS opened,
+                       count(*) FILTER (WHERE closed_business_date BETWEEN :from AND :to) AS closed,
+                       avg(seconds_to_first_response) FILTER (
+                           WHERE opened_business_date BETWEEN :from AND :to) AS first_mean,
+                       percentile_cont(0.9) WITHIN GROUP (ORDER BY seconds_to_first_response) FILTER (
+                           WHERE opened_business_date BETWEEN :from AND :to) AS first_p90,
+                       avg(seconds_to_close) FILTER (
+                           WHERE closed_business_date BETWEEN :from AND :to) AS close_mean,
+                       percentile_cont(0.9) WITHIN GROUP (ORDER BY seconds_to_close) FILTER (
+                           WHERE closed_business_date BETWEEN :from AND :to) AS close_p90,
+                       count(*) FILTER (
+                           WHERE opened_business_date BETWEEN :from AND :to
+                             AND (first_response_breached OR resolution_breached)) AS breached,
+                       COALESCE(sum(compensation_count) FILTER (
+                           WHERE opened_business_date BETWEEN :from AND :to), 0) AS compensations
+                  FROM reporting.fact_recovery_case
+                 WHERE tenant_id = :tenantId
+                   AND (opened_business_date BETWEEN :from AND :to OR closed_business_date BETWEEN :from AND :to)
+                   AND (CAST(:brandId AS uuid) IS NULL OR brand_id = CAST(:brandId AS uuid))
+                 GROUP BY brand_id, location_id
+                 ORDER BY brand_id, location_id
+                """)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .param("brandId", brandId)
+                .query((ResultSet row, int number) -> new RecoverySummaryRow(
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getLong("opened"),
+                        row.getLong("closed"),
+                        wholeSeconds(row.getBigDecimal("first_mean")),
+                        wholeSeconds(row.getBigDecimal("first_p90")),
+                        wholeSeconds(row.getBigDecimal("close_mean")),
+                        wholeSeconds(row.getBigDecimal("close_p90")),
+                        row.getLong("breached"),
+                        row.getLong("compensations")))
+                .list();
+    }
+
+    /** How the cases closed in the range ended, per location and outcome. */
+    public List<RecoveryOutcomeRow> readRecoveryOutcomes(
+            UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId) {
+        return jdbc.sql("""
+                SELECT brand_id, location_id, outcome_code, count(*) AS cases
+                  FROM reporting.fact_recovery_case
+                 WHERE tenant_id = :tenantId AND closed_business_date BETWEEN :from AND :to
+                   AND outcome_code IS NOT NULL
+                   AND (CAST(:brandId AS uuid) IS NULL OR brand_id = CAST(:brandId AS uuid))
+                 GROUP BY brand_id, location_id, outcome_code
+                 ORDER BY brand_id, location_id, outcome_code
+                """)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .param("brandId", brandId)
+                .query((ResultSet row, int number) -> new RecoveryOutcomeRow(
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getString("outcome_code"),
+                        row.getLong("cases")))
+                .list();
+    }
+
+    /**
+     * Remedy money attached to the cases opened in the range, per location and currency, as it was
+     * attached. Never summed across currencies, and a benefit grant is a count, not a row here.
+     */
+    public List<RecoveryRemedyRow> readRecoveryRemedies(
+            UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId) {
+        return jdbc.sql("""
+                SELECT brand_id, location_id, currency, sum(remedy_money_minor) AS amount_minor
+                  FROM reporting.fact_recovery_case
+                 WHERE tenant_id = :tenantId AND opened_business_date BETWEEN :from AND :to
+                   AND currency IS NOT NULL AND remedy_money_minor > 0
+                   AND (CAST(:brandId AS uuid) IS NULL OR brand_id = CAST(:brandId AS uuid))
+                 GROUP BY brand_id, location_id, currency
+                 ORDER BY brand_id, location_id, currency
+                """)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .param("brandId", brandId)
+                .query((ResultSet row, int number) -> new RecoveryRemedyRow(
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getString("currency"),
+                        row.getLong("amount_minor")))
+                .list();
+    }
+
+    private static @Nullable Long wholeSeconds(@Nullable BigDecimal value) {
+        return value == null
+                ? null
+                : value.setScale(0, java.math.RoundingMode.HALF_UP).longValueExact();
+    }
+
+    /** One location's reviews over a range. {@code distribution} is the count at one to five stars. */
+    public record ReviewSummaryRow(
+            UUID brandId, UUID locationId, long reviews, long ratingSum, long withComment, List<Long> distribution) {}
+
+    public record ReviewTagRow(UUID brandId, UUID locationId, String category, String sentiment, long tags) {}
+
+    public record RecoverySummaryRow(
+            UUID brandId,
+            UUID locationId,
+            long opened,
+            long closed,
+            @Nullable Long firstResponseMeanSeconds,
+            @Nullable Long firstResponseP90Seconds,
+            @Nullable Long closeMeanSeconds,
+            @Nullable Long closeP90Seconds,
+            long breached,
+            long compensations) {}
+
+    public record RecoveryOutcomeRow(UUID brandId, UUID locationId, String outcomeCode, long cases) {}
+
+    public record RecoveryRemedyRow(UUID brandId, UUID locationId, String currency, long amountMinor) {}
 
     /** ORDER STATUSES that never became a sale: counted in the redemption log, excluded from the summary. */
     private static final String NOT_A_SALE = "('CANCELLED', 'REJECTED', 'EXPIRED', 'PAYMENT_FAILED')";

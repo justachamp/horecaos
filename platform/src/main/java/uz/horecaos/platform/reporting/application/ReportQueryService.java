@@ -557,6 +557,49 @@ public class ReportQueryService {
                 provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
     }
 
+    /**
+     * ADR 0159 (5.4/5.5): the reviews a location received over the closed business days in the range,
+     * the tags they carried, and the figures behind the average. Read from {@code fact_review} and
+     * {@code fact_review_tag} alone -- never a {@code reviews} table (ADR 0023) -- so it lags by up to
+     * a business day, in exchange for one definition of a review count.
+     */
+    @Transactional(readOnly = true)
+    public ReviewSummaryResult reviewSummary(UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId) {
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+        return new ReviewSummaryResult(
+                store.readReviewSummary(tenantId, from, to, brandId),
+                store.readReviewTags(tenantId, from, to, brandId),
+                provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    /**
+     * ADR 0159: the service-recovery cases of a location over the closed business days in the range --
+     * opened, closed by outcome, first-response and close times, the share that breached a clock, and
+     * the remedy money attached, per currency.
+     */
+    @Transactional(readOnly = true)
+    public RecoverySummaryResult recoverySummary(UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId) {
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+        return new RecoverySummaryResult(
+                store.readRecoverySummary(tenantId, from, to, brandId),
+                store.readRecoveryOutcomes(tenantId, from, to, brandId),
+                store.readRecoveryRemedies(tenantId, from, to, brandId),
+                provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    public record ReviewSummaryResult(
+            List<JdbcReportingStore.ReviewSummaryRow> rows,
+            List<JdbcReportingStore.ReviewTagRow> tags,
+            Provenance provenance) {}
+
+    public record RecoverySummaryResult(
+            List<JdbcReportingStore.RecoverySummaryRow> rows,
+            List<JdbcReportingStore.RecoveryOutcomeRow> outcomes,
+            List<JdbcReportingStore.RecoveryRemedyRow> remedies,
+            Provenance provenance) {}
+
     public record PromotionSummaryResult(List<JdbcReportingStore.PromotionSummaryRow> rows, Provenance provenance) {}
 
     public record PromotionRedemptionsResult(

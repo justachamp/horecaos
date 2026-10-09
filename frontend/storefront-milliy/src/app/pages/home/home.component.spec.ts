@@ -6,6 +6,7 @@ import { APP_CONFIG, type AppConfig } from '../../core/config/app-config';
 import { HomeComponent } from './home.component';
 import { LangService } from '../../services/lang.service';
 import { MenuService } from '../../services/menu.service';
+import { ReviewsService } from '../../services/reviews.service';
 import { TranslateService } from '../../services/translate.service';
 import type { CustomerUiResponse, MenuItem, MenuItemVariant } from '../../types/home.types';
 
@@ -77,6 +78,17 @@ class FakeMenuService {
   readonly currency = signal<string | null>('UZS');
   home = vi.fn();
 }
+/** The public rating block is not under test here: the platform reports nothing to show. */
+class FakeReviewsService {
+  publicSummary = vi.fn(async () => ({
+    visibility: 'NONE' as const,
+    ready: false,
+    count: null,
+    average: null,
+    distribution: null,
+  }));
+  publicComments = vi.fn();
+}
 class FakeLangService {
   langId = () => 'uz';
 }
@@ -95,6 +107,7 @@ async function setUp(menu: CustomerUiResponse) {
     providers: [
       provideRouter([]),
       { provide: MenuService, useValue: service },
+      { provide: ReviewsService, useClass: FakeReviewsService },
       { provide: LangService, useClass: FakeLangService },
       { provide: TranslateService, useClass: FakeTranslateService },
       { provide: APP_CONFIG, useValue: CONFIG },

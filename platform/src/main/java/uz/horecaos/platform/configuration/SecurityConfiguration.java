@@ -219,6 +219,15 @@ public class SecurityConfiguration {
                                 // thing a storefront paints. The staff surfaces' twins stay
                                 // behind a session.
                                 "/api/v1/storefront/locales",
+                                // ADR 0159: the tags a customer is offered with a rating, a brand's rating
+                                // summary and its published comments. Off until the tenant switches them on
+                                // (an empty answer, not a refusal), cached and rate limited by the
+                                // handler, and carrying no name, customer, order number, review id or time
+                                // of day -- a comment appears only when its author said yes and a
+                                // moderator did too. See StorefrontPublicReviewController's own doc.
+                                "/api/v1/storefront/tenants/*/brands/*/feedback/config",
+                                "/api/v1/storefront/tenants/*/brands/*/reviews/public",
+                                "/api/v1/storefront/tenants/*/brands/*/reviews/public/summary",
                                 // ADR 0047: the guest's own running bill. Outside
                                 // the resource server's principal model on purpose
                                 // — see the POST pair below — and authorised by the

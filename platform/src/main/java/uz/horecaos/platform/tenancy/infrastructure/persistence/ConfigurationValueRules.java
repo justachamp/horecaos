@@ -105,7 +105,11 @@ public final class ConfigurationValueRules {
                     integerBetween("workforce.roster.late_after_minutes", 1, 120)),
             Map.entry(
                     "workforce.roster.match_window_minutes",
-                    integerBetween("workforce.roster.match_window_minutes", 30, 480)));
+                    integerBetween("workforce.roster.match_window_minutes", 30, 480)),
+            // ADR 0159: a mistyped visibility must be refused, never quietly read as NONE, and the minimum
+            // count is a count a person can read off the public page.
+            Map.entry("feedback.public_visibility", ConfigurationValueRules::requirePublicVisibility),
+            Map.entry("feedback.public_minimum_reviews", ConfigurationValueRules::requirePublicMinimumReviews));
 
     private ConfigurationValueRules() {}
 
@@ -200,6 +204,23 @@ public final class ConfigurationValueRules {
                 ErrorCode.VALIDATION_FAILED,
                 code + " must be one of " + String.join(", ", allowed),
                 Map.of("field", code));
+    }
+
+    private static void requirePublicVisibility(Object value) {
+        String text = String.valueOf(value);
+        if (!"NONE".equals(text) && !"RATING_ONLY".equals(text) && !"RATING_AND_COMMENTS".equals(text)) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "feedback.public_visibility must be NONE, RATING_ONLY or RATING_AND_COMMENTS");
+        }
+    }
+
+    private static void requirePublicMinimumReviews(Object value) {
+        int count = ((Number) value).intValue();
+        if (count < 0 || count > 1000) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "feedback.public_minimum_reviews must be between 0 and 1000");
+        }
     }
 
     private static void requireMinutesWithinADay(Object value) {

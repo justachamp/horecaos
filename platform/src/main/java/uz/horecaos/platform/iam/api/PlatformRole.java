@@ -183,6 +183,9 @@ public enum PlatformRole {
                     // ADR 0071: a brand's own order reviews, the same class of read as
                     // the referral line above it.
                     REVIEW_READ,
+                    // ADR 0159: the decision to put a customer's words on the brand's public page,
+                    // held where a brand speaks for itself. Hides words, never numbers.
+                    REVIEW_MODERATE,
                     // ADR 0072: a promo code's shape, value and limits -- the same
                     // class of decision as the two above it, held here alone for the
                     // same reason.
@@ -446,6 +449,9 @@ public enum PlatformRole {
                     REFERRAL_READ,
                     // ADR 0071: a brand's own order reviews, the same class of read.
                     REVIEW_READ,
+                    // ADR 0159: the decision to put a customer's words on the brand's public page,
+                    // held where a brand speaks for itself. Hides words, never numbers.
+                    REVIEW_MODERATE,
                     CAMPAIGN_AUTHOR,
                     // ADR 0112: the offers a campaign may point at, and a quieter contact
                     // policy. Beside authoring, because both are ways of composing one.
@@ -779,6 +785,11 @@ public enum PlatformRole {
                     // ADR 0071: a brand's own order reviews — its own reputation
                     // signal, the same class of read as the referral line above it.
                     REVIEW_READ,
+                    // ADR 0159: the decision to put a customer's words on the brand's public page,
+                    // held where a brand speaks for itself. Hides words, never numbers.
+                    REVIEW_MODERATE,
+                    // ADR 0159: a brand works its own service-recovery cases (the brand worklist).
+                    RECOVERY_CASE_MANAGE,
                     CAMPAIGN_AUTHOR,
                     // ADR 0112: a brand manager's own offers and contact policy.
                     MARKETING_OFFER_MANAGE,
@@ -909,6 +920,11 @@ public enum PlatformRole {
                     ORDER_BULK_ACTION,
                     REFUND_REQUEST,
                     RECOVERY_CASE_MANAGE,
+                    // ADR 0159: a branch manager reads the comment on a case that belongs to her
+                    // branch -- item-level reads through the case drawer. The brand-wide list stays
+                    // at brand scope (REVIEW_READ is declared BRAND on that route), so this widens
+                    // who may read one customer's words at the branch and nothing wider.
+                    REVIEW_READ,
                     // ADR 0041: the pass and the office. Recall, release and the late
                     // release are held here and not by the line, because each of them
                     // undoes or delays something the line has already reported.
@@ -1260,6 +1276,10 @@ public enum PlatformRole {
                     ORDER_AMEND,
                     REFUND_REQUEST,
                     RECOVERY_CASE_MANAGE,
+                    // ADR 0159: a support agent who works a service-recovery case has to read the
+                    // customer's words to answer them. Tenant-wide, which is already the reach of
+                    // CUSTOMER_PII_REVEAL this bundle holds.
+                    REVIEW_READ,
                     DELIVERY_PLAN_READ,
                     // The three questions a support call is: why was my delivery that
                     // much, where is my confirmation, and can you send it again.

@@ -381,6 +381,18 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     'uz-Latn': 'Mijoz shikoyati boʻyicha ish yuritish',
     en: 'Manage a service-recovery case',
   },
+  'review.read': {
+    area: 'recovery',
+    ru: 'Читать отзывы клиентов, включая комментарии',
+    'uz-Latn': 'Mijoz sharhlarini, jumladan izohlarni oʻqish',
+    en: 'Read customer reviews, comments included',
+  },
+  'review.moderate': {
+    area: 'recovery',
+    ru: 'Публиковать и скрывать комментарии клиентов на странице бренда',
+    'uz-Latn': 'Mijoz izohlarini brend sahifasida eʻlon qilish va yashirish',
+    en: 'Publish and hide customers’ comments on the brand’s page',
+  },
   'recovery.remedy.approve': {
     area: 'recovery',
     ru: 'Согласовывать компенсацию клиенту',

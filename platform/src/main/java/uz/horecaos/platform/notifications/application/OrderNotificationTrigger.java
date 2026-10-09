@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -28,6 +29,7 @@ import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.ordering.api.OrderExpired;
 import uz.horecaos.platform.ordering.api.OrderRejected;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
+import uz.horecaos.platform.reviews.api.FeedbackPromptPolicy;
 
 /**
  * Turning an ADR 0019 order fact into a durable notification intent (ADR 0020).
@@ -60,6 +62,15 @@ import uz.horecaos.platform.ordering.api.OrderingEvent;
  * {@code docs/minimum-viable-cutover.md} scopes this ADR to confirmation and
  * rejection on one channel, and a third template is a third piece of copy a pilot
  * tenant would have to write and translate in three languages before going live.
+ *
+ * <p><strong>The rating prompt is timed by a policy (ADR 0159, Decision 4).</strong> The
+ * {@link #ORDER_COMPLETED} intent used to be created at once and expire after {@code order-expiry}.
+ * For a tenant that has switched {@code feature.feedback_settings} on, {@link FeedbackPromptPolicy}
+ * now says whether the prompt is sent on the channel this customer routes to, when it becomes
+ * sendable (a delay, moved to the next opening of the send window) and when it stops being worth
+ * sending. This class still decides nothing about the notification's class, its template or its
+ * delivery, and an unactivated template still sends nothing. For a tenant that has not switched it
+ * on, the intent is byte for byte what it always was.
  */
 @Component
 public class OrderNotificationTrigger {
@@ -117,7 +128,9 @@ public class OrderNotificationTrigger {
     private final Clock clock;
     private final NotificationChannel defaultChannel;
     private final Duration expiry;
+    private final FeedbackPromptPolicy prompts;
 
+    @Autowired
     public OrderNotificationTrigger(
             JdbcNotificationStore notifications,
             OperationsAlertFanoutService operationsAlerts,
@@ -129,7 +142,8 @@ public class OrderNotificationTrigger {
             // An open input on ADR 0020: how long an unsent confirmation is still
             // worth sending is a product decision, not one this build invents. Six
             // hours is a stated default, not a considered answer.
-            @Value("${horecaos.notifications.order-expiry:PT6H}") Duration expiry) {
+            @Value("${horecaos.notifications.order-expiry:PT6H}") Duration expiry,
+            FeedbackPromptPolicy prompts) {
         this.notifications = notifications;
         this.operationsAlerts = operationsAlerts;
         this.orders = orders;
@@ -138,6 +152,52 @@ public class OrderNotificationTrigger {
         this.clock = clock;
         this.defaultChannel = NotificationChannel.valueOf(channel);
         this.expiry = expiry;
+        this.prompts = prompts;
+    }
+
+    /**
+     * The shape that predates ADR 0159: every prompt is immediate and expires after {@code expiry}.
+     * Kept for the callers and tests that build a trigger by hand and have no prompt policy to give.
+     */
+    public OrderNotificationTrigger(
+            JdbcNotificationStore notifications,
+            OperationsAlertFanoutService operationsAlerts,
+            OrderDirectory orders,
+            CustomerTelegramChannelRouter channelRouter,
+            ObjectMapper objectMapper,
+            Clock clock,
+            String channel,
+            Duration expiry) {
+        this(
+                notifications,
+                operationsAlerts,
+                orders,
+                channelRouter,
+                objectMapper,
+                clock,
+                channel,
+                expiry,
+                new Ungoverned());
+    }
+
+    /** A prompt policy that governs no tenant: today's immediate send, for a trigger built without one. */
+    private static final class Ungoverned implements FeedbackPromptPolicy {
+
+        @Override
+        public boolean governs(UUID tenantId) {
+            return false;
+        }
+
+        @Override
+        public Decision decide(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                @Nullable String fulfillmentMode,
+                String channel,
+                Instant completedAt) {
+            throw new IllegalStateException("An ungoverned prompt is never decided");
+        }
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
@@ -162,7 +222,13 @@ public class OrderNotificationTrigger {
             case OrderAwaitingApproval awaiting ->
                 createOperationsOnly(awaiting, ORDER_AWAITING_APPROVAL, awaiting.brandId(), awaiting.locationId());
             case OrderCompleted completed ->
-                create(completed, ORDER_COMPLETED, completed.brandId(), completed.locationId(), Map.of());
+                create(
+                        completed,
+                        ORDER_COMPLETED,
+                        completed.brandId(),
+                        completed.locationId(),
+                        Map.of(),
+                        completed.completedAt());
             case OrderCancelled cancelled ->
                 create(
                         cancelled,
@@ -190,6 +256,20 @@ public class OrderNotificationTrigger {
             UUID brandId,
             UUID locationId,
             Map<String, String> triggerVariables) {
+        create(event, templateKey, brandId, locationId, triggerVariables, null);
+    }
+
+    /**
+     * @param promptCompletedAt non-null only for the rating prompt: when the order was completed, which
+     *                          {@link FeedbackPromptPolicy} times the prompt from
+     */
+    private void create(
+            OrderingEvent event,
+            String templateKey,
+            UUID brandId,
+            UUID locationId,
+            Map<String, String> triggerVariables,
+            @Nullable Instant promptCompletedAt) {
 
         // ADR 0024's headline suppression, and the one the ADR names first:
         // importing five years of confirmed orders would otherwise write five
@@ -226,34 +306,56 @@ public class OrderNotificationTrigger {
         // long as the row exists.
         String idempotencyKey = "%s:%s:%s:%s".formatted(templateKey, SUBJECT_TYPE, event.orderId(), channel.name());
 
-        boolean created = notifications.createIntent(new NewNotification(
-                UUID.randomUUID(),
-                tenantId,
-                brandId,
-                locationId,
-                // Stated here rather than configured, because it is not a
-                // tenant's choice. A confirmation is a receipt for money the
-                // customer spent: it is not marketing, it does not need marketing
-                // consent, and it must not become suppressible by a preference
-                // toggle. What is genuinely open — the legal basis behind that
-                // classification — ADR 0020 leaves with counsel.
-                NotificationClass.TRANSACTIONAL_REQUIRED.name(),
-                channel.name(),
-                templateKey,
-                SUBJECT_TYPE,
-                event.orderId(),
-                // Resolved by eligibility from the order, not guessed here. The
-                // event does not carry it, and ADR 0032 is right that it should not
-                // have to.
-                null,
-                event.eventId(),
-                idempotencyKey,
-                json(triggerVariables),
-                now,
-                now.plus(expiry),
-                now));
+        // ADR 0159, Decision 4. The rating prompt is the one intent whose timing a tenant governs: when
+        // its policy is on, the policy says whether the prompt goes out on this channel, when it
+        // becomes sendable and when it stops being worth sending. Off, none of this runs and the intent
+        // below is the one this class always created.
+        Instant scheduledAt = now;
+        Instant expiresAt = now.plus(expiry);
+        boolean sendCustomerIntent = true;
+        if (promptCompletedAt != null && prompts.governs(tenantId)) {
+            String mode = orders.notificationContext(tenantId, event.orderId())
+                    .map(context -> context.fulfillmentMode().name())
+                    .orElse(null);
+            FeedbackPromptPolicy.Decision decision =
+                    prompts.decide(tenantId, brandId, locationId, mode, channel.name(), promptCompletedAt);
+            if (decision.send()) {
+                scheduledAt = java.util.Objects.requireNonNull(decision.scheduledAt());
+                expiresAt = java.util.Objects.requireNonNull(decision.expiresAt());
+            } else {
+                sendCustomerIntent = false;
+            }
+        }
 
-        if (!created) {
+        boolean created = sendCustomerIntent
+                && notifications.createIntent(new NewNotification(
+                        UUID.randomUUID(),
+                        tenantId,
+                        brandId,
+                        locationId,
+                        // Stated here rather than configured, because it is not a
+                        // tenant's choice. A confirmation is a receipt for money the
+                        // customer spent: it is not marketing, it does not need marketing
+                        // consent, and it must not become suppressible by a preference
+                        // toggle. What is genuinely open — the legal basis behind that
+                        // classification — ADR 0020 leaves with counsel.
+                        NotificationClass.TRANSACTIONAL_REQUIRED.name(),
+                        channel.name(),
+                        templateKey,
+                        SUBJECT_TYPE,
+                        event.orderId(),
+                        // Resolved by eligibility from the order, not guessed here. The
+                        // event does not carry it, and ADR 0032 is right that it should not
+                        // have to.
+                        null,
+                        event.eventId(),
+                        idempotencyKey,
+                        json(triggerVariables),
+                        scheduledAt,
+                        expiresAt,
+                        now));
+
+        if (sendCustomerIntent && !created) {
             // The expected outcome of a redelivery, not a problem. Logged at debug
             // so a replay storm does not look like an incident.
             log.debug("A {} notification already exists for order {}", templateKey, event.orderId());

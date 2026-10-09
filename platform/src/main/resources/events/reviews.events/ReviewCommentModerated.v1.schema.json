@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/reviews.events/ReviewCommentModerated.v1.schema.json",
+  "title": "ReviewCommentModerated v1 payload",
+  "description": "A review's comment moved between publication states (ADR 0159): a moderator's decision, the customer's withdrawal or an erasure. States and a reason code; never the comment, and never a rating -- a rating is not moderated.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "reviewId",
+    "orderId",
+    "brandId",
+    "fromState",
+    "toState",
+    "reasonCode",
+    "actorType"
+  ],
+  "properties": {
+    "reviewId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "brandId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "fromState": {
+      "type": "string",
+      "enum": [
+        "NOT_SHARED",
+        "PENDING",
+        "PUBLISHED",
+        "HIDDEN"
+      ]
+    },
+    "toState": {
+      "type": "string",
+      "enum": [
+        "NOT_SHARED",
+        "PENDING",
+        "PUBLISHED",
+        "HIDDEN"
+      ]
+    },
+    "reasonCode": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "ABUSIVE_LANGUAGE",
+        "PERSONAL_DATA_OF_ANOTHER",
+        "NAMES_AN_INDIVIDUAL",
+        "SPAM_OR_UNRELATED",
+        "LEGAL_REQUEST",
+        "CUSTOMER_WITHDREW",
+        "CUSTOMER_ERASED"
+      ]
+    },
+    "actorType": {
+      "type": "string",
+      "enum": [
+        "STAFF",
+        "CUSTOMER",
+        "SYSTEM"
+      ]
+    }
+  }
+}

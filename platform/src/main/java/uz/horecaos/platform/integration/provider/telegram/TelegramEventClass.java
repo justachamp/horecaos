@@ -4,7 +4,7 @@ package uz.horecaos.platform.integration.provider.telegram;
  * Every event class a bound Telegram chat may subscribe to today, restated
  * from {@code integration.telegram_binding_events}'s own {@code
  * ck_telegram_binding_event_class} check (currently last widened by
- * {@code V0527}) — kept beside the schema constraint deliberately rather than
+ * {@code V0544}) — kept beside the schema constraint deliberately rather than
  * generated from it, so the admin routing screen (gap map row {@code 10.9b},
  * wave P36) can offer the set without a schema round trip, and a value here
  * that the check does not also admit fails a test rather than a real insert.
@@ -34,7 +34,9 @@ public enum TelegramEventClass {
     // ADR 0155: a staff PIN locked at a terminal, and a terminal that must be unlocked and has not
     // been seen. Restated in V0527's CHECK.
     TERMINAL_CREDENTIAL_LOCKED("A staff PIN was locked at a terminal"),
-    TERMINAL_DEVICE_UNSEEN("A terminal that must be unlocked has not been seen");
+    TERMINAL_DEVICE_UNSEEN("A terminal that must be unlocked has not been seen"),
+    RECOVERY_CASE_OPENED("Service-recovery case opened"),
+    RECOVERY_CASE_SLA_BREACHED("Service-recovery case passed a clock");
 
     private final String description;
 

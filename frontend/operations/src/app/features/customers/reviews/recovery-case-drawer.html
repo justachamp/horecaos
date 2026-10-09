@@ -1,0 +1,357 @@
+<q-drawer
+  [title]="'customers.recovery.drawer.title' | t: { order: orderNumber() }"
+  (dismiss)="dismiss.emit()"
+>
+  <div class="case" data-testid="recovery-drawer">
+    @switch (state()) {
+      @case ('loading') {
+        <p class="q-body-sm">{{ 'customers.recovery.drawer.loading' | t }}</p>
+      }
+      @case ('error') {
+        <div class="band band--error" role="alert">
+          <span class="q-body-sm">
+            {{ errorText() ?? ('customers.recovery.drawer.loadFailed' | t) }}
+          </span>
+        </div>
+      }
+      @case ('ready') {
+        @if (detail(); as d) {
+          <header class="case__head">
+            <span class="case__stars" [attr.aria-label]="current().rating + ' / 5'">
+              {{ stars(current().rating) }}
+            </span>
+            <q-status-pill
+              [label]="stateKey(current().state) | t"
+              [tone]="stateTone(current().state)"
+              data-testid="drawer-state"
+            />
+            <q-status-pill
+              [label]="slaKey(current().slaState) | t"
+              [tone]="slaTone(current().slaState)"
+              data-testid="drawer-sla"
+            />
+            <span class="q-caption case__source">
+              {{ sourceKey(current().source) | t }}
+            </span>
+          </header>
+
+          @if (errorText(); as message) {
+            <div class="band band--error" role="alert" data-testid="drawer-error">
+              <span class="q-body-sm">{{ message }}</span>
+            </div>
+          }
+
+          <section class="case__section">
+            <h3 class="q-caption">{{ 'customers.recovery.drawer.comment' | t }}</h3>
+            @if (d.commentWithheld) {
+              <p class="q-body-sm case__muted" data-testid="drawer-comment-withheld">
+                {{ 'customers.recovery.drawer.commentWithheld' | t }}
+              </p>
+            } @else if (d.comment) {
+              <blockquote class="q-body case__comment" data-testid="drawer-comment">
+                {{ d.comment }}
+              </blockquote>
+            } @else {
+              <p class="q-body-sm case__muted">{{ 'customers.recovery.drawer.noComment' | t }}</p>
+            }
+          </section>
+
+          <section class="case__section">
+            <h3 class="q-caption">{{ 'customers.recovery.drawer.tags' | t }}</h3>
+            @if (d.tags.length === 0) {
+              <p class="q-body-sm case__muted">{{ 'customers.recovery.drawer.noTags' | t }}</p>
+            } @else {
+              <ul class="case__tags">
+                @for (tag of d.tags; track tag.id) {
+                  <li
+                    class="case__tag q-caption"
+                    [class.case__tag--negative]="tag.sentiment === 'NEGATIVE'"
+                    data-testid="drawer-tag"
+                  >
+                    {{ tagLabel(tag.labels, tag.code) }}
+                  </li>
+                }
+              </ul>
+            }
+          </section>
+
+          <section class="case__section case__facts">
+            <div>
+              <h3 class="q-caption">{{ 'customers.recovery.drawer.order' | t }}</h3>
+              <a class="link q-body-sm" [routerLink]="['/orders', current().orderId]">
+                {{ orderNumber() }}
+              </a>
+            </div>
+            <div>
+              <h3 class="q-caption">{{ 'customers.recovery.drawer.customer' | t }}</h3>
+              <a class="link q-body-sm" [routerLink]="['/customers', current().customerAccountId]">
+                {{ current().customerAccountId }}
+              </a>
+            </div>
+            <div>
+              <h3 class="q-caption">{{ 'customers.recovery.column.owner' | t }}</h3>
+              <span class="q-body-sm" data-testid="drawer-owner">
+                {{ owner() ?? ('customers.recovery.owner.none' | t) }}
+              </span>
+            </div>
+          </section>
+
+          <section class="case__section case__clocks">
+            <h3 class="q-caption">{{ 'customers.recovery.drawer.clocks' | t }}</h3>
+            <div class="q-body-sm">
+              <span class="case__clock-name">{{
+                'customers.recovery.drawer.firstResponse' | t
+              }}</span>
+              <span class="q-tnum">{{ formatInstant(current().firstResponseDueAt) }}</span>
+              @if (current().firstResponseAt; as answered) {
+                <span class="q-caption case__muted">
+                  {{
+                    'customers.recovery.drawer.answeredAt' | t: { when: formatInstant(answered) }
+                  }}
+                </span>
+              }
+              @if (current().firstResponseBreached) {
+                <span class="q-caption case__breach">{{
+                  'customers.recovery.sla.BREACHED' | t
+                }}</span>
+              }
+            </div>
+            <div class="q-body-sm">
+              <span class="case__clock-name">{{ 'customers.recovery.drawer.resolution' | t }}</span>
+              <span class="q-tnum">{{ formatInstant(current().resolutionDueAt) }}</span>
+              @if (current().closedAt; as closedAt) {
+                <span class="q-caption case__muted">
+                  {{ 'customers.recovery.drawer.closedAt' | t: { when: formatInstant(closedAt) } }}
+                </span>
+              }
+              @if (current().resolutionBreached) {
+                <span class="q-caption case__breach">{{
+                  'customers.recovery.sla.BREACHED' | t
+                }}</span>
+              }
+            </div>
+          </section>
+
+          <section class="case__section">
+            <h3 class="q-caption">{{ 'customers.recovery.drawer.compensations' | t }}</h3>
+            @if (d.compensations.length === 0) {
+              <p class="q-body-sm case__muted">
+                {{ 'customers.recovery.drawer.noCompensations' | t }}
+              </p>
+            } @else {
+              <ul class="case__list">
+                @for (link of d.compensations; track link.refId) {
+                  <li class="q-body-sm" data-testid="drawer-compensation">
+                    {{ compensationKey(link.kind) | t }}
+                    @if (link.amountMinor !== null && link.currency) {
+                      <span class="q-tnum">· {{ link.amountMinor }} {{ link.currency }}</span>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+            @if (!closed()) {
+              <form class="case__form" (submit)="$event.preventDefault(); attach()">
+                <h4 class="q-caption">{{ 'customers.recovery.compensate.title' | t }}</h4>
+                <label class="q-caption" for="compensation-kind">
+                  {{ 'customers.recovery.compensate.kind' | t }}
+                </label>
+                <select
+                  id="compensation-kind"
+                  class="control"
+                  [value]="compensationKind()"
+                  (change)="onCompensationKindChange($any($event.target).value)"
+                  data-testid="compensation-kind"
+                >
+                  @for (kind of compensationKinds; track kind) {
+                    <option [value]="kind" [selected]="kind === compensationKind()">
+                      {{ compensateKey(kind) | t }}
+                    </option>
+                  }
+                </select>
+                <label class="q-caption" for="compensation-ref">
+                  {{ 'customers.recovery.compensate.ref' | t }}
+                </label>
+                <input
+                  id="compensation-ref"
+                  class="control"
+                  type="text"
+                  autocomplete="off"
+                  [value]="compensationRef()"
+                  (input)="compensationRef.set($any($event.target).value)"
+                  data-testid="compensation-ref"
+                />
+                <p class="q-caption case__muted">{{ 'customers.recovery.compensate.hint' | t }}</p>
+                <button
+                  type="submit"
+                  class="secondary"
+                  [disabled]="!canAttach()"
+                  data-testid="compensation-attach"
+                >
+                  {{ 'customers.recovery.compensate.attach' | t }}
+                </button>
+              </form>
+            }
+          </section>
+
+          <section class="case__section">
+            <h3 class="q-caption">{{ 'customers.recovery.drawer.timeline' | t }}</h3>
+            <q-timeline
+              [entries]="entries()"
+              [emptyLabel]="'customers.recovery.drawer.timelineEmpty' | t"
+            />
+            <form class="case__form" (submit)="$event.preventDefault(); addNote()">
+              <label class="q-caption" for="case-note">{{
+                'customers.recovery.note.label' | t
+              }}</label>
+              <textarea
+                id="case-note"
+                class="control"
+                rows="3"
+                maxlength="2000"
+                [value]="noteText()"
+                (input)="noteText.set($any($event.target).value)"
+                data-testid="case-note"
+              ></textarea>
+              <p class="q-caption case__muted">{{ 'customers.recovery.note.hint' | t }}</p>
+              <button
+                type="submit"
+                class="secondary"
+                [disabled]="!canAddNote()"
+                data-testid="case-note-add"
+              >
+                {{ 'customers.recovery.note.add' | t }}
+              </button>
+            </form>
+          </section>
+
+          @if (closing(); as target) {
+            <section class="case__section case__close" data-testid="close-form">
+              <label class="q-caption" for="case-outcome">
+                {{ 'customers.recovery.outcome.label' | t }}
+              </label>
+              <select
+                id="case-outcome"
+                class="control"
+                [value]="outcome()"
+                (change)="onOutcomeChange($any($event.target).value)"
+                data-testid="close-outcome"
+              >
+                <option value="">{{ 'customers.recovery.outcome.choose' | t }}</option>
+                @for (code of outcomes(); track code) {
+                  <option [value]="code">{{ outcomeKey(code) | t }}</option>
+                }
+              </select>
+              @if (outcomeNeedsLink()) {
+                <p class="q-caption case__breach" data-testid="close-needs-link">
+                  {{ 'customers.recovery.outcome.remedyNeedsLink' | t }}
+                </p>
+              }
+              <div class="case__row">
+                <button
+                  type="button"
+                  class="primary"
+                  [disabled]="!canConfirmClose()"
+                  (click)="confirmClose()"
+                  data-testid="close-confirm"
+                >
+                  {{ 'customers.recovery.action.confirm' | t }}
+                </button>
+                <button type="button" class="secondary" (click)="cancelClose()">
+                  {{ 'customers.recovery.action.cancel' | t }}
+                </button>
+              </div>
+            </section>
+          }
+
+          @if (dismissing()) {
+            <section class="case__section case__close" data-testid="dismiss-form">
+              <p class="q-body-sm">{{ 'customers.recovery.outcome.NOT_ACTIONABLE' | t }}</p>
+              <div class="case__row">
+                <button
+                  type="button"
+                  class="primary"
+                  [disabled]="busy()"
+                  (click)="dismissCase()"
+                  data-testid="dismiss-confirm"
+                >
+                  {{ 'customers.recovery.action.dismiss' | t }}
+                </button>
+                <button type="button" class="secondary" (click)="cancelDismiss()">
+                  {{ 'customers.recovery.action.cancel' | t }}
+                </button>
+              </div>
+            </section>
+          }
+        }
+      }
+    }
+  </div>
+
+  <ng-container qDrawerActions>
+    @if (state() === 'ready' && closing() === null && !dismissing()) {
+      @if (closed()) {
+        <span class="q-caption case__muted">{{ 'customers.recovery.action.final' | t }}</span>
+      } @else {
+        @if (canStart()) {
+          <button
+            type="button"
+            class="primary"
+            [disabled]="busy()"
+            (click)="start()"
+            data-testid="action-start"
+          >
+            {{ 'customers.recovery.action.start' | t }}
+          </button>
+        }
+        @if (canResolve()) {
+          <button
+            type="button"
+            class="primary"
+            [disabled]="busy()"
+            (click)="openClose('RESOLVED')"
+            data-testid="action-resolve"
+          >
+            {{ 'customers.recovery.action.resolve' | t }}
+          </button>
+        }
+        @if (canCloseUnresolved()) {
+          <button
+            type="button"
+            class="secondary"
+            [disabled]="busy()"
+            (click)="openClose('CLOSED_UNRESOLVED')"
+            data-testid="action-close-unresolved"
+          >
+            {{ 'customers.recovery.action.closeUnresolved' | t }}
+          </button>
+        }
+        @if (canRelease()) {
+          <button
+            type="button"
+            class="secondary"
+            [disabled]="busy()"
+            (click)="release()"
+            data-testid="action-release"
+          >
+            {{ 'customers.recovery.action.release' | t }}
+          </button>
+        }
+        @if (canDismiss()) {
+          <button
+            type="button"
+            class="secondary"
+            [disabled]="busy()"
+            (click)="askToDismiss()"
+            data-testid="action-dismiss"
+          >
+            {{ 'customers.recovery.action.dismiss' | t }}
+          </button>
+        }
+      }
+    }
+    <button type="button" class="secondary" (click)="dismiss.emit()" data-testid="drawer-close">
+      {{ 'customers.recovery.drawer.close' | t }}
+    </button>
+  </ng-container>
+</q-drawer>

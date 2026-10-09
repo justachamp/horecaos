@@ -1,0 +1,46 @@
+@if (list().length > 0) {
+  <section class="my-reviews" data-testid="my-reviews">
+    <h2 class="my-reviews__title">{{ 'profile.myReviews' | t }}</h2>
+    @if (errorKey(); as key) {
+      <p class="hint hint--error" role="alert">{{ key | t }}</p>
+    }
+    @for (review of list(); track review.id) {
+      <article class="my-review" data-testid="my-review">
+        <div class="my-review__stars" [attr.aria-label]="review.rating + ' / 5'">
+          @for (filled of stars(review.rating); track filled) {
+            <app-icon name="star" [size]="16" />
+          }
+        </div>
+        @if (review.comment) {
+          <p class="my-review__comment">{{ review.comment }}</p>
+        }
+        @if (review.tags && review.tags.length > 0) {
+          <div class="my-review__tags">
+            @for (tag of review.tags; track tag.id) {
+              <span class="tag-chip tag-chip--static">{{ wording(tag) }}</span>
+            }
+          </div>
+        }
+        @if (stateKey(review.publicDisplay); as key) {
+          <p class="my-review__state" data-testid="my-review-state">
+            {{ key | t }}
+            @if (reasonKey(review.publicDisplay); as reason) {
+              <span class="my-review__reason">· {{ reason | t }}</span>
+            }
+          </p>
+        }
+        @if (review.publicDisplay?.withdrawable) {
+          <button
+            type="button"
+            class="withdraw"
+            [disabled]="withdrawing() !== null"
+            (click)="withdraw(review)"
+            data-testid="withdraw"
+          >
+            {{ 'profile.withdrawPublic' | t }}
+          </button>
+        }
+      </article>
+    }
+  </section>
+}

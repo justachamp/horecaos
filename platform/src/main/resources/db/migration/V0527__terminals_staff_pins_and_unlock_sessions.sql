@@ -197,8 +197,9 @@ ALTER TABLE kitchen.ticket_events
 -- TERMINAL_CREDENTIAL_LOCKED (a PIN lock on a device or on the credential) and TERMINAL_DEVICE_UNSEEN (a
 -- PERSON_REQUIRED device unseen during service) join the enumerated event class list V0488 last restated. The
 -- full current list is carried forward rather than a clause added: a bare DROP/ADD pair silently drops every
--- value the previous migration did not know about. ADR 0154 widens the same list for PRINTER_OFFLINE and
--- PRINT_JOB_DEAD; whichever of the two migrations merges last carries every value in force.
+-- value the previous migration did not know about. ADR 0154's V0522 widened the same list for PRINTER_OFFLINE and
+-- PRINT_JOB_DEAD and runs before this one, so both are carried forward here (the integrator found them missing
+-- when the two waves met).
 ALTER TABLE integration.telegram_binding_events DROP CONSTRAINT ck_telegram_binding_event_class;
 ALTER TABLE integration.telegram_binding_events
     ADD CONSTRAINT ck_telegram_binding_event_class CHECK (
@@ -213,4 +214,5 @@ ALTER TABLE integration.telegram_binding_events
             'DEAD_LETTER_RECORDED', 'POS_EXPORT_AWAITING_OPERATOR',
             'CAMPAIGN_BLOCK_RATE_PAUSED',
             'MARKETPLACE_CHANNEL_STALE',
+            'PRINTER_OFFLINE', 'PRINT_JOB_DEAD',
             'TERMINAL_CREDENTIAL_LOCKED', 'TERMINAL_DEVICE_UNSEEN'));

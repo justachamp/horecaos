@@ -450,5 +450,38 @@
     "portionStep": "Ordered in portions of {{step}}",
     "weighedLine": "Weighed: {{weight}}",
     "estimateLine": "≈ {{weight}}, estimate"
+  },
+  "rateOrder": {
+    "title": "Rate your order",
+    "subtitle": "Order #{{number}} · your feedback reaches the kitchen",
+    "stars": "Rating",
+    "tagsLabel": "What did you like or not like?",
+    "tagsHint": "Pick up to {{max}}. Optional.",
+    "commentPlaceholder": "Leave a comment (optional)",
+    "publicConsent": "I agree to show my review on the restaurant's page without my name",
+    "publicConsentHint": "Only your comment is shown: no name, number or order. You can take it back at any time.",
+    "submit": "Submit rating",
+    "yourReview": "Your review",
+    "withdrawPublic": "Take off the page",
+    "publicState": {
+      "PENDING": "Your comment is being checked",
+      "PUBLISHED": "Your comment is on the restaurant's page",
+      "HIDDEN": "Your comment is not shown on the page"
+    },
+    "hiddenReason": {
+      "ABUSIVE_LANGUAGE": "it contains abusive language",
+      "PERSONAL_DATA_OF_ANOTHER": "it contains another person's personal data",
+      "NAMES_AN_INDIVIDUAL": "it names an individual",
+      "SPAM_OR_UNRELATED": "it is spam or unrelated",
+      "LEGAL_REQUEST": "because of a legal request",
+      "CUSTOMER_WITHDREW": "you took it off yourself",
+      "CUSTOMER_ERASED": "erased at your request"
+    }
+  },
+  "publicReviews": {
+    "title": "Guest reviews",
+    "count": "{{count}} ratings",
+    "distribution": "How the ratings split",
+    "more": "Show more"
   }
 }

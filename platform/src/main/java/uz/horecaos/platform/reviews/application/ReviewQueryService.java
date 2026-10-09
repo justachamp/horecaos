@@ -1,14 +1,20 @@
 package uz.horecaos.platform.reviews.application;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import uz.horecaos.platform.iam.api.protection.FieldProtection;
-import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
-import uz.horecaos.platform.iam.api.protection.ProtectedValue;
+import uz.horecaos.platform.reviews.application.FeedbackTagService.TagView;
+import uz.horecaos.platform.reviews.domain.CommentState;
+import uz.horecaos.platform.reviews.domain.RevealPurpose;
+import uz.horecaos.platform.reviews.infrastructure.persistence.JdbcPublicationStore;
+import uz.horecaos.platform.reviews.infrastructure.persistence.JdbcPublicationStore.PublicationRow;
+import uz.horecaos.platform.reviews.infrastructure.persistence.JdbcRecoveryCaseStore;
+import uz.horecaos.platform.reviews.infrastructure.persistence.JdbcRecoveryCaseStore.CaseLink;
 import uz.horecaos.platform.reviews.infrastructure.persistence.JdbcReviewStore;
 import uz.horecaos.platform.reviews.infrastructure.persistence.JdbcReviewStore.Row;
 import uz.horecaos.platform.reviews.infrastructure.persistence.JdbcReviewStore.Summary;
@@ -17,27 +23,41 @@ import uz.horecaos.platform.reviews.infrastructure.persistence.JdbcReviewStore.S
  * The operations side of ADR 0071 — §5.4 Reviews: a brand's own reviews,
  * filtered, read against the order and the customer each one is attached to.
  *
- * <p>Deliberately read-only, and deliberately not a case-management surface:
- * see the ADR's own "no moderation, no kanban" decision. There is no write
- * method here because there is nothing for an operator to write — a review is
- * customer-authored and immutable once submitted.
+ * <p>Read-only, and not where a case is worked or a comment moderated -- those are
+ * {@code RecoveryCaseService} and {@code ReviewModerationService} (ADR 0159). A review is
+ * customer-authored and immutable once submitted; what this list adds to it is only what stands beside
+ * it: the tags it carries, where its comment stands for the public page, and the case, if any, that
+ * answers it.
  */
 @Service
 public class ReviewQueryService {
 
-    private static final String TABLE = "reviews.order_reviews";
-    private static final String COMMENT_COLUMN = "comment_protected";
-    private static final String REVEAL_PURPOSE = "reviews.operations.reviews-screen";
-
     private final JdbcReviewStore store;
-    private final FieldProtection protection;
+    private final ReviewCommentVault vault;
+    private final JdbcPublicationStore publications;
+    private final JdbcRecoveryCaseStore cases;
+    private final FeedbackTagService tags;
 
-    public ReviewQueryService(JdbcReviewStore store, FieldProtection protection) {
+    public ReviewQueryService(
+            JdbcReviewStore store,
+            ReviewCommentVault vault,
+            JdbcPublicationStore publications,
+            JdbcRecoveryCaseStore cases,
+            FeedbackTagService tags) {
         this.store = store;
-        this.protection = protection;
+        this.vault = vault;
+        this.publications = publications;
+        this.cases = cases;
+        this.tags = tags;
     }
 
-    /** One review as the operations screen renders it — the comment already decrypted. */
+    /**
+     * One review as the operations screen renders it — the comment already decrypted.
+     *
+     * @param tags          the tags it carries
+     * @param publicDisplay where its comment stands for the public page, and why if it is hidden
+     * @param caseLink      the service-recovery case that answers it, or null
+     */
     public record ReviewView(
             UUID id,
             UUID orderId,
@@ -45,19 +65,11 @@ public class ReviewQueryService {
             UUID customerAccountId,
             int rating,
             @Nullable String comment,
-            Instant submittedAt) {
-
-        static ReviewView of(Row row, @Nullable String comment) {
-            return new ReviewView(
-                    row.id(),
-                    row.orderId(),
-                    row.locationId(),
-                    row.customerAccountId(),
-                    row.rating(),
-                    comment,
-                    row.submittedAt());
-        }
-    }
+            Instant submittedAt,
+            List<TagView> tags,
+            CommentState publicState,
+            @Nullable String publicReasonCode,
+            @Nullable CaseLink caseLink) {}
 
     /**
      * A brand's reviews, newest first, filtered by whatever the operator
@@ -89,21 +101,44 @@ public class ReviewQueryService {
         if (cursorReviewId != null) {
             before = store.brandCursor(tenantId, brandId, cursorReviewId).orElseThrow(UnknownCursorException::new);
         }
-        return store
-                .listForBrand(
-                        tenantId,
-                        brandId,
-                        customerAccountId,
-                        locationId,
-                        minRating,
-                        maxRating,
-                        submittedFrom,
-                        submittedTo,
-                        before,
-                        cursorReviewId,
-                        limit)
-                .stream()
-                .map(row -> ReviewView.of(row, reveal(tenantId, row)))
+        List<Row> rows = store.listForBrand(
+                tenantId,
+                brandId,
+                customerAccountId,
+                locationId,
+                minRating,
+                maxRating,
+                submittedFrom,
+                submittedTo,
+                before,
+                cursorReviewId,
+                limit);
+        List<UUID> reviewIds = rows.stream().map(Row::id).toList();
+        Map<UUID, List<UUID>> tagIds = store.tagIdsFor(tenantId, reviewIds);
+        Map<UUID, TagView> views = tags.viewsOf(
+                tenantId, tagIds.values().stream().flatMap(Collection::stream).toList());
+        Map<UUID, PublicationRow> publicationRows = publications.forReviews(tenantId, reviewIds);
+        Map<UUID, CaseLink> links = cases.linksForReviews(tenantId, reviewIds);
+
+        return rows.stream()
+                .map(row -> {
+                    PublicationRow publication = publicationRows.get(row.id());
+                    return new ReviewView(
+                            row.id(),
+                            row.orderId(),
+                            row.locationId(),
+                            row.customerAccountId(),
+                            row.rating(),
+                            reveal(tenantId, row),
+                            row.submittedAt(),
+                            tagIds.getOrDefault(row.id(), List.of()).stream()
+                                    .map(views::get)
+                                    .filter(java.util.Objects::nonNull)
+                                    .toList(),
+                            publication == null ? CommentState.NOT_SHARED : publication.commentState(),
+                            publication == null ? null : publication.stateReasonCode(),
+                            links.get(row.id()));
+                })
                 .toList();
     }
 
@@ -119,14 +154,7 @@ public class ReviewQueryService {
     }
 
     private @Nullable String reveal(UUID tenantId, Row row) {
-        if (row.commentProtected() == null) {
-            return null;
-        }
-        return protection.reveal(
-                tenantId,
-                ProtectedValue.deserialize(row.commentProtected()),
-                new RecordRef(TABLE, COMMENT_COLUMN, row.id()),
-                REVEAL_PURPOSE);
+        return vault.revealComment(tenantId, row.id(), row.commentProtected(), RevealPurpose.OPERATIONS_REVIEWS_SCREEN);
     }
 
     /** The cursor names no review at this brand. */

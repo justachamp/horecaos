@@ -51,6 +51,7 @@ changing retention is an approved operational migration with a rollback plan.
 | `marketing.events` | 3 | 1 | `PT168H` | `delete` |
 | `content.events` | 3 | 1 | `PT168H` | `delete` |
 | `customers.events` | 3 | 1 | `PT168H` | `delete` |
+| `reviews.events` | 3 | 1 | `PT168H` | `delete` |
 | `integration.events` | 3 | 1 | `PT168H` | `delete` |
 | `pos.commands` | 3 | 1 | `PT24H` | `delete` |
 
@@ -364,6 +365,36 @@ envelope-encrypted in `customer.leads` (ADR 0029). A reschedule of a pending cal
 status and is not published; a conversion publishes `LeadStatusChanged` and `LeadConverted`
 both. The contact journal (`customer.contact_attempts`) is not an event stream: it is append-only
 by grant and read through the customer card.
+
+## `reviews.events`
+
+- Producing module: `reviews`
+- Retention class: business fact
+- Classification: `INTERNAL` — no personal data on this topic
+- Key: `orderId`
+
+| Event | Version | Key | Schema | Version-1 payload |
+|---|---|---|---|---|
+| `ReviewSubmitted` | 1 | `orderId` | [`ReviewSubmitted.v1`](../../src/main/resources/events/reviews.events/ReviewSubmitted.v1.schema.json) | `reviewId`, `orderId`, `brandId`, `locationId`, `rating`, `hasComment`, `tagCount`, `submittedAt` |
+| `ReviewCommentModerated` | 1 | `orderId` | [`ReviewCommentModerated.v1`](../../src/main/resources/events/reviews.events/ReviewCommentModerated.v1.schema.json) | `reviewId`, `orderId`, `brandId`, `fromState`, `toState`, `reasonCode`, `actorType` |
+| `RecoveryCaseOpened` | 1 | `orderId` | [`RecoveryCaseOpened.v1`](../../src/main/resources/events/reviews.events/RecoveryCaseOpened.v1.schema.json) | `caseId`, `reviewId`, `orderId`, `brandId`, `locationId`, `source`, `rating`, `firstResponseDueAt`, `resolutionDueAt` |
+| `RecoveryCaseStateChanged` | 1 | `orderId` | [`RecoveryCaseStateChanged.v1`](../../src/main/resources/events/reviews.events/RecoveryCaseStateChanged.v1.schema.json) | `caseId`, `orderId`, `brandId`, `locationId`, `fromState`, `toState`, `outcomeCode?`, `ownerReference?`, `changedAt` |
+| `RecoveryCaseSlaBreached` | 1 | `orderId` | [`RecoveryCaseSlaBreached.v1`](../../src/main/resources/events/reviews.events/RecoveryCaseSlaBreached.v1.schema.json) | `caseId`, `orderId`, `brandId`, `locationId`, `kind`, `dueAt`, `breachedAt` |
+
+ADR 0159. A review is a customer's one rating of one completed order, and a case is the
+service-recovery worklist item about it. These five facts are appended to the outbox in the same
+transaction as the row they describe (`BEFORE_COMMIT`), keyed by the order so one order's review,
+moderation and case facts stay in order. Every payload is identifiers, states, stable codes and
+times: never a comment, a case note, a tag's wording, a customer or a staff member's name, which
+stay envelope-encrypted in `reviews.order_reviews` and `reviews.recovery_case_events` (ADR 0029).
+The owner of a case appears only as the staff member's non-personal `display_reference`
+(`S-0142`, ADR 0139). `ReviewCommentModerated` is published for a moderator's decision, a
+customer's withdrawal and an erasure alike, with the `actorType` that tells them apart; a
+rating is never moderated and no event carries a change to one. `RecoveryCaseSlaBreached` is
+published once per clock, by the worker that marked the breach, and only while the case was open:
+a case dismissed or resolved before the worker reached it publishes nothing. `notifications`
+consumes `RecoveryCaseOpened` and `RecoveryCaseSlaBreached` in-process to raise an operations
+alert when the brand's `reviews.recovery` policy asks for one.
 
 ## `inventory.events`
 

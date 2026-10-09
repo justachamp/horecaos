@@ -1,0 +1,264 @@
+<div class="worklist">
+  <div class="header">
+    <h1 class="q-title">{{ 'customers.recovery.title' | t }}</h1>
+    <div class="view-switch" role="group" [attr.aria-label]="'customers.recovery.view.label' | t">
+      <button
+        type="button"
+        class="view-switch__button"
+        [class.view-switch__button--on]="view() === 'board'"
+        [attr.aria-pressed]="view() === 'board'"
+        (click)="setView('board')"
+        data-testid="view-board"
+      >
+        {{ 'customers.recovery.view.board' | t }}
+      </button>
+      <button
+        type="button"
+        class="view-switch__button"
+        [class.view-switch__button--on]="view() === 'table'"
+        [attr.aria-pressed]="view() === 'table'"
+        (click)="setView('table')"
+        data-testid="view-table"
+      >
+        {{ 'customers.recovery.view.table' | t }}
+      </button>
+    </div>
+  </div>
+  <p class="q-body-sm subtitle">{{ 'customers.recovery.subtitle' | t }}</p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.recovery.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied">{{ 'customers.recovery.error.denied' | t }}</p>
+    }
+    @case ('error') {
+      <div class="error-band" role="alert">
+        <span class="q-body-sm">{{ errorText() }}</span>
+        <button type="button" class="secondary" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      @if (counts(); as c) {
+        <div class="counters" data-testid="recovery-counts">
+          <div class="counter">
+            <span class="q-caption">{{ 'customers.recovery.counts.open' | t }}</span>
+            <span class="q-data-lg q-tnum" data-testid="count-open">{{ openCount() }}</span>
+          </div>
+          <div class="counter">
+            <span class="q-caption">{{ 'customers.recovery.counts.atRisk' | t }}</span>
+            <span class="q-data-lg q-tnum" data-testid="count-at-risk">{{
+              c.bySla.AT_RISK ?? 0
+            }}</span>
+          </div>
+          <div class="counter counter--danger">
+            <span class="q-caption">{{ 'customers.recovery.counts.breached' | t }}</span>
+            <span class="q-data-lg q-tnum" data-testid="count-breached">{{
+              c.bySla.BREACHED ?? 0
+            }}</span>
+          </div>
+        </div>
+      }
+
+      <div class="filters">
+        <select
+          class="control"
+          [attr.aria-label]="'customers.recovery.filter.location' | t"
+          [value]="locationFilter()"
+          (change)="onLocationFilter($any($event.target).value)"
+          data-testid="recovery-location-filter"
+        >
+          <option value="">{{ 'customers.reviews.filter.allLocations' | t }}</option>
+          @for (location of locations(); track location.id) {
+            <option [value]="location.id">{{ location.displayName }}</option>
+          }
+        </select>
+        <select
+          class="control"
+          [attr.aria-label]="'customers.recovery.filter.clock' | t"
+          [value]="slaFilter()"
+          (change)="onSlaFilter($any($event.target).value)"
+          data-testid="recovery-sla-filter"
+        >
+          <option value="">{{ 'customers.recovery.filter.allClocks' | t }}</option>
+          @for (sla of slaStates; track sla) {
+            <option [value]="sla">{{ slaKey(sla) | t }}</option>
+          }
+        </select>
+        @if (view() === 'table') {
+          <select
+            class="control"
+            [attr.aria-label]="'customers.recovery.filter.state' | t"
+            [value]="stateFilter()"
+            (change)="onStateFilter($any($event.target).value)"
+            data-testid="recovery-state-filter"
+          >
+            <option value="">{{ 'customers.recovery.filter.allStates' | t }}</option>
+            @for (s of caseStates; track s) {
+              <option [value]="s">{{ stateKey(s) | t }}</option>
+            }
+          </select>
+        }
+      </div>
+
+      @if (notice(); as message) {
+        <div class="notice" role="status" data-testid="recovery-notice">
+          <span class="q-body-sm">{{ message }}</span>
+        </div>
+      }
+      @if (errorText(); as message) {
+        <div class="error-band" role="alert" data-testid="recovery-inline-error">
+          <span class="q-body-sm">{{ message }}</span>
+        </div>
+      }
+
+      @if (view() === 'board') {
+        <q-board>
+          @for (s of caseStates; track s) {
+            <q-board-column
+              [columnId]="s"
+              [titleText]="stateKey(s) | t"
+              [current]="columnOf(s).items.length"
+              [dropDisabled]="false"
+              (dropped)="onDropped($event)"
+            >
+              @for (item of columnOf(s).items; track item.id) {
+                <q-board-card [dragData]="item" [dragDisabled]="isClosed(item.state)">
+                  <article
+                    class="card"
+                    [class.card--breached]="item.slaState === 'BREACHED'"
+                    tabindex="0"
+                    (click)="open(item)"
+                    (keydown.enter)="open(item)"
+                    data-testid="recovery-card"
+                  >
+                    <div class="card__top">
+                      <span class="card__stars" [attr.aria-label]="item.rating + ' / 5'">
+                        {{ stars(item.rating) }}
+                      </span>
+                      <q-status-pill
+                        [label]="slaKey(item.slaState) | t"
+                        [tone]="slaTone(item.slaState)"
+                      />
+                    </div>
+                    <div class="q-body-sm card__order">
+                      {{ item.orderNumber ?? item.orderId }} · {{ locationName(item.locationId) }}
+                    </div>
+                    <div class="q-caption card__due">{{ dueLine(item) }}</div>
+                    <div class="q-caption card__foot">
+                      <span>{{
+                        ownerLabel(item.owner) ?? ('customers.recovery.owner.none' | t)
+                      }}</span>
+                      @if (item.compensationCount > 0) {
+                        <span>
+                          {{
+                            'customers.recovery.compensationCount'
+                              | t: { count: item.compensationCount }
+                          }}
+                        </span>
+                      }
+                    </div>
+                  </article>
+                </q-board-card>
+              } @empty {
+                <p class="q-caption column-empty">{{ 'customers.recovery.emptyColumn' | t }}</p>
+              }
+              @if (columnOf(s).cursor !== null) {
+                <button
+                  type="button"
+                  class="secondary column-more"
+                  [disabled]="columnOf(s).loading"
+                  (click)="loadMoreColumn(s)"
+                  data-testid="column-more"
+                >
+                  {{
+                    columnOf(s).loading
+                      ? ('customers.recovery.loading' | t)
+                      : ('customers.loadMore' | t)
+                  }}
+                </button>
+              }
+            </q-board-column>
+          }
+        </q-board>
+      } @else {
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'customers.recovery.column.opened' | t }}</th>
+              <th class="q-caption">{{ 'customers.recovery.column.rating' | t }}</th>
+              <th class="q-caption">{{ 'customers.recovery.column.order' | t }}</th>
+              <th class="q-caption">{{ 'customers.recovery.column.location' | t }}</th>
+              <th class="q-caption">{{ 'customers.recovery.column.owner' | t }}</th>
+              <th class="q-caption">{{ 'customers.recovery.column.state' | t }}</th>
+              <th class="q-caption">{{ 'customers.recovery.column.clock' | t }}</th>
+              <th class="q-caption">{{ 'customers.recovery.column.due' | t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of tableRows(); track row.id) {
+              <tr
+                class="row"
+                tabindex="0"
+                (click)="open(row)"
+                (keydown.enter)="open(row)"
+                data-testid="recovery-row"
+              >
+                <td class="q-body-sm q-tnum">{{ formatInstant(row.createdAt, row.locationId) }}</td>
+                <td class="q-body-sm" [attr.aria-label]="row.rating + ' / 5'">
+                  {{ stars(row.rating) }}
+                </td>
+                <td class="q-body-sm">{{ row.orderNumber ?? row.orderId }}</td>
+                <td class="q-body-sm">{{ locationName(row.locationId) }}</td>
+                <td class="q-body-sm">
+                  {{ ownerLabel(row.owner) ?? ('customers.recovery.owner.none' | t) }}
+                </td>
+                <td class="q-body-sm">
+                  <q-status-pill [label]="stateKey(row.state) | t" [tone]="stateTone(row.state)" />
+                </td>
+                <td class="q-body-sm">
+                  <q-status-pill
+                    [label]="slaKey(row.slaState) | t"
+                    [tone]="slaTone(row.slaState)"
+                  />
+                </td>
+                <td class="q-body-sm q-tnum">{{ dueLine(row) }}</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td class="q-body-sm empty" colspan="8">{{ 'customers.recovery.empty' | t }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        @if (tableCursor() !== null) {
+          <button
+            type="button"
+            class="secondary load-more"
+            [disabled]="tableLoading()"
+            (click)="loadMoreRows()"
+            data-testid="table-more"
+          >
+            {{ tableLoading() ? ('customers.recovery.loading' | t) : ('customers.loadMore' | t) }}
+          </button>
+        }
+      }
+
+      @if (selected(); as current) {
+        @if (scope(); as brandScope) {
+          <q-recovery-case-drawer
+            [scope]="brandScope"
+            [summary]="current"
+            [timeZone]="zoneOf(current.locationId)"
+            [intent]="intent()"
+            (dismiss)="closeDrawer()"
+            (changed)="onChanged()"
+          />
+        }
+      }
+    }
+  }
+</div>

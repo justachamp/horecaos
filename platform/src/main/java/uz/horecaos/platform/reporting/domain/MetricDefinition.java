@@ -101,7 +101,9 @@ public record MetricDefinition(
         SECONDS,
         MINUTES,
         BASIS_POINTS,
-        METERS
+        METERS,
+        /** ADR 0159: a mean rating on the customer's one-to-five scale, to one decimal. */
+        STARS
     }
 
     public MetricDefinition {

@@ -315,7 +315,29 @@
       "avatarUnavailable": "Profil rasmi hozircha mavjud emas.",
       "avatarFailed": "Rasm saqlanmadi. Boshqasini tanlang."
     },
-    "referral": "Do'stlarni taklif qilish"
+    "referral": "Do'stlarni taklif qilish",
+    "tagsLabel": "Nima yoqdi yoki yoqmadi?",
+    "tagsHint": "{{max}} tagacha tanlang. Ixtiyoriy.",
+    "publicConsent": "Sharhimni restoran sahifasida ismimsiz ko'rsatishga roziman",
+    "publicConsentHint": "Faqat izohingiz ko'rsatiladi: ismingiz, raqamingiz va buyurtmangiz ko'rsatilmaydi. Istalgan vaqtda qaytarib olishingiz mumkin.",
+    "rateThanksPending": "Rahmat! Baholovingiz yuborildi. Izohingiz sahifada ko'rsatilishidan oldin ko'rib chiqiladi.",
+    "rateThanksPublished": "Rahmat! Baholovingiz yuborildi va izohingiz restoran sahifasida ko'rsatilmoqda.",
+    "myReviews": "Mening sharhlarim",
+    "withdrawPublic": "Sahifadan olib tashlash",
+    "publicState": {
+      "PENDING": "Izohingiz tekshirilmoqda",
+      "PUBLISHED": "Izohingiz restoran sahifasida ko'rsatilmoqda",
+      "HIDDEN": "Izohingiz sahifada ko'rsatilmaydi"
+    },
+    "hiddenReason": {
+      "ABUSIVE_LANGUAGE": "haqoratli so'zlar bor",
+      "PERSONAL_DATA_OF_ANOTHER": "boshqa kishining shaxsiy ma'lumotlari bor",
+      "NAMES_AN_INDIVIDUAL": "muayyan shaxs nomi aytilgan",
+      "SPAM_OR_UNRELATED": "mavzuga aloqasiz",
+      "LEGAL_REQUEST": "huquqiy talab bo'yicha",
+      "CUSTOMER_WITHDREW": "siz o'zingiz olib tashladingiz",
+      "CUSTOMER_ERASED": "so'rovingiz bo'yicha o'chirildi"
+    }
   },
   "product": {
     "variants": "Variantlar",
@@ -540,5 +562,13 @@
     "portionStep": "{{step}} porsiyalarda buyurtma qilinadi",
     "weighedLine": "Tortildi: {{weight}}",
     "estimateLine": "≈ {{weight}}, taxminiy"
+  },
+  "reviews": {
+    "public": {
+      "title": "Mehmonlar fikri",
+      "count": "{{count}} ta baho",
+      "distribution": "Baholar taqsimoti",
+      "more": "Yana ko'rsatish"
+    }
   }
 }
