@@ -1,0 +1,242 @@
+<section
+  class="card"
+  data-testid="print-routes"
+  [attr.aria-label]="'settings.printing.routes.title' | t"
+>
+  <div class="card__head">
+    <h2 class="q-subhead">{{ 'settings.printing.routes.title' | t }}</h2>
+    @if (editing() === null) {
+      <button
+        type="button"
+        class="primary"
+        data-testid="print-route-add"
+        [disabled]="activePrinters().length === 0"
+        (click)="openNew()"
+      >
+        {{ 'settings.printing.routes.add' | t }}
+      </button>
+    }
+  </div>
+  <p class="q-body-sm muted">{{ 'settings.printing.routes.lead' | t }}</p>
+
+  @if (routes().length === 0) {
+    <p class="q-body-sm banner" data-testid="print-routes-empty">
+      {{ 'settings.printing.routes.empty' | t }}
+    </p>
+  }
+  @if (activePrinters().length === 0) {
+    <p class="q-body-sm banner" data-testid="print-routes-no-printer">
+      {{ 'settings.printing.routes.noPrinter' | t }}
+    </p>
+  }
+  @if (posMayPrint() && !hasKitchenRoute()) {
+    <p class="q-body-sm banner" data-testid="print-routes-pos-note">
+      {{ 'settings.printing.routes.posMayPrint' | t }}
+      {{ 'settings.printing.routes.posExplain' | t }}
+    </p>
+  }
+
+  @if (notice(); as message) {
+    <p class="q-body-sm success" role="status" data-testid="print-routes-notice">{{ message }}</p>
+  }
+  @if (error(); as message) {
+    <p class="q-body-sm error" role="alert" data-testid="print-routes-error">{{ message }}</p>
+  }
+
+  @if (editing() !== null) {
+    <form class="form" data-testid="print-route-form" (submit)="$event.preventDefault(); save()">
+      <label class="q-body-sm">
+        {{ 'settings.printing.routes.form.document' | t }}
+        <select
+          class="field"
+          data-testid="print-route-document"
+          [disabled]="editing() !== 'new'"
+          (change)="setDocumentType($any($event.target).value)"
+        >
+          @for (type of documentTypes; track type) {
+            <option [value]="type" [selected]="documentType() === type">
+              {{ documentKeys[type] | t }}
+            </option>
+          }
+        </select>
+      </label>
+
+      @if (isTicket()) {
+        <label class="q-body-sm">
+          {{ 'settings.printing.routes.form.station' | t }}
+          <select
+            class="field"
+            data-testid="print-route-station"
+            (change)="stationId.set($any($event.target).value)"
+          >
+            <option value="" [selected]="stationId() === ''">
+              {{ 'settings.printing.routes.form.anyStation' | t }}
+            </option>
+            @for (station of stations(); track station.stationId) {
+              <option [value]="station.stationId" [selected]="stationId() === station.stationId">
+                {{ stationName(station.stationId) }}
+              </option>
+            }
+          </select>
+        </label>
+        <p class="q-caption muted">{{ 'settings.printing.routes.form.stationNote' | t }}</p>
+        @if (posMayPrint()) {
+          <p class="q-body-sm banner" data-testid="print-route-form-pos-note">
+            {{ 'settings.printing.routes.posMayPrint' | t }}
+          </p>
+        }
+      }
+
+      <label class="q-body-sm">
+        {{ 'settings.printing.routes.form.printer' | t }}
+        <select
+          class="field"
+          data-testid="print-route-printer"
+          (change)="setPrinter($any($event.target).value)"
+        >
+          <option value="" [selected]="printerId() === ''">—</option>
+          @for (printer of activePrinters(); track printer.id) {
+            <option [value]="printer.id" [selected]="printerId() === printer.id">
+              {{ printer.displayName }}
+            </option>
+          }
+        </select>
+      </label>
+
+      <label class="q-body-sm">
+        {{ 'settings.printing.routes.form.copies' | t }}
+        <select
+          class="field"
+          data-testid="print-route-copies"
+          (change)="copies.set(+$any($event.target).value)"
+        >
+          @for (count of copyChoices; track count) {
+            <option [value]="count" [selected]="copies() === count">{{ count }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="q-body-sm inline">
+        <input
+          type="checkbox"
+          data-testid="print-route-auto"
+          [checked]="autoPrint()"
+          [disabled]="!autoPossible()"
+          (change)="autoPrint.set($any($event.target).checked)"
+        />
+        {{ 'settings.printing.routes.form.auto' | t }}
+      </label>
+      <p class="q-caption muted">
+        {{
+          (autoPossible()
+            ? 'settings.printing.routes.form.autoNote'
+            : 'settings.printing.routes.form.autoNeedsAgent'
+          ) | t
+        }}
+      </p>
+
+      @if (editing() !== 'new') {
+        <label class="q-body-sm inline">
+          <input
+            type="checkbox"
+            data-testid="print-route-active"
+            [checked]="active()"
+            (change)="active.set($any($event.target).checked)"
+          />
+          {{ 'settings.printing.routes.form.active' | t }}
+        </label>
+      }
+
+      <div class="form__actions">
+        <button type="button" class="secondary" [disabled]="busy()" (click)="cancel()">
+          {{ 'settings.printing.cancel' | t }}
+        </button>
+        <button
+          type="submit"
+          class="primary"
+          data-testid="print-route-save"
+          [disabled]="!canSave()"
+        >
+          {{ 'settings.printing.save' | t }}
+        </button>
+      </div>
+    </form>
+  }
+
+  @if (routes().length > 0) {
+    <table class="table q-body-sm">
+      <thead>
+        <tr>
+          <th>{{ 'settings.printing.routes.col.document' | t }}</th>
+          <th>{{ 'settings.printing.routes.col.station' | t }}</th>
+          <th>{{ 'settings.printing.routes.col.printer' | t }}</th>
+          <th>{{ 'settings.printing.routes.col.copies' | t }}</th>
+          <th>{{ 'settings.printing.routes.col.auto' | t }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (route of routes(); track route.id) {
+          <tr [attr.data-route]="route.id" [attr.data-status]="route.status">
+            <td>
+              {{ documentKeys[route.documentType] | t }}
+              @if (route.status === 'INACTIVE') {
+                <span class="chip q-caption">{{ 'settings.printing.routes.inactive' | t }}</span>
+              }
+              @if (route.documentType === 'KITCHEN_TICKET' && posMayPrint()) {
+                <span class="q-caption muted" data-testid="print-route-pos-note">
+                  {{ 'settings.printing.routes.posMayPrint' | t }}
+                </span>
+              }
+            </td>
+            <td>
+              @if (route.documentType === 'KITCHEN_TICKET') {
+                {{ stationName(route.stationId) ?? ('settings.printing.routes.anyStation' | t) }}
+              } @else {
+                <span class="muted">—</span>
+              }
+            </td>
+            <td>{{ printerName(route.printerId) }}</td>
+            <td>{{ route.copies }}</td>
+            <td>
+              {{
+                (route.autoPrint
+                  ? 'settings.printing.routes.autoOn'
+                  : 'settings.printing.routes.autoOff'
+                ) | t
+              }}
+            </td>
+            <td>
+              <div class="row-actions">
+                <button type="button" class="link" [disabled]="busy()" (click)="openEdit(route)">
+                  {{ 'settings.printing.edit' | t }}
+                </button>
+                @if (deleting() === route.id) {
+                  <button
+                    type="button"
+                    class="link"
+                    [attr.data-testid]="'print-route-delete-confirm-' + route.id"
+                    [disabled]="busy()"
+                    (click)="remove(route)"
+                  >
+                    {{ 'settings.printing.routes.deleteConfirm' | t }}
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    class="link"
+                    [attr.data-testid]="'print-route-delete-' + route.id"
+                    [disabled]="busy()"
+                    (click)="askDelete(route)"
+                  >
+                    {{ 'settings.printing.routes.delete' | t }}
+                  </button>
+                }
+              </div>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</section>

@@ -125,6 +125,15 @@ export const SETTINGS_NAVIGATION: readonly SettingsNavGroup[] = [
         description: 'settings.home.description.fiscalization',
         builtRoute: true,
       },
+      {
+        // 10.14 Printing and receipts (ADR 0154): printers, what prints where, the brand's receipt footer and
+        // the print queue. Dark behind `feature.printing`: a tenant that has not been switched on sees no door.
+        path: 'printing',
+        label: 'settings.nav.printing',
+        description: 'settings.home.description.printing',
+        builtRoute: true,
+        featureFlag: 'feature.printing',
+      },
     ],
   },
   {

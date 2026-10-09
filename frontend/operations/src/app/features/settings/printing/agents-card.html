@@ -1,0 +1,180 @@
+<section
+  class="card"
+  data-testid="print-agents"
+  [attr.aria-label]="'settings.printing.agents.title' | t"
+>
+  <h2 class="q-subhead">{{ 'settings.printing.agents.title' | t }}</h2>
+  <p class="q-body-sm muted">{{ 'settings.printing.agents.lead' | t }}</p>
+
+  @if (notice(); as message) {
+    <p class="q-body-sm success" role="status" data-testid="print-agents-notice">{{ message }}</p>
+  }
+  @if (error(); as message) {
+    <p class="q-body-sm error" role="alert" data-testid="print-agents-error">{{ message }}</p>
+  }
+
+  <form class="form" data-testid="print-agent-enrol" (submit)="$event.preventDefault(); lookUp()">
+    <label class="q-body-sm">
+      {{ 'settings.printing.agents.code' | t }}
+      <input
+        class="field q-mono"
+        type="text"
+        maxlength="32"
+        autocomplete="off"
+        data-testid="print-agent-code"
+        [value]="code()"
+        (input)="setCode($any($event.target).value)"
+      />
+    </label>
+    <p class="q-caption muted">{{ 'settings.printing.agents.codeNote' | t }}</p>
+    @if (pending() === null) {
+      <div class="form__actions">
+        <button
+          type="submit"
+          class="secondary"
+          data-testid="print-agent-lookup"
+          [disabled]="!canLookUp()"
+        >
+          {{ 'settings.printing.agents.lookUp' | t }}
+        </button>
+      </div>
+    }
+  </form>
+
+  @if (pending(); as claim) {
+    <div class="form" data-testid="print-agent-claim">
+      <p class="q-body-sm">
+        {{ 'settings.printing.agents.claims' | t: { label: claim.requestedLabel ?? '—' } }}
+      </p>
+      <p class="q-caption muted">{{ 'settings.printing.agents.grantNote' | t }}</p>
+      <label class="q-body-sm">
+        {{ 'settings.printing.agents.name' | t }}
+        <input
+          class="field"
+          type="text"
+          maxlength="120"
+          data-testid="print-agent-name"
+          [value]="agentName()"
+          (input)="agentName.set($any($event.target).value)"
+        />
+      </label>
+      <div class="form__actions">
+        <button
+          type="button"
+          class="primary"
+          data-testid="print-agent-approve"
+          [disabled]="!canApprove()"
+          (click)="approve()"
+        >
+          {{ 'settings.printing.agents.approve' | t }}
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (agents().length === 0) {
+    <p class="q-body-sm banner" data-testid="print-agents-empty">
+      {{ 'settings.printing.agents.empty' | t }}
+    </p>
+  } @else {
+    <ul class="agents">
+      @for (agent of agents(); track agent.device.deviceId) {
+        <li
+          class="agent"
+          [attr.data-agent]="agent.device.deviceId"
+          [attr.data-status]="agent.device.status"
+        >
+          <div class="card__head">
+            <strong class="q-body-sm">{{ agent.device.displayName }}</strong>
+            @if (agent.device.status === 'ACTIVE') {
+              <span class="chip q-caption chip--good">{{
+                'settings.printing.agents.status.active' | t
+              }}</span>
+            } @else {
+              <span class="chip q-caption">{{
+                'settings.printing.agents.status.revoked' | t
+              }}</span>
+            }
+          </div>
+          <p class="q-caption muted">
+            {{
+              'settings.printing.agents.enrolled'
+                | t: { by: agent.device.enrolledBy, time: when(agent.device.enrolledAt) }
+            }}
+          </p>
+          @if (agent.device.revokedAt; as revokedAt) {
+            <p class="q-caption muted">
+              {{
+                'settings.printing.agents.revokedAt'
+                  | t: { by: agent.device.revokedBy ?? '—', time: when(revokedAt) }
+              }}
+              @if (agent.device.revokedReason; as why) {
+                · {{ why }}
+              }
+            </p>
+          }
+          @if (agent.advertised.length === 0) {
+            <p class="q-caption muted">{{ 'settings.printing.agents.advertisesNone' | t }}</p>
+          } @else {
+            <p class="q-caption">
+              {{ 'settings.printing.agents.advertises' | t }}
+              @for (alias of agent.advertised; track alias.key) {
+                <span class="chip q-caption" [class.chip--good]="alias.status === 'ONLINE'">
+                  <span class="q-mono">{{ alias.key }}</span> · {{ statusKeys[alias.status] | t }}
+                </span>
+                {{ ' ' }}
+              }
+            </p>
+          }
+          @if (agent.device.status === 'ACTIVE') {
+            @if (revoking() === agent.device.deviceId) {
+              <div class="form">
+                <p class="q-body-sm">{{ 'settings.printing.agents.revokeNote' | t }}</p>
+                <label class="q-body-sm">
+                  {{ 'settings.printing.agents.reason' | t }}
+                  <input
+                    class="field"
+                    type="text"
+                    maxlength="500"
+                    data-testid="print-agent-revoke-reason"
+                    [value]="reason()"
+                    (input)="reason.set($any($event.target).value)"
+                  />
+                </label>
+                <div class="form__actions">
+                  <button
+                    type="button"
+                    class="secondary"
+                    [disabled]="busy()"
+                    (click)="openRevoke(agent)"
+                  >
+                    {{ 'settings.printing.cancel' | t }}
+                  </button>
+                  <button
+                    type="button"
+                    class="primary"
+                    data-testid="print-agent-revoke-confirm"
+                    [disabled]="!canRevoke()"
+                    (click)="revoke(agent)"
+                  >
+                    {{ 'settings.printing.agents.revoke' | t }}
+                  </button>
+                </div>
+              </div>
+            } @else {
+              <button
+                type="button"
+                class="link"
+                [attr.data-testid]="'print-agent-revoke-' + agent.device.deviceId"
+                [disabled]="busy()"
+                (click)="openRevoke(agent)"
+              >
+                {{ 'settings.printing.agents.revoke' | t }}
+              </button>
+            }
+          }
+        </li>
+      }
+    </ul>
+  }
+</section>

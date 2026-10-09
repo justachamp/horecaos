@@ -1,0 +1,210 @@
+<section
+  class="card"
+  data-testid="print-queue"
+  [attr.aria-label]="'settings.printing.queue.title' | t"
+>
+  <div class="card__head">
+    <h2 class="q-subhead">{{ 'settings.printing.queue.title' | t }}</h2>
+    <div class="row-actions">
+      <label class="q-body-sm">
+        <span class="q-visually-hidden">{{ 'settings.printing.queue.filter' | t }}</span>
+        <select
+          class="field"
+          data-testid="print-queue-filter"
+          [attr.aria-label]="'settings.printing.queue.filter' | t"
+          (change)="setFilter($any($event.target).value)"
+        >
+          <option value="" [selected]="filter() === null">
+            {{ 'settings.printing.queue.all' | t }}
+          </option>
+          @for (status of statuses; track status) {
+            <option [value]="status" [selected]="filter() === status">
+              {{ statusKeys[status] | t }}
+            </option>
+          }
+        </select>
+      </label>
+      <button type="button" class="secondary" data-testid="print-queue-refresh" (click)="refresh()">
+        {{ 'settings.printing.queue.refresh' | t }}
+      </button>
+    </div>
+  </div>
+  <p class="q-body-sm muted">{{ 'settings.printing.queue.lead' | t }}</p>
+
+  @if (notice(); as message) {
+    <p class="q-body-sm success" role="status" data-testid="print-queue-notice">{{ message }}</p>
+  }
+  @if (error(); as message) {
+    <p class="q-body-sm error" role="alert" data-testid="print-queue-error">{{ message }}</p>
+  }
+
+  @if (loadError(); as message) {
+    <p class="q-body-sm error" role="alert" data-testid="print-queue-load-error">{{ message }}</p>
+  } @else if (loading() && jobs().length === 0) {
+    <p class="q-body-sm">{{ 'settings.printing.loading' | t }}</p>
+  } @else if (jobs().length === 0) {
+    <p class="q-body-sm banner" data-testid="print-queue-empty">
+      {{ 'settings.printing.queue.empty' | t }}
+    </p>
+  } @else {
+    <table class="table q-body-sm">
+      <thead>
+        <tr>
+          <th>{{ 'settings.printing.queue.col.queued' | t }}</th>
+          <th>{{ 'settings.printing.queue.col.document' | t }}</th>
+          <th>{{ 'settings.printing.queue.col.printer' | t }}</th>
+          <th>{{ 'settings.printing.queue.col.state' | t }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (job of jobs(); track job.id) {
+          <tr [attr.data-job]="job.id" [attr.data-status]="job.status">
+            <td>{{ when(job.queuedAt) }}</td>
+            <td>
+              {{ documentKeys[job.documentType] | t }}
+              @if (job.copyNo > 1 || job.reprintOf) {
+                <span class="chip q-caption">{{ 'settings.printing.queue.copy' | t }}</span>
+              }
+              @if (job.reasonCode; as reason) {
+                <span class="q-caption muted">· {{ reasonKeys[reason] | t }}</span>
+              }
+            </td>
+            <td>{{ printerName(job.printerId) }}</td>
+            <td>
+              <span
+                class="chip q-caption"
+                [class.chip--good]="job.status === 'PRINTED' || job.status === 'HANDED_OFF'"
+                [class.chip--bad]="job.status === 'DEAD' || job.status === 'EXPIRED'"
+                [attr.data-testid]="'print-job-status-' + job.id"
+                >{{ statusKeys[job.status] | t }}</span
+              >
+              @if (job.attempt > 1) {
+                <span class="q-caption muted">{{
+                  'settings.printing.queue.attempt' | t: { n: job.attempt }
+                }}</span>
+              }
+              @if (failureKey(job); as key) {
+                <span class="q-caption muted" [attr.data-testid]="'print-job-failure-' + job.id">{{
+                  key | t
+                }}</span>
+              }
+            </td>
+            <td>
+              <div class="row-actions">
+                @if (canPreview(job)) {
+                  <button
+                    type="button"
+                    class="link"
+                    [attr.data-testid]="'print-job-preview-' + job.id"
+                    (click)="togglePreview(job)"
+                  >
+                    {{ 'settings.printing.queue.preview' | t }}
+                  </button>
+                }
+                @if (canReprint(job)) {
+                  <button
+                    type="button"
+                    class="link"
+                    [attr.data-testid]="'print-job-reprint-' + job.id"
+                    [disabled]="busy()"
+                    (click)="openReprint(job)"
+                  >
+                    {{ 'settings.printing.queue.reprint' | t }}
+                  </button>
+                }
+                @if (canCancel(job)) {
+                  <button
+                    type="button"
+                    class="link"
+                    [attr.data-testid]="'print-job-cancel-' + job.id"
+                    [disabled]="busy()"
+                    (click)="cancel(job)"
+                  >
+                    {{ 'settings.printing.queue.cancel' | t }}
+                  </button>
+                }
+              </div>
+            </td>
+          </tr>
+          @if (reprinting() === job.id) {
+            <tr>
+              <td colspan="5">
+                <div class="form" data-testid="print-reprint-form">
+                  <p class="q-body-sm">{{ 'settings.printing.queue.reprintNote' | t }}</p>
+                  <label class="q-body-sm">
+                    {{ 'settings.printing.queue.reason' | t }}
+                    <select
+                      class="field"
+                      data-testid="print-reprint-reason"
+                      (change)="reprintReason.set($any($event.target).value)"
+                    >
+                      @for (reason of reasons; track reason) {
+                        <option [value]="reason" [selected]="reprintReason() === reason">
+                          {{ reasonKeys[reason] | t }}
+                        </option>
+                      }
+                    </select>
+                  </label>
+                  <label class="q-body-sm">
+                    {{ 'settings.printing.queue.reprintPrinter' | t }}
+                    <select
+                      class="field"
+                      data-testid="print-reprint-printer"
+                      (change)="reprintPrinter.set($any($event.target).value)"
+                    >
+                      @for (printer of activePrinters(); track printer.id) {
+                        <option [value]="printer.id" [selected]="reprintPrinter() === printer.id">
+                          {{ printer.displayName }}
+                        </option>
+                      }
+                    </select>
+                  </label>
+                  <div class="form__actions">
+                    <button
+                      type="button"
+                      class="secondary"
+                      [disabled]="busy()"
+                      (click)="openReprint(job)"
+                    >
+                      {{ 'settings.printing.cancel' | t }}
+                    </button>
+                    <button
+                      type="button"
+                      class="primary"
+                      data-testid="print-reprint-confirm"
+                      [disabled]="busy()"
+                      (click)="reprint(job)"
+                    >
+                      {{ 'settings.printing.queue.reprintConfirm' | t }}
+                    </button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          }
+          @if (previewing(); as open) {
+            @if (open.jobId === job.id) {
+              <tr>
+                <td colspan="5">
+                  <img class="preview" data-testid="print-job-picture" [src]="open.url" alt="" />
+                </td>
+              </tr>
+            }
+          }
+        }
+      </tbody>
+    </table>
+    @if (nextCursor() !== null) {
+      <button
+        type="button"
+        class="secondary"
+        data-testid="print-queue-more"
+        [disabled]="loading()"
+        (click)="more()"
+      >
+        {{ 'settings.printing.queue.more' | t }}
+      </button>
+    }
+  }
+</section>

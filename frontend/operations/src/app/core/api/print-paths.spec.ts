@@ -33,7 +33,7 @@ describe('printPaths', () => {
     expect(printPaths.agentRevoke(SCOPE, 'd1')).toBe(`${BASE}/print/agents/d1/revoke`);
   });
 
-  it('puts an order\'s print jobs under the order, not under /print', () => {
+  it("puts an order's print jobs under the order, not under /print", () => {
     expect(printPaths.orderPrintJobs(SCOPE, 'o1')).toBe(`${BASE}/orders/o1/print-jobs`);
   });
 

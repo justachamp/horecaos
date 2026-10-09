@@ -1,0 +1,86 @@
+@if (visible()) {
+  <section
+    class="pane__section"
+    [attr.aria-label]="'orders.detail.section.print' | t"
+    data-testid="order-detail-print"
+  >
+    <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.print' | t }}</h2>
+    <p class="q-caption print__lead">{{ 'orders.detail.print.lead' | t }}</p>
+
+    <div class="print__form">
+      <label class="print__field">
+        <span class="q-body-sm">{{ 'orders.detail.print.document' | t }}</span>
+        <select
+          class="print__input"
+          data-testid="order-print-document"
+          [disabled]="busy()"
+          (change)="documentType.set($any($event.target).value)"
+        >
+          @for (type of documents; track type) {
+            <option [value]="type" [selected]="documentType() === type">
+              {{ documentKeys[type] | t }}
+            </option>
+          }
+        </select>
+      </label>
+
+      @if (activePrinters().length > 0) {
+        <label class="print__field">
+          <span class="q-body-sm">{{ 'orders.detail.print.printer' | t }}</span>
+          <select
+            class="print__input"
+            data-testid="order-print-printer"
+            [disabled]="busy()"
+            (change)="printerId.set($any($event.target).value)"
+          >
+            <option value="" [selected]="printerId() === ''">
+              {{ 'orders.detail.print.printerRoute' | t }}
+            </option>
+            @for (printer of activePrinters(); track printer.id) {
+              <option [value]="printer.id" [selected]="printerId() === printer.id">
+                {{ printer.displayName }}
+              </option>
+            }
+          </select>
+        </label>
+      }
+
+      <label class="print__field">
+        <span class="q-body-sm">{{ 'orders.detail.print.reason' | t }}</span>
+        <select
+          class="print__input"
+          data-testid="order-print-reason"
+          [disabled]="busy()"
+          (change)="reason.set($any($event.target).value)"
+        >
+          @for (code of reasons; track code) {
+            <option [value]="code" [selected]="reason() === code">
+              {{ reasonKeys[code] | t }}
+            </option>
+          }
+        </select>
+      </label>
+
+      <button
+        type="button"
+        class="print__button"
+        data-testid="order-print-submit"
+        [disabled]="busy()"
+        (click)="print()"
+      >
+        {{ (busy() ? 'orders.detail.print.submitting' : 'orders.detail.print.submit') | t }}
+      </button>
+    </div>
+
+    @if (notice(); as message) {
+      <p class="q-body-sm print__notice" role="status" data-testid="order-print-notice">
+        {{ message }}
+      </p>
+    }
+    @if (error(); as message) {
+      <p class="q-body-sm print__error" role="alert" data-testid="order-print-error">
+        {{ message }}
+      </p>
+    }
+  </section>
+}

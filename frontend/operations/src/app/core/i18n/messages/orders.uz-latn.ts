@@ -800,4 +800,32 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
     'Hisob tanlayotganingizda oʻzgardi: endi {amount}. Tekshirib, qaytadan tanlang.',
   'orders.dialog.addLines.combosUnavailable': 'Menyu mavjud emas — kombo qoʻshib boʻlmaydi.',
   'orders.dialog.changeQuantity.step': 'Buyurtma {step} porsiyalarda qilinadi',
+  // ---------------------------------------------------------------- print action (ADR 0154)
+  'orders.detail.section.print': 'Chop etish',
+  'orders.detail.print.lead':
+    'Shu filialda qogʻozga chop etadi. Bu «Kassaga eksport» emas — u buyurtmani kassaga yuboradi.',
+  'orders.detail.print.document': 'Hujjat',
+  'orders.detail.print.printer': 'Printer',
+  'orders.detail.print.printerRoute': 'Marshrut yuborgan joyga',
+  'orders.detail.print.reason': 'Nima uchun',
+  'orders.detail.print.submit': 'Chop etish',
+  'orders.detail.print.submitting': 'Chop etilmoqda…',
+  'orders.detail.print.queued': 'Chop etish navbatiga qoʻyildi: {count}.',
+  'orders.detail.print.browser': 'Brauzerning chop etish oynasi ochildi.',
+  'orders.detail.print.error.off':
+    'Hisobingiz uchun chop etish yoqilmagan. HorecaOS yordamidan uni yoqishni soʻrang.',
+  'orders.detail.print.error.noRoute':
+    'Bu hujjatni shu filialda chop etish sozlanmagan. Menejer «Sozlamalar → Chop etish va cheklar» boʻlimida marshrut qoʻshadi; yoki bu yerda printerni tanlang.',
+  'orders.detail.print.error.picture':
+    'Topshiriq yaratildi, lekin uning rasmini brauzerda ochib boʻlmadi.',
+  'orders.detail.print.doc.orderSlip': 'Buyurtma xulosasi',
+  'orders.detail.print.doc.kitchenTicket': 'Oshxona chiptasi',
+  'orders.detail.print.doc.fiscalReceipt': 'Fiskal chek',
+  'orders.detail.print.reason.customerRequest': 'Mijoz soʻradi',
+  'orders.detail.print.reason.paperJam': 'Qogʻoz tiqilib qoldi',
+  'orders.detail.print.reason.printerFault': 'Printer nosozligi',
+  'orders.detail.print.reason.kitchenRequest': 'Oshxona soʻradi',
+  'orders.detail.print.reason.amendedOrder': 'Buyurtma oʻzgartirildi',
+  'orders.detail.print.reason.test': 'Sinov',
+  'orders.detail.print.reason.other': 'Boshqa',
 };

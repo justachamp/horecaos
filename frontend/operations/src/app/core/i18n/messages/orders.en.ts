@@ -805,4 +805,32 @@ export const ordersEn = {
     'The bill changed while you were deciding: it is now {amount}. Check it and choose again.',
   'orders.dialog.addLines.combosUnavailable': 'Menu unavailable — no combos here.',
   'orders.dialog.changeQuantity.step': 'Ordered in steps of {step}',
+  // ---------------------------------------------------------------- print action (ADR 0154)
+  'orders.detail.section.print': 'Print',
+  'orders.detail.print.lead':
+    'Prints on paper at this branch. This is not “POS export”, which sends the order to the till.',
+  'orders.detail.print.document': 'Document',
+  'orders.detail.print.printer': 'Printer',
+  'orders.detail.print.printerRoute': 'Where the route sends it',
+  'orders.detail.print.reason': 'Why',
+  'orders.detail.print.submit': 'Print',
+  'orders.detail.print.submitting': 'Printing…',
+  'orders.detail.print.queued': 'Queued for printing: {count}.',
+  'orders.detail.print.browser': 'Opened your browser’s print dialog.',
+  'orders.detail.print.error.off':
+    'Printing is not switched on for your account. Ask HorecaOS support to switch it on.',
+  'orders.detail.print.error.noRoute':
+    'Nothing is set up to print this at this branch. A manager adds a route in Settings → Printing and receipts; or choose a printer here.',
+  'orders.detail.print.error.picture':
+    'The job was made, but its picture could not be opened for your browser.',
+  'orders.detail.print.doc.orderSlip': 'Order summary',
+  'orders.detail.print.doc.kitchenTicket': 'Kitchen ticket',
+  'orders.detail.print.doc.fiscalReceipt': 'Fiscal receipt',
+  'orders.detail.print.reason.customerRequest': 'The customer asked',
+  'orders.detail.print.reason.paperJam': 'Paper jam',
+  'orders.detail.print.reason.printerFault': 'Printer fault',
+  'orders.detail.print.reason.kitchenRequest': 'The kitchen asked',
+  'orders.detail.print.reason.amendedOrder': 'The order was changed',
+  'orders.detail.print.reason.test': 'Test',
+  'orders.detail.print.reason.other': 'Something else',
 } as const;

@@ -157,14 +157,12 @@ describe('ApiClient', () => {
         client.readBlob('/api/v1/tenants/t/brands/b/locations/l/print/documents/preview', {}),
       );
 
-      http
-        .expectOne(url('/api/v1/tenants/t/brands/b/locations/l/print/documents/preview'))
-        .flush(
-          new Blob([JSON.stringify({ code: 'RESOURCE_NOT_FOUND', status: 404, title: 'No' })], {
-            type: PROBLEM_JSON,
-          }),
-          { status: 404, statusText: 'Not Found' },
-        );
+      http.expectOne(url('/api/v1/tenants/t/brands/b/locations/l/print/documents/preview')).flush(
+        new Blob([JSON.stringify({ code: 'RESOURCE_NOT_FOUND', status: 404, title: 'No' })], {
+          type: PROBLEM_JSON,
+        }),
+        { status: 404, statusText: 'Not Found' },
+      );
 
       await expect(promise).rejects.toBeInstanceOf(ApiError);
     });
