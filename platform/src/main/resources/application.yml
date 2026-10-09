@@ -69,6 +69,14 @@ spring:
           audiences: ${HORECAOS_OIDC_AUDIENCE:horecaos-api}
   modulith:
     detection-strategy: explicitly-annotated
+    # spring-modulith-moments arrives transitively and its auto-configuration
+    # carries its own @EnableScheduling, which would keep every @Scheduled job
+    # running on a fallback single thread even when horecaos.runtime.role=app
+    # has dropped SchedulingConfiguration (ADR 0023). Nothing here consumes
+    # Moments' time-based events, so it stays off; the test profile relies on
+    # the same setting (see TestProfileSchedulingTests).
+    moments:
+      enabled: false
 
 springdoc:
   api-docs:
