@@ -38,6 +38,17 @@ export const PLATFORM_API_REQUEST = new HttpContextToken<boolean>(() => false);
  */
 export const ANONYMOUS = new HttpContextToken<boolean>(() => false);
 
+/**
+ * Marks a request whose failure the customer should not be told about.
+ *
+ * `errorNotificationInterceptor` turns a failed platform call into a toast, which is right for
+ * something the customer asked for and wrong for something the page does on its own and can do
+ * without -- the home content (ADR 0157) is the one today: a brand with nothing published, or a
+ * failed read, must leave the menu and the rest of the home screen exactly as they are, not put
+ * "something went wrong" on top of them. The failure still reaches the caller, who decides.
+ */
+export const SILENT_FAILURE = new HttpContextToken<boolean>(() => false);
+
 export type QueryValue = string | number | boolean | null | undefined;
 
 export interface ReadOptions {
@@ -45,6 +56,8 @@ export interface ReadOptions {
   /** Sent as `If-None-Match`; a 304 is surfaced as a null body by the caller. */
   readonly etag?: string;
   readonly anonymous?: boolean;
+  /** See {@link SILENT_FAILURE}: a failure is the caller's to handle and the customer is not told. */
+  readonly silent?: boolean;
   /**
    * Extra headers this one call needs beyond the platform's own conventions
    * (`Accept`, `X-Correlation-Id`) and the bearer the interceptors already
@@ -115,7 +128,8 @@ export class ApiClient {
         params: toParams(options.query),
         context: new HttpContext()
           .set(PLATFORM_API_REQUEST, true)
-          .set(ANONYMOUS, options.anonymous ?? false),
+          .set(ANONYMOUS, options.anonymous ?? false)
+          .set(SILENT_FAILURE, options.silent ?? false),
       }),
     );
   }

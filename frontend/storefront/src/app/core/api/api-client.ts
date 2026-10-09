@@ -38,6 +38,17 @@ export const PLATFORM_API_REQUEST = new HttpContextToken<boolean>(() => false);
  */
 export const ANONYMOUS = new HttpContextToken<boolean>(() => false);
 
+/**
+ * Marks a request whose failure is the caller's business alone.
+ *
+ * The error interceptor turns every platform failure into a toast. That is right for a read the
+ * customer asked for, and wrong for one they did not: the home screen's content document and the
+ * anonymous counters are best effort by contract (ADR 0157), a failure of either is meant to leave
+ * the page exactly as it was, and a "something went wrong" over a menu that is fine would be the
+ * page reporting a problem it does not have. The caller still receives the rejection.
+ */
+export const QUIET_FAILURE = new HttpContextToken<boolean>(() => false);
+
 export type QueryValue = string | number | boolean | null | undefined;
 
 export interface ReadOptions {
@@ -45,6 +56,8 @@ export interface ReadOptions {
   /** Sent as `If-None-Match`; a 304 is surfaced as a null body by the caller. */
   readonly etag?: string;
   readonly anonymous?: boolean;
+  /** See {@link QUIET_FAILURE}: a failure is returned to the caller and never shown as a toast. */
+  readonly quiet?: boolean;
   /**
    * Extra headers this one call needs beyond the platform's own conventions
    * (`Accept`, `X-Correlation-Id`) and the bearer the interceptors already
@@ -109,7 +122,8 @@ export class ApiClient {
         params: toParams(options.query),
         context: new HttpContext()
           .set(PLATFORM_API_REQUEST, true)
-          .set(ANONYMOUS, options.anonymous ?? false),
+          .set(ANONYMOUS, options.anonymous ?? false)
+          .set(QUIET_FAILURE, options.quiet ?? false),
       }),
     );
   }
@@ -160,6 +174,26 @@ export class ApiClient {
         context: new HttpContext()
           .set(PLATFORM_API_REQUEST, true)
           .set(ANONYMOUS, options.anonymous ?? false),
+      }),
+    );
+  }
+
+  /**
+   * An anonymous counter: a write-shaped call that is neither an effect to replay nor something that
+   * may identify the sender (the storefront's content counters, ADR 0157 Decision 10).
+   *
+   * It is the one `POST` that carries no `Idempotency-Key`, on purpose. A key exists so a retried
+   * request is not performed twice; a counter is not retried, and a client-generated token on a
+   * request the platform promises never to attribute is one more thing that must not be there. No
+   * bearer goes with it either, and its failure is the caller's to swallow, never a toast.
+   */
+  report<B>(path: string, body: B): Promise<void> {
+    return firstValueFrom(
+      this.http.post<void>(this.url(path), body, {
+        context: new HttpContext()
+          .set(PLATFORM_API_REQUEST, true)
+          .set(ANONYMOUS, true)
+          .set(QUIET_FAILURE, true),
       }),
     );
   }

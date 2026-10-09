@@ -1040,4 +1040,396 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.campaign.recipients.deliveryHint':
     'Yetkazish — shlyuzdan kelgan maʻlumot, vaʻda emas: «operatorga topshirilgan» xabar qabul qilingani va boshqa hech narsa maʻlum qilinmaganini bildiradi.',
   'marketing.campaign.recipients.segments': 'Hisoblangan segmentlar: {count}',
+
+  'marketing.content.kind.BANNER': 'Banner',
+  'marketing.content.kind.PROMO_CARD': 'Promo-kartochka',
+  'marketing.content.kind.PRODUCT_GROUP': 'Taomlar guruhi',
+  'marketing.content.kind.STORY_GROUP': 'Hikoya',
+  'marketing.content.kind.POPUP': 'Qalqib chiquvchi oyna',
+  'marketing.content.kind.NEWS': 'Yangilik',
+  'marketing.content.kind.GALLERY_ALBUM': 'Foto albom',
+  'marketing.content.kind.RECIPE': 'Retsept',
+  'marketing.content.kind.VACANCY': 'Vakansiya',
+  'marketing.content.placement.HOME_CAROUSEL': 'Bosh sahifa karuseli',
+  'marketing.content.placement.HOME_GROUPS': 'Bosh sahifa guruhlari',
+  'marketing.content.placement.STORY_RAIL': 'Hikoyalar',
+  'marketing.content.placement.PROMO_GRID': 'Aksiyalar setkasi',
+  'marketing.content.placement.ENTRY_MODAL': 'Kirishdagi oyna',
+  'marketing.content.state.DRAFT': 'Qoralama',
+  'marketing.content.state.PUBLISHED': 'Chop etilgan',
+  'marketing.content.state.WITHDRAWN': 'Olib tashlangan',
+  'marketing.content.state.ARCHIVED': 'Arxivda',
+  'marketing.content.visibility.LIVE': 'Koʻrsatilmoqda',
+  'marketing.content.visibility.SCHEDULED': 'Rejalashtirilgan',
+  'marketing.content.visibility.EXPIRED': 'Tugagan',
+  'marketing.content.unpublishedChanges': 'Chop etilmagan oʻzgarishlar bor',
+  'marketing.content.problemsCount': 'Tuzatish kerak: {count}',
+  'marketing.content.problem.CONTENT_DEFAULT_LOCALE_MISSING':
+    'Chop etishdan oldin brendning asosiy tilida sarlavha yozing',
+  'marketing.content.problem.CONTENT_LOCALE_INCOMPLETE':
+    'Bu brend uchun barcha tillar toʻldirilishi kerak',
+  'marketing.content.problem.CONTENT_MEDIA_NOT_DISPLAYABLE':
+    'Rasm yoʻq, hali tekshirilmoqda yoki ommaviy emas',
+  'marketing.content.problem.CONTENT_MEDIA_ASPECT_MISMATCH':
+    'Rasm bu joy uchun notoʻgʻri shaklda yoki juda kichik',
+  'marketing.content.problem.CONTENT_TARGET_NOT_FOUND':
+    'Havola koʻrsatgan taom yoki toifa brendning chop etilgan menyusida yoʻq',
+  'marketing.content.problem.CONTENT_PROMOTION_NOT_FOUND': 'Havola koʻrsatgan aksiya mavjud emas',
+  'marketing.content.problem.CONTENT_LINK_HOST_NOT_ALLOWED':
+    'Havola ruxsat etilganlar roʻyxatida yoʻq saytga olib boradi',
+  'marketing.content.problem.CONTENT_CHANNEL_NOT_A_CONTENT_SURFACE':
+    'Tanlangan kanal kontent koʻrsata olmaydi',
+  'marketing.content.problem.CONTENT_PLACEMENT_FULL':
+    'Bu joy toʻla — avval biror narsani olib tashlang',
+  'marketing.content.problem.CONTENT_NOTHING_TO_PUBLISH':
+    'Chop etilgan versiyadan beri hech narsa oʻzgarmagan',
+  'marketing.content.problem.CONTENT_VIDEO_LIMIT':
+    'Brendda bir vaqtda koʻrsatiladigan videolarning eng koʻpi allaqachon bor',
+  'marketing.content.problem.CONTENT_POSTER_REQUIRED': 'Videoga muqova rasmi kerak',
+  'marketing.content.problem.CONTENT_REVISION_MEDIA_RELEASED':
+    'Ushbu versiyaning rasmlari boʻshatilgan, uni tiklab boʻlmaydi',
+  'marketing.content.problem.CONTENT_KIND_NOT_ENABLED':
+    'Kontentning bu turi brend uchun yoqilmagan',
+  'marketing.content.problem.CONTENT_PROMOTION_NOT_LIVE':
+    'Kartochka bogʻlangan aksiya amalda emas, shuning uchun kartochka yashirilgan',
+  'marketing.content.problem.CONTENT_MEDIA_NOT_RENDERED':
+    'Rasm hali qayta ishlanmoqda, shuning uchun element hali koʻrsatilmayapti',
+  'marketing.content.problem.other': 'Eʻtibor kerak: {detail}',
+
+  'marketing.content.media.none': 'Hozircha rasm yoʻq.',
+  'marketing.content.media.shapeHint': 'Nisbat {ratio}, kamida {width} px kenglikda.',
+  'marketing.content.media.noPreview': 'Koʻrib chiqish tayyor emas',
+  'marketing.content.media.video': 'Video',
+  'marketing.content.media.remove': 'Olib tashlash',
+  'marketing.content.media.processing': 'Fayl yuklanmoqda va tekshirilmoqda…',
+  'marketing.content.media.imageRefused':
+    'Platforma bu rasmni rad etdi. 10 MB gacha JPEG, PNG yoki WebP ishlating.',
+  'marketing.content.media.notReady':
+    'Fayl yuklandi, lekin hali tekshirilmadi. Bir daqiqadan soʻng urinib koʻring.',
+  'marketing.content.media.failed': 'Yuklab boʻlmadi. Qayta urinib koʻring.',
+
+  'marketing.content.link.label': 'Bosilganda olib borsin',
+  'marketing.content.link.type.NONE': 'Hech qayerga',
+  'marketing.content.link.type.PRODUCT': 'Taomga',
+  'marketing.content.link.type.CATEGORY': 'Toifaga',
+  'marketing.content.link.type.CART': 'Savatga',
+  'marketing.content.link.type.PROMOTION': 'Aksiyaga',
+  'marketing.content.link.type.EXTERNAL': 'Veb-manzilga',
+  'marketing.content.link.searchProduct': 'Taom qidirish',
+  'marketing.content.link.searchCategory': 'Toifa qidirish',
+  'marketing.content.link.searchPromotion': 'Amaldagi aksiyani qidirish',
+  'marketing.content.link.chosen': 'Tanlandi: {label}',
+  'marketing.content.link.clear': 'Oʻzgartirish',
+  'marketing.content.link.url': 'Manzil (faqat https)',
+  'marketing.content.link.notHttps': 'Faqat https manzillariga ruxsat beriladi.',
+  'marketing.content.link.hostNotAllowed':
+    'Bu sayt hali ruxsat etilgan havolalar roʻyxatida yoʻq. Chop etishdan oldin uni «Havolalar» boʻlimida qoʻshing.',
+
+  'marketing.content.card.title': 'Sarlavha',
+  'marketing.content.card.subtitle': 'Taglavha (ixtiyoriy)',
+  'marketing.content.card.body': 'Matn (ixtiyoriy)',
+  'marketing.content.card.cta': 'Tugma matni (ixtiyoriy)',
+  'marketing.content.card.alt': 'Ekran oʻquvchilar uchun rasm tavsifi (ixtiyoriy)',
+  'marketing.content.card.image': 'Rasm yoki video',
+  'marketing.content.card.localeImage': 'Shu til uchun boshqa rasm (rasmda matn boʻlsa)',
+  'marketing.content.popup.settings': 'Qachon chiqadi',
+  'marketing.content.popup.delay': 'Necha soniyadan keyin koʻrsatilsin',
+  'marketing.content.popup.dailyWindow': 'Har kuni faqat belgilangan soatlarda',
+  'marketing.content.popup.from': 'Dan',
+  'marketing.content.popup.until': 'Gacha',
+  'marketing.content.popup.dailyHint':
+    'Tashrif buyuruvchining soati boʻyicha aniqlanadi. Tugashi boshlanishidan oldin boʻlsa, oyna yarim tundan oshadi.',
+  'marketing.content.popup.cap': 'Bitta qurilma uni qanchalik tez-tez koʻradi',
+  'marketing.content.popup.cap.ONCE_EVER': 'Bir marta, butunlay',
+  'marketing.content.popup.cap.ONCE_PER_DAY': 'Kuniga bir marta',
+  'marketing.content.popup.cap.EVERY_N_DAYS': 'Bir necha kunda bir marta',
+  'marketing.content.popup.capDays': 'Koʻrsatishlar orasidagi kunlar',
+  'marketing.content.popup.capHint':
+    'Har bir qurilma oʻzi hisoblaydi — platforma tashrif buyuruvchilarni aniqlamaydi. Tahrirlab qayta chop etilsa, hisob yangidan boshlanadi.',
+
+  'marketing.content.group.title': 'Guruh nomi',
+  'marketing.content.group.mode': 'Guruh nimani koʻrsatadi',
+  'marketing.content.group.manual': 'Men tanlagan taomlar',
+  'marketing.content.group.byCategory': 'Butun toifa',
+  'marketing.content.group.members': 'Taomlar: {count} / {max}',
+  'marketing.content.group.searchDish': 'Qoʻshish uchun taom qidirish',
+  'marketing.content.group.order': 'Bosh ekrandagi tartib',
+  'marketing.content.group.skipHint':
+    'Menyuda endi yoʻq taom jimgina oʻtkazib yuboriladi; toʻxtatilgan taom esa menyuning ishi.',
+  'marketing.content.group.sort': 'Taomlar tartibi',
+  'marketing.content.group.sort.MENU_ORDER': 'Menyudagidek',
+  'marketing.content.group.sort.NEWEST': 'Avval yangilari',
+  'marketing.content.group.limit': 'Koʻpi bilan shuncha koʻrsatilsin',
+
+  'marketing.content.story.title': 'Hikoya nomi',
+  'marketing.content.story.avatar': 'Hikoyalar lentasidagi dumaloq rasm',
+  'marketing.content.story.slides': 'Slaydlar: {count} / {max}',
+  'marketing.content.story.slideLabel': '{n}-slayd',
+  'marketing.content.story.addSlide': 'Slayd qoʻshish',
+  'marketing.content.story.removeSlide': 'Bu slaydni oʻchirish',
+  'marketing.content.story.slideMedia': 'Slaydning rasmi yoki videosi',
+  'marketing.content.story.duration': 'Koʻrsatilish vaqti (soniya)',
+  'marketing.content.story.caption': 'Izoh (ixtiyoriy)',
+
+  'marketing.content.blocks.text': 'Matn',
+  'marketing.content.blocks.bold': 'Qalin',
+  'marketing.content.blocks.italic': 'Kursiv',
+  'marketing.content.blocks.link': 'Havola',
+  'marketing.content.blocks.linkAddress': 'Havola manzili (https, tel: yoki mailto:)',
+  'marketing.content.blocks.linkRefused':
+    'Faqat https, tel: va mailto: havolalariga ruxsat beriladi.',
+  'marketing.content.blocks.addRun': 'Matn qismini qoʻshish',
+  'marketing.content.blocks.removeRun': 'Bu qismni olib tashlash',
+  'marketing.content.blocks.blockType': 'Blok turi',
+  'marketing.content.blocks.type.PARAGRAPH': 'Abzats',
+  'marketing.content.blocks.type.HEADING': 'Sarlavha',
+  'marketing.content.blocks.type.QUOTE': 'Sitata',
+  'marketing.content.blocks.type.LIST': 'Roʻyxat',
+  'marketing.content.blocks.type.IMAGE': 'Rasm',
+  'marketing.content.blocks.type.DIVIDER': 'Ajratgich',
+  'marketing.content.blocks.headingLevel': 'Sarlavha darajasi',
+  'marketing.content.blocks.level2': 'Sarlavha',
+  'marketing.content.blocks.level3': 'Taglavha',
+  'marketing.content.blocks.ordered': 'Raqamlangan',
+  'marketing.content.blocks.moveUp': 'Blokni yuqoriga siljitish',
+  'marketing.content.blocks.moveDown': 'Blokni pastga siljitish',
+  'marketing.content.blocks.removeBlock': 'Blokni oʻchirish',
+  'marketing.content.blocks.addBlock': 'Blok qoʻshish',
+  'marketing.content.blocks.addItem': 'Band qoʻshish',
+  'marketing.content.blocks.removeItem': 'Bandni oʻchirish',
+  'marketing.content.blocks.caption': 'Izoh',
+  'marketing.content.blocks.imageNone': 'Hozircha rasm yoʻq. Tanlang.',
+  'marketing.content.blocks.imageUploaded': 'Rasm qoʻshildi',
+  'marketing.content.blocks.imageFailed': 'Rasmni yuklab boʻlmadi.',
+  'marketing.content.blocks.divider': 'Ajratgich',
+  'marketing.content.blocks.problem.TOO_MANY_BLOCKS':
+    'Matnda koʻpi bilan 200 ta blok boʻlishi mumkin.',
+  'marketing.content.blocks.problem.TOO_MANY_RUNS': '{block}-blok: matnning koʻpi bilan 40 qismi.',
+  'marketing.content.blocks.problem.TOO_MANY_ITEMS': '{block}-blok: koʻpi bilan 50 ta band.',
+  'marketing.content.blocks.problem.TEXT_TOO_LONG':
+    'Matnda koʻpi bilan 50 000 ta belgi boʻlishi mumkin.',
+  'marketing.content.blocks.problem.RUN_TOO_LONG': '{block}-blok: matn qismi 5 000 belgidan uzun.',
+  'marketing.content.blocks.problem.FORBIDDEN_CHARACTER':
+    '{block}-blok: ruxsat etilmagan boshqaruv yoki matn yoʻnalishi belgisi bor.',
+  'marketing.content.blocks.problem.HREF_NOT_ALLOWED':
+    '{block}-blok: havola https, tel: yoki mailto: boʻlishi kerak.',
+  'marketing.content.blocks.problem.EMPTY_LIST':
+    '{block}-blok: roʻyxatda kamida bitta band boʻlishi kerak.',
+  'marketing.content.blocks.problem.IMAGE_WITHOUT_ASSET': '{block}-blok: rasm tanlang.',
+
+  'marketing.content.editorial.title': 'Sarlavha',
+  'marketing.content.editorial.summary': 'Qisqacha tavsif (ixtiyoriy)',
+  'marketing.content.editorial.cover': 'Muqova rasmi',
+  'marketing.content.editorial.body': 'Matn',
+  'marketing.content.vacancy.legend': 'Vakansiya',
+  'marketing.content.vacancy.employment': 'Bandlik turi',
+  'marketing.content.vacancy.employment.FULL_TIME': 'Toʻliq stavka',
+  'marketing.content.vacancy.employment.PART_TIME': 'Qisman band',
+  'marketing.content.vacancy.employment.SHIFT': 'Smenali ish',
+  'marketing.content.vacancy.employment.INTERNSHIP': 'Stajirovka',
+  'marketing.content.vacancy.applyType': 'Qanday bogʻlanish',
+  'marketing.content.vacancy.apply.PHONE': 'Telefon raqami',
+  'marketing.content.vacancy.apply.TELEGRAM': 'Telegram manzili (t.me/…)',
+  'marketing.content.vacancy.apply.URL': 'Veb-manzil (https)',
+  'marketing.content.vacancy.apply.EMAIL': 'Elektron pochta manzili',
+  'marketing.content.vacancy.applyValue': 'Eʻlon qilinadigan aloqa',
+  'marketing.content.vacancy.noApplicants':
+    'Bu faqat eʻlon: platformada ariza shakli yoʻq va nomzodlar haqida maʻlumot saqlanmaydi. Nomzodlar siz bilan yuqoridagi aloqa orqali bogʻlanadi.',
+  'marketing.content.album.images': 'Suratlar: {count} / {max}',
+  'marketing.content.album.imageLabel': '{n}-surat',
+  'marketing.content.album.add': 'Surat qoʻshish',
+  'marketing.content.album.caption': 'Shu tildagi izoh (ixtiyoriy)',
+  'marketing.content.album.remove': 'Bu suratni olib tashlash',
+
+  'marketing.content.preview.channel': 'Kanal',
+  'marketing.content.preview.locale': 'Til',
+  'marketing.content.preview.day': 'Sana boʻyicha (ixtiyoriy)',
+  'marketing.content.preview.refresh': 'Yangilash',
+  'marketing.content.preview.noChannel':
+    'Hozircha hech bir kanal kontent koʻrsata olmaydi, shuning uchun koʻrib chiqadigan narsa yoʻq.',
+  'marketing.content.preview.failed': 'Koʻrib chiqishni tayyorlab boʻlmadi.',
+  'marketing.content.preview.loading': 'Koʻrib chiqish tayyorlanmoqda…',
+  'marketing.content.preview.absent':
+    'Bu element tanlangan kanal, til va sana uchun koʻrib chiqishda yoʻq: u oʻz oynasidan tashqarida, boshqa kanalda, amalda boʻlmagan aksiyaga bogʻlangan yoki rasmi hali tekshirilmoqda. Hozirgina oʻzgartirgan boʻlsangiz, avval qoralamani saqlang.',
+  'marketing.content.preview.dishes': 'Taomlar: {count}',
+  'marketing.content.preview.popupDelay': 'Oyna {seconds} soniyadan keyin',
+  'marketing.content.preview.empty': 'Bu kanal va sana uchun bosh ekranda hech narsa yoʻq.',
+
+  'marketing.content.history.loading': 'Versiyalar yuklanmoqda…',
+  'marketing.content.history.empty': 'Hali chop etilmagan, shuning uchun tarix yoʻq.',
+  'marketing.content.history.version': '{n}-versiya',
+  'marketing.content.history.againstPrevious': 'Oldingi versiya bilan solishtirish',
+  'marketing.content.history.againstLive': 'Amaldagi versiya bilan solishtirish',
+  'marketing.content.history.publishedBy': '{who} chop etgan, {when}',
+  'marketing.content.history.noChange': 'Farq yoʻq.',
+  'marketing.content.history.restore': 'Bu versiyani qoralamaga qaytarish',
+  'marketing.content.history.restoreHint':
+    'Bu faqat qoralamani toʻldiradi. Chop etmaguningizcha mijozlar hech narsa koʻrmaydi.',
+  'marketing.content.history.failed': 'Tarixni oʻqib boʻlmadi.',
+
+  'marketing.content.stats.clientReported':
+    'Tashrif buyuruvchilarning oʻz qurilmalaridan yuboriladi. Bu raqamlarni istalgan kishi oshirishi mumkin, tashrif buyuruvchi aniqlanmaydi va hisobotlarda ishlatilmaydi — ularni oʻlchov emas, ishora deb biling.',
+  'marketing.content.stats.loading': 'Hisoblagichlar yuklanmoqda…',
+  'marketing.content.stats.failed': 'Hisoblagichlarni oʻqib boʻlmadi.',
+  'marketing.content.stats.window': 'Soʻnggi kunlar: {range}',
+  'marketing.content.stats.empty': 'Hozircha hech narsa yuborilmagan.',
+  'marketing.content.stats.version': 'Versiya',
+  'marketing.content.stats.impressions': 'Koʻrsatilgan',
+  'marketing.content.stats.clicks': 'Bosishlar',
+  'marketing.content.stats.dismissals': 'Yopilgan',
+  'marketing.content.stats.completions': 'Oxirigacha koʻrilgan',
+
+  'marketing.content.editor.new': 'Yangi: {kind}',
+  'marketing.content.editor.unsaved': 'Saqlanmagan',
+  'marketing.content.editor.close': 'Tahrirlagichni yopish',
+  'marketing.content.editor.stale':
+    'Siz tahrirlayotganda bu elementni boshqa kishi oʻzgartirdi. Uning versiyasini koʻrish uchun qayta yuklang; saqlanmagan oʻzgarishlar almashtiriladi.',
+  'marketing.content.editor.reload': 'Qayta yuklash',
+  'marketing.content.editor.archivedNote':
+    'Element arxivda: faqat oʻqish mumkin, roʻyxatlardan olib tashlangan.',
+  'marketing.content.editor.tab.edit': 'Tahrirlash',
+  'marketing.content.editor.tab.preview': 'Koʻrib chiqish',
+  'marketing.content.editor.tab.history': 'Tarix',
+  'marketing.content.editor.tab.stats': 'Hisoblagichlar',
+  'marketing.content.editor.internalName': 'Ichki nom (faqat jamoangiz koʻradi)',
+  'marketing.content.editor.slug':
+    'Manzil (kichik harflar, raqamlar va defis; saqlangach oʻzgarmaydi)',
+  'marketing.content.editor.placement': 'Qayerda koʻrsatiladi',
+  'marketing.content.editor.channels': 'Kanallar',
+  'marketing.content.editor.channelsHint':
+    'Hech narsa tanlanmasa, kontent koʻrsata oladigan barcha kanallarda koʻrsatiladi.',
+  'marketing.content.editor.noChannels':
+    'Hozircha hech bir kanal kontent koʻrsata olmaydi (veb, ilova yoki Telegram kanali kerak).',
+  'marketing.content.editor.schedule': 'Jadval',
+  'marketing.content.editor.schedule.always': 'Doim',
+  'marketing.content.editor.schedule.between': 'Ikki sana orasida',
+  'marketing.content.editor.schedule.from': 'Sanadan boshlab, cheksiz',
+  'marketing.content.editor.schedule.backwards': 'Tugash boshlanishdan keyin emas.',
+  'marketing.content.editor.schedule.hint':
+    'Vaqt mintaqangizdagi butun kunlar. Koʻrsatilishi mijoz ilovani ochgan har safar aniqlanadi, shuning uchun yarim tunda hech narsa ishga tushmaydi.',
+  'marketing.content.editor.promotion': 'Aksiyaga bogʻlash (ixtiyoriy)',
+  'marketing.content.editor.promotionHint':
+    'Kartochka faqat aksiya amalda boʻlgandagina koʻrsatiladi va oʻz sanalari boʻlmasa, aksiyaning sanalarini oladi. Platforma kartochkaga promokodni oʻzi qoʻshmaydi; kerak boʻlsa, oʻzingiz yozing.',
+  'marketing.content.editor.branch': 'Filial (ixtiyoriy)',
+  'marketing.content.editor.branchNone': 'Muayyan filialga bogʻlanmagan',
+  'marketing.content.editor.language': 'Til',
+  'marketing.content.editor.needsTitle':
+    'Quyidagi tillarda sarlavha yozing yoki u yerdagi yozuvni oʻchiring: {languages}.',
+  'marketing.content.editor.problems': 'Chop etishdan oldin tuzatish kerak',
+  'marketing.content.editor.previewUnsaved':
+    'Saqlanmagan oʻzgarishlar bor. Koʻrib chiqish oxirgi saqlangan qoralamani koʻrsatadi.',
+  'marketing.content.editor.save': 'Qoralamani saqlash',
+  'marketing.content.editor.publish': 'Chop etish',
+  'marketing.content.editor.withdraw': 'Koʻrsatuvdan olib tashlash',
+  'marketing.content.editor.archive': 'Arxivlash',
+  'marketing.content.editor.discard': 'Qoralamani bekor qilish',
+  'marketing.content.editor.saved': 'Qoralama saqlandi. Chop etilmaguncha mijozlar koʻrmaydi.',
+  'marketing.content.editor.published': 'Chop etildi. Mijozlar bir daqiqa ichida koʻradi.',
+  'marketing.content.editor.done': 'Tayyor.',
+  'marketing.content.editor.restored':
+    'Versiya qoralamaga qoʻyildi. Chop etmaguningizcha mijozlar hech narsa koʻrmaydi.',
+  'marketing.content.editor.failed': 'Nimadir xato ketdi. Qayta urinib koʻring.',
+  'marketing.content.editor.refused':
+    'Platforma buni qabul qilmadi. Nimani tuzatish kerakligi quyida.',
+  'marketing.content.editor.confirm.publish.title': 'Chop etilsinmi?',
+  'marketing.content.editor.confirm.publish.body':
+    'Hozir koʻrib turganingiz saqlanadi va chop etiladi. Mijozlar uni bir daqiqa ichida, toʻldirilgan tillarda koʻradi.',
+  'marketing.content.editor.confirm.withdraw.title': 'Koʻrsatuvdan olib tashlansinmi?',
+  'marketing.content.editor.confirm.withdraw.body':
+    'Mijozlar uni bir daqiqa ichida koʻrmay qoʻyadi. Barcha versiyalar saqlanadi, uni qayta chop etish mumkin.',
+  'marketing.content.editor.confirm.archive.title': 'Arxivlansinmi?',
+  'marketing.content.editor.confirm.archive.body':
+    'U roʻyxatlardan chiqadi, koʻrsatilayotgan boʻlsa avval olib tashlanadi. Uning manzili yana boʻsh boʻladi.',
+  'marketing.content.editor.confirm.discard.title': 'Qoralama bekor qilinsinmi?',
+  'marketing.content.editor.confirm.discard.body':
+    'Chop etilgan versiya oʻzgarishsiz qoladi; chop etilmagan oʻzgarishlar yoʻqoladi.',
+
+  'marketing.content.list.from': '{day} dan',
+  'marketing.content.list.limit': 'Koʻrsatilmoqda: {live} / {max} gacha',
+  'marketing.content.list.showArchived': 'Arxivni koʻrsatish',
+  'marketing.content.list.hideArchived': 'Roʻyxatga qaytish',
+  'marketing.content.list.new': 'Yangi: {kind}',
+  'marketing.content.list.loading': 'Yuklanmoqda…',
+  'marketing.content.list.empty': 'Bu yerda hozircha hech narsa yoʻq.',
+  'marketing.content.list.orderHint':
+    'Tartibni oʻzgartirish uchun torting yoki strelkalardan foydalaning. Tartib darhol kuchga kiradi va yangi versiya hisoblanmaydi.',
+  'marketing.content.list.orderMoved':
+    'Siz sudrab turganingizda tartibni boshqa kishi oʻzgartirdi. Roʻyxat qayta oʻqildi.',
+  'marketing.content.list.more': 'Yana koʻrsatish',
+  'marketing.content.list.discard.title': 'Saqlamasdan chiqilsinmi?',
+  'marketing.content.list.discard.body': 'Saqlanmagan oʻzgarishlar bor. Ular yoʻqoladi.',
+  'marketing.content.list.discard.confirm': 'Chiqish',
+  'marketing.content.list.discard.keep': 'Tahrirlashni davom ettirish',
+
+  'marketing.content.hosts.title': 'Ruxsat etilgan havolalar',
+  'marketing.content.hosts.intro':
+    'Banner, hikoya yoki oyna veb-manzilga faqat shu sayt ushbu roʻyxatda boʻlsa olib borishi mumkin. Kanallaringizning tasdiqlangan manzillari doim shu yerda; qolganlari faqat qoʻshganingizdan keyin.',
+  'marketing.content.hosts.host': 'Sayt (masalan, shop.example.uz)',
+  'marketing.content.hosts.reason': 'Nima uchun (ixtiyoriy)',
+  'marketing.content.hosts.add': 'Bu saytga ruxsat berish',
+  'marketing.content.hosts.invalid':
+    'Faqat sayt nomini yozing: kichik harflar, raqamlar, nuqta va defis — https://, port va * siz.',
+  'marketing.content.hosts.audited':
+    'Saytni qoʻshish yoki olib tashlash audit tarixiga xavfsizlik hodisasi sifatida yoziladi. Roʻyxatdan chiqarilgan saytga havola bir daqiqa ichida ishlamay qoladi; elementning oʻzi koʻrsatilishda qoladi.',
+  'marketing.content.hosts.empty': 'Hozircha saytlar yoʻq.',
+  'marketing.content.hosts.addedBy': '{who} qoʻshgan',
+  'marketing.content.hosts.fromChannel': 'kanallaringizdan birining tasdiqlangan manzili',
+  'marketing.content.hosts.remove': 'Olib tashlash',
+  'marketing.content.hosts.removeTitle': '{host} ga ruxsat bekor qilinsinmi?',
+  'marketing.content.hosts.removeBody':
+    'Bu saytga havolalar bir daqiqa ichida ishlamay qoladi. Ular ishlatilgan banner, hikoya va oynalar havolasiz holda koʻrsatilishda qoladi.',
+
+  'marketing.content.policy.title': 'Sozlamalar',
+  'marketing.content.policy.saved': 'Saqlandi.',
+  'marketing.content.policy.publishing': 'Chop etish',
+  'marketing.content.policy.requireAll':
+    'Chop etishdan oldin brendning barcha tillarida matn talab qilinsin',
+  'marketing.content.policy.requireAllHint':
+    'Odatda faqat brendning asosiy tili majburiy; boshqalari uning matnini oladi. Bu sozlama chop etishni faqat qattiqlashtirishi mumkin.',
+  'marketing.content.policy.editorial': 'Tahririy kontent',
+  'marketing.content.policy.editorialNotEntitled':
+    'Tarifingizga yangiliklar, foto albomlar, retseptlar va vakansiyalar kirmaydi. Buni platforma egasi ijarachi uchun yoqadi.',
+  'marketing.content.policy.kind.news': 'Yangiliklar',
+  'marketing.content.policy.kind.gallery': 'Foto albomlar',
+  'marketing.content.policy.kind.recipes': 'Retseptlar',
+  'marketing.content.policy.kind.vacancies': 'Vakansiyalar',
+  'marketing.content.policy.vacancyNote':
+    'Vakansiya — siz eʻlon qilishni tanlagan bitta aloqali eʻlon. Platformada ariza shakli yoʻq va nomzodlar haqida maʻlumot saqlanmaydi.',
+  'marketing.content.policy.videoOn':
+    'Video: tarifingiz banner, kartochka, oyna va hikoyalarda MP4 videoga ruxsat beradi.',
+  'marketing.content.policy.videoOff':
+    'Video: tarifingizga kirmaydi. Uni platforma egasi ijarachi uchun yoqadi.',
+
+  'marketing.content.health.title': 'Eʻtibor talab qiladi',
+  'marketing.content.health.intro':
+    'Mijozlar koʻrayotgan, ammo nosoz narsalar. Ilova ularning har birini jimgina hal qilgan: buzilgan havola «hech qayerga» boʻlgan, toʻxtatilgan aksiya kartochkasi yashirilgan — hech kim xato koʻrmaydi, lekin siz xohlagan narsani ham koʻrmaydi.',
+  'marketing.content.health.ok': 'Mijozlar koʻrayotgan hamma narsa siz yaratgandek.',
+  'marketing.content.health.failed': 'Kontent holatini tekshirib boʻlmadi.',
+
+  'marketing.content.page.title': 'Kontent',
+  'marketing.content.page.intro':
+    'Brendingiz menyudan tashqari mijozlarga koʻrsatadigan narsalar: bosh ekrandagi banner, promo-kartochkalar, hikoyalar va kirishdagi oyna — tarifingiz va sozlamalaringiz ruxsat bersa, yangiliklar, foto albomlar, retseptlar va vakansiyalar ham. Siz chop etmaguningizcha mijozlar hech narsa koʻrmaydi.',
+  'marketing.content.page.needsAttention': 'Eʻtibor talab qiladi: {count}',
+  'marketing.content.page.views': 'Roʻyxatlar',
+  'marketing.content.page.tab.items': 'Kontent',
+  'marketing.content.page.tab.links': 'Havolalar',
+  'marketing.content.page.tab.settings': 'Sozlamalar',
+  'marketing.content.page.tab.health': 'Holat',
+
+  'marketing.storefront.title': 'Vitrina',
+  'marketing.storefront.intro':
+    'Vitrinalaringizning bosh ekrani nimani va qanday tartibda koʻrsatadi: taomlar guruhlari, karusel va butun ekranni koʻrib chiqish. Chop etilmaguncha mijozlar hech narsa koʻrmaydi.',
+  'marketing.storefront.tab.groups': 'Bosh sahifa guruhlari',
+  'marketing.storefront.tab.carousel': 'Takliflar karuseli',
+  'marketing.storefront.tab.preview': 'Koʻrib chiqish',
+  'marketing.storefront.tab.switcher': 'Brend almashtirgich',
+  'marketing.storefront.groups.hint':
+    'Bosh ekrandagi nomli taomlar lentalari: qoʻlda tanlangan yoki butun toifa. Bu yerdagi tartib ekrandagi tartibdir.',
+  'marketing.storefront.carousel.hint':
+    'Bosh ekran tepasidagi karusel banner va promo-kartochkalar uchun umumiy. Tartibni shu yerda belgilang; ularni «Kontent» boʻlimida yozing va chop eting. U barcha mijozlar uchun bir xil — bitta mehmonga shaxsiy taklif esa boshqa narsa.',
+  'marketing.storefront.carousel.link': '«Kontent»ni ochish',
+  'marketing.storefront.switcher.title':
+    'Brend almashtirgich va marketpleys joylashuvi — yaratilmagan',
+  'marketing.storefront.switcher.body':
+    'Ular ijarachi bitta vitrinada ikki brend yuritib, ularni soʻramaguncha kutadi (ADR 0157, 4-reliz). Shu paytgacha sozlanadigan narsa yoʻq va buning uchun hech qanday sozlama zaxiralanmagan.',
 };

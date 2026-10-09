@@ -1,0 +1,122 @@
+.q-rich-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.q-rich-blocks__block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.q-rich-blocks__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.q-rich-blocks__spacer {
+  flex: 1;
+}
+
+.q-rich-blocks__type {
+  height: 24px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink-muted);
+}
+
+.q-rich-blocks__ordered {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--q-ink-muted);
+}
+
+.q-rich-blocks__icon {
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--q-ink-subtle);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.q-rich-blocks__icon:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.q-rich-blocks__items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding-inline-start: 20px;
+}
+
+.q-rich-blocks__item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  align-items: start;
+}
+
+.q-rich-blocks__add,
+.q-rich-blocks__add-item {
+  align-self: flex-start;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.q-rich-blocks__add-item {
+  border-style: dashed;
+  color: var(--q-ink-muted);
+}
+
+.q-rich-blocks__hint {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+.q-rich-blocks__image {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.q-rich-blocks__preview {
+  width: 96px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--q-radius);
+}
+
+.q-rich-blocks__divider {
+  width: 100%;
+  margin: 4px 0;
+  border: none;
+  border-top: 1px solid var(--q-hairline);
+}
+
+.q-rich-blocks__problems {
+  margin: 0;
+  padding-inline-start: 18px;
+  color: var(--q-error-text);
+}
+
+.q-rich-blocks__error {
+  margin: 0;
+  color: var(--q-error-text);
+}

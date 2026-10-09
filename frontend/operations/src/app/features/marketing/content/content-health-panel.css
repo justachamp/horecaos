@@ -1,0 +1,57 @@
+.health {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 720px;
+}
+
+.health h2 {
+  margin: 0;
+}
+
+.health__note {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+.health__ok {
+  margin: 0;
+}
+
+.health__error {
+  margin: 0;
+  color: var(--q-error-text);
+}
+
+.health__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.health__row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+  text-align: start;
+}
+
+.health__title {
+  font-weight: 600;
+}
+
+.health__problems {
+  margin: 0;
+  padding-inline-start: 18px;
+  color: var(--q-warning-text, var(--q-ink-muted));
+}

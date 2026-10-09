@@ -80,6 +80,42 @@
     "recentSearches": "Недавние поиски",
     "modeUnavailableToday": "Сейчас недоступно"
   },
+  "content": {
+    "carousel": "Предложения",
+    "promoGrid": "Акции",
+    "stories": "Истории",
+    "storyOpen": "Открыть историю: {{title}}",
+    "storyClose": "Закрыть историю",
+    "storyNext": "Следующий слайд",
+    "storyPrevious": "Предыдущий слайд",
+    "storySlide": "Слайд {{current}} из {{total}}",
+    "learnMore": "Подробнее",
+    "open": "Открыть",
+    "popupClose": "Закрыть",
+    "editorialSection": "Ещё от нас",
+    "editorial": {
+      "news": "Новости",
+      "gallery": "Галерея",
+      "recipes": "Рецепты",
+      "careers": "Вакансии"
+    },
+    "unavailable": "Эта страница недоступна.",
+    "empty": "Пока ничего нет.",
+    "loadMore": "Показать ещё",
+    "published": "Опубликовано {{date}}",
+    "employment": {
+      "FULL_TIME": "Полная занятость",
+      "PART_TIME": "Частичная занятость",
+      "SHIFT": "Сменный график",
+      "INTERNSHIP": "Стажировка"
+    },
+    "vacancy": {
+      "employment": "Занятость",
+      "branch": "Филиал",
+      "contact": "Как откликнуться"
+    },
+    "gallery": "Фотографии"
+  },
   "cart": {
     "title": "Корзина",
     "clearCart": "Очистить корзину",

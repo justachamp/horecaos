@@ -1,0 +1,11 @@
+@if (kinds().length > 0) {
+  <nav class="links" data-testid="editorial-links" [attr.aria-label]="'editorial.homeLabel' | t">
+    <ul class="links__list rail">
+      @for (kind of kinds(); track kind) {
+        <li>
+          <a class="link" [routerLink]="['/', kind]">{{ 'editorial.' + kind | t }}</a>
+        </li>
+      }
+    </ul>
+  </nav>
+}

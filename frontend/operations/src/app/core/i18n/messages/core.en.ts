@@ -213,6 +213,20 @@ export const coreEn = {
   'ui.mediaUploader.confirm': 'Use this crop',
   'ui.mediaUploader.cancel': 'Cancel',
   'ui.mediaUploader.uploading': 'Uploading…',
+  'ui.mediaUploader.videoNotMp4': 'Only MP4 video is accepted — export the clip as MP4 (H.264)',
+  'ui.mediaUploader.videoTooLarge': 'That video is over 12 MB — export it smaller',
+  'ui.mediaUploader.videoTooLong': 'That video is longer than 20 seconds — trim it',
+  'ui.mediaUploader.videoDimensions':
+    'The video must be at most 1920 pixels on its long edge and at least 480 on its short edge',
+  'ui.mediaUploader.videoUnreadable':
+    'This browser cannot read that video — export it as MP4 with H.264 video',
+  'ui.mediaUploader.videoRejectedByServer':
+    'The platform refused that video. Export it as MP4 with H.264 video (and AAC audio, or none), at most 12 MB, 20 seconds and 1920 pixels, with “fast start” (web optimised) turned on, then upload it again',
+  'ui.mediaUploader.posterFailed': 'Could not capture a poster frame from that video',
+  'ui.mediaUploader.posterHint':
+    'Choose the frame customers see before the video plays (and instead of it when they ask their phone for less motion)',
+  'ui.mediaUploader.posterFrame': 'Poster frame',
+  'ui.mediaUploader.posterConfirm': 'Use this frame',
 
   // `q-mapping-pane` (ADR 0012/0026, gap-map row X.24) — the dual list, link/
   // unlink, unmapped filter, bulk auto-match and the two-sided conflict card

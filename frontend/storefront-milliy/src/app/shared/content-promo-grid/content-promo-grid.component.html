@@ -1,0 +1,19 @@
+@if (visible().length > 0) {
+  <section
+    class="promo"
+    data-testid="content-promo-grid"
+    [attr.aria-label]="'content.promoGridLabel' | t"
+  >
+    <ul class="promo__list" data-testid="content-promo-grid-list">
+      @for (item of visible(); track item.id) {
+        <li>
+          <app-content-tile
+            [item]="item"
+            sizes="(min-width: 768px) 25vw, 45vw"
+            (failed)="drop(item.id)"
+          />
+        </li>
+      }
+    </ul>
+  </section>
+}

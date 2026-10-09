@@ -1,0 +1,168 @@
+<div class="editorial-fields" data-testid="content-editorial-fields">
+  <label class="editorial-fields__field">
+    <span class="q-caption">{{ 'marketing.content.editorial.title' | t }}</span>
+    <input
+      type="text"
+      class="editorial-fields__input"
+      maxlength="120"
+      [value]="title()"
+      [disabled]="disabled()"
+      (input)="setText('title', $any($event.target).value)"
+      data-testid="content-title"
+    />
+  </label>
+
+  <label class="editorial-fields__field">
+    <span class="q-caption">{{ 'marketing.content.editorial.summary' | t }}</span>
+    <textarea
+      class="editorial-fields__input editorial-fields__input--area"
+      maxlength="300"
+      rows="2"
+      [value]="summary()"
+      [disabled]="disabled()"
+      (input)="setText('summary', $any($event.target).value)"
+      data-testid="content-summary"
+    ></textarea>
+  </label>
+
+  @if (hasCover()) {
+    <q-content-media-field
+      [label]="'marketing.content.editorial.cover' | t"
+      [assetId]="cover()"
+      ratio="3:2"
+      [exportEdgePx]="1200"
+      [disabled]="disabled()"
+      (changed)="setCover($event)"
+    />
+  }
+
+  @if (isVacancy()) {
+    <fieldset class="editorial-fields__vacancy" [disabled]="disabled()">
+      <legend class="q-caption">{{ 'marketing.content.vacancy.legend' | t }}</legend>
+      <label class="editorial-fields__field">
+        <span class="q-caption">{{ 'marketing.content.vacancy.employment' | t }}</span>
+        <select
+          class="editorial-fields__input"
+          [value]="vacancy().employmentType"
+          (change)="setEmployment($any($event.target).value)"
+          data-testid="content-vacancy-employment"
+        >
+          @for (type of employment; track type) {
+            <option [value]="type" [selected]="type === vacancy().employmentType">
+              {{ employmentKey(type) | t }}
+            </option>
+          }
+        </select>
+      </label>
+      <label class="editorial-fields__field">
+        <span class="q-caption">{{ 'marketing.content.vacancy.applyType' | t }}</span>
+        <select
+          class="editorial-fields__input"
+          [value]="vacancy().applyType"
+          (change)="setApplyType($any($event.target).value)"
+          data-testid="content-vacancy-apply-type"
+        >
+          @for (type of applyTypes; track type) {
+            <option [value]="type" [selected]="type === vacancy().applyType">
+              {{ applyKey(type) | t }}
+            </option>
+          }
+        </select>
+      </label>
+      <label class="editorial-fields__field">
+        <span class="q-caption">{{ 'marketing.content.vacancy.applyValue' | t }}</span>
+        <input
+          type="text"
+          class="editorial-fields__input"
+          maxlength="2048"
+          [value]="vacancy().applyValue"
+          (input)="setApplyValue($any($event.target).value)"
+          data-testid="content-vacancy-apply-value"
+        />
+      </label>
+      @if (applyHostWarning()) {
+        <p class="q-caption editorial-fields__warn" role="alert" data-testid="content-vacancy-host">
+          {{ 'marketing.content.link.hostNotAllowed' | t }}
+        </p>
+      }
+      <p class="q-caption editorial-fields__hint">
+        {{ 'marketing.content.vacancy.noApplicants' | t }}
+      </p>
+    </fieldset>
+  }
+
+  @if (hasBody()) {
+    <div class="editorial-fields__body">
+      <span class="q-caption">{{ 'marketing.content.editorial.body' | t }}</span>
+      <q-rich-text
+        mode="blocks"
+        [blockDocument]="body()"
+        [blockLabels]="labels()"
+        [imageUpload]="upload"
+        [imagePreviews]="previews()"
+        [disabled]="disabled()"
+        [ariaLabel]="'marketing.content.editorial.body' | t"
+        (documentChange)="setBody($event)"
+      />
+    </div>
+  }
+
+  @if (isAlbum()) {
+    <div class="editorial-fields__album" data-testid="content-album">
+      <span class="q-caption">
+        {{ 'marketing.content.album.images' | t: { count: images().length, max: maxImages } }}
+      </span>
+      @if (images().length > 0) {
+        <q-rule-list
+          [items]="imageItems()"
+          [showToggle]="false"
+          [selectable]="true"
+          [selectedId]="imageIndex() === null ? null : '' + imageIndex()"
+          (selected)="selectImage($event)"
+          (reorder)="reorderImages($event)"
+        />
+      }
+      @if (images().length < maxImages) {
+        <q-content-media-field
+          [label]="'marketing.content.album.add' | t"
+          [assetId]="null"
+          ratio="3:2"
+          [exportEdgePx]="1600"
+          [disabled]="disabled()"
+          (changed)="addImage($event)"
+        />
+      }
+      @if (image(); as current) {
+        <div class="editorial-fields__image" data-testid="content-album-image">
+          <q-content-media-field
+            [assetId]="current.assetId"
+            ratio="3:2"
+            [exportEdgePx]="1600"
+            [disabled]="true"
+          />
+          <label class="editorial-fields__field">
+            <span class="q-caption">{{ 'marketing.content.album.caption' | t }}</span>
+            <input
+              type="text"
+              class="editorial-fields__input"
+              maxlength="140"
+              [value]="imageCaption()"
+              [disabled]="disabled()"
+              (input)="setImageCaption($any($event.target).value)"
+              data-testid="content-album-caption"
+            />
+          </label>
+          <button
+            type="button"
+            class="editorial-fields__remove"
+            [disabled]="disabled()"
+            (click)="removeImage()"
+            data-testid="content-album-remove"
+          >
+            {{ 'marketing.content.album.remove' | t }}
+          </button>
+        </div>
+      }
+    </div>
+  }
+</div>

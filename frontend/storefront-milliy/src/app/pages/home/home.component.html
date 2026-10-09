@@ -10,6 +10,11 @@
   <span class="search__hint">{{ 'home.searchHint' | t }}</span>
 </div>
 
+<app-content-stories [stories]="stories()" />
+<app-content-carousel [items]="carousel()" />
+<app-content-promo-grid [items]="promoGrid()" />
+<app-editorial-links />
+
 @switch (state()) {
   @case ('loading') {
     <p class="state">{{ 'common.loading' | t }}</p>
@@ -21,8 +26,14 @@
     </div>
   }
   @case ('ready') {
+    <app-content-groups [groups]="groups()" [sections]="items()" [currency]="currency()" />
     @if (hasDishes()) {
-      <app-menu-grid [categories]="categories()" [sections]="items()" [currency]="currency()" />
+      <app-menu-grid
+        [categories]="categories()"
+        [sections]="items()"
+        [currency]="currency()"
+        [requestedCategoryId]="category() ?? null"
+      />
     } @else {
       <p class="state">{{ 'home.emptyMenu' | t }}</p>
     }
@@ -30,3 +41,4 @@
 }
 
 <app-public-reviews />
+<app-content-popup [popup]="popup()" />

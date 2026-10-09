@@ -211,6 +211,21 @@ export const coreUzLatn: AreaMessages<typeof coreEn> = {
   'ui.mediaUploader.confirm': 'Kesishni qoʻllash',
   'ui.mediaUploader.cancel': 'Bekor qilish',
   'ui.mediaUploader.uploading': 'Yuklanmoqda…',
+  'ui.mediaUploader.videoNotMp4':
+    'Faqat MP4 video qabul qilinadi — rolikni MP4 (H.264) formatida eksport qiling',
+  'ui.mediaUploader.videoTooLarge': 'Video 12 MB dan katta — kichikroq qilib eksport qiling',
+  'ui.mediaUploader.videoTooLong': 'Video 20 soniyadan uzun — uni qirqing',
+  'ui.mediaUploader.videoDimensions':
+    'Videoning uzun tomoni koʻpi bilan 1920, qisqa tomoni kamida 480 piksel boʻlishi kerak',
+  'ui.mediaUploader.videoUnreadable':
+    'Brauzer bu videoni oʻqiy olmadi — uni H.264 videoli MP4 sifatida eksport qiling',
+  'ui.mediaUploader.videoRejectedByServer':
+    'Platforma bu videoni rad etdi. Uni H.264 videoli MP4 sifatida (AAC ovozi bilan yoki ovozsiz), koʻpi bilan 12 MB, 20 soniya va 1920 piksel qilib, “tez boshlash” (veb uchun optimallash) yoqilgan holda eksport qiling va qayta yuklang',
+  'ui.mediaUploader.posterFailed': 'Bu videodan muqova kadrini olib boʻlmadi',
+  'ui.mediaUploader.posterHint':
+    'Video boshlanishidan oldin mijozlar koʻradigan kadrni tanlang (telefonda harakat kamaytirilgan boʻlsa, video oʻrniga ham shu koʻrsatiladi)',
+  'ui.mediaUploader.posterFrame': 'Muqova kadri',
+  'ui.mediaUploader.posterConfirm': 'Shu kadrni olish',
   'ui.mappingPane.unmappedOnly': 'Faqat bogʻlanmaganlarni koʻrsatish',
   'ui.mappingPane.bulkAutoMatch': 'Nomi boʻyicha avtomatik bogʻlash',
   'ui.mappingPane.loading': 'Moslashtirish yuklanmoqda…',

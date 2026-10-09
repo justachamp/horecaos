@@ -1,0 +1,23 @@
+:host {
+  display: block;
+}
+
+.track {
+  margin: 0;
+  padding: 12px 24px;
+  gap: 12px;
+  list-style: none;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 24px;
+  overscroll-behavior-x: contain;
+}
+
+.track:focus-visible {
+  outline: 2px solid var(--brand-accent-deep);
+  outline-offset: -2px;
+}
+
+.slide {
+  flex: 0 0 min(85%, 420px);
+  scroll-snap-align: start;
+}

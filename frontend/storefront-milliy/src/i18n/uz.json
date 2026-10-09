@@ -67,6 +67,37 @@
     "telegramExpiryNotice": "Havola bir martalik va tez orada eskiradi — darhol oching.",
     "telegramCancel": "Telefon raqami bilan kirish"
   },
+  "content": {
+    "carouselLabel": "Aksiya va yangiliklar",
+    "promoGridLabel": "Boshqa takliflar",
+    "storiesLabel": "Hikoyalar",
+    "storyOpen": "Hikoyani ochish: {{title}}",
+    "storyClose": "Hikoyani yopish",
+    "storyNext": "Keyingi slayd",
+    "storyPrevious": "Oldingi slayd",
+    "storyProgress": "{{total}} tadan {{current}}-slayd",
+    "openLink": "Batafsil",
+    "popupClose": "Yopish"
+  },
+  "editorial": {
+    "homeLabel": "Biz haqimizda",
+    "news": "Yangiliklar",
+    "gallery": "Galereya",
+    "recipes": "Retseptlar",
+    "careers": "Vakansiyalar",
+    "loadMore": "Yana ko‘rsatish",
+    "empty": "Hozircha hech narsa yo‘q",
+    "unavailableTitle": "Mavjud emas",
+    "unavailableBody": "Bu bo‘lim hozircha mavjud emas.",
+    "branch": "Filial",
+    "applyHint": "Ariza topshirish uchun ish beruvchi bilan bevosita bog‘laning",
+    "employment": {
+      "FULL_TIME": "To‘liq stavka",
+      "PART_TIME": "Yarim stavka",
+      "SHIFT": "Smenali ish",
+      "INTERNSHIP": "Stajirovka"
+    }
+  },
   "home": {
     "delivery": "Yetkazib berish",
     "pickup": "Olib ketish",

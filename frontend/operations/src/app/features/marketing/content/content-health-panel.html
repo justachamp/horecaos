@@ -1,0 +1,40 @@
+<section class="health" data-testid="content-health">
+  <h2 class="q-subhead">{{ 'marketing.content.health.title' | t }}</h2>
+  <p class="q-body-sm health__note">{{ 'marketing.content.health.intro' | t }}</p>
+
+  @if (error(); as message) {
+    <p class="q-body-sm health__error" role="alert" data-testid="content-health-error">
+      {{ message }}
+    </p>
+  }
+  @if (loading()) {
+    <p class="q-caption" role="status">{{ 'marketing.content.list.loading' | t }}</p>
+  } @else if (items().length === 0 && error() === null) {
+    <p class="q-body-sm health__ok" data-testid="content-health-ok">
+      {{ 'marketing.content.health.ok' | t }}
+    </p>
+  } @else {
+    <ul class="health__list">
+      @for (item of items(); track item.id) {
+        <li>
+          <button
+            type="button"
+            class="health__row"
+            (click)="open.emit(item)"
+            data-testid="content-health-row"
+          >
+            <span class="q-body-sm health__title">{{ item.displayTitle }}</span>
+            <span class="q-caption health__note">
+              {{ kindKey(item) | t }} · {{ visibilityKey(item) | t }}
+            </span>
+            <ul class="health__problems">
+              @for (problem of item.problems; track $index) {
+                <li class="q-caption">{{ sentence(problem) }}</li>
+              }
+            </ul>
+          </button>
+        </li>
+      }
+    </ul>
+  }
+</section>

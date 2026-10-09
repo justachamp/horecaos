@@ -67,6 +67,37 @@
     "telegramExpiryNotice": "Ссылка одноразовая и скоро истечёт — откройте её сейчас.",
     "telegramCancel": "Войти по номеру телефона"
   },
+  "content": {
+    "carouselLabel": "Акции и новости",
+    "promoGridLabel": "Другие предложения",
+    "storiesLabel": "Истории",
+    "storyOpen": "Открыть историю: {{title}}",
+    "storyClose": "Закрыть историю",
+    "storyNext": "Следующий слайд",
+    "storyPrevious": "Предыдущий слайд",
+    "storyProgress": "Слайд {{current}} из {{total}}",
+    "openLink": "Подробнее",
+    "popupClose": "Закрыть"
+  },
+  "editorial": {
+    "homeLabel": "Ещё от нас",
+    "news": "Новости",
+    "gallery": "Галерея",
+    "recipes": "Рецепты",
+    "careers": "Вакансии",
+    "loadMore": "Показать ещё",
+    "empty": "Пока здесь пусто",
+    "unavailableTitle": "Недоступно",
+    "unavailableBody": "Этот раздел сейчас недоступен.",
+    "branch": "Филиал",
+    "applyHint": "Чтобы откликнуться, свяжитесь с работодателем напрямую",
+    "employment": {
+      "FULL_TIME": "Полная занятость",
+      "PART_TIME": "Частичная занятость",
+      "SHIFT": "Сменный график",
+      "INTERNSHIP": "Стажировка"
+    }
+  },
   "home": {
     "delivery": "Доставка",
     "pickup": "Самовывоз",

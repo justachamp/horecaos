@@ -100,5 +100,26 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./pages/referral/referral.component').then((m) => m.ReferralComponent),
   },
+  // ADR 0157, Release 5: the editorial pages a brand can switch on -- news, gallery albums, recipes
+  // and vacancies. Public like the menu, and lazy so nothing joins the initial chunk. One listing
+  // component and one entry component serve all four; the kind rides in the route's `data` and is
+  // bound into the component (`withComponentInputBinding`), the slug in its path. A kind the brand has
+  // not switched on is a 404 from the platform, which the pages show as a plain "not available" page.
+  ...(['news', 'gallery', 'recipes', 'careers'] as const).flatMap((kind): Routes => [
+    {
+      path: kind,
+      data: { kind },
+      loadComponent: () =>
+        import('./pages/editorial/editorial-list.component').then((m) => m.EditorialListComponent),
+    },
+    {
+      path: `${kind}/:slug`,
+      data: { kind },
+      loadComponent: () =>
+        import('./pages/editorial/editorial-detail.component').then(
+          (m) => m.EditorialDetailComponent,
+        ),
+    },
+  ]),
   { path: '**', redirectTo: 'home' },
 ];

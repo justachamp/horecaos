@@ -80,6 +80,42 @@
     "recentSearches": "Recent searches",
     "modeUnavailableToday": "Not available right now"
   },
+  "content": {
+    "carousel": "Offers",
+    "promoGrid": "Promotions",
+    "stories": "Stories",
+    "storyOpen": "Open story: {{title}}",
+    "storyClose": "Close story",
+    "storyNext": "Next slide",
+    "storyPrevious": "Previous slide",
+    "storySlide": "Slide {{current}} of {{total}}",
+    "learnMore": "Learn more",
+    "open": "Open",
+    "popupClose": "Close",
+    "editorialSection": "More from us",
+    "editorial": {
+      "news": "News",
+      "gallery": "Gallery",
+      "recipes": "Recipes",
+      "careers": "Careers"
+    },
+    "unavailable": "This page is not available.",
+    "empty": "Nothing here yet.",
+    "loadMore": "Show more",
+    "published": "Published {{date}}",
+    "employment": {
+      "FULL_TIME": "Full time",
+      "PART_TIME": "Part time",
+      "SHIFT": "Shift work",
+      "INTERNSHIP": "Internship"
+    },
+    "vacancy": {
+      "employment": "Employment",
+      "branch": "Branch",
+      "contact": "How to apply"
+    },
+    "gallery": "Photos"
+  },
   "cart": {
     "title": "Cart",
     "clearCart": "Clear cart",

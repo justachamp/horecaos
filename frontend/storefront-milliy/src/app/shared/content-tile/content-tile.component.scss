@@ -1,0 +1,42 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.tile {
+  height: 100%;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-subtle);
+  background: var(--surface-base);
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+.tile__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px 12px;
+}
+
+.tile__title {
+  font: 700 15px/1.25 var(--font-display);
+}
+
+.tile__subtitle {
+  color: var(--text-secondary);
+  font: 400 12px/1.4 var(--font-ui);
+}
+
+.tile__cta {
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-accent);
+  color: var(--text-on-accent);
+  font: 700 12px/1 var(--font-display);
+}

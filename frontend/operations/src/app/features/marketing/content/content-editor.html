@@ -1,0 +1,432 @@
+<section class="editor" data-testid="content-editor">
+  <header class="editor__head">
+    <div class="editor__title">
+      <h2 class="q-subhead">
+        @if (creating()) {
+          {{ 'marketing.content.editor.new' | t: { kind: kindLabel(kind()) | t } }}
+        } @else {
+          {{ current()?.displayTitle }}
+        }
+      </h2>
+      <span class="q-caption editor__kind">
+        {{ kindLabel(kind()) | t }}
+        @if (placement(); as place) {
+          · {{ placementLabel(place) | t }}
+        }
+      </span>
+    </div>
+    <div class="editor__pills">
+      @if (statePill(); as pill) {
+        <q-status-pill [label]="pill.label | t" [tone]="pill.tone" />
+      }
+      @if (current()?.hasUnpublishedChanges) {
+        <span class="q-caption editor__marker" data-testid="content-unpublished">
+          {{ 'marketing.content.unpublishedChanges' | t }}
+        </span>
+      }
+      @if (dirty()) {
+        <span class="q-caption editor__marker" data-testid="content-dirty">
+          {{ 'marketing.content.editor.unsaved' | t }}
+        </span>
+      }
+    </div>
+    <button
+      type="button"
+      class="editor__close"
+      [attr.aria-label]="'marketing.content.editor.close' | t"
+      (click)="closed.emit()"
+      data-testid="content-close"
+    >
+      ✕
+    </button>
+  </header>
+
+  @if (stale()) {
+    <div class="editor__stale" role="alert" data-testid="content-stale">
+      <span class="q-body-sm">{{ 'marketing.content.editor.stale' | t }}</span>
+      <button type="button" (click)="reloadRequested.emit()" data-testid="content-reload">
+        {{ 'marketing.content.editor.reload' | t }}
+      </button>
+    </div>
+  } @else if (error(); as message) {
+    <p class="q-body-sm editor__error" role="alert" data-testid="content-error">{{ message }}</p>
+  }
+  @if (notice(); as key) {
+    <p class="q-body-sm editor__notice" role="status" data-testid="content-notice">{{ key | t }}</p>
+  }
+  @if (archived()) {
+    <p class="q-body-sm editor__note">{{ 'marketing.content.editor.archivedNote' | t }}</p>
+  }
+
+  @if (!creating()) {
+    <nav class="editor__tabs" role="tablist">
+      @for (t of tabs; track t) {
+        <button
+          type="button"
+          role="tab"
+          class="editor__tab q-body-sm"
+          [class.editor__tab--active]="tab() === t"
+          [attr.aria-selected]="tab() === t"
+          (click)="tab.set(t)"
+          [attr.data-testid]="'content-tab-' + t"
+        >
+          {{ tabLabel(t) | t }}
+        </button>
+      }
+    </nav>
+  }
+
+  @switch (tab()) {
+    @case ('edit') {
+      <div class="editor__form" data-testid="content-form">
+        <label class="editor__field">
+          <span class="q-caption">{{ 'marketing.content.editor.internalName' | t }}</span>
+          <input
+            type="text"
+            class="editor__input"
+            maxlength="120"
+            [value]="internalName()"
+            [disabled]="archived()"
+            (input)="internalName.set($any($event.target).value)"
+            data-testid="content-internal-name"
+          />
+        </label>
+
+        @if (editorial()) {
+          <label class="editor__field">
+            <span class="q-caption">{{ 'marketing.content.editor.slug' | t }}</span>
+            <input
+              type="text"
+              class="editor__input"
+              maxlength="80"
+              pattern="[a-z0-9]+(-[a-z0-9]+)*"
+              [value]="slug()"
+              [disabled]="!creating()"
+              (input)="slug.set($any($event.target).value)"
+              data-testid="content-slug"
+            />
+          </label>
+        }
+
+        @if (placements().length > 1) {
+          <label class="editor__field">
+            <span class="q-caption">{{ 'marketing.content.editor.placement' | t }}</span>
+            <select
+              class="editor__input"
+              [value]="placement() ?? ''"
+              [disabled]="archived() || !creating()"
+              (change)="setPlacement($any($event.target).value)"
+              data-testid="content-placement"
+            >
+              @for (p of placements(); track p) {
+                <option [value]="p" [selected]="p === placement()">
+                  {{ placementLabel(p) | t }}
+                </option>
+              }
+            </select>
+          </label>
+        }
+
+        @if (!editorial()) {
+          <fieldset class="editor__channels" [disabled]="archived()">
+            <legend class="q-caption">{{ 'marketing.content.editor.channels' | t }}</legend>
+            @if (refs.contentChannels().length === 0) {
+              <p class="q-caption editor__note" data-testid="content-no-channels">
+                {{ 'marketing.content.editor.noChannels' | t }}
+              </p>
+            } @else {
+              <div class="editor__chips">
+                @for (channel of refs.contentChannels(); track channel.code) {
+                  <button
+                    type="button"
+                    class="editor__chip"
+                    [attr.aria-pressed]="channelCodes().includes(channel.code)"
+                    (click)="toggleChannel(channel.code)"
+                    data-testid="content-channel"
+                  >
+                    {{ channel.displayName }}
+                  </button>
+                }
+              </div>
+              <p class="q-caption editor__note">
+                {{ 'marketing.content.editor.channelsHint' | t }}
+              </p>
+            }
+          </fieldset>
+        }
+
+        <fieldset class="editor__schedule" [disabled]="archived()">
+          <legend class="q-caption">{{ 'marketing.content.editor.schedule' | t }}</legend>
+          <div class="editor__modes">
+            @for (mode of ['always', 'between', 'from']; track mode) {
+              <label class="q-body-sm editor__mode">
+                <input
+                  type="radio"
+                  name="schedule-mode"
+                  [checked]="scheduleMode() === mode"
+                  (change)="setScheduleMode($any(mode))"
+                  [attr.data-testid]="'content-schedule-' + mode"
+                />
+                @switch (mode) {
+                  @case ('always') {
+                    {{ 'marketing.content.editor.schedule.always' | t }}
+                  }
+                  @case ('between') {
+                    {{ 'marketing.content.editor.schedule.between' | t }}
+                  }
+                  @default {
+                    {{ 'marketing.content.editor.schedule.from' | t }}
+                  }
+                }
+              </label>
+            }
+          </div>
+          @if (scheduleMode() === 'between') {
+            <q-date-range-picker
+              [showPresets]="false"
+              [start]="startDay()"
+              [end]="endDay()"
+              (rangeChange)="setRange($event)"
+            />
+          } @else if (scheduleMode() === 'from') {
+            <input
+              type="date"
+              class="editor__input"
+              [value]="startDay() ?? ''"
+              (change)="setFrom($any($event.target).value)"
+              data-testid="content-schedule-from-date"
+            />
+          }
+          @if (backwards()) {
+            <p class="q-caption editor__error" role="alert" data-testid="content-backwards">
+              {{ 'marketing.content.editor.schedule.backwards' | t }}
+            </p>
+          }
+          <p class="q-caption editor__note">{{ 'marketing.content.editor.schedule.hint' | t }}</p>
+        </fieldset>
+
+        @if (kind() === 'PROMO_CARD') {
+          <div class="editor__field" data-testid="content-promotion">
+            <span class="q-caption">{{ 'marketing.content.editor.promotion' | t }}</span>
+            @if (promotionName(); as name) {
+              <p class="q-body-sm editor__chosen">
+                {{ 'marketing.content.link.chosen' | t: { label: name } }}
+                <button
+                  type="button"
+                  class="editor__linkish"
+                  [disabled]="archived()"
+                  (click)="clearPromotion()"
+                  data-testid="content-promotion-clear"
+                >
+                  {{ 'marketing.content.link.clear' | t }}
+                </button>
+              </p>
+            } @else {
+              <q-combobox
+                [query]="promotionQuery()"
+                [options]="promotionOptions()"
+                [placeholder]="'marketing.content.link.searchPromotion' | t"
+                [ariaLabel]="'marketing.content.editor.promotion' | t"
+                (queryChange)="promotionQuery.set($event)"
+                (optionSelected)="choosePromotion($event)"
+              />
+            }
+            <p class="q-caption editor__note">{{ 'marketing.content.editor.promotionHint' | t }}</p>
+          </div>
+        }
+
+        @if (kind() === 'VACANCY') {
+          <label class="editor__field">
+            <span class="q-caption">{{ 'marketing.content.editor.branch' | t }}</span>
+            <select
+              class="editor__input"
+              [value]="locationId() ?? ''"
+              [disabled]="archived()"
+              (change)="setLocation($any($event.target).value)"
+              data-testid="content-branch"
+            >
+              <option value="" [selected]="locationId() === null">
+                {{ 'marketing.content.editor.branchNone' | t }}
+              </option>
+              @for (location of refs.locations(); track location.id) {
+                <option [value]="location.id" [selected]="location.id === locationId()">
+                  {{ location.label }}
+                </option>
+              }
+            </select>
+          </label>
+        }
+
+        <div class="editor__languages">
+          <span class="q-caption">{{ 'marketing.content.editor.language' | t }}</span>
+          <q-localized-field-group
+            [locales]="locales()"
+            [activeLocale]="activeLocale()"
+            [defaultLocale]="defaultLocale()"
+            [completeness]="completeness()"
+            (activeLocaleChange)="activeLocale.set($event)"
+          />
+        </div>
+
+        @if (missingTitle().length > 0) {
+          <p class="q-caption editor__error" role="alert" data-testid="content-missing-title">
+            {{
+              'marketing.content.editor.needsTitle' | t: { languages: missingTitle().join(', ') }
+            }}
+          </p>
+        }
+
+        @if (cardKind(); as card) {
+          <q-content-card-fields
+            [kind]="card"
+            [document]="document()"
+            [locale]="activeLocale()"
+            [allowVideo]="videoEntitled()"
+            [disabled]="archived()"
+            (documentChange)="document.set($event)"
+          />
+        }
+        @if (kind() === 'PRODUCT_GROUP') {
+          <q-content-group-fields
+            [document]="document()"
+            [locale]="activeLocale()"
+            [disabled]="archived()"
+            (documentChange)="document.set($event)"
+          />
+        }
+        @if (kind() === 'STORY_GROUP') {
+          <q-content-story-fields
+            [document]="document()"
+            [locale]="activeLocale()"
+            [allowVideo]="videoEntitled()"
+            [disabled]="archived()"
+            (documentChange)="document.set($event)"
+          />
+        }
+        @if (editorialKind(); as editorialKind) {
+          <q-content-editorial-fields
+            [kind]="editorialKind"
+            [document]="document()"
+            [locale]="activeLocale()"
+            [disabled]="archived()"
+            (documentChange)="document.set($event)"
+          />
+        }
+
+        @if (problems().length > 0) {
+          <section class="editor__problems" data-testid="content-problems">
+            <h3 class="q-body-sm">{{ 'marketing.content.editor.problems' | t }}</h3>
+            <ul>
+              @for (problem of problems(); track $index) {
+                <li class="q-body-sm" data-testid="content-problem">
+                  {{ problemSentence(problem) }}
+                  <code class="q-caption editor__path">{{ problem.field }}</code>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+      </div>
+    }
+    @case ('preview') {
+      @if (itemId() !== null) {
+        <q-content-preview
+          [highlightId]="itemId()"
+          [locales]="locales()"
+          [startLocale]="activeLocale()"
+        />
+      }
+      @if (dirty()) {
+        <p class="q-caption editor__note" data-testid="content-preview-unsaved">
+          {{ 'marketing.content.editor.previewUnsaved' | t }}
+        </p>
+      }
+    }
+    @case ('history') {
+      @if (itemId(); as id) {
+        <q-content-history
+          [itemId]="id"
+          [version]="version()"
+          [readOnly]="archived()"
+          (restored)="restored($event)"
+        />
+      }
+    }
+    @case ('stats') {
+      @if (itemId(); as id) {
+        <q-content-stats [itemId]="id" />
+      }
+    }
+  }
+
+  @if (tab() === 'edit') {
+    <footer class="editor__actions">
+      <button
+        type="button"
+        class="editor__button"
+        [disabled]="!canSave() || (!dirty() && !creating())"
+        (click)="save()"
+        data-testid="content-save"
+      >
+        {{ 'marketing.content.editor.save' | t }}
+      </button>
+      @if (!creating() && !archived()) {
+        <button
+          type="button"
+          class="editor__button editor__button--primary"
+          [disabled]="!canSave()"
+          (click)="ask('publish')"
+          data-testid="content-publish"
+        >
+          {{ 'marketing.content.editor.publish' | t }}
+        </button>
+      }
+      @if (canWithdraw()) {
+        <button
+          type="button"
+          class="editor__button"
+          [disabled]="busy()"
+          (click)="ask('withdraw')"
+          data-testid="content-withdraw"
+        >
+          {{ 'marketing.content.editor.withdraw' | t }}
+        </button>
+      }
+      @if (hasDraft() && !archived()) {
+        <button
+          type="button"
+          class="editor__button"
+          [disabled]="busy()"
+          (click)="ask('discard')"
+          data-testid="content-discard"
+        >
+          {{ 'marketing.content.editor.discard' | t }}
+        </button>
+      }
+      @if (!creating() && !archived()) {
+        <button
+          type="button"
+          class="editor__button editor__button--danger"
+          [disabled]="busy()"
+          (click)="ask('archive')"
+          data-testid="content-archive"
+        >
+          {{ 'marketing.content.editor.archive' | t }}
+        </button>
+      }
+    </footer>
+  }
+
+  @if (confirmTexts(); as texts) {
+    <q-confirm-dialog
+      [title]="texts.title | t"
+      [body]="texts.body | t"
+      [confirmLabel]="texts.action | t"
+      [cancelLabel]="'marketing.dialog.cancel' | t"
+      [tone]="confirm() === 'archive' || confirm() === 'discard' ? 'destructive' : 'default'"
+      [busy]="busy()"
+      (confirm)="confirmed()"
+      (cancel)="cancelAsk()"
+    />
+  }
+</section>

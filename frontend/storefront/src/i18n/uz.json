@@ -80,6 +80,42 @@
     "recentSearches": "Oxirgi qidiruvlar",
     "modeUnavailableToday": "Hozircha mavjud emas"
   },
+  "content": {
+    "carousel": "Takliflar",
+    "promoGrid": "Aksiyalar",
+    "stories": "Hikoyalar",
+    "storyOpen": "Hikoyani ochish: {{title}}",
+    "storyClose": "Hikoyani yopish",
+    "storyNext": "Keyingi slayd",
+    "storyPrevious": "Oldingi slayd",
+    "storySlide": "{{current}}-slayd, jami {{total}} ta",
+    "learnMore": "Batafsil",
+    "open": "Ochish",
+    "popupClose": "Yopish",
+    "editorialSection": "Biz haqimizda ko'proq",
+    "editorial": {
+      "news": "Yangiliklar",
+      "gallery": "Galereya",
+      "recipes": "Retseptlar",
+      "careers": "Vakansiyalar"
+    },
+    "unavailable": "Bu sahifa mavjud emas.",
+    "empty": "Hozircha hech narsa yo'q.",
+    "loadMore": "Yana ko'rsatish",
+    "published": "{{date}} sanasida e'lon qilingan",
+    "employment": {
+      "FULL_TIME": "To'liq stavka",
+      "PART_TIME": "Yarim stavka",
+      "SHIFT": "Smenali ish",
+      "INTERNSHIP": "Stajirovka"
+    },
+    "vacancy": {
+      "employment": "Bandlik",
+      "branch": "Filial",
+      "contact": "Qanday murojaat qilish"
+    },
+    "gallery": "Suratlar"
+  },
   "cart": {
     "title": "Savat",
     "clearCart": "Savatni tozalash",

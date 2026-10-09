@@ -67,6 +67,37 @@
     "telegramExpiryNotice": "This link works once and expires soon — open it promptly.",
     "telegramCancel": "Use phone number instead"
   },
+  "content": {
+    "carouselLabel": "Offers and news",
+    "promoGridLabel": "More offers",
+    "storiesLabel": "Stories",
+    "storyOpen": "Open story: {{title}}",
+    "storyClose": "Close story",
+    "storyNext": "Next slide",
+    "storyPrevious": "Previous slide",
+    "storyProgress": "Slide {{current}} of {{total}}",
+    "openLink": "Learn more",
+    "popupClose": "Close"
+  },
+  "editorial": {
+    "homeLabel": "More from us",
+    "news": "News",
+    "gallery": "Gallery",
+    "recipes": "Recipes",
+    "careers": "Careers",
+    "loadMore": "Show more",
+    "empty": "Nothing here yet",
+    "unavailableTitle": "Not available",
+    "unavailableBody": "This section is not available right now.",
+    "branch": "Branch",
+    "applyHint": "To apply, contact the employer directly",
+    "employment": {
+      "FULL_TIME": "Full time",
+      "PART_TIME": "Part time",
+      "SHIFT": "Shift work",
+      "INTERNSHIP": "Internship"
+    }
+  },
   "home": {
     "delivery": "Delivery",
     "pickup": "Pickup",

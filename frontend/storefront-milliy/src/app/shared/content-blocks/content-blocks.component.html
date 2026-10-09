@@ -1,0 +1,86 @@
+<ng-template #runs let-list>
+  @for (run of list; track $index) {
+    @if (run.link; as link) {
+      <a
+        class="run"
+        [class.is-bold]="run.bold"
+        [class.is-italic]="run.italic"
+        [href]="link.href"
+        [attr.target]="link.external ? '_blank' : null"
+        [attr.rel]="link.external ? 'noopener noreferrer' : null"
+        >{{ run.text }}</a
+      >
+    } @else {
+      <span class="run" [class.is-bold]="run.bold" [class.is-italic]="run.italic">{{
+        run.text
+      }}</span>
+    }
+  }
+</ng-template>
+
+<div class="blocks" data-testid="content-blocks" [attr.lang]="lang()">
+  @for (block of drawn(); track block.key) {
+    @switch (block.type) {
+      @case ('PARAGRAPH') {
+        <p class="blocks__p">
+          <ng-container *ngTemplateOutlet="runs; context: { $implicit: block.runs }" />
+        </p>
+      }
+      @case ('HEADING') {
+        @if (block.level === 3) {
+          <h3 class="blocks__h3">
+            <ng-container *ngTemplateOutlet="runs; context: { $implicit: block.runs }" />
+          </h3>
+        } @else {
+          <h2 class="blocks__h2">
+            <ng-container *ngTemplateOutlet="runs; context: { $implicit: block.runs }" />
+          </h2>
+        }
+      }
+      @case ('QUOTE') {
+        <blockquote class="blocks__quote">
+          <ng-container *ngTemplateOutlet="runs; context: { $implicit: block.runs }" />
+        </blockquote>
+      }
+      @case ('LIST') {
+        @if (block.ordered) {
+          <ol class="blocks__list">
+            @for (item of block.items; track $index) {
+              <li>
+                <ng-container *ngTemplateOutlet="runs; context: { $implicit: item }" />
+              </li>
+            }
+          </ol>
+        } @else {
+          <ul class="blocks__list">
+            @for (item of block.items; track $index) {
+              <li>
+                <ng-container *ngTemplateOutlet="runs; context: { $implicit: item }" />
+              </li>
+            }
+          </ul>
+        }
+      }
+      @case ('IMAGE') {
+        <figure class="blocks__figure">
+          <app-content-media
+            class="blocks__image"
+            [plan]="block.plan"
+            [alt]="block.alt"
+            [aspectRatio]="block.aspect"
+            sizes="(min-width: 768px) 720px, 100vw"
+            (failed)="dropImage(block.key)"
+          />
+          @if (block.caption) {
+            <figcaption class="blocks__caption">
+              <ng-container *ngTemplateOutlet="runs; context: { $implicit: block.caption }" />
+            </figcaption>
+          }
+        </figure>
+      }
+      @case ('DIVIDER') {
+        <hr class="blocks__divider" />
+      }
+    }
+  }
+</div>

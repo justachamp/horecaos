@@ -190,3 +190,33 @@ describe('app.routes: the initial bundle carries the home page and nothing else'
     expect(eagerComponentPaths(routes)).toEqual(['/home']);
   });
 });
+
+describe('app.routes: the editorial pages (ADR 0157, Release 5)', () => {
+  beforeEach(() => localStorage.clear());
+
+  it.each(['news', 'gallery', 'recipes', 'careers'])(
+    'an anonymous visitor reaches /%s and one of its documents directly',
+    async (kind) => {
+      const { router } = setUp();
+
+      expect(await router.navigateByUrl(`/${kind}`)).toBe(true);
+      expect(router.url).toBe(`/${kind}`);
+      expect(await router.navigateByUrl(`/${kind}/some-slug`)).toBe(true);
+      expect(router.url).toBe(`/${kind}/some-slug`);
+    },
+  );
+
+  it.each(['news', 'gallery', 'recipes', 'careers'])(
+    'the %s routes are lazy and carry their kind',
+    (kind) => {
+      for (const path of [kind, `${kind}/:slug`]) {
+        const route = routes.find((r) => r.path === path);
+        expect(route, path).toBeDefined();
+        expect(route?.loadComponent, `${path} is lazy`).toBeTypeOf('function');
+        expect(route?.component, `${path} is not in the initial chunk`).toBeUndefined();
+        expect(route?.data?.['kind']).toBe(kind);
+        expect(route?.canActivate).toBeUndefined();
+      }
+    },
+  );
+});

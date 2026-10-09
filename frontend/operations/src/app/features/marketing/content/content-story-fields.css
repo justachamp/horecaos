@@ -1,0 +1,57 @@
+.story-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.story-fields__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.story-fields__input {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.story-fields__slides {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.story-fields__slide {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.story-fields__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.story-fields__add,
+.story-fields__remove {
+  align-self: flex-start;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.story-fields__remove {
+  color: var(--q-error-text);
+}

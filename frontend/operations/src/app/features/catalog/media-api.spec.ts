@@ -42,3 +42,39 @@ describe('MediaApi.downloadUrl', () => {
     expect(value).toBe('https://cdn.example/original-thumb.jpg');
   });
 });
+
+describe('MediaApi.requestUpload (ADR 0157: a content creative asks for the HERO rendition)', () => {
+  let api: MediaApi;
+  let http: HttpTestingController;
+  const file = new File([new Uint8Array(8)], 'banner.jpg', { type: 'image/jpeg' });
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting(), MediaApi],
+    });
+    api = TestBed.inject(MediaApi);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  it('sends no renditionProfile for a product photo, so it is rendered the three standard sizes', () => {
+    api.requestUpload('t1', 'BRAND', 'b1', 'PUBLIC', file).subscribe();
+
+    const request = http.expectOne((r) => r.url.endsWith('/media/assets/upload-requests'));
+    expect(request.request.body).not.toHaveProperty('renditionProfile');
+    request.flush({});
+  });
+
+  it('sends CREATIVE when the content editor asks for it', () => {
+    api.requestUpload('t1', 'BRAND', 'b1', 'PUBLIC', file, 'CREATIVE').subscribe();
+
+    const request = http.expectOne((r) => r.url.endsWith('/media/assets/upload-requests'));
+    expect(request.request.body).toMatchObject({
+      ownerScope: 'BRAND',
+      ownerId: 'b1',
+      visibility: 'PUBLIC',
+      renditionProfile: 'CREATIVE',
+      contentType: 'image/jpeg',
+    });
+    request.flush({});
+  });
+});

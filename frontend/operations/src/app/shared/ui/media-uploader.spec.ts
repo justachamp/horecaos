@@ -1,7 +1,17 @@
 import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { MediaUploader, mediaUploaderRejectionMessageKey } from './media-uploader';
+import {
+  MEDIA_UPLOADER_VIDEO,
+  MediaUploader,
+  MediaUploaderVideo,
+  VIDEO_LIMITS,
+  VideoMetadata,
+  VideoSelection,
+  exportSizeFor,
+  mediaUploaderRejectionMessageKey,
+  videoRejectionReason,
+} from './media-uploader';
 
 function render(): ReturnType<typeof TestBed.createComponent<MediaUploader>> {
   const fixture = TestBed.createComponent(MediaUploader);
@@ -186,5 +196,274 @@ describe('mediaUploaderRejectionMessageKey (row X.12)', () => {
     expect(mediaUploaderRejectionMessageKey('something-unrecognized')).toBe(
       'ui.mediaUploader.unsupportedType',
     );
+  });
+});
+
+describe('exportSizeFor (ADR 0157, Decision 11: a per-use export edge)', () => {
+  it('exports a 3:1 banner at 1600 px on the long edge, and the old 960 for a product photo', () => {
+    expect(exportSizeFor('3:1', 1600)).toEqual({ width: 1600, height: 533 });
+    expect(exportSizeFor('3:2', 960)).toEqual({ width: 960, height: 640 });
+    expect(exportSizeFor('1:1', 960)).toEqual({ width: 960, height: 960 });
+  });
+
+  it('puts the long edge on the height for a portrait ratio', () => {
+    expect(exportSizeFor('9:16', 960)).toEqual({ width: 540, height: 960 });
+  });
+});
+
+describe('MediaUploader export edge', () => {
+  beforeEach(() => TestBed.configureTestingModule({}));
+
+  it('defaults to 960 px so every existing caller exports as before', () => {
+    const fixture = render();
+    expect(fixture.componentInstance.exportEdgePx()).toBe(960);
+  });
+
+  it('takes the long edge the caller names, and exports the chosen ratio on it', () => {
+    const fixture = render();
+    fixture.componentRef.setInput('exportEdgePx', 1600);
+    fixture.componentRef.setInput('aspectRatios', ['3:1']);
+    fixture.componentInstance['selectRatio']('3:1');
+
+    expect(fixture.componentInstance.exportEdgePx()).toBe(1600);
+    expect(fixture.componentInstance['exportDimensions']()).toEqual({ width: 1600, height: 533 });
+  });
+
+  it('exports at 960 for a caller that names nothing', () => {
+    const fixture = render();
+    fixture.componentInstance['selectRatio']('3:2');
+
+    expect(fixture.componentInstance['exportDimensions']()).toEqual({ width: 960, height: 640 });
+  });
+});
+
+describe('videoRejectionReason (ADR 0157, Decision 8: the platform caps, checked before any upload)', () => {
+  const ok: VideoMetadata = { durationMs: 8_000, widthPx: 1280, heightPx: 720 };
+  const mp4 = { type: 'video/mp4', size: 5 * 1024 * 1024 };
+
+  it('takes an MP4 inside every cap', () => {
+    expect(videoRejectionReason(mp4, ok)).toBeNull();
+    expect(
+      videoRejectionReason(
+        { type: 'video/mp4', size: VIDEO_LIMITS.maxBytes },
+        { durationMs: VIDEO_LIMITS.maxDurationMs, widthPx: 1920, heightPx: 480 },
+      ),
+    ).toBeNull();
+  });
+
+  it.each([
+    ['not an MP4', { type: 'video/webm', size: 1 }, ok, 'videoNotMp4'],
+    ['over 12 MiB', { type: 'video/mp4', size: VIDEO_LIMITS.maxBytes + 1 }, ok, 'videoTooLarge'],
+    ['longer than 20 s', mp4, { ...ok, durationMs: 20_001 }, 'videoTooLong'],
+    ['wider than 1920 px', mp4, { ...ok, widthPx: 1921 }, 'videoDimensions'],
+    ['a short edge under 480 px', mp4, { ...ok, heightPx: 479 }, 'videoDimensions'],
+    ['unreadable', mp4, null, 'videoUnreadable'],
+    ['zero-sized', mp4, { ...ok, widthPx: 0 }, 'videoUnreadable'],
+  ])('refuses a video that is %s with its own reason', (_label, file, metadata, reason) => {
+    expect(videoRejectionReason(file, metadata)).toBe(reason);
+  });
+
+  it('maps every video reason to its own sentence, and the poster failure too', () => {
+    for (const reason of [
+      'videoNotMp4',
+      'videoTooLarge',
+      'videoTooLong',
+      'videoDimensions',
+      'videoUnreadable',
+      'posterFailed',
+    ]) {
+      expect(mediaUploaderRejectionMessageKey(reason)).toBe(`ui.mediaUploader.${reason}`);
+    }
+  });
+});
+
+/** Lets the uploader's own unmanaged promise chain (probe, then the poster step) run to its end. */
+function settle(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+describe('MediaUploader video mode (ADR 0157, Release 3)', () => {
+  let metadata: VideoMetadata | null;
+  let posterBlob: Blob | null;
+  const fakeVideo: MediaUploaderVideo = {
+    probe: () => Promise.resolve(metadata),
+    capture: () => Promise.resolve(posterBlob),
+  };
+
+  function renderVideo(): ReturnType<typeof TestBed.createComponent<MediaUploader>> {
+    TestBed.configureTestingModule({
+      providers: [{ provide: MEDIA_UPLOADER_VIDEO, useValue: fakeVideo }],
+    });
+    const fixture = TestBed.createComponent(MediaUploader);
+    fixture.componentRef.setInput('allowVideo', true);
+    fixture.componentRef.setInput('accept', 'image/jpeg,image/png,video/mp4');
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  beforeEach(() => {
+    metadata = { durationMs: 8_000, widthPx: 1280, heightPx: 720 };
+    posterBlob = new Blob(['jpeg'], { type: 'image/jpeg' });
+    URL.createObjectURL = () => 'blob:fake';
+    URL.revokeObjectURL = () => undefined;
+  });
+
+  it('takes an MP4 inside the caps to the poster step instead of refusing it', async () => {
+    const fixture = renderVideo();
+    const reasons: string[] = [];
+    fixture.componentInstance.rejected.subscribe((r) => reasons.push(r));
+    const video = new File(['x'], 'clip.mp4', { type: 'video/mp4' });
+
+    fixture.componentInstance['onFileInput'](fileList([video]));
+    await settle();
+    fixture.detectChanges();
+
+    expect(reasons).toEqual([]);
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="uploader-poster-step"]'),
+    ).toBeTruthy();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="uploader-poster-scrub"]'),
+    ).toBeTruthy();
+  });
+
+  it.each([
+    [
+      'a clip longer than 20 s',
+      { durationMs: 21_000, widthPx: 1280, heightPx: 720 },
+      'videoTooLong',
+    ],
+    [
+      'a clip wider than 1920 px',
+      { durationMs: 5_000, widthPx: 3840, heightPx: 2160 },
+      'videoDimensions',
+    ],
+    ['a clip the browser cannot read', null, 'videoUnreadable'],
+  ])('refuses %s before any request, naming the cap', async (_label, probed, reason) => {
+    metadata = probed;
+    const fixture = renderVideo();
+    const reasons: string[] = [];
+    const selections: VideoSelection[] = [];
+    fixture.componentInstance.rejected.subscribe((r) => reasons.push(r));
+    fixture.componentInstance.videoReady.subscribe((v) => selections.push(v));
+
+    fixture.componentInstance['onFileInput'](
+      fileList([new File(['x'], 'clip.mp4', { type: 'video/mp4' })]),
+    );
+    await settle();
+    fixture.detectChanges();
+
+    expect(reasons).toEqual([reason]);
+    expect(selections).toEqual([]);
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="uploader-poster-step"]'),
+    ).toBeNull();
+  });
+
+  it('refuses a WebM and a 13 MB file by their own reasons without reading either', async () => {
+    const fixture = renderVideo();
+    fixture.componentRef.setInput('accept', 'image/jpeg,video/mp4,video/webm');
+    const reasons: string[] = [];
+    fixture.componentInstance.rejected.subscribe((r) => reasons.push(r));
+
+    fixture.componentInstance['onFileInput'](
+      fileList([new File(['x'], 'a.webm', { type: 'video/webm' })]),
+    );
+    await settle();
+    const big = new File([new Uint8Array(VIDEO_LIMITS.maxBytes + 1)], 'big.mp4', {
+      type: 'video/mp4',
+    });
+    fixture.componentInstance['onFileInput'](fileList([big]));
+    await settle();
+
+    expect(reasons).toEqual(['videoNotMp4', 'videoTooLarge']);
+  });
+
+  it('hands back the untouched video and the poster the operator confirmed', async () => {
+    const fixture = renderVideo();
+    const selections: VideoSelection[] = [];
+    fixture.componentInstance.videoReady.subscribe((v) => selections.push(v));
+    const video = new File(['x'], 'clip.mp4', { type: 'video/mp4' });
+    fixture.componentInstance['onFileInput'](fileList([video]));
+    await settle();
+    fixture.detectChanges();
+
+    (
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="uploader-poster-confirm"]',
+      ) as HTMLButtonElement
+    ).click();
+    await settle();
+    fixture.detectChanges();
+
+    expect(selections).toHaveLength(1);
+    expect(selections[0].video).toBe(video);
+    expect(selections[0].poster.type).toBe('image/jpeg');
+    expect(selections[0].poster.name).toBe('clip.jpg');
+    expect(selections[0].metadata).toEqual(metadata);
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="uploader-poster-step"]'),
+    ).toBeNull();
+  });
+
+  it('says so, and keeps the video out of the upload, when no poster frame can be captured', async () => {
+    posterBlob = null;
+    const fixture = renderVideo();
+    const reasons: string[] = [];
+    const selections: VideoSelection[] = [];
+    fixture.componentInstance.rejected.subscribe((r) => reasons.push(r));
+    fixture.componentInstance.videoReady.subscribe((v) => selections.push(v));
+    fixture.componentInstance['onFileInput'](
+      fileList([new File(['x'], 'clip.mp4', { type: 'video/mp4' })]),
+    );
+    await settle();
+    fixture.detectChanges();
+
+    (
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="uploader-poster-confirm"]',
+      ) as HTMLButtonElement
+    ).click();
+    await settle();
+
+    expect(reasons).toEqual(['posterFailed']);
+    expect(selections).toEqual([]);
+  });
+
+  it('cancel leaves the poster step without emitting anything', async () => {
+    const fixture = renderVideo();
+    const selections: VideoSelection[] = [];
+    fixture.componentInstance.videoReady.subscribe((v) => selections.push(v));
+    fixture.componentInstance['onFileInput'](
+      fileList([new File(['x'], 'clip.mp4', { type: 'video/mp4' })]),
+    );
+    await settle();
+    fixture.detectChanges();
+
+    (
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="uploader-poster-cancel"]',
+      ) as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+
+    expect(selections).toEqual([]);
+    expect(fixture.componentInstance['posterStep']()).toBe(false);
+  });
+
+  it('keeps refusing a video for a caller that has not asked for video mode', () => {
+    TestBed.configureTestingModule({
+      providers: [{ provide: MEDIA_UPLOADER_VIDEO, useValue: fakeVideo }],
+    });
+    const fixture = TestBed.createComponent(MediaUploader);
+    fixture.detectChanges();
+    const reasons: string[] = [];
+    fixture.componentInstance.rejected.subscribe((r) => reasons.push(r));
+
+    fixture.componentInstance['onFileInput'](
+      fileList([new File(['x'], 'clip.mp4', { type: 'video/mp4' })]),
+    );
+
+    expect(reasons).toEqual(['videoNotSupported']);
   });
 });

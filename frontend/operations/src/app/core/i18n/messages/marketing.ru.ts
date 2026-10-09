@@ -1021,4 +1021,391 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.campaign.recipients.deliveryHint':
     'Доставка — это сведения от шлюза, а не обещание: «передано оператору» значит, что сообщение принято и больше ничего не сообщалось.',
   'marketing.campaign.recipients.segments': 'Тарифицировано сегментов: {count}',
+
+  'marketing.content.kind.BANNER': 'Баннер',
+  'marketing.content.kind.PROMO_CARD': 'Промо-карточка',
+  'marketing.content.kind.PRODUCT_GROUP': 'Группа блюд',
+  'marketing.content.kind.STORY_GROUP': 'История',
+  'marketing.content.kind.POPUP': 'Всплывающее окно',
+  'marketing.content.kind.NEWS': 'Новость',
+  'marketing.content.kind.GALLERY_ALBUM': 'Фотоальбом',
+  'marketing.content.kind.RECIPE': 'Рецепт',
+  'marketing.content.kind.VACANCY': 'Вакансия',
+  'marketing.content.placement.HOME_CAROUSEL': 'Карусель на главной',
+  'marketing.content.placement.HOME_GROUPS': 'Группы на главной',
+  'marketing.content.placement.STORY_RAIL': 'Истории',
+  'marketing.content.placement.PROMO_GRID': 'Сетка акций',
+  'marketing.content.placement.ENTRY_MODAL': 'Окно при входе',
+  'marketing.content.state.DRAFT': 'Черновик',
+  'marketing.content.state.PUBLISHED': 'Опубликовано',
+  'marketing.content.state.WITHDRAWN': 'Снято',
+  'marketing.content.state.ARCHIVED': 'В архиве',
+  'marketing.content.visibility.LIVE': 'Показывается',
+  'marketing.content.visibility.SCHEDULED': 'По расписанию',
+  'marketing.content.visibility.EXPIRED': 'Завершено',
+  'marketing.content.unpublishedChanges': 'Есть неопубликованные правки',
+  'marketing.content.problemsCount': 'Исправить: {count}',
+  'marketing.content.problem.CONTENT_DEFAULT_LOCALE_MISSING':
+    'Перед публикацией напишите заголовок на языке бренда по умолчанию',
+  'marketing.content.problem.CONTENT_LOCALE_INCOMPLETE':
+    'Для этого бренда нужно заполнить все языки',
+  'marketing.content.problem.CONTENT_MEDIA_NOT_DISPLAYABLE':
+    'Изображения нет, оно ещё проверяется или не публичное',
+  'marketing.content.problem.CONTENT_MEDIA_ASPECT_MISMATCH':
+    'Изображение не той формы или слишком маленькое для этого места',
+  'marketing.content.problem.CONTENT_TARGET_NOT_FOUND':
+    'Блюда или категории, на которые ведёт ссылка, нет в опубликованном меню бренда',
+  'marketing.content.problem.CONTENT_PROMOTION_NOT_FOUND':
+    'Акции, на которую ведёт ссылка, не существует',
+  'marketing.content.problem.CONTENT_LINK_HOST_NOT_ALLOWED':
+    'Ссылка ведёт на сайт, которого нет в списке разрешённых',
+  'marketing.content.problem.CONTENT_CHANNEL_NOT_A_CONTENT_SURFACE':
+    'Выбранный канал не умеет показывать контент',
+  'marketing.content.problem.CONTENT_PLACEMENT_FULL':
+    'Это место заполнено — сначала снимите что-нибудь',
+  'marketing.content.problem.CONTENT_NOTHING_TO_PUBLISH':
+    'С опубликованной версии ничего не изменилось',
+  'marketing.content.problem.CONTENT_VIDEO_LIMIT': 'У бренда уже показывается максимум видео',
+  'marketing.content.problem.CONTENT_POSTER_REQUIRED': 'Для видео нужна обложка',
+  'marketing.content.problem.CONTENT_REVISION_MEDIA_RELEASED':
+    'Изображения той версии освобождены, восстановить её нельзя',
+  'marketing.content.problem.CONTENT_KIND_NOT_ENABLED': 'Этот вид контента не включён для бренда',
+  'marketing.content.problem.CONTENT_PROMOTION_NOT_LIVE':
+    'Акция, к которой привязана карточка, не действует, поэтому карточка скрыта',
+  'marketing.content.problem.CONTENT_MEDIA_NOT_RENDERED':
+    'Изображение ещё обрабатывается, поэтому элемент пока не показывается',
+  'marketing.content.problem.other': 'Требует внимания: {detail}',
+
+  'marketing.content.media.none': 'Изображения пока нет.',
+  'marketing.content.media.shapeHint': 'Пропорции {ratio}, не уже {width} px.',
+  'marketing.content.media.noPreview': 'Предпросмотр не готов',
+  'marketing.content.media.video': 'Видео',
+  'marketing.content.media.remove': 'Убрать',
+  'marketing.content.media.processing': 'Загружаем и проверяем файл…',
+  'marketing.content.media.imageRefused':
+    'Платформа отклонила это изображение. Используйте JPEG, PNG или WebP до 10 МБ.',
+  'marketing.content.media.notReady': 'Файл загружен, но ещё не проверен. Попробуйте через минуту.',
+  'marketing.content.media.failed': 'Не удалось загрузить файл. Попробуйте ещё раз.',
+
+  'marketing.content.link.label': 'При нажатии вести',
+  'marketing.content.link.type.NONE': 'Никуда',
+  'marketing.content.link.type.PRODUCT': 'К блюду',
+  'marketing.content.link.type.CATEGORY': 'В категорию',
+  'marketing.content.link.type.CART': 'В корзину',
+  'marketing.content.link.type.PROMOTION': 'К акции',
+  'marketing.content.link.type.EXTERNAL': 'На веб-адрес',
+  'marketing.content.link.searchProduct': 'Найти блюдо',
+  'marketing.content.link.searchCategory': 'Найти категорию',
+  'marketing.content.link.searchPromotion': 'Найти действующую акцию',
+  'marketing.content.link.chosen': 'Выбрано: {label}',
+  'marketing.content.link.clear': 'Изменить',
+  'marketing.content.link.url': 'Адрес (только https)',
+  'marketing.content.link.notHttps': 'Допускаются только адреса https.',
+  'marketing.content.link.hostNotAllowed':
+    'Этого сайта пока нет в списке разрешённых ссылок. Добавьте его на вкладке «Ссылки» до публикации.',
+
+  'marketing.content.card.title': 'Заголовок',
+  'marketing.content.card.subtitle': 'Подзаголовок (необязательно)',
+  'marketing.content.card.body': 'Текст (необязательно)',
+  'marketing.content.card.cta': 'Текст кнопки (необязательно)',
+  'marketing.content.card.alt': 'Описание изображения для экранных дикторов (необязательно)',
+  'marketing.content.card.image': 'Изображение или видео',
+  'marketing.content.card.localeImage':
+    'Другое изображение для этого языка (если на картинке есть текст)',
+  'marketing.content.popup.settings': 'Когда появляется',
+  'marketing.content.popup.delay': 'Показать через (секунд)',
+  'marketing.content.popup.dailyWindow': 'Только в определённые часы каждый день',
+  'marketing.content.popup.from': 'С',
+  'marketing.content.popup.until': 'До',
+  'marketing.content.popup.dailyHint':
+    'Определяется по часам посетителя. Если конец раньше начала, окно переходит через полночь.',
+  'marketing.content.popup.cap': 'Как часто одно устройство его видит',
+  'marketing.content.popup.cap.ONCE_EVER': 'Один раз, навсегда',
+  'marketing.content.popup.cap.ONCE_PER_DAY': 'Раз в день',
+  'marketing.content.popup.cap.EVERY_N_DAYS': 'Раз в несколько дней',
+  'marketing.content.popup.capDays': 'Дней между показами',
+  'marketing.content.popup.capHint':
+    'Каждое устройство считает само — платформа не определяет посетителей. После правки и новой публикации счёт начинается заново.',
+
+  'marketing.content.group.title': 'Название группы',
+  'marketing.content.group.mode': 'Что показывает группа',
+  'marketing.content.group.manual': 'Блюда, которые я выберу',
+  'marketing.content.group.byCategory': 'Категорию целиком',
+  'marketing.content.group.members': 'Блюд: {count} из {max}',
+  'marketing.content.group.searchDish': 'Найти блюдо, чтобы добавить',
+  'marketing.content.group.order': 'Порядок на главном экране',
+  'marketing.content.group.skipHint':
+    'Блюдо, которого больше нет в меню, молча пропускается; остановленное блюдо — забота меню.',
+  'marketing.content.group.sort': 'Порядок блюд',
+  'marketing.content.group.sort.MENU_ORDER': 'Как в меню',
+  'marketing.content.group.sort.NEWEST': 'Сначала новые',
+  'marketing.content.group.limit': 'Показывать не больше',
+
+  'marketing.content.story.title': 'Название истории',
+  'marketing.content.story.avatar': 'Круглая картинка в ленте историй',
+  'marketing.content.story.slides': 'Слайдов: {count} из {max}',
+  'marketing.content.story.slideLabel': 'Слайд {n}',
+  'marketing.content.story.addSlide': 'Добавить слайд',
+  'marketing.content.story.removeSlide': 'Удалить этот слайд',
+  'marketing.content.story.slideMedia': 'Картинка или видео слайда',
+  'marketing.content.story.duration': 'Показывается (секунд)',
+  'marketing.content.story.caption': 'Подпись (необязательно)',
+
+  'marketing.content.blocks.text': 'Текст',
+  'marketing.content.blocks.bold': 'Жирный',
+  'marketing.content.blocks.italic': 'Курсив',
+  'marketing.content.blocks.link': 'Ссылка',
+  'marketing.content.blocks.linkAddress': 'Адрес ссылки (https, tel: или mailto:)',
+  'marketing.content.blocks.linkRefused': 'Допускаются только ссылки https, tel: и mailto:.',
+  'marketing.content.blocks.addRun': 'Добавить фрагмент',
+  'marketing.content.blocks.removeRun': 'Убрать фрагмент',
+  'marketing.content.blocks.blockType': 'Тип блока',
+  'marketing.content.blocks.type.PARAGRAPH': 'Абзац',
+  'marketing.content.blocks.type.HEADING': 'Заголовок',
+  'marketing.content.blocks.type.QUOTE': 'Цитата',
+  'marketing.content.blocks.type.LIST': 'Список',
+  'marketing.content.blocks.type.IMAGE': 'Изображение',
+  'marketing.content.blocks.type.DIVIDER': 'Разделитель',
+  'marketing.content.blocks.headingLevel': 'Уровень заголовка',
+  'marketing.content.blocks.level2': 'Заголовок',
+  'marketing.content.blocks.level3': 'Подзаголовок',
+  'marketing.content.blocks.ordered': 'Нумерованный',
+  'marketing.content.blocks.moveUp': 'Переместить блок вверх',
+  'marketing.content.blocks.moveDown': 'Переместить блок вниз',
+  'marketing.content.blocks.removeBlock': 'Удалить блок',
+  'marketing.content.blocks.addBlock': 'Добавить блок',
+  'marketing.content.blocks.addItem': 'Добавить пункт',
+  'marketing.content.blocks.removeItem': 'Удалить пункт',
+  'marketing.content.blocks.caption': 'Подпись',
+  'marketing.content.blocks.imageNone': 'Изображения пока нет. Выберите его.',
+  'marketing.content.blocks.imageUploaded': 'Изображение добавлено',
+  'marketing.content.blocks.imageFailed': 'Не удалось загрузить изображение.',
+  'marketing.content.blocks.divider': 'Разделитель',
+  'marketing.content.blocks.problem.TOO_MANY_BLOCKS': 'В тексте не больше 200 блоков.',
+  'marketing.content.blocks.problem.TOO_MANY_RUNS': 'Блок {block}: не больше 40 фрагментов текста.',
+  'marketing.content.blocks.problem.TOO_MANY_ITEMS': 'Блок {block}: не больше 50 пунктов.',
+  'marketing.content.blocks.problem.TEXT_TOO_LONG': 'В тексте не больше 50 000 символов.',
+  'marketing.content.blocks.problem.RUN_TOO_LONG':
+    'Блок {block}: фрагмент текста длиннее 5 000 символов.',
+  'marketing.content.blocks.problem.FORBIDDEN_CHARACTER':
+    'Блок {block}: содержит недопустимый управляющий символ или символ направления текста.',
+  'marketing.content.blocks.problem.HREF_NOT_ALLOWED':
+    'Блок {block}: ссылка должна быть https, tel: или mailto:.',
+  'marketing.content.blocks.problem.EMPTY_LIST': 'Блок {block}: в списке нужен хотя бы один пункт.',
+  'marketing.content.blocks.problem.IMAGE_WITHOUT_ASSET': 'Блок {block}: выберите изображение.',
+
+  'marketing.content.editorial.title': 'Заголовок',
+  'marketing.content.editorial.summary': 'Краткое описание (необязательно)',
+  'marketing.content.editorial.cover': 'Обложка',
+  'marketing.content.editorial.body': 'Текст',
+  'marketing.content.vacancy.legend': 'Вакансия',
+  'marketing.content.vacancy.employment': 'Тип занятости',
+  'marketing.content.vacancy.employment.FULL_TIME': 'Полная занятость',
+  'marketing.content.vacancy.employment.PART_TIME': 'Неполная занятость',
+  'marketing.content.vacancy.employment.SHIFT': 'Сменная работа',
+  'marketing.content.vacancy.employment.INTERNSHIP': 'Стажировка',
+  'marketing.content.vacancy.applyType': 'Как связаться',
+  'marketing.content.vacancy.apply.PHONE': 'Номер телефона',
+  'marketing.content.vacancy.apply.TELEGRAM': 'Адрес в Telegram (t.me/…)',
+  'marketing.content.vacancy.apply.URL': 'Веб-адрес (https)',
+  'marketing.content.vacancy.apply.EMAIL': 'Адрес электронной почты',
+  'marketing.content.vacancy.applyValue': 'Контакт для публикации',
+  'marketing.content.vacancy.noApplicants':
+    'Это только объявление: у платформы нет формы отклика, и данные о кандидатах она не хранит. Кандидаты связываются с вами по указанному контакту.',
+  'marketing.content.album.images': 'Фото: {count} из {max}',
+  'marketing.content.album.imageLabel': 'Фото {n}',
+  'marketing.content.album.add': 'Добавить фото',
+  'marketing.content.album.caption': 'Подпись на этом языке (необязательно)',
+  'marketing.content.album.remove': 'Убрать это фото',
+
+  'marketing.content.preview.channel': 'Канал',
+  'marketing.content.preview.locale': 'Язык',
+  'marketing.content.preview.day': 'На дату (необязательно)',
+  'marketing.content.preview.refresh': 'Обновить',
+  'marketing.content.preview.noChannel':
+    'Пока ни один канал не умеет показывать контент, поэтому предпросмотр пуст.',
+  'marketing.content.preview.failed': 'Не удалось собрать предпросмотр.',
+  'marketing.content.preview.loading': 'Собираем предпросмотр…',
+  'marketing.content.preview.absent':
+    'Этого элемента нет в предпросмотре для этого канала, языка и даты: он вне своего окна, на другом канале, привязан к неработающей акции или его изображение ещё проверяется. Если вы только что правили его, сначала сохраните черновик.',
+  'marketing.content.preview.dishes': 'Блюд: {count}',
+  'marketing.content.preview.popupDelay': 'Окно через {seconds} с',
+  'marketing.content.preview.empty': 'На главном экране для этого канала и даты ничего нет.',
+
+  'marketing.content.history.loading': 'Загружаем версии…',
+  'marketing.content.history.empty': 'Ещё не публиковалось, поэтому истории пока нет.',
+  'marketing.content.history.version': 'Версия {n}',
+  'marketing.content.history.againstPrevious': 'Сравнить с предыдущей версией',
+  'marketing.content.history.againstLive': 'Сравнить с действующей версией',
+  'marketing.content.history.publishedBy': 'Опубликовал(а) {who}, {when}',
+  'marketing.content.history.noChange': 'Различий нет.',
+  'marketing.content.history.restore': 'Вернуть эту версию в черновик',
+  'marketing.content.history.restoreHint':
+    'Это лишь заполнит черновик. Клиенты ничего не увидят, пока вы не опубликуете.',
+  'marketing.content.history.failed': 'Не удалось прочитать историю.',
+
+  'marketing.content.stats.clientReported':
+    'Присылается устройствами посетителей. Эти числа может накрутить кто угодно, посетитель не определяется, и в отчётах они не используются — считайте их подсказкой, а не измерением.',
+  'marketing.content.stats.loading': 'Загружаем счётчики…',
+  'marketing.content.stats.failed': 'Не удалось прочитать счётчики.',
+  'marketing.content.stats.window': 'Последние дни: {range}',
+  'marketing.content.stats.empty': 'Пока ничего не передано.',
+  'marketing.content.stats.version': 'Версия',
+  'marketing.content.stats.impressions': 'Показы',
+  'marketing.content.stats.clicks': 'Нажатия',
+  'marketing.content.stats.dismissals': 'Закрыто',
+  'marketing.content.stats.completions': 'Досмотрено',
+
+  'marketing.content.editor.new': 'Новый элемент: {kind}',
+  'marketing.content.editor.unsaved': 'Не сохранено',
+  'marketing.content.editor.close': 'Закрыть редактор',
+  'marketing.content.editor.stale':
+    'Пока вы редактировали, этот элемент изменил кто-то другой. Перезагрузите, чтобы увидеть его версию; несохранённые правки будут заменены.',
+  'marketing.content.editor.reload': 'Перезагрузить',
+  'marketing.content.editor.archivedNote':
+    'Элемент в архиве: его можно только читать, из списков он убран.',
+  'marketing.content.editor.tab.edit': 'Правка',
+  'marketing.content.editor.tab.preview': 'Предпросмотр',
+  'marketing.content.editor.tab.history': 'История',
+  'marketing.content.editor.tab.stats': 'Счётчики',
+  'marketing.content.editor.internalName': 'Внутреннее название (видит только команда)',
+  'marketing.content.editor.slug':
+    'Адрес (строчные буквы, цифры и дефисы; после сохранения не меняется)',
+  'marketing.content.editor.placement': 'Где показывается',
+  'marketing.content.editor.channels': 'Каналы',
+  'marketing.content.editor.channelsHint':
+    'Если ничего не выбрано, показывается на всех каналах, которые умеют показывать контент.',
+  'marketing.content.editor.noChannels':
+    'Пока ни один канал не умеет показывать контент (нужен веб-, мобильный или Telegram-канал).',
+  'marketing.content.editor.schedule': 'Расписание',
+  'marketing.content.editor.schedule.always': 'Всегда',
+  'marketing.content.editor.schedule.between': 'Между двумя датами',
+  'marketing.content.editor.schedule.from': 'С даты и без конца',
+  'marketing.content.editor.schedule.backwards': 'Конец не позже начала.',
+  'marketing.content.editor.schedule.hint':
+    'Целые дни в вашем часовом поясе. Показывается ли элемент, определяется при каждом открытии приложения клиентом, поэтому ночью ничего запускать не нужно.',
+  'marketing.content.editor.promotion': 'Привязать к акции (необязательно)',
+  'marketing.content.editor.promotionHint':
+    'Карточка показывается, только пока акция действует, и берёт даты акции, если своих нет. Платформа сама не добавляет на карточку промокод; если нужен, впишите его вручную.',
+  'marketing.content.editor.branch': 'Филиал (необязательно)',
+  'marketing.content.editor.branchNone': 'Не привязано к филиалу',
+  'marketing.content.editor.language': 'Язык',
+  'marketing.content.editor.needsTitle':
+    'Напишите заголовок на языке: {languages} — или сотрите то, что там набрано.',
+  'marketing.content.editor.problems': 'Что исправить перед публикацией',
+  'marketing.content.editor.previewUnsaved':
+    'Есть несохранённые правки. Предпросмотр показывает последний сохранённый черновик.',
+  'marketing.content.editor.save': 'Сохранить черновик',
+  'marketing.content.editor.publish': 'Опубликовать',
+  'marketing.content.editor.withdraw': 'Снять с показа',
+  'marketing.content.editor.archive': 'В архив',
+  'marketing.content.editor.discard': 'Отбросить черновик',
+  'marketing.content.editor.saved':
+    'Черновик сохранён. Клиенты не увидят его, пока вы не опубликуете.',
+  'marketing.content.editor.published': 'Опубликовано. Клиенты увидят это в течение минуты.',
+  'marketing.content.editor.done': 'Готово.',
+  'marketing.content.editor.restored':
+    'Версия помещена в черновик. Клиенты ничего не увидят, пока вы не опубликуете.',
+  'marketing.content.editor.failed': 'Что-то пошло не так. Попробуйте ещё раз.',
+  'marketing.content.editor.refused': 'Платформа не приняла это. Что исправить — ниже.',
+  'marketing.content.editor.confirm.publish.title': 'Опубликовать?',
+  'marketing.content.editor.confirm.publish.body':
+    'То, что вы видите сейчас, будет сохранено и опубликовано. Клиенты увидят это в течение минуты на заполненных языках.',
+  'marketing.content.editor.confirm.withdraw.title': 'Снять с показа?',
+  'marketing.content.editor.confirm.withdraw.body':
+    'Клиенты перестанут это видеть в течение минуты. Все версии сохраняются, опубликовать можно снова.',
+  'marketing.content.editor.confirm.archive.title': 'Отправить в архив?',
+  'marketing.content.editor.confirm.archive.body':
+    'Элемент уйдёт из списков, а если он показывается — сначала будет снят. Его адрес снова станет свободным.',
+  'marketing.content.editor.confirm.discard.title': 'Отбросить черновик?',
+  'marketing.content.editor.confirm.discard.body':
+    'Опубликованная версия останется как есть; неопубликованные изменения будут потеряны.',
+
+  'marketing.content.list.from': 'с {day}',
+  'marketing.content.list.limit': 'Показывается: {live} из {max} возможных',
+  'marketing.content.list.showArchived': 'Показать архив',
+  'marketing.content.list.hideArchived': 'Назад к списку',
+  'marketing.content.list.new': 'Создать: {kind}',
+  'marketing.content.list.loading': 'Загрузка…',
+  'marketing.content.list.empty': 'Здесь пока ничего нет.',
+  'marketing.content.list.orderHint':
+    'Перетащите, чтобы изменить порядок, или используйте стрелки. Порядок меняется сразу и не создаёт новой версии.',
+  'marketing.content.list.orderMoved':
+    'Пока вы перетаскивали, порядок изменил кто-то другой. Список прочитан заново.',
+  'marketing.content.list.more': 'Показать ещё',
+  'marketing.content.list.discard.title': 'Уйти без сохранения?',
+  'marketing.content.list.discard.body': 'Есть несохранённые изменения. Они будут потеряны.',
+  'marketing.content.list.discard.confirm': 'Уйти',
+  'marketing.content.list.discard.keep': 'Продолжить правку',
+
+  'marketing.content.hosts.title': 'Разрешённые ссылки',
+  'marketing.content.hosts.intro':
+    'Баннер, история или окно могут вести на веб-адрес, только если его сайт есть в этом списке. Подтверждённые адреса ваших каналов в нём всегда; остальное — только после добавления.',
+  'marketing.content.hosts.host': 'Сайт (например, shop.example.uz)',
+  'marketing.content.hosts.reason': 'Зачем (необязательно)',
+  'marketing.content.hosts.add': 'Разрешить этот сайт',
+  'marketing.content.hosts.invalid':
+    'Введите только имя сайта: строчные буквы, цифры, точки и дефисы — без https://, без порта, без *.',
+  'marketing.content.hosts.audited':
+    'Добавление и удаление сайта записывается в журнал аудита как событие безопасности. Ссылка на удалённый из списка сайт перестаёт работать в течение минуты; сам элемент остаётся опубликованным.',
+  'marketing.content.hosts.empty': 'Сайтов пока нет.',
+  'marketing.content.hosts.addedBy': 'добавил(а) {who}',
+  'marketing.content.hosts.fromChannel': 'подтверждённый адрес одного из ваших каналов',
+  'marketing.content.hosts.remove': 'Убрать',
+  'marketing.content.hosts.removeTitle': 'Больше не разрешать {host}?',
+  'marketing.content.hosts.removeBody':
+    'Ссылки на этот сайт перестанут работать в течение минуты. Баннеры, истории и окна с такими ссылками останутся опубликованными, но без ссылки.',
+
+  'marketing.content.policy.title': 'Настройки',
+  'marketing.content.policy.saved': 'Сохранено.',
+  'marketing.content.policy.publishing': 'Публикация',
+  'marketing.content.policy.requireAll': 'Требовать текст на всех языках бренда перед публикацией',
+  'marketing.content.policy.requireAllHint':
+    'По умолчанию обязателен только язык бренда по умолчанию; остальные берут его текст. Эта настройка может только ужесточать публикацию.',
+  'marketing.content.policy.editorial': 'Редакционный контент',
+  'marketing.content.policy.editorialNotEntitled':
+    'Ваш тариф не включает новости, фотоальбомы, рецепты и вакансии. Включает это владелец платформы для арендатора.',
+  'marketing.content.policy.kind.news': 'Новости',
+  'marketing.content.policy.kind.gallery': 'Фотоальбомы',
+  'marketing.content.policy.kind.recipes': 'Рецепты',
+  'marketing.content.policy.kind.vacancies': 'Вакансии',
+  'marketing.content.policy.vacancyNote':
+    'Вакансия — это объявление с одним контактом, который вы решили опубликовать. У платформы нет формы отклика, и данные о кандидатах она не хранит.',
+  'marketing.content.policy.videoOn':
+    'Видео: ваш тариф разрешает видео MP4 в баннерах, карточках, окнах и историях.',
+  'marketing.content.policy.videoOff':
+    'Видео: не входит в ваш тариф. Включает его владелец платформы для арендатора.',
+
+  'marketing.content.health.title': 'Требует внимания',
+  'marketing.content.health.intro':
+    'То, что видят клиенты, но с неполадкой. Приложение уже тихо справилось с каждой: сломанная ссылка стала «никуда», карточка остановленной акции скрыта — ошибок никто не видит, но и задуманного тоже.',
+  'marketing.content.health.ok': 'Всё, что видят клиенты, выглядит так, как вы задумали.',
+  'marketing.content.health.failed': 'Не удалось проверить состояние контента.',
+
+  'marketing.content.page.title': 'Контент',
+  'marketing.content.page.intro':
+    'То, что бренд показывает клиентам рядом с меню: баннеры, промо-карточки, истории и окно при входе на главном экране — а также, если позволяют тариф и настройки, новости, фотоальбомы, рецепты и вакансии. Клиенты ничего не увидят, пока вы не опубликуете.',
+  'marketing.content.page.needsAttention': 'Требуют внимания: {count}',
+  'marketing.content.page.views': 'Списки',
+  'marketing.content.page.tab.items': 'Контент',
+  'marketing.content.page.tab.links': 'Ссылки',
+  'marketing.content.page.tab.settings': 'Настройки',
+  'marketing.content.page.tab.health': 'Состояние',
+
+  'marketing.storefront.title': 'Витрина',
+  'marketing.storefront.intro':
+    'Что показывает главный экран ваших витрин и в каком порядке: группы блюд, карусель и предпросмотр всего экрана. Клиенты ничего не увидят, пока вы не опубликуете.',
+  'marketing.storefront.tab.groups': 'Группы на главной',
+  'marketing.storefront.tab.carousel': 'Карусель предложений',
+  'marketing.storefront.tab.preview': 'Предпросмотр',
+  'marketing.storefront.tab.switcher': 'Переключатель брендов',
+  'marketing.storefront.groups.hint':
+    'Именованные ленты блюд на главном экране: выбранные вручную или целая категория. Порядок здесь — это порядок на экране.',
+  'marketing.storefront.carousel.hint':
+    'Карусель вверху главного экрана общая для баннеров и промо-карточек. Порядок задаётся здесь; писать и публиковать их нужно в разделе «Контент». Она одинакова для всех клиентов — персональное предложение для одного гостя — это отдельное.',
+  'marketing.storefront.carousel.link': 'Открыть «Контент»',
+  'marketing.storefront.switcher.title':
+    'Переключатель брендов и раскладка маркетплейса — не созданы',
+  'marketing.storefront.switcher.body':
+    'Они ждут, пока арендатор не начнёт вести два бренда на одной витрине и не попросит об этом (ADR 0157, релиз 4). До тех пор настраивать нечего, и под это не зарезервировано ни одной настройки.',
 };

@@ -1,0 +1,164 @@
+<div class="preview" data-testid="content-preview">
+  <div class="preview__controls">
+    <label class="preview__field">
+      <span class="q-caption">{{ 'marketing.content.preview.channel' | t }}</span>
+      <select
+        class="preview__select"
+        [value]="channel() ?? ''"
+        (change)="chooseChannel($any($event.target).value)"
+        data-testid="content-preview-channel"
+      >
+        @for (c of channels(); track c.code) {
+          <option [value]="c.code" [selected]="c.code === channel()">{{ c.displayName }}</option>
+        }
+      </select>
+    </label>
+    <label class="preview__field">
+      <span class="q-caption">{{ 'marketing.content.preview.locale' | t }}</span>
+      <select
+        class="preview__select"
+        [value]="locale() ?? ''"
+        (change)="chooseLocale($any($event.target).value)"
+        data-testid="content-preview-locale"
+      >
+        @for (l of locales(); track l) {
+          <option [value]="l" [selected]="l === locale()">{{ l }}</option>
+        }
+      </select>
+    </label>
+    <label class="preview__field">
+      <span class="q-caption">{{ 'marketing.content.preview.day' | t }}</span>
+      <input
+        type="date"
+        class="preview__select"
+        [value]="day()"
+        (change)="chooseDay($any($event.target).value)"
+        data-testid="content-preview-day"
+      />
+    </label>
+    <button
+      type="button"
+      class="preview__refresh"
+      (click)="refresh()"
+      data-testid="content-preview-refresh"
+    >
+      {{ 'marketing.content.preview.refresh' | t }}
+    </button>
+  </div>
+
+  @if (channels().length === 0) {
+    <p class="q-body-sm preview__note" data-testid="content-preview-no-channel">
+      {{ 'marketing.content.preview.noChannel' | t }}
+    </p>
+  }
+  @if (error(); as message) {
+    <p class="q-body-sm preview__error" role="alert">{{ message }}</p>
+  }
+  @if (loading()) {
+    <p class="q-caption" role="status">{{ 'marketing.content.preview.loading' | t }}</p>
+  }
+
+  @if (document(); as doc) {
+    @if (highlightId() !== null && highlighted() === false) {
+      <p class="q-body-sm preview__note" data-testid="content-preview-absent">
+        {{ 'marketing.content.preview.absent' | t }}
+      </p>
+    }
+    <q-phone-frame [caption]="doc.locale">
+      <div class="preview__screen">
+        @if ((doc.stories ?? []).length > 0) {
+          <div class="preview__stories" data-testid="content-preview-stories">
+            @for (story of doc.stories; track story.id) {
+              <figure class="preview__story" [class.preview__hit]="story.id === highlightId()">
+                @if (imageUrl(story.avatar); as src) {
+                  <img class="preview__avatar" [src]="src" alt="" />
+                } @else {
+                  <span class="preview__avatar preview__avatar--empty"></span>
+                }
+                <figcaption class="q-caption">{{ story.title }}</figcaption>
+              </figure>
+            }
+          </div>
+        }
+
+        @if (doc.carousel.length > 0) {
+          <div class="preview__carousel" data-testid="content-preview-carousel">
+            @for (card of doc.carousel; track card.id) {
+              <article class="preview__card" [class.preview__hit]="card.id === highlightId()">
+                @if (imageUrl(card.media); as src) {
+                  <img class="preview__image" [src]="src" [alt]="card.media.alt ?? ''" />
+                }
+                @if (isVideo(card)) {
+                  <span class="preview__badge q-caption">{{
+                    'marketing.content.media.video' | t
+                  }}</span>
+                }
+                <div class="preview__text">
+                  <strong class="q-body-sm">{{ card.title }}</strong>
+                  @if (card.subtitle) {
+                    <span class="q-caption">{{ card.subtitle }}</span>
+                  }
+                  @if (card.ctaLabel) {
+                    <span class="preview__cta q-caption">{{ card.ctaLabel }}</span>
+                  }
+                </div>
+              </article>
+            }
+          </div>
+        }
+
+        @if ((doc.promoGrid ?? []).length > 0) {
+          <div class="preview__grid" data-testid="content-preview-grid">
+            @for (card of doc.promoGrid; track card.id) {
+              <article class="preview__tile" [class.preview__hit]="card.id === highlightId()">
+                @if (imageUrl(card.media); as src) {
+                  <img class="preview__image" [src]="src" [alt]="card.media.alt ?? ''" />
+                }
+                <strong class="q-caption">{{ card.title }}</strong>
+              </article>
+            }
+          </div>
+        }
+
+        @for (group of doc.groups; track group.id) {
+          <section
+            class="preview__group"
+            [class.preview__hit]="group.id === highlightId()"
+            data-testid="content-preview-group"
+          >
+            <h3 class="q-body-sm">{{ group.title }}</h3>
+            <p class="q-caption">
+              @if (group.categoryId; as category) {
+                {{ refs.categoryLabel(category) }}
+              } @else {
+                {{ 'marketing.content.preview.dishes' | t: { count: group.productIds.length } }}
+              }
+            </p>
+          </section>
+        }
+
+        @if (doc.popup; as popup) {
+          <aside
+            class="preview__popup"
+            [class.preview__hit]="popup.id === highlightId()"
+            data-testid="content-preview-popup"
+          >
+            <strong class="q-body-sm">{{ popup.title }}</strong>
+            @if (popup.body) {
+              <span class="q-caption">{{ popup.body }}</span>
+            }
+            <span class="q-caption">{{
+              'marketing.content.preview.popupDelay' | t: { seconds: popup.showAfterSeconds }
+            }}</span>
+          </aside>
+        }
+
+        @if (empty()) {
+          <p class="q-caption preview__empty" data-testid="content-preview-empty">
+            {{ 'marketing.content.preview.empty' | t }}
+          </p>
+        }
+      </div>
+    </q-phone-frame>
+  }
+</div>

@@ -1,0 +1,71 @@
+@switch (state()) {
+  @case ('unavailable') {
+    <app-editorial-unavailable />
+  }
+  @case ('loading') {
+    <p class="state" data-testid="editorial-loading">{{ 'common.loading' | t }}</p>
+  }
+  @case ('ready') {
+    <header class="head">
+      <a class="back" data-testid="editorial-back" routerLink="/home">
+        {{ 'common.back' | t }}
+      </a>
+      <h1 class="head__title" data-testid="editorial-title">
+        {{ 'editorial.' + valid() | t }}
+      </h1>
+    </header>
+
+    @if (cards().length === 0) {
+      <p class="state" data-testid="editorial-empty">{{ 'editorial.empty' | t }}</p>
+    } @else {
+      <ul class="list" data-testid="editorial-list">
+        @for (card of cards(); track card.entry.slug) {
+          <li>
+            <a
+              class="card"
+              data-testid="editorial-card"
+              [routerLink]="['/', valid(), card.entry.slug]"
+            >
+              @if (card.plan; as cover) {
+                <app-content-media
+                  class="card__cover"
+                  [plan]="cover"
+                  [alt]="card.entry.cover?.alt ?? ''"
+                  [aspectRatio]="card.aspect"
+                  sizes="(min-width: 768px) 320px, 40vw"
+                  (failed)="coverFailed(card.entry.slug)"
+                />
+              }
+              <span class="card__text" [attr.lang]="card.lang">
+                <span class="card__title">{{ card.entry.title }}</span>
+                @if (card.entry.summary) {
+                  <span class="card__summary">{{ card.entry.summary }}</span>
+                }
+                <span class="card__meta">
+                  @if (card.entry.employmentType; as employment) {
+                    <span class="card__tag">{{ 'editorial.employment.' + employment | t }}</span>
+                  }
+                  @if (card.date) {
+                    <time [attr.datetime]="card.entry.publishedAt">{{ card.date }}</time>
+                  }
+                </span>
+              </span>
+            </a>
+          </li>
+        }
+      </ul>
+
+      @if (nextCursor() !== null) {
+        <button
+          type="button"
+          class="more"
+          data-testid="editorial-more"
+          [disabled]="loadingMore()"
+          (click)="more()"
+        >
+          {{ 'editorial.loadMore' | t }}
+        </button>
+      }
+    }
+  }
+}

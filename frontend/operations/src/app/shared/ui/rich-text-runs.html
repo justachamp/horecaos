@@ -1,0 +1,91 @@
+<div class="q-rich-runs" role="group" data-testid="q-rich-text-runs">
+  @for (run of runs(); track $index; let i = $index) {
+    <div class="q-rich-runs__run" data-testid="q-rich-text-run">
+      <textarea
+        class="q-body q-rich-runs__text"
+        [class.q-rich-runs__text--bold]="run.bold"
+        [class.q-rich-runs__text--italic]="run.italic"
+        [attr.aria-label]="labels().text"
+        [attr.maxlength]="maxRunCharacters"
+        [attr.rows]="rows()"
+        [value]="run.text"
+        [disabled]="disabled()"
+        (input)="setText(i, $any($event.target).value)"
+        data-testid="q-rich-text-run-text"
+      ></textarea>
+      <div class="q-rich-runs__flags">
+        <button
+          type="button"
+          class="q-rich-runs__flag q-rich-runs__flag--bold"
+          [attr.aria-pressed]="run.bold === true"
+          [attr.aria-label]="labels().bold"
+          [disabled]="disabled()"
+          (click)="toggle(i, 'bold')"
+          data-testid="q-rich-text-run-bold"
+        >
+          B
+        </button>
+        <button
+          type="button"
+          class="q-rich-runs__flag q-rich-runs__flag--italic"
+          [attr.aria-pressed]="run.italic === true"
+          [attr.aria-label]="labels().italic"
+          [disabled]="disabled()"
+          (click)="toggle(i, 'italic')"
+          data-testid="q-rich-text-run-italic"
+        >
+          I
+        </button>
+        <button
+          type="button"
+          class="q-rich-runs__flag"
+          [attr.aria-pressed]="linkVisible(run)"
+          [attr.aria-label]="labels().link"
+          [disabled]="disabled()"
+          (click)="toggleLink(i)"
+          data-testid="q-rich-text-run-link"
+        >
+          ↗
+        </button>
+        <button
+          type="button"
+          class="q-rich-runs__flag"
+          [attr.aria-label]="labels().removeRun"
+          [disabled]="disabled() || runs().length === 1"
+          (click)="remove(i)"
+          data-testid="q-rich-text-run-remove"
+        >
+          ✕
+        </button>
+      </div>
+      @if (linkVisible(run)) {
+        <input
+          type="url"
+          class="q-body-sm q-rich-runs__href"
+          [class.q-rich-runs__href--refused]="linkRefused(run)"
+          [attr.aria-label]="labels().linkAddress"
+          [attr.aria-invalid]="linkRefused(run)"
+          placeholder="https://"
+          [value]="run.href ?? ''"
+          [disabled]="disabled()"
+          (input)="setHref(i, $any($event.target).value)"
+          data-testid="q-rich-text-run-href"
+        />
+        @if (linkRefused(run)) {
+          <p class="q-caption q-rich-runs__refused" role="alert">{{ labels().linkRefused }}</p>
+        }
+      }
+    </div>
+  }
+  @if (runs().length < maxRuns) {
+    <button
+      type="button"
+      class="q-rich-runs__add"
+      [disabled]="disabled()"
+      (click)="add()"
+      data-testid="q-rich-text-run-add"
+    >
+      + {{ labels().addRun }}
+    </button>
+  }
+</div>

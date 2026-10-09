@@ -1,0 +1,219 @@
+<div
+  class="q-rich-blocks"
+  role="group"
+  [attr.aria-label]="ariaLabel()"
+  data-testid="q-rich-text-blocks"
+>
+  @for (entry of blocks(); track entry.id; let i = $index) {
+    <div class="q-rich-blocks__block" data-testid="q-rich-text-doc-block">
+      <div class="q-rich-blocks__toolbar">
+        <select
+          class="q-rich-blocks__type q-caption"
+          [attr.aria-label]="labels().blockType"
+          [value]="entry.block.type"
+          [disabled]="disabled()"
+          (change)="setType(entry.id, $any($event.target).value)"
+          data-testid="q-rich-text-doc-type"
+        >
+          @for (type of types(); track type) {
+            <option [value]="type" [selected]="type === entry.block.type">
+              {{ typeLabel(type) }}
+            </option>
+          }
+        </select>
+
+        @if (entry.block.type === 'HEADING') {
+          <select
+            class="q-rich-blocks__type q-caption"
+            [attr.aria-label]="labels().headingLevel"
+            [value]="entry.block.level"
+            [disabled]="disabled()"
+            (change)="setLevel(entry.id, $any($event.target).value)"
+            data-testid="q-rich-text-doc-level"
+          >
+            <option value="2" [selected]="entry.block.level === 2">{{ labels().level2 }}</option>
+            <option value="3" [selected]="entry.block.level === 3">{{ labels().level3 }}</option>
+          </select>
+        }
+
+        @if (entry.block.type === 'LIST') {
+          <label class="q-caption q-rich-blocks__ordered">
+            <input
+              type="checkbox"
+              [checked]="entry.block.ordered"
+              [disabled]="disabled()"
+              (change)="setOrdered(entry.id, $any($event.target).checked)"
+              data-testid="q-rich-text-doc-ordered"
+            />
+            {{ labels().ordered }}
+          </label>
+        }
+
+        <span class="q-rich-blocks__spacer"></span>
+
+        <button
+          type="button"
+          class="q-rich-blocks__icon"
+          [attr.aria-label]="labels().moveUp"
+          [disabled]="disabled() || i === 0"
+          (click)="move(entry.id, -1)"
+          data-testid="q-rich-text-doc-up"
+        >
+          ▲
+        </button>
+        <button
+          type="button"
+          class="q-rich-blocks__icon"
+          [attr.aria-label]="labels().moveDown"
+          [disabled]="disabled() || i === blocks().length - 1"
+          (click)="move(entry.id, 1)"
+          data-testid="q-rich-text-doc-down"
+        >
+          ▼
+        </button>
+        <button
+          type="button"
+          class="q-rich-blocks__icon"
+          [attr.aria-label]="labels().removeBlock"
+          [disabled]="disabled()"
+          (click)="removeBlock(entry.id)"
+          data-testid="q-rich-text-doc-remove"
+        >
+          ✕
+        </button>
+      </div>
+
+      @switch (entry.block.type) {
+        @case ('PARAGRAPH') {
+          <q-rich-text-runs
+            [runs]="runsOf(entry.block)"
+            [labels]="labels()"
+            [disabled]="disabled()"
+            [rows]="3"
+            (runsChange)="setRuns(entry.id, $event)"
+          />
+        }
+        @case ('HEADING') {
+          <q-rich-text-runs
+            [runs]="runsOf(entry.block)"
+            [labels]="labels()"
+            [disabled]="disabled()"
+            [rows]="1"
+            (runsChange)="setRuns(entry.id, $event)"
+          />
+        }
+        @case ('QUOTE') {
+          <q-rich-text-runs
+            [runs]="runsOf(entry.block)"
+            [labels]="labels()"
+            [disabled]="disabled()"
+            [rows]="2"
+            (runsChange)="setRuns(entry.id, $event)"
+          />
+        }
+        @case ('LIST') {
+          @if (entry.block.type === 'LIST') {
+            <ol class="q-rich-blocks__items">
+              @for (item of entry.block.items; track $index; let n = $index) {
+                <li class="q-rich-blocks__item" data-testid="q-rich-text-doc-item">
+                  <q-rich-text-runs
+                    [runs]="item"
+                    [labels]="labels()"
+                    [disabled]="disabled()"
+                    [rows]="1"
+                    (runsChange)="setItemRuns(entry.id, n, $event)"
+                  />
+                  <button
+                    type="button"
+                    class="q-rich-blocks__icon"
+                    [attr.aria-label]="labels().removeItem"
+                    [disabled]="disabled()"
+                    (click)="removeItem(entry.id, n)"
+                    data-testid="q-rich-text-doc-item-remove"
+                  >
+                    ✕
+                  </button>
+                </li>
+              }
+            </ol>
+            @if (entry.block.items.length < maxListItems) {
+              <button
+                type="button"
+                class="q-rich-blocks__add-item"
+                [disabled]="disabled()"
+                (click)="addItem(entry.id)"
+                data-testid="q-rich-text-doc-item-add"
+              >
+                + {{ labels().addItem }}
+              </button>
+            }
+          }
+        }
+        @case ('IMAGE') {
+          @if (entry.block.type === 'IMAGE') {
+            @if (entry.block.assetId === '') {
+              <p class="q-body-sm q-rich-blocks__hint">{{ labels().imageNone }}</p>
+              <q-media-uploader
+                [aspectRatios]="imageRatios"
+                [exportEdgePx]="1200"
+                accept="image/jpeg,image/png,image/webp"
+                [uploading]="uploading() === entry.id"
+                (cropped)="uploadImage(entry.id, $event)"
+                (rejected)="imageError.set(labels().imageFailed)"
+              />
+            } @else {
+              <div class="q-rich-blocks__image" data-testid="q-rich-text-doc-image">
+                @if (previewOf(entry.block.assetId); as url) {
+                  <img class="q-rich-blocks__preview" [src]="url" alt="" />
+                }
+                <span class="q-caption">{{ labels().imageUploaded }}</span>
+                <button
+                  type="button"
+                  class="q-rich-blocks__icon"
+                  [attr.aria-label]="labels().removeBlock"
+                  [disabled]="disabled()"
+                  (click)="clearImage(entry.id)"
+                  data-testid="q-rich-text-doc-image-clear"
+                >
+                  ✕
+                </button>
+              </div>
+              <span class="q-caption">{{ labels().caption }}</span>
+              <q-rich-text-runs
+                [runs]="captionOf(entry.block)"
+                [labels]="labels()"
+                [disabled]="disabled()"
+                [rows]="1"
+                (runsChange)="setCaption(entry.id, $event)"
+              />
+            }
+            @if (imageError(); as error) {
+              <p class="q-caption q-rich-blocks__error" role="alert">{{ error }}</p>
+            }
+          }
+        }
+        @case ('DIVIDER') {
+          <hr class="q-rich-blocks__divider" [attr.aria-label]="labels().dividerLabel" />
+        }
+      }
+    </div>
+  }
+
+  <button
+    type="button"
+    class="q-rich-blocks__add"
+    [disabled]="disabled() || !canAddBlock()"
+    (click)="addBlock()"
+    data-testid="q-rich-text-doc-add"
+  >
+    + {{ labels().addBlock }}
+  </button>
+
+  @if (problems().length > 0) {
+    <ul class="q-rich-blocks__problems" role="alert" data-testid="q-rich-text-doc-problems">
+      @for (problem of problems(); track $index) {
+        <li class="q-caption">{{ problemText(problem) }}</li>
+      }
+    </ul>
+  }
+</div>

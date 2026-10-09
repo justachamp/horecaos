@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { describe, expect, it } from 'vitest';
 
-import { RichText, RichTextBlockKindLabels } from './rich-text';
+import { BlockDocument, RichText, RichTextBlockKindLabels, RichTextBlockLabels } from './rich-text';
 
 const KIND_LABELS: RichTextBlockKindLabels = {
   paragraph: 'Paragraph',
@@ -161,5 +161,105 @@ describe('RichText', () => {
         '[data-testid="q-rich-text-add"]',
       )!.disabled,
     ).toBe(true);
+  });
+});
+
+describe('RichText block mode (ADR 0157, Decision 11: the block-document mode)', () => {
+  const LABELS = {
+    text: 'Text',
+    bold: 'Bold',
+    italic: 'Italic',
+    link: 'Link',
+    linkAddress: 'Link address',
+    linkRefused: 'Refused',
+    addRun: 'Add text',
+    removeRun: 'Remove text',
+    blockType: 'Block type',
+    types: {
+      PARAGRAPH: 'Paragraph',
+      HEADING: 'Heading',
+      QUOTE: 'Quote',
+      LIST: 'List',
+      IMAGE: 'Image',
+      DIVIDER: 'Divider',
+    },
+    headingLevel: 'Level',
+    level2: 'Heading',
+    level3: 'Subheading',
+    ordered: 'Numbered',
+    moveUp: 'Up',
+    moveDown: 'Down',
+    removeBlock: 'Remove',
+    addBlock: 'Add block',
+    addItem: 'Add item',
+    removeItem: 'Remove item',
+    caption: 'Caption',
+    imageNone: 'No image',
+    imageUploaded: 'Added',
+    imageFailed: 'Failed',
+    dividerLabel: 'Divider',
+    problems: {
+      TOO_MANY_BLOCKS: 'a',
+      TOO_MANY_RUNS: 'b',
+      TOO_MANY_ITEMS: 'c',
+      TEXT_TOO_LONG: 'd',
+      RUN_TOO_LONG: 'e',
+      FORBIDDEN_CHARACTER: 'f',
+      HREF_NOT_ALLOWED: 'g',
+      EMPTY_LIST: 'h',
+      IMAGE_WITHOUT_ASSET: 'i',
+    },
+  } satisfies RichTextBlockLabels;
+
+  function renderBlocks(
+    document: BlockDocument | null,
+  ): ReturnType<typeof TestBed.createComponent<RichText>> {
+    const fixture = TestBed.createComponent(RichText);
+    fixture.componentRef.setInput('mode', 'blocks');
+    fixture.componentRef.setInput('blockLabels', LABELS);
+    fixture.componentRef.setInput('blockDocument', document);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  it('is the HTML editor unless asked for blocks, so every current host is unchanged', () => {
+    const fixture = render('<p>x</p>');
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="q-rich-text"]')).toBeTruthy();
+    expect(host.querySelector('[data-testid="q-rich-text-blocks"]')).toBeNull();
+  });
+
+  it('renders the block-document editor in blocks mode, and not the HTML one', () => {
+    const fixture = renderBlocks({
+      schemaVersion: 1,
+      blocks: [{ type: 'PARAGRAPH', inlines: [{ text: 'Body' }] }],
+    });
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="q-rich-text-blocks"]')).toBeTruthy();
+    expect(host.querySelector('[data-testid="q-rich-text"]')).toBeNull();
+    expect(
+      host.querySelector<HTMLTextAreaElement>('[data-testid="q-rich-text-run-text"]')?.value,
+    ).toBe('Body');
+  });
+
+  it('emits a block document through documentChange and never touches valueChange', () => {
+    const fixture = renderBlocks(null);
+    const documents: BlockDocument[] = [];
+    const html: string[] = [];
+    fixture.componentInstance.documentChange.subscribe((d) => documents.push(d));
+    fixture.componentInstance.valueChange.subscribe((v) => html.push(v));
+
+    const area = (fixture.nativeElement as HTMLElement).querySelector<HTMLTextAreaElement>(
+      '[data-testid="q-rich-text-run-text"]',
+    )!;
+    area.value = 'Typed';
+    area.dispatchEvent(new Event('input'));
+
+    expect(documents).toEqual([
+      { schemaVersion: 1, blocks: [{ type: 'PARAGRAPH', inlines: [{ text: 'Typed' }] }] },
+    ]);
+    expect(html).toEqual([]);
   });
 });

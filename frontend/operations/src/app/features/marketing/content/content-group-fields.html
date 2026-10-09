@@ -1,0 +1,120 @@
+<div class="group-fields" data-testid="content-group-fields">
+  <label class="group-fields__field">
+    <span class="q-caption">{{ 'marketing.content.group.title' | t }}</span>
+    <input
+      type="text"
+      class="group-fields__input"
+      maxlength="60"
+      [value]="title()"
+      [disabled]="disabled()"
+      (input)="setTitle($any($event.target).value)"
+      data-testid="content-title"
+    />
+  </label>
+
+  <fieldset class="group-fields__modes" [disabled]="disabled()">
+    <legend class="q-caption">{{ 'marketing.content.group.mode' | t }}</legend>
+    <label class="group-fields__radio">
+      <input
+        type="radio"
+        name="group-mode"
+        value="MANUAL"
+        [checked]="group().mode === 'MANUAL'"
+        (change)="setMode('MANUAL')"
+        data-testid="content-group-manual"
+      />
+      <span class="q-body-sm">{{ 'marketing.content.group.manual' | t }}</span>
+    </label>
+    <label class="group-fields__radio">
+      <input
+        type="radio"
+        name="group-mode"
+        value="BY_CATEGORY"
+        [checked]="group().mode === 'BY_CATEGORY'"
+        (change)="setMode('BY_CATEGORY')"
+        data-testid="content-group-by-category"
+      />
+      <span class="q-body-sm">{{ 'marketing.content.group.byCategory' | t }}</span>
+    </label>
+  </fieldset>
+
+  @if (group().mode === 'MANUAL') {
+    <div class="group-fields__members" data-testid="content-group-members">
+      <span class="q-caption">
+        {{
+          'marketing.content.group.members' | t: { count: group().members.length, max: maxMembers }
+        }}
+      </span>
+      <q-combobox
+        [multiple]="true"
+        [query]="memberQuery()"
+        [options]="memberOptions()"
+        [selected]="selectedMembers()"
+        [placeholder]="'marketing.content.group.searchDish' | t"
+        [ariaLabel]="'marketing.content.group.searchDish' | t"
+        (queryChange)="memberQuery.set($event)"
+        (selectedChange)="setMembers($event)"
+      />
+      @if (group().members.length > 1) {
+        <span class="q-caption">{{ 'marketing.content.group.order' | t }}</span>
+        <q-rule-list [items]="orderItems()" [showToggle]="false" (reorder)="reorder($event)" />
+      }
+      <p class="q-caption group-fields__hint">{{ 'marketing.content.group.skipHint' | t }}</p>
+    </div>
+  } @else {
+    <div class="group-fields__category" data-testid="content-group-category">
+      @if (categoryName(); as name) {
+        <p class="q-body-sm group-fields__chosen" data-testid="content-group-category-chosen">
+          {{ 'marketing.content.link.chosen' | t: { label: name } }}
+          <button
+            type="button"
+            class="group-fields__clear"
+            [disabled]="disabled()"
+            (click)="clearCategory()"
+            data-testid="content-group-category-clear"
+          >
+            {{ 'marketing.content.link.clear' | t }}
+          </button>
+        </p>
+      } @else {
+        <q-combobox
+          [query]="categoryQuery()"
+          [options]="categoryOptions()"
+          [placeholder]="'marketing.content.link.searchCategory' | t"
+          [ariaLabel]="'marketing.content.link.searchCategory' | t"
+          (queryChange)="categoryQuery.set($event)"
+          (optionSelected)="chooseCategory($event)"
+        />
+      }
+      <label class="group-fields__field">
+        <span class="q-caption">{{ 'marketing.content.group.sort' | t }}</span>
+        <select
+          class="group-fields__input"
+          [value]="group().order"
+          [disabled]="disabled()"
+          (change)="setOrder($any($event.target).value)"
+          data-testid="content-group-order"
+        >
+          <option value="MENU_ORDER" [selected]="group().order === 'MENU_ORDER'">
+            {{ 'marketing.content.group.sort.MENU_ORDER' | t }}
+          </option>
+          <option value="NEWEST" [selected]="group().order === 'NEWEST'">
+            {{ 'marketing.content.group.sort.NEWEST' | t }}
+          </option>
+        </select>
+      </label>
+      <label class="group-fields__row">
+        <span class="q-body-sm">{{ 'marketing.content.group.limit' | t }}</span>
+        <q-number-stepper
+          [value]="group().limit"
+          [min]="1"
+          [max]="maxMembers"
+          [ariaLabel]="'marketing.content.group.limit' | t"
+          [disabled]="disabled()"
+          (valueChange)="setLimit($event)"
+        />
+      </label>
+      <p class="q-caption group-fields__hint">{{ 'marketing.content.group.skipHint' | t }}</p>
+    </div>
+  }
+</div>

@@ -1,0 +1,66 @@
+<section class="policies" data-testid="content-policies">
+  <h2 class="q-subhead">{{ 'marketing.content.policy.title' | t }}</h2>
+
+  @if (loading()) {
+    <p class="q-caption" role="status">{{ 'marketing.content.list.loading' | t }}</p>
+  } @else if (denied()) {
+    <q-denied-state capability="content.read" />
+  } @else if (policies(); as current) {
+    @if (error(); as message) {
+      <p class="q-body-sm policies__error" role="alert" data-testid="content-policies-error">
+        {{ message }}
+      </p>
+    }
+    @if (saved()) {
+      <p class="q-body-sm policies__ok" role="status" data-testid="content-policies-saved">
+        {{ 'marketing.content.policy.saved' | t }}
+      </p>
+    }
+
+    @for (r of [round()]; track r) {
+      <fieldset class="policies__group" [disabled]="busy()">
+        <legend class="q-body-sm">{{ 'marketing.content.policy.publishing' | t }}</legend>
+        <label class="policies__switch">
+          <input
+            type="checkbox"
+            [checked]="current.publishing.requireAllBrandLocales"
+            (change)="setRequireAll($any($event.target).checked)"
+            data-testid="content-policy-require-all"
+          />
+          <span class="q-body-sm">{{ 'marketing.content.policy.requireAll' | t }}</span>
+        </label>
+        <p class="q-caption policies__note">{{ 'marketing.content.policy.requireAllHint' | t }}</p>
+      </fieldset>
+
+      <fieldset class="policies__group" [disabled]="busy() || !current.editorialEntitled">
+        <legend class="q-body-sm">{{ 'marketing.content.policy.editorial' | t }}</legend>
+        @if (!current.editorialEntitled) {
+          <p class="q-caption policies__note" data-testid="content-policy-not-entitled">
+            {{ 'marketing.content.policy.editorialNotEntitled' | t }}
+          </p>
+        }
+        @for (feature of features; track feature) {
+          <label class="policies__switch">
+            <input
+              type="checkbox"
+              [checked]="current.editorial[feature]"
+              (change)="setFeature(feature, $any($event.target).checked)"
+              [attr.data-testid]="'content-policy-' + feature"
+            />
+            <span class="q-body-sm">{{ featureKey(feature) | t }}</span>
+          </label>
+        }
+        <p class="q-caption policies__note">{{ 'marketing.content.policy.vacancyNote' | t }}</p>
+      </fieldset>
+    }
+
+    <p class="q-body-sm policies__fact" data-testid="content-policy-video">
+      {{
+        (current.videoEntitled
+          ? 'marketing.content.policy.videoOn'
+          : 'marketing.content.policy.videoOff'
+        ) | t
+      }}
+    </p>
+  }
+</section>

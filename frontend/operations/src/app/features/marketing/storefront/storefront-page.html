@@ -1,0 +1,52 @@
+<div class="storefront" data-testid="storefront-page">
+  <header>
+    <h1 class="q-subhead">{{ 'marketing.storefront.title' | t }}</h1>
+    <p class="q-body-sm storefront__intro">{{ 'marketing.storefront.intro' | t }}</p>
+  </header>
+
+  <nav class="storefront__tabs" role="tablist">
+    @for (t of tabs; track t) {
+      <button
+        type="button"
+        role="tab"
+        class="storefront__tab q-body-sm"
+        [class.storefront__tab--active]="tab() === t"
+        [attr.aria-selected]="tab() === t"
+        (click)="tab.set(t)"
+        [attr.data-testid]="'storefront-tab-' + t"
+      >
+        {{ tabLabel(t) | t }}
+      </button>
+    }
+  </nav>
+
+  @switch (tab()) {
+    @case ('groups') {
+      <p class="q-body-sm storefront__note">{{ 'marketing.storefront.groups.hint' | t }}</p>
+      <q-content-workbench [kinds]="['PRODUCT_GROUP']" placement="HOME_GROUPS" />
+    }
+    @case ('carousel') {
+      <p class="q-body-sm storefront__note" data-testid="storefront-carousel-note">
+        {{ 'marketing.storefront.carousel.hint' | t }}
+        <a [routerLink]="['/marketing/content']" data-testid="storefront-content-link">
+          {{ 'marketing.storefront.carousel.link' | t }}
+        </a>
+      </p>
+      <q-content-workbench
+        [kinds]="['BANNER', 'PROMO_CARD']"
+        placement="HOME_CAROUSEL"
+        [canCreate]="false"
+        [videoEntitled]="videoEntitled()"
+      />
+    }
+    @case ('preview') {
+      <q-content-preview [locales]="locales()" [startLocale]="defaultLocale()" />
+    }
+    @case ('switcher') {
+      <section class="storefront__not-built" data-testid="storefront-switcher">
+        <h2 class="q-subhead">{{ 'marketing.storefront.switcher.title' | t }}</h2>
+        <p class="q-body-sm">{{ 'marketing.storefront.switcher.body' | t }}</p>
+      </section>
+    }
+  }
+</div>

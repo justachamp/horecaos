@@ -1,0 +1,88 @@
+.hosts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 720px;
+}
+
+.hosts h2 {
+  margin: 0;
+}
+
+.hosts__note {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+.hosts__error {
+  margin: 0;
+  color: var(--q-error-text);
+}
+
+.hosts__add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.hosts__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hosts__input {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.hosts__input[aria-invalid='true'] {
+  border-color: var(--q-error);
+}
+
+.hosts__button {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.hosts__button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.hosts__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hosts__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.hosts__remove {
+  margin-inline-start: auto;
+  border: none;
+  background: none;
+  color: var(--q-error-text);
+  cursor: pointer;
+  text-decoration: underline;
+}
