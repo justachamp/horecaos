@@ -169,6 +169,24 @@ export const ordersEn = {
   'orders.dialog.changeQuantity.line': 'Item',
   'orders.dialog.changeQuantity.newQuantity': 'New quantity (at least {min})',
   'orders.dialog.changeQuantity.comboOption': '{name} (combos: {count})',
+  'orders.dialog.changeQuantity.lowering':
+    'Lowering the quantity takes stock off the order. Pick the reason: it decides whether the units go back on the shelf.',
+  'orders.dialog.removal.reason': 'Removal reason',
+  'orders.dialog.removal.reasonPlaceholder': 'Choose a reason',
+  'orders.dialog.removal.noReasons':
+    'This tenant has no active removal reason, so a line cannot be taken off an order yet.',
+  'orders.dialog.removal.noReasonsLink': 'Add one in Reference data',
+  'orders.dialog.removeLines.title': 'Remove items',
+  'orders.dialog.removeLines.lead': 'Pick what comes off the order. A combo is removed whole.',
+  'orders.dialog.removeLines.wouldEmpty':
+    'That would leave nothing on the order. Cancel the order instead: that records why.',
+  'orders.dialog.removeLines.confirm': 'Review the change',
+  'orders.dialog.amendConfirm.stock.units': 'Units taken off: {count}.',
+  'orders.dialog.amendConfirm.stock.writtenOff': 'Written off: {count}.',
+  'orders.dialog.amendConfirm.stock.returned': 'Back on the shelf: {count}.',
+  'orders.dialog.amendConfirm.stock.released': 'Hold released: {count}.',
+  'orders.dialog.amendConfirm.stock.kitchen':
+    'The kitchen has started it, so it is written off whatever the reason says.',
 
   'orders.dialog.changeAddress.line2': 'Address line 2',
   'orders.dialog.changeAddress.city': 'City',

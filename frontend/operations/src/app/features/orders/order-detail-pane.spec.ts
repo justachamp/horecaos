@@ -1934,7 +1934,7 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
     expect(host.querySelector('[data-testid="order-detail-cash-tendered-warning"]')).toBeNull();
   });
 
-  it('AMEND opens the eleven-command menu the row’s own edit affordances use', async () => {
+  it('AMEND opens the amend menu: the eleven ungated commands, and not REMOVE_LINES while the brand has the removal path off', async () => {
     configure({
       get: apiGet({
         value: detail({
@@ -1955,9 +1955,9 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
     fixture.detectChanges();
 
     expect(host.querySelector('[data-testid="order-amend-menu"]')).not.toBeNull();
-    // Wave 10 (rows 1.2c/2.1d): six of the seven financial commands are built
-    // and do reach this menu now — only REMOVE_LINES, still refused by name,
-    // never does. See `order-amend-menu.spec.ts` for the exhaustive check.
+    // REMOVE_LINES (ADR 0169) is built but behind the brand's rollout gate, which the order detail reports
+    // (`lineRemovalEnabled`, absent here): the menu offers it only where the server will carry it out. See
+    // `order-amend-menu.spec.ts` for the exhaustive check.
     expect(host.querySelector('[data-testid="order-amend-menu-ADD_LINES"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="order-amend-menu-REMOVE_LINES"]')).toBeNull();
 
@@ -2053,6 +2053,207 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
     await flushMicrotasks();
 
     expect(confirm).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'amendment-1', 1, 'PHONE');
+  });
+
+  describe('REMOVE_LINES (ADR 0169)', () => {
+    const REMOVAL_REASON = {
+      id: 'reason-1',
+      kind: 'LINE_REMOVAL',
+      systemCategory: 'CUSTOMER_CHANGED_MIND',
+      internalName: 'Customer changed their mind',
+      stockDisposition: 'RETURN_TO_STOCK',
+      liabilityParty: 'CUSTOMER',
+      customerRefund: null,
+      allowedFulfillmentModes: null,
+      customerTexts: {},
+      status: 'ACTIVE',
+      version: 1,
+      updatedAt: '2026-10-08T00:00:00Z',
+    } as const;
+
+    const TWO_LINES = [
+      {
+        lineNumber: 1,
+        productName: 'Лагман',
+        quantity: 2,
+        finalAmountMinor: 100_000,
+        modifiers: [],
+        commentPresets: [],
+        lineId: 'line-1',
+        hasNote: false,
+      },
+      {
+        lineNumber: 2,
+        productName: 'Плов',
+        quantity: 1,
+        finalAmountMinor: 46_000,
+        modifiers: [],
+        commentPresets: [],
+        lineId: 'line-2',
+        hasNote: false,
+      },
+    ];
+
+    async function openAmendMenu(
+      lineRemovalEnabled: boolean,
+      extra: Parameters<typeof configure>[0] = {},
+    ) {
+      configure({
+        get: apiGet({
+          value: detail({
+            summary: { ...detail().summary, status: 'CONFIRMED', actions: [{ action: 'AMEND' }] },
+            lines: TWO_LINES,
+            lineRemovalEnabled,
+          }),
+          version: 3,
+        }),
+        ...extra,
+      });
+      const fixture = await render();
+      const host: HTMLElement = fixture.nativeElement;
+      (
+        host.querySelector('[data-testid="order-detail-primary-action"]') as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+      return { fixture, host };
+    }
+
+    it('offers REMOVE_LINES only where the brand has the removal path on', async () => {
+      const off = await openAmendMenu(false);
+      expect(off.host.querySelector('[data-testid="order-amend-menu-REMOVE_LINES"]')).toBeNull();
+      TestBed.resetTestingModule();
+
+      const on = await openAmendMenu(true);
+      expect(on.host.querySelector('[data-testid="order-amend-menu-REMOVE_LINES"]')).not.toBeNull();
+    });
+
+    it('reads the tenant’s removal reasons, proposes without applying, shows what the stock will do, then records the agreement', async () => {
+      const removeLines = vi.fn().mockReturnValue(
+        of(
+          amendmentResult({
+            status: 'PRICED',
+            deltaTotalMinor: -46_000,
+            requiresApproval: false,
+            amendmentVersion: 1,
+            stockConsequence: [
+              {
+                orderLineId: 'line-2',
+                variantId: 'variant-2',
+                productName: 'Плов',
+                quantityBefore: 1,
+                quantityAfter: 0,
+                stockUnits: 1,
+                kitchenState: 'STARTED',
+                declaredDisposition: 'RETURN_TO_STOCK',
+                effectiveDisposition: 'WRITE_OFF',
+                releasedUnits: 0,
+                returnedUnits: 0,
+                writtenOffUnits: 1,
+                noEffectUnits: 0,
+                reasonId: 'reason-1',
+                reasonCategory: 'CUSTOMER_CHANGED_MIND',
+              },
+            ],
+          }),
+        ),
+      );
+      const confirm = vi.fn().mockReturnValue(of(amendmentResult({ status: 'APPLIED' })));
+      const list = vi.fn().mockResolvedValue([REMOVAL_REASON]);
+      const { fixture, host } = await openAmendMenu(true, {
+        amendmentsApi: { removeLines, confirm },
+        referenceDataApi: { list },
+      });
+
+      (
+        host.querySelector('[data-testid="order-amend-menu-REMOVE_LINES"]') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(list).toHaveBeenCalledWith(FAKE_SCOPE, 'LINE_REMOVAL');
+      expect(host.querySelector('[data-testid="order-remove-lines-dialog"]')).not.toBeNull();
+
+      (
+        host.querySelector(
+          '[data-testid="order-remove-lines-dialog-choice-line-2"]',
+        ) as HTMLInputElement
+      ).click();
+      const select = host.querySelector(
+        '[data-testid="removal-reason-select"]',
+      ) as HTMLSelectElement;
+      select.value = 'reason-1';
+      select.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      (
+        host.querySelector('[data-testid="order-remove-lines-dialog-confirm"]') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(removeLines).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 3, ['line-2'], 'reason-1');
+      // Proposed, not applied: the confirmation step says what happens to the stock first, and asks how
+      // the customer agreed even though the total only fell.
+      expect(host.querySelector('[data-testid="order-amendment-confirm-dialog"]')).not.toBeNull();
+      expect(
+        host.querySelector('[data-testid="order-amendment-confirm-stock-line-2"]')?.textContent,
+      ).toContain('Written off: 1');
+      expect(host.querySelector('[data-testid="order-amendment-confirm-channel"]')).not.toBeNull();
+
+      (
+        host.querySelector('[data-testid="order-amendment-confirm-submit"]') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+
+      expect(confirm).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 'amendment-1', 1, 'PHONE');
+    });
+
+    it('lowers a quantity with the reason when the removal path is on', async () => {
+      const changeLineQuantity = vi
+        .fn()
+        .mockReturnValue(of(amendmentResult({ status: 'PRICED', deltaTotalMinor: -50_000 })));
+      const list = vi.fn().mockResolvedValue([REMOVAL_REASON]);
+      const { fixture, host } = await openAmendMenu(true, {
+        amendmentsApi: { changeLineQuantity },
+        referenceDataApi: { list },
+      });
+
+      (
+        host.querySelector(
+          '[data-testid="order-amend-menu-CHANGE_LINE_QUANTITY"]',
+        ) as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+      expect(list).toHaveBeenCalledWith(FAKE_SCOPE, 'LINE_REMOVAL');
+
+      const quantity = host.querySelector(
+        '[data-testid="order-change-quantity-dialog-quantity"]',
+      ) as HTMLInputElement;
+      quantity.value = '1';
+      quantity.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      const select = host.querySelector(
+        '[data-testid="removal-reason-select"]',
+      ) as HTMLSelectElement;
+      select.value = 'reason-1';
+      select.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      (
+        host.querySelector(
+          '[data-testid="order-change-quantity-dialog-confirm"]',
+        ) as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+
+      expect(changeLineQuantity).toHaveBeenCalledWith(
+        FAKE_SCOPE,
+        'order-1',
+        3,
+        'line-1',
+        1,
+        'reason-1',
+      );
+    });
   });
 
   describe('ADD_LINES of a combo (ADR 0136)', () => {

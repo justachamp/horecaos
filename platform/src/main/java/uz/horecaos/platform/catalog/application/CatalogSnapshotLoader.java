@@ -37,6 +37,7 @@ import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.MxikFacts;
 import uz.horecaos.platform.catalog.domain.PhysicalAttributes;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
+import uz.horecaos.platform.catalog.domain.Vocabularies;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.MediaRelationRow;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.TranslationRow;
@@ -79,6 +80,7 @@ public class CatalogSnapshotLoader {
     private final String defaultLocale;
     private final boolean pricingWired;
     private final AutoAddSnapshotSource autoAdd;
+    private final VocabularySnapshotSource vocabularies;
 
     /**
      * @param defaultLocale {@code horecaos.catalog.default-locale} -- where a name is
@@ -91,7 +93,9 @@ public class CatalogSnapshotLoader {
             VariantPricingLookup pricing,
             BrandLocaleLookup brandLocales,
             @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale,
-            AutoAddSnapshotSource autoAdd) {
+            AutoAddSnapshotSource autoAdd,
+            VocabularySnapshotSource vocabularies) {
+        this.vocabularies = vocabularies;
         this.store = store;
         this.media = media;
         this.pricing = pricing;
@@ -99,6 +103,17 @@ public class CatalogSnapshotLoader {
         this.defaultLocale = defaultLocale;
         this.pricingWired = pricing.isWired();
         this.autoAdd = autoAdd;
+    }
+
+    /** A loader that publishes no tags or ingredients (ADR 0174), for callers and tests that never author one. */
+    public CatalogSnapshotLoader(
+            JdbcCatalogStore store,
+            MediaAvailability media,
+            VariantPricingLookup pricing,
+            BrandLocaleLookup brandLocales,
+            String defaultLocale,
+            AutoAddSnapshotSource autoAdd) {
+        this(store, media, pricing, brandLocales, defaultLocale, autoAdd, VocabularySnapshotSource.NONE);
     }
 
     /** A loader that publishes no auto-add rules (ADR 0158), for callers and tests that never author one. */
@@ -199,7 +214,14 @@ public class CatalogSnapshotLoader {
                 pricingWired,
                 composite,
                 store.physicalAttributesForBrand(tenantId, brandId),
-                autoAdd.load(tenantId, brandId));
+                autoAdd.load(tenantId, brandId),
+                vocabularies.load(
+                        tenantId,
+                        brandId,
+                        products.stream()
+                                .filter(product -> product.status() == Status.ACTIVE)
+                                .map(Product::id)
+                                .toList()));
     }
 
     /**
@@ -504,6 +526,16 @@ public class CatalogSnapshotLoader {
                                 // differently about them; absent on every variant that does neither,
                                 // so a menu without variant-level groups keeps the content it had.
                                 putVariantGroups(entry, snapshot, variant.id());
+                                // ADR 0174. What the customer reads for this size or form. Written only
+                                // when the variant has a name in some locale, so a variant nobody named
+                                // publishes exactly the content it always has, the draft's content hash
+                                // does not move for a brand that authored none, and a client falls back
+                                // to the unit code.
+                                Map<String, Map<String, String>> variantNames =
+                                        names(snapshot, EntityType.VARIANT, variant.id());
+                                if (!variantNames.isEmpty()) {
+                                    entry.put("names", variantNames);
+                                }
                                 entry.put("isDefault", variant.isDefault());
                                 entry.put("sortOrder", variant.sortOrder());
                                 entry.put("status", variant.status().name());
@@ -536,6 +568,17 @@ public class CatalogSnapshotLoader {
             List<Map<String, Object>> policies = modifierGroupPolicies(snapshot, product.id());
             if (!policies.isEmpty()) {
                 content.put("modifierGroupPolicies", policies);
+            }
+            // ADR 0174. The ordered tags and ingredients this product shows, by id; the entries
+            // themselves are items of their own. Written only when there is something to say.
+            List<UUID> tagIds = snapshot.vocabulary().tagIdsByProduct().getOrDefault(product.id(), List.of());
+            if (!tagIds.isEmpty()) {
+                content.put("tagIds", idStrings(tagIds));
+            }
+            List<UUID> ingredientIds =
+                    snapshot.vocabulary().ingredientIdsByProduct().getOrDefault(product.id(), List.of());
+            if (!ingredientIds.isEmpty()) {
+                content.put("ingredientIds", idStrings(ingredientIds));
             }
 
             items.add(new PublicationItem(EntityType.PRODUCT, product.id(), product.version(), content));
@@ -591,6 +634,27 @@ public class CatalogSnapshotLoader {
             }
             items.add(new PublicationItem(
                     EntityType.COMBO_GROUP, group.id(), group.version(), comboGroupContent(snapshot, group)));
+        }
+
+        // ADR 0174: the tags and ingredients this brand's own products carry, and none it does not, so
+        // one tenant's other brands never see them. The registries carry no version of their own that a
+        // customer could cite, so the item's version is the registry row's at publication.
+        for (Vocabularies.Entry tag : snapshot.vocabulary().tags().values()) {
+            Map<String, Object> content = new LinkedHashMap<>();
+            content.put("code", tag.code());
+            putIfPresent(content, "icon", tag.iconKey());
+            content.put("showAsBadge", tag.showAsBadge());
+            content.put("showAsFilter", tag.showAsFilter());
+            content.put("sortOrder", tag.sortOrder());
+            content.put("names", publishedNames(tag));
+            items.add(new PublicationItem(EntityType.TAG, tag.id(), tag.version(), content));
+        }
+        for (Vocabularies.Entry ingredient : snapshot.vocabulary().ingredients().values()) {
+            Map<String, Object> content = new LinkedHashMap<>();
+            content.put("code", ingredient.code());
+            content.put("sortOrder", ingredient.sortOrder());
+            content.put("names", publishedNames(ingredient));
+            items.add(new PublicationItem(EntityType.INGREDIENT, ingredient.id(), ingredient.version(), content));
         }
 
         // ADR 0158: the active auto-add rules, each an immutable copy carrying its own version, so a
@@ -650,6 +714,15 @@ public class CatalogSnapshotLoader {
         // The customer text shown beside the injected line.
         content.put("names", names(snapshot, EntityType.AUTO_ADD_RULE, rule.id()));
         return content;
+    }
+
+    /** A registry entry's wording in the shape every published {@code names} map has. */
+    private static Map<String, Map<String, String>> publishedNames(Vocabularies.Entry entry) {
+        Map<String, Map<String, String>> byLocale = new LinkedHashMap<>();
+        entry.names().entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(name -> byLocale.put(name.getKey(), Map.of("name", name.getValue())));
+        return byLocale;
     }
 
     private static void putPlain(Map<String, Object> target, String key, @Nullable BigDecimal value) {

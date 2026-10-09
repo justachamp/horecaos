@@ -41,6 +41,14 @@
               <h2 class="pr-1 text-[15px] font-bold leading-snug text-text-primary">
                 {{ item.name }}
               </h2>
+              @if (item.autoAdd; as auto) {
+                <p
+                  class="pr-1 text-[12px] leading-snug text-brand-accent"
+                  data-testid="cart-line-auto-add"
+                >
+                  {{ auto.text ?? ('cart.autoAdded' | t) }}
+                </p>
+              }
               @if (item.comboComponents && item.comboComponents.length > 0) {
                 <ul
                   class="list-none space-y-0.5 pr-1 text-[12px] leading-snug text-zinc-400"
@@ -76,7 +84,7 @@
                 <button
                   type="button"
                   (click)="cart.decreaseQuantity(item)"
-                  [disabled]="cart.updating() || item.quantity <= 0"
+                  [disabled]="cart.updating() || !canDecrease(item)"
                   class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-raised-2 text-lg font-light leading-none text-text-primary transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
                   [attr.aria-label]="'common.decrease' | t"
                 >
@@ -97,7 +105,7 @@
                 <button
                   type="button"
                   (click)="cart.increaseQuantity(item)"
-                  [disabled]="cart.updating()"
+                  [disabled]="cart.updating() || !canIncrease(item)"
                   class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-raised-2 text-lg font-light leading-none text-text-primary transition-colors hover:bg-surface-hover disabled:opacity-50"
                   [attr.aria-label]="'common.increase' | t"
                 >

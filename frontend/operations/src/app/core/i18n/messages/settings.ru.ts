@@ -822,6 +822,12 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.referenceData.cancellation.add': 'Добавить причину отмены',
   'settings.referenceData.completion.title': 'Причины завершения',
   'settings.referenceData.completion.add': 'Добавить причину завершения',
+  'settings.referenceData.removal.title': 'Причины удаления позиций',
+  'settings.referenceData.removal.add': 'Добавить причину удаления',
+  'settings.referenceData.removal.lead':
+    'Почему позицию сняли с подтверждённого заказа. Причина определяет, что станет с остатком; оператор выбирает причину, а не распоряжение.',
+  'settings.referenceData.removal.unavailableCannotReturn':
+    'Причина «нет в наличии» не может возвращать позицию на склад: её там не было.',
   'settings.referenceData.add': 'Добавить',
   'settings.referenceData.disable': 'Отключить',
   'settings.referenceData.empty': 'Пока нет.',

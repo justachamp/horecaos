@@ -930,7 +930,11 @@
     />
   }
   @if (dialog() === 'amendMenu') {
-    <q-order-amend-menu (select)="onAmendMenuSelect($event)" (dismiss)="onDialogDismiss()" />
+    <q-order-amend-menu
+      [lineRemovalEnabled]="lineRemovalEnabled()"
+      (select)="onAmendMenuSelect($event)"
+      (dismiss)="onDialogDismiss()"
+    />
   }
   @if (dialog() === 'kitchenNote') {
     <q-order-note-dialog
@@ -995,8 +999,19 @@
   @if (dialog() === 'changeQuantity' && order(); as detail) {
     <q-order-change-quantity-dialog
       [lines]="detail.value.lines"
+      [lineRemovalEnabled]="lineRemovalEnabled()"
+      [reasons]="removalReasons()"
       [busy]="busy()"
       (confirm)="onChangeQuantityConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
+  @if (dialog() === 'removeLines' && order(); as detail) {
+    <q-order-remove-lines-dialog
+      [lines]="detail.value.lines"
+      [reasons]="removalReasons()"
+      [busy]="busy()"
+      (confirm)="onRemoveLinesConfirm($event)"
       (dismiss)="onDialogDismiss()"
     />
   }
@@ -1040,6 +1055,7 @@
       [deltaMinor]="pending.deltaMinor"
       [currency]="order()?.value.summary?.currency ?? 'UZS'"
       [requiresApproval]="pending.requiresApproval"
+      [stockConsequence]="pending.stockConsequence"
       [locale]="locale()"
       [busy]="busy()"
       (confirm)="onAmendConfirmDialogConfirm($event)"

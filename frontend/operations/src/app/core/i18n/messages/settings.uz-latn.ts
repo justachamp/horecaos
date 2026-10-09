@@ -831,6 +831,12 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.referenceData.cancellation.add': 'Bekor qilish sababini qoʻshish',
   'settings.referenceData.completion.title': 'Yakunlash sabablari',
   'settings.referenceData.completion.add': 'Yakunlash sababini qoʻshish',
+  'settings.referenceData.removal.title': 'Taomni olib tashlash sabablari',
+  'settings.referenceData.removal.add': 'Olib tashlash sababini qoʻshish',
+  'settings.referenceData.removal.lead':
+    'Tasdiqlangan buyurtmadan taom nega olib tashlandi. Sabab qoldiq taqdirini belgilaydi; operator sababni tanlaydi, farmoyishni emas.',
+  'settings.referenceData.removal.unavailableCannotReturn':
+    '«Mavjud emas» sababi mahsulotni omborga qaytara olmaydi: u u yerda boʻlmagan.',
   'settings.referenceData.add': 'Qoʻshish',
   'settings.referenceData.disable': 'Oʻchirish',
   'settings.referenceData.empty': 'Hali yoʻq.',

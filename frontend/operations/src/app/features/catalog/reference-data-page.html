@@ -1,0 +1,296 @@
+<div class="reference-data">
+  <h1 class="q-title">{{ 'catalog.referenceData.title' | t }}</h1>
+  <p class="q-body-sm lead">{{ 'catalog.referenceData.lead' | t }}</p>
+
+  @if (loading()) {
+    <p class="q-body-sm">{{ 'catalog.referenceData.loading' | t }}</p>
+  } @else if (denied()) {
+    <p class="q-body-sm denied" data-testid="reference-data-denied">
+      {{ 'catalog.referenceData.denied' | t }}
+    </p>
+  } @else {
+    <div class="reference-data__layout">
+      <nav class="reference-data__rail" [attr.aria-label]="'catalog.referenceData.rail' | t">
+        <button
+          type="button"
+          class="reference-data__rail-item q-body-sm"
+          [class.reference-data__rail-item--active]="kind() === 'TAG'"
+          (click)="choose('TAG')"
+          data-testid="rail-tags"
+        >
+          {{ 'catalog.referenceData.rail.tags' | t }}
+        </button>
+        <button
+          type="button"
+          class="reference-data__rail-item q-body-sm"
+          [class.reference-data__rail-item--active]="kind() === 'INGREDIENT'"
+          (click)="choose('INGREDIENT')"
+          data-testid="rail-ingredients"
+        >
+          {{ 'catalog.referenceData.rail.ingredients' | t }}
+        </button>
+        <p class="q-caption reference-data__rail-heading">
+          {{ 'catalog.referenceData.rail.elsewhere' | t }}
+        </p>
+        <a class="q-body-sm" routerLink="/settings/comment-presets" data-testid="link-presets">
+          {{ 'catalog.referenceData.link.presets' | t }}
+        </a>
+        <a class="q-body-sm" routerLink="/catalog/products" data-testid="link-kitchen">
+          {{ 'catalog.referenceData.link.kitchen' | t }}
+        </a>
+        <a class="q-body-sm" routerLink="/catalog/products" data-testid="link-recommendations">
+          {{ 'catalog.referenceData.link.recommendations' | t }}
+        </a>
+        <a class="q-body-sm" routerLink="/settings/brand" data-testid="link-brands">
+          {{ 'catalog.referenceData.link.brands' | t }}
+        </a>
+      </nav>
+
+      <section class="reference-data__panel" [attr.data-kind]="kind()">
+        @if (isTag()) {
+          <p class="q-body-sm">{{ 'catalog.referenceData.tags.lead' | t }}</p>
+        } @else {
+          <p class="q-body-sm" data-testid="ingredients-lead">
+            {{ 'catalog.referenceData.ingredients.lead' | t }}
+          </p>
+        }
+        <p class="q-caption">{{ 'catalog.referenceData.tenantWide' | t }}</p>
+
+        @if (lastError(); as message) {
+          <p class="q-body-sm error" role="alert" data-testid="reference-data-error">
+            {{ message }}
+          </p>
+        }
+
+        <form class="reference-data__form card" (submit)="$event.preventDefault(); create()">
+          <h2 class="q-heading">{{ 'catalog.referenceData.form.title' | t }}</h2>
+          <label class="q-caption">{{ 'catalog.referenceData.form.code' | t }}</label>
+          <input
+            type="text"
+            maxlength="32"
+            [value]="formCode()"
+            (input)="formCode.set($any($event.target).value)"
+            data-testid="form-code"
+          />
+          <p class="q-caption">{{ 'catalog.referenceData.form.codeHint' | t }}</p>
+          @for (locale of locales(); track locale) {
+            <label class="q-caption">
+              {{ 'catalog.referenceData.form.name' | t: { locale: localeName(locale) } }}
+              @if (isDefault(locale)) {
+                <span>({{ 'locales.defaultMarker' | t }})</span>
+              }
+            </label>
+            <input
+              type="text"
+              maxlength="80"
+              [value]="formNames()[locale] ?? ''"
+              (input)="setFormName(locale, $any($event.target).value)"
+              [attr.data-testid]="'form-name-' + locale"
+            />
+          }
+          @if (isTag()) {
+            <label class="q-caption">{{ 'catalog.referenceData.form.icon' | t }}</label>
+            <select
+              [value]="formIcon()"
+              (change)="formIcon.set($any($event.target).value)"
+              data-testid="form-icon"
+            >
+              <option value="">{{ 'catalog.referenceData.form.noIcon' | t }}</option>
+              @for (icon of icons; track icon) {
+                <option [value]="icon">{{ iconKey(icon) | t }}</option>
+              }
+            </select>
+            <label class="q-body-sm">
+              <input
+                type="checkbox"
+                [checked]="formBadge()"
+                (change)="formBadge.set($any($event.target).checked)"
+                data-testid="form-badge"
+              />
+              {{ 'catalog.referenceData.form.badge' | t }}
+            </label>
+            <label class="q-body-sm">
+              <input
+                type="checkbox"
+                [checked]="formFilter()"
+                (change)="formFilter.set($any($event.target).checked)"
+                data-testid="form-filter"
+              />
+              {{ 'catalog.referenceData.form.filter' | t }}
+            </label>
+            @if (formTouched() && !formBadge() && !formFilter()) {
+              <p class="q-caption error">
+                {{ 'catalog.referenceData.refusal.TAG_NOT_VISIBLE' | t }}
+              </p>
+            }
+          }
+          <label class="q-caption">{{ 'catalog.referenceData.form.sortOrder' | t }}</label>
+          <input
+            type="number"
+            [value]="formSortOrder()"
+            (input)="formSortOrder.set(+$any($event.target).value)"
+            data-testid="form-sort"
+          />
+          @if (formError(); as message) {
+            <p class="q-body-sm error" role="alert" data-testid="form-error">{{ message }}</p>
+          }
+          <button
+            type="submit"
+            class="primary"
+            [disabled]="formSubmitting() || !formValid()"
+            data-testid="form-submit"
+          >
+            {{
+              formSubmitting()
+                ? ('catalog.referenceData.form.creating' | t)
+                : ('catalog.referenceData.form.create' | t)
+            }}
+          </button>
+        </form>
+
+        @if (rows().length === 0) {
+          <p class="q-body-sm" data-testid="reference-data-empty">
+            {{ 'catalog.referenceData.empty' | t }}
+          </p>
+        } @else {
+          <table class="reference-data__table" data-testid="reference-data-table">
+            <thead>
+              <tr>
+                <th>{{ 'catalog.referenceData.col.code' | t }}</th>
+                <th>{{ 'catalog.referenceData.col.name' | t }}</th>
+                @if (isTag()) {
+                  <th>{{ 'catalog.referenceData.col.icon' | t }}</th>
+                  <th>{{ 'catalog.referenceData.col.shown' | t }}</th>
+                }
+                <th>{{ 'catalog.referenceData.col.status' | t }}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (entry of rows(); track entry.id) {
+                @if (editingId() === entry.id) {
+                  <tr data-testid="entry-edit-row">
+                    <td class="q-mono">{{ entry.code }}</td>
+                    <td>
+                      @for (locale of locales(); track locale) {
+                        <input
+                          type="text"
+                          maxlength="80"
+                          [value]="editNames()[locale] ?? ''"
+                          (input)="setEditName(locale, $any($event.target).value)"
+                          [attr.data-testid]="'edit-name-' + locale"
+                          [attr.aria-label]="localeName(locale)"
+                        />
+                      }
+                    </td>
+                    @if (isTag()) {
+                      <td>
+                        <select
+                          [value]="editIcon()"
+                          (change)="editIcon.set($any($event.target).value)"
+                          data-testid="edit-icon"
+                        >
+                          <option value="">{{ 'catalog.referenceData.form.noIcon' | t }}</option>
+                          @for (icon of icons; track icon) {
+                            <option [value]="icon">{{ iconKey(icon) | t }}</option>
+                          }
+                        </select>
+                      </td>
+                      <td>
+                        <label class="q-caption">
+                          <input
+                            type="checkbox"
+                            [checked]="editBadge()"
+                            (change)="editBadge.set($any($event.target).checked)"
+                            data-testid="edit-badge"
+                          />
+                          {{ 'catalog.referenceData.form.badge' | t }}
+                        </label>
+                        <label class="q-caption">
+                          <input
+                            type="checkbox"
+                            [checked]="editFilter()"
+                            (change)="editFilter.set($any($event.target).checked)"
+                            data-testid="edit-filter"
+                          />
+                          {{ 'catalog.referenceData.form.filter' | t }}
+                        </label>
+                      </td>
+                    }
+                    <td>
+                      <input
+                        type="number"
+                        [value]="editSortOrder()"
+                        (input)="editSortOrder.set(+$any($event.target).value)"
+                        data-testid="edit-sort"
+                      />
+                    </td>
+                    <td class="reference-data__actions">
+                      <button
+                        type="button"
+                        class="primary"
+                        [disabled]="editSubmitting() || !editValid()"
+                        (click)="saveEdit(entry)"
+                        data-testid="edit-save"
+                      >
+                        {{ 'catalog.referenceData.save' | t }}
+                      </button>
+                      <button type="button" (click)="cancelEdit()" data-testid="edit-cancel">
+                        {{ 'catalog.referenceData.cancel' | t }}
+                      </button>
+                    </td>
+                  </tr>
+                  @if (editError(); as message) {
+                    <tr>
+                      <td colspan="6" class="error" data-testid="edit-error">{{ message }}</td>
+                    </tr>
+                  }
+                } @else {
+                  <tr
+                    [attr.data-code]="entry.code"
+                    [class.reference-data__archived]="entry.status === 'ARCHIVED'"
+                  >
+                    <td class="q-mono">{{ entry.code }}</td>
+                    <td>{{ nameOf(entry) }}</td>
+                    @if (isTag()) {
+                      <td>{{ entry.iconKey ? (iconKey(entry.iconKey) | t) : '' }}</td>
+                      <td>
+                        @if (entry.showAsBadge) {
+                          <span class="q-caption">{{
+                            'catalog.referenceData.form.badge' | t
+                          }}</span>
+                        }
+                        @if (entry.showAsFilter) {
+                          <span class="q-caption">{{
+                            'catalog.referenceData.form.filter' | t
+                          }}</span>
+                        }
+                      </td>
+                    }
+                    <td>
+                      {{
+                        entry.status === 'ARCHIVED'
+                          ? ('catalog.referenceData.status.archived' | t)
+                          : ('catalog.referenceData.status.active' | t)
+                      }}
+                    </td>
+                    <td class="reference-data__actions">
+                      @if (entry.status === 'ACTIVE') {
+                        <button type="button" (click)="startEdit(entry)" data-testid="entry-edit">
+                          {{ 'catalog.referenceData.edit' | t }}
+                        </button>
+                        <button type="button" (click)="archive(entry)" data-testid="entry-archive">
+                          {{ 'catalog.referenceData.archive' | t }}
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        }
+      </section>
+    </div>
+  }
+</div>

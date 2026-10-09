@@ -35,6 +35,7 @@ import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.MxikFacts;
 import uz.horecaos.platform.catalog.domain.PhysicalAttributes;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
+import uz.horecaos.platform.catalog.domain.Vocabularies;
 import uz.horecaos.platform.media.api.MediaAssetId;
 
 /**
@@ -78,6 +79,7 @@ public class CatalogValidator {
         validateFiscalClassification(snapshot, findings);
         validatePhysicalAttributes(snapshot, findings);
         validateAutoAdd(snapshot, findings);
+        validateVocabulary(snapshot, findings);
 
         return new ValidationFinding.Report(List.copyOf(findings));
     }
@@ -399,6 +401,25 @@ public class CatalogValidator {
             }
         }
         return byVariant;
+    }
+
+    /**
+     * The tags and ingredients the menu's products carry (ADR 0174), loaded with the rest of the snapshot.
+     *
+     * @param tags                 the active tags some product of this catalog carries, by id
+     * @param ingredients          the same for ingredients
+     * @param tagIdsByProduct      each product's ordered, active tags
+     * @param ingredientIdsByProduct each product's ordered, active ingredients
+     */
+    public record VocabularyContext(
+            Map<UUID, Vocabularies.Entry> tags,
+            Map<UUID, Vocabularies.Entry> ingredients,
+            Map<UUID, List<UUID>> tagIdsByProduct,
+            Map<UUID, List<UUID>> ingredientIdsByProduct) {
+
+        public static VocabularyContext empty() {
+            return new VocabularyContext(Map.of(), Map.of(), Map.of(), Map.of());
+        }
     }
 
     /**
@@ -990,6 +1011,53 @@ public class CatalogValidator {
      * menu a {ru, en} brand had named completely in its own default language: its
      * editor offers no {@code uz} tab to satisfy it with.
      */
+    /**
+     * The tags and ingredients the products carry, and the variant names a size picker needs (ADR 0174).
+     *
+     * <p>A referenced tag or ingredient with no name in the brand's default locale is a blocker, as a product
+     * with no name is: the storefront would print its code. A variant with no name where its product has two or
+     * more active variants is a WARNING for one release (every existing menu was published without one), because
+     * the customer is shown the unit code instead and can still order.
+     */
+    private void validateVocabulary(Snapshot snapshot, List<ValidationFinding> findings) {
+        String locale = snapshot.defaultLocale();
+        String reason = snapshot.fallbackLocale().equals(locale)
+                ? "No name in the brand default locale " + locale
+                : "No name in the brand default locale " + locale + " or the catalog's " + snapshot.fallbackLocale();
+        VocabularyContext vocabulary = snapshot.vocabulary();
+        for (Vocabularies.Entry tag : vocabulary.tags().values()) {
+            if (!tag.names().containsKey(locale) && !tag.names().containsKey(snapshot.fallbackLocale())) {
+                findings.add(
+                        ValidationFinding.blocker("TAG_NAME_MISSING", EntityType.TAG, tag.id(), tag.code(), reason));
+            }
+        }
+        for (Vocabularies.Entry ingredient : vocabulary.ingredients().values()) {
+            if (!ingredient.names().containsKey(locale) && !ingredient.names().containsKey(snapshot.fallbackLocale())) {
+                findings.add(ValidationFinding.blocker(
+                        "INGREDIENT_NAME_MISSING", EntityType.INGREDIENT, ingredient.id(), ingredient.code(), reason));
+            }
+        }
+        for (Product product : snapshot.products()) {
+            List<Variant> orderable = snapshot.variantsByProduct().getOrDefault(product.id(), List.of()).stream()
+                    .filter(variant -> variant.status() == Status.ACTIVE)
+                    .toList();
+            if (product.status() != Status.ACTIVE || orderable.size() < 2) {
+                continue;
+            }
+            for (Variant variant : orderable) {
+                if (!snapshot.hasName(EntityType.VARIANT, variant.id())) {
+                    findings.add(ValidationFinding.warning(
+                            "VARIANT_NAME_MISSING",
+                            EntityType.VARIANT,
+                            variant.id(),
+                            variant.sku(),
+                            "This product has several variants and this one has no name to show beside the others. "
+                                    + reason));
+                }
+            }
+        }
+    }
+
     private void validateTranslations(Snapshot snapshot, List<ValidationFinding> findings) {
         String locale = snapshot.defaultLocale();
         String reason = snapshot.fallbackLocale().equals(locale)
@@ -1095,7 +1163,56 @@ public class CatalogValidator {
             boolean pricingWired,
             CompositeContext composite,
             Map<UUID, PhysicalAttributes> physicalByVariant,
-            AutoAddContext autoAdd) {
+            AutoAddContext autoAdd,
+            VocabularyContext vocabulary) {
+
+        /** A snapshot with auto-add rules (ADR 0158) and no tags or ingredients (ADR 0174). */
+        public Snapshot(
+                String defaultLocale,
+                String fallbackLocale,
+                List<Product> products,
+                List<Variant> variants,
+                Map<UUID, List<Variant>> variantsByProduct,
+                List<Category> categories,
+                Map<UUID, Category> categoriesById,
+                Map<UUID, List<UUID>> productIdsByCategory,
+                Map<UUID, List<UUID>> modifierGroupIdsByProduct,
+                List<ModifierGroup> modifierGroups,
+                Map<UUID, List<ModifierOption>> optionsByGroup,
+                Map<String, LocalizedText> translations,
+                Map<MediaAssetId, Set<UUID>> mediaReferences,
+                Set<MediaAssetId> displayableMedia,
+                Set<UUID> pricedVariantIds,
+                Set<UUID> offeredVariantIds,
+                FiscalContext fiscal,
+                boolean pricingWired,
+                CompositeContext composite,
+                Map<UUID, PhysicalAttributes> physicalByVariant,
+                AutoAddContext autoAdd) {
+            this(
+                    defaultLocale,
+                    fallbackLocale,
+                    products,
+                    variants,
+                    variantsByProduct,
+                    categories,
+                    categoriesById,
+                    productIdsByCategory,
+                    modifierGroupIdsByProduct,
+                    modifierGroups,
+                    optionsByGroup,
+                    translations,
+                    mediaReferences,
+                    displayableMedia,
+                    pricedVariantIds,
+                    offeredVariantIds,
+                    fiscal,
+                    pricingWired,
+                    composite,
+                    physicalByVariant,
+                    autoAdd,
+                    VocabularyContext.empty());
+        }
 
         /** A snapshot with composite products and physical attributes and no auto-add rules (ADR 0158). */
         public Snapshot(

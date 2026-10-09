@@ -311,4 +311,25 @@ describe('OrderDetailLines', () => {
       expect(row(0).querySelector('[data-testid="order-detail-line-weight"]')).toBeNull();
     });
   });
+
+  it('says a rule added the line, and says nothing for a line the customer chose (ADR 0158)', () => {
+    const { host } = render({
+      lines: [
+        line({ lineId: 'a', lineNumber: 1, productName: 'Burger' }),
+        line({
+          lineId: 'b',
+          lineNumber: 2,
+          productName: 'Delivery box',
+          origin: 'AUTO_ADD',
+          autoAddMandatory: true,
+        }),
+      ],
+    });
+
+    const rows = Array.from(host.querySelectorAll('[data-testid="order-detail-line"]'));
+    expect(rows[0].querySelector('[data-testid="order-detail-line-origin"]')).toBeNull();
+    expect(
+      rows[1].querySelector('[data-testid="order-detail-line-origin"]')?.textContent,
+    ).toContain('added automatically');
+  });
 });

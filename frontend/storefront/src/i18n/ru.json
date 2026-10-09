@@ -148,7 +148,8 @@
       "choose": "Выберите подарок",
       "add": "Добавить подарок: {{name}}",
       "addMany": "Добавить подарок: {{name}} ×{{count}}"
-    }
+    },
+    "autoAdded": "Добавлено автоматически"
   },
   "orders": {
     "title": "Заказы",
@@ -307,7 +308,8 @@
     "pickAtLeast": "Выберите не меньше {{min}}",
     "pickAny": "Выберите любые",
     "variantGroupsTitle": "Выбор для «{{variant}}»",
-    "fromPrice": "от {{price}}"
+    "fromPrice": "от {{price}}",
+    "ingredients": "Состав"
   },
   "terms": {
     "agreementTitle": "Договор публичной оферты",
@@ -450,5 +452,12 @@
     "portionStep": "Заказывается порциями по {{step}}",
     "weighedLine": "Взвешено: {{weight}}",
     "estimateLine": "≈ {{weight}}, оценка"
+  },
+  "menu": {
+    "filter": {
+      "title": "Фильтр по тегам",
+      "clear": "Сбросить",
+      "empty": "Нет блюд со всеми выбранными тегами."
+    }
   }
 }

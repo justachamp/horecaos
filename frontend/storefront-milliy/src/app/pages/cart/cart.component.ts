@@ -15,7 +15,13 @@ import { LangService } from '../../services/lang.service';
 import { TranslateService } from '../../services/translate.service';
 import { UiCartService } from '../../services/ui-cart.service';
 import type { CartResponseItem } from '../../types/cart.types';
-import { catchweightEstimateGrams, formatQuantity, formatWeight } from '../../utils/physical';
+import { canStepDown, canStepUp } from '../../utils/auto-add-line';
+import {
+  catchweightEstimateGrams,
+  formatQuantity,
+  formatWeight,
+  portionStep,
+} from '../../utils/physical';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
@@ -78,6 +84,15 @@ export class CartComponent implements OnInit {
     this.state.set('loading');
     await this.cart.load();
     this.state.set(this.cart.error() ? 'error' : 'ready');
+  }
+
+  /** ADR 0158: a line a rule added stops at the floor and the ceiling the cart states for it. */
+  protected canDecrease(item: CartResponseItem): boolean {
+    return canStepDown(item, portionStep(item.physical));
+  }
+
+  protected canIncrease(item: CartResponseItem): boolean {
+    return canStepUp(item, portionStep(item.physical));
   }
 
   protected increase(item: CartResponseItem): void {

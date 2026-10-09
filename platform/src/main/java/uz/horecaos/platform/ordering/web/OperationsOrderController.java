@@ -54,6 +54,7 @@ import uz.horecaos.platform.ordering.application.BranchResolutionQueryService.Br
 import uz.horecaos.platform.ordering.application.BranchResolutionQueryService.BranchResolution;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
+import uz.horecaos.platform.ordering.application.LineRemovalCoordinator;
 import uz.horecaos.platform.ordering.application.LiveBoardQueryService;
 import uz.horecaos.platform.ordering.application.MyWorkQueryService;
 import uz.horecaos.platform.ordering.application.OperatorCustomerLookupService;
@@ -894,7 +895,11 @@ public class OperationsOrderController {
                         presentablePayment,
                         table,
                         staffDirectory,
-                        portionSteps));
+                        portionSteps,
+                        // ADR 0169: whether this brand has the removal path on, so the console offers "remove a
+                        // line" and a lowered quantity only where the server will carry them out. Asked only of
+                        // an order that can still be amended.
+                        !detail.order().status().terminal() && amendments.lineRemovalEnabled(detail.order())));
     }
 
     @GetMapping("/{orderId}/revisions")
@@ -1325,13 +1330,16 @@ public class OperationsOrderController {
             summary = "Amend a live order, appending a new revision",
             description = "An amendment is not an edit. Applying one appends a revision carrying "
                     + "its own complete total and leaves the previous one byte-identical; it "
-                    + "never rewrites a revision and never creates a second order. Eleven of "
-                    + "ADR 0039's twelve commands are built (wave 10 added six financial ones — "
-                    + "ADD_LINES, CHANGE_LINE_QUANTITY increase-only, CHANGE_PAYMENT_METHOD, "
-                    + "CHANGE_DELIVERY_ADDRESS, CHANGE_FULFILLMENT_TIME and CHANGE_CONTACT — "
-                    + "beside the five already built); only REMOVE_LINES is still refused by "
-                    + "name rather than half-performed, pending an ADR 0017 return/write-off "
-                    + "primitive.")
+                    + "never rewrites a revision and never creates a second order. All twelve of "
+                    + "ADR 0039's commands are built. REMOVE_LINES and a CHANGE_LINE_QUANTITY that "
+                    + "lowers the quantity (ADR 0169) take a line off a confirmed order for a removal "
+                    + "reason the tenant authored (removalReasonId, kind LINE_REMOVAL); the reason decides "
+                    + "whether the stock goes back on the shelf or is written off, the kitchen's own "
+                    + "record can only make that more conservative, and the response's stockConsequence "
+                    + "says which before anything is applied. They are behind the brand's "
+                    + "ordering.amendment_line_removal_enabled gate, need the customer's recorded "
+                    + "agreement, and are refused on an order paid through a provider "
+                    + "(PAID_ORDER_DECREASE_NOT_SUPPORTED).")
     public ResponseEntity<AmendmentResponse> amend(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -1458,7 +1466,14 @@ public class OperationsOrderController {
             return ResponseEntity.ok(amendments.forOrder(tenantId, orderId).stream()
                     .filter(row -> row.id().equals(amendmentId))
                     .findFirst()
-                    .map(row -> AmendmentResponse.of(row, List.of(), List.of(), List.of()))
+                    .map(row -> AmendmentResponse.of(
+                            row,
+                            List.of(),
+                            List.of(),
+                            List.of(),
+                            row.removesStock()
+                                    ? amendments.stockConsequence(amendments.commands(tenantId, row.id()))
+                                    : List.of()))
                     .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such amendment")));
         }
     }
@@ -1516,7 +1531,8 @@ public class OperationsOrderController {
                             commandRows.stream()
                                     .map(c -> new AmendmentCommandDetail(
                                             c.commandType().name(), amendments.noteOf(c)))
-                                    .toList());
+                                    .toList(),
+                            row.removesStock() ? amendments.stockConsequence(commandRows) : List.of());
                 })
                 .toList());
     }
@@ -2277,7 +2293,47 @@ public class OperationsOrderController {
             // Whether this line takes a fraction is the amendment's decision against the published
             // menu, exactly as the cart's is; here it is only a positive amount the column can hold.
             @DecimalMin(value = "0", inclusive = false) @DecimalMax("999") @Digits(integer = 3, fraction = 3)
-            BigDecimal quantity) {
+            BigDecimal quantity,
+            // ADR 0169: REMOVE_LINES takes whole lines off the order; a combo goes whole, by all its lines.
+            @Size(max = 10) @Nullable List<UUID> orderLineIds,
+            // ADR 0169: the tenant-authored removal reason (kind LINE_REMOVAL) that decides what happens to the
+            // stock. Required for REMOVE_LINES and for a CHANGE_LINE_QUANTITY that lowers the quantity.
+            @Nullable UUID removalReasonId) {
+
+        /** Every request that predates ADR 0169. */
+        public AmendmentCommandRequest(
+                AmendmentCommandType type,
+                String kitchenNote,
+                Boolean callbackRequested,
+                Long cashTenderedMinor,
+                String courierNote,
+                String internalNote,
+                String recipientName,
+                String recipientPhone,
+                Instant promisedAt,
+                String paymentMethodCode,
+                DeliveryAddressRequest deliveryAddress,
+                List<AddLineRequest> lines,
+                UUID orderLineId,
+                BigDecimal quantity) {
+            this(
+                    type,
+                    kitchenNote,
+                    callbackRequested,
+                    cashTenderedMinor,
+                    courierNote,
+                    internalNote,
+                    recipientName,
+                    recipientPhone,
+                    promisedAt,
+                    paymentMethodCode,
+                    deliveryAddress,
+                    lines,
+                    orderLineId,
+                    quantity,
+                    null,
+                    null);
+        }
 
         OrderAmendmentService.AmendmentCommand toCommand() {
             return switch (type) {
@@ -2337,13 +2393,18 @@ public class OperationsOrderController {
                         throw new IllegalArgumentException(
                                 "CHANGE_LINE_QUANTITY carries the line it targets and the new quantity");
                     }
-                    yield OrderAmendmentService.AmendmentCommand.changeLineQuantity(orderLineId, quantity);
+                    yield OrderAmendmentService.AmendmentCommand.changeLineQuantity(
+                            orderLineId, quantity, removalReasonId);
                 }
-                // Declared by ADR 0039 and not built. Refused here as well as in
-                // the service, so the failure arrives before anything is written.
-                default ->
-                    throw new OrderAmendmentService.AmendmentNotPermittedException(
-                            "%s is declared by ADR 0039 and not built in this release".formatted(type));
+                // ADR 0169. Whether the brand has the removal path on is the service's decision, asked once the
+                // order is known; here the request only has to say which lines.
+                case REMOVE_LINES -> {
+                    if (orderLineIds == null || orderLineIds.isEmpty()) {
+                        throw new IllegalArgumentException(
+                                "REMOVE_LINES carries the order lines to take off and a removal reason");
+                    }
+                    yield OrderAmendmentService.AmendmentCommand.removeLines(orderLineIds, removalReasonId);
+                }
             };
         }
     }
@@ -2492,10 +2553,55 @@ public class OperationsOrderController {
             Instant createdAt,
             String createdByActorType,
             @Nullable String createdByActorId,
-            List<String> actions) {
+            List<String> actions,
+            List<StockConsequenceLine> stockConsequence) {
+
+        /** Every response before ADR 0169, none of which takes stock off the order. */
+        public AmendmentResponse(
+                UUID amendmentId,
+                UUID orderId,
+                String status,
+                int baseRevision,
+                Integer appliedRevision,
+                long deltaTotalMinor,
+                boolean requiresApproval,
+                String confirmationChannel,
+                Instant expiresAt,
+                int amendmentVersion,
+                int orderVersion,
+                List<String> commands,
+                List<String> warnings,
+                boolean replayed,
+                List<AmendmentCommandDetail> commandDetails,
+                Instant createdAt,
+                String createdByActorType,
+                @Nullable String createdByActorId,
+                List<String> actions) {
+            this(
+                    amendmentId,
+                    orderId,
+                    status,
+                    baseRevision,
+                    appliedRevision,
+                    deltaTotalMinor,
+                    requiresApproval,
+                    confirmationChannel,
+                    expiresAt,
+                    amendmentVersion,
+                    orderVersion,
+                    commands,
+                    warnings,
+                    replayed,
+                    commandDetails,
+                    createdAt,
+                    createdByActorType,
+                    createdByActorId,
+                    actions,
+                    List.of());
+        }
 
         static AmendmentResponse of(OrderAmendmentService.AmendmentResult result) {
-            return of(result.amendment(), result.warnings(), List.of(), List.of())
+            return of(result.amendment(), result.warnings(), List.of(), List.of(), result.stockConsequence())
                     .withOrderVersion(result.orderVersion(), result.replayed());
         }
 
@@ -2504,6 +2610,15 @@ public class OperationsOrderController {
                 List<String> warnings,
                 List<String> commands,
                 List<AmendmentCommandDetail> commandDetails) {
+            return of(row, warnings, commands, commandDetails, List.of());
+        }
+
+        static AmendmentResponse of(
+                JdbcOrderAmendmentStore.AmendmentRow row,
+                List<String> warnings,
+                List<String> commands,
+                List<AmendmentCommandDetail> commandDetails,
+                List<LineRemovalCoordinator.LineConsequence> stockConsequence) {
             return new AmendmentResponse(
                     row.id(),
                     row.orderId(),
@@ -2523,14 +2638,17 @@ public class OperationsOrderController {
                     row.createdAt(),
                     row.createdByActorType(),
                     row.createdByActorId(),
-                    actionsFor(row));
+                    actionsFor(row),
+                    stockConsequence.stream().map(StockConsequenceLine::of).toList());
         }
 
         private static List<String> actionsFor(JdbcOrderAmendmentStore.AmendmentRow row) {
             if (row.status().terminal()) {
                 return List.of();
             }
-            boolean awaitingConfirmation = row.deltaTotalMinor() > 0 && row.confirmationAttestedAt() == null;
+            // ADR 0169: a removal waits for the customer's agreement whatever it does to the total.
+            boolean awaitingConfirmation =
+                    (row.deltaTotalMinor() > 0 || row.removesStock()) && row.confirmationAttestedAt() == null;
             boolean awaitingApproval = row.requiresApproval() && row.approvalRequestId() == null;
             return awaitingConfirmation || awaitingApproval ? List.of("RESOLVE") : List.of();
         }
@@ -2555,7 +2673,54 @@ public class OperationsOrderController {
                     createdAt,
                     createdByActorType,
                     createdByActorId,
-                    actions);
+                    actions,
+                    stockConsequence);
+        }
+    }
+
+    /**
+     * What one affected order line costs the stock (ADR 0169), shown before a removal is applied and kept with
+     * the amendment after it. Units, never money: the ledger carries no cost.
+     *
+     * @param kitchenState {@code NOT_STARTED}, {@code STARTED}, {@code MADE} or {@code UNKNOWN}; a started or made
+     *        line is written off whatever the reason says
+     * @param declaredDisposition what the removal reason says to do with a sold unit
+     * @param effectiveDisposition what applies once the kitchen's record is taken into account
+     */
+    public record StockConsequenceLine(
+            UUID orderLineId,
+            UUID variantId,
+            String productName,
+            BigDecimal quantityBefore,
+            BigDecimal quantityAfter,
+            int stockUnits,
+            String kitchenState,
+            String declaredDisposition,
+            String effectiveDisposition,
+            int releasedUnits,
+            int returnedUnits,
+            int writtenOffUnits,
+            int noEffectUnits,
+            UUID reasonId,
+            String reasonCategory) {
+
+        static StockConsequenceLine of(LineRemovalCoordinator.LineConsequence consequence) {
+            return new StockConsequenceLine(
+                    consequence.orderLineId(),
+                    consequence.variantId(),
+                    consequence.productName(),
+                    consequence.quantityBefore(),
+                    consequence.quantityAfter(),
+                    consequence.stockUnits(),
+                    consequence.kitchenState(),
+                    consequence.declaredDisposition(),
+                    consequence.effectiveDisposition(),
+                    consequence.releasedUnits(),
+                    consequence.returnedUnits(),
+                    consequence.writtenOffUnits(),
+                    consequence.noEffectUnits(),
+                    consequence.reasonId(),
+                    consequence.reasonCategory());
         }
     }
 
@@ -3030,6 +3195,10 @@ public class OperationsOrderController {
      *                       subject id.
      * @param acceptedByDisplayName the same resolution for {@code
      *                       acceptedByActorId}
+     * @param lineRemovalEnabled ADR 0169: true when this brand has {@code
+     *                       ordering.amendment_line_removal_enabled} on and the
+     *                       order can still be amended, so the console offers
+     *                       the removal path only where it will be carried out
      */
     public record OrderDetailResponse(
             OrderSummaryResponse summary,
@@ -3052,7 +3221,8 @@ public class OperationsOrderController {
             @Nullable Long cashTenderedExpectedMinor,
             @Nullable Long changeDueMinor,
             @Nullable OutcomeResponse outcome,
-            CustomerResponse customer) {
+            CustomerResponse customer,
+            boolean lineRemovalEnabled) {
 
         static OrderDetailResponse of(
                 OrderQueryService.OrderDetail detail,
@@ -3063,7 +3233,8 @@ public class OperationsOrderController {
                 boolean presentablePayment,
                 OrderTablesPort.@Nullable OrderTable table,
                 StaffDirectory staffDirectory,
-                Map<UUID, BigDecimal> portionSteps) {
+                Map<UUID, BigDecimal> portionSteps,
+                boolean lineRemovalEnabled) {
             var order = detail.order();
             return new OrderDetailResponse(
                     OrderSummaryResponse.of(
@@ -3096,7 +3267,8 @@ public class OperationsOrderController {
                             ? null
                             : order.cashTenderedExpectedMinor() - order.totalMinor(),
                     outcomeRow == null ? null : OutcomeResponse.of(outcomeRow),
-                    CustomerResponse.of(detail.customer()));
+                    CustomerResponse.of(detail.customer()),
+                    lineRemovalEnabled);
         }
 
         /**

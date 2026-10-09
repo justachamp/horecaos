@@ -31,7 +31,7 @@ import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 
 /**
- * Authoring the tenant's cancellation and completion reasons (ADR 0039).
+ * Authoring the tenant's cancellation, completion and line-removal reasons (ADR 0039, ADR 0169).
  *
  * <p>Two rules run through it.
  *
@@ -106,10 +106,10 @@ public class OrderOutcomeReasonService {
                 command.kind(),
                 command.systemCategory().name(),
                 command.internalName().strip(),
-                command.kind() == OutcomeReasonKind.CANCELLATION
+                command.kind() != OutcomeReasonKind.COMPLETION
                         ? requireCancellationField(command.stockDisposition()).name()
                         : null,
-                command.kind() == OutcomeReasonKind.CANCELLATION
+                command.kind() != OutcomeReasonKind.COMPLETION
                         ? requireCancellationField(command.liabilityParty()).name()
                         : null,
                 command.kind() == OutcomeReasonKind.CANCELLATION
@@ -161,11 +161,11 @@ public class OrderOutcomeReasonService {
                         expectedVersion,
                         command.systemCategory().name(),
                         command.internalName().strip(),
-                        command.kind() == OutcomeReasonKind.CANCELLATION
+                        command.kind() != OutcomeReasonKind.COMPLETION
                                 ? requireCancellationField(command.stockDisposition())
                                         .name()
                                 : null,
-                        command.kind() == OutcomeReasonKind.CANCELLATION
+                        command.kind() != OutcomeReasonKind.COMPLETION
                                 ? requireCancellationField(command.liabilityParty())
                                         .name()
                                 : null,
@@ -226,6 +226,80 @@ public class OrderOutcomeReasonService {
                 before,
                 after,
                 now);
+    }
+
+    /**
+     * The three starter removal reasons (ADR 0169, open input on the starter set), for a tenant that has never
+     * had one: "Customer changed their mind" (return to stock, the customer carries it), "Kitchen error" (write
+     * off, the tenant carries it) and "Order entry error" (return to stock, the tenant carries it). V0541 gave
+     * them to every tenant that existed; this gives them to a tenant activated after it. A tenant that already
+     * has any removal reason, archived ones included, is left alone, so a tenant that retired the starter set is
+     * not handed it back.
+     *
+     * @return whether anything was seeded
+     */
+    @Transactional
+    public boolean seedStarterRemovalReasons(UUID tenantId) {
+        if (!reasons.list(tenantId, OutcomeReasonKind.LINE_REMOVAL, false).isEmpty()) {
+            return false;
+        }
+        record Starter(
+                String name,
+                OutcomeSystemCategory category,
+                StockDisposition disposition,
+                LiabilityParty liable,
+                String ru,
+                String uz,
+                String en) {}
+        List<Starter> starters = List.of(
+                new Starter(
+                        "Customer changed their mind",
+                        OutcomeSystemCategory.CUSTOMER_CHANGED_MIND,
+                        StockDisposition.RETURN_TO_STOCK,
+                        LiabilityParty.CUSTOMER,
+                        "По вашей просьбе блюдо убрано из заказа.",
+                        "Sizning iltimosingizga ko‘ra taom buyurtmadan olib tashlandi.",
+                        "At your request, the dish was removed from your order."),
+                new Starter(
+                        "Kitchen error",
+                        OutcomeSystemCategory.KITCHEN_ERROR,
+                        StockDisposition.WRITE_OFF,
+                        LiabilityParty.TENANT,
+                        "Блюдо убрано из заказа: на кухне произошла ошибка.",
+                        "Taom buyurtmadan olib tashlandi: oshxonada xatolik yuz berdi.",
+                        "The dish was removed from your order because of a kitchen error."),
+                new Starter(
+                        "Order entry error",
+                        OutcomeSystemCategory.ORDER_ENTRY_ERROR,
+                        StockDisposition.RETURN_TO_STOCK,
+                        LiabilityParty.TENANT,
+                        "Блюдо убрано из заказа: оно было добавлено по ошибке.",
+                        "Taom buyurtmadan olib tashlandi: u xato bilan qoʻshilgan edi.",
+                        "The dish was removed from your order because it was added by mistake."));
+        Instant now = clock.instant();
+        int position = 0;
+        for (Starter starter : starters) {
+            UUID reasonId = UUID.randomUUID();
+            reasons.insert(new JdbcOutcomeReasonStore.NewReason(
+                    reasonId,
+                    tenantId,
+                    OutcomeReasonKind.LINE_REMOVAL,
+                    starter.category().name(),
+                    starter.name(),
+                    starter.disposition().name(),
+                    starter.liable().name(),
+                    null,
+                    null,
+                    now));
+            reasons.replaceTexts(
+                    reasonId,
+                    Map.of(
+                            "ru", starter.ru(),
+                            "uz-Latn", starter.uz(),
+                            "en", starter.en()));
+            reasons.setDisplayOrder(tenantId, reasonId, position++, now);
+        }
+        return true;
     }
 
     public List<ReasonRow> list(UUID tenantId, OutcomeReasonKind kind, boolean activeOnly) {
@@ -448,6 +522,30 @@ public class OrderOutcomeReasonService {
                     && !command.allowedFulfillmentModes().isEmpty()) {
                 throw new IllegalArgumentException(
                         "Fulfilment modes belong to a completion reason, not a cancellation");
+            }
+        } else if (command.kind() == OutcomeReasonKind.LINE_REMOVAL) {
+            // ADR 0169. A removal decides the disposition and who carries the cost, and has no refund posture:
+            // a paid order's removal is refused, and a cash order has nothing to give back.
+            if (command.stockDisposition() == null || command.liabilityParty() == null) {
+                throw new IllegalArgumentException("A line-removal reason decides the stock disposition and "
+                        + "the liable party; neither has a safe default");
+            }
+            if (command.stockDisposition() == StockDisposition.RELEASE) {
+                throw new IllegalArgumentException("A removal is asked about by the reservation itself: choose "
+                        + "return to stock, write off or no effect");
+            }
+            if (command.systemCategory() == OutcomeSystemCategory.ITEM_UNAVAILABLE
+                    && command.stockDisposition() == StockDisposition.RETURN_TO_STOCK) {
+                // The stock is by definition not there.
+                throw new IllegalArgumentException(
+                        "An item that was not available cannot be returned to stock; choose write off or no effect");
+            }
+            if (command.customerRefund() != null) {
+                throw new IllegalArgumentException("A line removal has no refund posture");
+            }
+            if (command.allowedFulfillmentModes() != null
+                    && !command.allowedFulfillmentModes().isEmpty()) {
+                throw new IllegalArgumentException("Fulfilment modes belong to a completion reason");
             }
         } else {
             if (command.allowedFulfillmentModes() == null

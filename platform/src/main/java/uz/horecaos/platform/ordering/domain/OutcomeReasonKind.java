@@ -3,12 +3,12 @@ package uz.horecaos.platform.ordering.domain;
 /**
  * What a tenant's outcome reason is for (ADR 0039).
  *
- * <p>Two registries in one table rather than two tables, because they share
+ * <p>Three registries in one table rather than three, because they share
  * everything that matters — a tenant name, a platform category, a customer
  * wording, a version — and differ only in which consequence columns apply. The
- * database states that difference as an equivalence per column, so a completion
- * reason cannot carry a stock disposition and a cancellation reason cannot be
- * missing one.
+ * database states that difference per column, so a completion reason cannot carry
+ * a stock disposition, a cancellation or removal reason cannot be missing one, and
+ * only a cancellation carries a refund posture.
  */
 public enum OutcomeReasonKind {
 
@@ -16,5 +16,12 @@ public enum OutcomeReasonKind {
     CANCELLATION,
 
     /** How an order was completed. Carries the fulfilment modes it is valid for. */
-    COMPLETION
+    COMPLETION,
+
+    /**
+     * Why a line was taken off a confirmed order, or its quantity lowered (ADR 0169). Carries the stock
+     * disposition and the liable party, like a cancellation, and no refund posture: a removal on an order the
+     * customer paid through a provider is refused, and a cash order has nothing to refund.
+     */
+    LINE_REMOVAL
 }

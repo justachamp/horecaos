@@ -822,6 +822,12 @@ export const settingsEn = {
   'settings.referenceData.cancellation.add': 'Add cancellation reason',
   'settings.referenceData.completion.title': 'Completion reasons',
   'settings.referenceData.completion.add': 'Add completion reason',
+  'settings.referenceData.removal.title': 'Line removal reasons',
+  'settings.referenceData.removal.add': 'Add removal reason',
+  'settings.referenceData.removal.lead':
+    'Why a line was taken off a confirmed order. The reason decides what happens to its stock; the operator picks the reason and never the disposition.',
+  'settings.referenceData.removal.unavailableCannotReturn':
+    'A reason for an unavailable item cannot return it to stock: it was never there.',
   'settings.referenceData.add': 'Add',
   'settings.referenceData.disable': 'Disable',
   'settings.referenceData.empty': 'None yet.',

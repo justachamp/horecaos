@@ -22,26 +22,30 @@ package uz.horecaos.platform.ordering.domain;
  * financial commands: {@link #ADD_LINES} and {@link #CHANGE_LINE_QUANTITY} for
  * an increase only, {@link #CHANGE_PAYMENT_METHOD} for {@code CASH} at either
  * end or opening a fresh online intent, {@link #CHANGE_DELIVERY_ADDRESS},
- * {@link #CHANGE_FULFILLMENT_TIME} and {@link #CHANGE_CONTACT}. Eleven of the
- * twelve are built in total; only {@link #REMOVE_LINES} is still declared and
- * refused — the set is code-owned like {@link OrderStatus}, and a set that is
- * open at the edges cannot express "closed" — because releasing or writing off
- * already-committed stock needs a fourth ADR 0017 primitive (return-to-stock
- * or write-off) beyond the port's deliberate three (hold, commit, release),
- * and inventing one is that module's decision, not this one's. {@code
- * built()} is false for it, so the application refuses it by name rather than
- * accepting a command it would carry out in the quote and forget in the
- * inventory ledger.
+ * {@link #CHANGE_FULFILLMENT_TIME} and {@link #CHANGE_CONTACT}. ADR 0169 built
+ * the seventh, {@link #REMOVE_LINES}, and the decrease of {@link
+ * #CHANGE_LINE_QUANTITY}, on the fourth ADR 0017 primitive (inventory's {@code
+ * dispose}). All twelve are built; whether a brand may use the two that take
+ * stock off an order is the rollout gate {@code
+ * ordering.amendment_line_removal_enabled}, a configuration value and not a
+ * property of the command, so {@code built()} is true for it and the service
+ * refuses by name while the gate is off.
  */
 public enum AmendmentCommandType {
     /** Wave 10 (gap map rows {@code 1.2c}/{@code 2.1d}): increases only, no modifiers. */
     ADD_LINES(true, true),
 
-    /** Wave 10: increases only — a decrease has no ADR 0017 return/waste primitive yet. */
+    /**
+     * Wave 10: an increase. ADR 0169: and a decrease, which names a removal reason and gives the units it frees
+     * back through inventory's {@code dispose}, behind the brand's rollout gate.
+     */
     CHANGE_LINE_QUANTITY(true, true),
 
-    /** Still refused: removing a line needs the same missing ADR 0017 primitive as a decrease. */
-    REMOVE_LINES(true, false),
+    /**
+     * ADR 0169: takes whole lines (a combo, whole) off the order, naming a tenant-authored removal reason whose
+     * stock disposition decides whether the units go back on the shelf or are written off.
+     */
+    REMOVE_LINES(true, true),
 
     /** Wave 10: {@code CASH} at either end direct; anything else needs a void/refund this build cannot do. */
     CHANGE_PAYMENT_METHOD(true, true),

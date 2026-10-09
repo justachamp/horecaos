@@ -169,6 +169,25 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   'orders.dialog.changeQuantity.line': 'Pozitsiya',
   'orders.dialog.changeQuantity.newQuantity': 'Yangi miqdor (kamida {min})',
   'orders.dialog.changeQuantity.comboOption': '{name} (kombo: {count})',
+  'orders.dialog.changeQuantity.lowering':
+    'Miqdorni kamaytirish pozitsiyaning bir qismini buyurtmadan olib tashlaydi. Sababni tanlang: u porsiyalar omborga qaytishini belgilaydi.',
+  'orders.dialog.removal.reason': 'Olib tashlash sababi',
+  'orders.dialog.removal.reasonPlaceholder': 'Sababni tanlang',
+  'orders.dialog.removal.noReasons':
+    'Ijarachida faol olib tashlash sababi yoʻq, shuning uchun taomni buyurtmadan hozircha olib boʻlmaydi.',
+  'orders.dialog.removal.noReasonsLink': 'Maʼlumotnomalarda qoʻshing',
+  'orders.dialog.removeLines.title': 'Taomlarni olib tashlash',
+  'orders.dialog.removeLines.lead':
+    'Buyurtmadan nimani olib tashlashni tanlang. Kombo butunlay olib tashlanadi.',
+  'orders.dialog.removeLines.wouldEmpty':
+    'Shunda buyurtmada hech narsa qolmaydi. Buyurtmani bekor qiling: sabab yoziladi.',
+  'orders.dialog.removeLines.confirm': 'Oʻzgarishni koʻrib chiqish',
+  'orders.dialog.amendConfirm.stock.units': 'Olib tashlanadigan birliklar: {count}.',
+  'orders.dialog.amendConfirm.stock.writtenOff': 'Hisobdan chiqariladi: {count}.',
+  'orders.dialog.amendConfirm.stock.returned': 'Omborga qaytadi: {count}.',
+  'orders.dialog.amendConfirm.stock.released': 'Bron bekor qilinadi: {count}.',
+  'orders.dialog.amendConfirm.stock.kitchen':
+    'Oshxona tayyorlashni boshlagan, shuning uchun sabab qanday boʻlishidan qatʼi nazar hisobdan chiqariladi.',
 
   'orders.dialog.changeAddress.line2': 'Manzil, 2-qator',
   'orders.dialog.changeAddress.city': 'Shahar',

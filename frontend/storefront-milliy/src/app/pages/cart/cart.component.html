@@ -43,6 +43,11 @@
             ></div>
             <div class="line__body">
               <span class="line__name">{{ item.name }}</span>
+              @if (item.autoAdd; as auto) {
+                <span class="line__addons line__auto" data-testid="cart-line-auto-add">{{
+                  auto.text ?? ('cart.autoAdded' | t)
+                }}</span>
+              }
               @if (comboLabel(item); as components) {
                 <span class="line__addons" data-testid="cart-line-combo">{{ components }}</span>
               }
@@ -71,6 +76,7 @@
                 type="button"
                 class="qty__btn"
                 (click)="decrease(item)"
+                [disabled]="!canDecrease(item)"
                 [attr.aria-label]="'common.decrease' | t"
               >
                 −
@@ -80,6 +86,7 @@
                 type="button"
                 class="qty__btn qty__btn--add"
                 (click)="increase(item)"
+                [disabled]="!canIncrease(item)"
                 [attr.aria-label]="'common.increase' | t"
               >
                 +

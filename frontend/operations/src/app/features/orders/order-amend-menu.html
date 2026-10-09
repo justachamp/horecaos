@@ -57,9 +57,9 @@
     </li>
   </ul>
 
-  <!-- wave 10 financial commands (rows 1.2c/2.1d) — REMOVE_LINES is deliberately absent, see the class doc. -->
+  <!-- wave 10 financial commands (rows 1.2c/2.1d); REMOVE_LINES (ADR 0169) only where the brand has it on, see the class doc. -->
   <ul class="amend-menu__list amend-menu__list--financial">
-    @for (type of financialCommands; track type) {
+    @for (type of financialCommands(); track type) {
       <li>
         <button
           type="button"

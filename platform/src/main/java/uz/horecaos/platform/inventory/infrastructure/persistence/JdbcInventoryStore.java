@@ -562,7 +562,7 @@ public class JdbcInventoryStore {
                 FROM inventory.reservation_lines rl
                 JOIN inventory.stock_items si ON si.id = rl.stock_item_id
                 WHERE rl.tenant_id = :tenantId AND rl.reservation_id = :reservationId
-                  AND si.tracking_mode = 'QUANTITY'
+                  AND si.tracking_mode = 'QUANTITY' AND rl.quantity > 0
                 """)
                 .param("tenantId", tenantId)
                 .param("reservationId", reservationId)
@@ -588,7 +588,7 @@ public class JdbcInventoryStore {
                 SELECT rl.tenant_id, rl.stock_item_id, rl.quantity
                 FROM inventory.reservation_lines rl
                 JOIN inventory.stock_items si ON si.id = rl.stock_item_id
-                WHERE rl.reservation_id = ANY(:ids) AND si.tracking_mode = 'QUANTITY'
+                WHERE rl.reservation_id = ANY(:ids) AND si.tracking_mode = 'QUANTITY' AND rl.quantity > 0
                 """)
                 .param("ids", reservationIds.toArray(UUID[]::new))
                 .query((row, number) -> new QuantityReservationLineRow(
@@ -599,6 +599,264 @@ public class JdbcInventoryStore {
     }
 
     public record QuantityReservationLineRow(UUID tenantId, UUID stockItemId, BigDecimal quantity) {}
+
+    // ------------------------------------------------------------------------ disposal (ADR 0169)
+
+    /** One reservation line of one of an order's holds. */
+    public record OrderReservationLine(UUID reservationId, UUID stockItemId, String status, BigDecimal quantity) {}
+
+    /**
+     * Takes the position row lock of each stock item, in the order given. Callers pass them sorted by id, the
+     * order {@code reserveForQuote} locks in, so two concurrent disposals (or a disposal and a reservation)
+     * naming overlapping items wait on one another rather than deadlock.
+     */
+    public void lockPositions(UUID tenantId, List<UUID> stockItemIdsInOrder) {
+        for (UUID stockItemId : stockItemIdsInOrder) {
+            jdbc.sql("""
+                    SELECT 1 FROM inventory.positions
+                     WHERE stock_item_id = :stockItemId AND tenant_id = :tenantId
+                       FOR UPDATE
+                    """)
+                    .param("stockItemId", stockItemId)
+                    .param("tenantId", tenantId)
+                    .query(Integer.class)
+                    .optional();
+        }
+    }
+
+    /**
+     * Every line of every reservation owned by one of these quotes, for these stock items, with the
+     * reservation's status: the order's claim on the shelf as inventory itself records it. Oldest hold first,
+     * so a release takes from the original hold before an amendment's.
+     */
+    public List<OrderReservationLine> orderReservationLines(
+            UUID tenantId, List<UUID> quoteIds, java.util.Collection<UUID> stockItemIds) {
+        if (quoteIds.isEmpty() || stockItemIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("""
+                SELECT r.id AS reservation_id, rl.stock_item_id, r.status, rl.quantity
+                  FROM inventory.reservations r
+                  JOIN inventory.reservation_lines rl
+                    ON rl.reservation_id = r.id AND rl.tenant_id = r.tenant_id
+                 WHERE r.tenant_id = :tenantId AND r.owner_type = 'QUOTE' AND r.owner_id = ANY(:quoteIds)
+                   AND rl.stock_item_id = ANY(:stockItemIds)
+                 ORDER BY r.created_at, r.id
+                """)
+                .param("tenantId", tenantId)
+                .param("quoteIds", quoteIds.toArray(UUID[]::new))
+                .param("stockItemIds", stockItemIds.toArray(UUID[]::new))
+                .query((row, number) -> new OrderReservationLine(
+                        row.getObject("reservation_id", UUID.class),
+                        row.getObject("stock_item_id", UUID.class),
+                        row.getString("status"),
+                        row.getBigDecimal("quantity")))
+                .list();
+    }
+
+    /** Lowers a reservation line by the units a disposal took out of it; never below zero. */
+    public void reduceReservationLine(UUID tenantId, UUID reservationId, UUID stockItemId, BigDecimal by) {
+        jdbc.sql("""
+                UPDATE inventory.reservation_lines
+                   SET quantity = GREATEST(quantity - :by, 0)
+                 WHERE tenant_id = :tenantId AND reservation_id = :reservationId AND stock_item_id = :stockItemId
+                """)
+                .param("tenantId", tenantId)
+                .param("reservationId", reservationId)
+                .param("stockItemId", stockItemId)
+                .param("by", by)
+                .update();
+    }
+
+    /**
+     * The units earlier disposals of this order already returned, wrote off or took without effect for one stock
+     * item. They are still on a {@code COMMITTED} line (a committed reservation is never reopened), so a later
+     * disposal must not count them as the order's claim a second time.
+     */
+    public int disposedSoldUnits(UUID tenantId, UUID orderId, UUID stockItemId) {
+        return jdbc.sql("""
+                SELECT COALESCE(sum(l.returned_units + l.written_off_units + l.no_effect_units), 0)::int
+                  FROM inventory.stock_disposal_lines l
+                  JOIN inventory.stock_disposals d ON d.id = l.disposal_id AND d.tenant_id = l.tenant_id
+                 WHERE d.tenant_id = :tenantId AND d.order_id = :orderId AND l.stock_item_id = :stockItemId
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .param("stockItemId", stockItemId)
+                .query(Integer.class)
+                .single();
+    }
+
+    /** A disposal already recorded under this key, with its lines. */
+    public record DisposalLineRow(
+            UUID stockItemId,
+            UUID variantId,
+            int units,
+            int releasedUnits,
+            int returnedUnits,
+            int writtenOffUnits,
+            int noEffectUnits,
+            List<UUID> movementIds) {}
+
+    public List<DisposalLineRow> findDisposalLines(UUID tenantId, String idempotencyKey) {
+        return jdbc.sql("""
+                SELECT l.stock_item_id, l.variant_id, l.units, l.released_units, l.returned_units,
+                       l.written_off_units, l.no_effect_units, l.movement_ids
+                  FROM inventory.stock_disposals d
+                  JOIN inventory.stock_disposal_lines l ON l.disposal_id = d.id AND l.tenant_id = d.tenant_id
+                 WHERE d.tenant_id = :tenantId AND d.idempotency_key = :key
+                 ORDER BY l.stock_item_id
+                """)
+                .param("tenantId", tenantId)
+                .param("key", idempotencyKey)
+                .query((row, number) -> new DisposalLineRow(
+                        row.getObject("stock_item_id", UUID.class),
+                        row.getObject("variant_id", UUID.class),
+                        row.getInt("units"),
+                        row.getInt("released_units"),
+                        row.getInt("returned_units"),
+                        row.getInt("written_off_units"),
+                        row.getInt("no_effect_units"),
+                        uuidArray(row.getArray("movement_ids"))))
+                .list();
+    }
+
+    public boolean disposalExists(UUID tenantId, String idempotencyKey) {
+        return jdbc.sql(
+                                "SELECT count(*) FROM inventory.stock_disposals WHERE tenant_id = :tenantId AND idempotency_key = :key")
+                        .param("tenantId", tenantId)
+                        .param("key", idempotencyKey)
+                        .query(Long.class)
+                        .single()
+                > 0;
+    }
+
+    public void insertDisposal(
+            UUID disposalId,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID orderId,
+            String idempotencyKey,
+            String declared,
+            String reasonCode,
+            String actorType,
+            @Nullable UUID actorId,
+            Instant now) {
+        jdbc.sql("""
+                INSERT INTO inventory.stock_disposals (
+                    id, tenant_id, brand_id, location_id, order_id, idempotency_key, declared, reason_code,
+                    actor_type, actor_id, created_at)
+                VALUES (:id, :tenantId, :brandId, :locationId, :orderId, :key, :declared, :reasonCode,
+                    :actorType, :actorId, :now)
+                """)
+                .param("id", disposalId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("orderId", orderId)
+                .param("key", idempotencyKey)
+                .param("declared", declared)
+                .param("reasonCode", reasonCode)
+                .param("actorType", actorType)
+                .param("actorId", actorId)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .update();
+    }
+
+    public void insertDisposalLine(UUID disposalId, UUID tenantId, DisposalLineRow line) {
+        jdbc.sql("""
+                INSERT INTO inventory.stock_disposal_lines (
+                    disposal_id, tenant_id, stock_item_id, variant_id, units, released_units, returned_units,
+                    written_off_units, no_effect_units, movement_ids)
+                VALUES (:disposalId, :tenantId, :stockItemId, :variantId, :units, :released, :returned,
+                    :writtenOff, :noEffect, CAST(:movementIds AS uuid[]))
+                """)
+                .param("disposalId", disposalId)
+                .param("tenantId", tenantId)
+                .param("stockItemId", line.stockItemId())
+                .param("variantId", line.variantId())
+                .param("units", line.units())
+                .param("released", line.releasedUnits())
+                .param("returned", line.returnedUnits())
+                .param("writtenOff", line.writtenOffUnits())
+                .param("noEffect", line.noEffectUnits())
+                .param("movementIds", line.movementIds().toArray(UUID[]::new))
+                .update();
+    }
+
+    /**
+     * Appends one movement of a disposal and returns its id, or empty when the idempotency key was already
+     * used for this stock item (a retry that got that far before). Does not touch the position: the caller
+     * moves {@code on_hand_quantity} once, net, with {@link #addOnHand}.
+     */
+    public Optional<UUID> appendMovement(
+            UUID tenantId,
+            UUID stockItemId,
+            String movementType,
+            BigDecimal quantityDelta,
+            UUID sourceOrderId,
+            String idempotencyKey,
+            String reasonCode,
+            String actorType,
+            @Nullable UUID actorId,
+            Instant now) {
+        UUID movementId = UUID.randomUUID();
+        int inserted = jdbc.sql("""
+                INSERT INTO inventory.movements (
+                    id, tenant_id, brand_id, location_id, stock_item_id, sequence_number,
+                    movement_type, quantity_delta, source_type, source_id, idempotency_key,
+                    reason_code, actor_type, actor_id, occurred_at)
+                SELECT :movementId, s.tenant_id, s.brand_id, s.location_id, s.id,
+                       COALESCE((SELECT max(m.sequence_number) FROM inventory.movements m
+                                 WHERE m.stock_item_id = s.id), 0) + 1,
+                       :movementType, :delta, 'ORDER', :sourceId, :idempotencyKey,
+                       :reasonCode, :actorType, :actorId, :now
+                  FROM inventory.stock_items s
+                 WHERE s.id = :stockItemId AND s.tenant_id = :tenantId
+                ON CONFLICT (tenant_id, stock_item_id, idempotency_key) DO NOTHING
+                """)
+                .param("movementId", movementId)
+                .param("stockItemId", stockItemId)
+                .param("tenantId", tenantId)
+                .param("movementType", movementType)
+                .param("delta", quantityDelta)
+                .param("sourceId", sourceOrderId)
+                .param("idempotencyKey", idempotencyKey)
+                .param("reasonCode", reasonCode)
+                .param("actorType", actorType)
+                .param("actorId", actorId)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .update();
+        return inserted == 1 ? Optional.of(movementId) : Optional.empty();
+    }
+
+    /** Moves {@code on_hand_quantity} by a signed amount, in the same transaction as the movements that explain it. */
+    public void addOnHand(UUID tenantId, UUID stockItemId, BigDecimal delta, Instant now) {
+        jdbc.sql("""
+                UPDATE inventory.positions
+                   SET on_hand_quantity = GREATEST(on_hand_quantity + :delta, 0),
+                       position_sequence = position_sequence + 1,
+                       version = version + 1,
+                       updated_at = :now
+                 WHERE stock_item_id = :stockItemId AND tenant_id = :tenantId
+                """)
+                .param("stockItemId", stockItemId)
+                .param("tenantId", tenantId)
+                .param("delta", delta)
+                .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
+                .update();
+    }
+
+    private static List<UUID> uuidArray(java.sql.@Nullable Array array) throws java.sql.SQLException {
+        if (array == null) {
+            return List.of();
+        }
+        Object[] elements = (Object[]) array.getArray();
+        return java.util.Arrays.stream(elements)
+                .map(element -> element instanceof UUID uuid ? uuid : UUID.fromString(String.valueOf(element)))
+                .toList();
+    }
 
     // --------------------------------------------------------- QUANTITY: operator on-hand write
 

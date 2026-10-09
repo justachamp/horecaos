@@ -169,6 +169,24 @@ export const ordersRu: AreaMessages<typeof ordersEn> = {
   'orders.dialog.changeQuantity.line': 'Позиция',
   'orders.dialog.changeQuantity.newQuantity': 'Новое количество (не менее {min})',
   'orders.dialog.changeQuantity.comboOption': '{name} (комбо: {count})',
+  'orders.dialog.changeQuantity.lowering':
+    'Уменьшение количества снимает часть позиции с заказа. Выберите причину: от неё зависит, вернутся ли порции на склад.',
+  'orders.dialog.removal.reason': 'Причина удаления',
+  'orders.dialog.removal.reasonPlaceholder': 'Выберите причину',
+  'orders.dialog.removal.noReasons':
+    'У арендатора нет активной причины удаления, поэтому позицию пока нельзя снять с заказа.',
+  'orders.dialog.removal.noReasonsLink': 'Добавить в справочниках',
+  'orders.dialog.removeLines.title': 'Убрать позиции',
+  'orders.dialog.removeLines.lead': 'Выберите, что убрать из заказа. Комбо убирается целиком.',
+  'orders.dialog.removeLines.wouldEmpty':
+    'Так в заказе ничего не останется. Отмените заказ: так будет записана причина.',
+  'orders.dialog.removeLines.confirm': 'Проверить изменение',
+  'orders.dialog.amendConfirm.stock.units': 'Снимается единиц: {count}.',
+  'orders.dialog.amendConfirm.stock.writtenOff': 'Списывается: {count}.',
+  'orders.dialog.amendConfirm.stock.returned': 'Вернётся на склад: {count}.',
+  'orders.dialog.amendConfirm.stock.released': 'Бронь снимается: {count}.',
+  'orders.dialog.amendConfirm.stock.kitchen':
+    'Кухня уже начала готовить, поэтому списание не зависит от причины.',
 
   'orders.dialog.changeAddress.line2': 'Адрес, строка 2',
   'orders.dialog.changeAddress.city': 'Город',

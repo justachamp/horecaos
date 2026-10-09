@@ -6,17 +6,16 @@
  * `order-detail.ts`'s own file doc states for why this is not generated from
  * `platform/api/openapi/v1/horecaos-api.json`.
  *
- * Eleven of ADR 0039's twelve commands are built: the five non-financial ones
+ * All twelve of ADR 0039's commands are built: the five non-financial ones
  * from wave P10 (`SET_KITCHEN_NOTE`, `SET_CALLBACK_REQUESTED`,
- * `SET_CASH_TENDERED`, `SET_COURIER_NOTE`, `SET_INTERNAL_NOTE`) and, as of
- * wave 10, six of the seven financial ones (`ADD_LINES`,
- * `CHANGE_LINE_QUANTITY` increase-only, `CHANGE_PAYMENT_METHOD`,
- * `CHANGE_DELIVERY_ADDRESS`, `CHANGE_FULFILLMENT_TIME`, `CHANGE_CONTACT`).
- * Only `REMOVE_LINES` stays declared and refused by name at the server
- * (`AmendmentCommandType.built() == false` — no ADR 0017 return/write-off
- * primitive exists yet), so {@link BUILT_AMENDMENT_COMMAND_TYPES} still omits
- * it: `order-amend-menu.ts`'s own trap ("never offer a command the server
- * refuses") applies to it exactly as it used to apply to all seven.
+ * `SET_CASH_TENDERED`, `SET_COURIER_NOTE`, `SET_INTERNAL_NOTE`), six of the
+ * seven financial ones from wave 10 (`ADD_LINES`, `CHANGE_LINE_QUANTITY`,
+ * `CHANGE_PAYMENT_METHOD`, `CHANGE_DELIVERY_ADDRESS`, `CHANGE_FULFILLMENT_TIME`,
+ * `CHANGE_CONTACT`), and, ADR 0169, `REMOVE_LINES` and the lowering of a
+ * quantity. The last two are behind the brand's rollout gate, and
+ * `order-amend-menu.ts`'s trap ("never offer a command the server refuses")
+ * applies to them as it always did: the menu offers them only when the order
+ * detail reports the gate on.
  */
 import { MessageKey } from '../../core/i18n/messages.en';
 
@@ -29,6 +28,7 @@ export const BUILT_AMENDMENT_COMMAND_TYPES = [
   // ---------------------------------------------------- wave 10 financial commands
   'ADD_LINES',
   'CHANGE_LINE_QUANTITY',
+  'REMOVE_LINES',
   'CHANGE_PAYMENT_METHOD',
   'CHANGE_DELIVERY_ADDRESS',
   'CHANGE_FULFILLMENT_TIME',
@@ -36,23 +36,31 @@ export const BUILT_AMENDMENT_COMMAND_TYPES = [
 ] as const;
 export type BuiltAmendmentCommandType = (typeof BUILT_AMENDMENT_COMMAND_TYPES)[number];
 
-/** The six wave-10 financial commands, in the amend menu's own display order. */
+/**
+ * The seven financial commands, in the amend menu's own display order. `REMOVE_LINES` (ADR 0169) is built but
+ * behind the brand's `ordering.amendment_line_removal_enabled` gate, so the menu offers it only when the order
+ * detail says the gate is on ({@link OrderDetailResponse.lineRemovalEnabled}): never a command the server
+ * would refuse.
+ */
 export const FINANCIAL_AMENDMENT_COMMAND_TYPES = [
   'ADD_LINES',
   'CHANGE_LINE_QUANTITY',
+  'REMOVE_LINES',
   'CHANGE_PAYMENT_METHOD',
   'CHANGE_DELIVERY_ADDRESS',
   'CHANGE_FULFILLMENT_TIME',
   'CHANGE_CONTACT',
 ] as const satisfies readonly BuiltAmendmentCommandType[];
 
+/** The commands the server refuses unless the brand has switched them on, and so the menu offers conditionally. */
+export const GATED_AMENDMENT_COMMAND_TYPES = ['REMOVE_LINES'] as const;
+
 /**
- * Every command type ADR 0039 names, built or not — for rendering a history
- * entry's label honestly rather than only the eleven this client can
- * propose. `REMOVE_LINES` can still appear in a history entry once a future
- * wave builds it; this client just never sends one.
+ * Every command type ADR 0039 names — for rendering a history entry's label honestly. All twelve are built
+ * since ADR 0169; the list stays separate from {@link BUILT_AMENDMENT_COMMAND_TYPES} so a command a future
+ * ADR adds shows in history before this client can send it.
  */
-export const AMENDMENT_COMMAND_TYPES = [...BUILT_AMENDMENT_COMMAND_TYPES, 'REMOVE_LINES'] as const;
+export const AMENDMENT_COMMAND_TYPES = [...BUILT_AMENDMENT_COMMAND_TYPES] as const;
 
 /**
  * `AmendmentResponse` — what `amend`, `confirmAmendment` and the amendment
@@ -103,6 +111,38 @@ export interface AmendmentResponse {
   readonly createdByActorType: string;
   readonly createdByActorId?: string | null;
   readonly actions?: readonly string[];
+  /**
+   * ADR 0169: what the stock does for each line this amendment takes off the order — kept with the amendment,
+   * shown before it is applied. Empty or absent for an amendment that takes nothing off.
+   */
+  readonly stockConsequence?: readonly StockConsequenceLine[];
+}
+
+/**
+ * `OperationsOrderController.StockConsequenceLine` (ADR 0169): one affected order line, in units and never in
+ * money (the ledger carries no cost).
+ *
+ * @property kitchenState `NOT_STARTED`, `STARTED`, `MADE` or `UNKNOWN`: a started or made line is written off
+ *   whatever the reason says
+ * @property declaredDisposition what the removal reason says to do with a sold unit
+ * @property effectiveDisposition what applies once the kitchen's record is taken into account
+ */
+export interface StockConsequenceLine {
+  readonly orderLineId: string;
+  readonly variantId: string;
+  readonly productName: string;
+  readonly quantityBefore: number;
+  readonly quantityAfter: number;
+  readonly stockUnits: number;
+  readonly kitchenState: 'NOT_STARTED' | 'STARTED' | 'MADE' | 'UNKNOWN';
+  readonly declaredDisposition: string;
+  readonly effectiveDisposition: string;
+  readonly releasedUnits: number;
+  readonly returnedUnits: number;
+  readonly writtenOffUnits: number;
+  readonly noEffectUnits: number;
+  readonly reasonId: string;
+  readonly reasonCategory: string;
 }
 
 /** `AmendmentCommandDetail` — one command's type, and its free text where it set one. */

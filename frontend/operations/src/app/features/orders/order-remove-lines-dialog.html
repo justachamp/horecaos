@@ -1,0 +1,71 @@
+<q-modal
+  [title]="'orders.dialog.removeLines.title' | t"
+  [dismissible]="!busy()"
+  (dismiss)="dismiss.emit()"
+  data-testid="order-remove-lines-dialog"
+>
+  <p class="remove-lines-dialog__lead q-body-sm">{{ 'orders.dialog.removeLines.lead' | t }}</p>
+
+  <ul class="remove-lines-dialog__list">
+    @for (choice of choices(); track choice.key) {
+      <li>
+        <label class="remove-lines-dialog__row q-body-sm">
+          <input
+            type="checkbox"
+            [checked]="isSelected(choice)"
+            [disabled]="busy()"
+            (change)="toggle(choice)"
+            [attr.data-testid]="'order-remove-lines-dialog-choice-' + choice.key"
+          />
+          <span>
+            @if (choice.isCombo) {
+              {{
+                'orders.dialog.changeQuantity.comboOption'
+                  | t: { name: choice.name, count: choice.quantity }
+              }}
+            } @else {
+              {{ choice.name }} ({{ 'orders.detail.lines.column.quantity' | t }}:
+              {{ quantityText(choice.quantity) }})
+            }
+          </span>
+        </label>
+      </li>
+    }
+  </ul>
+
+  @if (wouldEmptyTheOrder()) {
+    <p
+      class="remove-lines-dialog__problem q-body-sm"
+      role="alert"
+      data-testid="order-remove-lines-dialog-empty"
+    >
+      {{ 'orders.dialog.removeLines.wouldEmpty' | t }}
+    </p>
+  }
+
+  <q-order-removal-reason-picker
+    [reasons]="reasons()"
+    [selectedId]="reasonId()"
+    (pick)="reasonId.set($event)"
+  />
+
+  <ng-container qModalActions>
+    <button
+      type="button"
+      class="remove-lines-dialog__dismiss q-body-sm"
+      (click)="dismiss.emit()"
+      [disabled]="busy()"
+    >
+      {{ 'orders.dialog.dismiss' | t }}
+    </button>
+    <button
+      type="button"
+      class="remove-lines-dialog__confirm q-body-sm"
+      (click)="submit()"
+      [disabled]="busy() || !canSubmit()"
+      data-testid="order-remove-lines-dialog-confirm"
+    >
+      {{ 'orders.dialog.removeLines.confirm' | t }}
+    </button>
+  </ng-container>
+</q-modal>

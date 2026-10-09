@@ -173,6 +173,16 @@
     background: var(--brand-accent);
     color: var(--text-on-accent);
   }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
+/* ADR 0158: the wording beside a line a rule added. */
+.line__auto {
+  color: var(--brand-accent-deep);
 }
 
 .qty__value {

@@ -63,6 +63,7 @@ import {
   OrderQuote,
   PlaceOrderLine,
   PlaceOrderRequest,
+  QuotedAutoAddLine,
   StorefrontMenu,
 } from './new-order-api';
 import { BasketLineView, NewOrderBasket } from './new-order-basket';
@@ -1240,6 +1241,43 @@ export class NewOrderPage implements OnInit {
    * the screen then falls back to the menu arithmetic it always had, honestly labelled an estimate.
    */
   protected readonly serverQuote = signal<OrderQuote | null>(null);
+
+  /**
+   * ADR 0158: the rules whose lines the operator took off. Each is remembered with what the quote said about
+   * it, so a declined line can be shown and put back after the next quote no longer carries it.
+   */
+  protected readonly declinedAutoAdd = signal<ReadonlyMap<string, QuotedAutoAddLine>>(new Map());
+
+  /** The rules' lines the last quote added and the operator has not declined. */
+  protected readonly autoAddedLines = computed(() => this.serverQuote()?.autoAdded ?? []);
+
+  protected declineAutoAdd(line: QuotedAutoAddLine): void {
+    if (line.mandatory) {
+      return;
+    }
+    this.declinedAutoAdd.update((current) => new Map(current).set(line.ruleId, line));
+  }
+
+  protected restoreAutoAdd(ruleId: string): void {
+    this.declinedAutoAdd.update((current) => {
+      const next = new Map(current);
+      next.delete(ruleId);
+      return next;
+    });
+  }
+
+  /** The rule's wording for the operator's language, else its code. */
+  protected autoAddLabel(line: QuotedAutoAddLine): string {
+    const locale = this.i18n.locale();
+    const keys = locale === 'uz-Latn' ? ['uz-Latn', 'uz'] : [locale];
+    for (const key of keys) {
+      const text = line.customerText[key];
+      if (text && text.trim().length > 0) {
+        return text.trim();
+      }
+    }
+    return line.ruleCode;
+  }
   /** Why the server will not price this basket as it stands (a promo code that does not apply, an item out of stock), in words. */
   protected readonly quoteRefusal = signal<string | null>(null);
 
@@ -1437,6 +1475,8 @@ export class NewOrderPage implements OnInit {
       this.promoCode();
       this.paymentMethodCode();
       this.channelCode();
+      // ADR 0158: taking a rule's line off, or putting it back, changes the price.
+      this.declinedAutoAdd();
 
       this.quoteSequence += 1;
       const sequence = this.quoteSequence;
@@ -1926,6 +1966,10 @@ export class NewOrderPage implements OnInit {
       // transaction that creates it. Only a cash order has one, and only an entered figure.
       cashTenderedMinor:
         place && this.paymentMethodCode() === 'CASH' && tendered > 0 ? tendered : null,
+      // ADR 0158: what the operator declined, on the quote and on the order alike.
+      ...(this.declinedAutoAdd().size > 0
+        ? { declinedAutoAddRuleIds: [...this.declinedAutoAdd().keys()] }
+        : {}),
     };
   }
 

@@ -62,6 +62,7 @@ import { ProductEditorHeader } from './product-editor-header';
 import { ProductModifierPolicyPanel } from './product-modifier-policy-panel';
 import { ProductPhotosPanel } from './product-photos-panel';
 import { ListingNotice, ProductUnlistedBanner, UnlistedRow } from './product-unlisted-banner';
+import { ProductVocabulary } from './product-vocabulary';
 import { VariantPhysicalAttributes } from './variant-physical-attributes';
 
 const STATUSES: readonly CatalogStatus[] = ['DRAFT', 'ACTIVE', 'ARCHIVED'];
@@ -261,6 +262,7 @@ const FINDING_LABEL_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
     ProductModifierPolicyPanel,
     ProductPhotosPanel,
     ProductUnlistedBanner,
+    ProductVocabulary,
     ScheduleGrid,
     VariantPhysicalAttributes,
   ],

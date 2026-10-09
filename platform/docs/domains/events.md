@@ -375,6 +375,7 @@ by grant and read through the customer card.
 |---|---|---|---|---|
 | `InventoryAvailabilityChanged` | 1 | `variantId` | [`InventoryAvailabilityChanged.v1`](../../src/main/resources/events/inventory.events/InventoryAvailabilityChanged.v1.schema.json) | `variantId`, `locationId`, `available`, `reasonCode` |
 | `InventoryStopChanged` | 1 | `variantId` | [`InventoryStopChanged.v1`](../../src/main/resources/events/inventory.events/InventoryStopChanged.v1.schema.json) | `stopId`, `variantId`, `scopeType`, `locationId?`, `menuId?`, `channelId?`, `source`, `active`, `endsAt?`, `reasonCode` |
+| `InventoryStockDisposed` | 1 | `orderId` | [`InventoryStockDisposed.v1`](../../src/main/resources/events/inventory.events/InventoryStockDisposed.v1.schema.json) | `orderId`, `brandId`, `locationId`, `disposition`, `reasonCategory`, `lines[]` (`variantId`, `units`, `releasedUnits`, `returnedUnits`, `writtenOffUnits`, `noEffectUnits`) |
 
 Symmetric by construction: `available` carries the direction, so a dish going
 off and a dish coming back are the same event type rather than two. `InventoryStopChanged` (ADR
@@ -386,6 +387,13 @@ optional end — identifiers and stable codes only, never a name or free text. N
 product or variant name — a consumer resolves that through the authorized
 catalog API with `variantId` — and never `brandId`, which a consumer holding
 `locationId` can already resolve.
+
+`InventoryStockDisposed` (ADR 0169) is the one inventory fact keyed by an order rather than a variant: a
+removal or a cancellation after commitment disposes of several variants at once, and what a consumer needs
+is to which order it belongs. It says what became of the units the order no longer needed — released from a
+hold, returned to stock, written off, or left untouched — in whole units and never in money (the ledger
+carries no cost), and carries no customer, address, note or product name. The write-off report ADR 0039
+promised is built from it.
 
 ADR 0017 names six further inventory facts — `InventoryPositionChanged`,
 `InventoryReserved`, `InventoryReservationCommitted`,

@@ -18,6 +18,7 @@ import { LangService } from '../../services/lang.service';
 import { MenuService } from '../../services/menu.service';
 import { NestedChoicesComponent } from '../../shared/nested-choices/nested-choices.component';
 import { PhysicalFactsComponent } from '../../shared/physical-facts/physical-facts.component';
+import { TagBadgesComponent } from '../../shared/tag-badges/tag-badges.component';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { UiCartService } from '../../services/ui-cart.service';
 import type { MenuItem, MenuItemComboGroup, MenuItemModifierGroup } from '../../types/home.types';
@@ -66,6 +67,7 @@ type LoadState = 'loading' | 'ready' | 'missing' | 'error';
     IconComponent,
     NestedChoicesComponent,
     PhysicalFactsComponent,
+    TagBadgesComponent,
     TranslatePipe,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -109,6 +111,11 @@ export class DetailsComponent implements OnInit {
   );
 
   protected readonly isCombo = computed(() => this.comboGroups().length > 0);
+
+  /** ADR 0174: the composition line, in the author's order: a label for the guest to read, nothing more. */
+  protected readonly ingredientLine = computed(() =>
+    (this.item()?.ingredients ?? []).map((ingredient) => ingredient.name).join(', '),
+  );
 
   /** A group that no orderable component can fill makes the whole combo unorderable for now. */
   protected readonly comboUnavailable = computed(() =>

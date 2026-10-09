@@ -118,7 +118,10 @@ public class OrderOutcomeReasonController {
                     + "and the refund posture; none of the three has a safe default and all three "
                     + "are required. A completion reason names the fulfilment modes it is valid "
                     + "for, because without that «Самовывоз выполнен» lands on a delivery order "
-                    + "and the courier SLA report quietly loses it.")
+                    + "and the courier SLA report quietly loses it. A line-removal reason (ADR 0169, "
+                    + "kind LINE_REMOVAL) is why a line was taken off a confirmed order: it carries the "
+                    + "stock disposition (never RELEASE) and the liable party, no refund posture, and an "
+                    + "ITEM_UNAVAILABLE one may not return to stock.")
     public ResponseEntity<IdResponse> create(@PathVariable UUID tenantId, @Valid @RequestBody ReasonRequest body) {
         try {
             return ResponseEntity.ok(new IdResponse(reasons.create(tenantId, authorship(), body.toCommand())));

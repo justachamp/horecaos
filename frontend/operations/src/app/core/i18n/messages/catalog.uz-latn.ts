@@ -21,6 +21,79 @@ export const catalogUzLatn: AreaMessages<typeof catalogEn> = {
   'catalog.nav.taxProfile': 'QQS',
   'catalog.nav.referenceData': 'Maʻlumotnomalar',
   'catalog.nav.autoAdd': 'Avto-qoʻshish qoidalari',
+  'catalog.autoAdd.title': 'Avtomatik qoʻshish qoidalari',
+  'catalog.autoAdd.lead':
+    'Qoida savatga qoʻshadigan pozitsiyalar: qadoq, asboblar, sovgʻa. Qoida qoralama sifatida saqlanadi va faollashtirilgach ishlaydi; faol qoida keyingi nashr bilan mijozlarga yetadi.',
+  'catalog.autoAdd.loading': 'Qoidalar yuklanmoqda…',
+  'catalog.autoAdd.denied': 'Bu brend katalogi qoidalariga kirish huquqingiz yoʻq.',
+  'catalog.autoAdd.rules': 'Qoidalar',
+  'catalog.autoAdd.add': 'Qoida qoʻshish',
+  'catalog.autoAdd.edit': 'Tahrirlash',
+  'catalog.autoAdd.archive': 'Arxivga',
+  'catalog.autoAdd.archive.confirm':
+    '“{code}” arxivga olinsinmi? U keyingi nashrdan chiqadi, yozuv saqlanadi.',
+  'catalog.autoAdd.activate': 'Faollashtirish',
+  'catalog.autoAdd.deactivate': 'Qoralamaga qaytarish',
+  'catalog.autoAdd.empty': 'Hozircha qoidalar yoʻq.',
+  'catalog.autoAdd.mandatory': 'mijoz rad eta olmaydi',
+  'catalog.autoAdd.remove': 'Olib tashlash',
+  'catalog.autoAdd.cancel': 'Bekor qilish',
+  'catalog.autoAdd.save': 'Saqlash',
+  'catalog.autoAdd.field.code': 'Kod',
+  'catalog.autoAdd.field.kind': 'Turi',
+  'catalog.autoAdd.field.does': 'Nima qiladi',
+  'catalog.autoAdd.field.mode': 'Rejim',
+  'catalog.autoAdd.field.status': 'Holati',
+  'catalog.autoAdd.field.adds': 'Qoʻshadi',
+  'catalog.autoAdd.field.quantity': 'Miqdor',
+  'catalog.autoAdd.field.triggers': 'Triggerlar (savatda shulardan biri)',
+  'catalog.autoAdd.field.threshold': 'Har shuncha trigger birligiga',
+  'catalog.autoAdd.field.repeat': 'Har bir karraliga takrorlash',
+  'catalog.autoAdd.field.bands': 'Porsiya oraliqlari',
+  'catalog.autoAdd.field.minimum': 'Qoʻshiladigan eng kam miqdor',
+  'catalog.autoAdd.field.maximum': 'Qoʻshiladigan eng koʻp miqdor',
+  'catalog.autoAdd.field.mandatory': 'Mijoz rad eta olmaydi',
+  'catalog.autoAdd.field.fulfillment': 'Yetkazish usullari',
+  'catalog.autoAdd.field.channel': 'Kanal turlari',
+  'catalog.autoAdd.field.textRu': 'Mijoz uchun matn (ruscha)',
+  'catalog.autoAdd.field.textUz': 'Mijoz uchun matn (oʻzbekcha)',
+  'catalog.autoAdd.field.textEn': 'Mijoz uchun matn (inglizcha)',
+  'catalog.autoAdd.channelsNote':
+    'Faqat buyurtma savatdan yigʻiladigan kanallar. Agregator yoki kassa buyurtmasi qoidani koʻtara olmaydi.',
+  'catalog.autoAdd.pickVariant': 'Qoʻshiladigan pozitsiyani toping',
+  'catalog.autoAdd.pickTrigger': 'Trigger pozitsiyani toping',
+  'catalog.autoAdd.band.add': 'Oraliq qoʻshish',
+  'catalog.autoAdd.band.from': 'Dan (porsiya)',
+  'catalog.autoAdd.band.to': 'Gacha, shu jumladan emas',
+  'catalog.autoAdd.band.quantity': 'Miqdor',
+  'catalog.autoAdd.kind.PLAIN': 'Doim',
+  'catalog.autoAdd.kind.PRODUCT_TRIGGERED': 'Trigger pozitsiyaga',
+  'catalog.autoAdd.kind.PORTION_BAND': 'Porsiyalar boʻyicha',
+  'catalog.autoAdd.mode.INJECT': 'Pozitsiyani qoʻshish',
+  'catalog.autoAdd.mode.OFFER': 'Pozitsiyani taklif qilish',
+  'catalog.autoAdd.status.DRAFT': 'Qoralama',
+  'catalog.autoAdd.status.ACTIVE': 'Faol',
+  'catalog.autoAdd.status.ARCHIVED': 'Arxivda',
+  'catalog.autoAdd.summary.plain': '{quantity} × {variant}',
+  'catalog.autoAdd.summary.triggered': '{quantity} × {variant}, har {step} trigger birligiga',
+  'catalog.autoAdd.summary.bands': 'Porsiya oraliqlari: {count}',
+  'catalog.autoAdd.refusal.AUTO_ADD_RULE_INVALID':
+    'Qoidani bunday saqlab boʻlmaydi: pozitsiya, miqdorlar va triggerlarni tekshiring.',
+  'catalog.autoAdd.refusal.AUTO_ADD_CHANNEL_NOT_ALLOWED':
+    'Qoida agregator yoki kassa kanalini nomlay olmaydi: bunday buyurtmalar savatdan yigʻilmaydi.',
+  'catalog.autoAdd.refusal.AUTO_ADD_BANDS_OVERLAP':
+    'Ikki porsiya oraligʻi kesishadi. Har bir porsiya yigʻindisi aynan bitta oraliqqa tegishli.',
+  'catalog.autoAdd.simulator.title': 'Simulyator',
+  'catalog.autoAdd.simulator.lead':
+    'Savatni ishga tushirishdan oldin qoralama va faol qoidalardan oʻtkazing. Hech narsa yozilmaydi; qoldiq, sotuv oynalari va narxlar haqiqiy filialdagi haqiqiy savatga tegishli.',
+  'catalog.autoAdd.simulator.basket': 'Savat',
+  'catalog.autoAdd.simulator.addLine': 'Savatga pozitsiya qoʻshing',
+  'catalog.autoAdd.simulator.quantity': 'Miqdor',
+  'catalog.autoAdd.simulator.run': 'Ishga tushirish',
+  'catalog.autoAdd.simulator.totals': 'Savatda birliklar: {units}, porsiyalar: {portions}.',
+  'catalog.autoAdd.outcome.INJECT': 'Qoʻshadi',
+  'catalog.autoAdd.outcome.OFFER': 'Taklif qiladi',
+  'catalog.autoAdd.outcome.SKIPPED': 'Oʻtkazib yuborildi',
 
   // catalog.menuSets.* -- 4.4a qatori, nomlangan Menu obyekti
   'catalog.menuSets.title': 'Menyu toʻplamlari',
@@ -285,7 +358,8 @@ export const catalogUzLatn: AreaMessages<typeof catalogEn> = {
     'Boʻsh natija rasmiy ИКПУ/MXIK roʻyxati platformaga hali yuklanmaganini bildiradi — hech narsa topilmagani emas.',
   'catalog.editor.fiscal.mxikNotLoaded':
     'Milliy ИКПУ/MXIK roʻyxati platformaga hali yuklanmagan, shuning uchun qidiruv hech narsa topmaydi. Kodni qoʻlda kiritish baribir mumkin.',
-  'catalog.editor.fiscal.mxikLoaded': 'Milliy ИКПУ/MXIK roʻyxati: {version}-toʻplam, kodlar: {valid}.',
+  'catalog.editor.fiscal.mxikLoaded':
+    'Milliy ИКПУ/MXIK roʻyxati: {version}-toʻplam, kodlar: {valid}.',
   'catalog.editor.fiscal.mxikStale': 'Roʻyxat {days} kun oldin yangilangan.',
   'catalog.editor.physical.intro':
     'Variantning jismoniy tavsifi: ogʻirligi yoki hajmi, ogʻirlik boʻyicha sotiladimi (aniq ogʻirlik faqat topshirishda maʻlum boʻladi), ulushlab buyurtma qilish mumkinmi va ozuqaviy qiymati. Oddiy donali mahsulot uchun hammasini boʻsh qoldiring.',
@@ -777,4 +851,90 @@ export const catalogUzLatn: AreaMessages<typeof catalogEn> = {
   'catalog.priceBulk.status.failed': 'Rad etildi',
 
   'catalog.price.perQuantum': '{quantum} uchun',
+
+  // ADR 0174: Catalog, Reference data (tags and ingredients; the others are linked out).
+  'catalog.referenceData.title': 'Maʻlumotnomalar',
+  'catalog.referenceData.lead':
+    'Menyu tayanadigan nazorat qilinadigan maʻlumotnomalar. Teglar va tarkiblar shu yerda yuritiladi; qolganlarining oʻz boʻlimi bor, ularga havola berilgan.',
+  'catalog.referenceData.loading': 'Yuklanmoqda…',
+  'catalog.referenceData.denied': 'Sizda bu tenant maʻlumotnomalariga ruxsat yoʻq.',
+  'catalog.referenceData.rail': 'Maʻlumotnomalar',
+  'catalog.referenceData.rail.tags': 'Teglar',
+  'catalog.referenceData.rail.ingredients': 'Tarkiblar',
+  'catalog.referenceData.rail.elsewhere': 'Boshqa boʻlimlarda yuritiladi',
+  'catalog.referenceData.link.presets': 'Izoh shablonlari: Sozlamalar, Izoh shablonlari',
+  'catalog.referenceData.link.kitchen':
+    'Oshxona boʻlimlari: mahsulot tahrirlagichidagi «Oshxona boʻlimi» maydoni (stansiya rollari)',
+  'catalog.referenceData.link.recommendations':
+    'Tavsiya etilgan mahsulotlar: mahsulot tahrirlagichidagi «Tavsiyalar» yorligʻi',
+  'catalog.referenceData.link.brands': 'Brendlar: Sozlamalar, Brend',
+  'catalog.referenceData.tags.lead':
+    'Teg — mahsulot kartasidagi belgi va/yoki menyudagi filtr varianti. Kodni bir marta tanlang; mijoz oʻqiydigan nom har bir tilda kiritiladi. Bitta mahsulotga ko‘pi bilan oʻn ikkita.',
+  'catalog.referenceData.ingredients.lead':
+    'Tarkib — mahsulot sahifasida koʻrsatiladigan tarkib yozuvi. Uning narxi, qoldigʻi yoʻq, buyurtma qilinmaydi va sanalmaydi, allergenlarni eʼlon qilmaydi: bu roʻyxatni allergenlar haqidagi bayonot sifatida ishlatmang. Bitta mahsulotga koʻpi bilan qirqta.',
+  'catalog.referenceData.tenantWide':
+    'Shu tenantning barcha brendlari uchun umumiy. Arxivlash yozuvni tanlovdan va keyingi eʼlondan olib tashlaydi; unga ega mahsulotlarda u saqlanadi.',
+  'catalog.referenceData.form.title': 'Yangi yozuv',
+  'catalog.referenceData.form.code': 'Kod',
+  'catalog.referenceData.form.codeHint':
+    'Kichik harflar, raqamlar, «-» va «_», 32 belgigacha. Mijozlarga koʻrsatilmaydi; keyin oʻzgartirib boʻlmaydi.',
+  'catalog.referenceData.form.name': 'Nomi ({locale})',
+  'catalog.referenceData.form.icon': 'Belgi',
+  'catalog.referenceData.form.noIcon': 'Belgisiz (faqat matn)',
+  'catalog.referenceData.form.badge': 'Kartadagi belgi',
+  'catalog.referenceData.form.filter': 'Filtr varianti',
+  'catalog.referenceData.form.sortOrder': 'Tartib',
+  'catalog.referenceData.form.create': 'Qoʻshish',
+  'catalog.referenceData.form.creating': 'Qoʻshilmoqda…',
+  'catalog.referenceData.empty': 'Hozircha hech narsa kiritilmagan.',
+  'catalog.referenceData.col.code': 'Kod',
+  'catalog.referenceData.col.name': 'Nomi',
+  'catalog.referenceData.col.icon': 'Belgi',
+  'catalog.referenceData.col.shown': 'Koʻrsatilishi',
+  'catalog.referenceData.col.status': 'Holati',
+  'catalog.referenceData.status.active': 'Faol',
+  'catalog.referenceData.status.archived': 'Arxivda',
+  'catalog.referenceData.edit': 'Tahrirlash',
+  'catalog.referenceData.save': 'Saqlash',
+  'catalog.referenceData.cancel': 'Bekor qilish',
+  'catalog.referenceData.archive': 'Arxivlash',
+  'catalog.referenceData.icon.FLAME': 'Alanga',
+  'catalog.referenceData.icon.LEAF': 'Barg',
+  'catalog.referenceData.icon.STAR': 'Yulduz',
+  'catalog.referenceData.icon.HEART': 'Yurak',
+  'catalog.referenceData.icon.FISH': 'Baliq',
+  'catalog.referenceData.icon.NEW': 'Yangi',
+  'catalog.referenceData.refusal.VOCABULARY_CODE_INVALID':
+    'Kod — kichik harflar, raqamlar, «-» yoki «_», 1 dan 32 gacha belgi, harf yoki raqam bilan boshlanadi.',
+  'catalog.referenceData.refusal.VOCABULARY_CODE_TAKEN':
+    'Bu tenantda bunday kodli yozuv allaqachon bor (arxivdagi oʻz kodini saqlaydi).',
+  'catalog.referenceData.refusal.TAG_ICON_UNKNOWN': 'Bunday belgi roʻyxatda yoʻq.',
+  'catalog.referenceData.refusal.TAG_NOT_VISIBLE':
+    'Teg belgi sifatida koʻrsatiladi, filtr sifatida taklif qilinadi yoki ikkalasi.',
+  'catalog.referenceData.refusal.VOCABULARY_DEFAULT_NAME_MISSING':
+    'Tenantning asosiy tilida nom kerak.',
+  'catalog.referenceData.refusal.VOCABULARY_TENANT_LIMIT_REACHED':
+    'Bu maʻlumotnoma uchun tenant chegarasiga yetildi.',
+
+  // ADR 0174: a product's tags and ingredients in the editor.
+  'catalog.editor.vocabulary.tags': 'Teglar',
+  'catalog.editor.vocabulary.ingredients': 'Tarkiblar (mahsulot sahifasidagi tarkib)',
+  'catalog.editor.vocabulary.loading': 'Yuklanmoqda…',
+  'catalog.editor.vocabulary.empty': 'Hech narsa tanlanmagan.',
+  'catalog.editor.vocabulary.up': 'Yuqoriga',
+  'catalog.editor.vocabulary.down': 'Pastga',
+  'catalog.editor.vocabulary.remove': 'Olib tashlash',
+  'catalog.editor.vocabulary.add': 'Roʻyxatdan qoʻshish…',
+  'catalog.editor.vocabulary.full': 'Mahsulotda koʻpi bilan {count} ta boʻladi.',
+  'catalog.editor.vocabulary.noneLeft':
+    'Roʻyxatdagi hammasi tanlangan. Yangilarini «Katalog, Maʻlumotnomalar»da qoʻshing.',
+  'catalog.editor.vocabulary.save': 'Saqlash',
+  'catalog.editor.vocabulary.saved': 'Saqlandi. Mijozlar buni keyingi eʼlondan keyin koʻradi.',
+  'catalog.editor.vocabulary.refusal.limit':
+    'Mahsulotda cheklangan son boʻladi; avval bittasini olib tashlang.',
+  'catalog.editor.vocabulary.refusal.archived': 'Arxivdagi yozuvni qoʻshib boʻlmaydi.',
+  'catalog.editor.vocabulary.refusal.unknown':
+    'Bu yozuv tenant roʻyxatida endi yoʻq. Sahifani yangilab, qayta tanlang.',
+  'catalog.editor.vocabulary.variantNameHint':
+    'Mijoz boshqa oʻlchamlar yonida koʻradigan nom. Yagona variantli mahsulot uchun boʻsh qoldiring.',
 };

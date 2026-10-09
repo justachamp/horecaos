@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 
 import type { CategoryItem, MenuCategory, MenuItem } from '../../types/home.types';
+import { filterOptionsOf, matchesAllTags } from '../../utils/menu-tags';
 import { DishCardComponent } from '../dish-card/dish-card.component';
 import { TranslatePipe } from '../translate/translate.pipe';
 
@@ -40,15 +41,50 @@ export class MenuGridComponent {
 
   protected readonly activeCategoryId = signal<string | null>(null);
 
-  /** The sections to draw: the chosen category only, and never an empty one. */
+  /** ADR 0174: the tags the guest has selected as filters. Selected chips combine as AND. */
+  protected readonly selectedTags = signal<ReadonlySet<string>>(new Set());
+
+  /** The filter chips the whole menu offers: each tag its author made a filter option, once. */
+  protected readonly filterOptions = computed(() =>
+    filterOptionsOf(this.sections().flatMap((section) => section.items)),
+  );
+
+  /**
+   * The sections to draw: the chosen category only, the dishes that carry every selected tag, and never an
+   * empty section.
+   */
   protected readonly visible = computed(() => {
     const active = this.activeCategoryId();
-    return this.sections().filter(
-      (section) => section.items.length > 0 && (active === null || section.id === active),
-    );
+    const selected = this.selectedTags();
+    return this.sections()
+      .filter((section) => active === null || section.id === active)
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) => matchesAllTags(item, selected)),
+      }))
+      .filter((section) => section.items.length > 0);
   });
+
+  /** True when a filter is on and nothing matches it, so the screen says so rather than going blank. */
+  protected readonly nothingMatches = computed(
+    () => this.selectedTags().size > 0 && this.visible().length === 0,
+  );
 
   protected selectCategory(categoryId: string | null): void {
     this.activeCategoryId.set(categoryId);
+  }
+
+  protected toggleTag(tagId: string): void {
+    this.selectedTags.update((current) => {
+      const next = new Set(current);
+      if (!next.delete(tagId)) {
+        next.add(tagId);
+      }
+      return next;
+    });
+  }
+
+  protected clearTags(): void {
+    this.selectedTags.set(new Set());
   }
 }

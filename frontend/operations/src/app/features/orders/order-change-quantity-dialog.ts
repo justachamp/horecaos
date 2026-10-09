@@ -18,11 +18,15 @@ import {
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { Modal } from '../../shared/ui/modal';
+import { ReasonResponse } from '../settings/reference-data/reference-data-api';
 import { OrderLine } from './order-detail';
+import { OrderRemovalReasonPicker } from './order-removal-reason-picker';
 
 export interface QuantitySubmission {
   readonly orderLineId: string;
   readonly quantity: number;
+  /** ADR 0169: set exactly when the quantity is lowered; the removal reason decides what happens to the stock. */
+  readonly removalReasonId?: string;
 }
 
 /** One thing the operator can raise: a line, or a whole combo counted in combos (ADR 0136). */
@@ -43,13 +47,15 @@ export interface QuantityChoice {
 }
 
 /**
- * `CHANGE_LINE_QUANTITY` (ADR 0039, wave 10, row `1.2c`) — increase only.
- * `OrderAmendmentService#repriceFor` refuses `quantity <= line.quantity()`
- * with `QUANTITY_DECREASE_NOT_SUPPORTED` (no ADR 0017 return/write-off
- * primitive exists yet), so this dialog picks a live line from the order's
- * own lines (already loaded — no new read) and only ever offers a quantity
- * strictly above its current one; the stepper's own `min` enforces it
- * client-side, the server enforces it for real.
+ * `CHANGE_LINE_QUANTITY` (ADR 0039, wave 10, row `1.2c`). Picks a live line from the order's own lines
+ * (already loaded — no new read). While the brand has the removal path off, the server refuses a quantity
+ * that is not above the line's (`QUANTITY_DECREASE_NOT_SUPPORTED`), so only a larger one is offered; the
+ * stepper's own `min` enforces it client-side, the server enforces it for real.
+ *
+ * With the removal path on ({@link lineRemovalEnabled}, ADR 0169) the quantity may also be lowered, down to
+ * the smallest the dish is sold in. Lowering gives stock back or writes it off, so it names a removal reason
+ * the tenant authored (the reason decides, the operator never picks a disposition) and the confirmation step
+ * shows what the stock will do first.
  *
  * Reprices, so `order-detail-pane.ts` always proposes this with
  * `applyImmediately: false` and follows it with the priced-delta
@@ -58,7 +64,7 @@ export interface QuantityChoice {
  */
 @Component({
   selector: 'q-order-change-quantity-dialog',
-  imports: [TPipe, Modal],
+  imports: [TPipe, Modal, OrderRemovalReasonPicker],
   templateUrl: './order-change-quantity-dialog.html',
   styleUrl: './order-change-quantity-dialog.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -68,12 +74,17 @@ export class OrderChangeQuantityDialog {
 
   readonly lines = input.required<readonly OrderLine[]>();
   readonly busy = input(false);
+  /** ADR 0169: whether the order's brand has the removal path on, so the quantity may be lowered. */
+  readonly lineRemovalEnabled = input(false);
+  /** ADR 0169: the tenant's active `LINE_REMOVAL` reasons, for a lowered quantity. */
+  readonly reasons = input<readonly ReasonResponse[]>([]);
 
   readonly confirm = output<QuantitySubmission>();
   readonly dismiss = output<void>();
 
   protected readonly selectedLineId = signal<string | null>(null);
   protected readonly quantity = signal(1);
+  protected readonly reasonId = signal<string | null>(null);
   private lastSeededLines: readonly OrderLine[] = [];
 
   /**
@@ -86,6 +97,11 @@ export class OrderChangeQuantityDialog {
     const choices: QuantityChoice[] = [];
     const seen = new Set<string>();
     for (const line of this.lines()) {
+      if (this.lineRemovalEnabled() && line.autoAddMandatory) {
+        // ADR 0158 / ADR 0169: a rule's line the customer cannot decline is neither lowered nor removed, and
+        // the server refuses it; with the lowering on offer it is not offered at all.
+        continue;
+      }
       const combo = line.combo;
       if (!combo) {
         choices.push({
@@ -131,7 +147,20 @@ export class OrderChangeQuantityDialog {
    */
   protected readonly minQuantity = computed(() => {
     const choice = this.selectedChoice();
-    return choice ? nextQuantityAbove(choice.current, choice.step) : 1;
+    if (!choice) {
+      return 1;
+    }
+    // With the removal path on, anything the dish is sold in down to its smallest portion; otherwise only above.
+    return this.lineRemovalEnabled() ? choice.step : nextQuantityAbove(choice.current, choice.step);
+  });
+
+  /**
+   * The quantity is below the line's, where the brand allows that: stock goes back, and a reason says where.
+   * With the removal path off a lower quantity is not a lowering at all, only a quantity the dialog refuses.
+   */
+  protected readonly lowering = computed(() => {
+    const choice = this.selectedChoice();
+    return this.lineRemovalEnabled() && choice !== null && this.quantity() < choice.current;
   });
 
   /** Fractions are offered only for a dish that publishes a portion; the rest keep whole units. */
@@ -150,12 +179,16 @@ export class OrderChangeQuantityDialog {
       : null;
   });
 
-  protected readonly canSubmit = computed(
-    () =>
-      this.selectedChoice() !== null &&
+  protected readonly canSubmit = computed(() => {
+    const choice = this.selectedChoice();
+    return (
+      choice !== null &&
       this.quantity() >= this.minQuantity() &&
-      isOrderableQuantity(this.quantity(), this.step()),
-  );
+      this.quantity() !== choice.current &&
+      isOrderableQuantity(this.quantity(), this.step()) &&
+      (!this.lowering() || this.reasonId() !== null)
+    );
+  });
 
   constructor() {
     effect(() => {
@@ -202,9 +235,11 @@ export class OrderChangeQuantityDialog {
     if (!choice || !this.canSubmit()) {
       return;
     }
+    const reasonId = this.lowering() ? this.reasonId() : null;
     this.confirm.emit({
       orderLineId: choice.lineId,
       quantity: this.quantity() * choice.unitsPerStep,
+      ...(reasonId ? { removalReasonId: reasonId } : {}),
     });
   }
 }

@@ -27,11 +27,45 @@
     </p>
   }
 
-  @if (deltaMinor() > 0) {
-    <!-- ADR 0039 §3.11: the customer's recorded agreement is only for an
-         increase. A decrease (or a zero-delta reprice) is never presented as
-         one, so the console never collects -- or looks like it collects -- a
-         "how did the customer agree" answer nobody was ever asked. -->
+  @if (removesStock()) {
+    <!-- ADR 0169: what happens to the stock, said before the customer's agreement is recorded and the
+         amendment applied. Units, never money: the ledger carries no cost. -->
+    <ul class="amend-confirm-dialog__stock" data-testid="order-amendment-confirm-stock">
+      @for (line of stockConsequence(); track line.orderLineId) {
+        <li
+          class="q-body-sm"
+          [attr.data-testid]="'order-amendment-confirm-stock-' + line.orderLineId"
+        >
+          <strong>{{ line.productName }}</strong>
+          — {{ 'orders.dialog.amendConfirm.stock.units' | t: { count: line.stockUnits } }}
+          @if (line.writtenOffUnits > 0) {
+            <span class="amend-confirm-dialog__writeoff">
+              {{
+                'orders.dialog.amendConfirm.stock.writtenOff' | t: { count: line.writtenOffUnits }
+              }}
+            </span>
+          }
+          @if (line.returnedUnits > 0) {
+            {{ 'orders.dialog.amendConfirm.stock.returned' | t: { count: line.returnedUnits } }}
+          }
+          @if (line.releasedUnits > 0) {
+            {{ 'orders.dialog.amendConfirm.stock.released' | t: { count: line.releasedUnits } }}
+          }
+          @if (line.kitchenState === 'STARTED' || line.kitchenState === 'MADE') {
+            <em data-testid="order-amendment-confirm-kitchen">
+              {{ 'orders.dialog.amendConfirm.stock.kitchen' | t }}
+            </em>
+          }
+        </li>
+      }
+    </ul>
+  }
+
+  @if (needsAgreement()) {
+    <!-- ADR 0039 §3.11: the customer's recorded agreement is for an increase, and (ADR 0169) for a
+         removal. A decrease that removes nothing (or a zero-delta reprice) is never presented as one, so
+         the console never collects -- or looks like it collects -- a "how did the customer agree" answer
+         nobody was ever asked. -->
     <label class="amend-confirm-dialog__field">
       <span class="q-body-sm">{{ 'orders.dialog.amendConfirm.channel' | t }}</span>
       <select

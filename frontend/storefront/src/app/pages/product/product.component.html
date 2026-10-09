@@ -103,6 +103,13 @@
           @if (item.description) {
             <p class="line-clamp-3 text-[13px] leading-5 text-zinc-300">{{ item.description }}</p>
           }
+          <app-tag-badges [tags]="item.tags" />
+          @if (item.ingredients.length > 0) {
+            <p class="text-[13px] leading-5 text-zinc-300" data-testid="product-ingredients">
+              <span class="font-semibold text-text-primary">{{ 'product.ingredients' | t }}:</span>
+              {{ ingredientLine(item) }}
+            </p>
+          }
         </div>
 
         <!-- One modifier group with its options; drawn for the product and in the row of a portion that carries it -->

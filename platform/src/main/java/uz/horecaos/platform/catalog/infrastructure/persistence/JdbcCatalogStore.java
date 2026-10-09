@@ -551,6 +551,9 @@ public class JdbcCatalogStore {
                     // ADR 0136: a pairing is named by the variant it offers; it has no
                     // translations of its own to write against.
                     case COMBO_COMPONENT -> null;
+                    // ADR 0174: the registries are tenant-wide and keep their wording in their own
+                    // translation tables, so nothing is written against them in catalog.translations.
+                    case TAG, INGREDIENT -> null;
                     // ADR 0038: a fee reaches a receipt as a line without being a catalog
                     // item. It has no row anywhere, and no translations, so there is
                     // nothing to resolve and nothing that may be written against it.

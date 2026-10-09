@@ -139,4 +139,73 @@ describe('OrderAmendmentConfirmDialog', () => {
 
     expect(dismissed).toBe(true);
   });
+
+  // ------------------------------------------------------------ ADR 0169: an amendment that removes
+
+  const writtenOff = {
+    orderLineId: 'line-1',
+    variantId: 'variant-1',
+    productName: 'Burger',
+    quantityBefore: 2,
+    quantityAfter: 1,
+    stockUnits: 1,
+    kitchenState: 'STARTED',
+    declaredDisposition: 'RETURN_TO_STOCK',
+    effectiveDisposition: 'WRITE_OFF',
+    releasedUnits: 0,
+    returnedUnits: 0,
+    writtenOffUnits: 1,
+    noEffectUnits: 0,
+    reasonId: 'reason-1',
+    reasonCategory: 'CUSTOMER_CHANGED_MIND',
+  } as const;
+
+  it('asks how the customer agreed to a removal even though the total only goes down', () => {
+    const { fixture } = render({ deltaMinor: -50_000 });
+    fixture.componentRef.setInput('stockConsequence', [writtenOff]);
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelector('[data-testid="order-amendment-confirm-channel"]')).not.toBeNull();
+  });
+
+  it('still does not ask about a decrease that removes nothing', () => {
+    const { fixture } = render({ deltaMinor: -50_000 });
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelector('[data-testid="order-amendment-confirm-channel"]')).toBeNull();
+    expect(host.querySelector('[data-testid="order-amendment-confirm-stock"]')).toBeNull();
+  });
+
+  it('says what the stock will do before anything is applied, including the kitchen override', () => {
+    const { fixture } = render({ deltaMinor: -50_000 });
+    fixture.componentRef.setInput('stockConsequence', [writtenOff]);
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const line = host.querySelector('[data-testid="order-amendment-confirm-stock-line-1"]');
+    expect(line?.textContent).toContain('Burger');
+    expect(line?.textContent).toContain('Written off: 1');
+    expect(host.querySelector('[data-testid="order-amendment-confirm-kitchen"]')).not.toBeNull();
+  });
+
+  it('reports a returned unit as back on the shelf, with no kitchen note for an untouched line', () => {
+    const { fixture } = render({ deltaMinor: -50_000 });
+    fixture.componentRef.setInput('stockConsequence', [
+      {
+        ...writtenOff,
+        kitchenState: 'UNKNOWN',
+        effectiveDisposition: 'RETURN_TO_STOCK',
+        writtenOffUnits: 0,
+        returnedUnits: 1,
+      },
+    ]);
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+
+    const line = host.querySelector('[data-testid="order-amendment-confirm-stock-line-1"]');
+    expect(line?.textContent).toContain('Back on the shelf: 1');
+    expect(line?.textContent).not.toContain('Written off');
+    expect(host.querySelector('[data-testid="order-amendment-confirm-kitchen"]')).toBeNull();
+  });
 });

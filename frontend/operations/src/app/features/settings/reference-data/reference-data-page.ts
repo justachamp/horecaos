@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  WritableSignal,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
@@ -93,6 +100,9 @@ export class ReferenceDataPage {
   protected readonly completionReasons = signal<readonly ReasonResponse[]>([]);
   protected readonly cancellationCategories = signal<readonly string[]>([]);
   protected readonly completionCategories = signal<readonly string[]>([]);
+  /** ADR 0169: the reasons an operator cites when a line is taken off a confirmed order, and their categories. */
+  protected readonly removalReasons = signal<readonly ReasonResponse[]>([]);
+  protected readonly removalCategories = signal<readonly string[]>([]);
 
   // ------------------------------------------------------------- create
 
@@ -190,12 +200,48 @@ export class ReferenceDataPage {
 
   // ============================================================== reasons
 
+  /** The platform categories a reason of this kind may name (the closed list belongs to the kind). */
+  protected categoriesOf(kind: OutcomeReasonKind): readonly string[] {
+    switch (kind) {
+      case 'CANCELLATION':
+        return this.cancellationCategories();
+      case 'COMPLETION':
+        return this.completionCategories();
+      case 'LINE_REMOVAL':
+        return this.removalCategories();
+    }
+  }
+
+  /**
+   * A removal never `RELEASE`s (that is the answer only before commitment, and a removal is asked about by the
+   * reservation itself), so the choice a removal reason offers is the other three.
+   */
+  protected dispositionsOf(kind: OutcomeReasonKind): readonly StockDisposition[] {
+    return kind === 'CANCELLATION'
+      ? ['RELEASE', 'RETURN_TO_STOCK', 'WRITE_OFF', 'NO_EFFECT']
+      : ['RETURN_TO_STOCK', 'WRITE_OFF', 'NO_EFFECT'];
+  }
+
+  /**
+   * The registry refuses a removal reason that says «item unavailable» and returns to stock: the stock is by
+   * definition not there. Said before the save, not only by the server's refusal after it.
+   */
+  protected unavailableCannotReturn(
+    kind: OutcomeReasonKind,
+    category: string,
+    disposition: StockDisposition,
+  ): boolean {
+    return (
+      kind === 'LINE_REMOVAL' &&
+      category === 'ITEM_UNAVAILABLE' &&
+      disposition === 'RETURN_TO_STOCK'
+    );
+  }
+
   protected openCreateForm(kind: OutcomeReasonKind): void {
     this.newInternalName.set('');
-    this.newSystemCategory.set(
-      (kind === 'CANCELLATION' ? this.cancellationCategories() : this.completionCategories())[0] ??
-        '',
-    );
+    this.newSystemCategory.set(this.categoriesOf(kind)[0] ?? '');
+    this.newStockDisposition.set(kind === 'LINE_REMOVAL' ? 'RETURN_TO_STOCK' : 'RELEASE');
     this.newTextRu.set('');
     this.newTextUz.set('');
     this.newTextEn.set('');
@@ -227,7 +273,11 @@ export class ReferenceDataPage {
       this.newTextRu().trim().length > 0 &&
       this.newTextUz().trim().length > 0 &&
       this.newTextEn().trim().length > 0 &&
-      (kind !== 'COMPLETION' || this.newAllowedModes().length > 0)
+      (kind !== 'COMPLETION' || this.newAllowedModes().length > 0) &&
+      !(
+        kind !== null &&
+        this.unavailableCannotReturn(kind, this.newSystemCategory(), this.newStockDisposition())
+      )
     );
   }
 
@@ -254,7 +304,12 @@ export class ReferenceDataPage {
             liabilityParty: this.newLiabilityParty(),
             customerRefund: this.newCustomerRefund(),
           }
-        : { allowedFulfillmentModes: this.newAllowedModes() }),
+        : kind === 'LINE_REMOVAL'
+          ? {
+              stockDisposition: this.newStockDisposition(),
+              liabilityParty: this.newLiabilityParty(),
+            }
+          : { allowedFulfillmentModes: this.newAllowedModes() }),
     };
     try {
       await this.api.create(scope, request);
@@ -291,7 +346,12 @@ export class ReferenceDataPage {
       this.editTextRu().trim().length > 0 &&
       this.editTextUz().trim().length > 0 &&
       this.editTextEn().trim().length > 0 &&
-      (reason.kind !== 'COMPLETION' || this.editAllowedModes().length > 0)
+      (reason.kind !== 'COMPLETION' || this.editAllowedModes().length > 0) &&
+      !this.unavailableCannotReturn(
+        reason.kind,
+        this.editSystemCategory(),
+        this.editStockDisposition(),
+      )
     );
   }
 
@@ -318,7 +378,12 @@ export class ReferenceDataPage {
             liabilityParty: this.editLiabilityParty(),
             customerRefund: this.editCustomerRefund(),
           }
-        : { allowedFulfillmentModes: this.editAllowedModes() }),
+        : reason.kind === 'LINE_REMOVAL'
+          ? {
+              stockDisposition: this.editStockDisposition(),
+              liabilityParty: this.editLiabilityParty(),
+            }
+          : { allowedFulfillmentModes: this.editAllowedModes() }),
     };
     try {
       await this.api.update(scope, reason.id, request, reason.version);
@@ -359,17 +424,27 @@ export class ReferenceDataPage {
       return;
     }
     try {
-      const [cancellation, completion, cancellationCategories, completionCategories] =
-        await Promise.all([
-          this.api.list(scope, 'CANCELLATION'),
-          this.api.list(scope, 'COMPLETION'),
-          this.api.categories(scope, 'CANCELLATION'),
-          this.api.categories(scope, 'COMPLETION'),
-        ]);
+      const [
+        cancellation,
+        completion,
+        removal,
+        cancellationCategories,
+        completionCategories,
+        removalCategories,
+      ] = await Promise.all([
+        this.api.list(scope, 'CANCELLATION'),
+        this.api.list(scope, 'COMPLETION'),
+        this.api.list(scope, 'LINE_REMOVAL'),
+        this.api.categories(scope, 'CANCELLATION'),
+        this.api.categories(scope, 'COMPLETION'),
+        this.api.categories(scope, 'LINE_REMOVAL'),
+      ]);
       this.cancellationReasons.set(cancellation);
       this.completionReasons.set(completion);
+      this.removalReasons.set(removal);
       this.cancellationCategories.set(cancellationCategories);
       this.completionCategories.set(completionCategories);
+      this.removalCategories.set(removalCategories);
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
         this.denied.set(true);
@@ -384,6 +459,7 @@ export class ReferenceDataPage {
   private async reload(scope: NonNullable<ReturnType<CurrentLocation['scope']>>): Promise<void> {
     this.cancellationReasons.set(await this.api.list(scope, 'CANCELLATION'));
     this.completionReasons.set(await this.api.list(scope, 'COMPLETION'));
+    this.removalReasons.set(await this.api.list(scope, 'LINE_REMOVAL'));
   }
 
   // -------------------------------------------------------- 10.10a: reorder
@@ -419,6 +495,17 @@ export class ReferenceDataPage {
     this.dragIndex = null;
   }
 
+  private reasonSignalOf(kind: OutcomeReasonKind): WritableSignal<readonly ReasonResponse[]> {
+    switch (kind) {
+      case 'CANCELLATION':
+        return this.cancellationReasons;
+      case 'COMPLETION':
+        return this.completionReasons;
+      case 'LINE_REMOVAL':
+        return this.removalReasons;
+    }
+  }
+
   protected moveReasonUp(kind: OutcomeReasonKind, index: number): void {
     if (index > 0) {
       void this.moveReason(kind, index, index - 1);
@@ -426,7 +513,7 @@ export class ReferenceDataPage {
   }
 
   protected moveReasonDown(kind: OutcomeReasonKind, index: number): void {
-    const reasons = kind === 'CANCELLATION' ? this.cancellationReasons() : this.completionReasons();
+    const reasons = this.reasonSignalOf(kind)();
     if (index < reasons.length - 1) {
       void this.moveReason(kind, index, index + 1);
     }
@@ -451,7 +538,7 @@ export class ReferenceDataPage {
     if (!scope) {
       return;
     }
-    const signalFor = kind === 'CANCELLATION' ? this.cancellationReasons : this.completionReasons;
+    const signalFor = this.reasonSignalOf(kind);
     const current = signalFor();
     const reordered = [...current];
     const [moved] = reordered.splice(from, 1);

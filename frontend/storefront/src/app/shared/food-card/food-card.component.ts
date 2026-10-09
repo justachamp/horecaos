@@ -7,6 +7,7 @@ import { UiCartService } from '../../services/ui-cart.service';
 import { LangService } from '../../services/lang.service';
 import { TranslatePipe } from '../translate/translate.pipe';
 import { PhysicalFactsComponent } from '../physical-facts/physical-facts.component';
+import { TagBadgesComponent } from '../tag-badges/tag-badges.component';
 import {
   formatQuantity,
   formatWeight,
@@ -21,7 +22,7 @@ import { Session } from '../../core/auth/session';
 @Component({
   selector: 'app-food-card',
   standalone: true,
-  imports: [CommonModule, RouterLink, PhysicalFactsComponent, TranslatePipe],
+  imports: [CommonModule, RouterLink, PhysicalFactsComponent, TagBadgesComponent, TranslatePipe],
   templateUrl: './food-card.component.html',
   styleUrl: './food-card.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

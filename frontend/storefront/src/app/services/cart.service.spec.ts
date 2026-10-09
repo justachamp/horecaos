@@ -341,6 +341,64 @@ describe('CartService.bindTable (ADR 0047)', () => {
   });
 });
 
+describe('CartService.price (ADR 0158)', () => {
+  function priced(overrides: Partial<PricedCart> = {}): PricedCart {
+    return {
+      cartId: 'cart-1',
+      cartVersion: 3,
+      quoteId: 'quote-1',
+      contextHash: 'hash',
+      currency: 'UZS',
+      subtotalMinor: 100,
+      taxMinor: 0,
+      discountMinor: 0,
+      feeMinor: 0,
+      totalMinor: 100,
+      expiresAt: '2026-10-08T12:00:00Z',
+      delivery: null,
+      ...overrides,
+    };
+  }
+
+  it('reads the cart again when the rules changed the basket while it was priced, so the lines are the quote’s', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 2 }));
+    api.mutate.mockResolvedValue(priced({ changedByPricing: true }));
+    const rebuilt = baseCart({
+      version: 3,
+      lines: [
+        {
+          lineKey: 'box',
+          variantId: 'v-box',
+          quantity: 1,
+          commentPresetCodes: [],
+          hasCustomerNote: false,
+          origin: 'AUTO_ADD',
+        },
+      ],
+    });
+    api.get.mockResolvedValue(rebuilt);
+
+    await service.price();
+
+    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(String(api.get.mock.calls[0][0])).toContain('/carts/cart-1');
+    expect(service.cart()?.lines.map((line) => line.lineKey)).toEqual(['box']);
+    expect(service.cart()?.version).toBe(3);
+  });
+
+  it('does not read the cart again when pricing changed nothing', async () => {
+    const { service, api } = setUp();
+    service.cart.set(baseCart({ version: 2 }));
+    api.mutate.mockResolvedValue(priced({ changedByPricing: false }));
+
+    await service.price();
+
+    expect(api.get).not.toHaveBeenCalled();
+    expect(service.cart()?.version).toBe(3);
+  });
+});
+
 describe('CartService.checkout', () => {
   const priced: PricedCart = {
     cartId: 'cart-1',
