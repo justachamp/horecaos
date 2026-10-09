@@ -736,6 +736,75 @@ public final class ConfigurationKeys {
                     + "them. 0 means no gate. Not yet enforced.")
             .build();
 
+    /** ADR 0158's rollout gate, declared identically in {@code ordering.api.OrderingConfigurationKeys}. */
+    public static final ConfigurationKey<Boolean> ORDERING_AUTO_ADD_ENABLED = ConfigurationKey.of(
+                    "ordering.auto_add_enabled", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("ordering")
+            .settableAt(ScopeType.BRAND)
+            .describedAs("Whether the cart evaluates auto-add rules (packaging, cutlery and the like) for this "
+                    + "brand. Off means the cart neither adds nor removes anything.")
+            .build();
+
+    /** ADR 0158's shadow mode, declared identically in {@code ordering.api.OrderingConfigurationKeys}. */
+    public static final ConfigurationKey<Boolean> ORDERING_AUTO_ADD_SHADOW_ENABLED = ConfigurationKey.of(
+                    "ordering.auto_add_shadow_enabled", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("ordering")
+            .settableAt(ScopeType.BRAND)
+            .describedAs("While auto-add is off, count what the rules would have added without adding it.")
+            .build();
+
+    /** ADR 0169's rollout gate, declared identically in {@code ordering.api.OrderingConfigurationKeys}. */
+    public static final ConfigurationKey<Boolean> ORDERING_AMENDMENT_LINE_REMOVAL_ENABLED = ConfigurationKey.of(
+                    "ordering.amendment_line_removal_enabled", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("ordering")
+            .settableAt(ScopeType.BRAND)
+            .describedAs("Whether an operator may remove a line from, or lower a quantity on, a confirmed order "
+                    + "by amendment. Off means the command is refused.")
+            .build();
+
+    /** ADR 0158's legal switch, declared identically in {@code catalog.api.CatalogConfigurationKeys}. */
+    public static final ConfigurationKey<Boolean> CATALOG_AUTO_ADD_MANDATORY_ALLOWED = ConfigurationKey.of(
+                    "catalog.auto_add_mandatory_allowed", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("catalog")
+            .settableAt(ScopeType.TENANT)
+            .describedAs("Whether a mandatory auto-add rule (a cart line the customer cannot remove) may be "
+                    + "published for this tenant. Written by a platform administrator on the owner's instruction.")
+            .build();
+
+    /** ADR 0173, declared identically in {@code catalog.api.CatalogConfigurationKeys}. */
+    public static final ConfigurationKey<Integer> CATALOG_MXIK_REFERENCE_MAX_AGE_DAYS = ConfigurationKey.of(
+                    "catalog.mxik_reference_max_age_days", Integer.class)
+            .defaultValue(45)
+            .ownedBy("catalog")
+            .settableAt(ScopeType.PLATFORM)
+            .describedAs("Days the loaded national ИКПУ/MXIK classification list may age before a platform "
+                    + "alert is raised.")
+            .build();
+
+    /** ADR 0173, declared identically in {@code catalog.api.CatalogConfigurationKeys}. */
+    public static final ConfigurationKey<Integer> CATALOG_MXIK_IMPORT_WITHDRAWAL_THRESHOLD_PERCENT =
+            ConfigurationKey.of("catalog.mxik_import_withdrawal_threshold_percent", Integer.class)
+                    .defaultValue(2)
+                    .ownedBy("catalog")
+                    .settableAt(ScopeType.PLATFORM)
+                    .describedAs(
+                            "Percent of the currently valid ИКПУ/MXIK rows a full-snapshot import may withdraw "
+                                    + "before it is held for review. A truncated or wrong file otherwise empties the list in one request.")
+                    .build();
+
+    /** ADR 0173, declared identically in {@code catalog.api.CatalogConfigurationKeys}. */
+    public static final ConfigurationKey<Long> CATALOG_MXIK_IMPORT_MAX_BYTES = ConfigurationKey.of(
+                    "catalog.mxik_import_max_bytes", Long.class)
+            .defaultValue(33_554_432L)
+            .ownedBy("catalog")
+            .settableAt(ScopeType.PLATFORM)
+            .describedAs("The largest decoded ИКПУ/MXIK file, in bytes, the importer accepts in one request.")
+            .build();
+
     /**
      * Wave 10 (gap map rows {@code 1.2c}/{@code 2.1d}): ADR 0039's financial
      * amendment cut point. Declared identically in {@code
@@ -1134,6 +1203,13 @@ public final class ConfigurationKeys {
             ORDERING_OPERATOR_PROMO_CODE_ALLOWED,
             ORDERING_AUTO_ACCEPT_ELIGIBLE_CHANNELS,
             ORDERING_AUTO_ACCEPT_MIN_PRIOR_ORDERS,
+            ORDERING_AUTO_ADD_ENABLED,
+            ORDERING_AUTO_ADD_SHADOW_ENABLED,
+            ORDERING_AMENDMENT_LINE_REMOVAL_ENABLED,
+            CATALOG_AUTO_ADD_MANDATORY_ALLOWED,
+            CATALOG_MXIK_REFERENCE_MAX_AGE_DAYS,
+            CATALOG_MXIK_IMPORT_WITHDRAWAL_THRESHOLD_PERCENT,
+            CATALOG_MXIK_IMPORT_MAX_BYTES,
             CATALOG_USE_STOCK_LOGIC,
             INVENTORY_STOPS_CREATION_ENABLED,
             INVENTORY_STOPS_READ_ENABLED,

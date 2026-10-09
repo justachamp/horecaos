@@ -691,7 +691,10 @@ public class DayCloseService {
                 line.comboSelectionId(),
                 line.comboContainerVariantId(),
                 line.comboQuantity(),
-                line.comboName());
+                line.comboName(),
+                // ADR 0158 (V0538): which lines a rule added to the basket.
+                line.lineOrigin(),
+                line.autoAddRuleId());
     }
 
     private static @Nullable Integer elapsed(@Nullable Instant from, @Nullable Instant to) {

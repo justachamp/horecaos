@@ -1122,6 +1122,71 @@ export const uzLatn: Messages = {
   'fiscalReference.column.labelRu': 'Nomi (RU)',
   'fiscalReference.column.labelUz': 'Nomi (UZ)',
   'fiscalReference.column.packages': 'Standart qadoqlar',
+  'fiscalReference.status.title': 'Ro‘yxat holati',
+  'fiscalReference.status.dataset':
+    'Ma’lumotlar to‘plami {version}, import qilingan sana: {importedAt}.',
+  'fiscalReference.status.counts': 'Amaldagi kodlar: {valid}, bekor qilingan: {withdrawn}.',
+  'fiscalReference.status.source': 'Organ e’lon qilgan sana: {date}.',
+  'fiscalReference.status.stale':
+    'Ro‘yxat oxirgi marta {days} kun oldin import qilingan; uni kamida har {max} kunda yangilash kerak. Joriy faylni import qiling.',
+  'fiscalReference.import.title': 'Rasmiy faylni import qilish',
+  'fiscalReference.import.lead':
+    'Davlat soliq qo‘mitasidan yuklab olingan faylni yuklang. Yuklash faqat tekshiruv: siz qo‘llamaguningizcha ro‘yxat o‘zgarmaydi.',
+  'fiscalReference.import.file': 'Fayl (.xlsx yoki .csv)',
+  'fiscalReference.import.mode': 'Rejim',
+  'fiscalReference.import.mode.FULL_SNAPSHOT':
+    'To‘liq nusxa: fayldagi bo‘lmagan kodlar bekor qilinadi',
+  'fiscalReference.import.mode.PARTIAL':
+    'Qisman: faqat qo‘shish va yangilash, hech narsani bekor qilmaydi',
+  'fiscalReference.import.publishedOn': 'Organ e’lon qilgan sana',
+  'fiscalReference.import.validate': 'Faylni tekshirish (sinov)',
+  'fiscalReference.import.working': 'Bajarilmoqda…',
+  'fiscalReference.run.title': 'Sinov',
+  'fiscalReference.run.status.VALIDATED': 'Qo‘llashga tayyor',
+  'fiscalReference.run.status.HELD_FOR_REVIEW': 'Ko‘rib chiqish uchun ushlab turilgan',
+  'fiscalReference.run.status.APPLYING': 'Qo‘llanmoqda',
+  'fiscalReference.run.status.APPLIED': 'Qo‘llangan',
+  'fiscalReference.run.status.FAILED': 'Muvaffaqiyatsiz',
+  'fiscalReference.run.status.REJECTED': 'Rad etilgan',
+  'fiscalReference.run.counts':
+    'Qatorlar: {total}; yangi: {added}, o‘zgargan: {changed}, o‘zgarmagan: {unchanged}, bekor qilinadi: {withdrawn}, tiklanadi: {reinstated}, xatoli (yuklanmaydi): {errors}.',
+  'fiscalReference.run.borrowed':
+    '{count} ta qatorda faqat bitta nom bor; u ikkala til uchun olindi.',
+  'fiscalReference.run.lengths': 'Fayldagi kod uzunliklari (uzunlik: qatorlar): {lengths}.',
+  'fiscalReference.run.partialNote':
+    'Qisman fayl, undagi bo‘lmagan kodlar qancha bo‘lmasin, hech narsani bekor qilmaydi.',
+  'fiscalReference.run.held':
+    'Bu fayl {count} ta kodni bekor qilgan bo‘lardi, bu ro‘yxatning {percent}% dan ko‘pi. Odatda bu kesilgan yoki noto‘g‘ri fayl. Organ haqiqatan ham bekor qilgan bo‘lsagina qo‘llang.',
+  'fiscalReference.run.acknowledge': 'Tasdiqlash uchun {count} kiriting',
+  'fiscalReference.run.apply': 'Ro‘yxatga qo‘llash',
+  'fiscalReference.run.reject': 'Rad etish',
+  'fiscalReference.run.applied': '{version}-ma’lumotlar to‘plami sifatida qo‘llandi.',
+  'fiscalReference.run.rejected': 'Rad etildi. Ro‘yxat o‘zgarmadi.',
+  'fiscalReference.findings.title': 'Izohlar',
+  'fiscalReference.findings.kind.ROW_ERROR': 'Qator yuklanmagan',
+  'fiscalReference.findings.kind.WITHDRAWN': 'Bekor qilinadi',
+  'fiscalReference.findings.kind.REINSTATED': 'Tiklanadi',
+  'fiscalReference.findings.kind.PACKAGE_DEFAULTS_CHANGED': 'Standart qadoqlar o‘zgaradi',
+  'fiscalReference.findings.more': 'Yana ko‘rsatish',
+  'fiscalReference.recent.title': 'So‘nggi importlar',
+  'fiscalReference.recent.open': 'Ochish',
+  'fiscalReference.browse.title': 'Ro‘yxatni ko‘rish',
+  'fiscalReference.browse.includeWithdrawn': 'Bugungacha bekor qilingan kodlarni ham ko‘rsatish',
+  'fiscalReference.browse.withdrawn': 'Bekor qilingan: {date}.',
+  'fiscalReference.browse.successor': 'Vorisi: {code}.',
+  'fiscalReference.refusal.UNKNOWN_HEADER':
+    'Faylda import qiluvchi tanimaydigan ustun bor, shuning uchun hech narsa o‘qilmadi. Profilni shu fayl uchun yangilash kerak.',
+  'fiscalReference.refusal.REQUIRED_COLUMN_MISSING':
+    'Faylda kod ustuni yoki ruscha yoxud o‘zbekcha nom ustuni yo‘q.',
+  'fiscalReference.refusal.FILE_TOO_LARGE': 'Fayl import qiluvchi qabul qiladigandan katta.',
+  'fiscalReference.refusal.FILE_UNREADABLE': 'Faylni ro‘yxat sifatida o‘qib bo‘lmadi.',
+  'fiscalReference.refusal.RUN_IS_STALE':
+    'Bu fayl tekshirilgandan keyin ro‘yxat o‘zgardi. Faylni qayta yuklang.',
+  'fiscalReference.refusal.RUN_NOT_APPLICABLE':
+    'Bu sinovni endi qo‘llab ham, rad etib ham bo‘lmaydi.',
+  'fiscalReference.refusal.WITHDRAWAL_ACKNOWLEDGEMENT_REQUIRED':
+    'Kiritilgan son bu fayl bekor qiladigan kodlar soniga teng emas.',
+  'fiscalReference.refusal.UPLOAD_FAILED': 'Faylni yuklab bo‘lmadi.',
 
   'staff.title': 'Xodimlar va rollar',
   'staff.lead':

@@ -225,6 +225,11 @@ public class ReorderPlanService {
     private static List<Unit> unitsOf(List<OrderQueryService.DetailLine> detailLines) {
         Map<Object, List<OrderQueryService.DetailLine>> grouped = new LinkedHashMap<>();
         for (OrderQueryService.DetailLine detailLine : detailLines) {
+            if (detailLine.line().autoAdded()) {
+                // ADR 0158: a reorder repeats what the customer chose. The rules add their own lines
+                // again, on the cart the reorder builds, if they still apply.
+                continue;
+            }
             Object key = detailLine.line().comboSelectionId() == null
                     ? detailLine.line().lineId()
                     : detailLine.line().comboSelectionId();

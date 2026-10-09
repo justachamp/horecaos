@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionDefinition;
@@ -90,13 +91,65 @@ public class OperatorOrderQuoteService {
             @Nullable Long deliveryFreeFromMinor,
             boolean provisional,
             List<QuotedLine> lines,
-            List<QuotedDiscount> discounts) {
+            List<QuotedDiscount> discounts,
+            List<QuotedAutoAddLine> autoAddedLines) {
 
         public OrderQuote {
             lines = List.copyOf(lines);
             discounts = List.copyOf(discounts);
+            autoAddedLines = List.copyOf(autoAddedLines);
+        }
+
+        /** A quote of a basket no rule added to, which is every quote before ADR 0158. */
+        public OrderQuote(
+                String currency,
+                long subtotalMinor,
+                long discountMinor,
+                long feeMinor,
+                long taxMinor,
+                long totalMinor,
+                @Nullable String deliveryOutcome,
+                @Nullable Long deliveryShortfallMinor,
+                @Nullable Long deliveryMinBasketMinor,
+                @Nullable Long deliveryFreeFromMinor,
+                boolean provisional,
+                List<QuotedLine> lines,
+                List<QuotedDiscount> discounts) {
+            this(
+                    currency,
+                    subtotalMinor,
+                    discountMinor,
+                    feeMinor,
+                    taxMinor,
+                    totalMinor,
+                    deliveryOutcome,
+                    deliveryShortfallMinor,
+                    deliveryMinBasketMinor,
+                    deliveryFreeFromMinor,
+                    provisional,
+                    lines,
+                    discounts,
+                    List.of());
         }
     }
+
+    /**
+     * A line a rule put in the basket (ADR 0158), priced. It is not one of the request's lines, so it has no
+     * {@code index}; the rule that added it and the text to show beside it say what it is.
+     *
+     * @param ruleId the rule behind the line, which the composer sends back as declined to take the line off
+     * @param mandatory true when the rule is not removable
+     */
+    public record QuotedAutoAddLine(
+            UUID ruleId,
+            String ruleCode,
+            java.util.Map<String, String> customerText,
+            boolean mandatory,
+            UUID variantId,
+            java.math.BigDecimal quantity,
+            long baseAmountMinor,
+            long finalAmountMinor,
+            long taxAmountMinor) {}
 
     /**
      * One line the operator entered, priced. A combo's components are summed back into the
@@ -135,7 +188,7 @@ public class OperatorOrderQuoteService {
         ordering.requireWellFormed(command);
         OrderQuote quote = transactions.execute(status -> {
             try {
-                return toQuote(command, ordering.fillAndPrice(command).priced().quote());
+                return toQuote(command, ordering.fillAndPrice(command));
             } finally {
                 // On every exit, a refusal included. A cart that was priced is a cart nobody
                 // asked to keep.
@@ -145,7 +198,9 @@ public class OperatorOrderQuoteService {
         return Objects.requireNonNull(quote, "a transaction callback that returned a quote returns it");
     }
 
-    private static OrderQuote toQuote(OperatorOrderingService.PlaceOrderCommand command, QuoteSnapshot snapshot) {
+    private static OrderQuote toQuote(
+            OperatorOrderingService.PlaceOrderCommand command, OperatorOrderingService.FilledCart filled) {
+        QuoteSnapshot snapshot = filled.priced().quote();
         List<QuotedLine> lines = new ArrayList<>(command.lines().size());
         for (int index = 0; index < command.lines().size(); index++) {
             // The key fillAndPrice gives line i; a combo's component lines carry it as a prefix.
@@ -178,6 +233,36 @@ public class OperatorOrderQuoteService {
                     Math.abs(adjustment.amountMinor())));
         }
 
+        List<QuotedAutoAddLine> autoAdded = new ArrayList<>();
+        filled.autoAdded().forEach((lineKey, info) -> {
+            long base = 0;
+            long finalAmount = 0;
+            long tax = 0;
+            java.math.BigDecimal quantity = java.math.BigDecimal.ZERO;
+            java.util.UUID variantId = null;
+            for (QuoteSnapshot.Line line : snapshot.lines()) {
+                if (line.cartLineKey().equals(lineKey)) {
+                    base += line.baseAmountMinor();
+                    finalAmount += line.finalAmountMinor();
+                    tax += line.taxAmountMinor();
+                    quantity = quantity.add(line.quantity());
+                    variantId = line.variantId();
+                }
+            }
+            if (variantId != null) {
+                autoAdded.add(new QuotedAutoAddLine(
+                        info.ruleId(),
+                        info.ruleCode(),
+                        info.customerText(),
+                        info.mandatory(),
+                        variantId,
+                        quantity,
+                        base,
+                        finalAmount,
+                        tax));
+            }
+        });
+
         return new OrderQuote(
                 snapshot.currency(),
                 snapshot.subtotalMinor(),
@@ -193,7 +278,8 @@ public class OperatorOrderQuoteService {
                 snapshot.deliveryFreeFromMinor(),
                 lines.stream().anyMatch(QuotedLine::provisional),
                 lines,
-                discounts);
+                discounts,
+                autoAdded);
     }
 
     /** The request line an adjustment's key belongs to, or null for an order-level one. */

@@ -543,7 +543,8 @@ public class OperationsOrderController {
                     body.overrideReasonCode(),
                     body.overrideNote(),
                     body.dineInSessionId(),
-                    body.cashTenderedMinor()));
+                    body.cashTenderedMinor(),
+                    body.declinedAutoAddRuleIds() == null ? List.of() : body.declinedAutoAddRuleIds()));
 
             if (result.outcome() == CheckoutService.CheckoutResult.Outcome.REJECTED) {
                 String rejectionCode =
@@ -627,7 +628,8 @@ public class OperationsOrderController {
                     body.overrideReasonCode(),
                     body.overrideNote(),
                     body.dineInSessionId(),
-                    body.cashTenderedMinor()));
+                    body.cashTenderedMinor(),
+                    body.declinedAutoAddRuleIds() == null ? List.of() : body.declinedAutoAddRuleIds()));
             return ResponseEntity.ok(OrderQuoteResponse.of(quote));
         } catch (CartService.CartRefusedException refused) {
             throw StorefrontOrderingController.refusal(refused);
@@ -1867,7 +1869,45 @@ public class OperationsOrderController {
             @Nullable @Size(max = 48) String overrideReasonCode,
             @Nullable @Size(max = 500) String overrideNote,
             @Nullable UUID dineInSessionId,
-            @Nullable @PositiveOrZero Long cashTenderedMinor) {}
+            @Nullable @PositiveOrZero Long cashTenderedMinor,
+            // ADR 0158: the rules whose lines the operator took off the basket the last quote showed,
+            // each by the ruleId that quote named. The cart never evaluates them into this order.
+            @Nullable @Size(max = 50) List<UUID> declinedAutoAddRuleIds) {
+
+        /** A request that declines no auto-add rule: every client that predates ADR 0158. */
+        public PlaceOrderRequest(
+                UUID customerAccountId,
+                String channelCode,
+                FulfillmentMode fulfillmentMode,
+                List<OrderLineRequest> lines,
+                @Nullable DestinationRequest destination,
+                String paymentMethodCode,
+                @Nullable String promoCode,
+                @Nullable Instant requestedFor,
+                Boolean overrideOutOfHours,
+                @Nullable UUID proposedLocationId,
+                @Nullable String overrideReasonCode,
+                @Nullable String overrideNote,
+                @Nullable UUID dineInSessionId,
+                @Nullable Long cashTenderedMinor) {
+            this(
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines,
+                    destination,
+                    paymentMethodCode,
+                    promoCode,
+                    requestedFor,
+                    overrideOutOfHours,
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    cashTenderedMinor,
+                    null);
+        }
+    }
 
     /** One line the operator entered into the basket, same shape as a storefront cart line. */
     public record OrderLineRequest(
@@ -2012,7 +2052,11 @@ public class OperationsOrderController {
             @Nullable Long deliveryFreeFromMinor,
             boolean provisional,
             List<QuotedLineResponse> lines,
-            List<QuotedDiscountResponse> discounts) {
+            List<QuotedDiscountResponse> discounts,
+            // ADR 0158: the lines a rule added to the basket, which are not lines of the request. Each says
+            // which rule put it there and the text to show beside it, and a rule's ruleId sent back as
+            // declined takes its line off.
+            List<QuotedAutoAddLineResponse> autoAdded) {
 
         static OrderQuoteResponse of(OperatorOrderQuoteService.OrderQuote quote) {
             return new OrderQuoteResponse(
@@ -2038,9 +2082,38 @@ public class OperationsOrderController {
                     quote.discounts().stream()
                             .map(discount -> new QuotedDiscountResponse(
                                     discount.lineIndex(), discount.type(), discount.code(), discount.amountMinor()))
+                            .toList(),
+                    quote.autoAddedLines().stream()
+                            .map(line -> new QuotedAutoAddLineResponse(
+                                    line.ruleId(),
+                                    line.ruleCode(),
+                                    line.customerText(),
+                                    line.mandatory(),
+                                    line.variantId(),
+                                    line.quantity(),
+                                    line.baseAmountMinor(),
+                                    line.finalAmountMinor(),
+                                    line.taxAmountMinor()))
                             .toList());
         }
     }
+
+    /**
+     * A line an auto-add rule put in the basket (ADR 0158), priced.
+     *
+     * @param ruleId   the rule behind it; sent back in {@code declinedAutoAddRuleIds} to take the line off
+     * @param mandatory true when the rule cannot be declined
+     */
+    public record QuotedAutoAddLineResponse(
+            UUID ruleId,
+            String ruleCode,
+            java.util.Map<String, String> customerText,
+            boolean mandatory,
+            UUID variantId,
+            BigDecimal quantity,
+            long baseAmountMinor,
+            long finalAmountMinor,
+            long taxAmountMinor) {}
 
     /** One line of a quote, by its position in the request. */
     public record QuotedLineResponse(
@@ -3118,7 +3191,9 @@ public class OperationsOrderController {
                             OrderLineCatchweightResponse.of(line.line()),
                             line.line().isComboComponent()
                                     ? null
-                                    : portionSteps.get(line.line().sourceVariantId())))
+                                    : portionSteps.get(line.line().sourceVariantId()),
+                            line.line().origin(),
+                            line.line().autoAddMandatory()))
                     .toList();
         }
     }
@@ -3369,7 +3444,12 @@ public class OperationsOrderController {
             // ADR 0137: the step this line may be amended in, present only on a line of a splittable
             // dish whose order can still be amended -- so a console offers 1,5 of a plov and never of
             // a can. Absent means whole units; it is the published rule, not a property of the line.
-            @Nullable BigDecimal portionSize) {}
+            @Nullable BigDecimal portionSize,
+            // ADR 0158: CUSTOMER for a line the customer chose, AUTO_ADD for one an auto-add rule put in
+            // the basket. The console prints «добавлено автоматически» beside the latter, and a line
+            // that was mandatory could not be removed by the customer.
+            String origin,
+            boolean autoAddMandatory) {}
 
     /** An option the server applied to a line, and what it cost for the whole line (ADR 0136). */
     public record AutoSelectedChargeResponse(String name, long amountMinor) {}

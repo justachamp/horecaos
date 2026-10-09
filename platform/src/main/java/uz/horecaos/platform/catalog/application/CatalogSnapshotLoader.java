@@ -1,5 +1,6 @@
 package uz.horecaos.platform.catalog.application;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -15,6 +16,8 @@ import org.springframework.stereotype.Component;
 import uz.horecaos.platform.catalog.api.CatalogNameLocales;
 import uz.horecaos.platform.catalog.api.VariantPricingLookup;
 import uz.horecaos.platform.catalog.application.ChannelProjection.ResolvedMedia;
+import uz.horecaos.platform.catalog.domain.AutoAddRules;
+import uz.horecaos.platform.catalog.domain.AutoAddRules.AutoAddRule;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Category;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.LocationOffering;
@@ -31,6 +34,7 @@ import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ModifierAttachment;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
+import uz.horecaos.platform.catalog.domain.MxikFacts;
 import uz.horecaos.platform.catalog.domain.PhysicalAttributes;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
@@ -74,6 +78,7 @@ public class CatalogSnapshotLoader {
     private final BrandLocaleLookup brandLocales;
     private final String defaultLocale;
     private final boolean pricingWired;
+    private final AutoAddSnapshotSource autoAdd;
 
     /**
      * @param defaultLocale {@code horecaos.catalog.default-locale} -- where a name is
@@ -85,13 +90,25 @@ public class CatalogSnapshotLoader {
             MediaAvailability media,
             VariantPricingLookup pricing,
             BrandLocaleLookup brandLocales,
-            @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale) {
+            @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale,
+            AutoAddSnapshotSource autoAdd) {
         this.store = store;
         this.media = media;
         this.pricing = pricing;
         this.brandLocales = brandLocales;
         this.defaultLocale = defaultLocale;
         this.pricingWired = pricing.isWired();
+        this.autoAdd = autoAdd;
+    }
+
+    /** A loader that publishes no auto-add rules (ADR 0158), for callers and tests that never author one. */
+    public CatalogSnapshotLoader(
+            JdbcCatalogStore store,
+            MediaAvailability media,
+            VariantPricingLookup pricing,
+            BrandLocaleLookup brandLocales,
+            String defaultLocale) {
+        this(store, media, pricing, brandLocales, defaultLocale, AutoAddSnapshotSource.NONE);
     }
 
     /** A loader that requires the configured locale for every brand, for callers with no tenancy to ask. */
@@ -181,7 +198,8 @@ public class CatalogSnapshotLoader {
                 loadFiscalContext(tenantId, brandId, offerings),
                 pricingWired,
                 composite,
-                store.physicalAttributesForBrand(tenantId, brandId));
+                store.physicalAttributesForBrand(tenantId, brandId),
+                autoAdd.load(tenantId, brandId));
     }
 
     /**
@@ -324,15 +342,21 @@ public class CatalogSnapshotLoader {
                         && offering.fulfillmentModes().stream().anyMatch(DELIVERY_MODE::equalsIgnoreCase));
 
         boolean referenceLoaded = store.mxikReferenceIsLoaded();
-        Set<String> knownCodes = referenceLoaded
-                ? store.knownMxikCodes(byNode.values().stream()
-                        .map(FiscalClassification::mxikCode)
-                        .filter(java.util.Objects::nonNull)
-                        .collect(Collectors.toUnmodifiableSet()))
-                : Set.of();
+        // One date for the whole validation: the publication's own. A future receipt builder passes the order's
+        // business date instead (ADR 0038), so last month's receipt is judged on last month's list.
+        java.time.LocalDate on = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+        Set<String> classified = byNode.values().stream()
+                .map(FiscalClassification::mxikCode)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toUnmodifiableSet());
+        Map<String, MxikFacts> facts = referenceLoaded ? store.mxikFacts(classified) : Map.of();
+        Set<String> knownCodes = facts.entrySet().stream()
+                .filter(entry -> entry.getValue().validOn(on))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toUnmodifiableSet());
 
         return new CatalogValidator.FiscalContext(
-                byNode, store.feesForBrand(tenantId, brandId), offersDelivery, referenceLoaded, knownCodes);
+                byNode, store.feesForBrand(tenantId, brandId), offersDelivery, referenceLoaded, knownCodes, facts, on);
     }
 
     /**
@@ -356,10 +380,25 @@ public class CatalogSnapshotLoader {
                 store.mediaRelations(tenantId, brandId),
                 store.channelMediaOverrides(tenantId, brandId, channel.id()));
         return new ChannelItems(
-                plan.items(),
+                withoutRulesOfOtherChannelTypes(plan.items(), channel),
                 plan.resolved(),
                 plan.overridesByEntity(),
                 unavailableOverrideImages(tenantId, plan.overridesByEntity()));
+    }
+
+    /**
+     * Each channel's publication contains the auto-add rules whose channel types include that
+     * channel's own system type (ADR 0158); a rule written for the web storefront is not in the
+     * Telegram bot's menu, and the cart reads only the publication of its own channel.
+     */
+    private static List<PublicationItem> withoutRulesOfOtherChannelTypes(
+            List<PublicationItem> items, SalesChannel channel) {
+        String systemType = channel.systemType().name();
+        return items.stream()
+                .filter(item -> item.entityType() != EntityType.AUTO_ADD_RULE
+                        || (item.content().get("channelSystemTypes") instanceof List<?> types
+                                && types.contains(systemType)))
+                .toList();
     }
 
     /**
@@ -554,7 +593,69 @@ public class CatalogSnapshotLoader {
                     EntityType.COMBO_GROUP, group.id(), group.version(), comboGroupContent(snapshot, group)));
         }
 
+        // ADR 0158: the active auto-add rules, each an immutable copy carrying its own version, so a
+        // cart line can name the exact rule that put it there. Written only when there are rules, so a
+        // brand that authored none publishes exactly the items it always has.
+        for (AutoAddRule rule : snapshot.autoAdd().rules()) {
+            items.add(new PublicationItem(
+                    EntityType.AUTO_ADD_RULE, rule.id(), rule.version(), autoAddRuleContent(snapshot, rule)));
+        }
+
         return List.copyOf(items);
+    }
+
+    /**
+     * One auto-add rule as the cart reads it (ADR 0158). Decimals travel as plain strings so a quantity
+     * of 0.333 is read back as exactly that and not as the nearest double.
+     */
+    private static Map<String, Object> autoAddRuleContent(CatalogValidator.Snapshot snapshot, AutoAddRule rule) {
+        Map<String, Object> content = new LinkedHashMap<>();
+        content.put("code", rule.code());
+        content.put("kind", rule.kind().name());
+        content.put("mode", rule.mode().name());
+        putIfPresent(content, "addVariantId", rule.addVariantId());
+        putPlain(content, "quantity", rule.quantity());
+        putPlain(content, "triggerThreshold", rule.triggerThreshold());
+        content.put("repeatPerMultiple", rule.repeatPerMultiple());
+        content.put("minimumQuantity", rule.minimumQuantity().toPlainString());
+        content.put("maximumQuantity", rule.maximumQuantity().toPlainString());
+        content.put("mandatory", rule.mandatory());
+        content.put(
+                "fulfillmentModes", rule.fulfillmentModes().stream().sorted().toList());
+        content.put(
+                "channelSystemTypes",
+                rule.channelSystemTypes().stream().sorted().toList());
+        content.put(
+                "locationIds", idStrings(rule.locationIds().stream().sorted().toList()));
+        content.put("sortOrder", rule.sortOrder());
+        List<Map<String, Object>> triggers = new ArrayList<>();
+        for (AutoAddRules.Trigger trigger : rule.triggers()) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            putIfPresent(entry, "variantId", trigger.variantId());
+            putIfPresent(entry, "productId", trigger.productId());
+            putIfPresent(entry, "categoryId", trigger.categoryId());
+            triggers.add(entry);
+        }
+        content.put("triggers", triggers);
+        List<Map<String, Object>> bands = new ArrayList<>();
+        for (AutoAddRules.Band band : rule.bands()) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("portionsFrom", band.portionsFrom().toPlainString());
+            putPlain(entry, "portionsTo", band.portionsTo());
+            entry.put("addVariantId", band.addVariantId().toString());
+            entry.put("quantity", band.quantity().toPlainString());
+            bands.add(entry);
+        }
+        content.put("bands", bands);
+        // The customer text shown beside the injected line.
+        content.put("names", names(snapshot, EntityType.AUTO_ADD_RULE, rule.id()));
+        return content;
+    }
+
+    private static void putPlain(Map<String, Object> target, String key, @Nullable BigDecimal value) {
+        if (value != null) {
+            target.put(key, value.toPlainString());
+        }
     }
 
     /**
@@ -790,6 +891,9 @@ public class CatalogSnapshotLoader {
         putIfPresent(block, "catchweightNominalGrams", physical.catchweightNominalGrams());
         block.put("splittable", physical.splittable());
         putIfPresent(block, "portionSize", physical.portionSize());
+        // ADR 0158: written only when stated, so a variant that never states it publishes the
+        // block it always did and the draft's content hash does not move.
+        putIfPresent(block, "portionsPerUnit", physical.portionsPerUnit());
         Map<String, Object> nutrition = new LinkedHashMap<>();
         putIfPresent(nutrition, "caloriesKcalPer100", physical.caloriesKcalPer100());
         putIfPresent(nutrition, "proteinGramsPer100", physical.proteinGramsPer100());

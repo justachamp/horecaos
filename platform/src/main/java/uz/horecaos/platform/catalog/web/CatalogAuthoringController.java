@@ -484,6 +484,8 @@ public class CatalogAuthoringController {
      * @param splittable        absent reads as false
      * @param portionSize       the step a splittable variant may be ordered in, e.g. 0.5
      * @param caloriesKcalPer100 КБЖУ per 100 g (per 100 mL for a volume-measured variant)
+     * @param portionsPerUnit   ADR 0158: how many servings one unit is worth, for portion-band
+     *                          auto-add rules; blank counts as zero
      */
     public record PhysicalAttributesRequest(
             @Nullable @Positive Integer netWeightGrams,
@@ -496,7 +498,8 @@ public class CatalogAuthoringController {
             @Nullable BigDecimal caloriesKcalPer100,
             @Nullable BigDecimal proteinGramsPer100,
             @Nullable BigDecimal fatGramsPer100,
-            @Nullable BigDecimal carbohydratesGramsPer100) {
+            @Nullable BigDecimal carbohydratesGramsPer100,
+            @Nullable BigDecimal portionsPerUnit) {
 
         PhysicalAttributes toAttributes() {
             return new PhysicalAttributes(
@@ -510,7 +513,8 @@ public class CatalogAuthoringController {
                     caloriesKcalPer100,
                     proteinGramsPer100,
                     fatGramsPer100,
-                    carbohydratesGramsPer100);
+                    carbohydratesGramsPer100,
+                    portionsPerUnit);
         }
     }
 
@@ -527,13 +531,14 @@ public class CatalogAuthoringController {
             @Nullable BigDecimal proteinGramsPer100,
             @Nullable BigDecimal fatGramsPer100,
             @Nullable BigDecimal carbohydratesGramsPer100,
+            @Nullable BigDecimal portionsPerUnit,
             int version) {
 
         static PhysicalAttributesResponse of(PhysicalAttributesAuthoringService.View view) {
             PhysicalAttributes attributes = view.attributes();
             if (attributes == null) {
                 return new PhysicalAttributesResponse(
-                        null, null, false, null, null, false, null, null, null, null, null, view.version());
+                        null, null, false, null, null, false, null, null, null, null, null, null, view.version());
             }
             return new PhysicalAttributesResponse(
                     attributes.netWeightGrams(),
@@ -547,6 +552,7 @@ public class CatalogAuthoringController {
                     attributes.proteinGramsPer100(),
                     attributes.fatGramsPer100(),
                     attributes.carbohydratesGramsPer100(),
+                    attributes.portionsPerUnit(),
                     view.version());
         }
     }

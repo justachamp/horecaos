@@ -28,7 +28,7 @@ public class JdbcPhysicalAttributesStore {
     private static final String COLUMNS = """
             net_weight_grams, net_volume_millilitres, is_catchweight, catchweight_quantum_grams,
             catchweight_nominal_grams, is_splittable, portion_size, calories_kcal_per_100,
-            protein_grams_per_100, fat_grams_per_100, carbohydrates_grams_per_100""";
+            protein_grams_per_100, fat_grams_per_100, carbohydrates_grams_per_100, portions_per_unit""";
 
     private final JdbcClient jdbc;
 
@@ -75,12 +75,12 @@ public class JdbcPhysicalAttributesStore {
                     variant_id, tenant_id, brand_id,
                     net_weight_grams, net_volume_millilitres, is_catchweight, catchweight_quantum_grams,
                     catchweight_nominal_grams, is_splittable, portion_size, calories_kcal_per_100,
-                    protein_grams_per_100, fat_grams_per_100, carbohydrates_grams_per_100)
+                    protein_grams_per_100, fat_grams_per_100, carbohydrates_grams_per_100, portions_per_unit)
                 VALUES (
                     :variantId, :tenantId, :brandId,
                     :netWeightGrams, :netVolumeMillilitres, :catchweight, :quantumGrams,
                     :nominalGrams, :splittable, :portionSize, :calories,
-                    :protein, :fat, :carbohydrates)
+                    :protein, :fat, :carbohydrates, :portionsPerUnit)
                 ON CONFLICT (variant_id) DO NOTHING
                 RETURNING version
                 """).params(params).query(Integer.class).optional();
@@ -108,6 +108,7 @@ public class JdbcPhysicalAttributesStore {
                     protein_grams_per_100 = :protein,
                     fat_grams_per_100 = :fat,
                     carbohydrates_grams_per_100 = :carbohydrates,
+                    portions_per_unit = :portionsPerUnit,
                     version = version + 1,
                     updated_at = now()
                 WHERE tenant_id = :tenantId AND brand_id = :brandId AND variant_id = :variantId
@@ -149,6 +150,7 @@ public class JdbcPhysicalAttributesStore {
         params.put("protein", attributes.proteinGramsPer100());
         params.put("fat", attributes.fatGramsPer100());
         params.put("carbohydrates", attributes.carbohydratesGramsPer100());
+        params.put("portionsPerUnit", attributes.portionsPerUnit());
         return params;
     }
 
@@ -169,6 +171,7 @@ public class JdbcPhysicalAttributesStore {
                 row.getObject("calories_kcal_per_100", BigDecimal.class),
                 row.getObject("protein_grams_per_100", BigDecimal.class),
                 row.getObject("fat_grams_per_100", BigDecimal.class),
-                row.getObject("carbohydrates_grams_per_100", BigDecimal.class));
+                row.getObject("carbohydrates_grams_per_100", BigDecimal.class),
+                row.getObject("portions_per_unit", BigDecimal.class));
     }
 }

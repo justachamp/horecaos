@@ -247,7 +247,11 @@ public final class ReportingFacts {
             @Nullable UUID comboSelectionId,
             @Nullable UUID comboContainerVariantId,
             @Nullable Integer comboQuantity,
-            @Nullable String comboNameSnapshot) {}
+            @Nullable String comboNameSnapshot,
+            // ADR 0158 (V0538): CUSTOMER for a line the customer chose, AUTO_ADD for one a rule added,
+            // and the rule behind it, so a report can say which lines a rule put in the basket.
+            String lineOrigin,
+            @Nullable UUID autoAddRuleId) {}
 
     /**
      * The slice a branch-day aggregate is keyed by.

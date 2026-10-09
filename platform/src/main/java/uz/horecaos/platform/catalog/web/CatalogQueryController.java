@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.catalog.application.CatalogQueryService;
+import uz.horecaos.platform.catalog.application.MxikReferenceStatusService;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.Visibility;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.iam.api.Capability;
@@ -46,9 +47,11 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class CatalogQueryController {
 
     private final CatalogQueryService query;
+    private final MxikReferenceStatusService referenceStatus;
 
-    public CatalogQueryController(CatalogQueryService query) {
+    public CatalogQueryController(CatalogQueryService query, MxikReferenceStatusService referenceStatus) {
         this.query = query;
+        this.referenceStatus = referenceStatus;
     }
 
     @GetMapping("/catalogs")
@@ -170,12 +173,26 @@ public class CatalogQueryController {
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @RequestParam @Nullable String query,
-            @RequestParam(required = false) @Nullable Integer limit) {
+            @RequestParam(required = false) @Nullable Integer limit,
+            @RequestParam(required = false) java.time.@Nullable LocalDate asOf) {
         if (query == null || query.trim().length() < 2) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "query must be at least 2 characters");
         }
         int pageSize = limit == null ? 20 : Math.clamp(limit, 1, 100);
-        return Page.last(this.query.searchMxikReference(query, pageSize));
+        return Page.last(this.query.searchMxikReference(query, pageSize, asOf));
+    }
+
+    @GetMapping("/fiscal-reference/mxik/status")
+    @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "Whether the national ИКПУ/MXIK list is loaded — tenant alias (ADR 0173)",
+            description = "The platform status read behind CATALOG_READ at BRAND scope, so the classification "
+                    + "picker and the product editor can say \"the list is not loaded\" instead of \"nothing "
+                    + "found\". Shows the same national state to every tenant and nothing about any tenant; it "
+                    + "cannot reach the import runs.")
+    public FiscalReferenceController.ReferenceStatus mxikReferenceStatus(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        return FiscalReferenceController.ReferenceStatus.of(referenceStatus.status());
     }
 
     @GetMapping("/fiscal-coverage")
@@ -196,7 +213,9 @@ public class CatalogQueryController {
             int totalNodes,
             int unclassifiedCount,
             List<FiscalCoverageNodeResponse> nodes,
-            List<CategoryDefaultResponse> categoryDefaults) {
+            List<CategoryDefaultResponse> categoryDefaults,
+            int withdrawnCount,
+            List<FiscalCoverageNodeResponse> withdrawnNodes) {
         static FiscalCoverageResponse of(CatalogQueryService.FiscalCoverageSummary summary) {
             return new FiscalCoverageResponse(
                     summary.totalNodes(),
@@ -204,6 +223,10 @@ public class CatalogQueryController {
                     summary.nodes().stream().map(FiscalCoverageNodeResponse::of).toList(),
                     summary.categoryDefaults().stream()
                             .map(CategoryDefaultResponse::of)
+                            .toList(),
+                    summary.withdrawnCount(),
+                    summary.withdrawnNodes().stream()
+                            .map(FiscalCoverageNodeResponse::of)
                             .toList());
         }
     }
@@ -212,6 +235,8 @@ public class CatalogQueryController {
      * @param categoryId  the node's category, absent for a modifier option and the delivery fee
      * @param mxikCode    what the node already holds for its ИКПУ, if anything
      * @param packageCode what the node already holds for its package code, if anything
+     * @param mxikWithdrawnOn the date the official list withdrew the node's code, when it has (ADR 0173)
+     * @param mxikReplacedBy  the successor the list names for it, for a person to click
      */
     public record FiscalCoverageNodeResponse(
             uz.horecaos.platform.catalog.domain.CatalogEntities.PriceableType nodeType,
@@ -221,7 +246,9 @@ public class CatalogQueryController {
             int locationCount,
             @Nullable UUID categoryId,
             @Nullable String mxikCode,
-            @Nullable String packageCode) {
+            @Nullable String packageCode,
+            java.time.@Nullable LocalDate mxikWithdrawnOn,
+            @Nullable String mxikReplacedBy) {
         static FiscalCoverageNodeResponse of(CatalogQueryService.FiscalCoverageNode node) {
             return new FiscalCoverageNodeResponse(
                     node.nodeType(),
@@ -231,7 +258,9 @@ public class CatalogQueryController {
                     node.locationCount(),
                     node.categoryId(),
                     node.mxikCode(),
-                    node.packageCode());
+                    node.packageCode(),
+                    node.mxikWithdrawnOn(),
+                    node.mxikReplacedBy());
         }
     }
 

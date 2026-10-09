@@ -3,6 +3,7 @@ package uz.horecaos.platform.catalog;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,7 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Status;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
+import uz.horecaos.platform.catalog.domain.MxikFacts;
 import uz.horecaos.platform.catalog.domain.PhysicalAttributes;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.media.api.MediaAssetId;
@@ -596,6 +598,149 @@ class CatalogValidatorTests {
                         .blockers())
                 .extracting(ValidationFinding::code)
                 .doesNotContain("PHYSICAL_ATTRIBUTES_CONFLICT_WITH_MARKING");
+    }
+
+    // ---------------------------------------------------------- ADR 0173: the national list's findings
+
+    private static final LocalDate TODAY = LocalDate.parse("2026-10-08");
+    private static final String LISTED = "10202001001000000";
+
+    private static FiscalClassification classifiedAs(String mxikCode, String packageCode) {
+        return new FiscalClassification(
+                mxikCode,
+                packageCode,
+                1,
+                "Bottle",
+                null,
+                false,
+                FiscalClassification.MarkingScheme.NONE,
+                false,
+                null,
+                null);
+    }
+
+    private static Snapshot referenceSnapshot(
+            Variant variant,
+            FiscalClassification fiscal,
+            boolean loaded,
+            Set<String> validToday,
+            Map<String, MxikFacts> facts) {
+        Snapshot base = markingSnapshot(variant, fiscal, null);
+        return new Snapshot(
+                base.defaultLocale(),
+                base.fallbackLocale(),
+                base.products(),
+                base.variants(),
+                base.variantsByProduct(),
+                base.categories(),
+                base.categoriesById(),
+                base.productIdsByCategory(),
+                base.modifierGroupIdsByProduct(),
+                base.modifierGroups(),
+                base.optionsByGroup(),
+                base.translations(),
+                base.mediaReferences(),
+                base.displayableMedia(),
+                base.pricedVariantIds(),
+                base.offeredVariantIds(),
+                new CatalogValidator.FiscalContext(
+                        Map.of(variant.id(), fiscal), List.of(), false, loaded, validToday, facts, TODAY),
+                base.pricingWired(),
+                Map.of());
+    }
+
+    private static List<String> mxikCodes(ValidationFinding.Report report) {
+        return report.findings().stream()
+                .map(ValidationFinding::code)
+                .filter(code -> code.startsWith("FISCAL_MXIK_") || code.startsWith("FISCAL_PACKAGE_"))
+                .toList();
+    }
+
+    @Test
+    @DisplayName(
+            "while the list is not loaded the validator is silent about every code: an empty list is an outstanding import, not a thousand errors")
+    void anUnloadedListIsSilent() {
+        Variant variant = activeVariant("BOTTLE");
+
+        ValidationFinding.Report report = validator.validate(
+                referenceSnapshot(variant, classifiedAs("ANY-CODE", "1001"), false, Set.of(), Map.of()));
+
+        assertThat(mxikCodes(report)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a code the loaded list has never held is unknown, a WARNING")
+    void aCodeTheListNeverHeldIsUnknown() {
+        Variant variant = activeVariant("BOTTLE");
+
+        ValidationFinding.Report report = validator.validate(
+                referenceSnapshot(variant, classifiedAs("TYPO-CODE", "1001"), true, Set.of(LISTED), Map.of()));
+
+        assertThat(report.findings())
+                .filteredOn(finding -> finding.code().startsWith("FISCAL_MXIK_"))
+                .singleElement()
+                .satisfies(finding -> {
+                    assertThat(finding.code()).isEqualTo("FISCAL_MXIK_CODE_UNKNOWN");
+                    assertThat(finding.severity()).isEqualTo(ValidationFinding.Severity.WARNING);
+                });
+    }
+
+    @Test
+    @DisplayName("a code the list has withdrawn warns with its date and successor, and is not also called unknown")
+    void aWithdrawnCodeWarnsAndNeverBlocks() {
+        Variant variant = activeVariant("BOTTLE");
+        MxikFacts withdrawn = new MxikFacts(
+                LocalDate.parse("2021-08-01"), LocalDate.parse("2026-09-01"), List.of("1001"), "10202002001000000");
+
+        ValidationFinding.Report report = validator.validate(
+                referenceSnapshot(variant, classifiedAs(LISTED, "1001"), true, Set.of(), Map.of(LISTED, withdrawn)));
+
+        assertThat(mxikCodes(report)).containsExactly("FISCAL_MXIK_CODE_WITHDRAWN");
+        ValidationFinding finding = report.findings().stream()
+                .filter(f -> f.code().equals("FISCAL_MXIK_CODE_WITHDRAWN"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(finding.severity()).isEqualTo(ValidationFinding.Severity.WARNING);
+        assertThat(finding.entityId()).isEqualTo(variant.id());
+        assertThat(finding.detail()).contains(LISTED, "2026-09-01", "10202002001000000");
+        assertThat(report.blockers())
+                .as("a withdrawal blocks nothing: no sale, receipt or publication stops on it")
+                .extracting(ValidationFinding::code)
+                .doesNotContain("FISCAL_MXIK_CODE_WITHDRAWN");
+    }
+
+    @Test
+    @DisplayName("a code whose withdrawal date is still ahead is valid today and raises nothing")
+    void aCodeWithdrawnInTheFutureIsStillValid() {
+        Variant variant = activeVariant("BOTTLE");
+        MxikFacts endingSoon =
+                new MxikFacts(LocalDate.parse("2021-08-01"), LocalDate.parse("2026-12-31"), List.of("1001"), null);
+
+        ValidationFinding.Report report = validator.validate(referenceSnapshot(
+                variant, classifiedAs(LISTED, "1001"), true, Set.of(LISTED), Map.of(LISTED, endingSoon)));
+
+        assertThat(mxikCodes(report)).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "a package code the list does not name for the code is a WARNING; one it names, and a list that names none, are not")
+    void aPackageCodeTheListDoesNotNameWarns() {
+        Variant variant = activeVariant("BOTTLE");
+        MxikFacts listsPackages = new MxikFacts(LocalDate.parse("2021-08-01"), null, List.of("1010", "1011"), null);
+        MxikFacts listsNone = new MxikFacts(LocalDate.parse("2021-08-01"), null, List.of(), null);
+
+        assertThat(mxikCodes(validator.validate(referenceSnapshot(
+                        variant, classifiedAs(LISTED, "9999"), true, Set.of(LISTED), Map.of(LISTED, listsPackages)))))
+                .containsExactly("FISCAL_PACKAGE_CODE_NOT_LISTED_FOR_MXIK");
+        assertThat(mxikCodes(validator.validate(referenceSnapshot(
+                        variant, classifiedAs(LISTED, "1011"), true, Set.of(LISTED), Map.of(LISTED, listsPackages)))))
+                .as("a code the dataset names is fine")
+                .isEmpty();
+        assertThat(mxikCodes(validator.validate(referenceSnapshot(
+                        variant, classifiedAs(LISTED, "9999"), true, Set.of(LISTED), Map.of(LISTED, listsNone)))))
+                .as("a list that names no package codes for the code is not evidence of anything")
+                .isEmpty();
     }
 
     private static Variant activeVariant(String sku) {

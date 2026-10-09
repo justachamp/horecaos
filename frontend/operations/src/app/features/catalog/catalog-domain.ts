@@ -426,6 +426,22 @@ export interface MxikReferenceRow {
   readonly defaultPackageCodes: readonly string[];
   readonly validFrom: string;
   readonly validUntil?: string | null;
+  /** Present only on a search asked as of a date (ADR 0173). */
+  readonly withdrawn?: boolean | null;
+  readonly replacedByCode?: string | null;
+}
+
+/** `FiscalReferenceController.ReferenceStatus` — the national ИКПУ/MXIK list's state (ADR 0173). */
+export interface MxikReferenceStatus {
+  readonly loaded: boolean;
+  readonly datasetVersion: number | null;
+  readonly importedAt: string | null;
+  readonly sourcePublishedOn: string | null;
+  readonly validRows: number;
+  readonly withdrawnRows: number;
+  readonly ageDays: number | null;
+  readonly maxAgeDays: number | null;
+  readonly stale: boolean;
 }
 
 /** `IdResponse`. */

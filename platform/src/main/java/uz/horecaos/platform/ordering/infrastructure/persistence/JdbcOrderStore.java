@@ -787,6 +787,63 @@ public class JdbcOrderStore {
             @Nullable String noteEncrypted,
             @Nullable ComboFacts combo,
             QuoteSnapshot.@Nullable Catchweight catchweight) {
+        insertLine(
+                lineId,
+                tenantId,
+                orderId,
+                lineNumber,
+                sourceProductId,
+                sourceVariantId,
+                productName,
+                variantName,
+                sku,
+                quantity,
+                unitMinor,
+                baseMinor,
+                finalMinor,
+                taxMinor,
+                noteEncrypted,
+                combo,
+                catchweight,
+                LineOrigin.CUSTOMER);
+    }
+
+    /**
+     * Where an order line came from (ADR 0158): the customer's own choice, or a line an auto-add rule
+     * put in the basket. The rule id and version are the evidence; {@code mandatory} records that the
+     * customer was not able to remove it. A line imported from the legacy platform is {@code AUTO_ADD}
+     * with no rule, which the order table allows and the cart table does not.
+     */
+    public record LineOrigin(
+            String origin, @Nullable UUID ruleId, @Nullable Integer ruleVersion, boolean mandatory) {
+
+        public static final LineOrigin CUSTOMER = new LineOrigin("CUSTOMER", null, null, false);
+
+        public static LineOrigin autoAdded(UUID ruleId, int ruleVersion, boolean mandatory) {
+            return new LineOrigin("AUTO_ADD", ruleId, ruleVersion, mandatory);
+        }
+    }
+
+    /** One line that may be a combo component (ADR 0136), sold by weight (ADR 0137), and added by a rule (ADR 0158). */
+    public void insertLine(
+            UUID lineId,
+            UUID tenantId,
+            UUID orderId,
+            int lineNumber,
+            @Nullable UUID sourceProductId,
+            UUID sourceVariantId,
+            String productName,
+            @Nullable String variantName,
+            @Nullable String sku,
+            BigDecimal quantity,
+            long unitMinor,
+            long baseMinor,
+            long finalMinor,
+            long taxMinor,
+            @Nullable String noteEncrypted,
+            @Nullable ComboFacts combo,
+            QuoteSnapshot.@Nullable Catchweight catchweight,
+            LineOrigin origin) {
         jdbc.sql("""
                 INSERT INTO ordering.order_lines (
                     id, tenant_id, order_id, line_number, source_product_id, source_variant_id,
@@ -796,14 +853,20 @@ public class JdbcOrderStore {
                     combo_selection_id, combo_container_variant_id, combo_name_snapshot,
                     combo_component_id, combo_quantity, combo_pick_quantity,
                     catchweight_quantum_grams, catchweight_nominal_grams,
-                    catchweight_price_per_quantum_minor, actual_weight_grams)
+                    catchweight_price_per_quantum_minor, actual_weight_grams,
+                    origin, auto_add_rule_id, auto_add_rule_version, auto_add_mandatory)
                 VALUES (:id, :tenantId, :orderId, :lineNumber, :productId, :variantId,
                     :productName, :variantName, :sku, :quantity,
                     :unit, :base, :finalAmount, :tax, :note,
                     :comboSelectionId, :comboContainerVariantId, :comboName,
                     :comboComponentId, :comboQuantity, :comboPickQuantity,
-                    :quantum, :nominal, :pricePerQuantum, :actualWeight)
+                    :quantum, :nominal, :pricePerQuantum, :actualWeight,
+                    :origin, :autoAddRuleId, :autoAddRuleVersion, :autoAddMandatory)
                 """)
+                .param("origin", origin.origin())
+                .param("autoAddRuleId", origin.ruleId())
+                .param("autoAddRuleVersion", origin.ruleVersion())
+                .param("autoAddMandatory", origin.mandatory())
                 .param("comboSelectionId", combo == null ? null : combo.selectionId())
                 .param("comboContainerVariantId", combo == null ? null : combo.containerVariantId())
                 .param("comboName", combo == null ? null : combo.name())
@@ -2271,7 +2334,8 @@ public class JdbcOrderStore {
                        combo_selection_id, combo_container_variant_id, combo_name_snapshot,
                        combo_component_id, combo_quantity, combo_pick_quantity,
                        catchweight_quantum_grams, catchweight_nominal_grams,
-                       catchweight_price_per_quantum_minor, actual_weight_grams
+                       catchweight_price_per_quantum_minor, actual_weight_grams,
+                       origin, auto_add_rule_id, auto_add_rule_version, auto_add_mandatory
                 FROM ordering.order_lines
                 WHERE tenant_id = :tenantId AND order_id = :orderId
                   AND (:revision::integer IS NULL
@@ -2304,7 +2368,11 @@ public class JdbcOrderStore {
                         row.getObject("catchweight_quantum_grams", Integer.class),
                         row.getObject("catchweight_nominal_grams", Integer.class),
                         row.getObject("catchweight_price_per_quantum_minor", Long.class),
-                        row.getObject("actual_weight_grams", Integer.class)))
+                        row.getObject("actual_weight_grams", Integer.class),
+                        row.getString("origin"),
+                        row.getObject("auto_add_rule_id", UUID.class),
+                        row.getObject("auto_add_rule_version", Integer.class),
+                        row.getBoolean("auto_add_mandatory")))
                 .list();
     }
 
@@ -3769,10 +3837,79 @@ public class JdbcOrderStore {
             @Nullable Integer catchweightQuantumGrams,
             @Nullable Integer catchweightNominalGrams,
             @Nullable Long catchweightPricePerQuantumMinor,
-            @Nullable Integer actualWeightGrams) {
+            @Nullable Integer actualWeightGrams,
+            String origin,
+            @Nullable UUID autoAddRuleId,
+            @Nullable Integer autoAddRuleVersion,
+            boolean autoAddMandatory) {
 
         public OrderLineRow {
             quantity = Quantities.normalise(quantity);
+        }
+
+        /** A customer's own line, which is every line there was before ADR 0158. */
+        public OrderLineRow(
+                UUID lineId,
+                int lineNumber,
+                UUID sourceProductId,
+                UUID sourceVariantId,
+                String productName,
+                String variantName,
+                String sku,
+                BigDecimal quantity,
+                long unitAmountMinor,
+                long baseAmountMinor,
+                long finalAmountMinor,
+                long taxAmountMinor,
+                String noteEncrypted,
+                @Nullable UUID comboSelectionId,
+                @Nullable UUID comboContainerVariantId,
+                @Nullable String comboName,
+                @Nullable UUID comboComponentId,
+                @Nullable Integer comboQuantity,
+                @Nullable Integer comboPickQuantity,
+                @Nullable Integer catchweightQuantumGrams,
+                @Nullable Integer catchweightNominalGrams,
+                @Nullable Long catchweightPricePerQuantumMinor,
+                @Nullable Integer actualWeightGrams) {
+            this(
+                    lineId,
+                    lineNumber,
+                    sourceProductId,
+                    sourceVariantId,
+                    productName,
+                    variantName,
+                    sku,
+                    quantity,
+                    unitAmountMinor,
+                    baseAmountMinor,
+                    finalAmountMinor,
+                    taxAmountMinor,
+                    noteEncrypted,
+                    comboSelectionId,
+                    comboContainerVariantId,
+                    comboName,
+                    comboComponentId,
+                    comboQuantity,
+                    comboPickQuantity,
+                    catchweightQuantumGrams,
+                    catchweightNominalGrams,
+                    catchweightPricePerQuantumMinor,
+                    actualWeightGrams,
+                    "CUSTOMER",
+                    null,
+                    null,
+                    false);
+        }
+
+        /** Whether a rule put this line in the basket (ADR 0158). */
+        public boolean autoAdded() {
+            return "AUTO_ADD".equals(origin);
+        }
+
+        /** The origin this line carries into the revision that replaces it. */
+        public LineOrigin lineOrigin() {
+            return new LineOrigin(origin, autoAddRuleId, autoAddRuleVersion, autoAddMandatory);
         }
 
         public boolean hasNote() {

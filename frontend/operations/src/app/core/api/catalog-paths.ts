@@ -172,6 +172,14 @@ export const catalogPaths = {
     return `${this.base(scope)}/fiscal-reference/mxik`;
   },
 
+  /**
+   * Whether the national list is loaded, which dataset and how old (ADR 0173): the same platform read behind
+   * the tenant's own capability, so the picker can say "not loaded" instead of "nothing found".
+   */
+  mxikReferenceStatus(scope: BrandScope): string {
+    return `${this.base(scope)}/fiscal-reference/mxik/status`;
+  },
+
   /** ИКПУ/MXIK and packaging for a variant. */
   variantFiscalClassification(scope: BrandScope, variantId: string): string {
     return `${this.base(scope)}/variants/${encodeURIComponent(variantId)}/fiscal-classification`;

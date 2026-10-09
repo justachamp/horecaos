@@ -101,6 +101,25 @@ public class JdbcControlPlaneAlertStore {
                 == 1;
     }
 
+    /** Resolves the live incident of this class and subject; a no-op when there is none. */
+    public boolean resolveBySubject(
+            String eventClass, String subjectType, String subjectId, String by, String note, Instant at) {
+        return jdbc.sql("""
+                        UPDATE notifications.control_plane_alerts
+                           SET status = 'RESOLVED', resolved_by = :by, resolved_at = :at, resolution_note = :note
+                         WHERE event_class = :eventClass AND subject_type = :subjectType
+                           AND subject_id = :subjectId AND status <> 'RESOLVED'
+                        """)
+                        .param("eventClass", eventClass)
+                        .param("subjectType", subjectType)
+                        .param("subjectId", subjectId)
+                        .param("by", by)
+                        .param("note", note)
+                        .param("at", utc(at))
+                        .update()
+                > 0;
+    }
+
     private static final String SELECT = """
             SELECT id, event_class, subject_type, subject_id, variables, first_raised_at, last_raised_at,
                    occurrences, status, acknowledged_by, acknowledged_at, resolved_by, resolved_at, resolution_note
