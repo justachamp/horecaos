@@ -1084,6 +1084,61 @@ public class JdbcCatalogStore {
     }
 
     /**
+     * The marked nodes among these with the barcode their classification states (ADR 0161), for the
+     * check that a scanned code's GTIN is the product's. The map's value is null for a marked node
+     * with no barcode, which the caller records as an unchecked GTIN rather than as a mismatch.
+     * Reads the same partial index as {@link #markedNodes}.
+     */
+    public Map<UUID, String> markedNodeBarcodes(UUID tenantId, UUID brandId, Set<UUID> priceableIds) {
+        if (priceableIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> byNode = new LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT priceable_id, barcode FROM catalog.fiscal_classifications
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                  AND marking_required
+                  AND priceable_id = ANY(:ids)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("ids", priceableIds.toArray(UUID[]::new))
+                .query((row, number) -> {
+                    byNode.put(row.getObject("priceable_id", UUID.class), row.getString("barcode"));
+                    return 0;
+                })
+                .list();
+        return byNode;
+    }
+
+    /**
+     * The classification of each of these nodes, for the module that turns an order into a receipt
+     * (ADR 0161). A node with no classification row is absent.
+     */
+    public Map<UUID, FiscalClassification> classificationsFor(UUID tenantId, UUID brandId, Set<UUID> priceableIds) {
+        if (priceableIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, FiscalClassification> byNode = new LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT priceable_id, mxik_code, package_code, fiscal_unit_code, fiscal_name,
+                       barcode, marking_required, marking_scheme, excisable,
+                       alcohol_by_volume_bp, age_restriction_years
+                FROM catalog.fiscal_classifications
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND priceable_id = ANY(:ids)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("ids", priceableIds.toArray(UUID[]::new))
+                .query((row, number) -> {
+                    byNode.put(row.getObject("priceable_id", UUID.class), mapClassification(row));
+                    return 0;
+                })
+                .list();
+        return Map.copyOf(byNode);
+    }
+
+    /**
      * The package code classified for each of these nodes, for a caller building
      * a provider order line rather than a fiscal receipt (ADR 0038).
      *

@@ -227,6 +227,7 @@ export const financeEn = {
   'finance.fiscal.field.blockedAt': 'Blocked at',
   'finance.fiscal.evidence.yes': 'On file',
   'finance.fiscal.evidence.no': 'None',
+  'finance.fiscal.marks.progress': '{captured} of {required} scanned',
   'finance.fiscal.action.retry': 'Ask again',
   'finance.fiscal.action.retry.reason': 'Why ask again',
   'finance.fiscal.action.retry.submit': 'Ask again',

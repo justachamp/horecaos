@@ -484,6 +484,17 @@ public final class EventCatalog {
                     Retention.BUSINESS_FACT,
                     Classification.INTERNAL,
                     "A raised callback was cleared."),
+            // ADR 0161: counts only, never a marking code; a nudge the fiscal module re-reads the counts on.
+            new EventContract(
+                    "OrderMarksCompleted",
+                    1,
+                    "ordering",
+                    ORDERING_EVENTS_TOPIC,
+                    "orderId",
+                    "events/ordering.events/OrderMarksCompleted.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "Every marked line of the order holds all its scanned units. A nudge, counts only."),
             // ADR 0007's reconciliation command and its settled answer. Both key
             // on the delivery operation whose outcome is unknown, not on the
             // reconciliation: two reconciliations for one operation must not

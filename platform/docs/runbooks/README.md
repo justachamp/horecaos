@@ -48,6 +48,7 @@ That shapes them more than any style guide would.
 | [terminals-and-kiosks.md](terminals-and-kiosks.md) | A person forgot or locked their staff PIN, who was at a tablet, a tablet went quiet during service, rotating the PIN pepper, and installing, revoking and re-pairing a kiosk (ADR 0155, ADR 0162) |
 | [staff-sessions.md](staff-sessions.md) | Setting the sign-in client's id so «Мой профиль» can list a person's sessions, what to do when «Выйти на всех устройствах» is refused, and what the history keeps (ADR 0176) |
 | [staff-shifts.md](staff-shifts.md) | Before switching attendance on for a company, a shift left open, reading a staff-hours divergence, why the payroll export refuses, and the partition hazard for the next fact table (ADR 0156) |
+| [marking-scanner-setup.md](marking-scanner-setup.md) | A branch that sells marked goods: the imager settings that matter, the one-minute self-test, the three preconditions for turning `feature.marked_goods` on, and what to do when a real code is refused (ADR 0161) |
 
 **A runbook that has never been executed is a draft.** Each file above carries a
 `Last executed` line in its header. Most read `never`; the few that have been run

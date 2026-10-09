@@ -114,6 +114,28 @@ class ModularArchitectureTests {
         }
     }
 
+    @Test
+    @DisplayName("ordering imports neither fiscal nor payments, so marks can be read by both without a cycle")
+    void orderingDoesNotReachForwardIntoTheFiscalPath() throws IOException {
+        // ADR 0161 puts the marking-code table and its port in ordering because fiscal and payments each
+        // import ordering.api already. A single import the other way would close the cycle that placement
+        // exists to avoid, and Modulith would only say so when it was already closed; this says why.
+        List<String> offenders = sourcesIn(List.of("ordering")).stream()
+                .filter(source -> read(source)
+                        .lines()
+                        .filter(line -> line.startsWith("import "))
+                        .anyMatch(line -> line.startsWith("import uz.horecaos.platform.fiscal.")
+                                || line.startsWith("import uz.horecaos.platform.payments.")
+                                || line.startsWith("import static uz.horecaos.platform.fiscal.")
+                                || line.startsWith("import static uz.horecaos.platform.payments.")))
+                .map(Path::toString)
+                .toList();
+
+        assertThat(offenders)
+                .as("ordering owns ordering.order_line_marks; fiscal and payments depend on it, never the reverse")
+                .isEmpty();
+    }
+
     private static List<Path> sourcesIn(List<String> modules) throws IOException {
         Path root = Path.of("src/main/java/uz/horecaos/platform");
         try (Stream<Path> paths = Files.walk(root)) {

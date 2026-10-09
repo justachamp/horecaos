@@ -492,13 +492,14 @@ class DayCloseAndMetricLayerTests {
         assertThat(secondCount).isEqualTo(firstCount);
     }
 
-    private void insertCallEvent(
+    private UUID insertCallEvent(
             UUID installationId,
             String providerCallId,
             String eventType,
             @Nullable String operatorPrincipalId,
             @Nullable Integer durationSeconds,
             Instant occurredAt) {
+        UUID id = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO voice.call_events
                     (id, tenant_id, brand_id, location_id, installation_id, provider_call_id, event_type,
@@ -506,7 +507,7 @@ class DayCloseAndMetricLayerTests {
                 VALUES (:id, :tenantId, :brandId, :locationId, :installationId, :providerCallId, :eventType,
                         'INBOUND', :operatorPrincipalId, :durationSeconds, :occurredAt)
                 """)
-                .param("id", UUID.randomUUID())
+                .param("id", id)
                 .param("tenantId", TENANT)
                 .param("brandId", BRAND)
                 .param("locationId", LOCATION)
@@ -517,6 +518,281 @@ class DayCloseAndMetricLayerTests {
                 .param("durationSeconds", durationSeconds)
                 .param("occurredAt", occurredAt.atOffset(ZoneOffset.UTC))
                 .update();
+        return id;
+    }
+
+    // ------------------------------------------------------ ADR 0175 call KPIs
+
+    /** The one fact row of an operator in an hour, with the five ADR 0175 columns. */
+    private Map<String, Object> callKpiRow(String operator, int hour) {
+        return jdbc.sql("""
+                SELECT answered_call_count, ring_seconds_total, ring_sample_count, ring_seconds_max,
+                       converted_count, answered_count
+                FROM reporting.fact_call_hour
+                WHERE tenant_id = :t AND location_id = :l AND business_date = :day
+                  AND operator_principal_id = :op AND hour_of_day = :hour
+                """)
+                .param("t", TENANT)
+                .param("l", LOCATION)
+                .param("day", DAY)
+                .param("op", operator)
+                .param("hour", hour)
+                .query()
+                .singleRow();
+    }
+
+    private void linkOrderToCall(String orderSeed, UUID offeredEventId) {
+        jdbc.sql("UPDATE ordering.orders SET source_call_id = :call WHERE tenant_id = :t AND id = :id")
+                .param("call", offeredEventId)
+                .param("t", TENANT)
+                .param("id", orderId(orderSeed))
+                .update();
+    }
+
+    @Test
+    @DisplayName("a seven second ring and an order placed from the call land in the new columns")
+    void aRingOfSevenSecondsAndAnOrderFromTheCallAreMeasured() {
+        UUID installation = UUID.randomUUID();
+        UUID offered = insertCallEvent(installation, "call-1", "OFFERED", null, null, tashkent(10, 0, 0));
+        insertCallEvent(installation, "call-1", "ANSWERED", "alice", null, tashkent(10, 0, 7));
+        insertCallEvent(installation, "call-1", "ENDED", "alice", 90, tashkent(10, 1, 30));
+        insertOrder("PHONE", ENTITY_A, "COMPLETED", tashkent(10, 3, 0), tashkent(10, 40, 0), 70_000, 0);
+        linkOrderToCall("PHONE", offered);
+
+        close.close(TENANT, DAY);
+
+        Map<String, Object> alice = callKpiRow("alice", 10);
+        assertThat(alice.get("answered_call_count")).isEqualTo(1);
+        assertThat(alice.get("ring_seconds_total")).isEqualTo(7L);
+        assertThat(alice.get("ring_sample_count")).isEqualTo(1);
+        assertThat(alice.get("ring_seconds_max")).isEqualTo(7);
+        assertThat(alice.get("converted_count")).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("an order linked with a created_at before the call was offered is not a conversion")
+    void anOrderOlderThanTheCallIsNotCounted() {
+        UUID installation = UUID.randomUUID();
+        UUID offered = insertCallEvent(installation, "call-1", "OFFERED", null, null, tashkent(11, 0, 0));
+        insertCallEvent(installation, "call-1", "ANSWERED", "alice", null, tashkent(11, 0, 5));
+        insertOrder("EARLIER", ENTITY_A, "COMPLETED", tashkent(10, 30, 0), tashkent(10, 59, 0), 50_000, 0);
+        linkOrderToCall("EARLIER", offered);
+
+        close.close(TENANT, DAY);
+
+        Map<String, Object> alice = callKpiRow("alice", 11);
+        assertThat(alice.get("answered_call_count")).isEqualTo(1);
+        assertThat(alice.get("converted_count")).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("a cancelled order still counts as the call's conversion, and two orders count the call once")
+    void aCancelledOrderCountsAndTwoOrdersCountOnce() {
+        UUID installation = UUID.randomUUID();
+        UUID offered = insertCallEvent(installation, "call-1", "OFFERED", null, null, tashkent(12, 0, 0));
+        insertCallEvent(installation, "call-1", "ANSWERED", "alice", null, tashkent(12, 0, 4));
+        insertOrder("FIRST", ENTITY_A, "CANCELLED", tashkent(12, 2, 0), tashkent(12, 9, 0), 40_000, 0);
+        insertOrder("SECOND", ENTITY_A, "COMPLETED", tashkent(12, 3, 0), tashkent(12, 30, 0), 45_000, 0);
+        linkOrderToCall("FIRST", offered);
+        linkOrderToCall("SECOND", offered);
+
+        close.close(TENANT, DAY);
+
+        assertThat(callKpiRow("alice", 12).get("converted_count")).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a call nobody answered measures zero answered calls, and a transfer's second answer adds no sample")
+    void anUnansweredCallAndATransferAreCountedHonestly() {
+        UUID installation = UUID.randomUUID();
+        // Nobody answered call-2.
+        insertCallEvent(installation, "call-2", "OFFERED", null, null, tashkent(9, 0, 0));
+        insertCallEvent(installation, "call-2", "MISSED", null, null, tashkent(9, 0, 20));
+        // call-3 is answered by alice after 3 s and transferred to bob, who answers 40 s later.
+        insertCallEvent(installation, "call-3", "OFFERED", null, null, tashkent(9, 30, 0));
+        insertCallEvent(installation, "call-3", "ANSWERED", "alice", null, tashkent(9, 30, 3));
+        insertCallEvent(installation, "call-3", "TRANSFERRED", "alice", null, tashkent(9, 30, 30));
+        insertCallEvent(installation, "call-3", "ANSWERED", "bob", null, tashkent(9, 30, 43));
+
+        close.close(TENANT, DAY);
+
+        Map<String, Object> unassigned = callKpiRow("(unassigned)", 9);
+        assertThat(unassigned.get("answered_call_count"))
+                .as("measured, and zero -- never null on a row the new close wrote")
+                .isEqualTo(0);
+        assertThat(unassigned.get("ring_sample_count")).isEqualTo(0);
+        assertThat(unassigned.get("ring_seconds_max")).isNull();
+
+        Map<String, Object> alice = callKpiRow("alice", 9);
+        assertThat(alice.get("answered_call_count")).isEqualTo(1);
+        assertThat(alice.get("ring_seconds_total")).isEqualTo(3L);
+
+        Map<String, Object> bob = callKpiRow("bob", 9);
+        assertThat(bob.get("answered_count"))
+                .as("the old count counts both answers")
+                .isEqualTo(1);
+        assertThat(bob.get("answered_call_count"))
+                .as("the call is counted once, on its first answer")
+                .isEqualTo(0);
+        assertThat(bob.get("ring_sample_count")).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("the operator on the call's ENDED event stands in for an answer that named nobody")
+    void theEndedEventsOperatorResolvesAnUnnamedAnswer() {
+        UUID installation = UUID.randomUUID();
+        insertCallEvent(installation, "call-1", "OFFERED", null, null, tashkent(14, 0, 0));
+        insertCallEvent(installation, "call-1", "ANSWERED", null, null, tashkent(14, 0, 6));
+        insertCallEvent(installation, "call-1", "ENDED", "carol", 60, tashkent(14, 1, 0));
+
+        close.close(TENANT, DAY);
+
+        Map<String, Object> carol = callKpiRow("carol", 14);
+        assertThat(carol.get("answered_call_count")).isEqualTo(1);
+        assertThat(carol.get("ring_seconds_total")).isEqualTo(6L);
+        Map<String, Object> unassigned = callKpiRow("(unassigned)", 14);
+        assertThat(unassigned.get("answered_count"))
+                .as("the event's own key is unchanged")
+                .isEqualTo(1);
+        assertThat(unassigned.get("answered_call_count")).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("an OFFERED event from the previous business day still pairs with an answer after midnight")
+    void anOfferFromTheNightBeforePairsWithTodaysAnswer() {
+        UUID installation = UUID.randomUUID();
+        insertCallEvent(
+                installation, "call-1", "OFFERED", null, null, tashkent(0, 0, 0).minusSeconds(8));
+        insertCallEvent(installation, "call-1", "ANSWERED", "alice", null, tashkent(0, 0, 4));
+
+        close.close(TENANT, DAY);
+
+        Map<String, Object> alice = callKpiRow("alice", 0);
+        assertThat(alice.get("answered_call_count")).isEqualTo(1);
+        assertThat(alice.get("ring_seconds_total")).isEqualTo(12L);
+    }
+
+    @Test
+    @DisplayName("an answer for a call whose provider id was reused by another installation does not pair")
+    void aCallIsOneInstallationAndOneProviderCallId() {
+        insertCallEvent(UUID.randomUUID(), "call-1", "OFFERED", null, null, tashkent(15, 0, 0));
+        insertCallEvent(UUID.randomUUID(), "call-1", "ANSWERED", "alice", null, tashkent(15, 0, 9));
+
+        close.close(TENANT, DAY);
+
+        Map<String, Object> alice = callKpiRow("alice", 15);
+        assertThat(alice.get("answered_call_count")).isEqualTo(1);
+        assertThat(alice.get("ring_sample_count"))
+                .as("a different installation's offer is not this call's")
+                .isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("closing a day twice, and clearing it, leaves the same call KPI figures")
+    void theCallKpisAreIdempotentOnARepeatedClose() {
+        UUID installation = UUID.randomUUID();
+        UUID offered = insertCallEvent(installation, "call-1", "OFFERED", null, null, tashkent(10, 0, 0));
+        insertCallEvent(installation, "call-1", "ANSWERED", "alice", null, tashkent(10, 0, 7));
+        insertOrder("PHONE", ENTITY_A, "COMPLETED", tashkent(10, 3, 0), tashkent(10, 40, 0), 70_000, 0);
+        linkOrderToCall("PHONE", offered);
+
+        close.close(TENANT, DAY);
+        Map<String, Object> first = callKpiRow("alice", 10);
+        close.close(TENANT, DAY);
+        Map<String, Object> second = callKpiRow("alice", 10);
+
+        assertThat(second).isEqualTo(first);
+        assertThat(first.get("converted_count")).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a row closed before the migration reads null, never zero")
+    void aRowClosedBeforeTheMigrationReadsNull() {
+        jdbc.sql("""
+                INSERT INTO reporting.fact_call_hour
+                    (tenant_id, business_date, hour_of_day, location_id, brand_id, operator_principal_id,
+                     boundary_version, metric_calculation_version, offered_count, answered_count,
+                     missed_count, transferred_count, talk_duration_seconds)
+                VALUES (:t, :day, 9, :l, :b, 'alice', 1, 1, 1, 1, 0, 0, 90)
+                """)
+                .param("t", TENANT)
+                .param("day", DAY)
+                .param("l", LOCATION)
+                .param("b", BRAND)
+                .update();
+
+        var facts = store.readCallHourFacts(TENANT, LOCATION, DAY);
+
+        assertThat(facts).hasSize(1);
+        assertThat(facts.getFirst().answeredCallCount()).isNull();
+        assertThat(facts.getFirst().ringSecondsTotal()).isNull();
+        assertThat(facts.getFirst().ringSampleCount()).isNull();
+        assertThat(facts.getFirst().ringSecondsMax()).isNull();
+        assertThat(facts.getFirst().convertedCount()).isNull();
+        assertThat(facts.getFirst().talkDurationSeconds()).isEqualTo(90L);
+    }
+
+    @Test
+    @DisplayName("the call-event read never names a caller number, a customer or an order id in its select list")
+    void theCallEventReadSelectsNoPersonalData() {
+        String selectList = JdbcReportingStore.CALL_EVENTS_SQL.substring(
+                "SELECT".length(), JdbcReportingStore.CALL_EVENTS_SQL.indexOf("FROM voice.call_events e"));
+        assertThat(selectList)
+                .doesNotContain("caller_number_encrypted")
+                .doesNotContain("caller_number_masked")
+                .doesNotContain("resolved_customer_account_id");
+        // The order is tested for existence only: no order column is selected.
+        assertThat(selectList)
+                .doesNotContain("o.id")
+                .doesNotContain("o.customer")
+                .doesNotContain("order_id");
+    }
+
+    @Test
+    @DisplayName("a recut that finds more conversions than the close stored reports them and rewrites nothing")
+    void aRecutReportsLateProvenanceAsExpectedDrift() {
+        UUID installation = UUID.randomUUID();
+        UUID offered = insertCallEvent(installation, "call-1", "OFFERED", null, null, tashkent(10, 0, 0));
+        insertCallEvent(installation, "call-1", "ANSWERED", "alice", null, tashkent(10, 0, 7));
+        insertOrder("PHONE", ENTITY_A, "COMPLETED", tashkent(10, 3, 0), tashkent(10, 40, 0), 70_000, 0);
+        close.close(TENANT, DAY);
+        assertThat(callKpiRow("alice", 10).get("converted_count")).isEqualTo(0);
+
+        // The console writes the provenance after the order, and the day had already closed.
+        linkOrderToCall("PHONE", offered);
+        var recut = close.recut(TENANT, DAY);
+
+        assertThat(recut.divergences()).anySatisfy(divergence -> {
+            assertThat(divergence.metricName()).isEqualTo("call.converted");
+            assertThat(divergence.storedValue()).isZero();
+            assertThat(divergence.recutValue()).isEqualTo(1);
+        });
+        assertThat(recut.unexpectedDivergenceCount())
+                .as("a higher conversion count is the late provenance ADR 0175 expects")
+                .isZero();
+        assertThat(callKpiRow("alice", 10).get("converted_count"))
+                .as("the recut never rewrites the stored fact")
+                .isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("a recut over a pre-migration row compares nothing: it was never measured")
+    void aRecutSkipsRowsThatWereNotMeasured() {
+        UUID installation = UUID.randomUUID();
+        insertCallEvent(installation, "call-1", "OFFERED", null, null, tashkent(10, 0, 0));
+        insertCallEvent(installation, "call-1", "ANSWERED", "alice", null, tashkent(10, 0, 7));
+        close.close(TENANT, DAY);
+        jdbc.sql("""
+                UPDATE reporting.fact_call_hour
+                   SET answered_call_count = NULL, ring_seconds_total = NULL, ring_sample_count = NULL,
+                       ring_seconds_max = NULL, converted_count = NULL
+                 WHERE tenant_id = :t
+                """).param("t", TENANT).update();
+
+        var recut = close.recut(TENANT, DAY);
+
+        assertThat(recut.divergences())
+                .noneMatch(divergence -> divergence.metricName().startsWith("call."));
     }
 
     private static Instant tashkent(int hour, int minute, int second) {

@@ -6,7 +6,7 @@ import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
-import { CallCentreApi, CallHourStat } from '../orders/call-centre-api';
+import { CallCentreApi, CallCoverage, CallHourStat } from '../orders/call-centre-api';
 import { ProvenanceBanner } from './provenance-banner';
 import {
   formatAverage,
@@ -15,7 +15,7 @@ import {
   formatSecondsDuration,
   formatShare,
 } from './report-formatting';
-import { ReportsFilterState } from './reports-filter-state';
+import { REPORTS_PLACEHOLDER_TIME_ZONE, ReportsFilterState } from './reports-filter-state';
 import {
   OperatorLeaderboardRowResponse,
   ProvenanceResponse,
@@ -34,15 +34,35 @@ const TAB_DEFINITIONS: readonly { readonly id: StaffReportTab; readonly labelKey
   { id: 'telephony', labelKey: 'reports.staff.tab.telephony' },
 ];
 
-/** One operator's summed call activity across the range — see {@link loadTelephony}. */
+/**
+ * One operator's summed call activity across the range — see {@link loadTelephony}.
+ *
+ * ADR 0175: the five call-level sums are taken over the days that were *measured*
+ * only. A day closed before the measure existed carries `null` and contributes to
+ * the old counts and to nothing here, so a ratio's numerator and denominator are
+ * always counted over the same rows.
+ */
 interface TelephonyRow {
   readonly operatorPrincipalId: string;
   readonly offeredCount: number;
   readonly answeredCount: number;
   readonly missedCount: number;
   readonly transferredCount: number;
-  readonly talkDurationSeconds: number;
+  /** The call's length (first event to end), despite the historic field name `talkDurationSeconds`. */
+  readonly callLengthSeconds: number;
+  /** Answered calls over measured rows: the denominator of the ratios below. */
+  readonly measuredAnsweredCalls: number;
+  readonly ringSecondsTotal: number;
+  readonly ringSampleCount: number;
+  readonly ringSecondsMax: number | null;
+  readonly convertedCount: number;
 }
+
+/** The sentinel `reporting.fact_call_hour` files a call under when nobody could be named. */
+const UNATTRIBUTED_OPERATOR = '(unassigned)';
+
+/** `CallStatsController.coverage` refuses a range of a year or more; the page asks for at most this many days. */
+const COVERAGE_MAX_DAYS = 365;
 
 /**
  * `CallStatsController` answers one business date at a time (no `groupBy`,
@@ -67,15 +87,15 @@ const TELEPHONY_MAX_DAYS = 31;
  * never holds a name), falling back to a truncated Keycloak subject, never a
  * bare UUID with no explanation, for a subject the tenant keeps no name for.
  *
- * **Telephony (7.5b) is not blocked** on live telephony existing:
- * `CallStatsController` already serves offered/answered/missed/transferred
- * and talk seconds per hour per operator off `reporting.fact_call_hour`,
- * written by the same day-close pipeline, and had zero consumers before this
- * tab. Two of the three KPIs the IA names genuinely have no source yet and say
- * so on screen rather than rendering a wrong or invented number: answer speed
- * has no ring/wait column in V0149, and call-to-order conversion needs `1.6`'s
- * provenance wiring (`T-W01`) to start populating the write-once
- * `call-provenance` column.
+ * **Telephony (7.5b)** reads `CallStatsController` (offered/answered/missed/transferred, answer
+ * speed, call-to-order conversion and call length per hour per operator, off
+ * `reporting.fact_call_hour`, written by the same day-close pipeline). ADR 0175 defines the two
+ * KPIs once: answer speed is the seconds from a call's `OFFERED` event to its first `ANSWERED`
+ * event; conversion is the share of answered calls with an order placed from them, in any status.
+ * Ratios are computed here from stored counts and sums, never stored; a figure that was not
+ * measured is «—, not measured» and never zero; and a branch with no telephony provider and no
+ * closed call history has no Telephony tab at all (statistics.md §2.5), decided by the `coverage`
+ * read.
  */
 @Component({
   selector: 'q-staff-report-page',
@@ -91,8 +111,33 @@ export class StaffReportPage {
   private readonly filters = inject(ReportsFilterState);
   protected readonly i18n = inject(I18n);
 
-  protected readonly tabs = TAB_DEFINITIONS;
   protected readonly activeTab = signal<StaffReportTab>('leaderboard');
+
+  /** ADR 0175: whether the branch has telephony; loaded with the page, it decides if the tab is offered. */
+  protected readonly coverage = signal<CallCoverage | null>(null);
+  protected readonly coverageState = signal<'loading' | 'ready' | 'error'>('loading');
+  /**
+   * The Telephony tab is offered when the branch has a live provider or any closed call history. While the
+   * coverage read is in flight it is not (no flash of a tab that then disappears); if the read failed we
+   * cannot tell, so the tab stays and does its own loading and error reporting.
+   */
+  protected readonly telephonyAvailable = computed(() => {
+    const state = this.coverageState();
+    if (state === 'error') {
+      return true;
+    }
+    const coverage = this.coverage();
+    return (
+      state === 'ready' &&
+      coverage !== null &&
+      (coverage.connection === 'CONNECTED' || coverage.closedDaysWithCalls > 0)
+    );
+  });
+  protected readonly tabs = computed(() =>
+    TAB_DEFINITIONS.filter((tab) => tab.id !== 'telephony' || this.telephonyAvailable()),
+  );
+  /** A `?rp_tab=telephony` deep link, honoured only once the coverage read says the tab exists. */
+  private readonly requestedTab: StaffReportTab | null = readRequestedTab();
 
   protected readonly state = signal<LoadState>('loading');
   protected readonly rows = signal<readonly OperatorLeaderboardRowResponse[]>([]);
@@ -111,9 +156,14 @@ export class StaffReportPage {
 
   constructor() {
     void this.load();
+    void this.loadCoverage();
   }
 
   protected selectTab(tab: StaffReportTab): void {
+    if (tab === 'telephony' && !this.telephonyAvailable()) {
+      this.activeTab.set('leaderboard');
+      return;
+    }
     this.activeTab.set(tab);
     if (tab === 'telephony' && this.telephonyState() === 'idle') {
       void this.loadTelephony();
@@ -177,9 +227,59 @@ export class StaffReportPage {
     return subject.slice(0, 8);
   }
 
+  /** Answered over offered — the branch total's ratio, where both counts exist (an offered call carries no operator). */
   protected answerRate(row: TelephonyRow): string {
     return formatShare(row.answeredCount, row.offeredCount);
   }
+
+  /** Whole seconds of average answer speed, or null when no call in the measured rows was a ring sample. */
+  protected averageRingSeconds(row: TelephonyRow): number | null {
+    return row.ringSampleCount > 0 ? Math.round(row.ringSecondsTotal / row.ringSampleCount) : null;
+  }
+
+  /** «18 s (max 61 s)» — only meaningful when {@link averageRingSeconds} is not null. */
+  protected answerSpeed(row: TelephonyRow): string {
+    const average = this.averageRingSeconds(row);
+    return average === null || row.ringSecondsMax === null
+      ? '—'
+      : this.i18n.t('reports.staff.telephony.speedValue', {
+          avg: average,
+          max: row.ringSecondsMax,
+        });
+  }
+
+  /** Conversion as a whole percentage over the measured answered calls; «—» (never `0%`) when none were measured. */
+  protected conversion(row: TelephonyRow): string {
+    return formatShare(row.convertedCount, row.measuredAnsweredCalls);
+  }
+
+  /** «Not attributed» for the sentinel, else the operator's name or short subject. */
+  protected telephonyOperatorLabel(subject: string): string {
+    return subject === UNATTRIBUTED_OPERATOR
+      ? this.i18n.t('reports.staff.telephony.unattributed')
+      : this.telephonyOperator(subject);
+  }
+
+  /** The branch line: every operator's row summed, so answer rate has both its counts on one line. */
+  protected readonly telephonyTotal = computed<TelephonyRow | null>(() => {
+    const rows = this.telephonyRows();
+    return rows.length === 0 ? null : sumRows(rows);
+  });
+
+  /** The wall-clock time (in the reports' zone) of the next close, for the connected-but-nothing-closed line. */
+  protected readonly nextCloseLabel = computed(() => {
+    const coverage = this.coverage();
+    if (!coverage) {
+      return '';
+    }
+    return new Intl.DateTimeFormat(this.i18n.locale(), {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: REPORTS_PLACEHOLDER_TIME_ZONE,
+    }).format(new Date(coverage.nextCloseAt));
+  });
 
   private async load(): Promise<void> {
     this.state.set('loading');
@@ -201,6 +301,39 @@ export class StaffReportPage {
       this.state.set('ready');
     } catch {
       this.state.set('error');
+    }
+  }
+
+  private async loadCoverage(): Promise<void> {
+    await this.location.ensureLoaded();
+    const scope = this.location.scope();
+    if (!scope) {
+      this.coverageState.set('error');
+      return;
+    }
+    try {
+      const range = this.filters.range();
+      const floor = shiftDateIso(range.to, -COVERAGE_MAX_DAYS);
+      const coverage = await this.callCentre.callCoverage(
+        scope,
+        range.from < floor ? floor : range.from,
+        range.to,
+      );
+      this.coverage.set(coverage);
+      this.coverageState.set('ready');
+    } catch {
+      this.coverageState.set('error');
+    }
+    this.settleTab();
+  }
+
+  /** Once the coverage is known: leave a hidden tab, and honour a deep link to a tab that exists. */
+  private settleTab(): void {
+    if (this.activeTab() === 'telephony' && !this.telephonyAvailable()) {
+      this.activeTab.set('leaderboard');
+    }
+    if (this.requestedTab === 'telephony' && this.telephonyAvailable()) {
+      this.selectTab('telephony');
     }
   }
 
@@ -255,25 +388,80 @@ function rollUpByOperator(perDate: readonly (readonly CallHourStat[])[]): readon
   const byOperator = new Map<string, TelephonyRow>();
   for (const hours of perDate) {
     for (const hour of hours) {
-      const existing = byOperator.get(hour.operatorPrincipalId) ?? {
-        operatorPrincipalId: hour.operatorPrincipalId,
-        offeredCount: 0,
-        answeredCount: 0,
-        missedCount: 0,
-        transferredCount: 0,
-        talkDurationSeconds: 0,
-      };
+      const existing =
+        byOperator.get(hour.operatorPrincipalId) ?? emptyRow(hour.operatorPrincipalId);
+      // A null answeredCallCount is a row closed before ADR 0175's measure existed: not measured, so it
+      // adds to the old counts and to none of the call-level sums.
+      const measured = hour.answeredCallCount != null;
       byOperator.set(hour.operatorPrincipalId, {
         operatorPrincipalId: hour.operatorPrincipalId,
         offeredCount: existing.offeredCount + hour.offeredCount,
         answeredCount: existing.answeredCount + hour.answeredCount,
         missedCount: existing.missedCount + hour.missedCount,
         transferredCount: existing.transferredCount + hour.transferredCount,
-        talkDurationSeconds: existing.talkDurationSeconds + hour.talkDurationSeconds,
+        callLengthSeconds: existing.callLengthSeconds + hour.talkDurationSeconds,
+        measuredAnsweredCalls: existing.measuredAnsweredCalls + (hour.answeredCallCount ?? 0),
+        ringSecondsTotal: existing.ringSecondsTotal + (measured ? (hour.ringSecondsTotal ?? 0) : 0),
+        ringSampleCount: existing.ringSampleCount + (measured ? (hour.ringSampleCount ?? 0) : 0),
+        ringSecondsMax: maxOrNull(existing.ringSecondsMax, hour.ringSecondsMax ?? null),
+        convertedCount: existing.convertedCount + (measured ? (hour.convertedCount ?? 0) : 0),
       });
     }
   }
-  return [...byOperator.values()].sort((a, b) => b.offeredCount - a.offeredCount);
+  return [...byOperator.values()].sort(
+    (a, b) => b.offeredCount + b.answeredCount - (a.offeredCount + a.answeredCount),
+  );
+}
+
+function emptyRow(operatorPrincipalId: string): TelephonyRow {
+  return {
+    operatorPrincipalId,
+    offeredCount: 0,
+    answeredCount: 0,
+    missedCount: 0,
+    transferredCount: 0,
+    callLengthSeconds: 0,
+    measuredAnsweredCalls: 0,
+    ringSecondsTotal: 0,
+    ringSampleCount: 0,
+    ringSecondsMax: null,
+    convertedCount: 0,
+  };
+}
+
+function sumRows(rows: readonly TelephonyRow[]): TelephonyRow {
+  return rows.reduce<TelephonyRow>(
+    (total, row) => ({
+      operatorPrincipalId: total.operatorPrincipalId,
+      offeredCount: total.offeredCount + row.offeredCount,
+      answeredCount: total.answeredCount + row.answeredCount,
+      missedCount: total.missedCount + row.missedCount,
+      transferredCount: total.transferredCount + row.transferredCount,
+      callLengthSeconds: total.callLengthSeconds + row.callLengthSeconds,
+      measuredAnsweredCalls: total.measuredAnsweredCalls + row.measuredAnsweredCalls,
+      ringSecondsTotal: total.ringSecondsTotal + row.ringSecondsTotal,
+      ringSampleCount: total.ringSampleCount + row.ringSampleCount,
+      ringSecondsMax: maxOrNull(total.ringSecondsMax, row.ringSecondsMax),
+      convertedCount: total.convertedCount + row.convertedCount,
+    }),
+    emptyRow('total'),
+  );
+}
+
+function maxOrNull(left: number | null, right: number | null): number | null {
+  if (left === null) {
+    return right;
+  }
+  return right === null ? left : Math.max(left, right);
+}
+
+/** `?rp_tab=telephony` — the page's own deep link, prefixed like every other reports query key. */
+function readRequestedTab(): StaffReportTab | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  const tab = new URLSearchParams(window.location.search).get('rp_tab');
+  return tab === 'telephony' ? 'telephony' : null;
 }
 
 /** Every ISO date from `fromIso` to `toIso` inclusive, capped at `maxDays` — zone-independent, both ends already local dates. */

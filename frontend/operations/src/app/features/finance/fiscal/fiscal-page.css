@@ -208,3 +208,8 @@
   width: 160px;
   margin-top: 4px;
 }
+
+.marks {
+  display: block;
+  color: var(--q-ink-muted);
+}

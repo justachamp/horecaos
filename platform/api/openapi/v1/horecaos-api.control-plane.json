@@ -1129,6 +1129,9 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "marks" : {
+            "$ref" : "#/components/schemas/MarkProgressResponse"
+          },
           "orderId" : {
             "format" : "uuid",
             "type" : "string"
@@ -6304,6 +6307,19 @@
           },
           "version" : {
             "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "MarkProgressResponse" : {
+        "properties" : {
+          "captured" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "required" : {
+            "format" : "int32",
             "type" : "integer"
           }
         },

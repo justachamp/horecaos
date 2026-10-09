@@ -126,6 +126,69 @@ public final class ConfigurationKeys {
                     + "their name is erased and the application archived.")
             .build();
 
+    /**
+     * ADR 0161 (ADR 0082 flag): whether marked-goods capture is on for a tenant. Off until a tenant names a
+     * marked SKU and the three preconditions of ADR 0161 hold, and ADR 0161 has the platform turn it on.
+     * Read by catalog (publication) and ordering (capture and the handover guard) through {@code
+     * tenancy.api.FeatureFlagKeys}.
+     *
+     * <p>Tenant-visible like every ADR 0082 flag ({@code ConfigurationKeysTests} requires it), which also
+     * means the tenant settings surface can set it for the tenant's own account. "The platform turns it on"
+     * is therefore the rollout rule and not a mechanism; making it one needs either an exemption from that
+     * invariant or a write guard that knows the actor, which is the owner's call and is recorded as open.
+     */
+    public static final ConfigurationKey<Boolean> FEATURE_MARKED_GOODS = ConfigurationKey.of(
+                    "feature.marked_goods", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Turns on marked-goods (DataMatrix) capture at the pass and the handover guard "
+                    + "that holds an order until every marked unit is scanned.")
+            .build();
+
+    /**
+     * ADR 0161: how much of a marking code's shape the server checks. Declared here so a stored row for it
+     * passes the startup validator, and declared identically in {@code
+     * ordering.api.MarkingConfigurationKeys} where it is consumed, for the reason recorded on {@link
+     * #COMMERCIAL_ENFORCEMENT_CEILING}.
+     */
+    public static final ConfigurationKey<String> FISCAL_MARKING_STRUCTURE_CHECK = ConfigurationKey.of(
+                    "fiscal.marking.structure_check", String.class)
+            .defaultValue("GS1")
+            .ownedBy("fiscal")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("How much of a marking code's shape the server checks: GS1 (the assumed GS1 "
+                    + "element-string shape) or NONE (only the character set and length).")
+            .build();
+
+    /** ADR 0161: whether a hand-typed or pasted marking code is accepted; see {@link #FISCAL_MARKING_STRUCTURE_CHECK}. */
+    public static final ConfigurationKey<Boolean> FISCAL_MARKING_ALLOW_KEYED_ENTRY = ConfigurationKey.of(
+                    "fiscal.marking.allow_keyed_entry", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("fiscal")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Whether a marking code typed or pasted by hand is accepted at the pass. Off by "
+                    + "default: a keyed code is not the code on the package.")
+            .build();
+
+    /**
+     * ADR 0175: the longest offered-to-answered interval the day close still believes as one
+     * call's ring time. Declared here so a stored row for it passes the startup validator, and
+     * declared identically in {@code voice.api.VoiceConfigurationKeys} where it is consumed, for the
+     * reason recorded on {@link #COMMERCIAL_ENFORCEMENT_CEILING}.
+     */
+    public static final ConfigurationKey<Integer> VOICE_RING_TIME_CEILING_SECONDS = ConfigurationKey.of(
+                    "voice.ring_time_ceiling_seconds", Integer.class)
+            .defaultValue(1800)
+            .ownedBy("voice")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("The longest interval, in seconds, from a call's arrival to its first answer "
+                    + "that still counts as one call's answer speed; a longer pair is treated as two "
+                    + "calls and left out of the average.")
+            .build();
+
     public static final ConfigurationKey<Integer> INVENTORY_RESERVATION_TTL_SECONDS = ConfigurationKey.of(
                     "inventory.reservation_ttl_seconds", Integer.class)
             .defaultValue(900)
@@ -1262,6 +1325,10 @@ public final class ConfigurationKeys {
             CART_EXPIRY_MINUTES,
             ORDERING_CART_RETENTION_DAYS,
             COURIER_APPLICANT_RETENTION_MONTHS,
+            VOICE_RING_TIME_CEILING_SECONDS,
+            FEATURE_MARKED_GOODS,
+            FISCAL_MARKING_STRUCTURE_CHECK,
+            FISCAL_MARKING_ALLOW_KEYED_ENTRY,
             QUOTE_TTL_SECONDS,
             PROMOTION_APPROVAL_PERCENTAGE_OVER_BP,
             PROMOTION_APPROVAL_AMOUNT_OVER_MINOR,

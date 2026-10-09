@@ -66,6 +66,7 @@ import uz.horecaos.platform.ordering.application.OrderBoardReadModels;
 import uz.horecaos.platform.ordering.application.OrderBulkActionService;
 import uz.horecaos.platform.ordering.application.OrderCallProvenanceService;
 import uz.horecaos.platform.ordering.application.OrderCountsPeriod;
+import uz.horecaos.platform.ordering.application.OrderMarkService;
 import uz.horecaos.platform.ordering.application.OrderOutcomeReasonService;
 import uz.horecaos.platform.ordering.application.OrderOutcomeService;
 import uz.horecaos.platform.ordering.application.OrderQueryService;
@@ -152,6 +153,8 @@ public class OperationsOrderController {
             // itself declares.
             Capability.DELIVERY_MANUAL_ASSIGN);
 
+    private final @Nullable OrderMarkService marks;
+
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OperationsOrderController(
             OrderQueryService orderQuery,
@@ -175,6 +178,61 @@ public class OperationsOrderController {
             ItemDisplayLookup itemDisplayLookup,
             BranchResolutionQueryService branchResolution,
             BranchOverrideReasonQueryService branchOverrideReasons) {
+        this(
+                orderQuery,
+                orderState,
+                outcomes,
+                amendments,
+                rejectReasons,
+                carts,
+                currentActor,
+                authorization,
+                callProvenance,
+                operatorOrdering,
+                operatorQuotes,
+                customerLookup,
+                bulkActions,
+                liveBoard,
+                aggregatorOrders,
+                deliveryCancellation,
+                myWork,
+                staffDirectory,
+                itemDisplayLookup,
+                branchResolution,
+                branchOverrideReasons,
+                null);
+    }
+
+    /**
+     * @param marks ADR 0161: where an order read gets the {@code marking} of each marked line; null wires a
+     *     controller that reads no marking (every suite that has nothing to say about it)
+     */
+    @org.springframework.beans.factory.annotation.Autowired
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public OperationsOrderController(
+            OrderQueryService orderQuery,
+            OrderStateService orderState,
+            OrderOutcomeService outcomes,
+            OrderAmendmentService amendments,
+            RejectReasonQueryService rejectReasons,
+            JdbcCartStore carts,
+            CurrentActor currentActor,
+            AuthorizationService authorization,
+            OrderCallProvenanceService callProvenance,
+            OperatorOrderingService operatorOrdering,
+            OperatorOrderQuoteService operatorQuotes,
+            OperatorCustomerLookupService customerLookup,
+            OrderBulkActionService bulkActions,
+            LiveBoardQueryService liveBoard,
+            AggregatorOrderIntakeService aggregatorOrders,
+            ShipmentCancellationPort deliveryCancellation,
+            MyWorkQueryService myWork,
+            StaffDirectory staffDirectory,
+            ItemDisplayLookup itemDisplayLookup,
+            BranchResolutionQueryService branchResolution,
+            BranchOverrideReasonQueryService branchOverrideReasons,
+            @Nullable OrderMarkService marks) {
+        this.marks = marks;
         this.orderQuery = orderQuery;
         this.orderState = orderState;
         this.outcomes = outcomes;
@@ -883,6 +941,11 @@ public class OperationsOrderController {
         OrderTablesPort.OrderTable table = detail.order().fulfillmentMode() == FulfillmentMode.DINE_IN
                 ? orderQuery.tableFor(tenantId, orderId)
                 : null;
+        // ADR 0161: the marking counts of the marked lines. Empty -- and the read costs nothing -- while
+        // feature.marked_goods is off for the tenant or the order holds no marked line.
+        Map<UUID, OrderMarkService.LineMarking> marking = marks == null
+                ? Map.of()
+                : marks.markingOf(tenantId, detail.order().brandId(), orderId);
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(detail.order().version()))
                 .body(OrderDetailResponse.of(
@@ -894,7 +957,8 @@ public class OperationsOrderController {
                         presentablePayment,
                         table,
                         staffDirectory,
-                        portionSteps));
+                        portionSteps,
+                        marking));
     }
 
     @GetMapping("/{orderId}/revisions")
@@ -1095,6 +1159,8 @@ public class OperationsOrderController {
                             "from", illegal.from().name(), "to", illegal.to().name()));
         } catch (OrderStateService.CatchweightNotReconciledException unweighed) {
             throw catchweightNotReconciled(unweighed);
+        } catch (OrderStateService.MarksIncompleteException unscanned) {
+            throw marksIncomplete(unscanned);
         }
     }
 
@@ -1294,6 +1360,8 @@ public class OperationsOrderController {
                             "from", illegal.from().name(), "to", illegal.to().name()));
         } catch (OrderStateService.CatchweightNotReconciledException unweighed) {
             throw catchweightNotReconciled(unweighed);
+        } catch (OrderStateService.MarksIncompleteException unscanned) {
+            throw marksIncomplete(unscanned);
         } catch (OrderOutcomeReasonService.ReasonNotFoundException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
         } catch (IllegalArgumentException refused) {
@@ -1315,6 +1383,21 @@ public class OperationsOrderController {
                         "CATCHWEIGHT_NOT_RECONCILED",
                         "orderLineIds",
                         unweighed.lineIds().stream().map(UUID::toString).toList()));
+    }
+
+    /**
+     * ADR 0161's {@code MARKS_INCOMPLETE}: a conflict with the order's current state, naming the marked
+     * lines still short of scanned units so the console can take the operator to them. Never a code.
+     */
+    private static ApiException marksIncomplete(OrderStateService.MarksIncompleteException unscanned) {
+        return new ApiException(
+                ErrorCode.RESOURCE_CONFLICT,
+                unscanned.getMessage(),
+                java.util.Map.of(
+                        "reason",
+                        "MARKS_INCOMPLETE",
+                        "orderLineIds",
+                        unscanned.lineIds().stream().map(UUID::toString).toList()));
     }
 
     // ------------------------------------------------------------ amendments
@@ -3127,7 +3210,8 @@ public class OperationsOrderController {
                 boolean presentablePayment,
                 OrderTablesPort.@Nullable OrderTable table,
                 StaffDirectory staffDirectory,
-                Map<UUID, BigDecimal> portionSteps) {
+                Map<UUID, BigDecimal> portionSteps,
+                Map<UUID, OrderMarkService.LineMarking> marking) {
             var order = detail.order();
             String createdByName = displayNameOf(
                     staffDirectory, order.tenantId(), order.createdByActorType(), order.createdByActorId());
@@ -3146,7 +3230,7 @@ public class OperationsOrderController {
                     order.subtotalMinor(),
                     order.taxMinor(),
                     order.acceptanceMode(),
-                    lineResponses(detail, portionSteps),
+                    lineResponses(detail, portionSteps, marking),
                     detail.warnings(),
                     order.currentRevision(),
                     order.createdByActorType(),
@@ -3198,7 +3282,9 @@ public class OperationsOrderController {
         }
 
         private static List<LineResponse> lineResponses(
-                OrderQueryService.OrderDetail detail, Map<UUID, BigDecimal> portionSteps) {
+                OrderQueryService.OrderDetail detail,
+                Map<UUID, BigDecimal> portionSteps,
+                Map<UUID, OrderMarkService.LineMarking> marking) {
             return detail.lines().stream()
                     .map(line -> new LineResponse(
                             line.line().lineNumber(),
@@ -3229,7 +3315,8 @@ public class OperationsOrderController {
                                     ? null
                                     : portionSteps.get(line.line().sourceVariantId()),
                             line.line().origin(),
-                            line.line().autoAddMandatory()))
+                            line.line().autoAddMandatory(),
+                            LineMarkingResponse.of(marking.get(line.line().lineId()))))
                     .toList();
         }
     }
@@ -3485,7 +3572,23 @@ public class OperationsOrderController {
             // the basket. The console prints «добавлено автоматически» beside the latter, and a line
             // that was mandatory could not be removed by the customer.
             String origin,
-            boolean autoAddMandatory) {}
+            boolean autoAddMandatory,
+            // ADR 0161: present on a marked line while marked-goods capture is on -- how many units must be
+            // scanned and how many are. Counts and nothing else: no screen shows a code.
+            @Nullable LineMarkingResponse marking) {}
+
+    /**
+     * ADR 0161: the marking progress of one order line.
+     *
+     * @param required units that must be scanned before the order may leave the pass
+     * @param captured units scanned so far
+     */
+    public record LineMarkingResponse(int required, int captured) {
+
+        static @Nullable LineMarkingResponse of(OrderMarkService.@Nullable LineMarking marking) {
+            return marking == null ? null : new LineMarkingResponse(marking.required(), marking.captured());
+        }
+    }
 
     /** An option the server applied to a line, and what it cost for the whole line (ADR 0136). */
     public record AutoSelectedChargeResponse(String name, long amountMinor) {}

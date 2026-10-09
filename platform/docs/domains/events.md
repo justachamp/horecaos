@@ -146,6 +146,7 @@ holds organization and subject identifiers and applied configuration.
 | `OrderRevisionCreated` | 1 | `orderId` | [`OrderRevisionCreated.v1`](../../src/main/resources/events/ordering.events/OrderRevisionCreated.v1.schema.json) | `orderId`, brand/location, revision, `amendmentId`, source, currency, total, delta total, order version |
 | `OrderCallbackRequested` | 1 | `orderId` | [`OrderCallbackRequested.v1`](../../src/main/resources/events/ordering.events/OrderCallbackRequested.v1.schema.json) | `orderId`, brand/location, `amendmentId`, order version |
 | `OrderCallbackResolved` | 1 | `orderId` | [`OrderCallbackResolved.v1`](../../src/main/resources/events/ordering.events/OrderCallbackResolved.v1.schema.json) | `orderId`, brand/location, `amendmentId`, order version |
+| `OrderMarksCompleted` | 1 | `orderId` | [`OrderMarksCompleted.v1`](../../src/main/resources/events/ordering.events/OrderMarksCompleted.v1.schema.json) | `orderId`, brand/location, marked line count, marked unit count, completed-at (ADR 0161: counts only, never a marking code) |
 
 These payloads deliberately omit the order lines, the customer, the address, the
 contact details, and every customer note. ADR 0019 says events carry order and

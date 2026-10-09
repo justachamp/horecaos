@@ -1,0 +1,135 @@
+@if (rows().length > 0) {
+  <section class="mark" data-testid="order-marking">
+    <h3 class="q-emphasis mark__title">{{ 'orders.marking.title' | t }}</h3>
+    <p class="q-caption mark__intro">{{ 'orders.marking.intro' | t }}</p>
+    @if (!markable()) {
+      <p class="q-caption mark__closed" data-testid="order-marking-closed">
+        {{ 'orders.marking.closed' | t }}
+      </p>
+    }
+    <ul class="mark__lines">
+      @for (row of rows(); track row.lineId) {
+        <li
+          class="mark__line"
+          [class.mark__line--current]="armed() && current()?.lineId === row.lineId"
+          data-testid="order-marking-line"
+        >
+          <div class="mark__what">
+            <span class="q-body-sm">{{ row.productName }}</span>
+            <span class="q-caption mark__progress" data-testid="order-marking-progress">
+              {{ progressText(row) }}
+            </span>
+          </div>
+          @if (markable() && remaining(row) > 0) {
+            @if (current()?.lineId === row.lineId) {
+              <span class="q-caption mark__scanning">{{ 'orders.marking.line.scanning' | t }}</span>
+            } @else {
+              <button
+                type="button"
+                class="mark__button"
+                (click)="select(row)"
+                data-testid="order-marking-select"
+              >
+                {{ 'orders.marking.line.scan' | t }}
+              </button>
+            }
+          }
+          @if (unitsOf(row).length > 0) {
+            <ul
+              class="mark__units"
+              data-testid="order-marking-units"
+              [attr.aria-label]="'orders.marking.units.title' | t"
+            >
+              @for (unit of unitsOf(row); track unit.markId) {
+                <li class="mark__unit">
+                  <span class="q-caption q-mono">{{ unitText(unit) }}</span>
+                  <span class="q-caption mark__stage">{{ stageText(unit) }}</span>
+                  @if (markable()) {
+                    <button
+                      type="button"
+                      class="mark__button mark__button--quiet"
+                      [disabled]="releasing() !== null"
+                      (click)="release(row, unit)"
+                      data-testid="order-marking-release"
+                    >
+                      {{
+                        (releasing() === unit.markId
+                          ? 'orders.marking.remove.busy'
+                          : 'orders.marking.remove.button'
+                        ) | t
+                      }}
+                    </button>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </li>
+      }
+    </ul>
+
+    @if (markable()) {
+      <q-datamatrix-input
+        [armed]="armed()"
+        [remaining]="inputRemaining()"
+        (scanned)="onScanned($event)"
+        (disarmRequested)="paused.set(true)"
+      />
+      @if (paused()) {
+        <button
+          type="button"
+          class="mark__button"
+          (click)="resume()"
+          data-testid="order-marking-resume"
+        >
+          {{ 'orders.marking.line.scan' | t }}
+        </button>
+      }
+      <div class="mark__tools">
+        <label class="q-caption mark__field">
+          <span>{{ 'orders.marking.remove.reason' | t }}</span>
+          <select
+            [value]="releaseReason()"
+            (change)="setReleaseReason($any($event.target).value)"
+            data-testid="order-marking-reason"
+          >
+            @for (reason of removalReasons; track reason) {
+              <option [value]="reason" [selected]="releaseReason() === reason">
+                {{ reasonText(reason) }}
+              </option>
+            }
+          </select>
+        </label>
+        <label class="q-caption mark__field">
+          <input
+            type="checkbox"
+            [checked]="selfTest()"
+            (change)="setSelfTest($any($event.target).checked)"
+            data-testid="order-marking-selftest"
+          />
+          {{ 'orders.marking.selfTest.label' | t }}
+        </label>
+      </div>
+      @if (selfTestResult(); as result) {
+        <p
+          class="q-caption mark__selftest"
+          role="status"
+          data-testid="order-marking-selftest-result"
+        >
+          {{ result }}
+        </p>
+      }
+    }
+    @if (notice(); as message) {
+      <p
+        class="q-caption mark__notice"
+        [class.mark__notice--error]="message.kind === 'error'"
+        [class.mark__notice--warn]="message.kind === 'warn'"
+        role="alert"
+        data-testid="order-marking-notice"
+      >
+        {{ message.text }}
+      </p>
+    }
+  </section>
+}

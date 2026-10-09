@@ -18,6 +18,7 @@ import uz.horecaos.platform.catalog.application.CatalogValidator.LocalizedText;
 import uz.horecaos.platform.catalog.application.CatalogValidator.Snapshot;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Category;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
+import uz.horecaos.platform.catalog.domain.CatalogEntities.Fee;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierGroup;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.ModifierOption;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
@@ -741,6 +742,128 @@ class CatalogValidatorTests {
                         variant, classifiedAs(LISTED, "9999"), true, Set.of(LISTED), Map.of(LISTED, listsNone)))))
                 .as("a list that names no package codes for the code is not evidence of anything")
                 .isEmpty();
+    }
+
+    // ---------------------------------------------------------- ADR 0161: marked goods at publication
+
+    @Test
+    @DisplayName("a marked variant cannot be published while marked-goods capture is off for the tenant")
+    void aMarkedVariantIsBlockedWhileTheFlagIsOff() {
+        Variant variant = activeVariant("BOTTLE");
+
+        ValidationFinding.Report off = validator.validate(markedGoodsSnapshot(variant, MARKED, false));
+        ValidationFinding.Report on = validator.validate(markedGoodsSnapshot(variant, MARKED, true));
+
+        assertThat(off.blockers())
+                .filteredOn(finding -> finding.code().equals("MARKED_GOODS_NOT_ENABLED"))
+                .singleElement()
+                .satisfies(finding -> {
+                    assertThat(finding.entityType()).isEqualTo(EntityType.VARIANT);
+                    assertThat(finding.entityId()).isEqualTo(variant.id());
+                });
+        assertThat(on.blockers())
+                .as("with the flag on, publishing a marked SKU is allowed")
+                .extracting(ValidationFinding::code)
+                .doesNotContain("MARKED_GOODS_NOT_ENABLED");
+    }
+
+    @Test
+    @DisplayName("an unmarked variant, and an archived marked one, are never held by the flag")
+    void onlyALiveMarkedVariantIsHeld() {
+        Variant variant = activeVariant("WATER");
+        FiscalClassification unmarked = FiscalClassification.of("10202001001000000", "1512315", 1, "Water");
+        UUID productId = UUID.randomUUID();
+        Variant archived =
+                new Variant(UUID.randomUUID(), TENANT, BRAND, productId, "OLD", "PIECE", true, 0, Status.ARCHIVED, 1);
+
+        assertThat(validator
+                        .validate(markedGoodsSnapshot(variant, unmarked, false))
+                        .blockers())
+                .extracting(ValidationFinding::code)
+                .doesNotContain("MARKED_GOODS_NOT_ENABLED");
+        assertThat(validator
+                        .validate(markedGoodsSnapshot(archived, MARKED, false))
+                        .blockers())
+                .extracting(ValidationFinding::code)
+                .doesNotContain("MARKED_GOODS_NOT_ENABLED");
+    }
+
+    @Test
+    @DisplayName(
+            "a marked modifier option or fee is refused whatever the flag says; an option linked to a variant is that variant's business")
+    void aMarkedModifierOrFeeIsAlwaysRefused() {
+        Variant variant = activeVariant("BOTTLE");
+        UUID groupId = UUID.randomUUID();
+        ModifierGroup group =
+                new ModifierGroup(groupId, TENANT, BRAND, "EXTRAS", false, 0, 1, false, 0, Status.ACTIVE, 1);
+        ModifierOption own =
+                new ModifierOption(UUID.randomUUID(), TENANT, BRAND, groupId, "OWN", null, 1, 0, Status.ACTIVE, 1);
+        ModifierOption linked = new ModifierOption(
+                UUID.randomUUID(), TENANT, BRAND, groupId, "LINKED", variant.id(), 1, 1, Status.ACTIVE, 1);
+        Fee fee = new Fee(UUID.randomUUID(), TENANT, BRAND, Fee.DELIVERY, Status.ACTIVE, 1);
+        Map<UUID, FiscalClassification> classifications = Map.of(
+                variant.id(), FiscalClassification.of("10202001001000000", "1512315", 1, "Bottle"),
+                own.id(), MARKED,
+                fee.id(), MARKED);
+
+        for (boolean flag : new boolean[] {true, false}) {
+            Snapshot snapshot = markedGoodsSnapshot(
+                    variant,
+                    classifications,
+                    List.of(fee),
+                    flag,
+                    List.of(group),
+                    Map.of(groupId, List.of(own, linked)));
+            assertThat(validator.validate(snapshot).blockers())
+                    .filteredOn(finding -> finding.code().equals("MARKED_MODIFIER_UNSUPPORTED"))
+                    .extracting(ValidationFinding::entityType, ValidationFinding::entityId)
+                    .as("flag %s", flag)
+                    .containsExactlyInAnyOrder(
+                            org.assertj.core.groups.Tuple.tuple(EntityType.MODIFIER_OPTION, own.id()),
+                            org.assertj.core.groups.Tuple.tuple(EntityType.FEE, fee.id()));
+        }
+    }
+
+    private static Snapshot markedGoodsSnapshot(Variant variant, FiscalClassification fiscal, boolean flag) {
+        return markedGoodsSnapshot(variant, Map.of(variant.id(), fiscal), List.of(), flag, List.of(), Map.of());
+    }
+
+    private static Snapshot markedGoodsSnapshot(
+            Variant variant,
+            Map<UUID, FiscalClassification> classifications,
+            List<Fee> fees,
+            boolean flag,
+            List<ModifierGroup> groups,
+            Map<UUID, List<ModifierOption>> optionsByGroup) {
+        Snapshot base = snapshotOf(
+                List.of(),
+                List.of(variant),
+                List.of(),
+                groups,
+                optionsByGroup,
+                Map.of(),
+                Set.of(variant.id()),
+                Set.of());
+        return new Snapshot(
+                base.defaultLocale(),
+                base.fallbackLocale(),
+                base.products(),
+                base.variants(),
+                base.variantsByProduct(),
+                base.categories(),
+                base.categoriesById(),
+                base.productIdsByCategory(),
+                base.modifierGroupIdsByProduct(),
+                base.modifierGroups(),
+                base.optionsByGroup(),
+                base.translations(),
+                base.mediaReferences(),
+                base.displayableMedia(),
+                base.pricedVariantIds(),
+                base.offeredVariantIds(),
+                new CatalogValidator.FiscalContext(classifications, fees, false, false, Set.of(), flag),
+                base.pricingWired(),
+                Map.of());
     }
 
     private static Variant activeVariant(String sku) {

@@ -1,5 +1,6 @@
 package uz.horecaos.platform.catalog.application;
 
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -28,5 +29,13 @@ public class CatalogFiscalFacts implements FiscalNodeFacts {
     @Transactional(readOnly = true)
     public Set<UUID> markedNodes(UUID tenantId, UUID brandId, Set<UUID> priceableIds) {
         return store.markedNodes(tenantId, brandId, priceableIds);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, MarkedNode> markedNodeDetails(UUID tenantId, UUID brandId, Set<UUID> priceableIds) {
+        return store.markedNodeBarcodes(tenantId, brandId, priceableIds).entrySet().stream()
+                .collect(java.util.stream.Collectors.toUnmodifiableMap(
+                        Map.Entry::getKey, entry -> new MarkedNode(entry.getValue())));
     }
 }

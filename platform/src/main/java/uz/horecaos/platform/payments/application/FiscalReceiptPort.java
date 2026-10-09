@@ -33,4 +33,16 @@ public interface FiscalReceiptPort {
     FiscalSubmission submit(FiscalDocument document, ProviderBinding binding);
 
     uz.horecaos.platform.payments.domain.PaymentProviderType providerType();
+
+    /**
+     * Whether this provider's receipt can carry a marking code per unit (ADR 0161).
+     *
+     * <p>Click's {@code Items[].Labels} can, so its adapter says so. Payme's {@code detail} object has no
+     * such field at all, so it keeps this default and a marked good cannot lawfully be fiscalized through
+     * it. A capability on the port and not a provider test in the caller, which {@code AGENTS.md} forbids:
+     * the next provider declares what it can do and no core class learns its name.
+     */
+    default boolean carriesMarkingCodes() {
+        return false;
+    }
 }

@@ -31,6 +31,7 @@ import uz.horecaos.platform.ordering.domain.AcceptanceMode;
 import uz.horecaos.platform.ordering.domain.ApprovalTimeoutAction;
 import uz.horecaos.platform.ordering.domain.CustomerRefund;
 import uz.horecaos.platform.ordering.domain.LiabilityParty;
+import uz.horecaos.platform.ordering.domain.MarkCaptureStage;
 import uz.horecaos.platform.ordering.domain.OrderDecisionChannel;
 import uz.horecaos.platform.ordering.domain.OrderOutcome;
 import uz.horecaos.platform.ordering.domain.OrderStateMachine;
@@ -84,7 +85,13 @@ public class OrderStateService {
     private final ApplicationEventPublisher events;
     private final Clock clock;
     private final PromoCodeRedemptionPort promoCodes;
+    private final OrderMarksGuard marks;
 
+    /**
+     * A state service wired without marked-goods capture: an order with no marked line has nothing to guard
+     * (ADR 0161), which is what every hand-built service in a suite that has nothing to say about marking
+     * wants.
+     */
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderStateService(
             JdbcOrderStore orders,
@@ -97,6 +104,38 @@ public class OrderStateService {
             ApplicationEventPublisher events,
             Clock clock,
             PromoCodeRedemptionPort promoCodes) {
+        this(
+                orders,
+                capacity,
+                inventoryProcess,
+                paymentProcess,
+                acceptancePolicies,
+                settlements,
+                audit,
+                events,
+                clock,
+                promoCodes,
+                OrderMarksGuard.NONE);
+    }
+
+    /**
+     * @param marks the ADR 0161 guard: refuses a handover while a marked line is short of codes, and frees an
+     *     order's marks when it is cancelled before the handover
+     */
+    @org.springframework.beans.factory.annotation.Autowired
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public OrderStateService(
+            JdbcOrderStore orders,
+            LocationCapacityPort capacity,
+            OrderInventoryProcess inventoryProcess,
+            OrderPaymentProcess paymentProcess,
+            OrderAcceptancePolicyService acceptancePolicies,
+            OrderSettlementPort settlements,
+            AuditRecorder audit,
+            ApplicationEventPublisher events,
+            Clock clock,
+            PromoCodeRedemptionPort promoCodes,
+            OrderMarksGuard marks) {
         this.orders = orders;
         this.capacity = capacity;
         this.inventoryProcess = inventoryProcess;
@@ -107,6 +146,7 @@ public class OrderStateService {
         this.events = events;
         this.clock = clock;
         this.promoCodes = promoCodes;
+        this.marks = marks;
     }
 
     /**
@@ -748,6 +788,7 @@ public class OrderStateService {
             throw new OrderStateMachine.IllegalTransitionException(order.status(), target);
         }
         requireCatchweightReconciled(tenantId, orderId, target);
+        requireMarksComplete(tenantId, order.brandId(), orderId, target);
 
         Optional<Integer> won = orders.transition(tenantId, orderId, order.status(), target, now);
         if (won.isEmpty()) {
@@ -828,6 +869,28 @@ public class OrderStateService {
         List<UUID> unweighed = orders.unreconciledCatchweightLines(tenantId, orderId);
         if (!unweighed.isEmpty()) {
             throw new CatchweightNotReconciledException(unweighed);
+        }
+    }
+
+    /**
+     * {@code MARKS_INCOMPLETE} (ADR 0161): an order does not leave the pass while a marked line holds fewer
+     * live marks than it has units.
+     *
+     * <p>Runs on the same targets as {@link #requireCatchweightReconciled}, after it, and inside the advance
+     * transaction: the guard takes the order row's lock before it counts (only for an order that holds a
+     * marked line or a mark), and the status {@code UPDATE} that follows runs under that same lock, so a
+     * removal cannot commit between the count and the change. There is no bypass -- an unscanned marked sale
+     * is the breach this exists to prevent, and a supervisor override would be the way it happens.
+     *
+     * @throws MarksIncompleteException naming the lines still short of codes
+     */
+    private void requireMarksComplete(UUID tenantId, UUID brandId, UUID orderId, OrderStatus target) {
+        if (!isHandover(target)) {
+            return;
+        }
+        List<UUID> incomplete = marks.incompleteLines(tenantId, brandId, orderId);
+        if (!incomplete.isEmpty()) {
+            throw new MarksIncompleteException(incomplete);
         }
     }
 
@@ -1117,6 +1180,13 @@ public class OrderStateService {
             log.info("Order {} still has catchweight lines nobody has weighed; refusing {}", orderId, target);
             outcome = ProgressProposal.REFUSED;
             resultStatus = order.status();
+        } else if (isHandover(target)
+                && !marks.incompleteLines(tenantId, order.brandId(), orderId).isEmpty()) {
+            // ADR 0161: the same refusal for a marked line short of codes -- the ticket carries on holding
+            // the food it has, and the order stays at the pass until the units are scanned.
+            log.info("Order {} still has marked lines short of codes; refusing {}", orderId, target);
+            outcome = ProgressProposal.REFUSED;
+            resultStatus = order.status();
         } else {
             Optional<Integer> won = orders.transition(tenantId, orderId, order.status(), target, now);
             if (won.isEmpty()) {
@@ -1296,6 +1366,11 @@ public class OrderStateService {
                 correlationId,
                 now);
         orders.cancelTimer(tenantId, orderId, CheckoutService.APPROVAL_TIMER, now);
+        if (MarkCaptureStage.forStatus(order.status()).isPresent()) {
+            // ADR 0161: an order cancelled before the handover frees its marks, in this transaction; the
+            // status UPDATE above already holds the order row's lock.
+            marks.releaseForCancellation(tenantId, order.brandId(), order.locationId(), orderId, now);
+        }
 
         // With no registry reason the order was still unconfirmed, so the hold was
         // never committed: it goes back, and the tenant carries the cost of an
@@ -1746,6 +1821,27 @@ public class OrderStateService {
         }
 
         /** The order lines still priced against their nominal weight. */
+        public List<UUID> lineIds() {
+            return lineIds;
+        }
+    }
+
+    /**
+     * ADR 0161's {@code MARKS_INCOMPLETE}: the order cannot be handed over because these marked lines hold
+     * fewer scanned units than they have.
+     */
+    public static class MarksIncompleteException extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+
+        private final transient List<UUID> lineIds;
+
+        public MarksIncompleteException(List<UUID> lineIds) {
+            super("%d marked line(s) are short of scanned units".formatted(lineIds.size()));
+            this.lineIds = List.copyOf(lineIds);
+        }
+
+        /** The order lines still short of codes. */
         public List<UUID> lineIds() {
             return lineIds;
         }

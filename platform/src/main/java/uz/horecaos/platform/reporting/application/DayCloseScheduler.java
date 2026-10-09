@@ -230,9 +230,8 @@ public class DayCloseScheduler {
         try {
             DayCloseService.CloseResult result = dayClose.recut(tenantId, businessDate);
             recordOutcome(RECUT, "recut");
-            if (!result.divergences().isEmpty()) {
-                meters.counter("horecaos.reporting.dayclose.divergences")
-                        .increment(result.divergences().size());
+            if (result.unexpectedDivergenceCount() > 0) {
+                meters.counter("horecaos.reporting.dayclose.divergences").increment(result.unexpectedDivergenceCount());
             }
         } finally {
             store.releaseDayCloseClaim(tenantId, businessDate, RECUT, owner);

@@ -1,40 +1,38 @@
 # ADR 0175: Telephony KPIs: ring time and call-to-order conversion
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Not started — the half of row `7.5b` that has a source is
-  built and the half that has none is not. `reporting.fact_call_hour` (V0149)
-  holds `offered_count`, `answered_count`, `missed_count`, `transferred_count`
-  and `talk_duration_seconds` per location, business date, hour and operator,
-  written by `DayCloseService.close` from `JdbcReportingStore.readSourceCallEvents`
-  and `DayAggregator.callHourFacts`; `CallStatsController` serves it (one date per
-  request, `REPORTING_READ`) to a Telephony tab on `/reports/staff` that renders
-  the counts and, in place of the two other KPIs, the notices
-  `reports.staff.telephony.answerSpeedNotBuilt` and `conversionNotBuilt`. There is
-  no ring or wait column anywhere, and `readSourceCallEvents` selects six columns
-  (brand, location, event type, operator, duration, time) and not the provider
-  call id, so the close cannot pair an `OFFERED` event with the `ANSWERED` event
-  that ends it. There is no conversion fact: `ordering.orders.source_call_id`
-  (V0148, write-once, set by `OrderCallProvenanceService`) exists and is now
-  written, since `new-order-page.ts` calls `recordCallProvenance` when an order is
-  started from a claimed screen-pop card (`new-order-page.spec.ts`), which makes the
-  conversion notice's text, "the call-provenance wiring that 1.6 supplies (not
-  built yet)", stale; but nothing in `reporting` reads `source_call_id`, it has
-  no index, and `reporting.fact_order` carries no call origin (V0274 added only
-  `operator_principal_id`). Two latent defects sit in what is built and decide
-  how the new columns must be shaped. First, `talk_duration_seconds` is not talk
-  time: `VoiceEventInboundPort.ingest` computes an `ENDED` event's
-  `duration_seconds` from `JdbcVoiceStore.earliestEventAt`, the earlier of the
-  call's `OFFERED` and `ANSWERED` events, so the figure is call length with ring
-  and queue time inside it, and the tab labels it «Talk time». Second, the tab's
-  per-operator «Answer rate» divides answered by offered, and an `OFFERED` or
-  `MISSED` event carries no operator (V0149's own comment says offered lands in
-  `(unassigned)`), so an operator's row has no offered count and the cell is
-  always «—»; the sentinel row is also sliced to eight characters by
-  `shortSubject` and shown as «(unassig». Neither adapter has ever met a live
-  provider: `AsteriskAmiSocketClient` stamps `occurredAt` with its own clock at
-  receipt and the hosted-webhook mapper passes the provider's `payload.occurredAt()`;
-  both are proven only against a fake PBX, no live provider account exists (ADR 0064
-  says so), and `voice_platform/` is decision records only.
+- Implementation status: Partial — answer speed and call-to-order conversion are built
+  end to end and proven against the fake PBX, and nothing has met a live provider.
+  V0556 adds five nullable call-level columns to `reporting.fact_call_hour`
+  (`answered_call_count`, `ring_seconds_total`, `ring_sample_count`,
+  `ring_seconds_max`, `converted_count`) with `ck_fact_call_hour_kpi` holding them
+  together, the partial index `ix_orders_source_call`, and a comment saying that
+  `talk_duration_seconds` is call length. `DayCloseService.close` reads the call
+  events with their provider call id (`JdbcReportingStore.CALL_EVENTS_SQL`), pairs
+  each call's first `ANSWERED` event with its earliest `OFFERED` event across
+  midnight, resolves the operator from the `ENDED` event when the answer named
+  nobody, drops pairs above `voice.ring_time_ceiling_seconds` (declared in
+  `voice.api.VoiceConfigurationKeys` and mirrored in the registry, held together by
+  `VoiceConfigurationKeyTests`) from the ring samples, and counts an order of any
+  status whose `source_call_id` is the offered call. Counts and sums are stored and
+  ratios are computed where they are read, so a row closed before the migration
+  answers `null` and the tab shows «—», never zero. `GET .../voice/call-stats/coverage`
+  tells a branch with a live voice installation (`CONNECTED`, through the
+  consumer-declared `voice.api.VoiceConnectionQueryPort`) from one with neither a
+  provider nor history, and the Telephony tab on `/reports/staff` stays out of sight
+  for the second; with a connection but no closed day it says so honestly. The tab
+  shows answer speed, conversion with its coverage, the answer rate on the branch
+  total only (an operator's row has no offered count), «Call length» in place of
+  «Talk time», and «Not attributed» in place of the sliced sentinel; the two
+  «not built» notices are gone. The fake PBX scripts a call with a ring delay, an IVR
+  leg and a transfer, and the adapter-contract clauses are held against both
+  adapters. What is not done: no live provider account exists (ADR 0064), so the
+  real timestamps of `AsteriskAmiSocketClient` and the hosted-webhook mapper are
+  proven only against the fake and the real connection stays behind an ADR 0026
+  installation the owner completes; there is no backfill, so days closed before
+  V0556 show no figure; the nightly recut compares only `converted_count` and
+  `ring_sample_count` and treats a higher recut conversion as the late-provenance
+  drift this record expects; and the gap-map row `7.5b` is for the owner to re-audit.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides

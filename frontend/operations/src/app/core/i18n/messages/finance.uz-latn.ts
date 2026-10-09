@@ -230,6 +230,7 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
   'finance.fiscal.field.blockedAt': 'Bloklangan vaqti',
   'finance.fiscal.evidence.yes': 'Bor',
   'finance.fiscal.evidence.no': 'Yoʻq',
+  'finance.fiscal.marks.progress': '{required} tadan {captured} tasi skanerlandi',
   'finance.fiscal.action.retry': 'Qayta soʻrash',
   'finance.fiscal.action.retry.reason': 'Nega qayta soʻralmoqda',
   'finance.fiscal.action.retry.submit': 'Qayta soʻrash',

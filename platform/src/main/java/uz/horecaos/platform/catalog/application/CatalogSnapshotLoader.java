@@ -42,9 +42,12 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.TranslationRow;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcChannelProjectionStore.MediaOverrideRow;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCompositeCatalogStore;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAvailability;
 import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
+import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
+import uz.horecaos.platform.tenancy.api.FeatureFlagKeys;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
 
 /**
@@ -79,6 +82,7 @@ public class CatalogSnapshotLoader {
     private final String defaultLocale;
     private final boolean pricingWired;
     private final AutoAddSnapshotSource autoAdd;
+    private final @Nullable ConfigurationResolver configuration;
 
     /**
      * @param defaultLocale {@code horecaos.catalog.default-locale} -- where a name is
@@ -91,7 +95,8 @@ public class CatalogSnapshotLoader {
             VariantPricingLookup pricing,
             BrandLocaleLookup brandLocales,
             @Value("${horecaos.catalog.default-locale:uz}") String defaultLocale,
-            AutoAddSnapshotSource autoAdd) {
+            AutoAddSnapshotSource autoAdd,
+            @Nullable ConfigurationResolver configuration) {
         this.store = store;
         this.media = media;
         this.pricing = pricing;
@@ -99,16 +104,21 @@ public class CatalogSnapshotLoader {
         this.defaultLocale = defaultLocale;
         this.pricingWired = pricing.isWired();
         this.autoAdd = autoAdd;
+        this.configuration = configuration;
     }
 
-    /** A loader that publishes no auto-add rules (ADR 0158), for callers and tests that never author one. */
+    /**
+     * A loader that publishes no auto-add rules (ADR 0158) and has no configuration to ask, which reads
+     * {@code feature.marked_goods} as on so that it never adds a publication blocker of its own (ADR 0161):
+     * every caller that predates those two records, and every test that has nothing to say about them.
+     */
     public CatalogSnapshotLoader(
             JdbcCatalogStore store,
             MediaAvailability media,
             VariantPricingLookup pricing,
             BrandLocaleLookup brandLocales,
             String defaultLocale) {
-        this(store, media, pricing, brandLocales, defaultLocale, AutoAddSnapshotSource.NONE);
+        this(store, media, pricing, brandLocales, defaultLocale, AutoAddSnapshotSource.NONE, null);
     }
 
     /** A loader that requires the configured locale for every brand, for callers with no tenancy to ask. */
@@ -356,7 +366,26 @@ public class CatalogSnapshotLoader {
                 .collect(Collectors.toUnmodifiableSet());
 
         return new CatalogValidator.FiscalContext(
-                byNode, store.feesForBrand(tenantId, brandId), offersDelivery, referenceLoaded, knownCodes, facts, on);
+                byNode,
+                store.feesForBrand(tenantId, brandId),
+                offersDelivery,
+                referenceLoaded,
+                knownCodes,
+                facts,
+                on,
+                markedGoodsEnabled(tenantId));
+    }
+
+    /**
+     * ADR 0161: whether marked-goods capture is on for the tenant. A loader wired without a
+     * configuration source reads it as on, which adds no blocker; the running platform always has one,
+     * and the flag's own default is off.
+     */
+    private boolean markedGoodsEnabled(UUID tenantId) {
+        if (configuration == null) {
+            return true;
+        }
+        return Boolean.TRUE.equals(configuration.value(FeatureFlagKeys.MARKED_GOODS, ResourceScope.tenant(tenantId)));
     }
 
     /**

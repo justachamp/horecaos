@@ -267,6 +267,7 @@ public class OrderAmendmentService {
         DecodedAmendment decoded = decode(typedPayloadsOfIssued(command.commands()));
         requireOrderableQuantities(order, decoded.basket());
         requireWeighedLinesStayAtHandover(order, decoded, orders.lines(tenantId, orderId));
+        requireScannedLinesAreNotReplaced(tenantId, orderId, decoded);
         long deltaTotalMinor = 0L;
         boolean requiresApproval = false;
         UUID quoteId = null;
@@ -1403,6 +1404,32 @@ public class OrderAmendmentService {
                             + "cannot be paid with "
                             + method
                             + " in advance");
+        }
+    }
+
+    /**
+     * ADR 0161, Decision 10: an amendment that would close or reduce a line holding a live mark is refused
+     * before it writes anything.
+     *
+     * <p>{@code CHANGE_LINE_QUANTITY} closes the line and inserts a replacement, which would orphan the
+     * marks scanned against the old one. Adding units is {@code ADD_LINES}: a new line with its own scans.
+     * The refusal is what a future {@code REMOVE_LINES} and line decrease (ADR 0169) call as well, so they
+     * add no marking logic of their own: the operator releases the line's marks through the removal
+     * endpoint first, then amends and rescans.
+     */
+    private void requireScannedLinesAreNotReplaced(UUID tenantId, UUID orderId, DecodedAmendment decoded) {
+        Set<UUID> touched = decoded.basket().changedQuantities().keySet();
+        if (touched.isEmpty()) {
+            return;
+        }
+        Set<UUID> scanned = orders.linesHoldingLiveMarks(tenantId, orderId);
+        for (UUID lineId : touched) {
+            if (scanned.contains(lineId)) {
+                throw new AmendmentRefusedException(
+                        "MARKS_ALREADY_CAPTURED",
+                        "This line already has scanned units. Take them back at the pass first, or add the "
+                                + "extra units as a new line with its own scans");
+            }
         }
     }
 

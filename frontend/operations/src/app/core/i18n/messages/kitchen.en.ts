@@ -120,6 +120,7 @@ export const kitchenEn = {
   'kitchen.item.weight.estimate': '≈ {weight} (estimate)',
   'kitchen.item.weight.weighed': '{weight} weighed',
   'kitchen.expo.weighFirst': 'Weigh the items sold by weight before handing this over.',
+  'kitchen.expo.scanFirst': 'Scan every unit of the marked items before handing this over.',
 
   'kitchen.stopList.tab.all': 'All',
   'kitchen.stopList.tab.available': 'Available',

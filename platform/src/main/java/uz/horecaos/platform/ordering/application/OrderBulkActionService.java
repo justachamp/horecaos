@@ -311,6 +311,10 @@ public class OrderBulkActionService {
             return fail(tenantId, order, bulkOperationId, command, "ILLEGAL_TRANSITION");
         } catch (OrderStateService.CatchweightNotReconciledException unweighed) {
             return fail(tenantId, order, bulkOperationId, command, "CATCHWEIGHT_NOT_RECONCILED");
+        } catch (OrderStateService.MarksIncompleteException unscanned) {
+            // ADR 0161: reported per order like its catchweight sibling, so one short marked line does
+            // not stop the other hundred and ninety-nine.
+            return fail(tenantId, order, bulkOperationId, command, "MARKS_INCOMPLETE");
         } catch (OrderStateService.CancellationNotPermittedException refused) {
             return fail(tenantId, order, bulkOperationId, command, "CANCELLATION_NOT_PERMITTED");
         } catch (OrderOutcomeReasonService.ReasonNotFoundException missing) {

@@ -23,16 +23,21 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.fiscal.api.PartnerFiscalizationPort;
+import uz.horecaos.platform.fiscal.application.FiscalDocumentService;
 import uz.horecaos.platform.fiscal.application.FiscalObligationService;
 import uz.horecaos.platform.fiscal.application.FiscalObligationService.ClaimedSubmission;
 import uz.horecaos.platform.fiscal.application.FiscalObligationSweeper;
 import uz.horecaos.platform.fiscal.application.FiscalReportingPolicyService;
+import uz.horecaos.platform.fiscal.application.MarksCompletedReopener;
 import uz.horecaos.platform.fiscal.domain.FiscalDocumentState;
 import uz.horecaos.platform.fiscal.domain.FiscalReasonCode;
 import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalLifecycleStore;
 import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalLifecycleStore.FiscalDocumentRow;
 import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalLifecycleStore.NewFiscalDocument;
+import uz.horecaos.platform.ordering.api.OrderMarksCompleted;
+import uz.horecaos.platform.ordering.api.OrderMarksPort;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.api.TenantId;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcLegalEntityStore;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcPolicyResolver;
 
@@ -473,6 +478,130 @@ class FiscalObligationTests {
                 .as("a second writer for the evidence columns would be a second authority over "
                         + "what the tax authority was told")
                 .isEqualTo(versionBefore);
+    }
+
+    // ------------------------------------------------- ADR 0161: marked goods
+
+    @Test
+    @DisplayName(
+            "a marked order short of its codes is blocked for that reason, and a blocked document is not asked again")
+    void aMarkedOrderShortOfCodesIsBlockedWithItsOwnReason() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        UUID order = completedOrder("M-1", "CLICK", "PAID", NOW.minusSeconds(3600));
+        obligations.openObligations(50);
+
+        partner.answers = PartnerFiscalizationPort.Outcome.BLOCKED_MARKS;
+        sweeper.submitCapturedObligations();
+
+        FiscalDocumentRow document = onlyDocument(order);
+        assertThat(document.state()).isEqualTo(FiscalDocumentState.BLOCKED);
+        assertThat(document.reasonCode())
+                .as("not NO_FISCAL_PATH and not CLASSIFICATION_MISSING: the obstacle is the scans")
+                .isEqualTo(FiscalReasonCode.MARKS_INCOMPLETE);
+        assertThat(document.reasonNote()).contains("scanned units").contains("nothing was sent");
+
+        sweeper.submitCapturedObligations();
+
+        assertThat(partner.asks)
+                .as("a document blocked for its marks waits for them; it is not retried into the same refusal")
+                .containsExactly(document.id());
+    }
+
+    @Test
+    @DisplayName("when the marks complete the blocked document is reopened for the next submission pass")
+    void completedMarksReopenTheBlockedDocument() {
+        UUID order = blockedForMarks("M-2");
+        marks.counts = List.of(new OrderMarksPort.LineMarkCount(UUID.randomUUID(), 2, 2));
+
+        reopener().onMarksCompleted(completed(order));
+
+        FiscalDocumentRow document = onlyDocument(order);
+        assertThat(document.state()).isEqualTo(FiscalDocumentState.PENDING);
+        assertThat(document.reasonCode()).isEqualTo(FiscalReasonCode.AWAITING_PROVIDER);
+    }
+
+    @Test
+    @DisplayName("a removal that landed after the event keeps the document blocked: the event is a nudge, not a ledger")
+    void aStaleNudgeDoesNotReopenAShortOrder() {
+        UUID order = blockedForMarks("M-3");
+        marks.counts = List.of(new OrderMarksPort.LineMarkCount(UUID.randomUUID(), 2, 1));
+
+        reopener().onMarksCompleted(completed(order));
+
+        assertThat(onlyDocument(order).state()).isEqualTo(FiscalDocumentState.BLOCKED);
+        assertThat(onlyDocument(order).reasonCode()).isEqualTo(FiscalReasonCode.MARKS_INCOMPLETE);
+    }
+
+    @Test
+    @DisplayName("an order with no marked line to count never reopens anything")
+    void noCountsNoReopen() {
+        UUID order = blockedForMarks("M-4");
+        marks.counts = List.of();
+
+        reopener().onMarksCompleted(completed(order));
+
+        assertThat(onlyDocument(order).state()).isEqualTo(FiscalDocumentState.BLOCKED);
+    }
+
+    @Test
+    @DisplayName("a document blocked for another reason is left for the operator whatever the marks say")
+    void aDocumentBlockedForAnotherReasonIsNotReopened() {
+        UUID order = completedOrder("M-5", "PAYME", "PAID", NOW.minusSeconds(3600));
+        store.open(newDocument(order, FiscalDocumentState.PENDING, null));
+        sweeper.submitCapturedObligations();
+        assertThat(onlyDocument(order).reasonCode()).isEqualTo(FiscalReasonCode.NO_FISCAL_PATH);
+        marks.counts = List.of(new OrderMarksPort.LineMarkCount(UUID.randomUUID(), 1, 1));
+
+        reopener().onMarksCompleted(completed(order));
+
+        assertThat(onlyDocument(order).state()).isEqualTo(FiscalDocumentState.BLOCKED);
+        assertThat(onlyDocument(order).reasonCode()).isEqualTo(FiscalReasonCode.NO_FISCAL_PATH);
+    }
+
+    private final FakeMarks marks = new FakeMarks();
+
+    private UUID blockedForMarks(String number) {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        UUID order = completedOrder(number, "CLICK", "PAID", NOW.minusSeconds(3600));
+        obligations.openObligations(50);
+        partner.answers = PartnerFiscalizationPort.Outcome.BLOCKED_MARKS;
+        sweeper.submitCapturedObligations();
+        assertThat(onlyDocument(order).reasonCode()).isEqualTo(FiscalReasonCode.MARKS_INCOMPLETE);
+        return order;
+    }
+
+    private MarksCompletedReopener reopener() {
+        FiscalDocumentService service = new FiscalDocumentService(
+                store,
+                new FiscalReportingPolicyService(
+                        new JdbcPolicyResolver(jdbc, JsonMapper.builder().build())),
+                partner,
+                fact -> {},
+                event -> {},
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                "Asia/Tashkent",
+                Duration.ofMinutes(1));
+        return new MarksCompletedReopener(store, service, marks);
+    }
+
+    private static OrderMarksCompleted completed(UUID orderId) {
+        return new OrderMarksCompleted(
+                UUID.randomUUID(), new TenantId(TENANT), orderId, NOW, BRAND, LOCATION, 1, 2, NOW);
+    }
+
+    private static final class FakeMarks implements OrderMarksPort {
+
+        private List<LineMarkCount> counts = List.of();
+
+        @Override
+        public List<LineMarkCount> markCounts(UUID tenantId, UUID orderId) {
+            return counts;
+        }
+
+        @Override
+        public ReceiptSource receiptSource(UUID tenantId, UUID orderId) {
+            throw new AssertionError("the reopener reads counts only and must never ask for the codes");
+        }
     }
 
     // -------------------------------------------------------------- fixtures

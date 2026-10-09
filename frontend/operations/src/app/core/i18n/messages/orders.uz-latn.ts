@@ -852,4 +852,58 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   'orders.queue.views.limit': '20 tadan ortiq koʻrinish boʻlmaydi. Keraksizini oʻchiring.',
   'orders.queue.views.saved': 'Koʻrinishlar hisobingizda saqlanadi.',
   'orders.queue.views.session': 'Koʻrinishlar faqat shu seans tugaguncha amal qiladi.',
+  // ---------------------------------------------------------------- ADR 0161 marked goods (X.35)
+  'orders.queue.bulk.problem.MARKS_INCOMPLETE':
+    'Markirovkalangan pozitsiyalar hali toʻliq skanerlanmagan',
+  'orders.marking.title': 'Markirovkalangan tovarlar',
+  'orders.marking.intro':
+    'Buyurtmani topshirishdan oldin markirovkalangan tovarning har bir birligini skanerlang. Markirovkalangan pozitsiyada kodlar yetmasa, buyurtmani topshirib boʻlmaydi.',
+  'orders.marking.closed':
+    'Buyurtma allaqachon topshirish joyidan chiqqan, shuning uchun skanlarni oʻzgartirib boʻlmaydi.',
+  'orders.marking.line.progress': '{required} tadan {captured} tasi skanerlandi',
+  'orders.marking.line.complete': 'Hammasi, {required} ta, skanerlandi',
+  'orders.marking.line.scan': 'Shu pozitsiyani skanerlash',
+  'orders.marking.line.scanning': 'Shu pozitsiya skanerlanmoqda',
+  'orders.marking.units.title': 'Skanerlangan birliklar',
+  'orders.marking.units.item': '№{sequence} · tovar {gtin}',
+  'orders.marking.stage.PICK': 'yigʻishda',
+  'orders.marking.stage.HANDOVER': 'topshirishda',
+  'orders.marking.remove.reason': 'Bekor qilish sababi',
+  'orders.marking.remove.MISSCAN': 'Xato skan',
+  'orders.marking.remove.UNIT_REPLACED': 'Birlik almashtirildi',
+  'orders.marking.remove.UNIT_DAMAGED': 'Birlik shikastlangan',
+  'orders.marking.remove.button': 'Bekor qilish',
+  'orders.marking.remove.busy': 'Bekor qilinmoqda…',
+  'orders.marking.selfTest.label': 'Skanerni tekshirish (skanlar yuborilmaydi)',
+  'orders.marking.selfTest.result':
+    '{length} ta belgi va {separators} ta guruh ajratgichi oʻqildi; {shape}.',
+  'orders.marking.selfTest.gs1': 'GS1 kodiga oʻxshaydi',
+  'orders.marking.selfTest.notGs1':
+    'GS1 kodiga oʻxshamaydi: skaner guruh ajratgichini tushirib qoldirayotgan boʻlishi mumkin',
+  'orders.marking.selfTest.aim': 'Simvolika identifikatori kelib, olib tashlandi.',
+  'orders.marking.selfTest.keyed':
+    'Skan qoʻlda terilgandek sekin keldi: skanerdagi belgilar orasidagi kechikishni kamaytiring.',
+  'orders.marking.accepted.unchecked':
+    'Skanerlandi. Tovarni tekshirib boʻlmadi: uning tasnifida shtrixkod yoʻq.',
+  'orders.marking.error.malformed': 'Bu toʻliq markirovka kodi emas. Qadoqni qayta skanerlang.',
+  'orders.marking.error.wrongProduct': 'Bu kod boshqa tovarga tegishli.',
+  'orders.marking.error.alreadyHere': 'Bu birlik shu pozitsiyada allaqachon skanerlangan.',
+  'orders.marking.error.alreadyElsewhere': 'Bu birlik boshqa buyurtmada allaqachon skanerlangan.',
+  'orders.marking.error.keyed':
+    'Qoʻlda terilgan yoki qoʻyilgan kod qabul qilinmaydi. Qadoqni skanerlang.',
+  'orders.marking.error.complete': 'Bu pozitsiyada kerakli birliklarning hammasi bor.',
+  'orders.marking.error.notMarked': 'Bu pozitsiya markirovkalanmagan.',
+  'orders.marking.error.notMarkable': 'Buyurtma endi topshirish joyida emas.',
+  'orders.marking.error.rateLimited':
+    'Bir daqiqada juda koʻp skan. Biroz kuting va qayta skanerlang.',
+  'orders.marking.scanner.fieldLabel': 'Skaner kiritishi',
+  'orders.marking.scanner.ready': 'Tayyor: birlikni skanerlang',
+  'orders.marking.scanner.idle': 'Skanerlash oʻchiq',
+  'orders.marking.scanner.cameraOn': 'Kamera',
+  'orders.marking.scanner.cameraOff': 'Kamerani oʻchirish',
+  'orders.marking.scanner.cameraLabel': 'Kodni skanerlash uchun kamera tasviri',
+  'orders.marking.scanner.cameraUnavailable': 'Kamerani yoqib boʻlmadi.',
+  'orders.marking.scanner.sound': 'Ovoz',
+  'orders.marking.scanner.progress': '{required} tadan {captured} tasi skanerlandi',
+  'orders.marking.scanner.refused': 'Skan rad etildi',
 };

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -142,6 +143,15 @@ public class PaymentFiscalService {
                 now);
         documents.insert(document);
         return document.id();
+    }
+
+    /**
+     * Whether the receipt port for this provider can carry a marking code per unit (ADR 0161); false for a
+     * provider with no port.
+     */
+    public boolean carriesMarkingCodes(@Nullable PaymentProviderType providerType) {
+        FiscalReceiptPort port = providerType == null ? null : receiptPorts.get(providerType);
+        return port != null && port.carriesMarkingCodes();
     }
 
     /**

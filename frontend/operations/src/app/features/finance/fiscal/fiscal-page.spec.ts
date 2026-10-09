@@ -147,6 +147,33 @@ describe('FiscalPage', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('order-7');
   });
 
+  it('says how many units of a marked order are scanned beside a document blocked for its marks', async () => {
+    api.blocked.mockResolvedValue({
+      count: 2,
+      documents: [
+        {
+          ...BLOCKED_DOCUMENT,
+          documentId: 'doc-marks',
+          reasonCode: 'MARKS_INCOMPLETE',
+          marks: { captured: 2, required: 5 },
+        },
+        { ...BLOCKED_DOCUMENT, documentId: 'doc-other', marks: null },
+      ],
+      warning: null,
+    });
+    fixture = TestBed.createComponent(FiscalPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const progress = (fixture.nativeElement as HTMLElement).querySelectorAll(
+      '[data-testid="fiscal-marks-progress"]',
+    );
+    expect(progress).toHaveLength(1);
+    expect(progress[0].textContent).toContain('2 of 5 scanned');
+    expect(progress[0].closest('tr')?.textContent).toContain('MARKS_INCOMPLETE');
+  });
+
   it('never renders a fiscal sign, receipt URL or marking code', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).not.toContain('qrCodeURL');

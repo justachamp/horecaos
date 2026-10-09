@@ -75,7 +75,19 @@ public interface PartnerFiscalizationPort {
          * withdrawn, whereas a blocked document is recoverable. Allowed only where the provider
          * environment is a sandbox and the platform has said so.
          */
-        LINES_NOT_BUILT
+        LINES_NOT_BUILT,
+
+        /**
+         * The order holds a marked line with fewer scanned units than it has (ADR 0161). Nothing was built
+         * and nothing was sent: a marked order never takes the synthetic aggregate line, because a receipt
+         * for a marked good without its codes is the breach this exists to prevent.
+         *
+         * <p>The document is left {@code BLOCKED} with reason {@code MARKS_INCOMPLETE}, the first producer
+         * that constant has had, and is reopened by the fiscal module when the counts complete
+         * ({@code OrderMarksCompleted}). Also the defence in depth for an order that completed through a
+         * path the handover guard did not see.
+         */
+        BLOCKED_MARKS
     }
 
     /**

@@ -508,12 +508,20 @@ export const reportsRu: AreaMessages<typeof reportsEn> = {
   'reports.staff.telephony.column.answerRate': 'Доля отвеченных',
   'reports.staff.telephony.column.missed': 'Пропущено',
   'reports.staff.telephony.column.transferred': 'Переведено',
-  'reports.staff.telephony.column.talkTime': 'Время разговора',
+  'reports.staff.telephony.column.answerSpeed': 'Скорость ответа',
+  'reports.staff.telephony.column.conversion': 'Конверсия',
+  'reports.staff.telephony.column.callLength': 'Длительность звонка',
   'reports.staff.telephony.rangeCapped': 'Показаны первые {days} дн. более длинного периода.',
-  'reports.staff.telephony.answerSpeedNotBuilt':
-    'Скорость ответа не показана: пока нет столбца времени ожидания вызова (V0149).',
-  'reports.staff.telephony.conversionNotBuilt':
-    'Конверсия звонков в заказы не показана: нужна привязка call-provenance, которую даёт 1.6 (пока не реализовано).',
+  'reports.staff.telephony.help':
+    'Скорость ответа — время от поступления звонка до первого ответа, поэтому в неё входят голосовое меню и очередь. Конверсия — доля отвеченных звонков, по которым оформлен заказ (в любом статусе); это нижняя граница: заказ, привязанный после закрытия дня, учитывается только при пересчёте дня. Длительность звонка — от первого события звонка до его конца, включая ожидание ответа. Показатель, который не измерялся, отображается прочерком, а не нулём.',
+  'reports.staff.telephony.notMeasured': 'не измерено',
+  'reports.staff.telephony.measuredOn': 'измерено по {n} из {m} отвеченных звонков',
+  'reports.staff.telephony.convertedOf': '{n} из {m} отвеченных звонков',
+  'reports.staff.telephony.speedValue': '{avg} с (макс. {max} с)',
+  'reports.staff.telephony.unattributed': 'Не назначено',
+  'reports.staff.telephony.branchTotal': 'Итого по филиалу',
+  'reports.staff.telephony.nextClose':
+    'Звонки за сегодня появятся после закрытия бизнес-дня, около {time}.',
 
   // ---------------------------------------------------------------- reports 7.9 marketing (T15)
   'reports.marketing.title': 'Маркетинговые отчёты',

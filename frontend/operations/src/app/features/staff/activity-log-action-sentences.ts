@@ -1381,6 +1381,21 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       'uz-Latn':
         'Ogʻirlik boʻyicha sotiladigan pozitsiya ogʻirligi yozildi, buyurtma qayta hisoblandi',
     },
+    'ordering.order.line_mark_captured': {
+      en: 'A unit of a marked item scanned at the pass',
+      ru: 'Отсканирована единица маркированного товара',
+      'uz-Latn': 'Markirlangan mahsulot birligi skanerlandi',
+    },
+    'ordering.order.line_mark_removed': {
+      en: 'A scanned unit of a marked item taken back',
+      ru: 'Отсканированная единица маркированного товара возвращена',
+      'uz-Latn': 'Skanerlangan markirlangan mahsulot birligi bekor qilindi',
+    },
+    'ordering.order.marks_released': {
+      en: 'Scanned marking codes released with the cancelled order',
+      ru: 'Отсканированные коды маркировки освобождены вместе с отменённым заказом',
+      'uz-Latn': 'Bekor qilingan buyurtma bilan skanerlangan markirovka kodlari boʻshatildi',
+    },
     'ordering.order.promotion_requoted': {
       en: 'Promotions of a scheduled order checked again, the order unchanged',
       ru: 'Акции запланированного заказа проверены повторно, заказ не изменён',
@@ -1485,6 +1500,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Payment merchant binding secret rotated',
       ru: 'Платёж продавец привязка секрет обновлено',
       'uz-Latn': 'Toʻlov sotuvchi bogʻlanish sir yangilandi',
+    },
+    'payments.document.marking_codes_disclosed': {
+      en: 'Marking codes written onto a fiscal receipt',
+      ru: 'Коды маркировки записаны в фискальный чек',
+      'uz-Latn': 'Markirovka kodlari fiskal chekka yozildi',
     },
     'payments.remedy.verify': {
       en: 'Payments remedy verify',

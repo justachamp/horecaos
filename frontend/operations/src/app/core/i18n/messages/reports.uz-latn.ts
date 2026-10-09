@@ -507,12 +507,21 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.staff.telephony.column.answerRate': 'Javob ulushi',
   'reports.staff.telephony.column.missed': 'Oʻtkazib yuborilgan',
   'reports.staff.telephony.column.transferred': 'Uzatilgan',
-  'reports.staff.telephony.column.talkTime': 'Suhbat vaqti',
+  'reports.staff.telephony.column.answerSpeed': 'Javob tezligi',
+  'reports.staff.telephony.column.conversion': 'Konversiya',
+  'reports.staff.telephony.column.callLength': 'Qoʻngʻiroq davomiyligi',
   'reports.staff.telephony.rangeCapped': 'Uzunroq davrning dastlabki {days} kuni koʻrsatilmoqda.',
-  'reports.staff.telephony.answerSpeedNotBuilt':
-    'Javob tezligi koʻrsatilmaydi: hozircha qoʻngʻiroqni kutish vaqti ustuni yoʻq (V0149).',
-  'reports.staff.telephony.conversionNotBuilt':
-    'Qoʻngʻiroqdan buyurtmaga aylanish koʻrsatilmaydi: buning uchun 1.6 taʻminlaydigan call-provenance bogʻlanishi kerak (hali yaratilmagan).',
+  'reports.staff.telephony.help':
+    'Javob tezligi — qoʻngʻiroq kelganidan birinchi javobgacha boʻlgan vaqt, shuning uchun unga ovozli menyu va navbat ham kiradi. Konversiya — buyurtma (istalgan holatda) rasmiylashtirilgan javob berilgan qoʻngʻiroqlar ulushi; bu quyi chegara: kun yopilgandan keyin bogʻlangan buyurtma faqat kun qayta hisoblanganda hisobga olinadi. Qoʻngʻiroq davomiyligi — qoʻngʻiroqning birinchi hodisasidan oxirigacha, javobni kutish ham kiradi. Oʻlchanmagan koʻrsatkich nol emas, chiziqcha bilan koʻrsatiladi.',
+  'reports.staff.telephony.notMeasured': 'oʻlchanmagan',
+  'reports.staff.telephony.measuredOn':
+    'javob berilgan {m} ta qoʻngʻiroqning {n} tasi boʻyicha oʻlchangan',
+  'reports.staff.telephony.convertedOf': 'javob berilgan {m} ta qoʻngʻiroqdan {n} tasi',
+  'reports.staff.telephony.speedValue': '{avg} s (maks. {max} s)',
+  'reports.staff.telephony.unattributed': 'Biriktirilmagan',
+  'reports.staff.telephony.branchTotal': 'Filial boʻyicha jami',
+  'reports.staff.telephony.nextClose':
+    'Bugungi qoʻngʻiroqlar biznes-kun yopilgandan keyin, taxminan {time} da paydo boʻladi.',
 
   // ---------------------------------------------------------------- reports 7.9 marketing (T15)
   'reports.marketing.title': 'Marketing hisobotlari',

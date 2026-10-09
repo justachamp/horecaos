@@ -5,8 +5,10 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.fiscal.api.PartnerFiscalizationPort;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
@@ -86,7 +88,9 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
     private final LegalEntityDirectory legalEntities;
     private final SyntheticLineGate syntheticLines;
     private final Clock clock;
+    private final @Nullable MarkedOrderReceiptProjection markedOrders;
 
+    /** A bridge wired without marked-goods projection: every order takes the aggregate line, as before ADR 0161. */
     public PartnerFiscalizationBridge(
             PaymentFiscalService fiscalDocuments,
             PaymentBindingResolver bindings,
@@ -95,6 +99,22 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
             LegalEntityDirectory legalEntities,
             SyntheticLineGate syntheticLines,
             Clock clock) {
+        this(fiscalDocuments, bindings, intents, orders, legalEntities, clock, null);
+    }
+
+    /**
+     * @param markedOrders ADR 0161: builds the receipt of an order that holds a marked line, codes included,
+     *     so such an order never takes the synthetic aggregate line
+     */
+    @Autowired
+    public PartnerFiscalizationBridge(
+            PaymentFiscalService fiscalDocuments,
+            PaymentBindingResolver bindings,
+            JdbcPaymentIntentStore intents,
+            OrderDirectory orders,
+            LegalEntityDirectory legalEntities,
+            Clock clock,
+            @Nullable MarkedOrderReceiptProjection markedOrders) {
         this.fiscalDocuments = fiscalDocuments;
         this.bindings = bindings;
         this.intents = intents;
@@ -102,6 +122,7 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
         this.legalEntities = legalEntities;
         this.syntheticLines = syntheticLines;
         this.clock = clock;
+        this.markedOrders = markedOrders;
     }
 
     @Override
@@ -139,15 +160,43 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
             return Outcome.NO_PROVIDER_PATH;
         }
 
-        boolean placeholder = document.lines().isEmpty();
-        if (placeholder && !syntheticLines.permitted(binding.get())) {
-            // ADR 0166, Decision 6. No real lines are stored and there is no builder to make
-            // them, so the only receipt that could go out is the placeholder -- and that is filed
-            // only where it cannot be mistaken for a sale. Nothing is sent and nothing is
-            // recorded as though it had been: the caller blocks the document with its reason.
-            return Outcome.LINES_NOT_BUILT;
+        boolean placeholder = false;
+        FiscalDocument submittable = document;
+        if (document.lines().isEmpty()) {
+            // ADR 0161: an order holding a marked line is never given the synthetic aggregate line. Its
+            // receipt is projected from the order's lines and the codes scanned at the pass, or nothing is
+            // sent at all.
+            MarkedOrderReceiptProjection.Result marked = markedOrders == null
+                    ? new MarkedOrderReceiptProjection.Result.NotMarked()
+                    : markedOrders.project(document, commissionTin(document));
+            switch (marked) {
+                case MarkedOrderReceiptProjection.Result.MarksIncomplete incomplete -> {
+                    return Outcome.BLOCKED_MARKS;
+                }
+                case MarkedOrderReceiptProjection.Result.Unprojectable unprojectable -> {
+                    log.warn(
+                            "Fiscal document {} for order {} was not sent: {}",
+                            documentId,
+                            document.orderId(),
+                            unprojectable.reason());
+                    return Outcome.REJECTED;
+                }
+                case MarkedOrderReceiptProjection.Result.Lines projected ->
+                    submittable = copyWithLines(document, projected.lines());
+                case MarkedOrderReceiptProjection.Result.NotMarked notMarked -> {
+                    // ADR 0166, Decision 6. No real lines are stored and there is no builder to make
+                    // them for an unmarked order, so the only receipt that could go out is the
+                    // placeholder -- and that is filed only where it cannot be mistaken for a sale.
+                    // Nothing is sent and nothing is recorded as though it had been: the caller blocks
+                    // the document with its reason.
+                    if (!syntheticLines.permitted(binding.get())) {
+                        return Outcome.LINES_NOT_BUILT;
+                    }
+                    placeholder = true;
+                    submittable = withSyntheticLines(document);
+                }
+            }
         }
-        FiscalDocument submittable = placeholder ? withSyntheticLines(document) : document;
 
         FiscalStatus result = fiscalDocuments.submit(submittable, binding.get(), clock.instant(), placeholder);
         return switch (result) {

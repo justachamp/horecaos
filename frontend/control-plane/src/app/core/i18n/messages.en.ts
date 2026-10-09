@@ -446,6 +446,9 @@ export const en = {
   'featureFlags.flag.supportVisits': 'Support visits page',
   'featureFlags.flag.supportVisits.description':
     'Shows a tenant’s administrators, in the operations app, every HorecaOS support visit to their account, and lets them end one.',
+  'featureFlags.flag.markedGoods': 'Marked goods (DataMatrix)',
+  'featureFlags.flag.markedGoods.description':
+    'Turns on scanning of marking codes at the pass and the hand-over check that holds an order until every marked unit is scanned. Turn it on for a tenant only once the receipt path for marked goods has been proven.',
 
   'tenantDetail.facts.title': 'Tenant facts',
   'tenantDetail.facts.status': 'Status',
