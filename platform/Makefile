@@ -20,7 +20,7 @@ OPENAPI_GROUPS := storefront control-plane operations providers
 
 .DEFAULT_GOAL := help
 
-.PHONY: help verify test arch build lint format run up down logs eval fmt-check hooks-test bands-test shards-test makefile-test doc-links openapi-client-check openapi-baseline seed-payments pay-fake-click ci
+.PHONY: help verify test arch build lint format run up down logs eval fmt-check hooks-test bands-test shards-test print-agent-test makefile-test doc-links openapi-client-check openapi-baseline seed-payments pay-fake-click ci
 
 help: ## List targets
 	@grep -hE '^[a-z][a-zA-Z0-9_-]*:.*?## ' $(MAKEFILE_LIST) \
@@ -41,7 +41,7 @@ build: ## Compile and package without running tests
 format: ## Reformat Java sources (ADR 0054)
 	$(MVN) spotless:apply
 
-lint: fmt-check doc-links hooks-test bands-test shards-test makefile-test routing-gate-test ## Static checks an agent must pass before review
+lint: fmt-check doc-links hooks-test bands-test shards-test print-agent-test makefile-test routing-gate-test ## Static checks an agent must pass before review
 
 fmt-check: ## Repository hygiene checks that need no JVM
 	@python3 tools/checks/repo_hygiene.py
@@ -58,6 +58,9 @@ shards-test: ## Prove CI's Java test shards cover every test class exactly once,
 
 routing-gate-test: ## Prove the routing accuracy gate can say no (ADR 0147)
 	@cd tools/routing && python3 -m unittest test_accuracy_gate
+
+print-agent-test: ## Prove the reference print agent against a fake platform and a fake printer (ADR 0154; needs Node 20+)
+	@node --test tools/print-agent/print-agent.test.mjs
 
 makefile-test: ## Prove Maven targets run under the build lock and `make run` does not hold it while serving
 	@python3 tools/checks/test_makefile.py
