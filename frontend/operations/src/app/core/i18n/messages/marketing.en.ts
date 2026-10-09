@@ -1110,4 +1110,106 @@ export const marketingEn = {
   'marketing.content.album.add': 'Add a photo',
   'marketing.content.album.caption': 'Caption in this language (optional)',
   'marketing.content.album.remove': 'Remove this photo',
+
+  'marketing.content.preview.channel': 'Channel',
+  'marketing.content.preview.locale': 'Language',
+  'marketing.content.preview.day': 'As on day (optional)',
+  'marketing.content.preview.refresh': 'Refresh',
+  'marketing.content.preview.noChannel':
+    'No channel can show content yet, so there is nothing to preview.',
+  'marketing.content.preview.failed': 'Could not build the preview.',
+  'marketing.content.preview.loading': 'Building the preview…',
+  'marketing.content.preview.absent':
+    'This item is not in the preview for this channel, language and day — it is outside its window, on another channel, tied to a promotion that is not live, or its image is still being checked. Save the draft first if you have just changed it.',
+  'marketing.content.preview.dishes': '{count} dishes',
+  'marketing.content.preview.popupDelay': 'Pop-up after {seconds} s',
+  'marketing.content.preview.empty': 'Nothing is on the home screen for this channel and day.',
+
+  'marketing.content.history.loading': 'Loading the versions…',
+  'marketing.content.history.empty': 'Never published, so there is no history yet.',
+  'marketing.content.history.version': 'Version {n}',
+  'marketing.content.history.againstPrevious': 'Compare with the version before',
+  'marketing.content.history.againstLive': 'Compare with the live version',
+  'marketing.content.history.publishedBy': 'Published by {who} at {when}',
+  'marketing.content.history.noChange': 'Nothing differs.',
+  'marketing.content.history.restore': 'Put this version into the draft',
+  'marketing.content.history.restoreHint':
+    'This only fills the draft. Nothing reaches customers until you publish it.',
+  'marketing.content.history.failed': 'Could not read the history.',
+
+  'marketing.content.stats.clientReported':
+    'Reported by visitors’ own devices. Anyone can inflate these numbers, nothing identifies a visitor, and the reports do not use them — read them as a hint, not a measurement.',
+  'marketing.content.stats.loading': 'Loading the counts…',
+  'marketing.content.stats.failed': 'Could not read the counts.',
+  'marketing.content.stats.window': 'Last days: {range}',
+  'marketing.content.stats.empty': 'Nothing has been reported yet.',
+  'marketing.content.stats.version': 'Version',
+  'marketing.content.stats.impressions': 'Shown',
+  'marketing.content.stats.clicks': 'Taps',
+  'marketing.content.stats.dismissals': 'Dismissed',
+  'marketing.content.stats.completions': 'Watched to the end',
+
+  'marketing.content.editor.new': 'New: {kind}',
+  'marketing.content.editor.unsaved': 'Not saved',
+  'marketing.content.editor.close': 'Close the editor',
+  'marketing.content.editor.stale':
+    'Someone else changed this item while you were editing. Reload to see their version; your unsaved edits will be replaced.',
+  'marketing.content.editor.reload': 'Reload',
+  'marketing.content.editor.archivedNote':
+    'This item is archived: it is read-only and out of the lists.',
+  'marketing.content.editor.tab.edit': 'Edit',
+  'marketing.content.editor.tab.preview': 'Preview',
+  'marketing.content.editor.tab.history': 'History',
+  'marketing.content.editor.tab.stats': 'Counts',
+  'marketing.content.editor.internalName': 'Internal name (only your team sees it)',
+  'marketing.content.editor.slug':
+    'Address (lower-case letters, digits and hyphens; fixed once saved)',
+  'marketing.content.editor.placement': 'Where it appears',
+  'marketing.content.editor.channels': 'Channels',
+  'marketing.content.editor.channelsHint':
+    'Leave all unselected to show it on every channel that can show content.',
+  'marketing.content.editor.noChannels':
+    'No channel can show content yet (a web, app or Telegram channel is needed).',
+  'marketing.content.editor.schedule': 'Schedule',
+  'marketing.content.editor.schedule.always': 'Always',
+  'marketing.content.editor.schedule.between': 'Between two dates',
+  'marketing.content.editor.schedule.from': 'From a date onwards',
+  'marketing.content.editor.schedule.backwards': 'The end is not after the start.',
+  'marketing.content.editor.schedule.hint':
+    'Whole days in your timezone. Whether it is showing is worked out each time a customer opens the app, so nothing has to run at midnight.',
+  'marketing.content.editor.promotion': 'Tie to a promotion (optional)',
+  'marketing.content.editor.promotionHint':
+    'The card shows only while this promotion is live, and takes the promotion’s dates when it has none of its own. The platform never adds a promo code to a card; type one yourself if you want it shown.',
+  'marketing.content.editor.branch': 'Branch (optional)',
+  'marketing.content.editor.branchNone': 'No particular branch',
+  'marketing.content.editor.language': 'Language',
+  'marketing.content.editor.needsTitle':
+    'Write a title in {languages}, or clear what you typed there.',
+  'marketing.content.editor.problems': 'To fix before publishing',
+  'marketing.content.editor.previewUnsaved':
+    'You have unsaved changes. The preview shows the last saved draft.',
+  'marketing.content.editor.save': 'Save draft',
+  'marketing.content.editor.publish': 'Publish',
+  'marketing.content.editor.withdraw': 'Withdraw',
+  'marketing.content.editor.archive': 'Archive',
+  'marketing.content.editor.discard': 'Discard draft',
+  'marketing.content.editor.saved': 'Draft saved. Customers do not see it until it is published.',
+  'marketing.content.editor.published': 'Published. Customers see it within a minute.',
+  'marketing.content.editor.done': 'Done.',
+  'marketing.content.editor.restored':
+    'The version is in the draft. Nothing reaches customers until you publish it.',
+  'marketing.content.editor.failed': 'Something went wrong. Try again.',
+  'marketing.content.editor.refused': 'The platform did not accept this. See what to fix below.',
+  'marketing.content.editor.confirm.publish.title': 'Publish this?',
+  'marketing.content.editor.confirm.publish.body':
+    'What you see now is saved and goes live. Customers see it within a minute, in the languages you filled in.',
+  'marketing.content.editor.confirm.withdraw.title': 'Take it down?',
+  'marketing.content.editor.confirm.withdraw.body':
+    'Customers stop seeing it within a minute. Every version is kept, and you can publish it again.',
+  'marketing.content.editor.confirm.archive.title': 'Archive this?',
+  'marketing.content.editor.confirm.archive.body':
+    'It leaves the lists, and is taken down first if it is live. Its address becomes free to use again.',
+  'marketing.content.editor.confirm.discard.title': 'Discard the draft?',
+  'marketing.content.editor.confirm.discard.body':
+    'The live version stays as it is; the changes you have not published are lost.',
 } as const;

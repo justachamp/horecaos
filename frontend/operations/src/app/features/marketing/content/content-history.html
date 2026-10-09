@@ -1,0 +1,93 @@
+<div class="history" data-testid="content-history">
+  @if (loading()) {
+    <p class="q-caption" role="status">{{ 'marketing.content.history.loading' | t }}</p>
+  } @else if (revisions().length === 0) {
+    <p class="q-body-sm history__empty" data-testid="content-history-empty">
+      {{ 'marketing.content.history.empty' | t }}
+    </p>
+  } @else {
+    <ol class="history__list">
+      @for (revision of revisions(); track revision.revisionNo) {
+        <li>
+          <button
+            type="button"
+            class="history__row"
+            [class.history__row--selected]="selected() === revision.revisionNo"
+            [attr.aria-pressed]="selected() === revision.revisionNo"
+            (click)="select(revision.revisionNo)"
+            data-testid="content-history-row"
+          >
+            <span class="q-body-sm">
+              {{ 'marketing.content.history.version' | t: { n: revision.revisionNo } }}
+            </span>
+            @if (revision.live) {
+              <span class="history__live q-caption" data-testid="content-history-live">
+                {{ 'marketing.content.visibility.LIVE' | t }}
+              </span>
+            }
+            <span class="q-caption history__meta">{{ when(revision.publishedAt) }}</span>
+            @if (window(revision); as range) {
+              <span class="q-caption history__meta">{{ range }}</span>
+            }
+          </button>
+        </li>
+      }
+    </ol>
+  }
+
+  @if (error(); as message) {
+    <p class="q-body-sm history__error" role="alert" data-testid="content-history-error">
+      {{ message }}
+    </p>
+  }
+
+  @if (chosen(); as revision) {
+    <section class="history__detail" data-testid="content-history-detail">
+      <div class="history__compare">
+        <label class="q-body-sm">
+          <input
+            type="radio"
+            name="history-against"
+            [checked]="against() === 'previous'"
+            (change)="setAgainst('previous')"
+          />
+          {{ 'marketing.content.history.againstPrevious' | t }}
+        </label>
+        <label class="q-body-sm">
+          <input
+            type="radio"
+            name="history-against"
+            [checked]="against() === 'live'"
+            (change)="setAgainst('live')"
+            data-testid="content-history-against-live"
+          />
+          {{ 'marketing.content.history.againstLive' | t }}
+        </label>
+      </div>
+      <p class="q-caption">
+        {{
+          'marketing.content.history.publishedBy'
+            | t: { who: revision.publishedBy, when: when(revision.publishedAt) }
+        }}
+      </p>
+      @if (diff(); as entries) {
+        <q-diff-viewer
+          [document]="entries"
+          [emptyLabel]="'marketing.content.history.noChange' | t"
+        />
+      }
+      @if (!readOnly()) {
+        <button
+          type="button"
+          class="history__restore"
+          [disabled]="busy()"
+          (click)="restore()"
+          data-testid="content-history-restore"
+        >
+          {{ 'marketing.content.history.restore' | t }}
+        </button>
+        <p class="q-caption history__meta">{{ 'marketing.content.history.restoreHint' | t }}</p>
+      }
+    </section>
+  }
+</div>

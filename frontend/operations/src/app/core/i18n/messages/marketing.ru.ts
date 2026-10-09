@@ -1112,4 +1112,107 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.content.album.add': 'Добавить фото',
   'marketing.content.album.caption': 'Подпись на этом языке (необязательно)',
   'marketing.content.album.remove': 'Убрать это фото',
+
+  'marketing.content.preview.channel': 'Канал',
+  'marketing.content.preview.locale': 'Язык',
+  'marketing.content.preview.day': 'На дату (необязательно)',
+  'marketing.content.preview.refresh': 'Обновить',
+  'marketing.content.preview.noChannel':
+    'Пока ни один канал не умеет показывать контент, поэтому предпросмотр пуст.',
+  'marketing.content.preview.failed': 'Не удалось собрать предпросмотр.',
+  'marketing.content.preview.loading': 'Собираем предпросмотр…',
+  'marketing.content.preview.absent':
+    'Этого элемента нет в предпросмотре для этого канала, языка и даты: он вне своего окна, на другом канале, привязан к неработающей акции или его изображение ещё проверяется. Если вы только что правили его, сначала сохраните черновик.',
+  'marketing.content.preview.dishes': 'Блюд: {count}',
+  'marketing.content.preview.popupDelay': 'Окно через {seconds} с',
+  'marketing.content.preview.empty': 'На главном экране для этого канала и даты ничего нет.',
+
+  'marketing.content.history.loading': 'Загружаем версии…',
+  'marketing.content.history.empty': 'Ещё не публиковалось, поэтому истории пока нет.',
+  'marketing.content.history.version': 'Версия {n}',
+  'marketing.content.history.againstPrevious': 'Сравнить с предыдущей версией',
+  'marketing.content.history.againstLive': 'Сравнить с действующей версией',
+  'marketing.content.history.publishedBy': 'Опубликовал(а) {who}, {when}',
+  'marketing.content.history.noChange': 'Различий нет.',
+  'marketing.content.history.restore': 'Вернуть эту версию в черновик',
+  'marketing.content.history.restoreHint':
+    'Это лишь заполнит черновик. Клиенты ничего не увидят, пока вы не опубликуете.',
+  'marketing.content.history.failed': 'Не удалось прочитать историю.',
+
+  'marketing.content.stats.clientReported':
+    'Присылается устройствами посетителей. Эти числа может накрутить кто угодно, посетитель не определяется, и в отчётах они не используются — считайте их подсказкой, а не измерением.',
+  'marketing.content.stats.loading': 'Загружаем счётчики…',
+  'marketing.content.stats.failed': 'Не удалось прочитать счётчики.',
+  'marketing.content.stats.window': 'Последние дни: {range}',
+  'marketing.content.stats.empty': 'Пока ничего не передано.',
+  'marketing.content.stats.version': 'Версия',
+  'marketing.content.stats.impressions': 'Показы',
+  'marketing.content.stats.clicks': 'Нажатия',
+  'marketing.content.stats.dismissals': 'Закрыто',
+  'marketing.content.stats.completions': 'Досмотрено',
+
+  'marketing.content.editor.new': 'Новый элемент: {kind}',
+  'marketing.content.editor.unsaved': 'Не сохранено',
+  'marketing.content.editor.close': 'Закрыть редактор',
+  'marketing.content.editor.stale':
+    'Пока вы редактировали, этот элемент изменил кто-то другой. Перезагрузите, чтобы увидеть его версию; несохранённые правки будут заменены.',
+  'marketing.content.editor.reload': 'Перезагрузить',
+  'marketing.content.editor.archivedNote':
+    'Элемент в архиве: его можно только читать, из списков он убран.',
+  'marketing.content.editor.tab.edit': 'Правка',
+  'marketing.content.editor.tab.preview': 'Предпросмотр',
+  'marketing.content.editor.tab.history': 'История',
+  'marketing.content.editor.tab.stats': 'Счётчики',
+  'marketing.content.editor.internalName': 'Внутреннее название (видит только команда)',
+  'marketing.content.editor.slug':
+    'Адрес (строчные буквы, цифры и дефисы; после сохранения не меняется)',
+  'marketing.content.editor.placement': 'Где показывается',
+  'marketing.content.editor.channels': 'Каналы',
+  'marketing.content.editor.channelsHint':
+    'Если ничего не выбрано, показывается на всех каналах, которые умеют показывать контент.',
+  'marketing.content.editor.noChannels':
+    'Пока ни один канал не умеет показывать контент (нужен веб-, мобильный или Telegram-канал).',
+  'marketing.content.editor.schedule': 'Расписание',
+  'marketing.content.editor.schedule.always': 'Всегда',
+  'marketing.content.editor.schedule.between': 'Между двумя датами',
+  'marketing.content.editor.schedule.from': 'С даты и без конца',
+  'marketing.content.editor.schedule.backwards': 'Конец не позже начала.',
+  'marketing.content.editor.schedule.hint':
+    'Целые дни в вашем часовом поясе. Показывается ли элемент, определяется при каждом открытии приложения клиентом, поэтому ночью ничего запускать не нужно.',
+  'marketing.content.editor.promotion': 'Привязать к акции (необязательно)',
+  'marketing.content.editor.promotionHint':
+    'Карточка показывается, только пока акция действует, и берёт даты акции, если своих нет. Платформа сама не добавляет на карточку промокод; если нужен, впишите его вручную.',
+  'marketing.content.editor.branch': 'Филиал (необязательно)',
+  'marketing.content.editor.branchNone': 'Не привязано к филиалу',
+  'marketing.content.editor.language': 'Язык',
+  'marketing.content.editor.needsTitle':
+    'Напишите заголовок на языке: {languages} — или сотрите то, что там набрано.',
+  'marketing.content.editor.problems': 'Что исправить перед публикацией',
+  'marketing.content.editor.previewUnsaved':
+    'Есть несохранённые правки. Предпросмотр показывает последний сохранённый черновик.',
+  'marketing.content.editor.save': 'Сохранить черновик',
+  'marketing.content.editor.publish': 'Опубликовать',
+  'marketing.content.editor.withdraw': 'Снять с показа',
+  'marketing.content.editor.archive': 'В архив',
+  'marketing.content.editor.discard': 'Отбросить черновик',
+  'marketing.content.editor.saved':
+    'Черновик сохранён. Клиенты не увидят его, пока вы не опубликуете.',
+  'marketing.content.editor.published': 'Опубликовано. Клиенты увидят это в течение минуты.',
+  'marketing.content.editor.done': 'Готово.',
+  'marketing.content.editor.restored':
+    'Версия помещена в черновик. Клиенты ничего не увидят, пока вы не опубликуете.',
+  'marketing.content.editor.failed': 'Что-то пошло не так. Попробуйте ещё раз.',
+  'marketing.content.editor.refused': 'Платформа не приняла это. Что исправить — ниже.',
+  'marketing.content.editor.confirm.publish.title': 'Опубликовать?',
+  'marketing.content.editor.confirm.publish.body':
+    'То, что вы видите сейчас, будет сохранено и опубликовано. Клиенты увидят это в течение минуты на заполненных языках.',
+  'marketing.content.editor.confirm.withdraw.title': 'Снять с показа?',
+  'marketing.content.editor.confirm.withdraw.body':
+    'Клиенты перестанут это видеть в течение минуты. Все версии сохраняются, опубликовать можно снова.',
+  'marketing.content.editor.confirm.archive.title': 'Отправить в архив?',
+  'marketing.content.editor.confirm.archive.body':
+    'Элемент уйдёт из списков, а если он показывается — сначала будет снят. Его адрес снова станет свободным.',
+  'marketing.content.editor.confirm.discard.title': 'Отбросить черновик?',
+  'marketing.content.editor.confirm.discard.body':
+    'Опубликованная версия останется как есть; неопубликованные изменения будут потеряны.',
 };

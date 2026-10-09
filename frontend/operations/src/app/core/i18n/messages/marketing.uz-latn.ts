@@ -1132,4 +1132,107 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.content.album.add': 'Surat qoʻshish',
   'marketing.content.album.caption': 'Shu tildagi izoh (ixtiyoriy)',
   'marketing.content.album.remove': 'Bu suratni olib tashlash',
+
+  'marketing.content.preview.channel': 'Kanal',
+  'marketing.content.preview.locale': 'Til',
+  'marketing.content.preview.day': 'Sana boʻyicha (ixtiyoriy)',
+  'marketing.content.preview.refresh': 'Yangilash',
+  'marketing.content.preview.noChannel':
+    'Hozircha hech bir kanal kontent koʻrsata olmaydi, shuning uchun koʻrib chiqadigan narsa yoʻq.',
+  'marketing.content.preview.failed': 'Koʻrib chiqishni tayyorlab boʻlmadi.',
+  'marketing.content.preview.loading': 'Koʻrib chiqish tayyorlanmoqda…',
+  'marketing.content.preview.absent':
+    'Bu element tanlangan kanal, til va sana uchun koʻrib chiqishda yoʻq: u oʻz oynasidan tashqarida, boshqa kanalda, amalda boʻlmagan aksiyaga bogʻlangan yoki rasmi hali tekshirilmoqda. Hozirgina oʻzgartirgan boʻlsangiz, avval qoralamani saqlang.',
+  'marketing.content.preview.dishes': 'Taomlar: {count}',
+  'marketing.content.preview.popupDelay': 'Oyna {seconds} soniyadan keyin',
+  'marketing.content.preview.empty': 'Bu kanal va sana uchun bosh ekranda hech narsa yoʻq.',
+
+  'marketing.content.history.loading': 'Versiyalar yuklanmoqda…',
+  'marketing.content.history.empty': 'Hali chop etilmagan, shuning uchun tarix yoʻq.',
+  'marketing.content.history.version': '{n}-versiya',
+  'marketing.content.history.againstPrevious': 'Oldingi versiya bilan solishtirish',
+  'marketing.content.history.againstLive': 'Amaldagi versiya bilan solishtirish',
+  'marketing.content.history.publishedBy': '{who} chop etgan, {when}',
+  'marketing.content.history.noChange': 'Farq yoʻq.',
+  'marketing.content.history.restore': 'Bu versiyani qoralamaga qaytarish',
+  'marketing.content.history.restoreHint':
+    'Bu faqat qoralamani toʻldiradi. Chop etmaguningizcha mijozlar hech narsa koʻrmaydi.',
+  'marketing.content.history.failed': 'Tarixni oʻqib boʻlmadi.',
+
+  'marketing.content.stats.clientReported':
+    'Tashrif buyuruvchilarning oʻz qurilmalaridan yuboriladi. Bu raqamlarni istalgan kishi oshirishi mumkin, tashrif buyuruvchi aniqlanmaydi va hisobotlarda ishlatilmaydi — ularni oʻlchov emas, ishora deb biling.',
+  'marketing.content.stats.loading': 'Hisoblagichlar yuklanmoqda…',
+  'marketing.content.stats.failed': 'Hisoblagichlarni oʻqib boʻlmadi.',
+  'marketing.content.stats.window': 'Soʻnggi kunlar: {range}',
+  'marketing.content.stats.empty': 'Hozircha hech narsa yuborilmagan.',
+  'marketing.content.stats.version': 'Versiya',
+  'marketing.content.stats.impressions': 'Koʻrsatilgan',
+  'marketing.content.stats.clicks': 'Bosishlar',
+  'marketing.content.stats.dismissals': 'Yopilgan',
+  'marketing.content.stats.completions': 'Oxirigacha koʻrilgan',
+
+  'marketing.content.editor.new': 'Yangi: {kind}',
+  'marketing.content.editor.unsaved': 'Saqlanmagan',
+  'marketing.content.editor.close': 'Tahrirlagichni yopish',
+  'marketing.content.editor.stale':
+    'Siz tahrirlayotganda bu elementni boshqa kishi oʻzgartirdi. Uning versiyasini koʻrish uchun qayta yuklang; saqlanmagan oʻzgarishlar almashtiriladi.',
+  'marketing.content.editor.reload': 'Qayta yuklash',
+  'marketing.content.editor.archivedNote':
+    'Element arxivda: faqat oʻqish mumkin, roʻyxatlardan olib tashlangan.',
+  'marketing.content.editor.tab.edit': 'Tahrirlash',
+  'marketing.content.editor.tab.preview': 'Koʻrib chiqish',
+  'marketing.content.editor.tab.history': 'Tarix',
+  'marketing.content.editor.tab.stats': 'Hisoblagichlar',
+  'marketing.content.editor.internalName': 'Ichki nom (faqat jamoangiz koʻradi)',
+  'marketing.content.editor.slug':
+    'Manzil (kichik harflar, raqamlar va defis; saqlangach oʻzgarmaydi)',
+  'marketing.content.editor.placement': 'Qayerda koʻrsatiladi',
+  'marketing.content.editor.channels': 'Kanallar',
+  'marketing.content.editor.channelsHint':
+    'Hech narsa tanlanmasa, kontent koʻrsata oladigan barcha kanallarda koʻrsatiladi.',
+  'marketing.content.editor.noChannels':
+    'Hozircha hech bir kanal kontent koʻrsata olmaydi (veb, ilova yoki Telegram kanali kerak).',
+  'marketing.content.editor.schedule': 'Jadval',
+  'marketing.content.editor.schedule.always': 'Doim',
+  'marketing.content.editor.schedule.between': 'Ikki sana orasida',
+  'marketing.content.editor.schedule.from': 'Sanadan boshlab, cheksiz',
+  'marketing.content.editor.schedule.backwards': 'Tugash boshlanishdan keyin emas.',
+  'marketing.content.editor.schedule.hint':
+    'Vaqt mintaqangizdagi butun kunlar. Koʻrsatilishi mijoz ilovani ochgan har safar aniqlanadi, shuning uchun yarim tunda hech narsa ishga tushmaydi.',
+  'marketing.content.editor.promotion': 'Aksiyaga bogʻlash (ixtiyoriy)',
+  'marketing.content.editor.promotionHint':
+    'Kartochka faqat aksiya amalda boʻlgandagina koʻrsatiladi va oʻz sanalari boʻlmasa, aksiyaning sanalarini oladi. Platforma kartochkaga promokodni oʻzi qoʻshmaydi; kerak boʻlsa, oʻzingiz yozing.',
+  'marketing.content.editor.branch': 'Filial (ixtiyoriy)',
+  'marketing.content.editor.branchNone': 'Muayyan filialga bogʻlanmagan',
+  'marketing.content.editor.language': 'Til',
+  'marketing.content.editor.needsTitle':
+    'Quyidagi tillarda sarlavha yozing yoki u yerdagi yozuvni oʻchiring: {languages}.',
+  'marketing.content.editor.problems': 'Chop etishdan oldin tuzatish kerak',
+  'marketing.content.editor.previewUnsaved':
+    'Saqlanmagan oʻzgarishlar bor. Koʻrib chiqish oxirgi saqlangan qoralamani koʻrsatadi.',
+  'marketing.content.editor.save': 'Qoralamani saqlash',
+  'marketing.content.editor.publish': 'Chop etish',
+  'marketing.content.editor.withdraw': 'Koʻrsatuvdan olib tashlash',
+  'marketing.content.editor.archive': 'Arxivlash',
+  'marketing.content.editor.discard': 'Qoralamani bekor qilish',
+  'marketing.content.editor.saved': 'Qoralama saqlandi. Chop etilmaguncha mijozlar koʻrmaydi.',
+  'marketing.content.editor.published': 'Chop etildi. Mijozlar bir daqiqa ichida koʻradi.',
+  'marketing.content.editor.done': 'Tayyor.',
+  'marketing.content.editor.restored':
+    'Versiya qoralamaga qoʻyildi. Chop etmaguningizcha mijozlar hech narsa koʻrmaydi.',
+  'marketing.content.editor.failed': 'Nimadir xato ketdi. Qayta urinib koʻring.',
+  'marketing.content.editor.refused':
+    'Platforma buni qabul qilmadi. Nimani tuzatish kerakligi quyida.',
+  'marketing.content.editor.confirm.publish.title': 'Chop etilsinmi?',
+  'marketing.content.editor.confirm.publish.body':
+    'Hozir koʻrib turganingiz saqlanadi va chop etiladi. Mijozlar uni bir daqiqa ichida, toʻldirilgan tillarda koʻradi.',
+  'marketing.content.editor.confirm.withdraw.title': 'Koʻrsatuvdan olib tashlansinmi?',
+  'marketing.content.editor.confirm.withdraw.body':
+    'Mijozlar uni bir daqiqa ichida koʻrmay qoʻyadi. Barcha versiyalar saqlanadi, uni qayta chop etish mumkin.',
+  'marketing.content.editor.confirm.archive.title': 'Arxivlansinmi?',
+  'marketing.content.editor.confirm.archive.body':
+    'U roʻyxatlardan chiqadi, koʻrsatilayotgan boʻlsa avval olib tashlanadi. Uning manzili yana boʻsh boʻladi.',
+  'marketing.content.editor.confirm.discard.title': 'Qoralama bekor qilinsinmi?',
+  'marketing.content.editor.confirm.discard.body':
+    'Chop etilgan versiya oʻzgarishsiz qoladi; chop etilmagan oʻzgarishlar yoʻqoladi.',
 };

@@ -104,4 +104,32 @@ describe('DateRangePicker', () => {
 
     expect(emitted).toEqual({ start: '2026-08-01', end: '2026-08-15' });
   });
+
+  it('shows the reporting presets by default, so every current host is unchanged', () => {
+    const fixture = render();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelectorAll(
+        '[data-testid^="q-date-range-picker-preset-"]',
+      ),
+    ).toHaveLength(4);
+  });
+
+  it('hides the presets for a host choosing future dates, and still takes the two dates (ADR 0157)', () => {
+    const fixture = render();
+    fixture.componentRef.setInput('showPresets', false);
+    fixture.detectChanges();
+    let emitted: DateRange | undefined;
+    fixture.componentInstance.rangeChange.subscribe((r) => (emitted = r));
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelectorAll('[data-testid^="q-date-range-picker-preset-"]')).toHaveLength(0);
+    const startField = host.querySelector<HTMLInputElement>(
+      '[data-testid="q-date-range-picker-start"]',
+    )!;
+    startField.value = '2026-11-01';
+    startField.dispatchEvent(new Event('input'));
+
+    expect(emitted).toEqual({ start: '2026-11-01', end: '2026-11-01' });
+  });
 });
