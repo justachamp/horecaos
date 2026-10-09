@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -14,6 +15,7 @@ import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -83,7 +85,9 @@ public class OrderBulkActionService {
     private final Clock clock;
     private final CourierAssignmentPort courierAssignment;
     private final boolean assignCourierEnabled;
+    private final @Nullable MeterRegistry meters;
 
+    /** A service that counts nothing: every test that predates the counters. */
     public OrderBulkActionService(
             JdbcOrderStore orders,
             JdbcBulkOperationStore bulkStore,
@@ -92,7 +96,21 @@ public class OrderBulkActionService {
             AuditRecorder audit,
             Clock clock,
             CourierAssignmentPort courierAssignment,
-            @Value("${horecaos.ordering.bulk.assign-courier.enabled:false}") boolean assignCourierEnabled) {
+            boolean assignCourierEnabled) {
+        this(orders, bulkStore, orderState, outcomes, audit, clock, courierAssignment, assignCourierEnabled, null);
+    }
+
+    @Autowired
+    public OrderBulkActionService(
+            JdbcOrderStore orders,
+            JdbcBulkOperationStore bulkStore,
+            OrderStateService orderState,
+            OrderOutcomeService outcomes,
+            AuditRecorder audit,
+            Clock clock,
+            CourierAssignmentPort courierAssignment,
+            @Value("${horecaos.ordering.bulk.assign-courier.enabled:false}") boolean assignCourierEnabled,
+            @Nullable MeterRegistry meters) {
         this.orders = orders;
         this.bulkStore = bulkStore;
         this.orderState = orderState;
@@ -101,6 +119,7 @@ public class OrderBulkActionService {
         this.clock = clock;
         this.courierAssignment = courierAssignment;
         this.assignCourierEnabled = assignCourierEnabled;
+        this.meters = meters;
     }
 
     public BulkActionResult apply(UUID tenantId, UUID brandId, UUID locationId, BulkActionCommand command) {
@@ -155,6 +174,9 @@ public class OrderBulkActionService {
             // re-proposing: the recorded outcome, not a fresh attempt, is what
             // makes a retry after a partial failure safe.
             JdbcBulkOperationStore.BulkOperationRow settled = existing.get();
+            if (settled.completedAt() == null) {
+                resumePending(tenantId, brandId, locationId, settled, command);
+            }
             return new BulkActionResult(
                     settled.id(),
                     settled.actionType(),
@@ -182,7 +204,8 @@ public class OrderBulkActionService {
         int applied = 0;
         int failed = 0;
         for (BulkOrderRef ref : command.orders()) {
-            BulkItemOutcome outcome = applyItem(tenantId, brandId, locationId, bulkOperationId, command, ref);
+            BulkItemOutcome outcome =
+                    counted(command, applyItem(tenantId, brandId, locationId, bulkOperationId, command, ref));
             results.add(outcome);
             if (outcome.itemStatus() == BulkItemStatus.APPLIED) {
                 applied++;
@@ -193,9 +216,83 @@ public class OrderBulkActionService {
 
         bulkStore.markCompleted(tenantId, bulkOperationId, clock.instant());
         recordSummaryAudit(tenantId, brandId, locationId, bulkOperationId, command, applied, failed, now);
+        recordRun(command, command.orders().size(), now);
 
         return new BulkActionResult(
                 bulkOperationId, command.actionType(), command.orders().size(), false, results);
+    }
+
+    /**
+     * A resubmission under the key of a bulk that never completed: the process died, or the request was cut off,
+     * between an item's work and its recorded result (ADR 0172 Decision 8). A recorded outcome is replayed
+     * untouched, as ever; an item still {@code PENDING} is driven again, and for an assignment it reaches the
+     * attempt the first run opened under the same derived key rather than opening a second, so a shipment that
+     * was committed before the crash is reported as the assignment it is. Only orders the first run staked a
+     * claim on are driven: a resubmission cannot add orders to a bulk that already exists.
+     */
+    private void resumePending(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            JdbcBulkOperationStore.BulkOperationRow settled,
+            BulkActionCommand command) {
+
+        Instant started = clock.instant();
+        List<BulkItemRow> recorded = bulkStore.items(tenantId, settled.id());
+        Set<UUID> pending = new java.util.HashSet<>();
+        for (BulkItemRow item : recorded) {
+            if (item.itemStatus() == BulkItemStatus.PENDING) {
+                pending.add(item.orderId());
+            }
+        }
+        if (pending.isEmpty()) {
+            // Every item was decided and only the completion mark was lost.
+            bulkStore.markCompleted(tenantId, settled.id(), started);
+            return;
+        }
+        for (BulkOrderRef ref : command.orders()) {
+            if (pending.contains(ref.orderId())) {
+                counted(command, applyItem(tenantId, brandId, locationId, settled.id(), command, ref));
+            }
+        }
+        List<BulkItemRow> after = bulkStore.items(tenantId, settled.id());
+        boolean stillPending = after.stream().anyMatch(item -> item.itemStatus() == BulkItemStatus.PENDING);
+        if (!stillPending) {
+            int applied = (int) after.stream()
+                    .filter(item -> item.itemStatus() == BulkItemStatus.APPLIED)
+                    .count();
+            bulkStore.markCompleted(tenantId, settled.id(), clock.instant());
+            recordSummaryAudit(
+                    tenantId, brandId, locationId, settled.id(), command, applied, after.size() - applied, started);
+            recordRun(command, command.orders().size(), started);
+        }
+    }
+
+    /** The size and duration of one bulk run, labelled by action only (ADR 0172: no courier, no tenant). */
+    private void recordRun(BulkActionCommand command, int size, Instant started) {
+        if (meters == null) {
+            return;
+        }
+        String action = command.actionType().name().toLowerCase(java.util.Locale.ROOT);
+        meters.summary("ordering.bulk.size", "action", action).record(size);
+        meters.timer("ordering.bulk.duration", "action", action)
+                .record(java.time.Duration.between(started, clock.instant()));
+    }
+
+    /** One item's fate as a counter by action and outcome; the outcome is the problem code or {@code applied}. */
+    private BulkItemOutcome counted(BulkActionCommand command, BulkItemOutcome outcome) {
+        if (meters != null) {
+            meters.counter(
+                            "ordering.bulk.item",
+                            "action",
+                            command.actionType().name().toLowerCase(java.util.Locale.ROOT),
+                            "outcome",
+                            outcome.itemStatus() == BulkItemStatus.APPLIED
+                                    ? "applied"
+                                    : String.valueOf(outcome.itemProblemCode()).toLowerCase(java.util.Locale.ROOT))
+                    .increment();
+        }
+        return outcome;
     }
 
     /**
@@ -223,7 +320,8 @@ public class OrderBulkActionService {
                     settled.resultingOrderVersion(),
                     settled.planId(),
                     settled.shipmentId(),
-                    settled.note());
+                    settled.note(),
+                    settled.ruleId());
         }
         if (existingItem.isEmpty()) {
             bulkStore.insertPendingItem(tenantId, bulkOperationId, ref.orderId());
@@ -367,7 +465,14 @@ public class OrderBulkActionService {
             if (!outcome.applied()) {
                 String problem = Objects.requireNonNull(outcome.problemCode());
                 bulkStore.markItemFailed(
-                        tenantId, bulkOperationId, order.orderId(), problem, now, outcome.planId(), note);
+                        tenantId,
+                        bulkOperationId,
+                        order.orderId(),
+                        problem,
+                        now,
+                        outcome.planId(),
+                        note,
+                        outcome.ruleId());
                 recordItemAudit(
                         tenantId,
                         order.brandId(),
@@ -380,7 +485,14 @@ public class OrderBulkActionService {
                         null,
                         now);
                 return new BulkItemOutcome(
-                        order.orderId(), BulkItemStatus.FAILED, problem, null, outcome.planId(), null, note);
+                        order.orderId(),
+                        BulkItemStatus.FAILED,
+                        problem,
+                        null,
+                        outcome.planId(),
+                        null,
+                        note,
+                        outcome.ruleId());
             }
             // An assignment moves the plan and creates a shipment; it does not move the order's own
             // version, so an applied item records the version the order already had.
@@ -392,7 +504,8 @@ public class OrderBulkActionService {
                     now,
                     outcome.planId(),
                     outcome.shipmentId(),
-                    note);
+                    note,
+                    outcome.ruleId());
             recordItemAudit(
                     tenantId,
                     order.brandId(),
@@ -411,7 +524,8 @@ public class OrderBulkActionService {
                     order.version(),
                     outcome.planId(),
                     outcome.shipmentId(),
-                    note);
+                    note,
+                    outcome.ruleId());
         } catch (RuntimeException unexpected) {
             log.error(
                     "Bulk assignment of {} in operation {} failed unexpectedly",
@@ -468,7 +582,8 @@ public class OrderBulkActionService {
                         row.resultingOrderVersion(),
                         row.planId(),
                         row.shipmentId(),
-                        row.note()))
+                        row.note(),
+                        row.ruleId()))
                 .toList();
     }
 
@@ -624,6 +739,8 @@ public class OrderBulkActionService {
      * @param note       an applied item's non-fatal notes ({@code OVERRODE_DISPATCH_RULE},
      *                   {@code OUTSIDE_DISTANCE_BAND}) or a {@code COURIER_NOT_ELIGIBLE}
      *                   refusal's named reasons, comma separated
+     * @param ruleId     the dispatch rule the plan's stored decision matched (ADR 0172 Decision 6), an id and
+     *                   never the rule's content; null for ADVANCE and CANCEL
      */
     public record BulkItemOutcome(
             UUID orderId,
@@ -632,7 +749,21 @@ public class OrderBulkActionService {
             @Nullable Integer resultingOrderVersion,
             @Nullable UUID planId,
             @Nullable UUID shipmentId,
-            @Nullable String note) {}
+            @Nullable String note,
+            @Nullable String ruleId) {
+
+        /** An item with no rule to name: ADVANCE, CANCEL, and an assignment refused before its plan was read. */
+        public BulkItemOutcome(
+                UUID orderId,
+                BulkItemStatus itemStatus,
+                @Nullable String itemProblemCode,
+                @Nullable Integer resultingOrderVersion,
+                @Nullable UUID planId,
+                @Nullable UUID shipmentId,
+                @Nullable String note) {
+            this(orderId, itemStatus, itemProblemCode, resultingOrderVersion, planId, shipmentId, note, null);
+        }
+    }
 
     public record BulkActionResult(
             UUID bulkOperationId,

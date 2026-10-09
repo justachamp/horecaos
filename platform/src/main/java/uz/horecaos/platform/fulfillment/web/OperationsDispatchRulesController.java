@@ -155,7 +155,7 @@ public class OperationsDispatchRulesController {
         Editor editor = rules.view(scope);
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, AggregateVersion.toETag(editor.versionAtScope()))
-                .body(RulesResponse.of(editor, rules.groupingAllowed()));
+                .body(RulesResponse.of(editor, rules.groupingAllowed(), rules.runPayModeDecided(scope)));
     }
 
     @PutMapping("/dispatch-rules")
@@ -168,7 +168,8 @@ public class OperationsDispatchRulesController {
                     + "company's active delivery installation, a zone that is not a delivery zone, or a source "
                     + "outside the closed set; when a rule can never match because one above it takes every order "
                     + "it would; when its dispatch start leaves a partner no time; when it enables grouping "
-                    + "(not available until the pay treatment for a run is decided) or asks for a hold. "
+                    + "(RUN_PAY_MODE_UNDECIDED until the courier pay for a run is decided in the courier policy; "
+                    + "GROUPING_WAIT_NOT_AVAILABLE for any wait above zero) or asks for a hold. "
                     + "Requires If-Match carrying the version the GET at this same scope returned, or the write "
                     + "is refused with STALE_VERSION naming both versions. The version this replaces is never "
                     + "touched: a plan keeps the document version it was created under.")
@@ -185,7 +186,7 @@ public class OperationsDispatchRulesController {
         Editor published = rules.author(scope, body.toDocument(), expectedVersion, actor(), body.reason());
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, AggregateVersion.toETag(published.versionAtScope()))
-                .body(RulesResponse.of(published, rules.groupingAllowed()));
+                .body(RulesResponse.of(published, rules.groupingAllowed(), rules.runPayModeDecided(scope)));
     }
 
     @GetMapping("/dispatch-rules/options")
@@ -336,6 +337,8 @@ public class OperationsDispatchRulesController {
      * @param versionAtScope the latest version authored at exactly the requested scope (0 when it
      *                       inherits): send it back as If-Match
      * @param groupingAllowed whether this deployment lets a rule enable grouping
+     * @param runPayDecided  whether the courier pay for a run of several orders is decided at this scope (ADR 0170):
+     *                       a rule that groups is refused with {@code RUN_PAY_MODE_UNDECIDED} while it is not
      */
     public record RulesResponse(
             int schema,
@@ -347,9 +350,10 @@ public class OperationsDispatchRulesController {
             int policyVersion,
             int versionAtScope,
             List<Level> levels,
-            boolean groupingAllowed) {
+            boolean groupingAllowed,
+            boolean runPayDecided) {
 
-        static RulesResponse of(Editor editor, boolean groupingAllowed) {
+        static RulesResponse of(Editor editor, boolean groupingAllowed, boolean runPayDecided) {
             DispatchRulesDocument document = editor.document();
             return new RulesResponse(
                     document.schema(),
@@ -361,7 +365,8 @@ public class OperationsDispatchRulesController {
                     editor.policyVersion(),
                     editor.versionAtScope(),
                     editor.levels(),
-                    groupingAllowed);
+                    groupingAllowed,
+                    runPayDecided);
         }
     }
 

@@ -8,6 +8,7 @@ import {
 } from '@angular/router';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { ConsoleProfile } from './console-profile';
 import { CurrentTenant } from './current-tenant';
 import { ScopeGrant } from './session-context';
 import { capabilityGuard, navItemForUrl } from './capability.guard';
@@ -113,6 +114,42 @@ describe('capabilityGuard', () => {
       expect(String(result)).toBe(
         '/access-denied?capability=CUSTOMER_READ&section=shell.nav.customers',
       );
+    });
+  });
+
+  describe('a deliveries console profile (ADR 0164)', () => {
+    /** The profile puts the kitchen, marketing and the inbox away and opens on /deliveries. */
+    const deliveriesProfile = {
+      variant: signal<'STANDARD' | 'DELIVERIES'>('DELIVERIES'),
+      putAway: signal(['/kitchen', '/marketing', '/inbox']),
+      hiddenSections: signal(['/kitchen', '/marketing', '/inbox']),
+      ensureLoaded: () => Promise.resolve(),
+    };
+
+    beforeEach(() => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          provideRouter([]),
+          { provide: CurrentTenant, useValue: tenant },
+          { provide: ConsoleProfile, useValue: deliveriesProfile },
+        ],
+      });
+    });
+
+    it('only puts a section away: a holder who types its URL is still let in', async () => {
+      tenant.scopes.set([grant(['KITCHEN_TICKET_READ'])]);
+
+      expect(await run('/kitchen/buffer')).toBe(true);
+    });
+
+    it('and grants nothing: a section put away stays refused to someone without its capability', async () => {
+      tenant.scopes.set([grant(['ORDER_READ'])]);
+
+      const result = await run('/kitchen/buffer');
+
+      expect(result).toBeInstanceOf(UrlTree);
+      expect(String(result)).toContain('capability=KITCHEN_TICKET_READ');
     });
   });
 

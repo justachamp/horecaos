@@ -133,8 +133,16 @@ export class HeadcountCard {
     void this.load(this.scope(), this.weekday());
   }
 
+  /**
+   * The wall-clock time of an operating hour. The plan counts hours from the start of the tenant's business day,
+   * so with a day that starts at 09:00 operating hour 0 is 09:00 and operating hour 17 is 02:00 the next morning;
+   * printing the bare index would put the busiest evening hour in the afternoon.
+   */
   protected hourLabel(hour: number): string {
-    return `${String(hour).padStart(2, '0')}:00`;
+    const start = this.plan()?.businessDayStartMinutes ?? 0;
+    const minutes = (start + hour * 60) % (24 * 60);
+    const clock = `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+    return clock;
   }
 
   protected dateList(plan: HeadcountPlan): string {

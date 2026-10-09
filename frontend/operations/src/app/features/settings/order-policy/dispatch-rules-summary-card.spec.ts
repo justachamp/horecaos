@@ -19,6 +19,7 @@ const BUILT_IN: DispatchRulesView = {
   versionAtScope: 0,
   levels: [],
   groupingAllowed: false,
+  runPayDecided: false,
 };
 
 const PUBLISHED: DispatchRulesView = {

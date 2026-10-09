@@ -724,6 +724,11 @@ export const operationsPaths = {
     return `${OPERATIONS}/tenants/${encodeURIComponent(tenantId)}/kitchen-productivity`;
   },
 
+  /** ADR 0168: the paid-hold policy, scope-resolved like the payment window. */
+  kitchenPaidHold(tenantId: string): string {
+    return `${OPERATIONS}/tenants/${encodeURIComponent(tenantId)}/kitchen-paid-hold`;
+  },
+
   /**
    * One throughput ceiling — `PUT` corrects it, `DELETE` removes it (wave
    * T02, gap map row 2.6). Both take `expectedVersion` in the body, the same

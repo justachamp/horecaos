@@ -2016,4 +2016,34 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Смена аннулирована',
       'uz-Latn': 'Smena bekor qilindi',
     },
+    'courier.run-pay.changed': {
+      en: 'The pay for a run of several orders was changed',
+      ru: 'Оплата за рейс из нескольких заказов изменена',
+      'uz-Latn': 'Bir necha buyurtmali reys uchun toʻlov oʻzgartirildi',
+    },
+    'fulfillment.grouping.dropoff-revealed': {
+      en: 'A drop-off was read to group orders into a run',
+      ru: 'Адрес доставки прочитан для объединения заказов в рейс',
+      'uz-Latn': 'Buyurtmalarni reysga birlashtirish uchun yetkazish manzili oʻqildi',
+    },
+    'kitchen.paid_hold.published': {
+      en: 'The hold-for-payment policy was published',
+      ru: 'Опубликована политика удержания до оплаты',
+      'uz-Latn': 'Toʻlovgacha ushlab turish siyosati eʻlon qilindi',
+    },
+    'kitchen.station_productivity.published': {
+      en: 'The cook pace per station was published',
+      ru: 'Опубликована скорость поваров по станциям',
+      'uz-Latn': 'Stansiyalar boʻyicha oshpaz tezligi eʻlon qilindi',
+    },
+    'kitchen.ticket.payment_hold.override': {
+      en: 'A ticket held for payment was fired anyway',
+      ru: 'Тикет, удержанный до оплаты, всё равно запущен',
+      'uz-Latn': 'Toʻlovgacha ushlab turilgan tiket baribir ishga tushirildi',
+    },
+    'ordering.order.payment-window-lapsed': {
+      en: 'An unpaid order ended when its payment window ran out',
+      ru: 'Неоплаченный заказ завершён по истечении окна оплаты',
+      'uz-Latn': 'Toʻlanmagan buyurtma toʻlov oynasi tugagach yakunlandi',
+    },
   };

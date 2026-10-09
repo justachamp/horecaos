@@ -243,7 +243,7 @@ export const kitchenRu: AreaMessages<typeof kitchenEn> = {
   'kitchen.headcount.column.date': 'Дата',
   'kitchen.headcount.column.portions': 'Порции',
   'kitchen.headcount.hoursNote':
-    'Часы отсчитываются от начала рабочего дня. Маленькое число — поваров на верхней границе диапазона прогноза.',
+    'Время — по часам, от начала рабочего дня (день, начинающийся в 09:00, идёт за полночь). Маленькое число — поваров на верхней границе диапазона прогноза.',
   'kitchen.headcount.cell.detail':
     'ожидается порций: {portions} ({low}–{high}); поваров на верхней границе диапазона: {bandCooks}',
   'kitchen.headcount.cell.noPolicy': 'нет нормы',
@@ -338,4 +338,29 @@ export const kitchenRu: AreaMessages<typeof kitchenEn> = {
   'kitchen.stopList.why.cutoff': 'Остаток не выше порога канала',
   'kitchen.stopList.why.off': 'Стопы отключены',
   'kitchen.stopList.why.close': 'Закрыть',
+  'kitchen.paidHold.title': 'Удержание до оплаты',
+  'kitchen.paidHold.lead':
+    'Ждёт ли тикет в буфере денег, которые нужны его заказу и ещё не поступили. Тот, у кого есть право, всё равно может запустить удержанный тикет, указав причину.',
+  'kitchen.paidHold.field': 'Политика удержания',
+  'kitchen.paidHold.summary': '{mode} · «застрял» через {minutes} мин',
+  'kitchen.paidHold.trial':
+    'Пробный режим: кухня считает тикеты, которые удержала бы, и не удерживает ни одного.',
+  'kitchen.paidHold.mode': 'Режим',
+  'kitchen.paidHold.mode.SHADOW': 'Пробный (только считать)',
+  'kitchen.paidHold.mode.HOLD_UNTIL_PAID': 'Удерживать до оплаты',
+  'kitchen.paidHold.mode.OFF': 'Выключено',
+  'kitchen.paidHold.overdue': 'Считать застрявшим через (минут после времени запуска)',
+  'kitchen.paidHold.scope': 'Действует для',
+  'kitchen.paidHold.scope.location': 'Этого филиала',
+  'kitchen.paidHold.scope.brand': 'Этого бренда',
+  'kitchen.paidHold.scope.tenant': 'Всей компании',
+  'kitchen.paidHold.replaces': 'Политика на этом уровне целиком заменяет политику уровнем выше.',
+  'kitchen.paidHold.reason': 'Почему вы это меняете?',
+  'kitchen.paidHold.invalid': 'Минуты — целое число от 1 до 1440, причина обязательна.',
+  'kitchen.paidHold.stale':
+    'Кто-то изменил эту политику, пока вы её редактировали. Отмените и откройте заново.',
+  'kitchen.paidHold.save': 'Сохранить',
+  'kitchen.paidHold.saving': 'Сохраняем…',
+  'kitchen.paidHold.cancel': 'Отмена',
+  'kitchen.paidHold.saved': 'Политика удержания сохранена',
 };

@@ -214,6 +214,65 @@ describe('DispatchSimulator (ADR 0142 Decision 4: the simulator is the evaluator
     expect(control(host, 'sim-note-NO_ZONE_EVIDENCE').textContent).toContain('no zone');
   });
 
+  it('shows what the grouping bias measured for a recent plan and the pay each offer would carry (ADR 0170)', async () => {
+    const simulate = vi.fn().mockResolvedValue({
+      ...RESULT,
+      notes: ['GROUPING_CEILING_BELOW_RUN'],
+      grouping: {
+        candidates: 3,
+        measured: [
+          {
+            courierId: 'aaaaaaaa-1111-2222-3333-444444444444',
+            activeAssignments: 1,
+            concurrencyCeiling: 3,
+            groupableWithMetres: 280,
+            payBasis: 'RUN_INCREMENT',
+          },
+          {
+            courierId: 'bbbbbbbb-1111-2222-3333-444444444444',
+            activeAssignments: 0,
+            concurrencyCeiling: 3,
+            groupableWithMetres: null,
+            payBasis: 'DIRECT',
+          },
+        ],
+      },
+    });
+    const { fixture, host } = await render({}, simulate);
+
+    control<HTMLButtonElement>(host, 'sim-run').click();
+    await settle(fixture);
+
+    const grouping = control(host, 'sim-grouping').textContent ?? '';
+    expect(grouping).toContain('Couriers measured for grouping');
+    const groupable = control(
+      host,
+      'sim-grouping-aaaaaaaa-1111-2222-3333-444444444444',
+    ).textContent;
+    expect(groupable).toContain('aaaaaaaa');
+    expect(groupable).toContain('carrying 1 of 3');
+    expect(groupable).toContain('280 m');
+    expect(groupable).toContain('paid on the extra distance');
+    const other = control(host, 'sim-grouping-bbbbbbbb-1111-2222-3333-444444444444').textContent;
+    expect(other).toContain('not groupable');
+    expect(grouping).not.toContain('aaaaaaaa-1111');
+    expect(control(host, 'sim-note-GROUPING_CEILING_BELOW_RUN').textContent).toContain(
+      'No courier type',
+    );
+  });
+
+  it('says no courier was measured when the fleet is empty', async () => {
+    const simulate = vi
+      .fn()
+      .mockResolvedValue({ ...RESULT, grouping: { candidates: 0, measured: [] } });
+    const { fixture, host } = await render({}, simulate);
+
+    control<HTMLButtonElement>(host, 'sim-run').click();
+    await settle(fixture);
+
+    expect(control(host, 'sim-grouping-empty').textContent).toContain('No courier is on shift');
+  });
+
   it('reports the default when no rule matched', async () => {
     const simulate = vi.fn().mockResolvedValue({
       ...RESULT,

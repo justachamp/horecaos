@@ -37,6 +37,14 @@ export class OrderBulkAssignDialog {
   readonly couriers = input.required<readonly RosterEntryResponse[]>();
   readonly count = input.required<number>();
   readonly busy = input(false);
+  /**
+   * «Повторить проблемные» for an assignment (ADR 0172 exit criterion): the same dialog, opened for the orders
+   * that were refused, so a different courier can be picked for them. Sending the same courier again would
+   * fail the same way.
+   */
+  readonly retry = input(false);
+  /** The courier the failed orders were sent to, shown as already tried. */
+  readonly triedCourierId = input<string | null>(null);
 
   readonly confirmed = output<BulkAssignSubmission>();
   readonly dismissed = output<void>();

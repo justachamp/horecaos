@@ -1,0 +1,42 @@
+.hold {
+  margin: 0 0 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.hold__title {
+  margin: 0 0 4px;
+}
+
+.hold__lead,
+.hold__hint {
+  color: var(--q-ink-subtle);
+  margin: 0 0 8px;
+}
+
+.hold__error {
+  color: var(--q-danger, #b3261e);
+  margin: 8px 0;
+}
+
+.hold__saved {
+  color: var(--q-ink-subtle);
+  margin: 8px 0 0;
+}
+
+.hold__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hold__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hold__actions {
+  display: flex;
+  gap: 8px;
+}

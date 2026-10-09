@@ -10,6 +10,7 @@ import { zonedTimeToInstant } from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
 import { LocationView, LocationsApi } from '../settings/locations/locations-api';
 import { BoardResponse, KitchenApi, TicketResponse } from './kitchen-api';
+import { PaidHoldApi, PaidHoldPolicy } from './paid-hold-api';
 import { BufferPage } from './buffer-page';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
@@ -71,6 +72,24 @@ function held(overrides: Partial<TicketResponse>): TicketResponse {
   };
 }
 
+/** Nothing published anywhere: the platform's own trial mode. */
+const TRIAL_POLICY: PaidHoldPolicy = {
+  schema: 1,
+  mode: 'SHADOW',
+  overdueAfterMinutes: 10,
+  isDefault: true,
+  winningScope: null,
+  policyId: null,
+  policyVersion: 0,
+  versionAtScope: 0,
+  levels: [
+    { scopeType: 'LOCATION', authored: false },
+    { scopeType: 'BRAND', authored: false },
+    { scopeType: 'TENANT', authored: false },
+    { scopeType: 'PLATFORM', authored: false },
+  ],
+};
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -81,7 +100,11 @@ describe('BufferPage', () => {
 
   async function render(
     kitchenApi: Partial<KitchenApi>,
-    options: { locationsApi?: Partial<LocationsApi>; capabilities?: readonly string[] } = {},
+    options: {
+      locationsApi?: Partial<LocationsApi>;
+      capabilities?: readonly string[];
+      paidHoldApi?: Partial<PaidHoldApi>;
+    } = {},
   ): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [BufferPage],
@@ -96,6 +119,10 @@ describe('BufferPage', () => {
         },
         { provide: KitchenApi, useValue: kitchenApi },
         { provide: LocationsApi, useValue: options.locationsApi ?? defaultLocationsApi() },
+        {
+          provide: PaidHoldApi,
+          useValue: options.paidHoldApi ?? { policy: () => Promise.resolve(TRIAL_POLICY) },
+        },
         {
           provide: SessionCapabilities,
           useValue: {
@@ -378,6 +405,36 @@ describe('BufferPage', () => {
     fixture.detectChanges();
 
     expect(host.querySelector('[data-testid="buffer-edit-error"]')).not.toBeNull();
+  });
+
+  describe('the hold policy card (ADR 0168 Decision 8)', () => {
+    const cardOf = (): HTMLElement | null =>
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="paid-hold"]');
+
+    it('shows what the branch is held under beside the buffer, in trial until someone publishes', async () => {
+      await render({
+        board: () => Promise.resolve({ tickets: [], warnings: [] } satisfies BoardResponse),
+      });
+
+      expect(cardOf()).not.toBeNull();
+      expect(cardOf()?.textContent).toContain('Trial (count only)');
+    });
+
+    it('offers the edit only to a person who holds kitchen.paid-hold.manage', async () => {
+      await render(
+        { board: () => Promise.resolve({ tickets: [], warnings: [] } satisfies BoardResponse) },
+        { capabilities: [] },
+      );
+      expect(cardOf()?.querySelector('[data-testid="paid-hold-readonly"]')).not.toBeNull();
+      expect(cardOf()?.querySelector('q-inherited-field')).toBeNull();
+
+      TestBed.resetTestingModule();
+      await render(
+        { board: () => Promise.resolve({ tickets: [], warnings: [] } satisfies BoardResponse) },
+        { capabilities: ['KITCHEN_PAID_HOLD_MANAGE'] },
+      );
+      expect(cardOf()?.querySelector('q-inherited-field')).not.toBeNull();
+    });
   });
 
   it('shows the denied state when the location grant is missing', async () => {

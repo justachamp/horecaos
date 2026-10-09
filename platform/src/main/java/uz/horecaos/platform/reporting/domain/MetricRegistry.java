@@ -489,9 +489,10 @@ public final class MetricRegistry {
                     "Items of tickets that fired, except a line struck before any cook started it. Work a "
                             + "cook began keeps its portions even if the line was then struck or its ticket "
                             + "voided: the labour was spent.",
-                    "Tickets voided before they fired (they have no fire instant), lines struck before any "
-                            + "cook started them (an amendment's replaced line: the replacement counts once), "
-                            + "and the pass (EXPO), which cooks nothing.",
+                    "Tickets voided before they fired (they have no fire instant) and lines struck before any "
+                            + "cook started them (an amendment's replaced line: the replacement counts once). "
+                            + "The pass (EXPO) keeps its rows, since the fact records what each station fired; "
+                            + "the headcount plan is what never plans it, because it cooks nothing.",
                     "Not applicable: a refund is a payment event and moves no portion.",
                     "Computed at the instant a ticket fired, not the order's creation: a pre-order placed at "
                             + "11:00 for 20:00 is the 19:00 hour here and the 11:00 hour in fact_order. A "

@@ -611,6 +611,10 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   'orders.queue.bulk.assignDialog.reasonInvalid':
     '1 dan 48 gacha katta lotin harflari, raqamlar yoki pastki chiziq',
   'orders.queue.bulk.assignDialog.confirm': 'Tayinlash',
+  'orders.queue.bulk.assignDialog.retryLead':
+    '{count} ta buyurtmani tayinlab boʻlmadi. Ular uchun kuryer tanlang.',
+  'orders.queue.bulk.assignDialog.tried': 'sinab koʻrilgan',
+  'orders.queue.bulk.result.rule': '{rule} qoidasi',
   'orders.queue.bulk.problem.NOT_A_DELIVERY_ORDER': 'Bu yetkazib berish buyurtmasi emas',
   'orders.queue.bulk.problem.NO_DELIVERY_PLAN': 'Yetkazib berish hali rejalashtirilmagan',
   'orders.queue.bulk.problem.PLAN_NOT_OPEN': 'Yetkazib berish allaqachon tugagan',

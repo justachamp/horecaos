@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 
 import { TPipe } from '../../core/i18n/t.pipe';
-import { BulkActionResponse } from './order-bulk-actions-api';
+import { BulkActionItemResponse, BulkActionResponse } from './order-bulk-actions-api';
 
 /**
  * The outcome of a bulk action (orders.md §2.10): "197 applied · 3 problems",
@@ -40,6 +40,13 @@ export class OrderQueueBulkResult {
 
   readonly retryRequested = output<void>();
   readonly dismissRequested = output<void>();
+
+  /** The rule an applied assignment put a courier ahead of: named only when the note says it was overridden. */
+  protected overrodeRuleId(item: BulkActionItemResponse): string | null {
+    return item.ruleId && (item.note ?? '').split(',').includes('OVERRODE_DISPATCH_RULE')
+      ? item.ruleId
+      : null;
+  }
 
   protected bulkResultItemLabel(orderId: string): string {
     return this.itemLabel()(orderId);

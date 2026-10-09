@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalAction;
 import uz.horecaos.platform.audit.api.ApprovalOutcome;
@@ -16,8 +17,11 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.courier.domain.CourierCompensationPolicy;
 import uz.horecaos.platform.courier.domain.RunPayMode;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.tenancy.api.PolicyAuthor;
+import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -39,13 +43,64 @@ public class CourierRunPayChangeService {
 
     private final ApprovalService approvals;
     private final AuditRecorder audit;
+    private final PolicyAuthor policyAuthor;
     private final Clock clock;
 
-    public CourierRunPayChangeService(ApprovalService approvals, AuditRecorder audit, Clock clock) {
+    public CourierRunPayChangeService(
+            ApprovalService approvals, AuditRecorder audit, PolicyAuthor policyAuthor, Clock clock) {
         this.approvals = approvals;
         this.audit = audit;
+        this.policyAuthor = policyAuthor;
         this.clock = clock;
     }
+
+    /**
+     * Publishes the next version of the {@code courier.compensation} document, or says that a second signature
+     * has to come first.
+     *
+     * <p>One transaction, because ADR 0050 asks the approval to be consumed in the transaction that acts on it: an
+     * approval spent in one transaction and a document published in another is an approval that can be spent
+     * without the effect, or the effect had without the approval. The gate, the publication and the audit fact of
+     * what changed commit together or not at all. A move that needs no gate (every other edit, and a move away from
+     * the increment) goes straight through.
+     *
+     * @param current the document in force at {@code scope}, whose mode the move is judged against
+     */
+    @Transactional
+    public Published publish(
+            ResourceScope scope,
+            ResolvedPolicy<CourierCompensationPolicy> current,
+            CourierCompensationPolicy document,
+            @Nullable Boolean acknowledged,
+            ActorRef actor,
+            String reason) {
+
+        RunPayMode before = current.document().runPayMode();
+        Decision change = gate(scope, before, document.runPayMode(), acknowledged, actor, reason);
+        if (change.pending()) {
+            return new Published(null, change.approvalRequestId());
+        }
+        ResolvedPolicy<CourierCompensationPolicy> published =
+                policyAuthor.author(CourierPolicies.COMPENSATION, scope, document, actor, reason);
+        record(
+                scope,
+                before,
+                document.runPayMode(),
+                change,
+                actor,
+                reason,
+                published.policyId(),
+                published.policyVersion());
+        return new Published(published, null);
+    }
+
+    /**
+     * @param document        the version just published, or null when the change is waiting for a signature
+     * @param approvalRequest the request that is awaited, when {@code document} is null
+     */
+    public record Published(
+            @Nullable ResolvedPolicy<CourierCompensationPolicy> document,
+            @Nullable UUID approvalRequest) {}
 
     /**
      * Decides whether the publication may go ahead.
@@ -56,7 +111,7 @@ public class CourierRunPayChangeService {
      *                     the mode is moving to {@code FIRST_FULL_THEN_INCREMENT}
      * @throws ApiException {@code VALIDATION_FAILED} when the acknowledgement is missing
      */
-    public Decision gate(
+    Decision gate(
             ResourceScope scope,
             @Nullable RunPayMode current,
             @Nullable RunPayMode requested,
@@ -101,7 +156,7 @@ public class CourierRunPayChangeService {
      * Records what changed, once the document is published: the mode before and after and the
      * acknowledgement, naming the approval that covered it when there was one.
      */
-    public void record(
+    void record(
             ResourceScope scope,
             @Nullable RunPayMode before,
             @Nullable RunPayMode after,
@@ -127,6 +182,7 @@ public class CourierRunPayChangeService {
                 .targetVersion((long) policyVersion)
                 .because(reason)
                 .changed(ChangeDocuments.diff(was, now))
+                .correlatedBy("courier-run-pay:" + scope.tenantId() + ":" + policyVersion)
                 .occurredAt(clock.instant());
         if (decision.approvalRequestId() != null) {
             fact.underApproval(decision.approvalRequestId());
@@ -142,6 +198,7 @@ public class CourierRunPayChangeService {
                         scope.locationId(),
                         current == null ? "UNDECIDED" : current.name(),
                         requested == null ? "UNDECIDED" : requested.name()))
+                .excluding()
                 .hash();
     }
 

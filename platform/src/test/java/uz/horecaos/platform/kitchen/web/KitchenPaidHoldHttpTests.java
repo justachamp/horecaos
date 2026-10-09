@@ -26,6 +26,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -34,10 +35,19 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
+import uz.horecaos.platform.kitchen.application.KitchenPaidHoldPlatformPublisher;
+import uz.horecaos.platform.kitchen.application.KitchenPaidHoldPolicies;
+import uz.horecaos.platform.kitchen.application.KitchenReleaseWorker;
+import uz.horecaos.platform.ordering.api.OrderAmendmentApplied;
+import uz.horecaos.platform.ordering.api.OrderCancelled;
+import uz.horecaos.platform.ordering.api.PaymentCaptured;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.api.TenantId;
 
 /**
  * ADR 0168 through the real HTTP stack: the paid-hold policy endpoints (their capabilities, {@code If-Match},
@@ -106,6 +116,22 @@ class KitchenPaidHoldHttpTests {
     @SuppressWarnings("NullAway")
     private CacheManager cacheManager;
 
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private KitchenPaidHoldPolicies holdPolicies;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private ApplicationEventPublisher events;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private PlatformTransactionManager transactions;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private KitchenReleaseWorker releaseWorker;
+
     private UUID channelId;
     private UUID publicationId;
     private int sequence;
@@ -117,6 +143,9 @@ class KitchenPaidHoldHttpTests {
             policyCurrent.clear();
         }
         jdbc.sql("TRUNCATE TABLE platform.idempotency_records").update();
+        // The platform's own document belongs to no tenant, so truncating the tenants leaves it standing.
+        jdbc.sql("TRUNCATE TABLE tenant.policy_current, tenant.policies CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE kitchen.ticket_events, kitchen.ticket_items, kitchen.tickets CASCADE")
                 .update();
         jdbc.sql("TRUNCATE TABLE ordering.orders, ordering.carts CASCADE").update();
@@ -235,6 +264,187 @@ class KitchenPaidHoldHttpTests {
         assertThat(write(policyPath(BRAND, LOCATION), MANAGER, "c5", "0", body).status())
                 .as("a location manager at their own location")
                 .isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("the owner publishes the platform document by an operator-run start-up: every branch inherits it,"
+            + " a branch's own OFF still wins, it is audited with its reason, and a repeat publishes nothing")
+    void thePlatformDocumentIsPublishedByAnOperatorRunStartUp() throws Exception {
+        long auditedBefore = audited("kitchen.paid_hold.published");
+        Response branchOff = write(policyPath(BRAND, LOCATION), MANAGER, "plat0", "0", """
+                {"mode":"OFF","reason":"regulars on trust"}""");
+        assertThat(branchOff.status()).isEqualTo(200);
+
+        KitchenPaidHoldPlatformPublisher publisher = new KitchenPaidHoldPlatformPublisher(
+                holdPolicies, "HOLD_UNTIL_PAID", 15, "a fortnight of shadow on the pilot tenants read clean");
+        assertThat(publisher.publish()).isEqualTo(KitchenPaidHoldPlatformPublisher.Outcome.PUBLISHED);
+
+        JsonNode tenant = read(policyPath(null, null), OWNER);
+        assertThat(tenant.path("mode").asText()).isEqualTo("HOLD_UNTIL_PAID");
+        assertThat(tenant.path("overdueAfterMinutes").asInt()).isEqualTo(15);
+        assertThat(tenant.path("winningScope").asText()).isEqualTo("PLATFORM");
+        assertThat(tenant.path("isDefault").asBoolean()).isFalse();
+        assertThat(read(policyPath(BRAND, LOCATION), MANAGER).path("mode").asText())
+                .as("a location that stated OFF keeps it whatever the platform value becomes")
+                .isEqualTo("OFF");
+
+        assertThat(audited("kitchen.paid_hold.published") - auditedBefore)
+                .as("the branch's own publication and the platform's")
+                .isEqualTo(2);
+        assertThat(jdbc.sql("""
+                                SELECT reason FROM audit.audit_events
+                                 WHERE action_code = 'kitchen.paid_hold.published' AND actor_subject = :actor
+                                """)
+                        .param("actor", KitchenPaidHoldPlatformPublisher.ACTOR)
+                        .query(String.class)
+                        .single())
+                .contains("fortnight of shadow");
+
+        assertThat(publisher.publish())
+                .as("a restart that forgot to remove the property stacks no version")
+                .isEqualTo(KitchenPaidHoldPlatformPublisher.Outcome.UNCHANGED);
+        assertThat(audited("kitchen.paid_hold.published") - auditedBefore).isEqualTo(2);
+
+        assertThat(new KitchenPaidHoldPlatformPublisher(holdPolicies, "SHADOW", 15, "rolling back").publish())
+                .isEqualTo(KitchenPaidHoldPlatformPublisher.Outcome.PUBLISHED);
+        assertThat(read(policyPath(null, null), OWNER).path("mode").asText()).isEqualTo("SHADOW");
+    }
+
+    @Test
+    @DisplayName("an unknown mode or a missing reason publishes nothing, and the platform keeps the document it had")
+    void aRefusedPlatformPublicationChangesNothing() throws Exception {
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> new KitchenPaidHoldPlatformPublisher(holdPolicies, "ALWAYS", 10, "why").publish())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("SHADOW, HOLD_UNTIL_PAID or OFF");
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> new KitchenPaidHoldPlatformPublisher(holdPolicies, "OFF", 10, "  ").publish())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("platform-reason");
+        // An out-of-range minute count is the policy's own validation, so it is refused like any other write.
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> new KitchenPaidHoldPlatformPublisher(holdPolicies, "OFF", 0, "why").publish())
+                .hasMessageContaining("overdueAfterMinutes");
+
+        assertThat(read(policyPath(null, null), OWNER).path("isDefault").asBoolean())
+                .as("still the built-in trial")
+                .isTrue();
+    }
+
+    // ----------------------------------------------- the listeners, driven by the events themselves
+
+    @Test
+    @DisplayName("PaymentCaptured, published in a transaction, clears the hold in that transaction and leaves the"
+            + " ticket on its own schedule")
+    void aCapturedPaymentClearsTheHoldThroughTheListener() {
+        UUID ticket = bufferedTicket(true);
+        UUID order = orderOf(ticket);
+
+        inTransaction(() -> events.publishEvent(
+                new PaymentCaptured(UUID.randomUUID(), new TenantId(TENANT), order, Instant.now())));
+
+        assertThat(holdReasonOf(ticket))
+                .as("the money arrived: the hold is gone")
+                .isNull();
+        assertThat(statusOf(ticket))
+                .as("and the ticket still waits for its fire time")
+                .isEqualTo("HELD");
+    }
+
+    @Test
+    @DisplayName("OrderCancelled voids the buffered ticket of a payment-held pre-order in the cancellation's"
+            + " transaction, which nothing in the kitchen did before")
+    void aCancelledOrderVoidsItsTicketThroughTheListener() {
+        UUID ticket = bufferedTicket(true);
+        UUID order = orderOf(ticket);
+
+        inTransaction(() -> events.publishEvent(new OrderCancelled(
+                UUID.randomUUID(),
+                new TenantId(TENANT),
+                order,
+                Instant.now(),
+                BRAND,
+                LOCATION,
+                "USER",
+                "CUSTOMER_CHANGED_MIND",
+                "CONFIRMED",
+                "CANCELLED",
+                2,
+                null,
+                null,
+                null)));
+
+        assertThat(statusOf(ticket)).isEqualTo("VOIDED");
+        assertThat(holdReasonOf(ticket))
+                .as(
+                        "a voided ticket keeps its hold columns: that is how a cancelled payment-held pre-order says how it ended")
+                .isEqualTo("PAYMENT");
+        assertThat(jdbc.sql("""
+                                SELECT string_agg(trigger, ',' ORDER BY trigger) FROM kitchen.ticket_events
+                                 WHERE ticket_id = :id AND trigger IN ('ORDER_TERMINAL', 'PAYMENT_HOLD_CLEARED')
+                                """).param("id", ticket).query(String.class).single())
+                .isEqualTo("ORDER_TERMINAL,PAYMENT_HOLD_CLEARED");
+    }
+
+    @Test
+    @DisplayName("an applied amendment holds a ticket whose order now requires payment under HOLD_UNTIL_PAID, and under"
+            + " the default trial mode holds nothing")
+    void anAppliedAmendmentHoldsOnlyUnderHoldUntilPaid() throws Exception {
+        UUID inTrial = bufferedTicket(false);
+        UUID inTrialOrder = orderOf(inTrial);
+        inTransaction(() -> events.publishEvent(amendment(inTrialOrder)));
+        assertThat(holdReasonOf(inTrial))
+                .as("SHADOW counts what it would hold and holds nothing")
+                .isNull();
+
+        assertThat(write(policyPath(null, null), OWNER, "wire-hold", "0", """
+                        {"mode":"HOLD_UNTIL_PAID","reason":"wiring test"}""").status())
+                .isEqualTo(200);
+        UUID held = bufferedTicket(false);
+        UUID heldOrder = orderOf(held);
+        inTransaction(() -> events.publishEvent(amendment(heldOrder)));
+
+        assertThat(holdReasonOf(held)).isEqualTo("PAYMENT");
+        assertThat(statusOf(held)).isEqualTo("HELD");
+    }
+
+    @Test
+    @DisplayName("the release sweep holds a due ticket whose payment is still required instead of firing it, and an"
+            + " order that ended is never fired by the timer")
+    void theReleaseSweepHoldsADueUnpaidTicket() throws Exception {
+        assertThat(write(policyPath(null, null), OWNER, "wire-sweep", "0", """
+                        {"mode":"HOLD_UNTIL_PAID","reason":"wiring test"}""").status())
+                .isEqualTo(200);
+        UUID due = bufferedTicket(false);
+        UUID ended = bufferedTicket(false);
+        for (UUID ticket : List.of(due, ended)) {
+            jdbc.sql("UPDATE kitchen.tickets SET release_at = now() - interval '1 minute' WHERE id = :id")
+                    .param("id", ticket)
+                    .update();
+        }
+        jdbc.sql("UPDATE ordering.orders SET status = 'CANCELLED' WHERE id = :o")
+                .param("o", orderOf(ended))
+                .update();
+
+        releaseWorker.releaseDueTickets();
+
+        assertThat(holdReasonOf(due)).as("held by the sweep, not fired").isEqualTo("PAYMENT");
+        assertThat(statusOf(due)).isEqualTo("HELD");
+        assertThat(statusOf(ended))
+                .as("an order that reached a terminal status by a route the listener did not see")
+                .isNotEqualTo("FIRED");
+    }
+
+    @Test
+    @DisplayName("another tenant's owner cannot read this tenant's paid-hold policy")
+    void theReadIsTenantScoped() throws Exception {
+        MvcResult foreign = mvc.perform(get(policyPath(null, null)).with(tokenFor(OTHER_OWNER)))
+                .andReturn();
+
+        assertThat(foreign.getResponse().getStatus()).isEqualTo(403);
+        assertThat(foreign.getResponse().getContentAsString(UTF_8))
+                .doesNotContain("HOLD_UNTIL_PAID")
+                .doesNotContain("overdueAfterMinutes");
     }
 
     // ------------------------------------------------------------------ the release
@@ -393,6 +603,40 @@ class KitchenPaidHoldHttpTests {
                 result.getResponse().getStatus(),
                 result.getResponse().getContentAsString(),
                 result.getResponse().getHeader(HttpHeaders.ETAG));
+    }
+
+    private void inTransaction(Runnable work) {
+        new TransactionTemplate(transactions).executeWithoutResult(status -> work.run());
+    }
+
+    private OrderAmendmentApplied amendment(UUID orderId) {
+        return new OrderAmendmentApplied(
+                UUID.randomUUID(),
+                new TenantId(TENANT),
+                orderId,
+                Instant.now(),
+                BRAND,
+                LOCATION,
+                UUID.randomUUID(),
+                1,
+                List.of("CHANGE_PAYMENT_METHOD"),
+                0L,
+                2);
+    }
+
+    private UUID orderOf(UUID ticket) {
+        return jdbc.sql("SELECT order_id FROM kitchen.tickets WHERE id = :id")
+                .param("id", ticket)
+                .query(UUID.class)
+                .single();
+    }
+
+    private @Nullable String holdReasonOf(UUID ticket) {
+        return jdbc.sql("SELECT hold_reason FROM kitchen.tickets WHERE id = :id")
+                .param("id", ticket)
+                .query(String.class)
+                .optional()
+                .orElse(null);
     }
 
     private long audited(String action) {

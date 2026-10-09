@@ -101,12 +101,16 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.rules.start.READY': 'Taom tayyor boʻlganda',
   'delivery.rules.start.offset': 'Siljitish (daqiqa)',
   'delivery.rules.grouping': 'Buyurtmalarni bitta reysga birlashtirish',
-  'delivery.rules.grouping.locked':
-    'Hozircha mavjud emas: bir necha buyurtmali reys uchun kuryerga toʻlov hali hal qilinmagan.',
+  'delivery.rules.grouping.locked': 'Bu oʻrnatmada oʻchirilgan.',
+  'delivery.rules.grouping.payUndecided':
+    'Birlashtirish kuryer bir xil kilometr uchun topadigan pulni oʻzgartiradi, shuning uchun avval bir necha buyurtmali reys qanday toʻlanishini hal qiling.',
+  'delivery.rules.grouping.payUndecided.link': 'Reys uchun toʻlovni hal qilish',
   'delivery.rules.grouping.enable': 'Allaqachon shu tomonga ketayotgan kuryerni afzal koʻrish',
   'delivery.rules.grouping.radius': 'Birlashtirish radiusi (metr)',
   'delivery.rules.grouping.orders': 'Reysdagi buyurtmalar',
   'delivery.rules.grouping.wait': 'Eng uzoq kutish (soniya)',
+  'delivery.rules.grouping.waitNotAvailable':
+    'Shu tomonga ketayotgan kuryerni kutish mavjud emas: birlashtirish faqat kuryerlarni tartiblaydi, kutish nol boʻlib qoladi.',
   'delivery.rules.reason': 'Qoidalarni nima uchun oʻzgartiryapsiz?',
   'delivery.rules.reasonRequired': 'Qoidalarni oʻzgartirish sababini yozing.',
   'delivery.rules.publish': 'Eʻlon qilish',
@@ -168,6 +172,19 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
     'Mavjud hamkor yoʻq: buyurtmani faqat oʻz kuryerlari olishi mumkin.',
   'delivery.rules.sim.note.WINNER_DECIDED_BY_QUOTES':
     'Gʻolibni bron paytida aytilgan narxlar belgilaydi.',
+  'delivery.rules.sim.note.GROUPING_CEILING_BELOW_RUN':
+    'Bu kompaniyaning hech bir kuryer turi bu qoida birlashtiradigan qadar buyurtma tashiy olmaydi, shuning uchun reys shakllanmaydi.',
+  'delivery.rules.sim.note.GROUPING_NEEDS_A_PLAN_TO_MEASURE':
+    'Qaysi kuryerlar oʻlchanishini koʻrish uchun yaqinda berilgan buyurtmani tanlang: qoʻlda yozilgan stsenariyda manzil yoʻq.',
+  'delivery.rules.sim.note.FLEET_NOT_MEASURABLE': 'Kuryerlarni bu yerda oʻlchab boʻlmadi.',
+  'delivery.rules.sim.grouping.heading': 'Birlashtirish uchun oʻlchangan kuryerlar',
+  'delivery.rules.sim.grouping.empty': 'Smenada oʻlchanadigan kuryer yoʻq.',
+  'delivery.rules.sim.grouping.carrying': '{max} tadan {n} tasini olib ketmoqda',
+  'delivery.rules.sim.grouping.metres': 'olib ketayotgan manzilidan {metres} m',
+  'delivery.rules.sim.grouping.notGroupable': 'birlashtirishga mos emas',
+  'delivery.rules.sim.grouping.basis.DIRECT': 'buyurtmani oʻz toʻlovi bilan oladi',
+  'delivery.rules.sim.grouping.basis.RUN_INCREMENT':
+    'buyurtmani qoʻshimcha masofa uchun toʻlov bilan oladi',
   'delivery.rules.sim.note.NO_ZONE_EVIDENCE':
     'Buyurtmada zona yoʻq, shuning uchun zona qoidalari mos kelmaydi.',
   'delivery.rules.sim.violations': 'Bu qoralamani bunday holda eʻlon qilib boʻlmaydi:',

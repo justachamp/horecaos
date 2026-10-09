@@ -1,6 +1,7 @@
 package uz.horecaos.platform.fulfillment.infrastructure.sourcing;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Clock;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -11,8 +12,14 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.audit.api.AuditClass;
+import uz.horecaos.platform.audit.api.AuditFact;
+import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.fulfillment.api.DeliveryOrderPort;
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 
 /**
@@ -46,24 +53,40 @@ public class JdbcActiveAssignments implements InternalFleetPort.ActiveAssignment
 
     private static final double EARTH_RADIUS_METERS = 6_371_008.8;
 
+    /** The job the audit fact of a reveal names: sourcing runs as a system job, never as a person. */
+    private static final String SYSTEM_JOB = "delivery-sourcing";
+
     private final JdbcClient jdbc;
     private final DeliveryOrderPort deliveryOrders;
     private final @Nullable MeterRegistry meters;
+    private final @Nullable AuditRecorder audit;
+    private final Clock clock;
 
     @Autowired
-    public JdbcActiveAssignments(JdbcClient jdbc, DeliveryOrderPort deliveryOrders, @Nullable MeterRegistry meters) {
+    public JdbcActiveAssignments(
+            JdbcClient jdbc,
+            DeliveryOrderPort deliveryOrders,
+            @Nullable MeterRegistry meters,
+            @Nullable AuditRecorder audit,
+            Clock clock) {
         this.jdbc = jdbc;
         this.deliveryOrders = deliveryOrders;
         this.meters = meters;
+        this.audit = audit;
+        this.clock = clock;
+    }
+
+    public JdbcActiveAssignments(JdbcClient jdbc, DeliveryOrderPort deliveryOrders, @Nullable AuditRecorder audit) {
+        this(jdbc, deliveryOrders, null, audit, Clock.systemUTC());
     }
 
     public JdbcActiveAssignments(JdbcClient jdbc, DeliveryOrderPort deliveryOrders) {
-        this(jdbc, deliveryOrders, null);
+        this(jdbc, deliveryOrders, null, null, Clock.systemUTC());
     }
 
     /** Counts only: no order port, so no drop-off can be read and nothing is ever groupable. */
     public JdbcActiveAssignments(JdbcClient jdbc) {
-        this(jdbc, (tenantId, orderId) -> Optional.empty(), null);
+        this(jdbc, (tenantId, orderId) -> Optional.empty(), null, null, Clock.systemUTC());
     }
 
     @Override
@@ -117,15 +140,20 @@ public class JdbcActiveAssignments implements InternalFleetPort.ActiveAssignment
         if (courierIds.isEmpty()) {
             return Map.of();
         }
-        Optional<UUID> orderOfPlan = jdbc.sql("""
-                        SELECT order_id FROM fulfillment.delivery_plans
+        Optional<PlanDoor> planDoor = jdbc.sql("""
+                        SELECT order_id, brand_id, location_id FROM fulfillment.delivery_plans
                         WHERE tenant_id = :tenantId AND id = :planId
                         """)
                 .param("tenantId", tenantId)
                 .param("planId", planId)
-                .query((row, number) -> row.getObject("order_id", UUID.class))
+                .query((row, number) -> new PlanDoor(
+                        row.getObject("order_id", UUID.class),
+                        ResourceScope.location(
+                                tenantId,
+                                row.getObject("brand_id", UUID.class),
+                                row.getObject("location_id", UUID.class))))
                 .optional();
-        if (orderOfPlan.isEmpty()) {
+        if (planDoor.isEmpty()) {
             return Map.of();
         }
         Map<UUID, Integer> carrying = byCourier(tenantId, courierIds);
@@ -154,13 +182,14 @@ public class JdbcActiveAssignments implements InternalFleetPort.ActiveAssignment
             return Map.of();
         }
 
-        Optional<GeoPoint> here = reveal(tenantId, orderOfPlan.get());
+        ResourceScope scope = planDoor.get().scope();
+        Optional<GeoPoint> here = reveal(tenantId, scope, planDoor.get().orderId());
         if (here.isEmpty()) {
             return Map.of();
         }
         Map<UUID, InternalFleetPort.Groupable> nearest = new HashMap<>();
         for (UnPickedShipment shipment : candidates) {
-            Optional<GeoPoint> there = reveal(tenantId, shipment.orderId());
+            Optional<GeoPoint> there = reveal(tenantId, scope, shipment.orderId());
             if (there.isEmpty()) {
                 continue;
             }
@@ -176,11 +205,28 @@ public class JdbcActiveAssignments implements InternalFleetPort.ActiveAssignment
         return Map.copyOf(nearest);
     }
 
-    /** A door, or nothing: an unreadable or un-geocoded address makes a courier not groupable and is never an error. */
-    private Optional<GeoPoint> reveal(UUID tenantId, UUID orderId) {
+    /**
+     * A door, or nothing: an unreadable or un-geocoded address makes a courier not groupable and is never an error.
+     *
+     * <p>Every attempt to read one is a recorded reveal (ADR 0029, ADR 0027): a SECURITY fact that names the order
+     * and the purpose and carries no part of the address, and a counter by purpose. The fact is written before the
+     * read, so a read that fails is still on record as attempted.
+     */
+    private Optional<GeoPoint> reveal(UUID tenantId, ResourceScope scope, UUID orderId) {
         if (meters != null) {
             meters.counter("fulfillment.grouping.reveals", "purpose", PURPOSE_DISPATCH_GROUPING)
                     .increment();
+        }
+        if (audit != null) {
+            audit.record(AuditFact.of("fulfillment.grouping.dropoff-revealed", AuditClass.SECURITY)
+                    .by(ActorRef.systemJob(SYSTEM_JOB))
+                    .at(scope)
+                    .target("ordering.order", orderId)
+                    .because("The grouping bias measured a drop-off (" + PURPOSE_DISPATCH_GROUPING + ")")
+                    .changed(ChangeDocuments.created(Map.of("purpose", PURPOSE_DISPATCH_GROUPING)))
+                    .correlatedBy(orderId.toString())
+                    .occurredAt(clock.instant())
+                    .build());
         }
         try {
             return deliveryOrders.dropoffPoint(tenantId, orderId, PURPOSE_DISPATCH_GROUPING);
@@ -199,6 +245,8 @@ public class JdbcActiveAssignments implements InternalFleetPort.ActiveAssignment
                 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
         return 2 * EARTH_RADIUS_METERS * Math.asin(Math.min(1.0, Math.sqrt(h)));
     }
+
+    private record PlanDoor(UUID orderId, ResourceScope scope) {}
 
     private record UnPickedShipment(UUID courierId, UUID shipmentId, UUID orderId) {}
 

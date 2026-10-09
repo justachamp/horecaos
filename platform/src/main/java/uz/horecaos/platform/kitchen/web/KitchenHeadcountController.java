@@ -59,7 +59,7 @@ public class KitchenHeadcountController {
                     + "and the raw per-date portions instead. plantLimited means the band's top exceeds the "
                     + "station's own ceiling for that hour, where more cooks do not help. The pass (EXPO) is "
                     + "never planned. sampleSize defaults to 4, at least 3, at most 12.")
-    public ResponseEntity<PlanResponse> plan(
+    public ResponseEntity<HeadcountPlanResponse> plan(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
@@ -87,46 +87,49 @@ public class KitchenHeadcountController {
                 weekday,
                 Math.min(sample, HeadcountPlanner.MAX_SAMPLE_SIZE),
                 holidayMode == null ? HeadcountHolidayMode.INCLUDE : holidayMode);
-        return ResponseEntity.ok(PlanResponse.of(result));
+        return ResponseEntity.ok(HeadcountPlanResponse.of(result));
     }
 
-    public record PlanResponse(
+    public record HeadcountPlanResponse(
             LocalDate targetDate,
             int weekday,
             Status status,
             List<LocalDate> sampleDates,
-            GeneratedFrom generatedFrom,
-            List<RowView> rows,
-            @Nullable PeakView peak,
+            HeadcountGeneratedFrom generatedFrom,
+            List<HeadcountRowView> rows,
+            @Nullable HeadcountPeakView peak,
             List<String> stationsWithoutFigure,
-            List<RawCellView> history) {
+            List<HeadcountRawCellView> history,
+            int businessDayStartMinutes) {
 
-        static PlanResponse of(PlanResult result) {
+        static HeadcountPlanResponse of(PlanResult result) {
             Plan plan = result.plan();
-            return new PlanResponse(
+            return new HeadcountPlanResponse(
                     plan.targetDate(),
                     plan.weekday(),
                     plan.status(),
                     plan.sampleDates(),
-                    new GeneratedFrom(METRIC_ID, result.calculationVersion()),
-                    plan.rows().stream().map(RowView::of).toList(),
+                    new HeadcountGeneratedFrom(METRIC_ID, result.calculationVersion()),
+                    plan.rows().stream().map(HeadcountRowView::of).toList(),
                     plan.peak() == null
                             ? null
-                            : new PeakView(
+                            : new HeadcountPeakView(
                                     plan.peak().hour(),
                                     plan.peak().cooksExpected(),
                                     plan.peak().cooksAtPeakOfBand()),
                     plan.stationsWithoutFigure(),
                     plan.history().stream()
-                            .map(cell -> new RawCellView(cell.date(), cell.stationCode(), cell.hour(), cell.portions()))
-                            .toList());
+                            .map(cell -> new HeadcountRawCellView(
+                                    cell.date(), cell.stationCode(), cell.hour(), cell.portions()))
+                            .toList(),
+                    result.businessDayStartMinutes());
         }
     }
 
     /** @param calculationVersion the fact rows' metric calculation version; 0 when the plan drew on none */
-    public record GeneratedFrom(String metricId, int calculationVersion) {}
+    public record HeadcountGeneratedFrom(String metricId, int calculationVersion) {}
 
-    public record RowView(
+    public record HeadcountRowView(
             UUID stationId,
             String stationCode,
             StationRole stationRole,
@@ -142,8 +145,8 @@ public class KitchenHeadcountController {
             boolean plantLimited,
             int sampleSize) {
 
-        static RowView of(HeadcountPlanner.Row row) {
-            return new RowView(
+        static HeadcountRowView of(HeadcountPlanner.Row row) {
+            return new HeadcountRowView(
                     row.stationId(),
                     row.stationCode(),
                     row.stationRole(),
@@ -161,7 +164,7 @@ public class KitchenHeadcountController {
         }
     }
 
-    public record PeakView(int hour, int cooksExpected, int cooksAtPeakOfBand) {}
+    public record HeadcountPeakView(int hour, int cooksExpected, int cooksAtPeakOfBand) {}
 
-    public record RawCellView(LocalDate date, String stationCode, int hour, BigDecimal portions) {}
+    public record HeadcountRawCellView(LocalDate date, String stationCode, int hour, BigDecimal portions) {}
 }

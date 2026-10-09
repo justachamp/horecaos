@@ -32,10 +32,12 @@ public class StationLoadBackfillRunner {
 
     public StationLoadBackfillRunner(
             StationLoadBackfill backfill,
-            @Value("${horecaos.reporting.station-load-backfill.cutover}") LocalDate cutover,
+            // A String, parsed here: Spring's own String-to-LocalDate conversion reads a locale's short date
+            // style unless the field is annotated, and an operator writes the ISO date the property documents.
+            @Value("${horecaos.reporting.station-load-backfill.cutover}") String cutover,
             @Value("${horecaos.reporting.station-load-backfill.tenant-id:}") String tenantId) {
         this.backfill = backfill;
-        this.cutover = cutover;
+        this.cutover = LocalDate.parse(cutover.trim());
         this.tenantId = tenantId;
     }
 

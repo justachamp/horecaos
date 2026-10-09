@@ -362,8 +362,8 @@ class OperationsDispatchRulesEndpointTests {
     }
 
     @Test
-    @DisplayName("a start that leaves a partner no time, a hold, and grouping are each refused with their own sentence"
-            + " (grouping with no wait, which is the only grouping ADR 0170 offers, until the run pay is decided)")
+    @DisplayName(
+            "a start that leaves a partner no time, a hold, a grouping wait and a disabled grouping are each refused with their own sentence")
     void reservedAndImpossibleOptionsAreRefused() throws Exception {
         String lateStart = rulesJson("""
                 { "id": "late", "name": "Late", "then": { "mode": "PARTNER_FIRST", "dispatchAt": { "basis": "READY", "offsetSeconds": 900 } } }
@@ -379,14 +379,18 @@ class OperationsDispatchRulesEndpointTests {
                 .contains("leaves no time for a partner");
         assertThat(json(put(MANAGER, "hold", 0, hold)).path("detail").asText())
                 .contains("holding a partner booking before confirming it is not available");
-        assertThat(json(put(MANAGER, "grouped", 0, grouped)).path("detail").asText())
-                .contains("grouping needs the courier pay for a run to be decided first");
-        String waiting = rulesJson("""
-                { "id": "waiting", "name": "Waiting", "then": { "mode": "FLEET_FIRST", "grouping": { "mergeRadiusMeters": 700, "maxOrdersPerRun": 3, "maxWaitSeconds": 120 } } }
+        // ADR 0170: a wait above zero has its own stable code whatever else is true of the deployment ...
+        MvcResult waiting = put(MANAGER, "grouped", 0, grouped);
+        assertThat(waiting.getResponse().getStatus()).isEqualTo(422);
+        assertThat(json(waiting).path("code").asText()).isEqualTo("GROUPING_WAIT_NOT_AVAILABLE");
+        // ... and with no wait, grouping is still refused where the deployment's kill switch is off.
+        String groupedNoWait = rulesJson("""
+                { "id": "grouped", "name": "Grouped", "then": { "mode": "FLEET_FIRST", "grouping": { "mergeRadiusMeters": 700, "maxOrdersPerRun": 3, "maxWaitSeconds": 0 } } }
                 """);
-        assertThat(json(put(MANAGER, "waiting", 0, waiting)).path("detail").asText())
-                .as("a wait for a grouped courier is refused before the pay question is reached")
-                .contains("grouping is a ranking bias only");
+        assertThat(json(put(MANAGER, "grouped-no-wait", 0, groupedNoWait))
+                        .path("detail")
+                        .asText())
+                .contains("grouping is not enabled on this deployment");
         assertThat(published()).isZero();
     }
 

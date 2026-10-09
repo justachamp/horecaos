@@ -246,7 +246,7 @@ export const kitchenUzLatn: AreaMessages<typeof kitchenEn> = {
   'kitchen.headcount.column.date': 'Sana',
   'kitchen.headcount.column.portions': 'Porsiyalar',
   'kitchen.headcount.hoursNote':
-    'Soatlar ish kunining boshidan sanaladi. Kichik raqam — bashorat diapazonining yuqori chegarasida kerak boʻladigan oshpazlar.',
+    'Vaqt soat boʻyicha, ish kunining boshidan sanaladi (soat 09:00 da boshlanadigan kun yarim tundan oshadi). Kichik raqam — bashorat diapazonining yuqori chegarasida kerak boʻladigan oshpazlar.',
   'kitchen.headcount.cell.detail':
     'kutilayotgan porsiyalar: {portions} ({low}–{high}); diapazon yuqori chegarasida oshpazlar: {bandCooks}',
   'kitchen.headcount.cell.noPolicy': 'norma yoʻq',
@@ -344,4 +344,29 @@ export const kitchenUzLatn: AreaMessages<typeof kitchenEn> = {
   'kitchen.stopList.why.cutoff': 'Qoldiq kanal chegarasidan oshmaydi',
   'kitchen.stopList.why.off': 'Stoplar oʻchirilgan',
   'kitchen.stopList.why.close': 'Yopish',
+  'kitchen.paidHold.title': 'Toʻlovgacha ushlab turish',
+  'kitchen.paidHold.lead':
+    'Bufer dagi tiket buyurtmasi talab qiladigan va hali tushmagan pulni kutadimi. Huquqi bor kishi ushlab turilgan tiketni sabab koʻrsatib baribir ishga tushirishi mumkin.',
+  'kitchen.paidHold.field': 'Ushlab turish siyosati',
+  'kitchen.paidHold.summary': '{mode} · {minutes} daqiqadan keyin «qotib qoldi»',
+  'kitchen.paidHold.trial':
+    'Sinov rejimi: oshxona ushlab turadigan tiketlarni sanaydi, birortasini ushlamaydi.',
+  'kitchen.paidHold.mode': 'Rejim',
+  'kitchen.paidHold.mode.SHADOW': 'Sinov (faqat sanash)',
+  'kitchen.paidHold.mode.HOLD_UNTIL_PAID': 'Toʻlovgacha ushlab turish',
+  'kitchen.paidHold.mode.OFF': 'Oʻchirilgan',
+  'kitchen.paidHold.overdue': 'Qotib qoldi deb hisoblash (ishga tushish vaqtidan keyin, daqiqa)',
+  'kitchen.paidHold.scope': 'Amal qiladi',
+  'kitchen.paidHold.scope.location': 'Shu filial uchun',
+  'kitchen.paidHold.scope.brand': 'Shu brend uchun',
+  'kitchen.paidHold.scope.tenant': 'Butun kompaniya uchun',
+  'kitchen.paidHold.replaces': 'Shu darajadagi siyosat yuqoridagisini butunlay almashtiradi.',
+  'kitchen.paidHold.reason': 'Nima uchun oʻzgartiryapsiz?',
+  'kitchen.paidHold.invalid': 'Daqiqalar 1 dan 1440 gacha butun son, sabab majburiy.',
+  'kitchen.paidHold.stale':
+    'Siz tahrirlayotganingizda kimdir bu siyosatni oʻzgartirdi. Bekor qilib, qaytadan oching.',
+  'kitchen.paidHold.save': 'Saqlash',
+  'kitchen.paidHold.saving': 'Saqlanmoqda…',
+  'kitchen.paidHold.cancel': 'Bekor qilish',
+  'kitchen.paidHold.saved': 'Ushlab turish siyosati saqlandi',
 };

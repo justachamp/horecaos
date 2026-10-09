@@ -24,6 +24,7 @@ import { OrderTableChip } from '../../shared/ui/order-table-chip/order-table-chi
 import { LocationsApi } from '../settings/locations/locations-api';
 import { describeApiError } from '../orders/order-errors';
 import { KitchenApi, TicketResponse } from './kitchen-api';
+import { PaidHoldCard } from './paid-hold-card';
 
 /** Same cadence as the KDS queue (kitchen-queue-page.ts), until ADR 0045 exists. */
 const POLL_INTERVAL_MS = 10_000;
@@ -73,7 +74,7 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  */
 @Component({
   selector: 'q-buffer-page',
-  imports: [TPipe, OrderTableChip],
+  imports: [TPipe, OrderTableChip, PaidHoldCard],
   templateUrl: './buffer-page.html',
   styleUrl: './buffer-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -86,6 +87,8 @@ export class BufferPage implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly capabilities = inject(SessionCapabilities);
 
+  /** ADR 0168: the branch the paid-hold card reads and writes the policy for. */
+  protected readonly locationScope = this.location.scope;
   protected readonly tickets = signal<readonly TicketResponse[]>([]);
   protected readonly firstLoadComplete = signal(false);
   protected readonly denied = signal(false);
@@ -266,6 +269,11 @@ export class BufferPage implements OnInit {
       default:
         return 'kitchen.buffer.hold.awaitingPayment';
     }
+  }
+
+  /** Only a person holding `kitchen.paid-hold.manage` may change the hold policy; the server decides all the same. */
+  protected canManagePaidHold(): boolean {
+    return this.capabilities.has('KITCHEN_PAID_HOLD_MANAGE');
   }
 
   /** Only a person holding the override capability is offered «Release anyway»; the server decides all the same. */

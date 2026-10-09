@@ -41,7 +41,6 @@ import uz.horecaos.platform.courier.application.CourierAccountProvisioningServic
 import uz.horecaos.platform.courier.application.CourierAdjustmentService;
 import uz.horecaos.platform.courier.application.CourierCashService;
 import uz.horecaos.platform.courier.application.CourierEngagementService;
-import uz.horecaos.platform.courier.application.CourierPolicies;
 import uz.horecaos.platform.courier.application.CourierPolicyResolver;
 import uz.horecaos.platform.courier.application.CourierRateCardService;
 import uz.horecaos.platform.courier.application.CourierRosterQueryService;
@@ -91,7 +90,6 @@ import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
-import uz.horecaos.platform.tenancy.api.PolicyAuthor;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
@@ -130,7 +128,6 @@ public class OperationsCourierController {
     private final JdbcCourierRateCardStore rateCardStore;
     private final JdbcCourierShiftStore shiftStore;
     private final CourierPolicyResolver policyResolver;
-    private final PolicyAuthor policyAuthor;
     private final JdbcDeliveryCostStore deliveryCostStore;
     private final PlannedShiftService plannedShifts;
     private final CourierRunPayChangeService runPayChanges;
@@ -155,7 +152,6 @@ public class OperationsCourierController {
             JdbcCourierRateCardStore rateCardStore,
             JdbcCourierShiftStore shiftStore,
             CourierPolicyResolver policyResolver,
-            PolicyAuthor policyAuthor,
             JdbcDeliveryCostStore deliveryCostStore,
             PlannedShiftService plannedShifts,
             CourierRunPayChangeService runPayChanges,
@@ -178,7 +174,6 @@ public class OperationsCourierController {
         this.rateCardStore = rateCardStore;
         this.shiftStore = shiftStore;
         this.policyResolver = policyResolver;
-        this.policyAuthor = policyAuthor;
         this.deliveryCostStore = deliveryCostStore;
         this.plannedShifts = plannedShifts;
         this.runPayChanges = runPayChanges;
@@ -783,32 +778,16 @@ public class OperationsCourierController {
         CourierCompensationPolicy document = body.toDocument();
 
         // ADR 0170: moving the run pay to first-full-then-increment needs the engagement-terms statement and
-        // passes through the registered approval action. A pending approval publishes nothing; the same
-        // publication succeeds once it is approved.
-        CourierRunPayChangeService.Decision change = runPayChanges.gate(
-                scope,
-                current.document().runPayMode(),
-                document.runPayMode(),
-                body.acknowledgeEngagementTerms(),
-                actor(),
-                body.reason());
-        if (change.pending()) {
+        // passes through the registered approval action, in the transaction that publishes. A pending approval
+        // publishes nothing; the same publication succeeds once it is approved.
+        CourierRunPayChangeService.Published result = runPayChanges.publish(
+                scope, current, document, body.acknowledgeEngagementTerms(), actor(), body.reason());
+        if (result.document() == null) {
             return ResponseEntity.ok()
                     .header(HttpHeaders.ETAG, AggregateVersion.toETag(current.policyVersion()))
-                    .body(CourierPolicyResponse.of(current).awaiting(change.approvalRequestId()));
+                    .body(CourierPolicyResponse.of(current).awaiting(result.approvalRequest()));
         }
-
-        ResolvedPolicy<CourierCompensationPolicy> published =
-                policyAuthor.author(CourierPolicies.COMPENSATION, scope, document, actor(), body.reason());
-        runPayChanges.record(
-                scope,
-                current.document().runPayMode(),
-                document.runPayMode(),
-                change,
-                actor(),
-                body.reason(),
-                published.policyId(),
-                published.policyVersion());
+        ResolvedPolicy<CourierCompensationPolicy> published = result.document();
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, AggregateVersion.toETag(published.policyVersion()))

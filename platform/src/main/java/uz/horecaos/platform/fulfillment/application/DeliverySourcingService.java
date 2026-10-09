@@ -352,7 +352,7 @@ public class DeliverySourcingService {
                 decision.courierId(),
                 offerKey(request.planId(), decision.courierId()),
                 decision.expiresAt(),
-                decision.reason(),
+                reasonOf(decision.reason(), request.dispatch().grouping(), decision.courierId(), candidates),
                 policy.policyId(),
                 policy.policyVersion(),
                 now,
@@ -406,6 +406,27 @@ public class DeliverySourcingService {
         }
         return SourcingJournal.RunStamp.runIncrement(metres, lead);
     }
+
+    /**
+     * The attempt's reason, with the source of the grouping distance when the courier was chosen as a groupable
+     * one (ADR 0170 Decision 10). The distance is the straight line between two doors: road distance is used only
+     * when ADR 0147's routing provider is bound to this read, and it is not, so the record says so on the
+     * attempt rather than leaving a reader to infer it. The suffix is a fixed code, so the 48-character column
+     * holds it after any of the planner's reasons.
+     */
+    private static String reasonOf(
+            String reason, @Nullable Grouping grouping, UUID courierId, List<FleetCandidate> candidates) {
+        if (grouping == null) {
+            return reason;
+        }
+        boolean grouped = candidates.stream()
+                .filter(candidate -> candidate.courierId().equals(courierId))
+                .anyMatch(candidate -> SourcingPlanner.isGroupable(candidate, grouping));
+        return grouped ? reason + GROUPED_STRAIGHT_LINE : reason;
+    }
+
+    /** Appended to an attempt's reason when its courier was ranked as groupable on a straight-line distance. */
+    public static final String GROUPED_STRAIGHT_LINE = "+GROUPED_STRAIGHT_LINE";
 
     private void count(String meter, String outcome) {
         if (meters != null) {

@@ -522,6 +522,9 @@ export class OrderQueue implements OnInit {
   /** ADR 0172: the courier picker behind «Назначить курьера», and the roster it lists. */
   protected readonly bulkAssignDialogOpen = signal(false);
   protected readonly bulkAssignRoster = signal<readonly RosterEntryResponse[]>([]);
+  /** ADR 0172: the refused orders of an assignment being retried with another courier; null when it is a fresh pick. */
+  protected readonly bulkAssignRetryOrders = signal<readonly BulkOrderRef[] | null>(null);
+  protected readonly bulkAssignTriedCourierId = signal<string | null>(null);
   protected readonly bulkCancelReasons = signal<readonly ReasonResponse[]>([]);
   private lastBulkSubmission: BulkActionRequest | null = null;
 
@@ -1924,8 +1927,18 @@ export class OrderQueue implements OnInit {
   }
 
   protected onBulkAssignClick(): void {
+    if (!this.canBulkAssign()) {
+      return;
+    }
+    this.bulkAssignRetryOrders.set(null);
+    this.bulkAssignTriedCourierId.set(null);
+    this.openBulkAssignDialog();
+  }
+
+  /** Fetches the roster the dispatch board reads, then shows the picker; an unreadable roster shows an empty one. */
+  private openBulkAssignDialog(): void {
     const tenantId = this.location.scope()?.tenantId;
-    if (!this.canBulkAssign() || !tenantId) {
+    if (!tenantId) {
       return;
     }
     void this.couriersApi
@@ -1937,13 +1950,19 @@ export class OrderQueue implements OnInit {
 
   protected onBulkAssignDismiss(): void {
     this.bulkAssignDialogOpen.set(false);
+    this.bulkAssignRetryOrders.set(null);
+    this.bulkAssignTriedCourierId.set(null);
   }
 
   protected onBulkAssignConfirm(submission: BulkAssignSubmission): void {
     this.bulkAssignDialogOpen.set(false);
+    // A retry sends only the orders that were refused, to the courier just picked, under a new key.
+    const orders = this.bulkAssignRetryOrders() ?? this.orderRefsOf(this.selectedOrders());
+    this.bulkAssignRetryOrders.set(null);
+    this.bulkAssignTriedCourierId.set(null);
     void this.submitBulk({
       actionType: 'ASSIGN_COURIER',
-      orders: this.orderRefsOf(this.selectedOrders()),
+      orders,
       courierId: submission.courierId,
       reasonCode: submission.reasonCode,
     });
@@ -2076,6 +2095,14 @@ export class OrderQueue implements OnInit {
         orderId: ref.orderId,
         expectedVersion: freshVersionById.get(ref.orderId) ?? ref.expectedVersion,
       }));
+    if (previous.actionType === 'ASSIGN_COURIER') {
+      // The same courier would refuse the same orders for the same reason (a full ceiling, a lapsed
+      // registration), so the retry of an assignment asks who should take them instead (ADR 0172).
+      this.bulkAssignRetryOrders.set(retryOrders);
+      this.bulkAssignTriedCourierId.set(previous.courierId ?? null);
+      this.openBulkAssignDialog();
+      return;
+    }
     void this.submitBulk({ ...previous, orders: retryOrders });
   }
 

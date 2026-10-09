@@ -602,6 +602,10 @@ export const ordersRu: AreaMessages<typeof ordersEn> = {
   'orders.queue.bulk.assignDialog.reasonInvalid':
     'От 1 до 48 заглавных латинских букв, цифр или подчёркиваний',
   'orders.queue.bulk.assignDialog.confirm': 'Назначить',
+  'orders.queue.bulk.assignDialog.retryLead':
+    'Не удалось назначить заказов: {count}. Выберите для них курьера.',
+  'orders.queue.bulk.assignDialog.tried': 'уже пробовали',
+  'orders.queue.bulk.result.rule': 'правило {rule}',
   'orders.queue.bulk.problem.NOT_A_DELIVERY_ORDER': 'Это не заказ на доставку',
   'orders.queue.bulk.problem.NO_DELIVERY_PLAN': 'Доставка ещё не запланирована',
   'orders.queue.bulk.problem.PLAN_NOT_OPEN': 'Доставка уже завершена',

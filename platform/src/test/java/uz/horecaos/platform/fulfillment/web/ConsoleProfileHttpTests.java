@@ -210,6 +210,52 @@ class ConsoleProfileHttpTests {
     }
 
     @Test
+    @DisplayName(
+            "a profile the client already holds is answered 304 without a body, and one that moved is answered whole")
+    void anUnchangedProfileIsNotResent() throws Exception {
+        MvcResult first = read(TENANT, OWNER);
+        String etag = java.util.Objects.requireNonNull(first.getResponse().getHeader(HttpHeaders.ETAG));
+
+        MvcResult unchanged = mvc.perform(get("/api/v1/session/console-profile")
+                        .param("tenantId", TENANT.toString())
+                        .header(HttpHeaders.IF_NONE_MATCH, etag)
+                        .with(tokenFor(OWNER)))
+                .andReturn();
+        assertThat(unchanged.getResponse().getStatus()).isEqualTo(304);
+        assertThat(unchanged.getResponse().getContentAsString()).isEmpty();
+        assertThat(unchanged.getResponse().getHeader(HttpHeaders.ETAG)).isEqualTo(etag);
+
+        MvcResult weak = mvc.perform(get("/api/v1/session/console-profile")
+                        .param("tenantId", TENANT.toString())
+                        .header(HttpHeaders.IF_NONE_MATCH, "\"stale\", W/" + etag)
+                        .with(tokenFor(OWNER)))
+                .andReturn();
+        assertThat(weak.getResponse().getStatus())
+                .as("a weak validator in a list still matches")
+                .isEqualTo(304);
+
+        modules.purchase(TENANT, deliveriesConsoleModule, null, APPROVER, "owner bought it", "corr");
+        MvcResult moved = mvc.perform(get("/api/v1/session/console-profile")
+                        .param("tenantId", TENANT.toString())
+                        .header(HttpHeaders.IF_NONE_MATCH, etag)
+                        .with(tokenFor(OWNER)))
+                .andReturn();
+        assertThat(moved.getResponse().getStatus()).isEqualTo(200);
+        assertThat(JSON.readTree(moved.getResponse().getContentAsString())
+                        .path("variant")
+                        .asText())
+                .isEqualTo("DELIVERIES");
+
+        // The tag is no way round the 404: a principal with no grant in the tenant is refused whatever it sends.
+        MvcResult stranger = mvc.perform(get("/api/v1/session/console-profile")
+                        .param("tenantId", TENANT.toString())
+                        .header(HttpHeaders.IF_NONE_MATCH, etag)
+                        .with(tokenFor(OUTSIDER)))
+                .andReturn();
+        assertThat(stranger.getResponse().getStatus()).isEqualTo(404);
+    }
+
+    @Test
     @DisplayName("a subscription that no longer grants entitlements takes the profile back with it (ADR 0087)")
     void aSuspendedSubscriptionResolvesStandard() throws Exception {
         modules.purchase(TENANT, deliveriesConsoleModule, null, APPROVER, "owner bought it", "corr");

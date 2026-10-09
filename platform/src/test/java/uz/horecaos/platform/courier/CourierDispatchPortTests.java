@@ -35,9 +35,13 @@ import uz.horecaos.platform.courier.application.CourierDispatchGate;
 import uz.horecaos.platform.courier.application.CourierEngagementService;
 import uz.horecaos.platform.courier.application.CourierLedgerService;
 import uz.horecaos.platform.courier.application.CourierPolicyResolver;
+import uz.horecaos.platform.courier.application.CourierRateCardService;
 import uz.horecaos.platform.courier.application.CourierShiftService;
 import uz.horecaos.platform.courier.application.port.LegalEntityResolver;
 import uz.horecaos.platform.courier.domain.CourierCompensationPolicy;
+import uz.horecaos.platform.courier.domain.RateComponent;
+import uz.horecaos.platform.courier.domain.RateComponentType;
+import uz.horecaos.platform.courier.domain.RunPayMode;
 import uz.horecaos.platform.courier.domain.ShiftActor;
 import uz.horecaos.platform.courier.domain.ShiftEnforcement;
 import uz.horecaos.platform.courier.domain.VerificationMethod;
@@ -49,6 +53,7 @@ import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftS
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore.ShiftRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.CourierTypeRow;
+import uz.horecaos.platform.fulfillment.api.DeliveryOrderPort;
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort;
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort.FleetCandidate;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.PartnerOption;
@@ -73,6 +78,7 @@ import uz.horecaos.platform.telemetry.domain.LivePositionRules;
 import uz.horecaos.platform.telemetry.infrastructure.fulfillment.LivePositionProximity;
 import uz.horecaos.platform.telemetry.infrastructure.persistence.JdbcTelemetryStore;
 import uz.horecaos.platform.telemetry.infrastructure.persistence.JdbcTelemetryStore.DutySessionRow;
+import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
 import uz.horecaos.platform.tenancy.api.PolicyResolver;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
@@ -134,6 +140,10 @@ class CourierDispatchPortTests {
     private CourierShiftService shifts;
 
     private InternalFleetPort fleet;
+    private CourierDispatchGate dispatchGate;
+    private CourierProximityPort proximityPort;
+    private CourierPolicyResolver courierPolicies;
+    private JdbcCourierRateCardStore rateCards;
     private InternalFleetPort standIn;
     private CourierShiftPort shiftPort;
     private DutySessionService dutySessions;
@@ -259,6 +269,10 @@ class CourierDispatchPortTests {
 
         CourierDispatchGate gate = new CourierDispatchGate(courierStore, shiftStore, policyResolver);
         CourierProximityPort proximity = new LivePositionProximity(telemetryStore, clock);
+        dispatchGate = gate;
+        proximityPort = proximity;
+        courierPolicies = policyResolver;
+        rateCards = rateCardStore;
         fleet = new InternalFleetAdapter(shiftStore, gate, new JdbcActiveAssignments(jdbc), proximity);
         standIn = new InternalFleetConfiguration().unwiredInternalFleetPort();
 
@@ -621,9 +635,11 @@ class CourierDispatchPortTests {
                 .containsExactly("UUID", "UUID", "UUID", "LocalDate");
         // ADR 0142 adds the last component: how far, in metres, the courier's un-picked-up order is from
         // this one's drop-off (null when none is close enough to group with). A distance between two
-        // addresses, not a person or an address -- still no field a name could be put in.
+        // addresses, not a person or an address -- still no field a name could be put in. ADR 0170 adds two:
+        // the id of the carried shipment that distance was measured to (an id, never a place) and whether the
+        // courier would be offered the run's pay basis (a flag).
         assertThat(componentTypes(FleetCandidate.class))
-                .containsExactly("UUID", "int", "int", "int", "Integer", "int", "Integer");
+                .containsExactly("UUID", "int", "int", "int", "Integer", "int", "Integer", "UUID", "boolean");
 
         // And the values that actually cross carry nothing of the person beyond
         // the identifier the caller already had.
@@ -641,6 +657,221 @@ class CourierDispatchPortTests {
                         .orElseThrow()
                         .protectedRegistrationRef())
                 .isNull();
+    }
+
+    // ------------------------------------------ ADR 0170: the feed for the grouping bias
+
+    @Test
+    @DisplayName("a courier carrying an un-picked-up order from this branch near the plan's door is groupable:"
+            + " one distance and the shipment it was measured to leave fulfillment, read under DISPATCH_GROUPING")
+    void aNearbyUnpickedShipmentMakesACourierGroupable() {
+        shifts.open(openCommand(alisher, branch));
+        Doors doors = new Doors();
+        Carried carried = carryingShipment(alisher, "ASSIGNED");
+        Carried plan = planToSource();
+        doors.at(plan, metresNorth(2_000));
+        doors.at(carried, metresNorth(2_300));
+
+        FleetCandidate candidate = candidateFor(
+                groupingFleet(doors).candidates(TENANT, BRAND, branch, 4_000, probe(plan, 700, 3)), alisher);
+
+        assertThat(candidate.groupableWithMetres())
+                .as("about 300 m of latitude between the two doors, as a straight line")
+                .isBetween(298, 302);
+        assertThat(candidate.groupLeadShipmentId()).isEqualTo(carried.shipmentId());
+        assertThat(candidate.activeAssignments()).isEqualTo(1);
+        assertThat(doors.purposes)
+                .as("the plan's own door and the one carried door, each revealed once, each for the named purpose")
+                .containsExactly("DISPATCH_GROUPING", "DISPATCH_GROUPING");
+        assertThat(candidate.toString())
+                .as("an id and a distance: no coordinate, no address")
+                .doesNotContain(String.valueOf(metresNorth(2_000)).substring(0, 8));
+        assertThat(reveals.facts)
+                .as("each reveal is a SECURITY fact naming the order and the purpose, in the order's own branch")
+                .hasSize(2)
+                .allSatisfy(fact -> {
+                    assertThat(fact.actionCode()).isEqualTo("fulfillment.grouping.dropoff-revealed");
+                    assertThat(fact.auditClass()).isEqualTo(uz.horecaos.platform.audit.api.AuditClass.SECURITY);
+                    assertThat(fact.changeDocument().toString())
+                            .contains("DISPATCH_GROUPING")
+                            .as("no part of the address and no coordinate is in the fact")
+                            .doesNotContain("69.24")
+                            .doesNotContain("41.3");
+                    assertThat(fact.scope().locationId()).isEqualTo(branch);
+                })
+                .extracting(fact -> fact.targetId())
+                .containsExactlyInAnyOrder(plan.orderId(), carried.orderId());
+    }
+
+    @Test
+    @DisplayName("a picked-up order, another branch's order, a courier at the run's ceiling and a door beyond the"
+            + " radius are each not groupable -- and the first three are not even read")
+    void onlyTheRightShipmentsGroup() {
+        UUID bobur = seedCourier(scooterTypeId, "K-002", "Bobur Rashidov").courierId();
+        UUID sardor = seedCourier(scooterTypeId, "K-003", "Sardor Yusupov").courierId();
+        shifts.open(openCommand(alisher, branch));
+        shifts.open(openCommand(bobur, branch));
+        shifts.open(openCommand(sardor, branch));
+        Doors doors = new Doors();
+        Carried plan = planToSource();
+        doors.at(plan, metresNorth(2_000));
+
+        Carried pickedUp = carryingShipment(alisher, "PICKED_UP");
+        doors.at(pickedUp, metresNorth(2_100));
+        Carried elsewhere = carryingShipment(bobur, "ASSIGNED");
+        jdbc.sql("UPDATE fulfillment.shipments SET location_id = :other WHERE tenant_id = :t AND id = :id")
+                .param("other", otherBranch)
+                .param("t", TENANT)
+                .param("id", elsewhere.shipmentId())
+                .update();
+        doors.at(elsewhere, metresNorth(2_100));
+
+        List<FleetCandidate> candidates =
+                groupingFleet(doors).candidates(TENANT, BRAND, branch, 4_000, probe(plan, 700, 3));
+
+        assertThat(candidateFor(candidates, alisher).groupableWithMetres())
+                .as("already picked up: it is in the bag, not on the way")
+                .isNull();
+        assertThat(candidateFor(candidates, bobur).groupableWithMetres())
+                .as("an order from another branch is not on this branch's way")
+                .isNull();
+        assertThat(candidateFor(candidates, sardor).groupableWithMetres()).isNull();
+        assertThat(doors.purposes)
+                .as("nothing about any of them was revealed: no un-picked-up shipment of this branch exists")
+                .isEmpty();
+
+        // The ceiling: a courier carrying as many as the run allows is not asked about, and the probe's
+        // ceiling is the rule's, not the courier type's.
+        Carried near = carryingShipment(sardor, "ASSIGNED");
+        doors.at(near, metresNorth(2_100));
+        Doors atCeiling = doors.fresh();
+        assertThat(candidateFor(
+                                groupingFleet(atCeiling).candidates(TENANT, BRAND, branch, 4_000, probe(plan, 700, 1)),
+                                sardor)
+                        .groupableWithMetres())
+                .as("one carried and the rule allows one per run")
+                .isNull();
+        assertThat(atCeiling.purposes).isEmpty();
+        assertThat(candidateFor(
+                                groupingFleet(doors).candidates(TENANT, BRAND, branch, 4_000, probe(plan, 700, 2)),
+                                sardor)
+                        .groupableWithMetres())
+                .as("the same courier with room for a second order is groupable")
+                .isNotNull();
+
+        // The radius: the same door, a smaller circle.
+        assertThat(candidateFor(
+                                groupingFleet(doors.fresh())
+                                        .candidates(TENANT, BRAND, branch, 4_000, probe(plan, 50, 3)),
+                                sardor)
+                        .groupableWithMetres())
+                .as("100 m away is outside a 50 m circle")
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("nothing is read for a caller that asks for no grouping, and a door that has no coordinate or"
+            + " cannot be read just makes the courier not groupable")
+    void noProbeReadsNothingAndAnUnreadableDoorIsNeverAnError() {
+        shifts.open(openCommand(alisher, branch));
+        Doors doors = new Doors();
+        Carried carried = carryingShipment(alisher, "ASSIGNED");
+        Carried plan = planToSource();
+        doors.at(plan, metresNorth(2_000));
+        doors.at(carried, metresNorth(2_100));
+        InternalFleetPort grouping = groupingFleet(doors);
+
+        assertThat(grouping.candidates(TENANT, BRAND, branch, 4_000))
+                .singleElement()
+                .satisfies(candidate -> {
+                    assertThat(candidate.groupableWithMetres()).isNull();
+                    assertThat(candidate.groupLeadShipmentId()).isNull();
+                });
+        assertThat(grouping.candidates(TENANT, BRAND, branch, 4_000, null)).hasSize(1);
+        assertThat(doors.purposes)
+                .as("a tenant with no grouping rule decrypts nothing")
+                .isEmpty();
+
+        // The carried order's address has no coordinate (never geocoded) ...
+        Doors noCoordinate = new Doors();
+        noCoordinate.at(plan, metresNorth(2_000));
+        assertThat(candidateFor(
+                                groupingFleet(noCoordinate)
+                                        .candidates(TENANT, BRAND, branch, 4_000, probe(plan, 700, 3)),
+                                alisher)
+                        .groupableWithMetres())
+                .isNull();
+        // ... or cannot be decrypted at all ...
+        Doors unreadable = new Doors();
+        unreadable.at(plan, metresNorth(2_000));
+        unreadable.at(carried, metresNorth(2_100));
+        unreadable.unreadable.add(carried.orderId());
+        assertThat(candidateFor(
+                                groupingFleet(unreadable).candidates(TENANT, BRAND, branch, 4_000, probe(plan, 700, 3)),
+                                alisher)
+                        .groupableWithMetres())
+                .isNull();
+        // ... or it is the plan's own door that has none: nobody is groupable, and the offer still goes to someone.
+        Doors planWithoutDoor = new Doors();
+        planWithoutDoor.at(carried, metresNorth(2_100));
+        assertThat(groupingFleet(planWithoutDoor).candidates(TENANT, BRAND, branch, 4_000, probe(plan, 700, 3)))
+                .singleElement()
+                .satisfies(
+                        candidate -> assertThat(candidate.groupableWithMetres()).isNull());
+    }
+
+    @Test
+    @DisplayName("the feed is tenant-scoped: another tenant's plan id measures nothing")
+    void theFeedIsTenantScoped() {
+        shifts.open(openCommand(alisher, branch));
+        Doors doors = new Doors();
+        Carried carried = carryingShipment(alisher, "ASSIGNED");
+        Carried plan = planToSource();
+        doors.at(plan, metresNorth(2_000));
+        doors.at(carried, metresNorth(2_100));
+
+        assertThat(new JdbcActiveAssignments(jdbc, doors)
+                        .groupable(OTHER_TENANT, plan.planId(), List.of(alisher), 700, 3))
+                .isEmpty();
+        assertThat(new JdbcActiveAssignments(jdbc, doors).groupable(TENANT, plan.planId(), List.of(alisher), 700, 3))
+                .containsOnlyKeys(alisher);
+    }
+
+    @Test
+    @DisplayName("the run basis is offered only where the resolved pay says first-full-then-increment and a rate"
+            + " card resolves; a courier with no card is not offered a grouped order, and PER_ORDER groups at DIRECT")
+    void thePayTreatmentFollowsThePolicyAndTheCard() {
+        shifts.open(openCommand(alisher, branch));
+        Doors doors = new Doors();
+        Carried carried = carryingShipment(alisher, "ASSIGNED");
+        Carried plan = planToSource();
+        doors.at(plan, metresNorth(2_000));
+        doors.at(carried, metresNorth(2_100));
+        InternalFleetPort grouping = groupingFleet(doors);
+
+        // PER_ORDER (and undecided): the courier is ranked for the road they save; every order pays its own card.
+        for (RunPayMode mode : new RunPayMode[] {RunPayMode.PER_ORDER, null}) {
+            policies.runPayMode = mode;
+            FleetCandidate candidate =
+                    candidateFor(grouping.candidates(TENANT, BRAND, branch, 4_000, probe(plan, 700, 3)), alisher);
+            assertThat(candidate.groupableWithMetres()).as("mode %s", mode).isNotNull();
+            assertThat(candidate.runIncrementPay()).as("mode %s", mode).isFalse();
+        }
+
+        // First-full-then-increment with no rate card for the courier's type: a quote cannot be shown, so no
+        // grouped order is offered to them.
+        policies.runPayMode = RunPayMode.FIRST_FULL_THEN_INCREMENT;
+        FleetCandidate withoutCard =
+                candidateFor(grouping.candidates(TENANT, BRAND, branch, 4_000, probe(plan, 700, 3)), alisher);
+        assertThat(withoutCard.groupableWithMetres()).isNull();
+        assertThat(withoutCard.runIncrementPay()).isFalse();
+
+        // With a card, the same courier is groupable on the run basis.
+        activateScooterCard();
+        FleetCandidate withCard =
+                candidateFor(grouping.candidates(TENANT, BRAND, branch, 4_000, probe(plan, 700, 3)), alisher);
+        assertThat(withCard.groupableWithMetres()).isNotNull();
+        assertThat(withCard.runIncrementPay()).isTrue();
     }
 
     // ------------------------------------------------------------------- helpers
@@ -713,6 +944,79 @@ class CourierDispatchPortTests {
         return jdbc.sql("""
                 SELECT count(*) FROM fulfillment.courier_duty_sessions WHERE ended_at IS NULL
                 """).query(Long.class).single();
+    }
+
+    /** Every reveal the grouping feed makes, as the audit log would hold it. */
+    private final RecordingAudit reveals = new RecordingAudit();
+
+    private InternalFleetPort groupingFleet(Doors doors) {
+        return new InternalFleetAdapter(
+                shiftStore,
+                dispatchGate,
+                new JdbcActiveAssignments(jdbc, doors, reveals),
+                proximityPort,
+                courierPolicies,
+                rateCards,
+                courierStore,
+                null,
+                clock);
+    }
+
+    private static InternalFleetPort.GroupingProbe probe(Carried plan, int radiusMeters, int maxOrdersPerRun) {
+        return new InternalFleetPort.GroupingProbe(plan.planId(), radiusMeters, maxOrdersPerRun);
+    }
+
+    private void activateScooterCard() {
+        CourierRateCardService cards = new CourierRateCardService(rateCards, new RecordingAudit(), clock);
+        UUID cardId = cards.author(new CourierRateCardService.NewRateCard(
+                TENANT,
+                BRAND,
+                null,
+                scooterTypeId,
+                "SCOOTER-STANDARD",
+                1,
+                UZS,
+                List.of(
+                        new RateComponent(UUID.randomUUID(), RateComponentType.PER_ORDER, 0, 3_000, null, null, null),
+                        new RateComponent(UUID.randomUUID(), RateComponentType.PER_KM_BAND, 0, 2_000, 0, null, null))));
+        cards.activate(TENANT, cardId, manager(), "activating the scooter card");
+    }
+
+    /**
+     * The order port as the feed sees it: a door per order, a record of every reveal and the purpose it named.
+     * Only the point is ever returned, which is the whole contract of ADR 0170 Decision 9.
+     */
+    private static final class Doors implements DeliveryOrderPort {
+
+        private final java.util.Map<UUID, GeoPoint> points = new java.util.HashMap<>();
+        private final java.util.Set<UUID> unreadable = new java.util.HashSet<>();
+        private final List<String> purposes = new CopyOnWriteArrayList<>();
+
+        void at(Carried order, double latitude) {
+            points.put(order.orderId(), new GeoPoint(latitude, BRANCH_LONGITUDE));
+        }
+
+        /** The same doors, with a clean record of reveals. */
+        Doors fresh() {
+            Doors copy = new Doors();
+            copy.points.putAll(points);
+            copy.unreadable.addAll(unreadable);
+            return copy;
+        }
+
+        @Override
+        public Optional<DeliveryOrder> deliveryOrder(UUID tenantId, UUID orderId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public Optional<GeoPoint> dropoffPoint(UUID tenantId, UUID orderId, String purpose) {
+            purposes.add(purpose);
+            if (unreadable.contains(orderId)) {
+                throw new IllegalStateException("the address could not be decrypted");
+            }
+            return Optional.ofNullable(points.get(orderId));
+        }
     }
 
     /** A latitude that many metres north of the branch door. */
@@ -933,10 +1237,11 @@ class CourierDispatchPortTests {
      * shipments sharing a plan is the thing those indexes exist to make
      * unwritable.
      */
-    private void carryingShipment(UUID courierId, String status) {
+    private Carried carryingShipment(UUID courierId, String status) {
         int sequence = ++chainSequence;
         UUID orderId = seedDeliveryOrder(sequence);
         UUID planId = UUID.randomUUID();
+        UUID shipmentId = UUID.randomUUID();
         OffsetDateTime anchor = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
 
         jdbc.sql("""
@@ -975,7 +1280,7 @@ class CourierDispatchPortTests {
                             THEN anchor + interval '40 minutes' END
                   FROM (SELECT CAST(:anchor AS timestamptz) AS anchor) AS moment
                 """)
-                .param("id", UUID.randomUUID())
+                .param("id", shipmentId)
                 .param("tenantId", TENANT)
                 .param("brandId", BRAND)
                 .param("locationId", branch)
@@ -985,6 +1290,41 @@ class CourierDispatchPortTests {
                 .param("courierId", courierId)
                 .param("anchor", anchor)
                 .update();
+        return new Carried(orderId, planId, shipmentId);
+    }
+
+    /** What {@link #carryingShipment} left behind: the order (whose door the feed reads), its plan and its shipment. */
+    private record Carried(UUID orderId, UUID planId, UUID shipmentId) {}
+
+    /** An order and a plan still to be sourced, with no shipment: the one the grouping feed measures against. */
+    private Carried planToSource() {
+        int sequence = ++chainSequence;
+        UUID orderId = seedDeliveryOrder(sequence);
+        UUID planId = UUID.randomUUID();
+        OffsetDateTime anchor = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+        jdbc.sql("""
+                INSERT INTO fulfillment.delivery_plans (
+                    id, tenant_id, brand_id, location_id, order_id, status, sourcing_mode,
+                    service_level, customer_delivery_fee_minor, currency, confirmed_at,
+                    preparation_seconds, estimated_ready_at, pickup_window_start,
+                    pickup_window_end, promised_delivery_start, promised_delivery_end,
+                    source_at, latest_assignment_at, branch_zone)
+                SELECT :id, :tenantId, :brandId, :locationId, :orderId, 'SOURCING', 'FLEET_FIRST',
+                       'STANDARD', 12000, 'UZS', anchor, 900,
+                       anchor + interval '15 minutes', anchor + interval '15 minutes',
+                       anchor + interval '25 minutes', anchor + interval '30 minutes',
+                       anchor + interval '45 minutes', anchor, anchor + interval '25 minutes',
+                       'Asia/Tashkent'
+                  FROM (SELECT CAST(:anchor AS timestamptz) AS anchor) AS moment
+                """)
+                .param("id", planId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("locationId", branch)
+                .param("orderId", orderId)
+                .param("anchor", anchor)
+                .update();
+        return new Carried(orderId, planId, UUID.randomUUID());
     }
 
     private UUID seedDeliveryOrder(int sequence) {
@@ -1124,6 +1464,9 @@ class CourierDispatchPortTests {
 
         private ShiftEnforcement enforcement = ShiftEnforcement.ENFORCED;
 
+        /** ADR 0170: null is «not decided», as every document stored before the field existed reads. */
+        private @Nullable RunPayMode runPayMode;
+
         @Override
         @SuppressWarnings("unchecked")
         public <P> Optional<ResolvedPolicy<P>> resolve(PolicyKey<P> key, ResourceScope scope) {
@@ -1142,7 +1485,8 @@ class CourierDispatchPortTests {
                     CourierCompensationPolicy.DEFAULTS.kitchenReadyOnly(),
                     CourierCompensationPolicy.DEFAULTS.revealCustomerLocationTiming(),
                     CourierCompensationPolicy.DEFAULTS.postDeliveryPaymentCheckRequired(),
-                    CourierCompensationPolicy.DEFAULTS.onlineWithinMinutes());
+                    CourierCompensationPolicy.DEFAULTS.onlineWithinMinutes(),
+                    runPayMode);
 
             return Optional.of((ResolvedPolicy<P>) new ResolvedPolicy<>(
                     key.code(),

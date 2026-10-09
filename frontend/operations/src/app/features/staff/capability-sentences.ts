@@ -590,6 +590,24 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     'uz-Latn': 'Oshxona berish ekranini koʻrish',
     en: 'View the kitchen display board',
   },
+  'kitchen.headcount.read': {
+    area: 'kitchen',
+    ru: 'Видеть, сколько поваров нужно по часам',
+    'uz-Latn': 'Soatlar boʻyicha nechta oshpaz kerakligini koʻrish',
+    en: 'See how many cooks each hour needs',
+  },
+  'kitchen.paid-hold.manage': {
+    area: 'kitchen',
+    ru: 'Настраивать удержание тикетов до оплаты',
+    'uz-Latn': 'Chiptalarni toʻlovgacha ushlab turishni sozlash',
+    en: 'Set whether tickets wait for payment',
+  },
+  'kitchen.productivity.manage': {
+    area: 'kitchen',
+    ru: 'Указывать, сколько порций повар делает за час',
+    'uz-Latn': 'Oshpaz bir soatda nechta porsiya tayyorlashini kiritish',
+    en: 'State how many portions a cook makes in an hour',
+  },
   'kitchen.station.manage': {
     area: 'kitchen',
     ru: 'Настраивать станции кухни',
@@ -622,9 +640,9 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
   },
   'kitchen.ticket.release.override': {
     area: 'kitchen',
-    ru: 'Отпускать тикет досрочно',
-    'uz-Latn': 'Chiptani muddatidan oldin chiqarish',
-    en: 'Override an early ticket release',
+    ru: 'Отпускать тикет досрочно или несмотря на ожидание оплаты',
+    'uz-Latn': 'Chiptani muddatidan oldin yoki toʻlov kutilayotgan boʻlsa ham chiqarish',
+    en: 'Fire a ticket early, or while it waits for payment',
   },
 
   'dinein.floorplan.manage': {

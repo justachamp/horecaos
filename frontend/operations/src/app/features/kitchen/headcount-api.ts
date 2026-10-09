@@ -14,7 +14,7 @@ export type HeadcountHolidayMode = 'INCLUDE' | 'EXCLUDE' | 'WEIGHT';
 export const COOKING_ROLES = ['HOT', 'COLD', 'GRILL', 'BAR', 'BAKERY', 'PACKING'] as const;
 export type CookingRole = (typeof COOKING_ROLES)[number];
 
-/** Mirrors `KitchenHeadcountController.RowView`: one station in one operating hour. */
+/** Mirrors `KitchenHeadcountController.HeadcountRowView`: one station in one operating hour. */
 export interface HeadcountRow {
   readonly stationId: string;
   readonly stationCode: string;
@@ -48,7 +48,7 @@ export interface HeadcountRawCell {
   readonly portions: number;
 }
 
-/** Mirrors `KitchenHeadcountController.PlanResponse`. */
+/** Mirrors `KitchenHeadcountController.HeadcountPlanResponse`. */
 export interface HeadcountPlan {
   readonly targetDate: string;
   readonly weekday: number;
@@ -60,6 +60,11 @@ export interface HeadcountPlan {
   readonly stationsWithoutFigure: readonly string[];
   /** The raw per-date portions, only when the sample was too thin to plan from. */
   readonly history: readonly HeadcountRawCell[];
+  /**
+   * Minutes after local midnight at which the tenant's business day starts. An operating hour is counted from
+   * it, so the wall-clock hour is `(businessDayStartMinutes / 60 + hour) mod 24`. Absent reads as midnight.
+   */
+  readonly businessDayStartMinutes?: number;
 }
 
 export type PolicyScope = 'TENANT' | 'BRAND' | 'LOCATION';

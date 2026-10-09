@@ -1756,7 +1756,10 @@ public class OperationsOrderController {
                     reason = "ADR 0172: stable assignment codes (OVERRODE_DISPATCH_RULE, NO_OPEN_SHIFT, ...), "
                             + "never free text; the name heuristic reads «note» as a customer's own words")
             @Nullable
-            String note) {
+            String note,
+
+            /** ADR 0172 Decision 6: the dispatch rule the plan matched, which this assignment overrode when noted. */
+            @Nullable String ruleId) {
 
         static BulkActionItemResponse of(OrderBulkActionService.BulkItemOutcome outcome) {
             return new BulkActionItemResponse(
@@ -1766,7 +1769,8 @@ public class OperationsOrderController {
                     outcome.resultingOrderVersion(),
                     outcome.planId(),
                     outcome.shipmentId(),
-                    outcome.note());
+                    outcome.note(),
+                    outcome.ruleId());
         }
     }
 

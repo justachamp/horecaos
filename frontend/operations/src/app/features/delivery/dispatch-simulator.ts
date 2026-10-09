@@ -57,6 +57,9 @@ const NOTE_LABELS: Readonly<Record<string, MessageKey>> = {
   NO_PARTNER_AVAILABLE: 'delivery.rules.sim.note.NO_PARTNER_AVAILABLE',
   WINNER_DECIDED_BY_QUOTES: 'delivery.rules.sim.note.WINNER_DECIDED_BY_QUOTES',
   NO_ZONE_EVIDENCE: 'delivery.rules.sim.note.NO_ZONE_EVIDENCE',
+  GROUPING_CEILING_BELOW_RUN: 'delivery.rules.sim.note.GROUPING_CEILING_BELOW_RUN',
+  GROUPING_NEEDS_A_PLAN_TO_MEASURE: 'delivery.rules.sim.note.GROUPING_NEEDS_A_PLAN_TO_MEASURE',
+  FLEET_NOT_MEASURABLE: 'delivery.rules.sim.note.FLEET_NOT_MEASURABLE',
 };
 
 /** The platform is Uzbekistan-only and Uzbekistan has no DST, so a bare wall-clock time is read here until a result reports the branch's own zone. */
@@ -176,6 +179,17 @@ export class DispatchSimulator {
 
   protected noteLabel(note: string): MessageKey | null {
     return NOTE_LABELS[note] ?? null;
+  }
+
+  protected basisLabel(basis: 'DIRECT' | 'RUN_INCREMENT'): MessageKey {
+    return basis === 'RUN_INCREMENT'
+      ? 'delivery.rules.sim.grouping.basis.RUN_INCREMENT'
+      : 'delivery.rules.sim.grouping.basis.DIRECT';
+  }
+
+  /** A courier's id is shown short: it is enough to find them on the roster and carries nothing else. */
+  protected shortId(id: string): string {
+    return id.slice(0, 8);
   }
 
   /** An installation's name for a skip, which carries only its id. */

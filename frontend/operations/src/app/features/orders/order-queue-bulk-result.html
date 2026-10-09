@@ -20,6 +20,11 @@
         <li data-testid="order-queue-bulk-result-applied-note">
           <span class="q-mono">{{ bulkResultItemLabel(item.orderId) }}</span>
           — {{ bulkNoteLabel(item.note) }}
+          @if (overrodeRuleId(item); as ruleId) {
+            <span class="q-caption q-mono" data-testid="order-queue-bulk-result-rule">{{
+              'orders.queue.bulk.result.rule' | t: { rule: ruleId }
+            }}</span>
+          }
         </li>
       }
     </ul>

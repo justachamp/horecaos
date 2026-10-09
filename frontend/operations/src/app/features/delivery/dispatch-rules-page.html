@@ -98,6 +98,7 @@
               [action]="d.default"
               [options]="options()"
               [groupingAllowed]="v.groupingAllowed"
+              [runPayDecided]="v.runPayDecided"
               idPrefix="default"
               (actionChange)="setDefault($event)"
             />
@@ -157,6 +158,7 @@
               [action]="rule.then"
               [options]="options()"
               [groupingAllowed]="v.groupingAllowed"
+              [runPayDecided]="v.runPayDecided"
               idPrefix="rule-action"
               (actionChange)="setRuleAction($event)"
             />
