@@ -918,6 +918,406 @@
         "required" : [ "approvalChannel", "mode", "reason", "timeoutAction" ],
         "type" : "object"
       },
+      "AutoAddBandBody" : {
+        "properties" : {
+          "addVariantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "portionsFrom" : {
+            "type" : "number"
+          },
+          "portionsTo" : {
+            "type" : "number"
+          },
+          "quantity" : {
+            "type" : "number"
+          }
+        },
+        "required" : [ "addVariantId", "portionsFrom", "quantity" ],
+        "type" : "object"
+      },
+      "AutoAddOutcomeResponse" : {
+        "properties" : {
+          "outcome" : {
+            "type" : "string"
+          },
+          "quantity" : {
+            "type" : "number"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "ruleCode" : {
+            "type" : "string"
+          },
+          "ruleId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "ruleStatus" : {
+            "type" : "string"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "AutoAddRuleCreateRequest" : {
+        "properties" : {
+          "addVariantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "bands" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AutoAddBandBody"
+            },
+            "maxItems" : 20,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "channelSystemTypes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "maxItems" : 9,
+            "minItems" : 1,
+            "type" : "array"
+          },
+          "code" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "customerText" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "fulfillmentModes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "maxItems" : 3,
+            "minItems" : 1,
+            "type" : "array"
+          },
+          "kind" : {
+            "enum" : [ "PLAIN", "PRODUCT_TRIGGERED", "PORTION_BAND" ],
+            "type" : "string"
+          },
+          "locationIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "mandatory" : {
+            "type" : "boolean"
+          },
+          "maximumQuantity" : {
+            "type" : "number"
+          },
+          "minimumQuantity" : {
+            "type" : "number"
+          },
+          "mode" : {
+            "enum" : [ "INJECT", "OFFER" ],
+            "type" : "string"
+          },
+          "quantity" : {
+            "type" : "number"
+          },
+          "repeatPerMultiple" : {
+            "type" : "boolean"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "triggerThreshold" : {
+            "type" : "number"
+          },
+          "triggers" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AutoAddTriggerBody"
+            },
+            "maxItems" : 50,
+            "minItems" : 0,
+            "type" : "array"
+          }
+        },
+        "required" : [ "channelSystemTypes", "code", "fulfillmentModes", "kind" ],
+        "type" : "object"
+      },
+      "AutoAddRuleReplaceRequest" : {
+        "properties" : {
+          "addVariantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "bands" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AutoAddBandBody"
+            },
+            "maxItems" : 20,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "channelSystemTypes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "maxItems" : 9,
+            "minItems" : 1,
+            "type" : "array"
+          },
+          "customerText" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "fulfillmentModes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "maxItems" : 3,
+            "minItems" : 1,
+            "type" : "array"
+          },
+          "locationIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "mandatory" : {
+            "type" : "boolean"
+          },
+          "maximumQuantity" : {
+            "type" : "number"
+          },
+          "minimumQuantity" : {
+            "type" : "number"
+          },
+          "mode" : {
+            "enum" : [ "INJECT", "OFFER" ],
+            "type" : "string"
+          },
+          "quantity" : {
+            "type" : "number"
+          },
+          "repeatPerMultiple" : {
+            "type" : "boolean"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "pattern" : "DRAFT|ACTIVE",
+            "type" : "string"
+          },
+          "triggerThreshold" : {
+            "type" : "number"
+          },
+          "triggers" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AutoAddTriggerBody"
+            },
+            "maxItems" : 50,
+            "minItems" : 0,
+            "type" : "array"
+          }
+        },
+        "required" : [ "channelSystemTypes", "fulfillmentModes" ],
+        "type" : "object"
+      },
+      "AutoAddRuleResponse" : {
+        "properties" : {
+          "addVariantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "bands" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AutoAddBandBody"
+            },
+            "type" : "array"
+          },
+          "channelSystemTypes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "customerText" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "fulfillmentModes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "locationIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "mandatory" : {
+            "type" : "boolean"
+          },
+          "maximumQuantity" : {
+            "type" : "number"
+          },
+          "minimumQuantity" : {
+            "type" : "number"
+          },
+          "mode" : {
+            "type" : "string"
+          },
+          "quantity" : {
+            "type" : "number"
+          },
+          "repeatPerMultiple" : {
+            "type" : "boolean"
+          },
+          "ruleId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "triggerThreshold" : {
+            "type" : "number"
+          },
+          "triggers" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AutoAddTriggerBody"
+            },
+            "type" : "array"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "AutoAddSimulatedLineBody" : {
+        "properties" : {
+          "quantity" : {
+            "exclusiveMinimum" : 0,
+            "maximum" : 999,
+            "type" : "number"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "quantity", "variantId" ],
+        "type" : "object"
+      },
+      "AutoAddSimulationRequest" : {
+        "properties" : {
+          "channelSystemType" : {
+            "minLength" : 1,
+            "pattern" : "WEB|IOS|ANDROID|TELEGRAM|KIOSK|QR_TABLE|CALL_CENTRE",
+            "type" : "string"
+          },
+          "declinedRuleIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 50,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "fulfillmentMode" : {
+            "minLength" : 1,
+            "pattern" : "DELIVERY|PICKUP|DINE_IN",
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AutoAddSimulatedLineBody"
+            },
+            "maxItems" : 100,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "channelSystemType", "fulfillmentMode", "lines" ],
+        "type" : "object"
+      },
+      "AutoAddSimulationResponse" : {
+        "properties" : {
+          "outcomes" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AutoAddOutcomeResponse"
+            },
+            "type" : "array"
+          },
+          "portions" : {
+            "type" : "number"
+          },
+          "units" : {
+            "type" : "number"
+          }
+        },
+        "type" : "object"
+      },
+      "AutoAddTriggerBody" : {
+        "properties" : {
+          "categoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "productId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "BandView" : {
         "properties" : {
           "bandSet" : {
@@ -1448,7 +1848,7 @@
             "type" : "array"
           },
           "mode" : {
-            "enum" : [ "REPLACE", "MERGE" ],
+            "enum" : [ "REPLACE", "MERGE", "SUCCESSOR" ],
             "type" : "string"
           }
         },
@@ -5269,6 +5669,13 @@
           "mxikCode" : {
             "type" : "string"
           },
+          "mxikReplacedBy" : {
+            "type" : "string"
+          },
+          "mxikWithdrawnOn" : {
+            "format" : "date",
+            "type" : "string"
+          },
           "name" : {
             "type" : "string"
           },
@@ -5307,6 +5714,16 @@
           "unclassifiedCount" : {
             "format" : "int32",
             "type" : "integer"
+          },
+          "withdrawnCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "withdrawnNodes" : {
+            "items" : {
+              "$ref" : "#/components/schemas/FiscalCoverageNodeResponse"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -5763,6 +6180,42 @@
               "type" : "string"
             },
             "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
+      "IngredientCreateRequest" : {
+        "properties" : {
+          "code" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "names" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "code" ],
+        "type" : "object"
+      },
+      "IngredientEditRequest" : {
+        "properties" : {
+          "names" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -6834,6 +7287,176 @@
         },
         "type" : "object"
       },
+      "MxikImportApplyRequest" : {
+        "properties" : {
+          "acknowledgedWithdrawals" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "MxikImportFindingResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "detailCode" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "MxikImportRequest" : {
+        "properties" : {
+          "contentBase64" : {
+            "type" : "string"
+          },
+          "fileName" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "mode" : {
+            "type" : "string"
+          },
+          "objectKey" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "sourcePublishedOn" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        },
+        "required" : [ "fileName", "mode" ],
+        "type" : "object"
+      },
+      "MxikImportRunResponse" : {
+        "properties" : {
+          "acknowledgedWithdrawals" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "appliedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "appliedBy" : {
+            "type" : "string"
+          },
+          "codeLengthHistogram" : {
+            "additionalProperties" : {
+              "format" : "int32",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "createdBy" : {
+            "type" : "string"
+          },
+          "datasetVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "failureReason" : {
+            "type" : "string"
+          },
+          "labelsBorrowed" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "mappingProfile" : {
+            "type" : "string"
+          },
+          "mode" : {
+            "type" : "string"
+          },
+          "rowsChanged" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rowsError" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rowsNew" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rowsReinstated" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rowsTotal" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rowsUnchanged" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rowsWithdrawn" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "runId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sampleErrors" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MxikImportSampleError"
+            },
+            "type" : "array"
+          },
+          "sourceFileName" : {
+            "type" : "string"
+          },
+          "sourcePublishedOn" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "sourceSha256" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "withdrawalThresholdPercent" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "MxikImportSampleError" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "detailCode" : {
+            "type" : "string"
+          },
+          "row" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "MxikReferenceRow" : {
         "properties" : {
           "code" : {
@@ -6857,12 +7480,43 @@
           "parentCode" : {
             "type" : "string"
           },
+          "replacedByCode" : {
+            "type" : "string"
+          },
           "validFrom" : {
             "format" : "date",
             "type" : "string"
           },
           "validUntil" : {
             "format" : "date",
+            "type" : "string"
+          },
+          "withdrawn" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "MxikUploadTicketResponse" : {
+        "properties" : {
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "maxBytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "objectKey" : {
+            "type" : "string"
+          },
+          "requiredHeaders" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "url" : {
             "type" : "string"
           }
         },
@@ -7094,7 +7748,7 @@
             "type" : "string"
           },
           "kind" : {
-            "enum" : [ "CANCELLATION", "COMPLETION" ],
+            "enum" : [ "CANCELLATION", "COMPLETION", "LINE_REMOVAL" ],
             "type" : "string"
           },
           "liabilityParty" : {
@@ -7106,7 +7760,7 @@
             "type" : "string"
           },
           "systemCategory" : {
-            "enum" : [ "CUSTOMER_CANCELLED", "CUSTOMER_UNREACHABLE", "CUSTOMER_NO_SHOW", "RESTAURANT_REFUSED", "ITEM_UNAVAILABLE", "KITCHEN_CAPACITY", "DELIVERY_FAILED", "COURIER_UNAVAILABLE", "ADDRESS_UNSERVICEABLE", "PAYMENT_NOT_RECEIVED", "DUPLICATE_ORDER", "TEST_ORDER", "SUSPECTED_FRAUD", "PRICING_ERROR", "DELIVERED_OWN_COURIER", "DELIVERED_PARTNER_COURIER", "COLLECTED_BY_CUSTOMER", "SERVED_IN_HOUSE", "APPROVAL_DEADLINE_LAPSED", "OTHER" ],
+            "enum" : [ "CUSTOMER_CANCELLED", "CUSTOMER_UNREACHABLE", "CUSTOMER_NO_SHOW", "RESTAURANT_REFUSED", "ITEM_UNAVAILABLE", "KITCHEN_CAPACITY", "DELIVERY_FAILED", "COURIER_UNAVAILABLE", "ADDRESS_UNSERVICEABLE", "PAYMENT_NOT_RECEIVED", "DUPLICATE_ORDER", "TEST_ORDER", "SUSPECTED_FRAUD", "PRICING_ERROR", "CUSTOMER_CHANGED_MIND", "KITCHEN_ERROR", "ORDER_ENTRY_ERROR", "QUALITY_ISSUE", "DELIVERED_OWN_COURIER", "DELIVERED_PARTNER_COURIER", "COLLECTED_BY_CUSTOMER", "SERVED_IN_HOUSE", "APPROVAL_DEADLINE_LAPSED", "OTHER" ],
             "type" : "string"
           }
         },
@@ -7116,7 +7770,7 @@
       "OrderOutcomeReasonControllerReorderRequest" : {
         "properties" : {
           "kind" : {
-            "enum" : [ "CANCELLATION", "COMPLETION" ],
+            "enum" : [ "CANCELLATION", "COMPLETION", "LINE_REMOVAL" ],
             "type" : "string"
           },
           "orderedReasonIds" : {
@@ -7623,6 +8277,20 @@
         },
         "type" : "object"
       },
+      "PageMxikImportFindingResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MxikImportFindingResponse"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PageMxikReferenceRow" : {
         "properties" : {
           "items" : {
@@ -8101,6 +8769,9 @@
           "portionSize" : {
             "type" : "number"
           },
+          "portionsPerUnit" : {
+            "type" : "number"
+          },
           "proteinGramsPer100" : {
             "type" : "number"
           },
@@ -8141,6 +8812,9 @@
             "type" : "integer"
           },
           "portionSize" : {
+            "type" : "number"
+          },
+          "portionsPerUnit" : {
             "type" : "number"
           },
           "proteinGramsPer100" : {
@@ -9211,6 +9885,30 @@
         },
         "type" : "object"
       },
+      "ProductVocabularySetRequest" : {
+        "properties" : {
+          "ids" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "required" : [ "ids" ],
+        "type" : "object"
+      },
+      "ProductVocabularySetResponse" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/VocabularyEntryResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "ProgramView" : {
         "properties" : {
           "completedAt" : {
@@ -9876,8 +10574,39 @@
       },
       "ReferenceStatus" : {
         "properties" : {
+          "ageDays" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "datasetVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "importedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
           "loaded" : {
             "type" : "boolean"
+          },
+          "maxAgeDays" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "sourcePublishedOn" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "stale" : {
+            "type" : "boolean"
+          },
+          "validRows" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "withdrawnRows" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -11737,6 +12466,64 @@
         "required" : [ "holdingState", "reason" ],
         "type" : "object"
       },
+      "TagCreateRequest" : {
+        "properties" : {
+          "code" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "iconKey" : {
+            "maxLength" : 24,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "names" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "showAsBadge" : {
+            "type" : "boolean"
+          },
+          "showAsFilter" : {
+            "type" : "boolean"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "code" ],
+        "type" : "object"
+      },
+      "TagEditRequest" : {
+        "properties" : {
+          "iconKey" : {
+            "maxLength" : 24,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "names" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "showAsBadge" : {
+            "type" : "boolean"
+          },
+          "showAsFilter" : {
+            "type" : "boolean"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "TariffDetailResponse" : {
         "properties" : {
           "activeVersion" : {
@@ -12321,7 +13108,7 @@
             "type" : "string"
           },
           "entityType" : {
-            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "COMBO_GROUP", "COMBO_COMPONENT", "FEE" ],
+            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "COMBO_GROUP", "COMBO_COMPONENT", "AUTO_ADD_RULE", "TAG", "INGREDIENT", "FEE" ],
             "type" : "string"
           },
           "locale" : {
@@ -12817,6 +13604,44 @@
           },
           "variantId" : {
             "format" : "uuid",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "VocabularyEntryResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "iconKey" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "names" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "showAsBadge" : {
+            "type" : "boolean"
+          },
+          "showAsFilter" : {
+            "type" : "boolean"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
             "type" : "string"
           },
           "version" : {
@@ -13710,7 +14535,7 @@
     "/api/v1/control-plane/capabilities" : {
       "get" : {
         "description" : "The code-owned registry, not one session's slice of it. Platform-admin only: the vocabulary itself is what an approval policy's requiredApproverCapability and a grant's roleCode are built from.",
-        "operationId" : "list_21",
+        "operationId" : "list_24",
         "responses" : {
           "200" : {
             "content" : {
@@ -14008,7 +14833,7 @@
     "/api/v1/control-plane/event-contracts" : {
       "get" : {
         "description" : "Code-owned (ADR 0032): a producer cannot publish an event with no entry here. Static within a build, so there is nothing to paginate.",
-        "operationId" : "list_20",
+        "operationId" : "list_23",
         "responses" : {
           "200" : {
             "content" : {
@@ -14109,7 +14934,7 @@
     },
     "/api/v1/control-plane/fiscal-reference/mxik" : {
       "get" : {
-        "description" : "Currently-valid rows only. Empty when the official list has never been imported — that is a named gap, not a search that found nothing to match.",
+        "description" : "Currently-valid rows only, by the one definition of valid (ADR 0173): valid_from <= today and today < valid_until. With asOf (a date) the search is judged on that date and also returns the codes withdrawn by then, each marked withdrawn with the successor the list names; without it a row says nothing about withdrawal. Empty when the official list has never been imported — that is a named gap, not a search that found nothing to match; status says which.",
         "operationId" : "search_1",
         "parameters" : [ {
           "in" : "query",
@@ -14125,6 +14950,14 @@
           "schema" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "asOf",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
           }
         } ],
         "responses" : {
@@ -14143,8 +14976,227 @@
         "tags" : [ "Fiscal reference" ]
       }
     },
+    "/api/v1/control-plane/fiscal-reference/mxik/imports" : {
+      "get" : {
+        "operationId" : "recent",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/MxikImportRunResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The most recent import runs",
+        "tags" : [ "Fiscal reference" ]
+      },
+      "post" : {
+        "description" : "Supply the file as contentBase64 (a small file, within the request-body cap) or as objectKey from an upload ticket. Format follows the file's extension (.xlsx or .csv), never a byte sniff. The raw file is kept under its content hash, then parsed; the run records counts, a row-length distribution and findings, and the list is untouched. mode FULL_SNAPSHOT may withdraw codes the file no longer contains; PARTIAL only inserts and updates. A full snapshot that would withdraw more than catalog.mxik_import_withdrawal_threshold_percent of the valid rows answers HELD_FOR_REVIEW. 422 with findingCode UNKNOWN_HEADER, DUPLICATE_HEADER, MISSING_COLUMN, FILE_EMPTY, FILE_TOO_LARGE or RAW_FILE_NOT_STORED when the file cannot be used.",
+        "operationId" : "upload",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MxikImportRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MxikImportRunResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Upload the official file: always a dry run",
+        "tags" : [ "Fiscal reference" ]
+      }
+    },
+    "/api/v1/control-plane/fiscal-reference/mxik/imports/uploads" : {
+      "post" : {
+        "description" : "The API refuses a request body over a mebibyte, so a full national list goes to the object store directly: PUT the file to the returned URL with the required headers, then post the import naming the returned objectKey. The key is single-purpose and the URL expires; the file is read back once, bounded by catalog.mxik_import_max_bytes.",
+        "operationId" : "requestUpload",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MxikUploadTicketResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A signed upload for a file too large for the request body",
+        "tags" : [ "Fiscal reference" ]
+      }
+    },
+    "/api/v1/control-plane/fiscal-reference/mxik/imports/{runId}" : {
+      "get" : {
+        "operationId" : "read_5",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "runId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MxikImportRunResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One import run: its counts, its distribution of code lengths and where it stands",
+        "tags" : [ "Fiscal reference" ]
+      }
+    },
+    "/api/v1/control-plane/fiscal-reference/mxik/imports/{runId}/apply" : {
+      "post" : {
+        "description" : "Requires If-Match carrying the run's version. Writes the list parents-first in one transaction, dates the withdrawal of any code a full snapshot no longer contains and reinstates one that returned; nothing is ever deleted. A run that is HELD_FOR_REVIEW applies only when acknowledgedWithdrawals repeats the exact count it would withdraw (422 WITHDRAWAL_ACKNOWLEDGEMENT_REQUIRED otherwise). 422 RUN_IS_STALE when the list changed after the run was validated; upload the file again.",
+        "operationId" : "apply",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "runId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MxikImportApplyRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MxikImportRunResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Apply a validated run to the list",
+        "tags" : [ "Fiscal reference" ]
+      }
+    },
+    "/api/v1/control-plane/fiscal-reference/mxik/imports/{runId}/findings" : {
+      "get" : {
+        "description" : "Row errors, the codes a full snapshot would withdraw, the codes it would reinstate and the codes whose package defaults change. Capped at 5,000 per run. Cursor-paged: pass the previous page's nextCursor as after. The detail never repeats a row's content.",
+        "operationId" : "findings",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "runId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "after",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageMxikImportFindingResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What the run found, in order",
+        "tags" : [ "Fiscal reference" ]
+      }
+    },
+    "/api/v1/control-plane/fiscal-reference/mxik/imports/{runId}/reject" : {
+      "post" : {
+        "description" : "Requires If-Match. The run is kept as a record; its staged rows are cleared and the list is untouched.",
+        "operationId" : "reject",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "runId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MxikImportRunResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reject a validated run",
+        "tags" : [ "Fiscal reference" ]
+      }
+    },
     "/api/v1/control-plane/fiscal-reference/mxik/status" : {
       "get" : {
+        "description" : "loaded false means every classification lookup will find nothing, not that none exist. Once loaded: the dataset version, when it was imported, the source's own date if the administrator entered it, the valid and withdrawn row counts, its age in days and whether that exceeds catalog.mxik_reference_max_age_days.",
         "operationId" : "status_1",
         "responses" : {
           "200" : {
@@ -14158,13 +15210,13 @@
             "description" : "OK"
           }
         },
-        "summary" : "Whether the official ИКПУ/MXIK list has been imported at all",
+        "summary" : "Whether the official ИКПУ/MXIK list is loaded, which dataset it is, and how old",
         "tags" : [ "Fiscal reference" ]
       }
     },
     "/api/v1/control-plane/grants" : {
       "get" : {
-        "operationId" : "list_14",
+        "operationId" : "list_17",
         "responses" : {
           "200" : {
             "content" : {
@@ -14254,7 +15306,7 @@
     "/api/v1/control-plane/incidents" : {
       "get" : {
         "description" : "Each alert class and subject has at most one live incident; raising it again counts another occurrence.",
-        "operationId" : "list_19",
+        "operationId" : "list_22",
         "parameters" : [ {
           "in" : "query",
           "name" : "includeResolved",
@@ -14886,7 +15938,7 @@
     },
     "/api/v1/control-plane/onboarding-templates" : {
       "get" : {
-        "operationId" : "list_18",
+        "operationId" : "list_21",
         "responses" : {
           "200" : {
             "content" : {
@@ -15247,7 +16299,7 @@
     "/api/v1/control-plane/staff/{subjectId}/mfa" : {
       "get" : {
         "description" : "The identity provider's own credential list, cached for sixty seconds. A subject that holds no platform-scope grant answers not-found.",
-        "operationId" : "read_1",
+        "operationId" : "read_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "subjectId",
@@ -15569,7 +16621,7 @@
     "/api/v1/control-plane/template-reviews" : {
       "get" : {
         "description" : "Versions in force or in draft, awaiting first. A version awaiting or refused is not sent. Filter to one state with ?state=.",
-        "operationId" : "list_17",
+        "operationId" : "list_20",
         "parameters" : [ {
           "in" : "query",
           "name" : "state",
@@ -15780,7 +16832,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/approval-policies" : {
       "get" : {
         "description" : "Every version of each policy, newest first. An action code with no row here needs no second signature, which is the state every action is in until somebody publishes one.",
-        "operationId" : "list_13",
+        "operationId" : "list_16",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -16370,6 +17422,280 @@
         },
         "summary" : "Activate a brand",
         "tags" : [ "SaaS control plane" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/auto-add-rules" : {
+      "get" : {
+        "description" : "Draft, active and archived rules in display order. Only active rules reach customers, and only with the next publication.",
+        "operationId" : "list_15",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/AutoAddRuleResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The brand's auto-add rules, every status",
+        "tags" : [ "Auto-add rules" ]
+      },
+      "post" : {
+        "description" : "Three kinds: PLAIN adds a fixed quantity of one variant whenever the order's context matches; PRODUCT_TRIGGERED adds a quantity of one variant per step of trigger units in the basket; PORTION_BAND totals the basket's portions and adds the variant and quantity of the band that holds the total. A rule may condition on the order's fulfilment mode, the channel's system type (cart-built channels only: an aggregator or POS order cannot carry a rule), optionally the location, and the basket's contents, and on nothing else. A rule is created as a draft and activated with a replace that says so. Refused 409 when the code is taken; 422 with findingCode AUTO_ADD_RULE_INVALID, AUTO_ADD_CHANNEL_NOT_ALLOWED or AUTO_ADD_BANDS_OVERLAP for a rule that cannot be stored.",
+        "operationId" : "create_12",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AutoAddRuleCreateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AutoAddRuleResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Create an auto-add rule as a draft",
+        "tags" : [ "Auto-add rules" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/auto-add-rules/simulations" : {
+      "post" : {
+        "description" : "Evaluates draft and active rules with the evaluator the cart runs, and answers per rule whether it would INJECT a line, OFFER one, or be SKIPPED, with the variant and the quantity. Nothing is written. The only check run on a rule's variant is that it is active: stock, sale windows and prices belong to a real cart at a real branch.",
+        "operationId" : "simulate",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AutoAddSimulationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AutoAddSimulationResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Run a hypothetical basket through the brand's auto-add rules",
+        "tags" : [ "Auto-add rules" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/auto-add-rules/{ruleId}" : {
+      "get" : {
+        "operationId" : "read_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "ruleId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AutoAddRuleResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One auto-add rule with its triggers, bands, locations and customer text",
+        "tags" : [ "Auto-add rules" ]
+      },
+      "put" : {
+        "description" : "Requires If-Match carrying the rule's version; a stale version is refused with STALE_VERSION. The code and the kind are the rule's identity and are not editable. The three child sets are replaced as sets, in the same transaction as the version bump and the audit fact. status DRAFT or ACTIVE; an active rule reaches customers with the next publication. An archived rule is not edited.",
+        "operationId" : "replace",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "ruleId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AutoAddRuleReplaceRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AutoAddRuleResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replace a rule's fields and its trigger, band and location sets",
+        "tags" : [ "Auto-add rules" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/auto-add-rules/{ruleId}/archive" : {
+      "post" : {
+        "description" : "Requires If-Match. The rule leaves the next publication; the row stays so any published snapshot can be traced to it. Nothing is deleted.",
+        "operationId" : "archive_5",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "ruleId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AutoAddRuleResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Archive a rule",
+        "tags" : [ "Auto-add rules" ]
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs" : {
@@ -17362,7 +18688,7 @@
           "name" : "entityType",
           "required" : false,
           "schema" : {
-            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "COMBO_GROUP", "COMBO_COMPONENT", "FEE" ],
+            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "COMBO_GROUP", "COMBO_COMPONENT", "AUTO_ADD_RULE", "TAG", "INGREDIENT", "FEE" ],
             "type" : "string"
           }
         }, {
@@ -17423,7 +18749,7 @@
           "name" : "entityType",
           "required" : true,
           "schema" : {
-            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "COMBO_GROUP", "COMBO_COMPONENT", "FEE" ],
+            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "COMBO_GROUP", "COMBO_COMPONENT", "AUTO_ADD_RULE", "TAG", "INGREDIENT", "FEE" ],
             "type" : "string"
           }
         }, {
@@ -17981,6 +19307,14 @@
             "format" : "int32",
             "type" : "integer"
           }
+        }, {
+          "in" : "query",
+          "name" : "asOf",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
         } ],
         "responses" : {
           "200" : {
@@ -17995,6 +19329,43 @@
           }
         },
         "summary" : "Search the ИКПУ/MXIK reference — tenant alias (IA 4.2e)",
+        "tags" : [ "Catalog reads" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fiscal-reference/mxik/status" : {
+      "get" : {
+        "description" : "The platform status read behind CATALOG_READ at BRAND scope, so the classification picker and the product editor can say \"the list is not loaded\" instead of \"nothing found\". Shows the same national state to every tenant and nothing about any tenant; it cannot reach the import runs.",
+        "operationId" : "mxikReferenceStatus",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReferenceStatus"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether the national ИКПУ/MXIK list is loaded — tenant alias (ADR 0173)",
         "tags" : [ "Catalog reads" ]
       }
     },
@@ -18513,7 +19884,7 @@
           "name" : "entityType",
           "required" : true,
           "schema" : {
-            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "COMBO_GROUP", "COMBO_COMPONENT", "FEE" ],
+            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "COMBO_GROUP", "COMBO_COMPONENT", "AUTO_ADD_RULE", "TAG", "INGREDIENT", "FEE" ],
             "type" : "string"
           }
         }, {
@@ -18579,7 +19950,7 @@
           "name" : "entityType",
           "required" : true,
           "schema" : {
-            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "COMBO_GROUP", "COMBO_COMPONENT", "FEE" ],
+            "enum" : [ "CATALOG", "CATEGORY", "PRODUCT", "VARIANT", "MODIFIER_GROUP", "MODIFIER_OPTION", "COMBO_GROUP", "COMBO_COMPONENT", "AUTO_ADD_RULE", "TAG", "INGREDIENT", "FEE" ],
             "type" : "string"
           }
         }, {
@@ -18620,7 +19991,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus" : {
       "get" : {
-        "operationId" : "list_12",
+        "operationId" : "list_14",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18658,7 +20029,7 @@
       },
       "post" : {
         "description" : "Starts in DRAFT with no membership.",
-        "operationId" : "create_9",
+        "operationId" : "create_11",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -18836,7 +20207,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/{menuId}" : {
       "put" : {
         "description" : "Whole-record PUT with an expected version, the same discipline CommentPresetController's own update already uses.",
-        "operationId" : "update_5",
+        "operationId" : "update_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20675,7 +22046,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows" : {
       "get" : {
         "description" : "Every version of every flow key, newest first. At most one version per flow key is ever active at once.",
-        "operationId" : "list_16",
+        "operationId" : "list_19",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20769,7 +22140,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs" : {
       "get" : {
         "description" : "Operations §3.7.",
-        "operationId" : "list_11",
+        "operationId" : "list_13",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -20807,7 +22178,7 @@
       },
       "post" : {
         "description" : "The lineage only; the numbers live on versions. At most one tariff per brand may be the default, which is the last rung of fee resolution — and there is no rung after it, because a missing rate table and free delivery must never look alike.",
-        "operationId" : "create_8",
+        "operationId" : "create_10",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21065,7 +22436,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery/simulations" : {
       "get" : {
         "description" : "Runs the full resolver with a fixed clock and writes nothing. The returned evidence is the same shape the stored evidence takes, so what is seen before activation is what will be recorded after it.",
-        "operationId" : "simulate",
+        "operationId" : "simulate_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21460,7 +22831,7 @@
       },
       "post" : {
         "description" : "Draft: nothing in it prices anything until it is activated, so a season's prices can be built during service without moving a live one.",
-        "operationId" : "create_7",
+        "operationId" : "create_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21580,7 +22951,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}" : {
       "get" : {
-        "operationId" : "read",
+        "operationId" : "read_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -22315,7 +23686,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/products/{productId}/comment-presets" : {
       "get" : {
-        "operationId" : "list_10",
+        "operationId" : "list_12",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -22459,6 +23830,202 @@
         "tags" : [ "Preset product comments" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/products/{productId}/ingredients" : {
+      "get" : {
+        "description" : "Includes an archived entry the product still carries: it keeps resolving here.",
+        "operationId" : "forProduct_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProductVocabularySetResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The ingredients a product carries, in order",
+        "tags" : [ "Ingredients" ]
+      },
+      "put" : {
+        "description" : "At most forty. 422 with findingCode VOCABULARY_PRODUCT_LIMIT_REACHED over that, VOCABULARY_ENTRY_UNKNOWN for an entry of no such tenant, VOCABULARY_ENTRY_ARCHIVED for an archived entry the product does not already carry, VOCABULARY_ENTRY_DUPLICATED for a repeat.",
+        "operationId" : "setForProduct_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ProductVocabularySetRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProductVocabularySetResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replace the ingredients a product carries, in order",
+        "tags" : [ "Ingredients" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/products/{productId}/tags" : {
+      "get" : {
+        "description" : "Includes an archived entry the product still carries: it keeps resolving here.",
+        "operationId" : "forProduct",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProductVocabularySetResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The tags a product carries, in order",
+        "tags" : [ "Tags" ]
+      },
+      "put" : {
+        "description" : "At most twelve. 422 with findingCode VOCABULARY_PRODUCT_LIMIT_REACHED over that, VOCABULARY_ENTRY_UNKNOWN for an entry of no such tenant, VOCABULARY_ENTRY_ARCHIVED for an archived entry the product does not already carry; 400 VOCABULARY_ENTRY_DUPLICATED for a repeat.",
+        "operationId" : "setForProduct",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ProductVocabularySetRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProductVocabularySetResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Replace the tags a product carries, in order",
+        "tags" : [ "Tags" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/profile" : {
       "put" : {
         "description" : "Contact phone, Telegram handle, logo and banner (as already-uploaded media asset ids), and the brand's whole supported-locale set with each locale's own description and which one is default. A whole-set write for `locales`: the screen's own checkbox grid always knows the full set it wants.",
@@ -22556,7 +24123,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules" : {
       "get" : {
         "description" : "The Hours tab's rebind picker and the shared-schedule warning's source: each schedule's name and how many locations currently bind it.",
-        "operationId" : "list_9",
+        "operationId" : "list_11",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -22594,7 +24161,7 @@
       },
       "post" : {
         "description" : "Named and reusable, so thirty branches on one Ramadan timetable edit one object. That is the point, and also the accident.",
-        "operationId" : "create_6",
+        "operationId" : "create_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -22783,7 +24350,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones" : {
       "get" : {
         "description" : "Operations §3.6.",
-        "operationId" : "list_8",
+        "operationId" : "list_10",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -22821,7 +24388,7 @@
       },
       "post" : {
         "description" : "Creates the lineage only. A zone has no geometry until a version is drafted and activated, so registering one changes nothing a customer sees.",
-        "operationId" : "create_5",
+        "operationId" : "create_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -23109,7 +24676,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/comment-presets" : {
       "get" : {
-        "operationId" : "list_7",
+        "operationId" : "list_9",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -23139,7 +24706,7 @@
       },
       "post" : {
         "description" : "Refused (409) when the code is already registered for this tenant. pos_modifier_code is the coded value a POS export maps this preset to where it expects a modifier; left null, the preset still renders on the KDS and exports nowhere. labelRu/labelUz/labelEn are the platform triple and stay required; `labels` (row 10.12, optional) carries wording by locale for any language beyond them and wins where both name a locale. The tenant's default language must have wording, in one or the other.",
-        "operationId" : "create_4",
+        "operationId" : "create_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -23207,7 +24774,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/comment-presets/{presetId}" : {
       "put" : {
         "description" : "Whole-record PUT with an expected version, the same discipline every other versioned reference table in this platform uses. Archiving is status=ARCHIVED here, not a DELETE: a preset already selected on an open order's line must stay resolvable. A language beyond the platform triple that the request does not name in `labels` keeps its wording, so an editor that shows only some languages never deletes the others; the triple is always named (it is required), and an editor keeps a language it does not show by sending the wording the preset already has.",
-        "operationId" : "update_4",
+        "operationId" : "update_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -23420,7 +24987,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/grants" : {
       "get" : {
         "description" : "Active only by default. Pass includeInactive=true for staff-and-access.md §2's suspended-row state and §11.2's restore action, which both need to see a revoked grant, not only what remains active.",
-        "operationId" : "list_6",
+        "operationId" : "list_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -23582,9 +25149,196 @@
         "tags" : [ "SaaS control plane" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/ingredients" : {
+      "get" : {
+        "description" : "Each ingredient carries its code and its name per locale. It is a label for the customer to read, not a stock item.",
+        "operationId" : "list_7",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/VocabularyEntryResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The tenant's ingredients, active and archived",
+        "tags" : [ "Ingredients" ]
+      },
+      "post" : {
+        "description" : "An ingredient has a code (lower case, unique per tenant, never shown), a sort order and a name per locale. At most 1,000 per tenant. 409 when the code is taken (findingCode VOCABULARY_CODE_TAKEN); 400 for an invalid code, a missing name in the tenant's default language; 422 VOCABULARY_TENANT_LIMIT_REACHED over 1,000.",
+        "operationId" : "create_5",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/IngredientCreateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VocabularyEntryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Register an ingredient",
+        "tags" : [ "Ingredients" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/ingredients/{entryId}" : {
+      "get" : {
+        "operationId" : "read_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entryId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VocabularyEntryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One an ingredient with its wording",
+        "tags" : [ "Ingredients" ]
+      },
+      "put" : {
+        "description" : "Requires If-Match carrying the version. The code is the entry's identity and does not change. A locale not named keeps its wording; an edit never deletes one.",
+        "operationId" : "update_5",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entryId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/IngredientEditRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VocabularyEntryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Edit an ingredient",
+        "tags" : [ "Ingredients" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/ingredients/{entryId}/archive" : {
+      "post" : {
+        "description" : "Requires If-Match. Archived, never deleted: it keeps resolving on the products that carry it, leaves the pickers and the next publication, and its code stays taken.",
+        "operationId" : "archive_4",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entryId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VocabularyEntryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Archive an ingredient",
+        "tags" : [ "Ingredients" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/integrations" : {
       "get" : {
-        "operationId" : "list_5",
+        "operationId" : "list_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -24245,7 +25999,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities" : {
       "get" : {
-        "operationId" : "list_4",
+        "operationId" : "list_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -24395,7 +26149,7 @@
       },
       "put" : {
         "description" : "Everything but the taxpayer number and the lifecycle status: legal and short name, VAT registration and certificate, tax profile, registered address and contact phone. There was no way to fix any of these before this endpoint existed — a registered entity could never be corrected.",
-        "operationId" : "update_3",
+        "operationId" : "update_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -24495,7 +26249,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}/archive" : {
       "post" : {
         "description" : "Ends its life on the platform. Permitted from DRAFT or SUSPENDED, never from ACTIVE — an active entity must be suspended first, so a branch it still sells as never loses its seller without an operator seeing that happen. The row survives: every fiscal document it ever issued must still resolve a name and an INN years later.",
-        "operationId" : "archive_2",
+        "operationId" : "archive_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -25060,7 +26814,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons" : {
       "get" : {
         "description" : "Read with ORDER_READ rather than the manage capability, because the cancel dialog has to populate its list for every operator who can cancel an order and almost none of them may author one.",
-        "operationId" : "list_3",
+        "operationId" : "list_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -25074,7 +26828,7 @@
           "name" : "kind",
           "required" : true,
           "schema" : {
-            "enum" : [ "CANCELLATION", "COMPLETION" ],
+            "enum" : [ "CANCELLATION", "COMPLETION", "LINE_REMOVAL" ],
             "type" : "string"
           }
         }, {
@@ -25105,8 +26859,8 @@
         "tags" : [ "Order outcome reasons" ]
       },
       "post" : {
-        "description" : "A cancellation reason decides the stock disposition, the liable party and the refund posture; none of the three has a safe default and all three are required. A completion reason names the fulfilment modes it is valid for, because without that «Самовывоз выполнен» lands on a delivery order and the courier SLA report quietly loses it.",
-        "operationId" : "create_3",
+        "description" : "A cancellation reason decides the stock disposition, the liable party and the refund posture; none of the three has a safe default and all three are required. A completion reason names the fulfilment modes it is valid for, because without that «Самовывоз выполнен» lands on a delivery order and the courier SLA report quietly loses it. A line-removal reason (ADR 0169, kind LINE_REMOVAL) is why a line was taken off a confirmed order: it carries the stock disposition (never RELEASE) and the liable party, no refund posture, and an ITEM_UNAVAILABLE one may not return to stock.",
+        "operationId" : "create_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -25159,7 +26913,7 @@
           "name" : "kind",
           "required" : true,
           "schema" : {
-            "enum" : [ "CANCELLATION", "COMPLETION" ],
+            "enum" : [ "CANCELLATION", "COMPLETION", "LINE_REMOVAL" ],
             "type" : "string"
           }
         } ],
@@ -25255,7 +27009,7 @@
       },
       "put" : {
         "description" : "Outcomes already recorded keep the snapshot they were recorded with. That duplication is deliberate: renaming a reason next year must not rewrite last year's funnel.",
-        "operationId" : "update_2",
+        "operationId" : "update_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -25524,7 +27278,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/pos-mappings" : {
       "get" : {
         "description" : "Optionally filtered by status (PROPOSED, ACTIVE, CONFLICTED, RETIRED). Newest-updated first.",
-        "operationId" : "list_2",
+        "operationId" : "list_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -25589,7 +27343,7 @@
       },
       "post" : {
         "description" : "OPERATOR-sourced (V0013's CHECK has always allowed it; nothing wrote it before this). Refused with RESOURCE_CONFLICT when an ACTIVE mapping already claims either side, or when a RETIRED row already burned this external or HorecaOS id for this binding and type — see PosMappingService.create's own doc.",
-        "operationId" : "create_2",
+        "operationId" : "create_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -26237,7 +27991,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels" : {
       "get" : {
         "description" : "Archived channels are listed because a historical order still renders through one; the status says whether a new cart may use it. Each row also carries its branch count, enabled payment-method count and enabled fulfilment modes -- settings.md 10.4a's three previously absent columns.",
-        "operationId" : "list_1",
+        "operationId" : "list_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -26267,7 +28021,7 @@
       },
       "post" : {
         "description" : "The system type comes from a closed, code-owned list. A tenant may run several channels of one type — Uzum Tezkor and Yandex Eda are both AGGREGATOR and must differ in price plane, payment mix, and reporting.",
-        "operationId" : "create_1",
+        "operationId" : "create_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -26306,7 +28060,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}" : {
       "put" : {
         "description" : "Everything but the code and the system type, which ADR 0036 fixes at creation because behaviour keys on the type.",
-        "operationId" : "update_1",
+        "operationId" : "update_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -26361,7 +28115,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/archive" : {
       "post" : {
         "description" : "Channels archive and never delete. Every order carries its channel forever, and a deleted row makes that order unattributable in every report.",
-        "operationId" : "archive_1",
+        "operationId" : "archive_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -27420,7 +29174,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/statements" : {
       "get" : {
         "description" : "Newest month first, void ones included.",
-        "operationId" : "list_15",
+        "operationId" : "list_18",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -27783,6 +29537,193 @@
         },
         "summary" : "Suspend a tenant",
         "tags" : [ "SaaS control plane" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/tags" : {
+      "get" : {
+        "description" : "Each tag carries its code, an optional icon from a closed list, whether it is shown as a badge and/or offered as a filter, and its name per locale.",
+        "operationId" : "list_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/VocabularyEntryResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The tenant's tags, active and archived",
+        "tags" : [ "Tags" ]
+      },
+      "post" : {
+        "description" : "A tag has a code (lower case, unique per tenant, never shown), an optional icon key from the closed list FLAME, LEAF, STAR, HEART, FISH, NEW, at least one of showAsBadge and showAsFilter, a sort order and a name per locale. At most 200 per tenant. 409 when the code is taken (findingCode VOCABULARY_CODE_TAKEN); 400 for an invalid code, a missing name in the tenant's default language, an unknown icon, or a tag shown neither as badge nor as filter; 422 VOCABULARY_TENANT_LIMIT_REACHED over 200.",
+        "operationId" : "create_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TagCreateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VocabularyEntryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Register a tag",
+        "tags" : [ "Tags" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/tags/{entryId}" : {
+      "get" : {
+        "operationId" : "read",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entryId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VocabularyEntryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One a tag with its wording",
+        "tags" : [ "Tags" ]
+      },
+      "put" : {
+        "description" : "Requires If-Match carrying the version. The code is the entry's identity and does not change. A locale not named keeps its wording; an edit never deletes one.",
+        "operationId" : "update_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entryId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TagEditRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VocabularyEntryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Edit a tag",
+        "tags" : [ "Tags" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/tags/{entryId}/archive" : {
+      "post" : {
+        "description" : "Requires If-Match. Archived, never deleted: it keeps resolving on the products that carry it, leaves the pickers and the next publication, and its code stays taken.",
+        "operationId" : "archive_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "entryId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VocabularyEntryResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Archive a tag",
+        "tags" : [ "Tags" ]
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/template-versions/{versionId}/provider-review" : {
@@ -30573,6 +32514,9 @@
     "description" : "Delivery and catchment geometry, versioned like a policy",
     "name" : "Service zones"
   }, {
+    "description" : "Composition labels shown on a product page: a tenant-wide vocabulary",
+    "name" : "Ingredients"
+  }, {
     "description" : "Migration programs and the capability scopes under them",
     "name" : "Migration programs"
   }, {
@@ -30584,6 +32528,9 @@
   }, {
     "description" : "The ИКПУ/MXIK product classification reference",
     "name" : "Fiscal reference"
+  }, {
+    "description" : "Badges and filter options: a tenant-wide vocabulary, assigned to products",
+    "name" : "Tags"
   }, {
     "description" : "The maker-checker thresholds that decide when an action needs a second signature",
     "name" : "Approval policies"
@@ -30608,6 +32555,9 @@
   }, {
     "description" : "The languages the platform knows and where each is live (ADR 0149)",
     "name" : "Locales"
+  }, {
+    "description" : "Cart injection: packaging, cutlery and gift lines added by a rule",
+    "name" : "Auto-add rules"
   }, {
     "description" : "A platform account's second factor (ADR 0148)",
     "name" : "Platform staff second factor"

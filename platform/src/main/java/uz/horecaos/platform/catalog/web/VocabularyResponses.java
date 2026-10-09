@@ -21,7 +21,7 @@ final class VocabularyResponses {
      * @param names the wording by locale, as authored; the default language of the tenant is always present
      * @param status {@code ACTIVE} or {@code ARCHIVED}
      */
-    public record EntryResponse(
+    public record VocabularyEntryResponse(
             UUID id,
             String code,
             @Nullable String iconKey,
@@ -32,8 +32,8 @@ final class VocabularyResponses {
             int version,
             Map<String, String> names) {
 
-        static EntryResponse of(EntryView view) {
-            return new EntryResponse(
+        static VocabularyEntryResponse of(EntryView view) {
+            return new VocabularyEntryResponse(
                     view.row().id(),
                     view.row().code(),
                     view.row().iconKey(),
@@ -47,20 +47,21 @@ final class VocabularyResponses {
     }
 
     /** A product's ordered set. */
-    public record ProductSetResponse(List<EntryResponse> items) {
+    public record ProductVocabularySetResponse(List<VocabularyEntryResponse> items) {
 
-        static ProductSetResponse of(List<EntryView> views) {
-            return new ProductSetResponse(views.stream().map(EntryResponse::of).toList());
+        static ProductVocabularySetResponse of(List<EntryView> views) {
+            return new ProductVocabularySetResponse(
+                    views.stream().map(VocabularyEntryResponse::of).toList());
         }
     }
 
     /** The ids of a product's set, in the order they are shown. */
-    public record ProductSetRequest(
+    public record ProductVocabularySetRequest(
             @jakarta.validation.constraints.NotNull List<UUID> ids) {}
 
-    static ResponseEntity<EntryResponse> versioned(EntryView view) {
+    static ResponseEntity<VocabularyEntryResponse> versioned(EntryView view) {
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, AggregateVersion.toETag(view.row().version()))
-                .body(EntryResponse.of(view));
+                .body(VocabularyEntryResponse.of(view));
     }
 }

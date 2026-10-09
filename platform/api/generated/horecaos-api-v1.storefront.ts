@@ -76,6 +76,15 @@ export interface ApplyPromoCodeRequest {
   code: string;
 }
 
+export interface AutoAddLineResponse {
+  customerText?: { [key: string]: string };
+  mandatory?: boolean;
+  maximumQuantity?: number;
+  minimumQuantity?: number;
+  removable?: boolean;
+  ruleCode?: string;
+}
+
 export interface BalanceResponse {
   accountId?: string;
   balance?: ApiMoney;
@@ -99,12 +108,14 @@ export interface CallbackRequestResponse {
 }
 
 export interface CartLineResponse {
+  autoAdd?: AutoAddLineResponse;
   comboPicks?: Array<ComboPickResponse>;
   commentPresetCodes?: Array<string>;
   hasCustomerNote?: boolean;
   lineKey?: string;
   modifierOptionIds?: Array<string>;
   nestedModifiers?: Array<NestedModifierResponse>;
+  origin?: string;
   quantity?: number;
   variantId?: string;
 }
@@ -385,6 +396,12 @@ export interface MenuComboGroup {
   sortOrder?: number;
 }
 
+export interface MenuIngredient {
+  code?: string;
+  ingredientId?: string;
+  name?: string;
+}
+
 export interface MenuModifierGroup {
   allowSameOptionMultipleTimes?: boolean;
   code?: string;
@@ -418,12 +435,24 @@ export interface MenuProduct {
   commentPresets?: Array<CommentPresetOption>;
   description?: string;
   imageUrls?: Array<string>;
+  ingredients?: Array<MenuIngredient>;
   mediaAssetIds?: Array<string>;
   modifierGroupIds?: Array<string>;
   modifierGroupPolicies?: Array<MenuModifierGroupPolicy>;
   name?: string;
   productId?: string;
+  tags?: Array<MenuTag>;
   variants?: Array<MenuVariant>;
+}
+
+export interface MenuTag {
+  code?: string;
+  icon?: string;
+  name?: string;
+  showAsBadge?: boolean;
+  showAsFilter?: boolean;
+  sortOrder?: number;
+  tagId?: string;
 }
 
 export interface MenuVariant {
@@ -431,6 +460,7 @@ export interface MenuVariant {
   isDefault?: boolean;
   modifierGroupIds?: Array<string>;
   modifierGroupPolicies?: Array<MenuModifierGroupPolicy>;
+  name?: string;
   onSaleNow?: boolean;
   orderable?: boolean;
   physical?: PhysicalFacts;
@@ -480,6 +510,7 @@ export interface OrderLineResponse {
   lineNumber?: number;
   modifierOptionIds?: Array<string>;
   modifiers?: Array<string>;
+  origin?: string;
   productId?: string;
   productName?: string;
   quantity?: number;
@@ -606,6 +637,7 @@ export interface PricedCartResponse {
   appliedPromotions?: Array<AppliedPromotionResponse>;
   cartId?: string;
   cartVersion?: number;
+  changedByPricing?: boolean;
   contextHash?: string;
   currency?: string;
   delivery?: DeliveryChargeResponse;

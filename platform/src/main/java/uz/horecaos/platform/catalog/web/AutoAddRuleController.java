@@ -74,8 +74,10 @@ public class AutoAddRuleController {
             summary = "The brand's auto-add rules, every status",
             description = "Draft, active and archived rules in display order. Only active rules reach "
                     + "customers, and only with the next publication.")
-    public List<RuleResponse> list(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
-        return authoring.list(tenantId, brandId).stream().map(RuleResponse::of).toList();
+    public List<AutoAddRuleResponse> list(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        return authoring.list(tenantId, brandId).stream()
+                .map(AutoAddRuleResponse::of)
+                .toList();
     }
 
     @PostMapping
@@ -92,8 +94,10 @@ public class AutoAddRuleController {
                     + "with a replace that says so. Refused 409 when the code is taken; 422 with "
                     + "findingCode AUTO_ADD_RULE_INVALID, AUTO_ADD_CHANNEL_NOT_ALLOWED or "
                     + "AUTO_ADD_BANDS_OVERLAP for a rule that cannot be stored.")
-    public ResponseEntity<RuleResponse> create(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody CreateRuleRequest request) {
+    public ResponseEntity<AutoAddRuleResponse> create(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @Valid @RequestBody AutoAddRuleCreateRequest request) {
         RuleDetail created =
                 authoring.create(tenantId, brandId, request.code(), request.kind(), request.toCommand(), subject());
         return respond(created);
@@ -102,7 +106,7 @@ public class AutoAddRuleController {
     @GetMapping("/{ruleId}")
     @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.BRAND)
     @Operation(summary = "One auto-add rule with its triggers, bands, locations and customer text")
-    public ResponseEntity<RuleResponse> read(
+    public ResponseEntity<AutoAddRuleResponse> read(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID ruleId) {
         return respond(authoring.get(tenantId, brandId, ruleId));
     }
@@ -116,11 +120,11 @@ public class AutoAddRuleController {
                     + "The three child sets are replaced as sets, in the same transaction as the version "
                     + "bump and the audit fact. status DRAFT or ACTIVE; an active rule reaches customers "
                     + "with the next publication. An archived rule is not edited.")
-    public ResponseEntity<RuleResponse> replace(
+    public ResponseEntity<AutoAddRuleResponse> replace(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID ruleId,
-            @Valid @RequestBody ReplaceRuleRequest request,
+            @Valid @RequestBody AutoAddRuleReplaceRequest request,
             HttpServletRequest httpRequest) {
         int expected = Math.toIntExact(AggregateVersion.requireIfMatch(httpRequest));
         return respond(authoring.replace(tenantId, brandId, ruleId, expected, request.toCommand(), subject()));
@@ -132,7 +136,7 @@ public class AutoAddRuleController {
             summary = "Archive a rule",
             description = "Requires If-Match. The rule leaves the next publication; the row stays so any "
                     + "published snapshot can be traced to it. Nothing is deleted.")
-    public ResponseEntity<RuleResponse> archive(
+    public ResponseEntity<AutoAddRuleResponse> archive(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID ruleId,
@@ -145,22 +149,22 @@ public class AutoAddRuleController {
         return currentActor.get().subject();
     }
 
-    private static ResponseEntity<RuleResponse> respond(RuleDetail detail) {
+    private static ResponseEntity<AutoAddRuleResponse> respond(RuleDetail detail) {
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, AggregateVersion.toETag(detail.rule().version()))
-                .body(RuleResponse.of(detail));
+                .body(AutoAddRuleResponse.of(detail));
     }
 
     // -------------------------------------------------------------------------- shapes
 
     /** One trigger node: exactly one of the three ids. */
-    public record TriggerBody(
+    public record AutoAddTriggerBody(
             @Nullable UUID variantId,
             @Nullable UUID productId,
             @Nullable UUID categoryId) {}
 
     /** One portion band: {@code portionsFrom <= portions < portionsTo}, no upper bound when {@code portionsTo} is null. */
-    public record BandBody(
+    public record AutoAddBandBody(
             @NotNull BigDecimal portionsFrom,
             @Nullable BigDecimal portionsTo,
             @NotNull UUID addVariantId,
@@ -170,7 +174,7 @@ public class AutoAddRuleController {
      * What the author states about a rule. Every optional field is boxed: Jackson 3 refuses a body that
      * omits a primitive, and the console omits what the author left alone.
      */
-    public record CreateRuleRequest(
+    public record AutoAddRuleCreateRequest(
             @NotBlank @Size(max = 64) String code,
             @NotNull Kind kind,
             @Nullable Mode mode,
@@ -184,8 +188,8 @@ public class AutoAddRuleController {
             @NotNull @Size(min = 1, max = 3) List<String> fulfillmentModes,
             @NotNull @Size(min = 1, max = 9) List<String> channelSystemTypes,
             @Nullable Integer sortOrder,
-            @Nullable @Size(max = 50) List<TriggerBody> triggers,
-            @Nullable @Size(max = 20) List<BandBody> bands,
+            @Nullable @Size(max = 50) List<AutoAddTriggerBody> triggers,
+            @Nullable @Size(max = 20) List<AutoAddBandBody> bands,
             @Nullable @Size(max = 200) List<UUID> locationIds,
             @Nullable Map<String, String> customerText) {
 
@@ -211,7 +215,7 @@ public class AutoAddRuleController {
     }
 
     /** A replace states the whole rule again; the code and the kind are not part of it. */
-    public record ReplaceRuleRequest(
+    public record AutoAddRuleReplaceRequest(
             @Nullable Mode mode,
             @Nullable @Pattern(regexp = "DRAFT|ACTIVE") String status,
             @Nullable UUID addVariantId,
@@ -224,8 +228,8 @@ public class AutoAddRuleController {
             @NotNull @Size(min = 1, max = 3) List<String> fulfillmentModes,
             @NotNull @Size(min = 1, max = 9) List<String> channelSystemTypes,
             @Nullable Integer sortOrder,
-            @Nullable @Size(max = 50) List<TriggerBody> triggers,
-            @Nullable @Size(max = 20) List<BandBody> bands,
+            @Nullable @Size(max = 50) List<AutoAddTriggerBody> triggers,
+            @Nullable @Size(max = 20) List<AutoAddBandBody> bands,
             @Nullable @Size(max = 200) List<UUID> locationIds,
             @Nullable Map<String, String> customerText) {
 
@@ -263,13 +267,13 @@ public class AutoAddRuleController {
             List<String> fulfillmentModes,
             List<String> channelSystemTypes,
             @Nullable Integer sortOrder,
-            @Nullable List<TriggerBody> triggers,
-            @Nullable List<BandBody> bands,
+            @Nullable List<AutoAddTriggerBody> triggers,
+            @Nullable List<AutoAddBandBody> bands,
             @Nullable List<UUID> locationIds,
             @Nullable Map<String, String> customerText) {
         List<Trigger> triggerValues = new ArrayList<>();
         if (triggers != null) {
-            for (TriggerBody trigger : triggers) {
+            for (AutoAddTriggerBody trigger : triggers) {
                 try {
                     triggerValues.add(new Trigger(trigger.variantId(), trigger.productId(), trigger.categoryId()));
                 } catch (IllegalArgumentException wrongNodeCount) {
@@ -282,7 +286,7 @@ public class AutoAddRuleController {
         }
         List<Band> bandValues = new ArrayList<>();
         if (bands != null) {
-            for (BandBody band : bands) {
+            for (AutoAddBandBody band : bands) {
                 bandValues.add(new Band(band.portionsFrom(), band.portionsTo(), band.addVariantId(), band.quantity()));
             }
         }
@@ -306,7 +310,7 @@ public class AutoAddRuleController {
     }
 
     /** A rule as the console reads it. */
-    public record RuleResponse(
+    public record AutoAddRuleResponse(
             UUID ruleId,
             String code,
             String kind,
@@ -323,14 +327,14 @@ public class AutoAddRuleController {
             List<String> channelSystemTypes,
             int sortOrder,
             int version,
-            List<TriggerBody> triggers,
-            List<BandBody> bands,
+            List<AutoAddTriggerBody> triggers,
+            List<AutoAddBandBody> bands,
             List<UUID> locationIds,
             Map<String, String> customerText) {
 
-        static RuleResponse of(RuleDetail detail) {
+        static AutoAddRuleResponse of(RuleDetail detail) {
             AutoAddRule rule = detail.rule();
-            return new RuleResponse(
+            return new AutoAddRuleResponse(
                     rule.id(),
                     rule.code(),
                     rule.kind().name(),
@@ -348,11 +352,11 @@ public class AutoAddRuleController {
                     rule.sortOrder(),
                     rule.version(),
                     rule.triggers().stream()
-                            .map(trigger ->
-                                    new TriggerBody(trigger.variantId(), trigger.productId(), trigger.categoryId()))
+                            .map(trigger -> new AutoAddTriggerBody(
+                                    trigger.variantId(), trigger.productId(), trigger.categoryId()))
                             .toList(),
                     rule.bands().stream()
-                            .map(band -> new BandBody(
+                            .map(band -> new AutoAddBandBody(
                                     band.portionsFrom(), band.portionsTo(), band.addVariantId(), band.quantity()))
                             .toList(),
                     rule.locationIds().stream().sorted().toList(),

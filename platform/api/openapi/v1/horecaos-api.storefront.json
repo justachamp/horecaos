@@ -197,6 +197,32 @@
         "required" : [ "code" ],
         "type" : "object"
       },
+      "AutoAddLineResponse" : {
+        "properties" : {
+          "customerText" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "mandatory" : {
+            "type" : "boolean"
+          },
+          "maximumQuantity" : {
+            "type" : "number"
+          },
+          "minimumQuantity" : {
+            "type" : "number"
+          },
+          "removable" : {
+            "type" : "boolean"
+          },
+          "ruleCode" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "BalanceResponse" : {
         "properties" : {
           "accountId" : {
@@ -261,6 +287,9 @@
       },
       "CartLineResponse" : {
         "properties" : {
+          "autoAdd" : {
+            "$ref" : "#/components/schemas/AutoAddLineResponse"
+          },
           "comboPicks" : {
             "items" : {
               "$ref" : "#/components/schemas/ComboPickResponse"
@@ -291,6 +320,9 @@
               "$ref" : "#/components/schemas/NestedModifierResponse"
             },
             "type" : "array"
+          },
+          "origin" : {
+            "type" : "string"
           },
           "quantity" : {
             "type" : "number"
@@ -1123,6 +1155,21 @@
         },
         "type" : "object"
       },
+      "MenuIngredient" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "ingredientId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "MenuModifierGroup" : {
         "properties" : {
           "allowSameOptionMultipleTimes" : {
@@ -1234,6 +1281,12 @@
             },
             "type" : "array"
           },
+          "ingredients" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuIngredient"
+            },
+            "type" : "array"
+          },
           "mediaAssetIds" : {
             "items" : {
               "type" : "string"
@@ -1260,11 +1313,45 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "tags" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuTag"
+            },
+            "type" : "array"
+          },
           "variants" : {
             "items" : {
               "$ref" : "#/components/schemas/MenuVariant"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "MenuTag" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "icon" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "showAsBadge" : {
+            "type" : "boolean"
+          },
+          "showAsFilter" : {
+            "type" : "boolean"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "tagId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -1290,6 +1377,9 @@
               "$ref" : "#/components/schemas/MenuModifierGroupPolicy"
             },
             "type" : "array"
+          },
+          "name" : {
+            "type" : "string"
           },
           "onSaleNow" : {
             "type" : "boolean"
@@ -1435,6 +1525,9 @@
               "type" : "string"
             },
             "type" : "array"
+          },
+          "origin" : {
+            "type" : "string"
           },
           "productId" : {
             "format" : "uuid",
@@ -1838,6 +1931,9 @@
           "cartVersion" : {
             "format" : "int32",
             "type" : "integer"
+          },
+          "changedByPricing" : {
+            "type" : "boolean"
           },
           "contextHash" : {
             "type" : "string"

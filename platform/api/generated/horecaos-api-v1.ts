@@ -340,11 +340,13 @@ export interface AmendmentCommandRequest {
   kitchenNote?: string;
   lines?: Array<AddLineRequest>;
   orderLineId?: string;
+  orderLineIds?: Array<string>;
   paymentMethodCode?: string;
   promisedAt?: string;
   quantity?: number;
   recipientName?: string;
   recipientPhone?: string;
+  removalReasonId?: string;
   type: "ADD_LINES" | "CHANGE_LINE_QUANTITY" | "REMOVE_LINES" | "CHANGE_PAYMENT_METHOD" | "CHANGE_DELIVERY_ADDRESS" | "CHANGE_FULFILLMENT_TIME" | "CHANGE_CONTACT" | "SET_KITCHEN_NOTE" | "SET_CALLBACK_REQUESTED" | "SET_CASH_TENDERED" | "SET_COURIER_NOTE" | "SET_INTERNAL_NOTE";
 }
 
@@ -378,6 +380,7 @@ export interface AmendmentResponse {
   replayed?: boolean;
   requiresApproval?: boolean;
   status?: string;
+  stockConsequence?: Array<StockConsequenceLine>;
   warnings?: Array<string>;
 }
 
@@ -774,6 +777,119 @@ export interface AuthorRequest {
   reason: string;
   rejectionReasonRequired?: boolean;
   timeoutAction: "AUTO_REJECT" | "AUTO_CONFIRM";
+}
+
+export interface AutoAddBandBody {
+  addVariantId: string;
+  portionsFrom: number;
+  portionsTo?: number;
+  quantity: number;
+}
+
+export interface AutoAddLineResponse {
+  customerText?: { [key: string]: string };
+  mandatory?: boolean;
+  maximumQuantity?: number;
+  minimumQuantity?: number;
+  removable?: boolean;
+  ruleCode?: string;
+}
+
+export interface AutoAddOutcomeResponse {
+  outcome?: string;
+  quantity?: number;
+  reason?: string;
+  ruleCode?: string;
+  ruleId?: string;
+  ruleStatus?: string;
+  variantId?: string;
+}
+
+export interface AutoAddRuleCreateRequest {
+  addVariantId?: string;
+  bands?: Array<AutoAddBandBody>;
+  channelSystemTypes: Array<string>;
+  code: string;
+  customerText?: { [key: string]: string };
+  fulfillmentModes: Array<string>;
+  kind: "PLAIN" | "PRODUCT_TRIGGERED" | "PORTION_BAND";
+  locationIds?: Array<string>;
+  mandatory?: boolean;
+  maximumQuantity?: number;
+  minimumQuantity?: number;
+  mode?: "INJECT" | "OFFER";
+  quantity?: number;
+  repeatPerMultiple?: boolean;
+  sortOrder?: number;
+  triggerThreshold?: number;
+  triggers?: Array<AutoAddTriggerBody>;
+}
+
+export interface AutoAddRuleReplaceRequest {
+  addVariantId?: string;
+  bands?: Array<AutoAddBandBody>;
+  channelSystemTypes: Array<string>;
+  customerText?: { [key: string]: string };
+  fulfillmentModes: Array<string>;
+  locationIds?: Array<string>;
+  mandatory?: boolean;
+  maximumQuantity?: number;
+  minimumQuantity?: number;
+  mode?: "INJECT" | "OFFER";
+  quantity?: number;
+  repeatPerMultiple?: boolean;
+  sortOrder?: number;
+  status?: string;
+  triggerThreshold?: number;
+  triggers?: Array<AutoAddTriggerBody>;
+}
+
+export interface AutoAddRuleResponse {
+  addVariantId?: string;
+  bands?: Array<AutoAddBandBody>;
+  channelSystemTypes?: Array<string>;
+  code?: string;
+  customerText?: { [key: string]: string };
+  fulfillmentModes?: Array<string>;
+  kind?: string;
+  locationIds?: Array<string>;
+  mandatory?: boolean;
+  maximumQuantity?: number;
+  minimumQuantity?: number;
+  mode?: string;
+  quantity?: number;
+  repeatPerMultiple?: boolean;
+  ruleId?: string;
+  sortOrder?: number;
+  status?: string;
+  triggerThreshold?: number;
+  triggers?: Array<AutoAddTriggerBody>;
+  version?: number;
+}
+
+export interface AutoAddSimulatedLineBody {
+  quantity: number;
+  variantId: string;
+}
+
+export interface AutoAddSimulationRequest {
+  channelSystemType: string;
+  declinedRuleIds?: Array<string>;
+  fulfillmentMode: string;
+  lines: Array<AutoAddSimulatedLineBody>;
+  locationId?: string;
+}
+
+export interface AutoAddSimulationResponse {
+  outcomes?: Array<AutoAddOutcomeResponse>;
+  portions?: number;
+  units?: number;
+}
+
+export interface AutoAddTriggerBody {
+  categoryId?: string;
+  productId?: string;
+  variantId?: string;
 }
 
 export interface AutomationPreviewResponse {
@@ -1252,7 +1368,7 @@ export interface BulkClassifyOutcomeResponse {
 
 export interface BulkClassifyRequest {
   items: Array<BulkClassifyItemRequest>;
-  mode?: "REPLACE" | "MERGE";
+  mode?: "REPLACE" | "MERGE" | "SUCCESSOR";
 }
 
 export interface BulkClassifyResponse {
@@ -1515,12 +1631,14 @@ export interface CardResponse {
 }
 
 export interface CartLineResponse {
+  autoAdd?: AutoAddLineResponse;
   comboPicks?: Array<ComboPickResponse>;
   commentPresetCodes?: Array<string>;
   hasCustomerNote?: boolean;
   lineKey?: string;
   modifierOptionIds?: Array<string>;
   nestedModifiers?: Array<NestedModifierResponse>;
+  origin?: string;
   quantity?: number;
   variantId?: string;
 }
@@ -4347,6 +4465,8 @@ export interface FiscalCoverageNodeResponse {
   categoryName?: string;
   locationCount?: number;
   mxikCode?: string;
+  mxikReplacedBy?: string;
+  mxikWithdrawnOn?: string;
   name?: string;
   nodeId?: string;
   nodeType?: "VARIANT" | "MODIFIER_OPTION" | "FEE";
@@ -4358,6 +4478,8 @@ export interface FiscalCoverageResponse {
   nodes?: Array<FiscalCoverageNodeResponse>;
   totalNodes?: number;
   unclassifiedCount?: number;
+  withdrawnCount?: number;
+  withdrawnNodes?: Array<FiscalCoverageNodeResponse>;
 }
 
 export interface FiscalDocumentControllerResolutionRequest {
@@ -4685,6 +4807,17 @@ export interface IngestResponse {
   observationsAccepted?: number;
   suspended?: boolean;
   windowsWritten?: number;
+}
+
+export interface IngredientCreateRequest {
+  code: string;
+  names?: { [key: string]: string };
+  sortOrder?: number;
+}
+
+export interface IngredientEditRequest {
+  names?: { [key: string]: string };
+  sortOrder?: number;
 }
 
 export interface InstallRequest {
@@ -5429,6 +5562,12 @@ export interface MenuComboGroup {
   sortOrder?: number;
 }
 
+export interface MenuIngredient {
+  code?: string;
+  ingredientId?: string;
+  name?: string;
+}
+
 export interface MenuItemRequest {
   availabilityDefault: string;
   sortOrder?: number;
@@ -5477,11 +5616,13 @@ export interface MenuProduct {
   commentPresets?: Array<CommentPresetOption>;
   description?: string;
   imageUrls?: Array<string>;
+  ingredients?: Array<MenuIngredient>;
   mediaAssetIds?: Array<string>;
   modifierGroupIds?: Array<string>;
   modifierGroupPolicies?: Array<MenuModifierGroupPolicy>;
   name?: string;
   productId?: string;
+  tags?: Array<MenuTag>;
   variants?: Array<MenuVariant>;
 }
 
@@ -5492,11 +5633,22 @@ export interface MenuResponse {
   version?: number;
 }
 
+export interface MenuTag {
+  code?: string;
+  icon?: string;
+  name?: string;
+  showAsBadge?: boolean;
+  showAsFilter?: boolean;
+  sortOrder?: number;
+  tagId?: string;
+}
+
 export interface MenuVariant {
   amountMinor?: number;
   isDefault?: boolean;
   modifierGroupIds?: Array<string>;
   modifierGroupPolicies?: Array<MenuModifierGroupPolicy>;
+  name?: string;
   onSaleNow?: boolean;
   orderable?: boolean;
   physical?: PhysicalFacts;
@@ -5702,6 +5854,59 @@ export interface MoveLocationRequest {
   locationId: string;
 }
 
+export interface MxikImportApplyRequest {
+  acknowledgedWithdrawals?: number;
+}
+
+export interface MxikImportFindingResponse {
+  code?: string;
+  detailCode?: string;
+  kind?: string;
+}
+
+export interface MxikImportRequest {
+  contentBase64?: string;
+  fileName: string;
+  mode: string;
+  objectKey?: string;
+  sourcePublishedOn?: string;
+}
+
+export interface MxikImportRunResponse {
+  acknowledgedWithdrawals?: number;
+  appliedAt?: string;
+  appliedBy?: string;
+  codeLengthHistogram?: { [key: string]: number };
+  createdAt?: string;
+  createdBy?: string;
+  datasetVersion?: number;
+  failureReason?: string;
+  labelsBorrowed?: number;
+  mappingProfile?: string;
+  mode?: string;
+  rowsChanged?: number;
+  rowsError?: number;
+  rowsNew?: number;
+  rowsReinstated?: number;
+  rowsTotal?: number;
+  rowsUnchanged?: number;
+  rowsWithdrawn?: number;
+  runId?: string;
+  sampleErrors?: Array<MxikImportSampleError>;
+  sourceFileName?: string;
+  sourcePublishedOn?: string;
+  sourceSha256?: string;
+  status?: string;
+  version?: number;
+  withdrawalThresholdPercent?: number;
+}
+
+export interface MxikImportSampleError {
+  code?: string;
+  detailCode?: string;
+  row?: number;
+}
+
 export interface MxikReferenceRow {
   code?: string;
   defaultPackageCodes?: Array<string>;
@@ -5709,8 +5914,18 @@ export interface MxikReferenceRow {
   labelRu?: string;
   labelUz?: string;
   parentCode?: string;
+  replacedByCode?: string;
   validFrom?: string;
   validUntil?: string;
+  withdrawn?: boolean;
+}
+
+export interface MxikUploadTicketResponse {
+  expiresAt?: string;
+  maxBytes?: number;
+  objectKey?: string;
+  requiredHeaders?: { [key: string]: string };
+  url?: string;
 }
 
 export interface MyReferralResponse {
@@ -6107,6 +6322,7 @@ export interface OperationsOrderControllerDestinationRequest {
 }
 
 export interface OperationsOrderControllerLineResponse {
+  autoAddMandatory?: boolean;
   autoSelectedCharges?: Array<OperationsOrderControllerAutoSelectedChargeResponse>;
   autoSelectedModifiers?: Array<string>;
   catchweight?: OrderLineCatchweightResponse;
@@ -6117,6 +6333,7 @@ export interface OperationsOrderControllerLineResponse {
   lineId?: string;
   lineNumber?: number;
   modifiers?: Array<string>;
+  origin?: string;
   portionSize?: number;
   productName?: string;
   quantity?: number;
@@ -6385,6 +6602,7 @@ export interface OrderDetailResponse {
   currentRevision?: number;
   customer?: CustomerResponse;
   kitchenNote?: string;
+  lineRemovalEnabled?: boolean;
   lines?: Array<OperationsOrderControllerLineResponse>;
   outcome?: OutcomeResponse;
   subtotalMinor?: number;
@@ -6432,6 +6650,7 @@ export interface OrderLineResponse {
   lineNumber?: number;
   modifierOptionIds?: Array<string>;
   modifiers?: Array<string>;
+  origin?: string;
   productId?: string;
   productName?: string;
   quantity?: number;
@@ -6475,14 +6694,14 @@ export interface OrderOutcomeReasonControllerReasonRequest {
   customerRefund?: "FULL" | "NONE" | "DISCRETIONARY";
   customerTexts: { [key: string]: string };
   internalName: string;
-  kind: "CANCELLATION" | "COMPLETION";
+  kind: "CANCELLATION" | "COMPLETION" | "LINE_REMOVAL";
   liabilityParty?: "TENANT" | "CUSTOMER" | "COURIER_PARTNER" | "PLATFORM";
   stockDisposition?: "RELEASE" | "RETURN_TO_STOCK" | "WRITE_OFF" | "NO_EFFECT";
-  systemCategory: "CUSTOMER_CANCELLED" | "CUSTOMER_UNREACHABLE" | "CUSTOMER_NO_SHOW" | "RESTAURANT_REFUSED" | "ITEM_UNAVAILABLE" | "KITCHEN_CAPACITY" | "DELIVERY_FAILED" | "COURIER_UNAVAILABLE" | "ADDRESS_UNSERVICEABLE" | "PAYMENT_NOT_RECEIVED" | "DUPLICATE_ORDER" | "TEST_ORDER" | "SUSPECTED_FRAUD" | "PRICING_ERROR" | "DELIVERED_OWN_COURIER" | "DELIVERED_PARTNER_COURIER" | "COLLECTED_BY_CUSTOMER" | "SERVED_IN_HOUSE" | "APPROVAL_DEADLINE_LAPSED" | "OTHER";
+  systemCategory: "CUSTOMER_CANCELLED" | "CUSTOMER_UNREACHABLE" | "CUSTOMER_NO_SHOW" | "RESTAURANT_REFUSED" | "ITEM_UNAVAILABLE" | "KITCHEN_CAPACITY" | "DELIVERY_FAILED" | "COURIER_UNAVAILABLE" | "ADDRESS_UNSERVICEABLE" | "PAYMENT_NOT_RECEIVED" | "DUPLICATE_ORDER" | "TEST_ORDER" | "SUSPECTED_FRAUD" | "PRICING_ERROR" | "CUSTOMER_CHANGED_MIND" | "KITCHEN_ERROR" | "ORDER_ENTRY_ERROR" | "QUALITY_ISSUE" | "DELIVERED_OWN_COURIER" | "DELIVERED_PARTNER_COURIER" | "COLLECTED_BY_CUSTOMER" | "SERVED_IN_HOUSE" | "APPROVAL_DEADLINE_LAPSED" | "OTHER";
 }
 
 export interface OrderOutcomeReasonControllerReorderRequest {
-  kind: "CANCELLATION" | "COMPLETION";
+  kind: "CANCELLATION" | "COMPLETION" | "LINE_REMOVAL";
   orderedReasonIds: Array<string>;
 }
 
@@ -6532,6 +6751,7 @@ export interface OrderPosExportResponse {
 }
 
 export interface OrderQuoteResponse {
+  autoAdded?: Array<QuotedAutoAddLineResponse>;
   currency?: string;
   deliveryFreeFromMinor?: number;
   deliveryMinBasketMinor?: number;
@@ -6855,6 +7075,11 @@ export interface PageMappingView {
 
 export interface PageMigrationRunView {
   items?: Array<MigrationRunView>;
+  nextCursor?: string;
+}
+
+export interface PageMxikImportFindingResponse {
+  items?: Array<MxikImportFindingResponse>;
   nextCursor?: string;
 }
 
@@ -7247,6 +7472,7 @@ export interface PhysicalAttributesRequest {
   netVolumeMillilitres?: number;
   netWeightGrams?: number;
   portionSize?: number;
+  portionsPerUnit?: number;
   proteinGramsPer100?: number;
   splittable?: boolean;
 }
@@ -7261,6 +7487,7 @@ export interface PhysicalAttributesResponse {
   netVolumeMillilitres?: number;
   netWeightGrams?: number;
   portionSize?: number;
+  portionsPerUnit?: number;
   proteinGramsPer100?: number;
   splittable?: boolean;
   version?: number;
@@ -7320,6 +7547,7 @@ export interface PlaceOrderRequest {
   cashTenderedMinor?: number;
   channelCode: string;
   customerAccountId: string;
+  declinedAutoAddRuleIds?: Array<string>;
   destination?: OperationsOrderControllerDestinationRequest;
   dineInSessionId?: string;
   fulfillmentMode: "DELIVERY" | "PICKUP" | "DINE_IN";
@@ -7716,6 +7944,7 @@ export interface PricedCartResponse {
   appliedPromotions?: Array<AppliedPromotionResponse>;
   cartId?: string;
   cartVersion?: number;
+  changedByPricing?: boolean;
   contextHash?: string;
   currency?: string;
   delivery?: DeliveryChargeResponse;
@@ -7779,6 +8008,14 @@ export interface ProductSummaryResponse {
   status?: string;
   variantCount?: number;
   version?: number;
+}
+
+export interface ProductVocabularySetRequest {
+  ids: Array<string>;
+}
+
+export interface ProductVocabularySetResponse {
+  items?: Array<VocabularyEntryResponse>;
 }
 
 export interface ProfileResponse {
@@ -8205,6 +8442,18 @@ export interface QuoteResponse {
   totalMinor?: number;
 }
 
+export interface QuotedAutoAddLineResponse {
+  baseAmountMinor?: number;
+  customerText?: { [key: string]: string };
+  finalAmountMinor?: number;
+  mandatory?: boolean;
+  quantity?: number;
+  ruleCode?: string;
+  ruleId?: string;
+  taxAmountMinor?: number;
+  variantId?: string;
+}
+
 export interface QuotedDiscountResponse {
   amountMinor?: number;
   code?: string;
@@ -8487,7 +8736,15 @@ export interface ReferenceMatchResponse {
 }
 
 export interface ReferenceStatus {
+  ageDays?: number;
+  datasetVersion?: number;
+  importedAt?: string;
   loaded?: boolean;
+  maxAgeDays?: number;
+  sourcePublishedOn?: string;
+  stale?: boolean;
+  validRows?: number;
+  withdrawnRows?: number;
 }
 
 export interface ReferralOperationsControllerRedemptionResponse {
@@ -10228,6 +10485,24 @@ export interface StepView {
   stepKey?: string;
 }
 
+export interface StockConsequenceLine {
+  declaredDisposition?: string;
+  effectiveDisposition?: string;
+  kitchenState?: string;
+  noEffectUnits?: number;
+  orderLineId?: string;
+  productName?: string;
+  quantityAfter?: number;
+  quantityBefore?: number;
+  reasonCategory?: string;
+  reasonId?: string;
+  releasedUnits?: number;
+  returnedUnits?: number;
+  stockUnits?: number;
+  variantId?: string;
+  writtenOffUnits?: number;
+}
+
 export interface StockItemResponse {
   stockItemId?: string;
   trackingMode?: string;
@@ -10650,8 +10925,25 @@ export interface TableStatusRequest {
   status: string;
 }
 
+export interface TagCreateRequest {
+  code: string;
+  iconKey?: string;
+  names?: { [key: string]: string };
+  showAsBadge?: boolean;
+  showAsFilter?: boolean;
+  sortOrder?: number;
+}
+
 export interface TagCreatedResponse {
   tagId?: string;
+}
+
+export interface TagEditRequest {
+  iconKey?: string;
+  names?: { [key: string]: string };
+  showAsBadge?: boolean;
+  showAsFilter?: boolean;
+  sortOrder?: number;
 }
 
 export interface TagResponse {
@@ -11125,7 +11417,7 @@ export interface TransitionLeadRequest {
 export interface TranslateRequest {
   description?: string;
   entityId: string;
-  entityType: "CATALOG" | "CATEGORY" | "PRODUCT" | "VARIANT" | "MODIFIER_GROUP" | "MODIFIER_OPTION" | "COMBO_GROUP" | "COMBO_COMPONENT" | "FEE";
+  entityType: "CATALOG" | "CATEGORY" | "PRODUCT" | "VARIANT" | "MODIFIER_GROUP" | "MODIFIER_OPTION" | "COMBO_GROUP" | "COMBO_COMPONENT" | "AUTO_ADD_RULE" | "TAG" | "INGREDIENT" | "FEE";
   locale: string;
   name: string;
 }
@@ -11479,6 +11771,18 @@ export interface VerifyRequest {
   validUntil: string;
 }
 
+export interface VocabularyEntryResponse {
+  code?: string;
+  iconKey?: string;
+  id?: string;
+  names?: { [key: string]: string };
+  showAsBadge?: boolean;
+  showAsFilter?: boolean;
+  sortOrder?: number;
+  status?: string;
+  version?: number;
+}
+
 export interface WalletAdjustmentRequest {
   amountMinor?: number;
   grantId?: string;
@@ -11710,7 +12014,7 @@ export interface Operations {
   "bankDetails": { method: "GET"; path: "/api/v1/control-plane/billing/bank-details"; request: { parameters: Record<string, never> }; responses: { "200": BankDetailsView } };
   "cardInstallations": { method: "GET"; path: "/api/v1/control-plane/billing/card-installations"; request: { parameters: Record<string, never> }; responses: { "200": Array<CardInstallationView> } };
   "businessTypes": { method: "GET"; path: "/api/v1/control-plane/business-types"; request: { parameters: Record<string, never> }; responses: { "200": Array<BusinessTypeView> } };
-  "list_54": { method: "GET"; path: "/api/v1/control-plane/capabilities"; request: { parameters: Record<string, never> }; responses: { "200": Array<CapabilityDescriptor> } };
+  "list_57": { method: "GET"; path: "/api/v1/control-plane/capabilities"; request: { parameters: Record<string, never> }; responses: { "200": Array<CapabilityDescriptor> } };
   "keys_1": { method: "GET"; path: "/api/v1/control-plane/configuration/keys"; request: { parameters: Record<string, never> }; responses: { "200": Array<ConfigurationKeyResponse> } };
   "resolution_1": { method: "GET"; path: "/api/v1/control-plane/configuration/keys/{code}/resolution"; request: { parameters: { path: { code: string }; query: { brandId?: string; locationId?: string; scopeType: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION"; tenantId?: string } } }; responses: { "200": ConfigurationResolutionResponse } };
   "setValue_1": { method: "POST"; path: "/api/v1/control-plane/configuration/keys/{code}/values"; request: { parameters: { path: { code: string } }; body: SetConfigurationValueRequest }; responses: { "200": ConfigurationValueResponse } };
@@ -11720,16 +12024,23 @@ export interface Operations {
   "poll": { method: "POST"; path: "/api/v1/control-plane/device-enrolments/{deviceCode}/poll"; request: { parameters: { path: { deviceCode: string } } }; responses: { "200": PollResponse } };
   "installations_1": { method: "GET"; path: "/api/v1/control-plane/einvoicing/installations"; request: { parameters: Record<string, never> }; responses: { "200": Array<EInvoicingAccountView> } };
   "classifications": { method: "GET"; path: "/api/v1/control-plane/einvoicing/line-classifications"; request: { parameters: Record<string, never> }; responses: { "200": Array<EInvoicingClassificationView> } };
-  "list_53": { method: "GET"; path: "/api/v1/control-plane/event-contracts"; request: { parameters: Record<string, never> }; responses: { "200": Array<EventContractResponse> } };
+  "list_56": { method: "GET"; path: "/api/v1/control-plane/event-contracts"; request: { parameters: Record<string, never> }; responses: { "200": Array<EventContractResponse> } };
   "taxonomy_1": { method: "GET"; path: "/api/v1/control-plane/failure-taxonomy"; request: { parameters: Record<string, never> }; responses: { "200": Array<CategoryView> } };
   "flags": { method: "GET"; path: "/api/v1/control-plane/feature-flags"; request: { parameters: Record<string, never> }; responses: { "200": Array<FeatureFlagView> } };
   "blocked_1": { method: "GET"; path: "/api/v1/control-plane/fiscal-documents/blocked"; request: { parameters: { query: { limit?: number } } }; responses: { "200": Array<PlatformBlockedDocument> } };
-  "search_2": { method: "GET"; path: "/api/v1/control-plane/fiscal-reference/mxik"; request: { parameters: { query: { limit?: number; query?: string } } }; responses: { "200": PageMxikReferenceRow } };
+  "search_2": { method: "GET"; path: "/api/v1/control-plane/fiscal-reference/mxik"; request: { parameters: { query: { asOf?: string; limit?: number; query?: string } } }; responses: { "200": PageMxikReferenceRow } };
+  "recent": { method: "GET"; path: "/api/v1/control-plane/fiscal-reference/mxik/imports"; request: { parameters: { query: { limit?: number } } }; responses: { "200": Array<MxikImportRunResponse> } };
+  "upload": { method: "POST"; path: "/api/v1/control-plane/fiscal-reference/mxik/imports"; request: { parameters: Record<string, never>; body: MxikImportRequest }; responses: { "200": MxikImportRunResponse } };
+  "requestUpload_1": { method: "POST"; path: "/api/v1/control-plane/fiscal-reference/mxik/imports/uploads"; request: { parameters: Record<string, never> }; responses: { "200": MxikUploadTicketResponse } };
+  "read_11": { method: "GET"; path: "/api/v1/control-plane/fiscal-reference/mxik/imports/{runId}"; request: { parameters: { path: { runId: string } } }; responses: { "200": MxikImportRunResponse } };
+  "apply": { method: "POST"; path: "/api/v1/control-plane/fiscal-reference/mxik/imports/{runId}/apply"; request: { parameters: { path: { runId: string } }; body?: MxikImportApplyRequest }; responses: { "200": MxikImportRunResponse } };
+  "findings": { method: "GET"; path: "/api/v1/control-plane/fiscal-reference/mxik/imports/{runId}/findings"; request: { parameters: { path: { runId: string }; query: { after?: string; limit?: number } } }; responses: { "200": PageMxikImportFindingResponse } };
+  "reject": { method: "POST"; path: "/api/v1/control-plane/fiscal-reference/mxik/imports/{runId}/reject"; request: { parameters: { path: { runId: string } } }; responses: { "200": MxikImportRunResponse } };
   "status_3": { method: "GET"; path: "/api/v1/control-plane/fiscal-reference/mxik/status"; request: { parameters: Record<string, never> }; responses: { "200": ReferenceStatus } };
-  "list_41": { method: "GET"; path: "/api/v1/control-plane/grants"; request: { parameters: Record<string, never> }; responses: { "200": Array<PlatformGrantView> } };
+  "list_44": { method: "GET"; path: "/api/v1/control-plane/grants"; request: { parameters: Record<string, never> }; responses: { "200": Array<PlatformGrantView> } };
   "grant_1": { method: "POST"; path: "/api/v1/control-plane/grants"; request: { parameters: Record<string, never>; body: PlatformGrantRequest }; responses: { "200": PlatformGrantResponse } };
   "revoke_4": { method: "DELETE"; path: "/api/v1/control-plane/grants/{grantId}"; request: { parameters: { path: { grantId: string } }; body: PlatformGrantControllerReasonRequest }; responses: { "200": PlatformGrantResponse } };
-  "list_52": { method: "GET"; path: "/api/v1/control-plane/incidents"; request: { parameters: { query: { includeResolved?: boolean; limit?: number } } }; responses: { "200": Array<IncidentView> } };
+  "list_55": { method: "GET"; path: "/api/v1/control-plane/incidents"; request: { parameters: { query: { includeResolved?: boolean; limit?: number } } }; responses: { "200": Array<IncidentView> } };
   "acknowledge_2": { method: "POST"; path: "/api/v1/control-plane/incidents/{incidentId}/acknowledgement"; request: { parameters: { path: { incidentId: string } }; body?: NoteRequest }; responses: { "200": unknown } };
   "resolve_4": { method: "POST"; path: "/api/v1/control-plane/incidents/{incidentId}/resolution"; request: { parameters: { path: { incidentId: string } }; body: ControlPlaneIncidentControllerResolveRequest }; responses: { "200": unknown } };
   "installations": { method: "GET"; path: "/api/v1/control-plane/installations"; request: { parameters: { query: { cursor?: string; limit?: number } } }; responses: { "200": PagePlatformInstallationView } };
@@ -11746,7 +12057,7 @@ export interface Operations {
   "find_3": { method: "GET"; path: "/api/v1/control-plane/lookup"; request: { parameters: { query: { q: string } } }; responses: { "200": Array<LookupHit> } };
   "onSale": { method: "GET"; path: "/api/v1/control-plane/modules"; request: { parameters: Record<string, never> }; responses: { "200": Array<ModuleView> } };
   "registry": { method: "GET"; path: "/api/v1/control-plane/notification-providers"; request: { parameters: Record<string, never> }; responses: { "200": NotificationProviders } };
-  "list_51": { method: "GET"; path: "/api/v1/control-plane/onboarding-templates"; request: { parameters: Record<string, never> }; responses: { "200": Array<TemplateView> } };
+  "list_54": { method: "GET"; path: "/api/v1/control-plane/onboarding-templates"; request: { parameters: Record<string, never> }; responses: { "200": Array<TemplateView> } };
   "currentDefault": { method: "GET"; path: "/api/v1/control-plane/onboarding-templates/default"; request: { parameters: Record<string, never> }; responses: { "200": TemplateView } };
   "get_16": { method: "GET"; path: "/api/v1/control-plane/onboarding-templates/{templateId}"; request: { parameters: { path: { templateId: string } } }; responses: { "200": TemplateView } };
   "overview_2": { method: "GET"; path: "/api/v1/control-plane/owner-invitations"; request: { parameters: { query: { state?: "QUEUED" | "SENT" | "ACCEPTED" | "NOT_NEEDED" | "FAILED" | "EXPIRED" | "NONE" | "OUTSTANDING" } } }; responses: { "200": Array<OwnerInvitationOverviewRow> } };
@@ -11761,7 +12072,7 @@ export interface Operations {
   "removeHoliday_1": { method: "DELETE"; path: "/api/v1/control-plane/reference-data/holidays/{holidayId}"; request: { parameters: { path: { holidayId: string } }; body: RemoveHolidayRequest }; responses: { "200": unknown } };
   "buckets": { method: "GET"; path: "/api/v1/control-plane/reference-data/sla-buckets"; request: { parameters: Record<string, never> }; responses: { "200": SlaBuckets } };
   "residency": { method: "GET"; path: "/api/v1/control-plane/residency"; request: { parameters: Record<string, never> }; responses: { "200": ResidencyView } };
-  "read_7": { method: "GET"; path: "/api/v1/control-plane/staff/{subjectId}/mfa"; request: { parameters: { path: { subjectId: string } } }; responses: { "200": PlatformMfaResponse } };
+  "read_10": { method: "GET"; path: "/api/v1/control-plane/staff/{subjectId}/mfa"; request: { parameters: { path: { subjectId: string } } }; responses: { "200": PlatformMfaResponse } };
   "reset_1": { method: "POST"; path: "/api/v1/control-plane/staff/{subjectId}/mfa/resets"; request: { parameters: { path: { subjectId: string } }; body: PlatformResetRequest }; responses: { "200": PlatformResetResponse } };
   "listStorefrontApps": { method: "GET"; path: "/api/v1/control-plane/storefront-apps"; request: { parameters: Record<string, never> }; responses: { "200": Array<StorefrontAppSummaryView> } };
   "registerStorefrontApp": { method: "POST"; path: "/api/v1/control-plane/storefront-apps"; request: { parameters: Record<string, never>; body: RegisterAppRequest }; responses: { "200": RegisteredAppResponse } };
@@ -11771,14 +12082,14 @@ export interface Operations {
   "rotateStorefrontAppSecret": { method: "POST"; path: "/api/v1/control-plane/storefront-apps/{appId}/secret-rotations"; request: { parameters: { path: { appId: string } }; body: StorefrontAppRegistryControllerReasonRequest }; responses: { "200": RegisteredAppResponse } };
   "changeStorefrontAppStatus": { method: "PUT"; path: "/api/v1/control-plane/storefront-apps/{appId}/status"; request: { parameters: { path: { appId: string } }; body: ChangeStatusRequest }; responses: { "200": StorefrontAppView } };
   "mine_1": { method: "GET"; path: "/api/v1/control-plane/support-sessions/mine"; request: { parameters: Record<string, never> }; responses: { "200": Array<SupportSessionView> } };
-  "list_50": { method: "GET"; path: "/api/v1/control-plane/template-reviews"; request: { parameters: { query: { limit?: number; state?: string } } }; responses: { "200": Array<TemplateReviewView> } };
+  "list_53": { method: "GET"; path: "/api/v1/control-plane/template-reviews"; request: { parameters: { query: { limit?: number; state?: string } } }; responses: { "200": Array<TemplateReviewView> } };
   "health": { method: "GET"; path: "/api/v1/control-plane/tenant-health"; request: { parameters: Record<string, never> }; responses: { "200": Array<TenantHealth> } };
   "plans_1": { method: "GET"; path: "/api/v1/control-plane/tenant-plans"; request: { parameters: Record<string, never> }; responses: { "200": Array<TenantPlan> } };
   "listTenants": { method: "GET"; path: "/api/v1/control-plane/tenants"; request: { parameters: { query: { cursor?: string; limit?: number } } }; responses: { "200": PageTenantSummaryView } };
   "createTenant_1": { method: "POST"; path: "/api/v1/control-plane/tenants"; request: { parameters: Record<string, never>; body: CreateTenantRequest }; responses: { "200": TenantView } };
   "getTenantBySlug": { method: "GET"; path: "/api/v1/control-plane/tenants/by-slug/{slug}"; request: { parameters: { path: { slug: string } } }; responses: { "200": TenantView } };
   "getTenant_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": TenantView } };
-  "list_40": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/approval-policies"; request: { parameters: { path: { tenantId: string }; query: { actionCode?: string; includeEnded?: boolean; limit?: number } } }; responses: { "200": PagePolicyResponse } };
+  "list_43": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/approval-policies"; request: { parameters: { path: { tenantId: string }; query: { actionCode?: string; includeEnded?: boolean; limit?: number } } }; responses: { "200": PagePolicyResponse } };
   "author_2": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/approval-policies"; request: { parameters: { path: { tenantId: string } }; body: AuthorPolicyRequest }; responses: { "200": PolicyResponse } };
   "coverage_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/approval-policies/coverage"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<PolicyCoverageResponse> } };
   "endDate": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/approval-policies/{policyId}/expiry"; request: { parameters: { path: { policyId: string; tenantId: string } }; body: EndPolicyRequest }; responses: { "200": PolicyResponse } };
@@ -11791,6 +12102,12 @@ export interface Operations {
   "deleteBrand": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": unknown } };
   "reviseBrand": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: ReviseOperatingUnitRequest }; responses: { "200": BrandView } };
   "activateBrand": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/activate"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": BrandView } };
+  "list_42": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/auto-add-rules"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<AutoAddRuleResponse> } };
+  "create_24": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/auto-add-rules"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: AutoAddRuleCreateRequest }; responses: { "200": AutoAddRuleResponse } };
+  "simulate_2": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/auto-add-rules/simulations"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: AutoAddSimulationRequest }; responses: { "200": AutoAddSimulationResponse } };
+  "read_4": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/auto-add-rules/{ruleId}"; request: { parameters: { path: { brandId: string; ruleId: string; tenantId: string } } }; responses: { "200": AutoAddRuleResponse } };
+  "replace_1": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/auto-add-rules/{ruleId}"; request: { parameters: { path: { brandId: string; ruleId: string; tenantId: string } }; body: AutoAddRuleReplaceRequest }; responses: { "200": AutoAddRuleResponse } };
+  "archive_12": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/auto-add-rules/{ruleId}/archive"; request: { parameters: { path: { brandId: string; ruleId: string; tenantId: string } } }; responses: { "200": AutoAddRuleResponse } };
   "catalogs": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<CatalogSummaryResponse> } };
   "createCatalog": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateCatalogRequest }; responses: { "200": CatalogAuthoringControllerIdResponse } };
   "categories": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/catalogs/{catalogId}/categories"; request: { parameters: { path: { brandId: string; catalogId: string; tenantId: string } } }; responses: { "200": Array<CategorySummaryResponse> } };
@@ -11809,8 +12126,8 @@ export interface Operations {
   "channelExclusions": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/exclusions"; request: { parameters: { path: { brandId: string; channelId: string; tenantId: string }; query: { locationId: string } } }; responses: { "200": ChannelExclusionsResponse } };
   "bulkSetChannelOffering": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/exclusions/bulk"; request: { parameters: { path: { brandId: string; channelId: string; tenantId: string } }; body: BulkChannelOfferingRequest }; responses: { "200": BulkChannelOfferingResponse } };
   "setChannelOffering": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/exclusions/variants/{variantId}"; request: { parameters: { path: { brandId: string; channelId: string; tenantId: string; variantId: string } }; body: SetChannelOfferingRequest }; responses: { "200": unknown } };
-  "channelMediaOverrides": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/media-overrides"; request: { parameters: { path: { brandId: string; channelId: string; tenantId: string }; query: { entityId?: string; entityType?: "CATALOG" | "CATEGORY" | "PRODUCT" | "VARIANT" | "MODIFIER_GROUP" | "MODIFIER_OPTION" | "COMBO_GROUP" | "COMBO_COMPONENT" | "FEE" } } }; responses: { "200": ChannelMediaOverridesResponse } };
-  "replaceChannelMediaOverrides": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/media-overrides/{entityType}/{entityId}"; request: { parameters: { path: { brandId: string; channelId: string; entityId: string; entityType: "CATALOG" | "CATEGORY" | "PRODUCT" | "VARIANT" | "MODIFIER_GROUP" | "MODIFIER_OPTION" | "COMBO_GROUP" | "COMBO_COMPONENT" | "FEE"; tenantId: string } }; body: ReplaceChannelMediaRequest }; responses: { "200": ChannelMediaOverridesResponse } };
+  "channelMediaOverrides": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/media-overrides"; request: { parameters: { path: { brandId: string; channelId: string; tenantId: string }; query: { entityId?: string; entityType?: "CATALOG" | "CATEGORY" | "PRODUCT" | "VARIANT" | "MODIFIER_GROUP" | "MODIFIER_OPTION" | "COMBO_GROUP" | "COMBO_COMPONENT" | "AUTO_ADD_RULE" | "TAG" | "INGREDIENT" | "FEE" } } }; responses: { "200": ChannelMediaOverridesResponse } };
+  "replaceChannelMediaOverrides": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/media-overrides/{entityType}/{entityId}"; request: { parameters: { path: { brandId: string; channelId: string; entityId: string; entityType: "CATALOG" | "CATEGORY" | "PRODUCT" | "VARIANT" | "MODIFIER_GROUP" | "MODIFIER_OPTION" | "COMBO_GROUP" | "COMBO_COMPONENT" | "AUTO_ADD_RULE" | "TAG" | "INGREDIENT" | "FEE"; tenantId: string } }; body: ReplaceChannelMediaRequest }; responses: { "200": ChannelMediaOverridesResponse } };
   "previewTargets": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/channels/{channelId}/preview-targets"; request: { parameters: { path: { brandId: string; channelId: string; tenantId: string } } }; responses: { "200": Array<PreviewTargetView> } };
   "updateComponent": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/combo-components/{componentId}"; request: { parameters: { path: { brandId: string; componentId: string; tenantId: string } }; body: UpdateComboComponentRequest }; responses: { "200": ComboComponentResponse } };
   "createComboGroup": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/combo-groups"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateComboGroupRequest }; responses: { "200": ComboGroupResponse } };
@@ -11821,7 +12138,8 @@ export interface Operations {
   "classifyFee": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fees/{feeCode}/fiscal-classification"; request: { parameters: { path: { brandId: string; feeCode: string; tenantId: string } }; body: FiscalClassificationRequest }; responses: { "200": CatalogAuthoringControllerIdResponse } };
   "bulkClassify": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fiscal-classifications/bulk"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: BulkClassifyRequest }; responses: { "200": BulkClassifyResponse } };
   "fiscalCoverage": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fiscal-coverage"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": FiscalCoverageResponse } };
-  "mxikReference": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fiscal-reference/mxik"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { limit?: number; query?: string } } }; responses: { "200": PageMxikReferenceRow } };
+  "mxikReference": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fiscal-reference/mxik"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { asOf?: string; limit?: number; query?: string } } }; responses: { "200": PageMxikReferenceRow } };
+  "mxikReferenceStatus": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/fiscal-reference/mxik/status"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": ReferenceStatus } };
   "history_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/imports"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { limit?: number } } }; responses: { "200": Array<CatalogImportStatusResponse> } };
   "submit_3": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/imports"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { dryRun?: boolean } }; body: CatalogImportSubmitRequest }; responses: { "200": CatalogImportSubmitResponse } };
   "template": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/imports/template"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": string } };
@@ -11831,14 +12149,14 @@ export interface Operations {
   "variantsAtLocation": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/locations/{locationId}/variants"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { cursor?: string; limit?: number; locale?: string; query?: string; search?: string; status?: string } } }; responses: { "200": PageVariantAvailabilityResponse } };
   "variantAvailabilityCounts": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/locations/{locationId}/variants/availability-counts"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { locale?: string; search?: string } } }; responses: { "200": VariantAvailabilityCountsResponse } };
   "bulkSetOfferingStatus": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/locations/{locationId}/variants/bulk-offering-status"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BulkOfferingStatusRequest }; responses: { "200": BulkOfferingStatusResponse } };
-  "detachMedia": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/media/{entityType}/{entityId}/{assetId}"; request: { parameters: { path: { assetId: string; brandId: string; entityId: string; entityType: "CATALOG" | "CATEGORY" | "PRODUCT" | "VARIANT" | "MODIFIER_GROUP" | "MODIFIER_OPTION" | "COMBO_GROUP" | "COMBO_COMPONENT" | "FEE"; tenantId: string }; query: { channel?: string; role: string } } }; responses: { "200": unknown } };
-  "attachMedia": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/media/{entityType}/{entityId}/{assetId}"; request: { parameters: { path: { assetId: string; brandId: string; entityId: string; entityType: "CATALOG" | "CATEGORY" | "PRODUCT" | "VARIANT" | "MODIFIER_GROUP" | "MODIFIER_OPTION" | "COMBO_GROUP" | "COMBO_COMPONENT" | "FEE"; tenantId: string } }; body: AttachMediaRequest }; responses: { "200": unknown } };
-  "list_39": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<MenuResponse> } };
-  "create_21": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateMenuRequest }; responses: { "200": MenuResponse } };
+  "detachMedia": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/media/{entityType}/{entityId}/{assetId}"; request: { parameters: { path: { assetId: string; brandId: string; entityId: string; entityType: "CATALOG" | "CATEGORY" | "PRODUCT" | "VARIANT" | "MODIFIER_GROUP" | "MODIFIER_OPTION" | "COMBO_GROUP" | "COMBO_COMPONENT" | "AUTO_ADD_RULE" | "TAG" | "INGREDIENT" | "FEE"; tenantId: string }; query: { channel?: string; role: string } } }; responses: { "200": unknown } };
+  "attachMedia": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/media/{entityType}/{entityId}/{assetId}"; request: { parameters: { path: { assetId: string; brandId: string; entityId: string; entityType: "CATALOG" | "CATEGORY" | "PRODUCT" | "VARIANT" | "MODIFIER_GROUP" | "MODIFIER_OPTION" | "COMBO_GROUP" | "COMBO_COMPONENT" | "AUTO_ADD_RULE" | "TAG" | "INGREDIENT" | "FEE"; tenantId: string } }; body: AttachMediaRequest }; responses: { "200": unknown } };
+  "list_41": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<MenuResponse> } };
+  "create_23": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateMenuRequest }; responses: { "200": MenuResponse } };
   "listBindings": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/bindings"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<BranchMenuBindingResponse> } };
   "unbind": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/bindings/locations/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { channelId?: string } } }; responses: { "200": unknown } };
   "bind": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/bindings/locations/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BindMenuRequest }; responses: { "200": unknown } };
-  "update_11": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/{menuId}"; request: { parameters: { path: { brandId: string; menuId: string; tenantId: string } }; body: UpdateMenuRequest }; responses: { "200": MenuResponse } };
+  "update_13": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/{menuId}"; request: { parameters: { path: { brandId: string; menuId: string; tenantId: string } }; body: UpdateMenuRequest }; responses: { "200": MenuResponse } };
   "copy": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/{menuId}/copy"; request: { parameters: { path: { brandId: string; menuId: string; tenantId: string } }; body: CopyMenuRequest }; responses: { "200": MenuResponse } };
   "items": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/{menuId}/items"; request: { parameters: { path: { brandId: string; menuId: string; tenantId: string } } }; responses: { "200": Array<MenuItemResponse> } };
   "addByFilter": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/{menuId}/items/bulk-add-by-filter"; request: { parameters: { path: { brandId: string; menuId: string; tenantId: string } }; body: BulkAddByFilterRequest }; responses: { "200": BulkAddByFilterResponse } };
@@ -11874,15 +12192,15 @@ export interface Operations {
   "setVariantAttachmentPolicy": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/modifier-groups/{groupId}/overrides"; request: { parameters: { path: { brandId: string; groupId: string; tenantId: string; variantId: string } }; body: AttachmentPolicyRequest }; responses: { "200": ModifierAttachmentResponse } };
   "physicalAttributes": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/physical-attributes"; request: { parameters: { path: { brandId: string; tenantId: string; variantId: string } } }; responses: { "200": PhysicalAttributesResponse } };
   "setPhysicalAttributes": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/variants/{variantId}/physical-attributes"; request: { parameters: { path: { brandId: string; tenantId: string; variantId: string } }; body: PhysicalAttributesRequest }; responses: { "200": PhysicalAttributesResponse } };
-  "list_49": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<FlowDocumentResponse> } };
+  "list_52": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<FlowDocumentResponse> } };
   "author_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/conversations/flows/{flowKey}"; request: { parameters: { path: { brandId: string; flowKey: string; tenantId: string } }; body: AuthorFlowDocumentRequest }; responses: { "200": FlowDocumentResponse } };
-  "list_38": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<TariffSummaryResponse> } };
-  "create_20": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateTariffRequest }; responses: { "200": TariffView } };
+  "list_40": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<TariffSummaryResponse> } };
+  "create_22": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateTariffRequest }; responses: { "200": TariffView } };
   "detail_7": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}"; request: { parameters: { path: { brandId: string; tariffId: string; tenantId: string } } }; responses: { "200": TariffDetailResponse } };
   "bind_6": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/locations"; request: { parameters: { path: { brandId: string; tariffId: string; tenantId: string } }; body: DeliveryTariffControllerBindLocationRequest }; responses: { "200": unknown } };
   "draftVersion_4": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/versions"; request: { parameters: { path: { brandId: string; tariffId: string; tenantId: string } }; body: DeliveryTariffControllerDraftTariffVersionRequest }; responses: { "200": DeliveryTariffControllerVersionView } };
   "activate_17": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/versions/{version}/activate"; request: { parameters: { path: { brandId: string; tariffId: string; tenantId: string; version: number } }; body: ActorRequest }; responses: { "200": DeliveryTariffControllerVersionView } };
-  "simulate_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery/simulations"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { at?: string; currency: string; lat: number; locationId: string; lon: number; subtotalMinor?: number } } }; responses: { "200": SimulationView } };
+  "simulate_3": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery/simulations"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { at?: string; currency: string; lat: number; locationId: string; lon: number; subtotalMinor?: number } } }; responses: { "200": SimulationView } };
   "getLocations": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/locations"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<LocationView> } };
   "createLocation": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/locations"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateLocationRequest }; responses: { "200": LocationView } };
   "deleteLocation": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/locations/{locationId}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": unknown } };
@@ -11890,9 +12208,9 @@ export interface Operations {
   "activateLocation": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/activate"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": LocationView } };
   "describeLocation": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/place"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: DescribeLocationRequest }; responses: { "200": LocationView } };
   "listPriceBooks": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<PriceBookSummaryResponse> } };
-  "create_19": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreatePriceBookRequest }; responses: { "200": PriceBookResponse } };
+  "create_21": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreatePriceBookRequest }; responses: { "200": PriceBookResponse } };
   "resolvedPrices": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/resolved/prices"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { channelId?: string; ids: Array<string>; locationId: string; priceableType: "VARIANT" | "MODIFIER_OPTION" | "COMBO_COMPONENT" } } }; responses: { "200": ResolvedPricesResponse } };
-  "read_6": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}"; request: { parameters: { path: { brandId: string; priceBookId: string; tenantId: string } } }; responses: { "200": PriceBookResponse } };
+  "read_9": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}"; request: { parameters: { path: { brandId: string; priceBookId: string; tenantId: string } } }; responses: { "200": PriceBookResponse } };
   "activate_16": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/activation"; request: { parameters: { path: { brandId: string; priceBookId: string; tenantId: string } } }; responses: { "200": PriceBookResponse } };
   "assignToBrand": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/assignments/brand"; request: { parameters: { path: { brandId: string; priceBookId: string; tenantId: string } }; body: AssignmentRequest }; responses: { "200": PriceBookResponse } };
   "assignToChannel": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/assignments/channels/{channelId}"; request: { parameters: { path: { brandId: string; channelId: string; priceBookId: string; tenantId: string } }; body: AssignmentRequest }; responses: { "200": PriceBookResponse } };
@@ -11905,37 +12223,46 @@ export interface Operations {
   "listTaxProfiles": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/tax-profiles"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<TaxProfileResponse> } };
   "readTaxProfile": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/tax-profiles/{jurisdictionCode}"; request: { parameters: { path: { brandId: string; jurisdictionCode: string; tenantId: string } } }; responses: { "200": TaxProfileResponse } };
   "setTaxProfile": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/tax-profiles/{jurisdictionCode}"; request: { parameters: { path: { brandId: string; jurisdictionCode: string; tenantId: string } }; body: TaxProfileRequest }; responses: { "200": TaxProfileResponse } };
-  "list_37": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/products/{productId}/comment-presets"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } } }; responses: { "200": Array<ProductPresetResponse> } };
+  "list_39": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/products/{productId}/comment-presets"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } } }; responses: { "200": Array<ProductPresetResponse> } };
   "attach": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/products/{productId}/comment-presets"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } }; body: AttachPresetRequest }; responses: { "200": ProductPresetResponse } };
   "detach": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/products/{productId}/comment-presets/{presetId}"; request: { parameters: { path: { brandId: string; presetId: string; productId: string; tenantId: string } } }; responses: { "200": unknown } };
+  "forProduct_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/products/{productId}/ingredients"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } } }; responses: { "200": ProductVocabularySetResponse } };
+  "setForProduct_1": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/products/{productId}/ingredients"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } }; body: ProductVocabularySetRequest }; responses: { "200": ProductVocabularySetResponse } };
+  "forProduct": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/products/{productId}/tags"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } } }; responses: { "200": ProductVocabularySetResponse } };
+  "setForProduct": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/products/{productId}/tags"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } }; body: ProductVocabularySetRequest }; responses: { "200": ProductVocabularySetResponse } };
   "updateBrandProfile": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/profile"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: UpdateBrandProfileRequest }; responses: { "200": BrandView } };
   "reviseRegionalFormats": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/regional-formats"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RegionalFormatsRequest }; responses: { "200": BrandView } };
-  "list_36": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<ScheduleSummaryResponse> } };
-  "create_18": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateScheduleRequest }; responses: { "200": ScheduleView } };
+  "list_38": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<ScheduleSummaryResponse> } };
+  "create_20": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateScheduleRequest }; responses: { "200": ScheduleView } };
   "upsertException": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules/{scheduleId}/exceptions"; request: { parameters: { path: { brandId: string; scheduleId: string; tenantId: string } }; body: ExceptionRequest }; responses: { "200": unknown } };
   "deleteException": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules/{scheduleId}/exceptions/{date}"; request: { parameters: { path: { brandId: string; date: string; scheduleId: string; tenantId: string } } }; responses: { "200": unknown } };
   "replaceRules": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-schedules/{scheduleId}/rules"; request: { parameters: { path: { brandId: string; scheduleId: string; tenantId: string } }; body: RulesRequest }; responses: { "200": unknown } };
-  "list_35": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<ZoneSummaryResponse> } };
-  "create_17": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateZoneRequest }; responses: { "200": ZoneView } };
+  "list_37": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<ZoneSummaryResponse> } };
+  "create_19": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateZoneRequest }; responses: { "200": ZoneView } };
   "detail_6": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}"; request: { parameters: { path: { brandId: string; tenantId: string; zoneId: string } } }; responses: { "200": ZoneDetailResponse } };
   "bind_5": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/locations"; request: { parameters: { path: { brandId: string; tenantId: string; zoneId: string } }; body: ServiceZoneControllerBindLocationRequest }; responses: { "200": unknown } };
   "draftVersion_3": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions"; request: { parameters: { path: { brandId: string; tenantId: string; zoneId: string } }; body: ServiceZoneControllerDraftVersionRequest }; responses: { "200": ServiceZoneControllerVersionView } };
   "activate_15": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions/{version}/activate"; request: { parameters: { path: { brandId: string; tenantId: string; version: number; zoneId: string } }; body: ActivateRequest }; responses: { "200": ServiceZoneControllerVersionView } };
   "setBusinessType": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/business-type"; request: { parameters: { path: { tenantId: string } }; body: BusinessTypeRequest }; responses: { "200": unknown } };
-  "list_34": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<PresetResponse> } };
-  "create_16": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets"; request: { parameters: { path: { tenantId: string } }; body: NewPresetRequest }; responses: { "200": PresetResponse } };
+  "list_36": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<PresetResponse> } };
+  "create_18": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets"; request: { parameters: { path: { tenantId: string } }; body: NewPresetRequest }; responses: { "200": PresetResponse } };
   "localeSet_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets/locale-set"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CommentPresetControllerLocaleSetResponse } };
-  "update_10": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets/{presetId}"; request: { parameters: { path: { presetId: string; tenantId: string } }; body: UpdatePresetRequest }; responses: { "200": PresetResponse } };
+  "update_12": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/comment-presets/{presetId}"; request: { parameters: { path: { presetId: string; tenantId: string } }; body: UpdatePresetRequest }; responses: { "200": PresetResponse } };
   "changeCountry": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/country-change"; request: { parameters: { path: { tenantId: string } }; body: CountryChangeRequest }; responses: { "200": CountryChangeView } };
   "due": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/credentials-due"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CredentialsDue } };
   "forTenant_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/einvoices"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<EInvoiceView> } };
   "one": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/einvoices/{einvoiceId}"; request: { parameters: { path: { einvoiceId: string; tenantId: string } } }; responses: { "200": EInvoiceView } };
   "entitlements_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/entitlements"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CommercialControlPlaneControllerEntitlementSnapshotResponse } };
-  "list_33": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/grants"; request: { parameters: { path: { tenantId: string }; query: { includeInactive?: boolean } } }; responses: { "200": Array<GrantView> } };
+  "list_35": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/grants"; request: { parameters: { path: { tenantId: string }; query: { includeInactive?: boolean } } }; responses: { "200": Array<GrantView> } };
   "grant": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/grants"; request: { parameters: { path: { tenantId: string } }; body: GrantRequest }; responses: { "200": {  } } };
   "revoke_3": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/grants/{grantId}"; request: { parameters: { path: { grantId: string; tenantId: string } }; body: GrantControllerReasonRequest }; responses: { "200": {  } } };
   "linkKeycloakOrganization": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/identity/keycloak-organization"; request: { parameters: { path: { tenantId: string } }; body: LinkKeycloakOrganizationRequest }; responses: { "200": TenantView } };
-  "list_32": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": PageInstallationView } };
+  "list_34": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/ingredients"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<VocabularyEntryResponse> } };
+  "create_17": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/ingredients"; request: { parameters: { path: { tenantId: string } }; body: IngredientCreateRequest }; responses: { "200": VocabularyEntryResponse } };
+  "read_3": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/ingredients/{entryId}"; request: { parameters: { path: { entryId: string; tenantId: string } } }; responses: { "200": VocabularyEntryResponse } };
+  "update_11": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/ingredients/{entryId}"; request: { parameters: { path: { entryId: string; tenantId: string } }; body: IngredientEditRequest }; responses: { "200": VocabularyEntryResponse } };
+  "archive_11": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/ingredients/{entryId}/archive"; request: { parameters: { path: { entryId: string; tenantId: string } } }; responses: { "200": VocabularyEntryResponse } };
+  "list_33": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": PageInstallationView } };
   "install_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations"; request: { parameters: { path: { tenantId: string } }; body: InstallRequest }; responses: { "200": {  } } };
   "effectiveBindings_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/branches/effective-bindings"; request: { parameters: { path: { tenantId: string }; query: { brandId: string } } }; responses: { "200": Array<EffectiveBindingView> } };
   "connectFields_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/connect-fields"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<ConnectFieldDeclarationView> } };
@@ -11951,13 +12278,13 @@ export interface Operations {
   "settings_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/settings"; request: { parameters: { path: { installationId: string; tenantId: string } } }; responses: { "200": CloposSettingsView } };
   "updateSettings_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/settings"; request: { parameters: { path: { installationId: string; tenantId: string } }; body: UpdateCloposSettingsRequest }; responses: { "200": CloposSettingsView } };
   "registerWebhook_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/integrations/{installationId}/webhook-registration"; request: { parameters: { path: { installationId: string; tenantId: string } } }; responses: { "200": WebhookRegistrationResponse } };
-  "list_31": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<LegalEntityView> } };
+  "list_32": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<LegalEntityView> } };
   "register_6": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities"; request: { parameters: { path: { tenantId: string } }; body: RegisterLegalEntityRequest }; responses: { "200": LegalEntityView } };
   "assignmentHistory_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities/brands/{brandId}/locations/{locationId}/assignments"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<LocationFiscalAssignmentView> } };
   "get_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}"; request: { parameters: { path: { entityId: string; tenantId: string } } }; responses: { "200": LegalEntityView } };
-  "update_9": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}"; request: { parameters: { path: { entityId: string; tenantId: string }; query: { expectedVersion: number } }; body: UpdateLegalEntityRequest }; responses: { "200": LegalEntityView } };
+  "update_10": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}"; request: { parameters: { path: { entityId: string; tenantId: string }; query: { expectedVersion: number } }; body: UpdateLegalEntityRequest }; responses: { "200": LegalEntityView } };
   "activate_14": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}/activate"; request: { parameters: { path: { entityId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": LegalEntityView } };
-  "archive_9": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}/archive"; request: { parameters: { path: { entityId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": LegalEntityView } };
+  "archive_10": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}/archive"; request: { parameters: { path: { entityId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": LegalEntityView } };
   "assign_3": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}/assignments"; request: { parameters: { path: { entityId: string; tenantId: string } }; body: AssignLocationRequest }; responses: { "200": LocationFiscalAssignmentView } };
   "suspend_9": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}/suspend"; request: { parameters: { path: { entityId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": LegalEntityView } };
   "tenantModules": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/modules"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<TenantModuleView> } };
@@ -11971,20 +12298,20 @@ export interface Operations {
   "validate_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/validate"; request: { parameters: { path: { runId: string; tenantId: string } } }; responses: { "200": ValidationOutcome } };
   "effective": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/order-acceptance-policy"; request: { parameters: { path: { tenantId: string }; query: { brandId?: string; locationId?: string } } }; responses: { "200": AcceptancePolicyResponse } };
   "author": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/order-acceptance-policy"; request: { parameters: { path: { tenantId: string } }; body: AuthorRequest }; responses: { "200": AcceptancePolicyResponse } };
-  "list_30": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string }; query: { activeOnly?: boolean; kind: "CANCELLATION" | "COMPLETION" } } }; responses: { "200": Array<ReasonResponse> } };
-  "create_15": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerIdResponse } };
-  "categories_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/categories"; request: { parameters: { path: { tenantId: string }; query: { kind: "CANCELLATION" | "COMPLETION" } } }; responses: { "200": Array<string> } };
+  "list_31": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string }; query: { activeOnly?: boolean; kind: "CANCELLATION" | "COMPLETION" | "LINE_REMOVAL" } } }; responses: { "200": Array<ReasonResponse> } };
+  "create_16": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerIdResponse } };
+  "categories_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/categories"; request: { parameters: { path: { tenantId: string }; query: { kind: "CANCELLATION" | "COMPLETION" | "LINE_REMOVAL" } } }; responses: { "200": Array<string> } };
   "reorder_3": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/reorder"; request: { parameters: { path: { tenantId: string } }; body: OrderOutcomeReasonControllerReorderRequest }; responses: { "200": Array<ReasonResponse> } };
   "archive_1": { method: "DELETE"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } } }; responses: { "200": unknown } };
-  "update_8": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerVersionResponse } };
+  "update_9": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerVersionResponse } };
   "view": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/owner-invitation"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OwnerInvitationView } };
   "resend_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/owner-invitation/resend"; request: { parameters: { path: { tenantId: string } }; body: OwnerInvitationResendRequest }; responses: { "200": unknown } };
   "awaitingOperator": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports"; request: { parameters: { path: { tenantId: string }; query: { limit?: number } } }; responses: { "200": PagePosOrderExportControllerExportView } };
   "candidates": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports/{exportId}/candidates"; request: { parameters: { path: { exportId: string; tenantId: string } } }; responses: { "200": PageCandidateView } };
   "discover": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports/{exportId}/discovery"; request: { parameters: { path: { exportId: string; tenantId: string } } }; responses: { "200": {  } } };
   "resolve_3": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-exports/{exportId}/resolution"; request: { parameters: { path: { exportId: string; tenantId: string } }; body: PosOrderExportControllerResolutionRequest }; responses: { "200": {  } } };
-  "list_29": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-mappings"; request: { parameters: { path: { tenantId: string }; query: { bindingId: string; cursor?: string; entityType: "PRODUCT" | "PAYMENT_TYPE" | "DISCOUNT" | "COURIER" | "CANCELLATION_REASON" | "CHANNEL_POS_CODE" | "VARIANT" | "MODIFIER" | "OPERATOR"; limit?: number; status?: string } } }; responses: { "200": PageMappingView } };
-  "create_14": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-mappings"; request: { parameters: { path: { tenantId: string } }; body: CreateMappingRequest }; responses: { "200": MappingCreated } };
+  "list_30": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-mappings"; request: { parameters: { path: { tenantId: string }; query: { bindingId: string; cursor?: string; entityType: "PRODUCT" | "PAYMENT_TYPE" | "DISCOUNT" | "COURIER" | "CANCELLATION_REASON" | "CHANNEL_POS_CODE" | "VARIANT" | "MODIFIER" | "OPERATOR"; limit?: number; status?: string } } }; responses: { "200": PageMappingView } };
+  "create_15": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-mappings"; request: { parameters: { path: { tenantId: string } }; body: CreateMappingRequest }; responses: { "200": MappingCreated } };
   "bulkAutoMatch": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-mappings/bulk-auto-match"; request: { parameters: { path: { tenantId: string } }; body: BulkAutoMatchRequest }; responses: { "200": BulkAutoMatchResponse } };
   "unmapped": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-mappings/unmapped"; request: { parameters: { path: { tenantId: string }; query: { bindingId: string; entityType: "PRODUCT" | "PAYMENT_TYPE" | "DISCOUNT" | "COURIER" | "CANCELLATION_REASON" | "CHANNEL_POS_CODE" | "VARIANT" | "MODIFIER" | "OPERATOR" } } }; responses: { "200": UnmappedResponse } };
   "retire_4": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-mappings/{mappingId}/retire"; request: { parameters: { path: { mappingId: string; tenantId: string } }; body: RetireMappingRequest }; responses: { "200": MappingRetired } };
@@ -11999,10 +12326,10 @@ export interface Operations {
   "recordReviewDecision": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/pos-sync-runs/{runId}/review-decisions"; request: { parameters: { path: { runId: string; tenantId: string } }; body: ReviewDecisionRequest }; responses: { "200": {  } } };
   "reactivateTenant": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/reactivate"; request: { parameters: { path: { tenantId: string } }; body: TenantStatusChangeRequest }; responses: { "200": TenantView } };
   "roles": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/roles"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<RoleDescriptor> } };
-  "list_28": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<ChannelView> } };
-  "create_13": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels"; request: { parameters: { path: { tenantId: string } }; body: CreateChannelRequest }; responses: { "200": ChannelView } };
-  "update_7": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } }; body: UpdateChannelRequest }; responses: { "200": ChannelView } };
-  "archive_8": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/archive"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": ChannelView } };
+  "list_29": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<ChannelView> } };
+  "create_14": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels"; request: { parameters: { path: { tenantId: string } }; body: CreateChannelRequest }; responses: { "200": ChannelView } };
+  "update_8": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } }; body: UpdateChannelRequest }; responses: { "200": ChannelView } };
+  "archive_9": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/archive"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": ChannelView } };
   "deactivate_2": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/deactivate"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": ChannelView } };
   "replaceFulfillmentModes": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/fulfillment-modes"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } }; body: { [key: string]: boolean } }; responses: { "200": unknown } };
   "replaceLocations": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/locations"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } }; body: LocationSetRequest }; responses: { "200": unknown } };
@@ -12025,7 +12352,7 @@ export interface Operations {
   "replaceSocialLinks": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}/social-links"; request: { parameters: { path: { channelId: string; tenantId: string }; query: { expectedVersion: number } }; body: { [key: string]: string } }; responses: { "200": unknown } };
   "importContacts": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/sendpulse-imports"; request: { parameters: { path: { tenantId: string }; query: { dryRun?: boolean } }; body: ImportRequest }; responses: { "200": SendPulseImportReport } };
   "report_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/sendpulse-imports/{runId}"; request: { parameters: { path: { runId: string; tenantId: string }; query: { limit?: number; offset?: number } } }; responses: { "200": SendPulseImportReport } };
-  "list_48": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/statements"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<StatementView> } };
+  "list_51": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/statements"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<StatementView> } };
   "draft_4": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/statements/draft"; request: { parameters: { path: { tenantId: string }; query: { periodKey: string } } }; responses: { "200": StatementView } };
   "find_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/statements/{statementId}"; request: { parameters: { path: { statementId: string; tenantId: string } } }; responses: { "200": StatementView } };
   "forStatement": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/statements/{statementId}/einvoices"; request: { parameters: { path: { statementId: string; tenantId: string } } }; responses: { "200": Array<EInvoiceView> } };
@@ -12035,6 +12362,11 @@ export interface Operations {
   "open_3": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/support-sessions"; request: { parameters: { path: { tenantId: string } }; body: SupportSessionControllerOpenRequest }; responses: { "200": SupportSessionView } };
   "end_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/support-sessions/{sessionId}/end"; request: { parameters: { path: { sessionId: string; tenantId: string } }; body: EndRequest }; responses: { "200": SupportSessionView } };
   "suspendTenant": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/suspend"; request: { parameters: { path: { tenantId: string } }; body: TenantStatusChangeRequest }; responses: { "200": TenantView } };
+  "list_28": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/tags"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<VocabularyEntryResponse> } };
+  "create_13": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/tags"; request: { parameters: { path: { tenantId: string } }; body: TagCreateRequest }; responses: { "200": VocabularyEntryResponse } };
+  "read_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/tags/{entryId}"; request: { parameters: { path: { entryId: string; tenantId: string } } }; responses: { "200": VocabularyEntryResponse } };
+  "update_7": { method: "PUT"; path: "/api/v1/control-plane/tenants/{tenantId}/tags/{entryId}"; request: { parameters: { path: { entryId: string; tenantId: string } }; body: TagEditRequest }; responses: { "200": VocabularyEntryResponse } };
+  "archive_8": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/tags/{entryId}/archive"; request: { parameters: { path: { entryId: string; tenantId: string } } }; responses: { "200": VocabularyEntryResponse } };
   "record_1": { method: "POST"; path: "/api/v1/control-plane/tenants/{tenantId}/template-versions/{versionId}/provider-review"; request: { parameters: { path: { tenantId: string; versionId: string } }; body: ReviewRequest }; responses: { "200": unknown } };
   "usage_2": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/usage"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<CommercialControlPlaneControllerUsageResponse> } };
   "overview_1": { method: "GET"; path: "/api/v1/control-plane/tenants/{tenantId}/wallet"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": WalletOverviewView } };
@@ -12091,7 +12423,7 @@ export interface Operations {
   "create_12": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/branch-tags"; request: { parameters: { path: { tenantId: string } }; body: CreateTagRequest }; responses: { "200": TagCreatedResponse } };
   "assignments": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/branch-tags/assignments"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<AssignmentResponse> } };
   "archive_7": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/branch-tags/{tagId}/archive"; request: { parameters: { path: { tagId: string; tenantId: string } }; body: ArchiveTagRequest }; responses: { "200": unknown } };
-  "list_45": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<BrandView> } };
+  "list_48": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<BrandView> } };
   "get_10": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": BrandView } };
   "listBrand": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/assistant/knowledge"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<AssistantKnowledgeControllerEntryResponse> } };
   "createBrand": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/assistant/knowledge"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateBrandEntryRequest }; responses: { "200": AssistantKnowledgeControllerEntryResponse } };
@@ -12102,7 +12434,7 @@ export interface Operations {
   "turn": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/assistant/turns/{turnId}"; request: { parameters: { path: { brandId: string; tenantId: string; turnId: string } } }; responses: { "200": TurnResponse } };
   "forCustomer": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/benefit-grants"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { customerAccountId: string } } }; responses: { "200": Array<BenefitGrantResponse> } };
   "mint_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/benefit-grants"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: MintBenefitGrantRequest }; responses: { "200": MintBenefitGrantResponse } };
-  "list_47": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { limit?: number } } }; responses: { "200": Array<ConversationSummaryResponse> } };
+  "list_50": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { limit?: number } } }; responses: { "200": Array<ConversationSummaryResponse> } };
   "detail_5": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}"; request: { parameters: { path: { brandId: string; conversationId: string; tenantId: string } } }; responses: { "200": ConversationDetailResponse } };
   "close_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/close"; request: { parameters: { path: { brandId: string; conversationId: string; tenantId: string }; query: { reason?: string } } }; responses: { "200": ConversationResponse } };
   "reply": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/replies"; request: { parameters: { path: { brandId: string; conversationId: string; tenantId: string } }; body: SendReplyRequest }; responses: { "200": ConversationMessageResponse } };
@@ -12173,7 +12505,7 @@ export interface Operations {
   "updateForLocation": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/staff/members/{memberId}"; request: { parameters: { path: { brandId: string; locationId: string; memberId: string; tenantId: string } }; body: UpdateStaffMemberRequest }; responses: { "200": StaffMemberResponse } };
   "emergencyContactsForLocation": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/staff/members/{memberId}/emergency-contacts"; request: { parameters: { path: { brandId: string; locationId: string; memberId: string; tenantId: string } } }; responses: { "200": EmergencyContactsResponse } };
   "replaceEmergencyContactsForLocation": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/staff/members/{memberId}/emergency-contacts"; request: { parameters: { path: { brandId: string; locationId: string; memberId: string; tenantId: string } }; body: ReplaceEmergencyContactsRequest }; responses: { "200": EmergencyContactsResponse } };
-  "recent": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/voice/call-log"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<CallLogEntryResponse> } };
+  "recent_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/voice/call-log"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<CallLogEntryResponse> } };
   "forDate": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/voice/call-stats"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { businessDate: string } } }; responses: { "200": Array<CallHourResponse> } };
   "roster": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/voice/presence"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<PresenceResponse> } };
   "setPresence": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/voice/presence"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: SetPresenceRequest }; responses: { "200": PresenceResponse } };
@@ -12218,7 +12550,7 @@ export interface Operations {
   "retireProgram": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/referrals/programs/{programId}/retire"; request: { parameters: { path: { brandId: string; programId: string; tenantId: string } } }; responses: { "200": unknown } };
   "redemptions_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/referrals/redemptions"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<ReferralOperationsControllerRedemptionResponse> } };
   "summary_3": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/referrals/summary"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": ReferralOperationsControllerSummaryResponse } };
-  "list_46": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { cursor?: string; customerAccountId?: string; limit?: number; locationId?: string; maxRating?: number; minRating?: number; submittedFrom?: string; submittedTo?: string } } }; responses: { "200": PageOperationsReviewControllerReviewResponse } };
+  "list_49": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { cursor?: string; customerAccountId?: string; limit?: number; locationId?: string; maxRating?: number; minRating?: number; submittedFrom?: string; submittedTo?: string } } }; responses: { "200": PageOperationsReviewControllerReviewResponse } };
   "summary_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews/summary"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { locationId?: string; submittedFrom?: string; submittedTo?: string } } }; responses: { "200": OperationsReviewControllerSummaryResponse } };
   "list_22": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<ZoneSummaryResponse> } };
   "create_10": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/service-zones"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateZoneRequest }; responses: { "200": ZoneView } };
@@ -12339,9 +12671,9 @@ export interface Operations {
   "suspend_4": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/suspend"; request: { parameters: { path: { bindingId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": MerchantBindingView } };
   "readLatenessPolicyEditor": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-lateness-policy"; request: { parameters: { path: { tenantId: string }; query: { brandId?: string; locationId?: string; scopeType: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION" } } }; responses: { "200": EditorResponse } };
   "authorLatenessPolicy": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/order-lateness-policy"; request: { parameters: { path: { tenantId: string } }; body: AuthorLatenessPolicyRequest }; responses: { "200": EditorResponse } };
-  "list_17": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string }; query: { activeOnly?: boolean; kind: "CANCELLATION" | "COMPLETION" } } }; responses: { "200": Array<ReasonResponse> } };
+  "list_17": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string }; query: { activeOnly?: boolean; kind: "CANCELLATION" | "COMPLETION" | "LINE_REMOVAL" } } }; responses: { "200": Array<ReasonResponse> } };
   "create_9": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerIdResponse } };
-  "categories_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/categories"; request: { parameters: { path: { tenantId: string }; query: { kind: "CANCELLATION" | "COMPLETION" } } }; responses: { "200": Array<string> } };
+  "categories_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/categories"; request: { parameters: { path: { tenantId: string }; query: { kind: "CANCELLATION" | "COMPLETION" | "LINE_REMOVAL" } } }; responses: { "200": Array<string> } };
   "reorder_1": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/reorder"; request: { parameters: { path: { tenantId: string } }; body: OrderOutcomeReasonControllerReorderRequest }; responses: { "200": Array<ReasonResponse> } };
   "archive": { method: "DELETE"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } } }; responses: { "200": unknown } };
   "update_4": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerVersionResponse } };
@@ -12399,7 +12731,7 @@ export interface Operations {
   "emergencyContactsForTenant": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/staff/members/{memberId}/emergency-contacts"; request: { parameters: { path: { memberId: string; tenantId: string } } }; responses: { "200": EmergencyContactsResponse } };
   "replaceEmergencyContactsForTenant": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/staff/members/{memberId}/emergency-contacts"; request: { parameters: { path: { memberId: string; tenantId: string } }; body: ReplaceEmergencyContactsRequest }; responses: { "200": EmergencyContactsResponse } };
   "endEmployment": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/staff/members/{memberId}/end-employment"; request: { parameters: { path: { memberId: string; tenantId: string } }; body: EndEmploymentRequest }; responses: { "200": EndEmploymentResponse } };
-  "read_5": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/staff/members/{memberId}/mfa"; request: { parameters: { path: { memberId: string; tenantId: string } } }; responses: { "200": OwnMfaResponse } };
+  "read_8": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/staff/members/{memberId}/mfa"; request: { parameters: { path: { memberId: string; tenantId: string } } }; responses: { "200": OwnMfaResponse } };
   "reset": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/staff/members/{memberId}/mfa/resets"; request: { parameters: { path: { memberId: string; tenantId: string } }; body: ResetRequest }; responses: { "200": ResetResponse } };
   "summary_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/staff/mfa-summary"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": StaffMfaAdministrationControllerSummaryResponse } };
   "visitsToTenant": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/support-sessions"; request: { parameters: { path: { tenantId: string }; query: { limit?: number } } }; responses: { "200": PageSupportSessionView } };
@@ -12407,7 +12739,7 @@ export interface Operations {
   "endFromTenant": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/support-sessions/{sessionId}/end"; request: { parameters: { path: { sessionId: string; tenantId: string } }; body: EndRequest }; responses: { "200": SupportSessionView } };
   "push_1": { method: "POST"; path: "/api/v1/partner/tenants/{tenantId}/marketplace/shift-events"; request: { parameters: { path: { tenantId: string } }; body: ShiftEventRequest }; responses: { "200": ShiftEventResponse } };
   "push": { method: "POST"; path: "/api/v1/partner/tenants/{tenantId}/orders"; request: { parameters: { path: { tenantId: string } }; body: PartnerOrderControllerPushRequest }; responses: { "200": PushResponse } };
-  "read_4": { method: "GET"; path: "/api/v1/partner/tenants/{tenantId}/restaurants/{locationId}/availability"; request: { parameters: { path: { locationId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PartnerAvailabilityResponse } };
+  "read_7": { method: "GET"; path: "/api/v1/partner/tenants/{tenantId}/restaurants/{locationId}/availability"; request: { parameters: { path: { locationId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PartnerAvailabilityResponse } };
   "proposeBankDetails": { method: "POST"; path: "/api/v1/platform-admin/commercial/billing/bank-details"; request: { parameters: Record<string, never>; body: ProposeBankDetailsRequest }; responses: { "200": CommercialBillingSetupControllerWalletChangeResponse } };
   "createCardInstallation": { method: "POST"; path: "/api/v1/platform-admin/commercial/billing/card-installations"; request: { parameters: Record<string, never>; body: CreateCardInstallationRequest }; responses: { "200": CardInstallationCreated } };
   "activate_5": { method: "POST"; path: "/api/v1/platform-admin/commercial/billing/card-installations/{installationId}/activation"; request: { parameters: { path: { installationId: string } }; body: CommercialBillingSetupControllerTransitionRequest }; responses: { "200": CardInstallationView } };
@@ -12606,7 +12938,7 @@ export interface Operations {
   "setChannelStopThreshold": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/variants/{variantId}/channel-stop-thresholds/{channelType}"; request: { parameters: { path: { brandId: string; channelType: string; locationId: string; tenantId: string; variantId: string } }; body: ChannelStopThresholdRequest }; responses: { "200": unknown } };
   "setOnHand": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/variants/{variantId}/on-hand"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; variantId: string } }; body: OnHandRequest }; responses: { "200": unknown } };
   "setQuantityDefault": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/inventory/variants/{variantId}/quantity-defaults"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; variantId: string } }; body: QuantityDefaultRequest }; responses: { "200": unknown } };
-  "list_44": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<DeviceResponse> } };
+  "list_47": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<DeviceResponse> } };
   "pending": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices/enrolments/{userCode}"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; userCode: string } } }; responses: { "200": PendingEnrolmentResponse } };
   "approve_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices/enrolments/{userCode}/approve"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; userCode: string } }; body: ApproveRequest }; responses: { "200": DeviceResponse } };
   "configureDisplay": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices/{deviceId}/display"; request: { parameters: { path: { brandId: string; deviceId: string; locationId: string; tenantId: string } }; body: ConfigureDisplayRequest }; responses: { "200": DisplayResponse } };
@@ -12712,7 +13044,7 @@ export interface Operations {
   "resume": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/resumptions"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } }; body: OperationsMarketingControllerReasonRequest }; responses: { "200": ResumeResponse } };
   "submit_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/submissions"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } } }; responses: { "200": unknown } };
   "listChannels": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/channels"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<ChannelResponse> } };
-  "read_3": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/contact-policy"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": ContactPolicyResponse } };
+  "read_6": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/contact-policy"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": ContactPolicyResponse } };
   "defaults": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/contact-policy/defaults"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": DefaultsResponse } };
   "set_1": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/contact-policy/overrides"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: OverrideBody }; responses: { "200": OverrideResponse } };
   "remove": { method: "DELETE"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/contact-policy/overrides/{channel}/{campaignPurpose}/{period}"; request: { parameters: { path: { brandId: string; campaignPurpose: string; channel: string; period: string; tenantId: string }; query: { reason: string } } }; responses: { "200": unknown } };
@@ -12729,7 +13061,7 @@ export interface Operations {
   "newVersion": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/offers/{offerId}/versions"; request: { parameters: { path: { brandId: string; offerId: string; tenantId: string } }; body: OfferRequest }; responses: { "200": OfferResponse } };
   "list_3": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/scenarios"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<ScenarioSummary> } };
   "create_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/scenarios"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateScenarioRequest }; responses: { "200": ScenarioResponse } };
-  "read_2": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/scenarios/{campaignId}"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } } }; responses: { "200": ScenarioResponse } };
+  "read_5": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/scenarios/{campaignId}"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } } }; responses: { "200": ScenarioResponse } };
   "decisions": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/scenarios/{campaignId}/decisions"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string }; query: { accountId?: string; limit?: number } } }; responses: { "200": Array<ScenarioControllerDecisionResponse> } };
   "results": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/scenarios/{campaignId}/results"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string }; query: { model?: string; windowDays?: number } } }; responses: { "200": Results } };
   "revise": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/scenarios/{campaignId}/revisions"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } } }; responses: { "200": ScenarioResponse } };
@@ -12785,7 +13117,7 @@ export interface Operations {
   "statements": { method: "GET"; path: "/api/v1/tenants/{tenantId}/commercial/wallet/statements"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<CommercialOperationsWalletControllerStatementPaymentView> } };
   "recentTopUps": { method: "GET"; path: "/api/v1/tenants/{tenantId}/commercial/wallet/top-ups"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<TopUpView> } };
   "topUp": { method: "POST"; path: "/api/v1/tenants/{tenantId}/commercial/wallet/top-ups"; request: { parameters: { path: { tenantId: string } }; body: TopUpRequest }; responses: { "200": TopUpView } };
-  "list_43": { method: "GET"; path: "/api/v1/tenants/{tenantId}/consent-types"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<ConsentTypeResponse> } };
+  "list_46": { method: "GET"; path: "/api/v1/tenants/{tenantId}/consent-types"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<ConsentTypeResponse> } };
   "list_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers"; request: { parameters: { path: { tenantId: string }; query: { cursor?: string; limit?: number; query?: string; status?: string } } }; responses: { "200": PageCustomerSummaryResponse } };
   "createManually": { method: "POST"; path: "/api/v1/tenants/{tenantId}/customers"; request: { parameters: { path: { tenantId: string } }; body: CustomerControllerCreateCustomerRequest }; responses: { "200": CustomerControllerIdResponse } };
   "counts": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/counts"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": CustomerControllerCountsResponse } };
@@ -12822,7 +13154,7 @@ export interface Operations {
   "cancelErasure": { method: "POST"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/erasure-requests/{requestId}/cancel"; request: { parameters: { path: { accountId: string; requestId: string; tenantId: string } } }; responses: { "200": CustomerControllerErasureRequestResponse } };
   "executeErasure": { method: "POST"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/erasure-requests/{requestId}/execute"; request: { parameters: { path: { accountId: string; requestId: string; tenantId: string } } }; responses: { "200": CustomerControllerErasureRequestResponse } };
   "merge": { method: "POST"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/merge"; request: { parameters: { path: { accountId: string; tenantId: string } }; body: MergeRequest }; responses: { "200": unknown } };
-  "list_42": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/notification-preferences"; request: { parameters: { path: { accountId: string; tenantId: string } } }; responses: { "200": Array<PreferenceResponse> } };
+  "list_45": { method: "GET"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/notification-preferences"; request: { parameters: { path: { accountId: string; tenantId: string } } }; responses: { "200": Array<PreferenceResponse> } };
   "set": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/notification-preferences/{notificationClass}/{channel}"; request: { parameters: { path: { accountId: string; channel: string; notificationClass: string; tenantId: string } }; body: SetPreferenceRequest }; responses: { "200": unknown } };
   "updateProfile": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/customers/{accountId}/profile"; request: { parameters: { path: { accountId: string; tenantId: string } }; body: CustomerControllerUpdateProfileRequest }; responses: { "200": CustomerProfileResponse } };
   "coverage": { method: "GET"; path: "/api/v1/tenants/{tenantId}/fiscal/coverage"; request: { parameters: { path: { tenantId: string }; query: { from: string; to: string } } }; responses: { "200": CoverageResponse } };

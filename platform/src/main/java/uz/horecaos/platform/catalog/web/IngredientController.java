@@ -22,9 +22,9 @@ import uz.horecaos.platform.catalog.application.VocabularyService;
 import uz.horecaos.platform.catalog.application.VocabularyService.EntryEdit;
 import uz.horecaos.platform.catalog.application.VocabularyService.NewEntry;
 import uz.horecaos.platform.catalog.domain.Vocabularies.Kind;
-import uz.horecaos.platform.catalog.web.VocabularyResponses.EntryResponse;
-import uz.horecaos.platform.catalog.web.VocabularyResponses.ProductSetRequest;
-import uz.horecaos.platform.catalog.web.VocabularyResponses.ProductSetResponse;
+import uz.horecaos.platform.catalog.web.VocabularyResponses.ProductVocabularySetRequest;
+import uz.horecaos.platform.catalog.web.VocabularyResponses.ProductVocabularySetResponse;
+import uz.horecaos.platform.catalog.web.VocabularyResponses.VocabularyEntryResponse;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
@@ -61,8 +61,10 @@ public class IngredientController {
             summary = "The tenant's ingredients, active and archived",
             description =
                     "Each ingredient carries its code and its name per locale. It is a label for the customer to read, not a stock item.")
-    public List<EntryResponse> list(@PathVariable UUID tenantId) {
-        return service.list(KIND, tenantId).stream().map(EntryResponse::of).toList();
+    public List<VocabularyEntryResponse> list(@PathVariable UUID tenantId) {
+        return service.list(KIND, tenantId).stream()
+                .map(VocabularyEntryResponse::of)
+                .toList();
     }
 
     @PostMapping("/ingredients")
@@ -72,8 +74,8 @@ public class IngredientController {
             description =
                     "An ingredient has a code (lower case, unique per tenant, never shown), a sort order and a name per locale. At most 1,000 per tenant. 409 when the code is taken (findingCode VOCABULARY_CODE_TAKEN); "
                             + "400 for an invalid code, a missing name in the tenant's default language; 422 VOCABULARY_TENANT_LIMIT_REACHED over 1,000.")
-    public ResponseEntity<EntryResponse> create(
-            @PathVariable UUID tenantId, @Valid @RequestBody CreateRequest request) {
+    public ResponseEntity<VocabularyEntryResponse> create(
+            @PathVariable UUID tenantId, @Valid @RequestBody IngredientCreateRequest request) {
         return VocabularyResponses.versioned(service.create(
                 KIND,
                 tenantId,
@@ -84,7 +86,7 @@ public class IngredientController {
     @GetMapping("/ingredients/{entryId}")
     @RequiresCapability(value = Capability.CATALOG_READ, scope = ScopeType.TENANT)
     @Operation(summary = "One an ingredient with its wording")
-    public ResponseEntity<EntryResponse> read(@PathVariable UUID tenantId, @PathVariable UUID entryId) {
+    public ResponseEntity<VocabularyEntryResponse> read(@PathVariable UUID tenantId, @PathVariable UUID entryId) {
         return VocabularyResponses.versioned(service.get(KIND, tenantId, entryId));
     }
 
@@ -94,10 +96,10 @@ public class IngredientController {
             summary = "Edit an ingredient",
             description = "Requires If-Match carrying the version. The code is the entry's identity and does not "
                     + "change. A locale not named keeps its wording; an edit never deletes one.")
-    public ResponseEntity<EntryResponse> update(
+    public ResponseEntity<VocabularyEntryResponse> update(
             @PathVariable UUID tenantId,
             @PathVariable UUID entryId,
-            @Valid @RequestBody EditRequest request,
+            @Valid @RequestBody IngredientEditRequest request,
             HttpServletRequest httpRequest) {
         int expected = Math.toIntExact(AggregateVersion.requireIfMatch(httpRequest));
         return VocabularyResponses.versioned(service.update(
@@ -114,7 +116,7 @@ public class IngredientController {
             summary = "Archive an ingredient",
             description = "Requires If-Match. Archived, never deleted: it keeps resolving on the products that "
                     + "carry it, leaves the pickers and the next publication, and its code stays taken.")
-    public ResponseEntity<EntryResponse> archive(
+    public ResponseEntity<VocabularyEntryResponse> archive(
             @PathVariable UUID tenantId, @PathVariable UUID entryId, HttpServletRequest httpRequest) {
         int expected = Math.toIntExact(AggregateVersion.requireIfMatch(httpRequest));
         return VocabularyResponses.versioned(service.archive(KIND, tenantId, entryId, expected, subject()));
@@ -125,9 +127,9 @@ public class IngredientController {
     @Operation(
             summary = "The ingredients a product carries, in order",
             description = "Includes an archived entry the product still carries: it keeps resolving here.")
-    public ProductSetResponse forProduct(
+    public ProductVocabularySetResponse forProduct(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID productId) {
-        return ProductSetResponse.of(service.forProduct(KIND, tenantId, brandId, productId));
+        return ProductVocabularySetResponse.of(service.forProduct(KIND, tenantId, brandId, productId));
     }
 
     @PutMapping("/brands/{brandId}/products/{productId}/ingredients")
@@ -137,12 +139,12 @@ public class IngredientController {
             description = "At most forty. 422 with findingCode VOCABULARY_PRODUCT_LIMIT_REACHED over that, "
                     + "VOCABULARY_ENTRY_UNKNOWN for an entry of no such tenant, VOCABULARY_ENTRY_ARCHIVED for an "
                     + "archived entry the product does not already carry, VOCABULARY_ENTRY_DUPLICATED for a repeat.")
-    public ProductSetResponse setForProduct(
+    public ProductVocabularySetResponse setForProduct(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID productId,
-            @Valid @RequestBody ProductSetRequest request) {
-        return ProductSetResponse.of(
+            @Valid @RequestBody ProductVocabularySetRequest request) {
+        return ProductVocabularySetResponse.of(
                 service.setForProduct(KIND, tenantId, brandId, productId, request.ids(), subject()));
     }
 
@@ -151,9 +153,9 @@ public class IngredientController {
     }
 
     /** Every optional field is boxed: Jackson 3 refuses a body that omits a primitive. */
-    public record CreateRequest(
+    public record IngredientCreateRequest(
             @NotBlank @Size(max = 32) String code, @Nullable Integer sortOrder, Map<String, String> names) {}
 
-    public record EditRequest(
+    public record IngredientEditRequest(
             @Nullable Integer sortOrder, @Nullable Map<String, String> names) {}
 }

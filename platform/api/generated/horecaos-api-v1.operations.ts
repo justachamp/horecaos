@@ -224,11 +224,13 @@ export interface AmendmentCommandRequest {
   kitchenNote?: string;
   lines?: Array<AddLineRequest>;
   orderLineId?: string;
+  orderLineIds?: Array<string>;
   paymentMethodCode?: string;
   promisedAt?: string;
   quantity?: number;
   recipientName?: string;
   recipientPhone?: string;
+  removalReasonId?: string;
   type: "ADD_LINES" | "CHANGE_LINE_QUANTITY" | "REMOVE_LINES" | "CHANGE_PAYMENT_METHOD" | "CHANGE_DELIVERY_ADDRESS" | "CHANGE_FULFILLMENT_TIME" | "CHANGE_CONTACT" | "SET_KITCHEN_NOTE" | "SET_CALLBACK_REQUESTED" | "SET_CASH_TENDERED" | "SET_COURIER_NOTE" | "SET_INTERNAL_NOTE";
 }
 
@@ -262,6 +264,7 @@ export interface AmendmentResponse {
   replayed?: boolean;
   requiresApproval?: boolean;
   status?: string;
+  stockConsequence?: Array<StockConsequenceLine>;
   warnings?: Array<string>;
 }
 
@@ -3961,6 +3964,7 @@ export interface OperationsOrderControllerDestinationRequest {
 }
 
 export interface OperationsOrderControllerLineResponse {
+  autoAddMandatory?: boolean;
   autoSelectedCharges?: Array<OperationsOrderControllerAutoSelectedChargeResponse>;
   autoSelectedModifiers?: Array<string>;
   catchweight?: OrderLineCatchweightResponse;
@@ -3971,6 +3975,7 @@ export interface OperationsOrderControllerLineResponse {
   lineId?: string;
   lineNumber?: number;
   modifiers?: Array<string>;
+  origin?: string;
   portionSize?: number;
   productName?: string;
   quantity?: number;
@@ -4239,6 +4244,7 @@ export interface OrderDetailResponse {
   currentRevision?: number;
   customer?: CustomerResponse;
   kitchenNote?: string;
+  lineRemovalEnabled?: boolean;
   lines?: Array<OperationsOrderControllerLineResponse>;
   outcome?: OutcomeResponse;
   subtotalMinor?: number;
@@ -4304,14 +4310,14 @@ export interface OrderOutcomeReasonControllerReasonRequest {
   customerRefund?: "FULL" | "NONE" | "DISCRETIONARY";
   customerTexts: { [key: string]: string };
   internalName: string;
-  kind: "CANCELLATION" | "COMPLETION";
+  kind: "CANCELLATION" | "COMPLETION" | "LINE_REMOVAL";
   liabilityParty?: "TENANT" | "CUSTOMER" | "COURIER_PARTNER" | "PLATFORM";
   stockDisposition?: "RELEASE" | "RETURN_TO_STOCK" | "WRITE_OFF" | "NO_EFFECT";
-  systemCategory: "CUSTOMER_CANCELLED" | "CUSTOMER_UNREACHABLE" | "CUSTOMER_NO_SHOW" | "RESTAURANT_REFUSED" | "ITEM_UNAVAILABLE" | "KITCHEN_CAPACITY" | "DELIVERY_FAILED" | "COURIER_UNAVAILABLE" | "ADDRESS_UNSERVICEABLE" | "PAYMENT_NOT_RECEIVED" | "DUPLICATE_ORDER" | "TEST_ORDER" | "SUSPECTED_FRAUD" | "PRICING_ERROR" | "DELIVERED_OWN_COURIER" | "DELIVERED_PARTNER_COURIER" | "COLLECTED_BY_CUSTOMER" | "SERVED_IN_HOUSE" | "APPROVAL_DEADLINE_LAPSED" | "OTHER";
+  systemCategory: "CUSTOMER_CANCELLED" | "CUSTOMER_UNREACHABLE" | "CUSTOMER_NO_SHOW" | "RESTAURANT_REFUSED" | "ITEM_UNAVAILABLE" | "KITCHEN_CAPACITY" | "DELIVERY_FAILED" | "COURIER_UNAVAILABLE" | "ADDRESS_UNSERVICEABLE" | "PAYMENT_NOT_RECEIVED" | "DUPLICATE_ORDER" | "TEST_ORDER" | "SUSPECTED_FRAUD" | "PRICING_ERROR" | "CUSTOMER_CHANGED_MIND" | "KITCHEN_ERROR" | "ORDER_ENTRY_ERROR" | "QUALITY_ISSUE" | "DELIVERED_OWN_COURIER" | "DELIVERED_PARTNER_COURIER" | "COLLECTED_BY_CUSTOMER" | "SERVED_IN_HOUSE" | "APPROVAL_DEADLINE_LAPSED" | "OTHER";
 }
 
 export interface OrderOutcomeReasonControllerReorderRequest {
-  kind: "CANCELLATION" | "COMPLETION";
+  kind: "CANCELLATION" | "COMPLETION" | "LINE_REMOVAL";
   orderedReasonIds: Array<string>;
 }
 
@@ -4361,6 +4367,7 @@ export interface OrderPosExportResponse {
 }
 
 export interface OrderQuoteResponse {
+  autoAdded?: Array<QuotedAutoAddLineResponse>;
   currency?: string;
   deliveryFreeFromMinor?: number;
   deliveryMinBasketMinor?: number;
@@ -4772,6 +4779,7 @@ export interface PlaceOrderRequest {
   cashTenderedMinor?: number;
   channelCode: string;
   customerAccountId: string;
+  declinedAutoAddRuleIds?: Array<string>;
   destination?: OperationsOrderControllerDestinationRequest;
   dineInSessionId?: string;
   fulfillmentMode: "DELIVERY" | "PICKUP" | "DINE_IN";
@@ -5156,6 +5164,18 @@ export interface QuoteResponse {
   subtotalMinor?: number;
   taxMinor?: number;
   totalMinor?: number;
+}
+
+export interface QuotedAutoAddLineResponse {
+  baseAmountMinor?: number;
+  customerText?: { [key: string]: string };
+  finalAmountMinor?: number;
+  mandatory?: boolean;
+  quantity?: number;
+  ruleCode?: string;
+  ruleId?: string;
+  taxAmountMinor?: number;
+  variantId?: string;
 }
 
 export interface QuotedDiscountResponse {
@@ -6706,6 +6726,24 @@ export interface StepResponse {
   waitAfterPreviousSeconds?: number;
 }
 
+export interface StockConsequenceLine {
+  declaredDisposition?: string;
+  effectiveDisposition?: string;
+  kitchenState?: string;
+  noEffectUnits?: number;
+  orderLineId?: string;
+  productName?: string;
+  quantityAfter?: number;
+  quantityBefore?: number;
+  reasonCategory?: string;
+  reasonId?: string;
+  releasedUnits?: number;
+  returnedUnits?: number;
+  stockUnits?: number;
+  variantId?: string;
+  writtenOffUnits?: number;
+}
+
 export interface StockItemResponse {
   stockItemId?: string;
   trackingMode?: string;
@@ -7924,9 +7962,9 @@ export interface Operations {
   "suspend_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/merchant-bindings/{bindingId}/suspend"; request: { parameters: { path: { bindingId: string; tenantId: string }; query: { expectedVersion: number } } }; responses: { "200": MerchantBindingView } };
   "readLatenessPolicyEditor": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-lateness-policy"; request: { parameters: { path: { tenantId: string }; query: { brandId?: string; locationId?: string; scopeType: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION" } } }; responses: { "200": EditorResponse } };
   "authorLatenessPolicy": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/order-lateness-policy"; request: { parameters: { path: { tenantId: string } }; body: AuthorLatenessPolicyRequest }; responses: { "200": EditorResponse } };
-  "list_16": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string }; query: { activeOnly?: boolean; kind: "CANCELLATION" | "COMPLETION" } } }; responses: { "200": Array<ReasonResponse> } };
+  "list_16": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string }; query: { activeOnly?: boolean; kind: "CANCELLATION" | "COMPLETION" | "LINE_REMOVAL" } } }; responses: { "200": Array<ReasonResponse> } };
   "create_8": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons"; request: { parameters: { path: { tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerIdResponse } };
-  "categories": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/categories"; request: { parameters: { path: { tenantId: string }; query: { kind: "CANCELLATION" | "COMPLETION" } } }; responses: { "200": Array<string> } };
+  "categories": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/categories"; request: { parameters: { path: { tenantId: string }; query: { kind: "CANCELLATION" | "COMPLETION" | "LINE_REMOVAL" } } }; responses: { "200": Array<string> } };
   "reorder_1": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/reorder"; request: { parameters: { path: { tenantId: string } }; body: OrderOutcomeReasonControllerReorderRequest }; responses: { "200": Array<ReasonResponse> } };
   "archive": { method: "DELETE"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } } }; responses: { "200": unknown } };
   "update_3": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/order-outcome-reasons/{reasonId}"; request: { parameters: { path: { reasonId: string; tenantId: string } }; body: OrderOutcomeReasonControllerReasonRequest }; responses: { "200": OrderOutcomeReasonControllerVersionResponse } };
