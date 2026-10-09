@@ -43,7 +43,8 @@ class MediaAssetReferenceCatalogTests {
             "tenant.brand_media.media_asset_id", "tenancy",
             "tenant.channel_presentation.og_image_asset_id", "tenancy",
             "support.social_links.media_asset_id", "helpcenter",
-            "content.revision_media.media_asset_id", "content");
+            "content.revision_media.media_asset_id", "content",
+            "reviews.feedback_tags.icon_asset_id", "reviews");
 
     /**
      * Columns that can only hold a private asset, with the reason. The release guard is in the SQL

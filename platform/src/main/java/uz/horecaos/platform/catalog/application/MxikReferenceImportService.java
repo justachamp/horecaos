@@ -28,7 +28,9 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.catalog.api.CatalogConfigurationKeys;
+import uz.horecaos.platform.catalog.api.ReferenceListAlertPort;
 import uz.horecaos.platform.catalog.application.MxikMappingProfile.MxikImportFormatException;
 import uz.horecaos.platform.catalog.application.MxikReferenceImporter.Normalised;
 import uz.horecaos.platform.catalog.application.MxikReferenceImporter.RowError;
@@ -39,7 +41,6 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMxikImportSto
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.media.api.ObjectStorage;
-import uz.horecaos.platform.notifications.api.ControlPlaneAlertPort;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -85,7 +86,7 @@ public class MxikReferenceImportService {
     private final ConfigurationResolver configuration;
     private final AuditRecorder audit;
     private final MeterRegistry metrics;
-    private final ControlPlaneAlertPort alerts;
+    private final ReferenceListAlertPort alerts;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final TransactionTemplate independently;
@@ -102,7 +103,7 @@ public class MxikReferenceImportService {
             ConfigurationResolver configuration,
             AuditRecorder audit,
             MeterRegistry metrics,
-            ControlPlaneAlertPort alerts,
+            ReferenceListAlertPort alerts,
             ObjectMapper objectMapper,
             Clock clock,
             PlatformTransactionManager transactionManager,
@@ -522,8 +523,7 @@ public class MxikReferenceImportService {
     }
 
     private void raise(String eventClass, Map<String, String> variables) {
-        alerts.raise(new uz.horecaos.platform.notifications.api.ControlPlaneAlert(
-                eventClass, ALERT_SUBJECT_TYPE, ALERT_SUBJECT_ID, variables, clock.instant()));
+        alerts.raise(eventClass, ALERT_SUBJECT_TYPE, ALERT_SUBJECT_ID, variables, clock.instant());
     }
 
     private void resolveAlerts(String actorSubject) {
@@ -571,7 +571,7 @@ public class MxikReferenceImportService {
                 .target("MxikImportRun", runId)
                 .because("ИКПУ/MXIK reference import")
                 .usingCapability(Capability.PLATFORM_ADMIN.code())
-                .changed(uz.horecaos.platform.audit.api.ChangeDocuments.created(change))
+                .changed(ChangeDocuments.created(change))
                 .correlatedBy(runId.toString())
                 .occurredAt(clock.instant())
                 .build());

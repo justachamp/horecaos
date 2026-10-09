@@ -405,17 +405,16 @@ class FiscalEvidenceEndpointTests {
     }
 
     @Test
-    @DisplayName("marking is a count where the mark store exists, and says 'not built' where it does not")
-    void markingIsNotBuiltUntilTheMarkStoreExists() throws Exception {
+    @DisplayName("marking is a count read from the mark store: an order with no marked line is 0 of 0, not 'not built'")
+    void markingIsACountFromTheMarkStore() throws Exception {
         UUID orderId = seedOrder("E-105");
         issuedClickDocument(orderId, ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
 
         JsonNode marks = evidence(FINANCE, orderId, null).path("marks");
 
-        assertThat(marks.path("state").asText()).isEqualTo("NOT_BUILT");
-        assertThat(marks.has("required") && !marks.path("required").isNull())
-                .as("no count is shown while there is no store to count: 0 of 0 would be a claim")
-                .isFalse();
+        assertThat(marks.path("state").asText()).isEqualTo("COUNTS");
+        assertThat(marks.path("required").asInt(-1)).isZero();
+        assertThat(marks.path("captured").asInt(-1)).isZero();
     }
 
     @Test
