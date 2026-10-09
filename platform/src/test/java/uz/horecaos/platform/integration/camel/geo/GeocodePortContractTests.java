@@ -2,10 +2,7 @@ package uz.horecaos.platform.integration.camel.geo;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
@@ -24,7 +21,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.slf4j.LoggerFactory;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
 import uz.horecaos.platform.iam.api.secrets.SecretResolver;
@@ -33,6 +29,7 @@ import uz.horecaos.platform.integration.camel.common.ProviderExceptionClassifier
 import uz.horecaos.platform.integration.camel.common.ProviderHttpClient;
 import uz.horecaos.platform.integration.camel.geo.fake.FakeGeocoderAdapter;
 import uz.horecaos.platform.integration.camel.geo.yandex.YandexGeocoderAdapter;
+import uz.horecaos.platform.support.JvmLogCapture;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.tenancy.api.geo.GeoBoundingBox;
 import uz.horecaos.platform.tenancy.api.geo.GeoRegion;
@@ -423,8 +420,7 @@ class GeocodePortContractTests {
     @DisplayName("neither the typed address nor the key reaches any log line, on success or failure")
     void noAddressOrKeyReachesALog(Provider provider) throws Exception {
         Rig rig = rig(provider);
-        ListAppender<ILoggingEvent> lines = captureAllLogs();
-        Level previous = rootLogger().getLevel();
+        JvmLogCapture lines = JvmLogCapture.start();
         try {
             GeocodePort port = port(rig);
             rig.arm("house");
@@ -436,12 +432,18 @@ class GeocodePortContractTests {
             port.suggest(CANARY, TASHKENT, new GeoPoint(41.31, 69.24), "ru");
             port.reverseGeocode(new GeoPoint(41.31234, 69.24567), TASHKENT, "ru");
 
-            List<ILoggingEvent> captured = snapshot(lines);
+            List<ILoggingEvent> captured = lines.snapshot();
             assertThat(captured)
                     .as("the capture must see something, or it proves nothing")
                     .isNotEmpty();
-            assertThat(captured).noneMatch(event -> event.getFormattedMessage().contains("canary-address"));
-            assertThat(captured).noneMatch(event -> event.getFormattedMessage().contains(KEY));
+            // Mapped to "logger | message" so a failure names the logger that wrote the line: the
+            // CI failure of 2026-10-09 printed only "[DEBUG] Exchange request line: ..." and the
+            // JDK's HTTP server behind it had to be found by reading its source.
+            List<String> written = captured.stream()
+                    .map(event -> event.getLoggerName() + " | " + event.getFormattedMessage())
+                    .toList();
+            assertThat(written).noneMatch(line -> line.contains("canary-address"));
+            assertThat(written).noneMatch(line -> line.contains(KEY));
             assertThat(captured)
                     .as("no logged throwable may carry the request in its message either")
                     .noneMatch(event -> event.getThrowableProxy() != null
@@ -449,11 +451,9 @@ class GeocodePortContractTests {
                                             .contains("canary-address")
                                     || String.valueOf(event.getThrowableProxy().getMessage())
                                             .contains(KEY)));
-            assertThat(captured)
-                    .noneMatch(event -> event.getFormattedMessage().contains("41.31234")
-                            || event.getFormattedMessage().contains("69.24567"));
+            assertThat(written).noneMatch(line -> line.contains("41.31234") || line.contains("69.24567"));
         } finally {
-            releaseAllLogs(lines, previous);
+            lines.close();
         }
     }
 
@@ -614,34 +614,5 @@ class GeocodePortContractTests {
         var members = (tools.jackson.databind.node.ArrayNode) one.at("/response/GeoObjectCollection/featureMember");
         two.at("/response/GeoObjectCollection/featureMember").forEach(members::add);
         return mapper.writeValueAsString(one);
-    }
-
-    // ----------------------------------------------------------------- log capture
-
-    private static ListAppender<ILoggingEvent> captureAllLogs() {
-        ListAppender<ILoggingEvent> appender = new ListAppender<>();
-        appender.start();
-        Logger root = rootLogger();
-        root.setLevel(Level.ALL);
-        root.addAppender(appender);
-        return appender;
-    }
-
-    private static void releaseAllLogs(ListAppender<ILoggingEvent> appender, Level previous) {
-        Logger root = rootLogger();
-        root.detachAppender(appender);
-        root.setLevel(previous);
-        appender.stop();
-    }
-
-    private static Logger rootLogger() {
-        return (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
-    }
-
-    /** A consistent copy: background threads keep appending while an assertion iterates. */
-    private static List<ILoggingEvent> snapshot(ListAppender<ILoggingEvent> appender) {
-        synchronized (appender) {
-            return List.copyOf(appender.list);
-        }
     }
 }
