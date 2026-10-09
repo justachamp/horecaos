@@ -33,7 +33,7 @@
 .table td {
   padding: 8px 10px;
   border-bottom: 1px solid var(--q-hairline);
-  text-align: left;
+  text-align: start;
   vertical-align: top;
 }
 

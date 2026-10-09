@@ -29,7 +29,7 @@
 }
 
 .reference-data__rail-item {
-  text-align: left;
+  text-align: start;
   border: 1px solid var(--q-hairline);
   background: var(--q-canvas);
   color: var(--q-ink);
@@ -86,7 +86,7 @@
 
 .reference-data__table th,
 .reference-data__table td {
-  text-align: left;
+  text-align: start;
   padding: 8px 12px;
   border-bottom: 1px solid var(--q-hairline);
   vertical-align: top;
@@ -106,7 +106,7 @@
 }
 
 .reference-data__actions button {
-  margin-right: 4px;
+  margin-inline-end: 4px;
 }
 
 .error {
