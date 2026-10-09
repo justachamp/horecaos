@@ -388,6 +388,7 @@ class AutoAddRuleEndpointTests {
                  "bands":[{"portionsFrom":1,"portionsTo":4,"addVariantId":"%s","quantity":1},
                           {"portionsFrom":4,"addVariantId":"%s","quantity":2}]}""".formatted(CUTLERY, CUTLERY));
 
+        String writtenBefore = whatASimulationCouldWrite();
         MvcResult one = simulate("""
                 {"fulfillmentMode":"DELIVERY","channelSystemType":"WEB",
                  "lines":[{"variantId":"%s","quantity":1}]}""".formatted(BURGER));
@@ -435,6 +436,21 @@ class AutoAddRuleEndpointTests {
                         declined.getResponse().getContentAsString(),
                         "$.outcomes[?(@.ruleCode=='cutlery-sets')].reason"))
                 .containsExactly("DECLINED");
+        assertThat(whatASimulationCouldWrite())
+                .as("a simulation is a POST only because its input is a basket: it writes no cart, line, "
+                        + "decline, rule version or audit fact, which is why it needs no Idempotency-Key")
+                .isEqualTo(writtenBefore);
+    }
+
+    /** Every place a simulation could leave a trace, as one comparable string. */
+    private String whatASimulationCouldWrite() {
+        return jdbc.sql("""
+                        SELECT (SELECT count(*) FROM ordering.carts) || '/'
+                            || (SELECT count(*) FROM ordering.cart_lines) || '/'
+                            || (SELECT count(*) FROM ordering.cart_auto_add_declines) || '/'
+                            || (SELECT coalesce(sum(version), 0) FROM catalog.auto_add_rules) || '/'
+                            || (SELECT count(*) FROM audit.audit_events)
+                        """).query(String.class).single();
     }
 
     @Test
