@@ -1943,6 +1943,15 @@ class OrderAmendmentAndOutcomeTests {
         var row = removalRows(orderId).getFirst();
         assertThat((BigDecimal) row.get("quantity_after")).isEqualByComparingTo("0");
         assertThat(row.get("stock_units")).isEqualTo(1);
+        assertThat(orderQuery.revisions(TENANT, orderId))
+                .filteredOn(revision -> revision.revision() == 3)
+                .singleElement()
+                .satisfies(revision -> {
+                    assertThat(revision.fiscalCorrectionRequired())
+                            .as("a removal leaves the marker the sweep reads: ADR 0169 decision 7, ADR 0039's matrix")
+                            .isTrue();
+                    assertThat(revision.deltaTotalMinor()).isNegative();
+                });
     }
 
     @Test
