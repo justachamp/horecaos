@@ -130,6 +130,46 @@ describe('ApiClient', () => {
     });
   });
 
+  describe('reading a picture with a POST', () => {
+    it('sends the body, reads a Blob back and carries no idempotency key (it changes nothing)', async () => {
+      const promise = firstValue(
+        client.readBlob('/api/v1/tenants/t/brands/b/locations/l/print/documents/preview', {
+          jobId: 'j1',
+        }),
+      );
+
+      const request = http.expectOne(
+        url('/api/v1/tenants/t/brands/b/locations/l/print/documents/preview'),
+      );
+      expect(request.request.method).toBe('POST');
+      expect(request.request.responseType).toBe('blob');
+      expect(request.request.body).toEqual({ jobId: 'j1' });
+      expect(request.request.headers.has('Idempotency-Key')).toBe(false);
+      request.flush(new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' }));
+
+      const result = await promise;
+      expect(result).toBeInstanceOf(Blob);
+      expect(result.size).toBe(4);
+    });
+
+    it('turns a refusal into an ApiError, as every other read does', async () => {
+      const promise = firstValue(
+        client.readBlob('/api/v1/tenants/t/brands/b/locations/l/print/documents/preview', {}),
+      );
+
+      http
+        .expectOne(url('/api/v1/tenants/t/brands/b/locations/l/print/documents/preview'))
+        .flush(
+          new Blob([JSON.stringify({ code: 'RESOURCE_NOT_FOUND', status: 404, title: 'No' })], {
+            type: PROBLEM_JSON,
+          }),
+          { status: 404, statusText: 'Not Found' },
+        );
+
+      await expect(promise).rejects.toBeInstanceOf(ApiError);
+    });
+  });
+
   describe('cursor pagination', () => {
     it('sends limit alone on the first page and cursor after that', async () => {
       const promise = firstValue(client.page<string>('/api/v1/orders', firstPage(25)));
