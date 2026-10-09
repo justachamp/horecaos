@@ -133,7 +133,16 @@ class StaffMfaFlowTests {
         MfaPolicy policy = policy("REQUIRED", accountFacts);
         MfaCodeBudget budget = new MfaCodeBudget(limiter, 5, Duration.ofHours(1));
         auth = new StaffAuthService(
-                adapters.login(), adapters.probe(), limiter, budget, policy, accounts, tokens, metrics, clock);
+                adapters.login(),
+                adapters.probe(),
+                limiter,
+                budget,
+                policy,
+                accounts,
+                tokens,
+                metrics,
+                org.mockito.Mockito.mock(uz.horecaos.platform.iam.application.sessions.StaffSessionLedger.class),
+                clock);
         ConcurrentMapCacheManager caches =
                 new ConcurrentMapCacheManager(CacheRegistry.IAM_STAFF_MFA_CREDENTIALS.cacheName());
         TransactionTemplate transactions = new TransactionTemplate() {
@@ -380,6 +389,7 @@ class StaffMfaFlowTests {
                 accounts,
                 tokens,
                 new MfaMetrics(meters),
+                org.mockito.Mockito.mock(uz.horecaos.platform.iam.application.sessions.StaffSessionLedger.class),
                 clock);
 
         StaffSession session = prompting.signIn(PHONE, PASSWORD, null, "address-1");

@@ -136,6 +136,17 @@
         >
           {{ 'staff.detail.tab.contacts' | t }}
         </button>
+        @if (showsShifts()) {
+          <button
+            type="button"
+            class="tab"
+            [class.tab--on]="activeTab() === 'shifts'"
+            (click)="selectTab('shifts')"
+            data-testid="staff-detail-tab-shifts"
+          >
+            {{ 'staff.detail.tab.shifts' | t }}
+          </button>
+        }
       }
       <button
         type="button"
@@ -358,6 +369,10 @@
           [canManage]="canManageProfile()"
           (versionChanged)="onContactsVersion($event)"
         />
+      </div>
+    } @else if (activeTab() === 'shifts' && member(); as person) {
+      <div class="tab-panel" data-testid="staff-detail-shifts">
+        <q-person-shifts-tab [memberId]="person.memberId" />
       </div>
     } @else {
       <div class="tab-panel">

@@ -23,6 +23,7 @@ import uz.horecaos.platform.iam.api.accounts.StaffAccounts.PasswordRejectedExcep
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts.ProviderUnreachableException;
 import uz.horecaos.platform.iam.api.audit.StaffSecurityAudit;
 import uz.horecaos.platform.iam.api.audit.StaffSecurityFact;
+import uz.horecaos.platform.iam.application.sessions.StaffSessionLedger;
 import uz.horecaos.platform.iam.infrastructure.persistence.JdbcPasswordResetStore;
 import uz.horecaos.platform.iam.infrastructure.persistence.JdbcPasswordResetStore.Row;
 import uz.horecaos.platform.web.api.ApiException;
@@ -90,6 +91,7 @@ public class PasswordResetService {
     private final TransactionTemplate transactions;
     private final Clock clock;
     private final LocaleVocabulary locales;
+    private final StaffSessionLedger sessionLedger;
 
     public PasswordResetService(
             JdbcPasswordResetStore store,
@@ -97,8 +99,10 @@ public class PasswordResetService {
             StaffSecurityAudit audit,
             TransactionTemplate transactions,
             Clock clock,
-            LocaleVocabulary locales) {
+            LocaleVocabulary locales,
+            StaffSessionLedger sessionLedger) {
         this.locales = locales;
+        this.sessionLedger = sessionLedger;
         this.store = store;
         this.accounts = accounts;
         this.audit = audit;
@@ -380,7 +384,6 @@ public class PasswordResetService {
     private boolean endSessions(Row row, String correlationId, Instant now) {
         try {
             accounts.logoutEverywhere(row.subjectId());
-            return true;
         } catch (RuntimeException failed) {
             log.error(
                     "The password was reset but the account's sessions were not ended (reset {}, correlation {})",
@@ -402,6 +405,11 @@ public class PasswordResetService {
                     now));
             return false;
         }
+        // Only after logoutEverywhere succeeded (ADR 0176 Decision 7): the history must not say
+        // sessions ended when they did not. Every tenant's rows, because this path has no tenant.
+        // The ledger swallows its own failure; the answer and the accepted fact do not depend on it.
+        sessionLedger.endedByPasswordReset(row.subjectId());
+        return true;
     }
 
     /** SHA-256 of a token, hex; what the relay stores and what a presented token is compared by. */

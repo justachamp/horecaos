@@ -70,7 +70,12 @@ public final class ChangeDocuments {
             "pinhash",
             "activationcode",
             "codedigest",
-            "pepper");
+            "pepper",
+            // ADR 0156: the payroll export's identity group carries a name and an employee number
+            // next to hours. employeeNumber was added above; staffName is the one identity column
+            // it names that no earlier term matches ("fullname" and "personname" do not), so a key
+            // of either name is redacted wherever a change document or a log line carries one.
+            "staffname");
 
     private ChangeDocuments() {}
 

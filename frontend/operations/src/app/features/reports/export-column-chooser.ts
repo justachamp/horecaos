@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 
-import { SessionCapabilities } from '../../core/auth/session-capabilities';
+import { Capability, SessionCapabilities } from '../../core/auth/session-capabilities';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 
@@ -18,7 +18,7 @@ export interface ExportColumnOption {
  * rather than one more checkbox in the list.
  *
  * **The PII group is hidden, not merely disabled, when the operator lacks
- * `customer.pii.export`.** A disabled-but-visible checkbox still tells a
+ * the report's PII capability (`customer.pii.export`, or `staff.shift.export` for payroll).** A disabled-but-visible checkbox still tells a
  * principal that a phone column exists to ask for; the row's own brief asks
  * for the omission to be invisible from the request itself, and this is
  * where that starts — `ReportExportService#requestExport` is the second,
@@ -49,9 +49,7 @@ export interface ExportColumnOption {
       @if (piiColumns().length > 0) {
         @if (canIncludePii()) {
           <div class="column-chooser__pii-group" data-testid="export-column-pii-group">
-            <span class="q-caption column-chooser__pii-label">{{
-              'reports.exportCentre.piiGroupLabel' | t
-            }}</span>
+            <span class="q-caption column-chooser__pii-label">{{ piiLabelKey() | t }}</span>
             @for (column of piiColumns(); track column.key) {
               <label class="column-chooser__option q-body-sm">
                 <input
@@ -66,7 +64,7 @@ export interface ExportColumnOption {
           </div>
         } @else {
           <p class="q-caption column-chooser__pii-hidden" data-testid="export-column-pii-hidden">
-            {{ 'reports.exportCentre.piiGroupHidden' | t }}
+            {{ piiHiddenKey() | t }}
           </p>
         }
       }
@@ -117,7 +115,16 @@ export class ExportColumnChooser {
   readonly selected = input<readonly string[]>([]);
   readonly selectedChange = output<readonly string[]>();
 
-  protected readonly canIncludePii = computed(() => this.capabilities.has('CUSTOMER_PII_EXPORT'));
+  /**
+   * The capability that gates this report's PII group. `customer.pii.export` for the customer-shaped
+   * reports; `staff.shift.export` for the payroll file (ADR 0156), whose group is names and employee
+   * numbers and which a customer-PII holder gets no part of.
+   */
+  readonly piiCapability = input<Capability>('CUSTOMER_PII_EXPORT');
+  readonly piiLabelKey = input<MessageKey>('reports.exportCentre.piiGroupLabel');
+  readonly piiHiddenKey = input<MessageKey>('reports.exportCentre.piiGroupHidden');
+
+  protected readonly canIncludePii = computed(() => this.capabilities.has(this.piiCapability()));
 
   protected readonly standardColumns = computed(() => this.columns().filter((c) => !c.pii));
   protected readonly piiColumns = computed(() => this.columns().filter((c) => c.pii));

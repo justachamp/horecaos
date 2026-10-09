@@ -45,6 +45,8 @@ That shapes them more than any style guide would.
 | [late-order-threshold-stored-values.md](late-order-threshold-stored-values.md) | Before the ADR 0150 release: which tenants saved a «late after» number while it did nothing, what it will now do to their unpromised orders, and how to tell them |
 | [connect-card-merchant-account.md](connect-card-merchant-account.md) | Connecting HorecaOS's own card merchant account (ADR 0095): the installation to fill, the adapter it needs, replacing an account, and an unanswered charge |
 | [terminals-and-kiosks.md](terminals-and-kiosks.md) | A person forgot or locked their staff PIN, who was at a tablet, a tablet went quiet during service, rotating the PIN pepper, and installing, revoking and re-pairing a kiosk (ADR 0155, ADR 0162) |
+| [staff-sessions.md](staff-sessions.md) | Setting the sign-in client's id so «Мой профиль» can list a person's sessions, what to do when «Выйти на всех устройствах» is refused, and what the history keeps (ADR 0176) |
+| [staff-shifts.md](staff-shifts.md) | Before switching attendance on for a company, a shift left open, reading a staff-hours divergence, why the payroll export refuses, and the partition hazard for the next fact table (ADR 0156) |
 
 **A runbook that has never been executed is a draft.** Each file above carries a
 `Last executed` line in its header. Most read `never`; the few that have been run

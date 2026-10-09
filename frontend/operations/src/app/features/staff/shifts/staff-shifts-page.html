@@ -1,0 +1,392 @@
+<div class="shifts" data-testid="staff-shifts-page">
+  <h1 class="q-title">{{ 'staff.shifts.title' | t }}</h1>
+  <p class="q-body-sm shifts__lead">{{ 'staff.shifts.lead' | t }}</p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm" data-testid="shifts-loading">{{ 'customers.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm shifts__muted" data-testid="shifts-denied">
+        {{ 'settings.scope.denied' | t }}
+      </p>
+    }
+    @case ('error') {
+      <div class="shifts__band" role="alert" data-testid="shifts-error">
+        <span class="q-body-sm">{{ loadError() }}</span>
+        <button type="button" class="shifts__button" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('off') {
+      <section class="shifts__off" data-testid="shifts-off">
+        <h2 class="q-body-sm shifts__off-title">{{ 'staff.shifts.off.title' | t }}</h2>
+        <p class="q-body-sm">{{ 'staff.shifts.off.body' | t }}</p>
+        @if (canEnable()) {
+          <button
+            type="button"
+            class="shifts__button shifts__button--primary"
+            (click)="openNotice()"
+            data-testid="shifts-enable"
+          >
+            {{ 'staff.shifts.off.enable' | t }}
+          </button>
+        } @else {
+          <p class="q-caption shifts__muted" data-testid="shifts-ask-owner">
+            {{ 'staff.shifts.off.askOwner' | t }}
+          </p>
+        }
+      </section>
+    }
+    @case ('ready') {
+      <div class="shifts__tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          class="shifts__tab"
+          [class.shifts__tab--on]="tab() === 'week'"
+          [attr.aria-selected]="tab() === 'week'"
+          (click)="selectTab('week')"
+          data-testid="shifts-tab-week"
+        >
+          {{ 'staff.shifts.tab.week' | t }}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="shifts__tab"
+          [class.shifts__tab--on]="tab() === 'today'"
+          [attr.aria-selected]="tab() === 'today'"
+          (click)="selectTab('today')"
+          data-testid="shifts-tab-today"
+        >
+          {{ 'staff.shifts.tab.today' | t }}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="shifts__tab"
+          [class.shifts__tab--on]="tab() === 'timesheet'"
+          [attr.aria-selected]="tab() === 'timesheet'"
+          (click)="selectTab('timesheet')"
+          data-testid="shifts-tab-timesheet"
+        >
+          {{ 'staff.shifts.tab.timesheet' | t }}
+        </button>
+      </div>
+
+      @if (notice(); as message) {
+        <p class="q-body-sm shifts__notice" role="status" data-testid="shifts-notice">
+          {{ message }}
+        </p>
+      }
+      @if (failure(); as message) {
+        @if (entryTarget() === null && actionTarget() === null && !noticeOpen()) {
+          <p class="q-body-sm shifts__error" role="alert" data-testid="shifts-failure">
+            {{ message }}
+          </p>
+        }
+      }
+
+      @switch (tab()) {
+        @case ('week') {
+          <div class="shifts__toolbar">
+            <button
+              type="button"
+              class="shifts__button"
+              (click)="shiftWeek(-1)"
+              data-testid="shifts-prev"
+            >
+              {{ 'staff.shifts.week.prev' | t }}
+            </button>
+            <span class="q-body-sm shifts__range q-tnum" data-testid="shifts-range">{{
+              weekLabel()
+            }}</span>
+            <button
+              type="button"
+              class="shifts__button"
+              (click)="shiftWeek(1)"
+              data-testid="shifts-next"
+            >
+              {{ 'staff.shifts.week.next' | t }}
+            </button>
+            <button type="button" class="shifts__button" (click)="thisWeek()">
+              {{ 'staff.shifts.week.thisWeek' | t }}
+            </button>
+            @if (canManage()) {
+              <span class="shifts__spacer"></span>
+              <button
+                type="button"
+                class="shifts__button"
+                (click)="copyPreviousWeek()"
+                [disabled]="busy()"
+                data-testid="shifts-copy"
+              >
+                {{ 'staff.shifts.week.copy' | t }}
+              </button>
+              <button
+                type="button"
+                class="shifts__button shifts__button--primary"
+                (click)="publishWeek()"
+                [disabled]="busy() || draftCount() === 0"
+                data-testid="shifts-publish"
+              >
+                {{ 'staff.shifts.week.publish' | t }}
+                @if (draftCount() > 0) {
+                  <span class="q-tnum">({{ draftCount() }})</span>
+                }
+              </button>
+            }
+          </div>
+          <q-roster-week-grid
+            [days]="days()"
+            [entries]="entries()"
+            [extraPeople]="people()"
+            [zone]="zone()"
+            [canManage]="canManage()"
+            (add)="addEntry($event)"
+            (open)="editEntry($event)"
+          />
+        }
+        @case ('today') {
+          <p class="q-caption shifts__muted shifts__asof" data-testid="shifts-asof">
+            {{ 'staff.shifts.today.asOf' | t: { time: asOf() } }}
+            ·
+            {{ 'staff.shifts.today.ordersOnly' | t }}
+          </p>
+          @if (todayError(); as message) {
+            <p class="q-body-sm shifts__error" role="alert">{{ message }}</p>
+          }
+          <table class="shifts__table" data-testid="shifts-today">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'staff.shifts.column.person' | t }}</th>
+                <th class="q-caption">{{ 'staff.shifts.column.status' | t }}</th>
+                <th class="q-caption">{{ 'staff.shifts.column.planned' | t }}</th>
+                <th class="q-caption">{{ 'staff.shifts.column.recorded' | t }}</th>
+                <th class="q-caption">
+                  <span class="shifts__sr">{{ 'staff.shifts.column.actions' | t }}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of todayRows(); track $index) {
+                <tr data-testid="shifts-today-row">
+                  <td class="q-body-sm">{{ personLabel(row.person) }}</td>
+                  <td>
+                    <span
+                      class="shifts__pill q-caption"
+                      [class.shifts__pill--alert]="todayTone(row.status) === 'alert'"
+                      [class.shifts__pill--ok]="todayTone(row.status) === 'ok'"
+                      data-testid="shifts-today-status"
+                    >
+                      {{ todayLabel(row.status) }}
+                    </span>
+                    @if (row.shiftStatus === 'AWAITING_APPROVAL') {
+                      <span class="shifts__pill shifts__pill--alert q-caption">
+                        {{ shiftLabel('AWAITING_APPROVAL') }}
+                      </span>
+                    }
+                  </td>
+                  <td class="q-body-sm q-tnum">{{ plannedWindow(row) }}</td>
+                  <td class="q-body-sm q-tnum">
+                    @if (row.startedAt !== null) {
+                      {{ time(row.startedAt) }}–{{ time(row.endedAt) }}
+                    }
+                  </td>
+                  <td class="shifts__actions">
+                    @if (canManage()) {
+                      @if (row.shiftId === null) {
+                        <button type="button" class="shifts__button" (click)="openFromToday(row)">
+                          {{ 'staff.shifts.today.recordStart' | t }}
+                        </button>
+                      } @else if (row.shiftStatus === 'OPEN') {
+                        <button type="button" class="shifts__button" (click)="closeFromToday(row)">
+                          {{ 'staff.shifts.today.recordEnd' | t }}
+                        </button>
+                      }
+                    }
+                    @if (canApprove() && row.shiftStatus === 'AWAITING_APPROVAL') {
+                      <button type="button" class="shifts__button" (click)="approveFromToday(row)">
+                        {{ 'staff.shifts.action.confirm.approve' | t }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="5" class="shifts__none q-body-sm" data-testid="shifts-today-none">
+                    {{ 'staff.shifts.today.none' | t }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+        @case ('timesheet') {
+          <div class="shifts__toolbar">
+            <label class="q-body-sm">
+              {{ 'staff.shifts.timesheet.from' | t }}
+              <input
+                type="date"
+                class="shifts__input"
+                [value]="timesheetFrom()"
+                (change)="setTimesheetFrom($any($event.target).value)"
+                data-testid="shifts-from"
+              />
+            </label>
+            <label class="q-body-sm">
+              {{ 'staff.shifts.timesheet.to' | t }}
+              <input
+                type="date"
+                class="shifts__input"
+                [value]="timesheetTo()"
+                (change)="setTimesheetTo($any($event.target).value)"
+                data-testid="shifts-to"
+              />
+            </label>
+            @if (canManage()) {
+              <span class="shifts__spacer"></span>
+              <button
+                type="button"
+                class="shifts__button"
+                (click)="act('open', null, null)"
+                data-testid="shifts-add"
+              >
+                {{ 'staff.shifts.timesheet.add' | t }}
+              </button>
+            }
+          </div>
+          @if (timesheetState() === 'error') {
+            <p class="q-body-sm shifts__error" role="alert">{{ timesheetError() }}</p>
+          }
+          <table class="shifts__table" data-testid="shifts-timesheet">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'staff.shifts.column.person' | t }}</th>
+                <th class="q-caption">{{ 'staff.shifts.column.date' | t }}</th>
+                <th class="q-caption">{{ 'staff.shifts.column.recorded' | t }}</th>
+                <th class="q-caption">{{ 'staff.shifts.column.paid' | t }}</th>
+                <th class="q-caption">{{ 'staff.shifts.column.variance' | t }}</th>
+                <th class="q-caption">{{ 'staff.shifts.column.status' | t }}</th>
+                <th class="q-caption">
+                  <span class="shifts__sr">{{ 'staff.shifts.column.actions' | t }}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (shift of shifts(); track shift.id) {
+                <tr data-testid="shifts-row" [class.shifts__row--void]="shift.status === 'VOIDED'">
+                  <td class="q-body-sm">{{ personLabel(shift.person) }}</td>
+                  <td class="q-body-sm q-tnum">{{ shift.businessDate }}</td>
+                  <td class="q-body-sm q-tnum">
+                    {{ time(shift.startedAt) }}–{{ time(shift.endedAt) }}
+                  </td>
+                  <td class="q-body-sm q-tnum" data-testid="shifts-paid">
+                    {{ hours(shift.paidSeconds) }}
+                  </td>
+                  <td class="q-body-sm q-tnum" data-testid="shifts-variance">
+                    {{ variance(shift.varianceSeconds) }}
+                  </td>
+                  <td>
+                    <span
+                      class="shifts__pill q-caption"
+                      [class.shifts__pill--alert]="shift.status === 'AWAITING_APPROVAL'"
+                    >
+                      {{ shiftLabel(shift.status) }}
+                    </span>
+                  </td>
+                  <td class="shifts__actions">
+                    @if (canManage() && shift.status !== 'VOIDED') {
+                      <button
+                        type="button"
+                        class="shifts__button"
+                        (click)="act('correct', shift, shift.person)"
+                        data-testid="shifts-correct"
+                      >
+                        {{ 'staff.shifts.action.confirm.correct' | t }}
+                      </button>
+                      <button
+                        type="button"
+                        class="shifts__button"
+                        (click)="act('void', shift, shift.person)"
+                        data-testid="shifts-void"
+                      >
+                        {{ 'staff.shifts.action.confirm.void' | t }}
+                      </button>
+                    }
+                    @if (canApprove() && shift.status === 'AWAITING_APPROVAL') {
+                      <button
+                        type="button"
+                        class="shifts__button shifts__button--primary"
+                        (click)="act('approve', shift, shift.person)"
+                        data-testid="shifts-approve"
+                      >
+                        {{ 'staff.shifts.action.confirm.approve' | t }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                @if (timesheetState() === 'ready') {
+                  <tr>
+                    <td colspan="7" class="shifts__none q-body-sm" data-testid="shifts-none">
+                      {{ 'staff.shifts.timesheet.none' | t }}
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+          @if (nextCursor() !== null) {
+            <button
+              type="button"
+              class="shifts__button shifts__more"
+              (click)="loadTimesheet(true)"
+              data-testid="shifts-more"
+            >
+              {{ 'staff.shifts.timesheet.more' | t }}
+            </button>
+          }
+        }
+      }
+    }
+  }
+
+  @if (entryTarget(); as target) {
+    <q-roster-entry-dialog
+      [people]="people()"
+      [entry]="target.entry"
+      [date]="target.date"
+      [memberId]="target.memberId"
+      [zone]="zone()"
+      [busy]="busy()"
+      [failure]="failure()"
+      (result)="onEntryResult($event)"
+      (dismiss)="closeEntryDialog()"
+    />
+  }
+  @if (actionTarget(); as target) {
+    <q-shift-action-dialog
+      [kind]="target.kind"
+      [zone]="zone()"
+      [people]="people()"
+      [shift]="target.full"
+      [memberId]="target.memberId"
+      [subject]="target.subject"
+      [busy]="busy()"
+      [failure]="failure()"
+      (result)="onActionResult($event)"
+      (dismiss)="closeAction()"
+    />
+  }
+  @if (noticeOpen()) {
+    <q-attendance-notice-dialog
+      [busy]="busy()"
+      [failure]="failure()"
+      (confirm)="enable($event)"
+      (dismiss)="closeNotice()"
+    />
+  }
+</div>

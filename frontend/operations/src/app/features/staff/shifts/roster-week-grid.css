@@ -1,0 +1,110 @@
+.grid {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.grid__caption {
+  text-align: start;
+  color: var(--q-ink-muted);
+  padding-bottom: 8px;
+}
+
+.grid th,
+.grid td {
+  border: 1px solid var(--q-hairline);
+  padding: 4px;
+  vertical-align: top;
+}
+
+.grid__person {
+  width: 160px;
+  text-align: start;
+  font-weight: 500;
+}
+
+.grid__reference {
+  display: block;
+  color: var(--q-ink-muted);
+}
+
+.grid__day {
+  text-align: center;
+  color: var(--q-ink-muted);
+}
+
+.grid__day--today {
+  color: var(--q-ink);
+  border-bottom: 2px solid var(--q-primary);
+  font-weight: 600;
+}
+
+.grid__cell--today {
+  background: var(--q-surface-1, transparent);
+}
+
+.grid__entry {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-height: 40px;
+  margin-bottom: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--q-ink);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+  text-align: start;
+}
+
+.grid__entry--draft {
+  border-style: solid;
+  border-color: var(--q-hairline);
+  color: var(--q-ink-muted);
+}
+
+.grid__entry--missed {
+  text-decoration: line-through;
+}
+
+.grid__entry:disabled {
+  cursor: default;
+}
+
+.grid__status {
+  color: var(--q-ink-muted);
+}
+
+/* An empty cell is a dashed outline: what is missing from the rota is visible. */
+.grid__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 40px;
+  border: 1px dashed var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: transparent;
+  color: var(--q-ink-muted);
+  cursor: pointer;
+}
+
+.grid__empty:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.grid__entry:focus-visible,
+.grid__empty:focus-visible {
+  outline: 2px solid var(--q-primary);
+  outline-offset: 1px;
+}
+
+.grid__none {
+  text-align: center;
+  color: var(--q-ink-muted);
+  padding: 24px;
+}

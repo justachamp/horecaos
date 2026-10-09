@@ -1,0 +1,62 @@
+<q-modal
+  [title]="'staff.shifts.notice.title' | t"
+  [dismissible]="!busy()"
+  (dismiss)="dismiss.emit()"
+  data-testid="attendance-notice-dialog"
+>
+  <p class="q-body-sm">{{ 'staff.shifts.notice.lead' | t }}</p>
+  <ul class="q-body-sm notice__list">
+    <li>{{ 'staff.shifts.notice.holds' | t }}</li>
+    <li>{{ 'staff.shifts.notice.doesNotHold' | t }}</li>
+    <li>{{ 'staff.shifts.notice.seesOwn' | t }}</li>
+    <li>{{ 'staff.shifts.notice.noPay' | t }}</li>
+  </ul>
+  <p class="q-caption notice__legal" data-testid="attendance-notice-legal">
+    {{ 'staff.shifts.notice.legal' | t }}
+  </p>
+
+  <label class="notice__check q-body-sm">
+    <input
+      type="checkbox"
+      [checked]="acknowledged()"
+      (change)="toggleAcknowledged($any($event.target).checked)"
+      data-testid="attendance-notice-ack"
+    />
+    {{ 'staff.shifts.notice.ack' | t }}
+  </label>
+
+  <label class="notice__field">
+    <span class="q-body-sm">{{ 'staff.shifts.notice.reason' | t }}</span>
+    <input
+      type="text"
+      class="notice__input q-body-sm"
+      [value]="reason()"
+      (input)="setReason($any($event.target).value)"
+      data-testid="attendance-notice-reason"
+    />
+  </label>
+
+  @if (failure(); as message) {
+    <p class="q-body-sm notice__error" role="alert">{{ message }}</p>
+  }
+
+  <ng-container qModalActions>
+    <button
+      type="button"
+      class="notice__dismiss q-body-sm"
+      (click)="dismiss.emit()"
+      [disabled]="busy()"
+    >
+      {{ 'staff.shifts.notice.cancel' | t }}
+    </button>
+    <button
+      type="button"
+      class="notice__confirm q-body-sm"
+      (click)="submit()"
+      [disabled]="busy() || !acknowledged() || reason().trim() === ''"
+      data-testid="attendance-notice-confirm"
+    >
+      {{ 'staff.shifts.notice.confirm' | t }}
+    </button>
+  </ng-container>
+</q-modal>

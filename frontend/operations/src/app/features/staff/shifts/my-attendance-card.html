@@ -1,0 +1,73 @@
+@if (applies()) {
+  <section class="mine" data-testid="my-attendance-card">
+    <h2 class="q-subhead">{{ 'staff.shifts.mine.title' | t }}</h2>
+    @switch (state()) {
+      @case ('loading') {
+        <p class="q-body-sm mine__muted">{{ 'myWork.loading' | t }}</p>
+      }
+      @case ('error') {
+        <p class="q-body-sm mine__error" role="alert" data-testid="my-attendance-error">
+          {{ 'staff.shifts.mine.error' | t }}
+        </p>
+        <button type="button" class="mine__button" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      }
+      @case ('ready') {
+        @if (open(); as shift) {
+          <p class="q-body-sm" data-testid="my-attendance-open">
+            {{ 'staff.shifts.mine.since' | t: { time: time(shift.startedAt) } }}
+          </p>
+          <button
+            type="button"
+            class="mine__button mine__button--primary"
+            (click)="clockOut()"
+            [disabled]="busy()"
+            data-testid="my-attendance-clock-out"
+          >
+            {{ 'staff.shifts.mine.clockOut' | t }}
+          </button>
+        } @else {
+          <p class="q-body-sm mine__muted" data-testid="my-attendance-closed">
+            {{ 'staff.shifts.mine.notWorking' | t }}
+          </p>
+          @if (next(); as planned) {
+            <p class="q-caption mine__muted" data-testid="my-attendance-next">
+              {{
+                'staff.shifts.mine.next'
+                  | t: { from: dateTime(planned.plannedStart), to: time(planned.plannedEnd) }
+              }}
+            </p>
+          }
+          <button
+            type="button"
+            class="mine__button mine__button--primary"
+            (click)="clockIn()"
+            [disabled]="busy()"
+            data-testid="my-attendance-clock-in"
+          >
+            {{ 'staff.shifts.mine.clockIn' | t }}
+          </button>
+        }
+        @if (failure(); as message) {
+          <p class="q-body-sm mine__error" role="alert" data-testid="my-attendance-failure">
+            {{ message }}
+          </p>
+        }
+        @if (recent().length > 0) {
+          <ul class="mine__recent q-body-sm" data-testid="my-attendance-recent">
+            @for (shift of recent(); track shift.id) {
+              <li>
+                <span class="q-tnum">{{ window(shift) }}</span>
+                <span class="q-tnum mine__muted">{{ hours(shift.paidSeconds) }}</span>
+                @if (shift.status === 'AWAITING_APPROVAL') {
+                  <span class="q-caption mine__muted">{{ statusLabel(shift.status) }}</span>
+                }
+              </li>
+            }
+          </ul>
+        }
+      }
+    }
+  </section>
+}

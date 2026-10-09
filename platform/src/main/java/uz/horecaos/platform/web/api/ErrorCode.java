@@ -246,6 +246,27 @@ public enum ErrorCode {
      */
     MFA_CONFIRMATION_CODE_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "Confirmation code invalid"),
 
+    /**
+     * ADR 0176: the identity provider could not be asked, so a session the person asked to end is
+     * not known to have ended. Distinct from a generic 500 because the console must say, in words,
+     * that nothing was ended: a falsely reassuring "done" is the one failure that matters here.
+     */
+    IDENTITY_PROVIDER_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Identity provider unavailable"),
+
+    /**
+     * ADR 0156: a payroll export range holds a shift that is still open or awaiting approval, so
+     * the file would carry hours nobody has settled. Refused before the request is queued, with
+     * the count, unless the caller asks to include unresolved shifts.
+     */
+    ATTENDANCE_UNRESOLVED_SHIFTS(HttpStatus.UNPROCESSABLE_ENTITY, "Attendance has unresolved shifts"),
+
+    /**
+     * ADR 0156: a payroll export range is over the report's row ceiling. Refused with the count
+     * and the ceiling and never truncated: a payroll file whose total quietly stops short is the
+     * one outcome worse than no file.
+     */
+    ATTENDANCE_EXPORT_TOO_LARGE(HttpStatus.UNPROCESSABLE_ENTITY, "Attendance export too large"),
+
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal error"),
 
     /**

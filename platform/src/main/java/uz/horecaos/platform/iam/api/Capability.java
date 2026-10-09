@@ -2211,6 +2211,49 @@ public enum Capability {
     TERMINAL_UNLOCK("terminal.unlock", "terminal", "unlock"),
 
     /**
+     * ADR 0156: reading a branch's staff roster and timesheet -- who is rostered, who is working,
+     * the shifts and their variance. Read at {@code LOCATION} scope (one branch), and at {@code
+     * BRAND} and {@code TENANT} for the wider lists. Held by the owner, the administrator,
+     * finance, the brand manager and the branch manager.
+     *
+     * <p>Reading hours is not reading identity: a holder without {@code staff.profile.read}
+     * sees the non-personal display reference («S-0142») and no name.
+     */
+    STAFF_SHIFT_READ("staff.shift.read", "staff", "shift.read"),
+
+    /**
+     * ADR 0156: authoring the rota and recording or correcting hours for someone else -- creating,
+     * moving, publishing and cancelling roster entries, opening, closing, correcting and voiding a
+     * shift. {@code LOCATION} scope only: a broader grant covers it downward. A correction leaves
+     * an ADR 0027 fact carrying the old and new times and a reason from a closed list.
+     */
+    STAFF_SHIFT_MANAGE("staff.shift.manage", "staff", "shift.manage"),
+
+    /**
+     * ADR 0156: approving, one shift at a time, a shift whose variance against its plan is over the
+     * tenant's threshold, and editing a shift older than the retroactive-edit window. Approval is
+     * deliberately not a bulk action: its guarantee is that a person looked.
+     */
+    STAFF_SHIFT_APPROVE("staff.shift.approve", "staff", "shift.approve"),
+
+    /**
+     * ADR 0156: the identity column group of the payroll export (the person's name and employee
+     * number) next to their hours. Held by the owner, the administrator and finance, which makes
+     * finance a reader of staff names inside an audited export file and nowhere else: finance
+     * holds neither {@code staff.profile.read} nor {@code staff.profile.manage}, and no profile
+     * route is opened to it. Without it the export carries the display reference only.
+     */
+    STAFF_SHIFT_EXPORT("staff.shift.export", "staff", "shift.export"),
+
+    /**
+     * ADR 0156: a person starting and ending their own shift from the console at a branch where
+     * they hold a job. Authorised by {@code StaffSelfAuthorized}, as {@link #STAFF_SELF_MANAGE} is:
+     * held at any scope in the tenant, with the handler acting on the caller's own record and
+     * checking the branch itself. It is on no route's {@code RequiresCapability}.
+     */
+    STAFF_SHIFT_CLOCK("staff.shift.clock", "staff", "shift.clock"),
+
+    /**
      * Global control-plane administration. Issued by Keycloak as described in
      * ADR 0003 and never granted through tenant administration.
      */

@@ -3,8 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { signal } from '@angular/core';
+import { ApiError } from '../../core/api/problem-details';
 import { Capability, SessionCapabilities } from '../../core/auth/session-capabilities';
 import { I18n } from '../../core/i18n/i18n';
+import { AttendanceStatus } from '../staff/shifts/attendance-status';
 import { ExportCentrePage } from './export-centre-page';
 import {
   ReportExportQueuedResponse,
@@ -52,12 +55,17 @@ describe('ExportCentrePage (row 7.2e)', () => {
     history?: readonly ReportExportStatusResponse[];
     capabilities?: readonly Capability[];
     requestExportResult?: ReportExportQueuedResponse;
+    requestExportError?: Error;
+    attendanceOn?: boolean;
   }): Promise<void> {
     requestExportSpy = vi
       .fn()
       .mockResolvedValue(
         options.requestExportResult ?? { exportId: 'export-new', status: 'QUEUED' },
       );
+    if (options.requestExportError) {
+      requestExportSpy.mockRejectedValue(options.requestExportError);
+    }
 
     await TestBed.configureTestingModule({
       imports: [ExportCentrePage],
@@ -73,6 +81,13 @@ describe('ExportCentrePage (row 7.2e)', () => {
         {
           provide: SessionCapabilities,
           useValue: fakeCapabilities(options.capabilities ?? ['REPORT_EXPORT']),
+        },
+        {
+          provide: AttendanceStatus,
+          useValue: {
+            ensureLoaded: () => Promise.resolve(),
+            enabled: signal<boolean | null>(options.attendanceOn ?? false),
+          },
         },
         {
           provide: ReportingApi,
@@ -259,5 +274,139 @@ describe('ExportCentrePage (row 7.2e)', () => {
     const row2 = el('export-centre-job-e-2')!;
     expect(row1.textContent).toContain('Summary');
     expect(row2.textContent).toContain('Customer directory');
+  });
+
+  describe('the payroll file (ADR 0156)', () => {
+    async function openStaffAttendance(options: Parameters<typeof render>[0] = {}): Promise<void> {
+      await render({
+        capabilities: ['REPORT_EXPORT', 'STAFF_SHIFT_READ'],
+        attendanceOn: true,
+        ...options,
+      });
+      selectReport('STAFF_ATTENDANCE');
+    }
+
+    function optionKeys(): string[] {
+      return Array.from(
+        el<HTMLSelectElement>('export-centre-report')!.querySelectorAll('option'),
+      ).map((option) => (option as HTMLOptionElement).value);
+    }
+
+    async function fillAndSubmit(): Promise<void> {
+      const from = el<HTMLInputElement>('export-centre-from')!;
+      from.value = '2026-10-01';
+      from.dispatchEvent(new Event('input'));
+      const to = el<HTMLInputElement>('export-centre-to')!;
+      to.value = '2026-10-07';
+      to.dispatchEvent(new Event('input'));
+      const purpose = el<HTMLInputElement>('export-centre-purpose')!;
+      purpose.value = 'October payroll';
+      purpose.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      el<HTMLButtonElement>('export-centre-submit')!.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+    }
+
+    it('is offered only when attendance is on and the viewer may read shifts', async () => {
+      await render({ capabilities: ['REPORT_EXPORT', 'STAFF_SHIFT_READ'], attendanceOn: false });
+      expect(optionKeys()).not.toContain('STAFF_ATTENDANCE');
+    });
+
+    it('is not offered to a viewer who cannot read shifts, even when attendance is on', async () => {
+      await render({ capabilities: ['REPORT_EXPORT'], attendanceOn: true });
+      expect(optionKeys()).not.toContain('STAFF_ATTENDANCE');
+    });
+
+    it('is offered fifth to a viewer who can, with its own columns and a date range', async () => {
+      await openStaffAttendance();
+
+      expect(optionKeys()).toEqual([
+        'CUSTOMER_DIRECTORY',
+        'ORDER_CRM_LOG',
+        'ORDER_REPORT_LOG',
+        'ORDER_REPORT_SUMMARY',
+        'STAFF_ATTENDANCE',
+      ]);
+      expect(el('export-column-paidSeconds')).toBeTruthy();
+      expect(el('export-column-orderId')).toBeNull();
+      expect(el('export-centre-from')).toBeTruthy();
+      expect(el('export-centre-unresolved')).toBeTruthy();
+      expect(el('export-centre-status')).toBeNull();
+    });
+
+    it('hides names and employee numbers from a viewer without staff.shift.export, and customer-PII does not open them', async () => {
+      await openStaffAttendance({
+        capabilities: ['REPORT_EXPORT', 'STAFF_SHIFT_READ', 'CUSTOMER_PII_EXPORT'],
+      });
+
+      expect(el('export-column-pii-hidden')).toBeTruthy();
+      expect(el('export-column-staffName')).toBeNull();
+      expect(el('export-column-employeeNumber')).toBeNull();
+    });
+
+    it('shows them to a viewer who holds staff.shift.export', async () => {
+      await openStaffAttendance({
+        capabilities: ['REPORT_EXPORT', 'STAFF_SHIFT_READ', 'STAFF_SHIFT_EXPORT'],
+      });
+
+      expect(el('export-column-staffName')).toBeTruthy();
+      expect(el('export-column-employeeNumber')).toBeTruthy();
+    });
+
+    it('submits the range and, only when ticked, asks for the unsettled shifts too', async () => {
+      await openStaffAttendance();
+      await fillAndSubmit();
+      expect(requestExportSpy).toHaveBeenCalledTimes(1);
+      const first = requestExportSpy.mock.calls[0][1] as ReportExportRequest;
+      expect(first.reportKey).toBe('STAFF_ATTENDANCE');
+      expect(first.from).toBe('2026-10-01T00:00:00.000Z');
+      expect(first.includeUnresolved).toBe(false);
+
+      const box = el<HTMLInputElement>('export-centre-unresolved')!;
+      box.checked = true;
+      box.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      const purpose = el<HTMLInputElement>('export-centre-purpose')!;
+      purpose.value = 'October payroll again';
+      purpose.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      el<HTMLButtonElement>('export-centre-submit')!.click();
+      await flushMicrotasks();
+
+      expect((requestExportSpy.mock.calls[1][1] as ReportExportRequest).includeUnresolved).toBe(
+        true,
+      );
+    });
+
+    it('sends no includeUnresolved for a report that has no such thing', async () => {
+      await render({ capabilities: ['REPORT_EXPORT', 'STAFF_SHIFT_READ'], attendanceOn: true });
+      const purpose = el<HTMLInputElement>('export-centre-purpose')!;
+      purpose.value = 'Customers';
+      purpose.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      el<HTMLButtonElement>('export-centre-submit')!.click();
+      await flushMicrotasks();
+
+      expect(
+        (requestExportSpy.mock.calls[0][1] as ReportExportRequest).includeUnresolved,
+      ).toBeNull();
+    });
+
+    it('says why the platform refused: unsettled shifts, or a range over the ceiling', async () => {
+      await openStaffAttendance({
+        requestExportError: new ApiError('ATTENDANCE_UNRESOLVED_SHIFTS', 409, null, null),
+      });
+      await fillAndSubmit();
+      expect(fixture.nativeElement.textContent).toContain('still open or awaiting approval');
+    });
+
+    it('names the ceiling when the range is too large', async () => {
+      await openStaffAttendance({
+        requestExportError: new ApiError('ATTENDANCE_EXPORT_TOO_LARGE', 422, null, null),
+      });
+      await fillAndSubmit();
+      expect(fixture.nativeElement.textContent).toContain('never cut short');
+    });
   });
 });

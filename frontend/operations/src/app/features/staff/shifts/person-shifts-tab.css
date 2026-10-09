@@ -1,0 +1,26 @@
+.person-shifts__lead,
+.person-shifts__muted {
+  color: var(--q-ink-muted);
+}
+
+.person-shifts__error {
+  color: var(--q-error-text, var(--q-ink));
+}
+
+.person-shifts__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+.person-shifts__table th {
+  text-align: start;
+  color: var(--q-ink-muted);
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.person-shifts__table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--q-hairline);
+}

@@ -87,6 +87,9 @@ public final class MetricRegistry {
      */
     private static final LocalDate W11_DELIVERY_TRANSIT_TIME = LocalDate.of(2026, 9, 25);
 
+    /** ADR 0156 (batch 20): staff hours, from fact_staff_shift (V0530). */
+    private static final LocalDate W20_STAFF_HOURS = LocalDate.of(2026, 10, 8);
+
     private static final Map<String, MetricDefinition> BY_CODE = index(List.of(
             new MetricDefinition(
                     new MetricId("revenue.gross", 1),
@@ -800,7 +803,74 @@ public final class MetricRegistry {
                             + "acceptance, after confirmation, dispatch and sourcing, so it is never "
                             + "the same figure as delivery_time.median.v1 (order creation to close) "
                             + "and the two must not be added or substituted for each other.",
-                    W11_DELIVERY_TRANSIT_TIME)));
+                    W11_DELIVERY_TRANSIT_TIME),
+            // ADR 0156: staff hours, for a payroll conversation. Hours, never pay: HorecaOS computes no
+            // wage, no overtime, no night or holiday premium, no deduction and no tax, and applies no
+            // working-time rule. Each is provisional until finance signs the sentence.
+            new MetricDefinition(
+                    new MetricId("staff_hours.paid", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_staff_shift.paid_seconds (V0530)",
+                    true,
+                    Aggregation.SUM,
+                    "CLOSED_STAFF_SHIFTS",
+                    CurrencyRule.NONE,
+                    "Whole seconds, summed; no rounding",
+                    MetricUnit.SECONDS,
+                    "Seconds worked by non-courier staff on closed shifts, less the break, on the business "
+                            + "date the shift started: wall time from start to end minus break_seconds "
+                            + "(ADR 0156).",
+                    "Staff shifts that are CLOSED, including those a manager approved after their variance "
+                            + "was over the threshold.",
+                    "A shift still OPEN, one AWAITING_APPROVAL, a VOIDED one, and every courier shift "
+                            + "(couriers are fulfillment.courier_shifts and the courier settlement, ADR 0042).",
+                    "Not applicable: a refund does not change how long somebody worked.",
+                    "No working-time rule is applied: not a maximum shift length, not mandatory rest, not night "
+                            + "work, overtime or a public-holiday premium. The legal answers to those are open "
+                            + "(ADR 0156) and this figure is hours recorded, not hours payable.",
+                    W20_STAFF_HOURS),
+            new MetricDefinition(
+                    new MetricId("staff_hours.planned", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_staff_shift.planned_seconds (V0530)",
+                    true,
+                    Aggregation.SUM,
+                    "CLOSED_STAFF_SHIFTS_WITH_A_ROSTER_ENTRY",
+                    CurrencyRule.NONE,
+                    "Whole seconds, summed; no rounding",
+                    MetricUnit.SECONDS,
+                    "Seconds the rota planned for the closed shifts that were matched to a roster entry: "
+                            + "(planned end minus planned start) minus the planned break, snapshotted when the "
+                            + "shift was opened against the entry.",
+                    "Closed staff shifts that were matched to a published roster entry.",
+                    "Closed shifts with no roster entry (a clock-in needs none, so the Friday with no rota still "
+                            + "has hours): they have no plan, and null is not zero. Planned hours are never a "
+                            + "source of paid time.",
+                    "Not applicable.",
+                    "A plan is read from the entry as it stood when the shift was opened; an entry edited "
+                            + "afterwards does not move a shift that already carries its snapshot. No "
+                            + "working-time rule is applied.",
+                    W20_STAFF_HOURS),
+            new MetricDefinition(
+                    new MetricId("staff_hours.variance", 1),
+                    Grain.DAY_LOCATION,
+                    "reporting.fact_staff_shift.variance_seconds (V0530)",
+                    true,
+                    Aggregation.SUM,
+                    "CLOSED_STAFF_SHIFTS_WITH_A_ROSTER_ENTRY",
+                    CurrencyRule.NONE,
+                    "Whole seconds, summed; the sign is kept (positive is over the plan)",
+                    MetricUnit.SECONDS,
+                    "Paid seconds minus planned seconds, summed over the closed staff shifts that were matched "
+                            + "to a roster entry. A shift over the tenant's threshold either way waited for a "
+                            + "person to approve it before it counted.",
+                    "Closed staff shifts that were matched to a published roster entry.",
+                    "Closed shifts with no plan (null variance, not zero), open, awaiting-approval and voided "
+                            + "shifts.",
+                    "Not applicable.",
+                    "A sum of signed variances lets overruns and early finishes cancel; read it beside the "
+                            + "per-shift list, not instead of it. No working-time rule is applied.",
+                    W20_STAFF_HOURS)));
 
     private MetricRegistry() {}
 

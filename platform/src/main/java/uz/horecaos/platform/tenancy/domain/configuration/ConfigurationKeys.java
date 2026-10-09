@@ -956,6 +956,98 @@ public final class ConfigurationKeys {
                     + "Switching it on ends the affected accounts' sessions so the next sign-in is asked.")
             .build();
 
+    /**
+     * ADR 0176: days a staff sign-in row is kept, read by {@code iam}'s {@code StaffSignInSweeper}
+     * (which holds the code and the default as constants, because importing this registry's key
+     * type would close an {@code iam -> tenancy -> audit -> iam} cycle; {@code
+     * IamConfigurationKeyTests} keeps the two equal).
+     */
+    public static final ConfigurationKey<Integer> IAM_STAFF_SIGN_IN_RETENTION_DAYS = ConfigurationKey.of(
+                    "iam.staff_sign_in_retention_days", Integer.class)
+            .defaultValue(180)
+            .ownedBy("iam")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Days a staff sign-in record (browser, system, form and times; no address) is "
+                    + "kept before it is deleted. Between 30 and 730.")
+            .build();
+
+    /**
+     * ADR 0156: whether a tenant records its staff's hours. Declared here so a stored row for it
+     * passes the startup validator, and declared identically in {@code
+     * workforce.api.WorkforceConfigurationKeys} where it is consumed, for the reason recorded on
+     * {@link #COMMERCIAL_ENFORCEMENT_CEILING}. {@code WorkforceConfigurationKeyTests} keeps the seven
+     * in step.
+     */
+    public static final ConfigurationKey<Boolean> WORKFORCE_ATTENDANCE_ENABLED = ConfigurationKey.of(
+                    "workforce.attendance.enabled", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("workforce")
+            .tenantVisible()
+            .settableAt(ScopeType.TENANT)
+            .describedAs("Whether this company records its staff's working hours (rota, clock-in and "
+                    + "timesheet). Off until switched on; switching it on is an audited change.")
+            .build();
+
+    public static final ConfigurationKey<Integer> WORKFORCE_SHIFT_VARIANCE_THRESHOLD_MINUTES = ConfigurationKey.of(
+                    "workforce.shift.variance_threshold_minutes", Integer.class)
+            .defaultValue(30)
+            .ownedBy("workforce")
+            .tenantVisible()
+            .settableAt(ScopeType.TENANT, ScopeType.BRAND, ScopeType.LOCATION)
+            .describedAs("Minutes a closed shift may differ from its plan before a manager must approve it. "
+                    + "Between 5 and 240.")
+            .build();
+
+    public static final ConfigurationKey<Boolean> WORKFORCE_SHIFT_APPROVER_MUST_DIFFER = ConfigurationKey.of(
+                    "workforce.shift.approver_must_differ", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("workforce")
+            .tenantVisible()
+            .settableAt(ScopeType.TENANT)
+            .describedAs("Whether a different person must approve a shift's variance than edited it. Off, "
+                    + "because a branch with one manager could otherwise approve nothing.")
+            .build();
+
+    public static final ConfigurationKey<Integer> WORKFORCE_SHIFT_RETROACTIVE_EDIT_DAYS = ConfigurationKey.of(
+                    "workforce.shift.retroactive_edit_days", Integer.class)
+            .defaultValue(7)
+            .ownedBy("workforce")
+            .tenantVisible()
+            .settableAt(ScopeType.TENANT)
+            .describedAs("How many days back a branch manager may correct a shift; older ones need the "
+                    + "approval capability. Between 0 and 60.")
+            .build();
+
+    public static final ConfigurationKey<Integer> WORKFORCE_SHIFT_MAX_OPEN_HOURS = ConfigurationKey.of(
+                    "workforce.shift.max_open_hours", Integer.class)
+            .defaultValue(14)
+            .ownedBy("workforce")
+            .tenantVisible()
+            .settableAt(ScopeType.TENANT, ScopeType.BRAND, ScopeType.LOCATION)
+            .describedAs("Hours after which a still-open shift is flagged as not closed. Between 4 and 16.")
+            .build();
+
+    public static final ConfigurationKey<Integer> WORKFORCE_ROSTER_LATE_AFTER_MINUTES = ConfigurationKey.of(
+                    "workforce.roster.late_after_minutes", Integer.class)
+            .defaultValue(10)
+            .ownedBy("workforce")
+            .tenantVisible()
+            .settableAt(ScopeType.TENANT, ScopeType.BRAND, ScopeType.LOCATION)
+            .describedAs("Minutes after the planned start with no shift before a person reads as late. "
+                    + "Between 1 and 120.")
+            .build();
+
+    public static final ConfigurationKey<Integer> WORKFORCE_ROSTER_MATCH_WINDOW_MINUTES = ConfigurationKey.of(
+                    "workforce.roster.match_window_minutes", Integer.class)
+            .defaultValue(240)
+            .ownedBy("workforce")
+            .tenantVisible()
+            .settableAt(ScopeType.TENANT)
+            .describedAs("Minutes either side of a published entry's start within which a new shift is "
+                    + "matched to it. Between 30 and 480.")
+            .build();
+
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             CART_EXPIRY_MINUTES,
             ORDERING_CART_RETENTION_DAYS,
@@ -972,6 +1064,14 @@ public final class ConfigurationKeys {
             AUDIT_SECURITY_RETENTION_DAYS,
             AUDIT_BUSINESS_RETENTION_DAYS,
             IAM_STAFF_MFA_REQUIREMENT,
+            IAM_STAFF_SIGN_IN_RETENTION_DAYS,
+            WORKFORCE_ATTENDANCE_ENABLED,
+            WORKFORCE_SHIFT_VARIANCE_THRESHOLD_MINUTES,
+            WORKFORCE_SHIFT_APPROVER_MUST_DIFFER,
+            WORKFORCE_SHIFT_RETROACTIVE_EDIT_DAYS,
+            WORKFORCE_SHIFT_MAX_OPEN_HOURS,
+            WORKFORCE_ROSTER_LATE_AFTER_MINUTES,
+            WORKFORCE_ROSTER_MATCH_WINDOW_MINUTES,
             CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN,
             CUSTOMERS_OTP_DELIVERY_CHANNEL_ORDER,
             CUSTOMERS_PII_EXPORT_APPROVAL_THRESHOLD_ROWS,

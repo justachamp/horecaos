@@ -22,6 +22,16 @@
         {{ 'staff.shell.terminals' | t }}
       </a>
     }
+    @if (showsShifts()) {
+      <a
+        class="shell__tab"
+        routerLink="/staff/shifts"
+        routerLinkActive="shell__tab--on"
+        data-testid="staff-shell-shifts"
+      >
+        {{ 'staff.shell.shifts' | t }}
+      </a>
+    }
   </nav>
   <router-outlet />
 </div>

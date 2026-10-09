@@ -1,0 +1,86 @@
+:host {
+  display: block;
+}
+
+.lead,
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.sessions {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.session {
+  padding: 8px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.session[data-current='true'] {
+  border-color: var(--q-ink);
+}
+
+.session__line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.session__line .q-body {
+  flex: 1;
+}
+
+.session--ended {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-style: dashed;
+}
+
+.ended-title {
+  margin: 16px 0 0;
+}
+
+.badge {
+  padding: 0 8px;
+  border: 1px solid var(--q-ink);
+  border-radius: var(--q-radius);
+}
+
+.unavailable {
+  padding: 8px 12px;
+  border: 1px dashed var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.confirm {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--q-ink);
+  border-radius: var(--q-radius);
+}
+
+.reasons {
+  margin: 12px 0;
+  padding: 0;
+  border: 0;
+}
+
+.reason {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}

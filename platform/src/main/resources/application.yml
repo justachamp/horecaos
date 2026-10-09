@@ -143,6 +143,12 @@ horecaos:
     # exchange staff credentials with Keycloak. Same base-url/realm as above --
     # this is not a second Keycloak, just a second client on it.
     staff-login-client-id: ${HORECAOS_KEYCLOAK_STAFF_LOGIN_CLIENT_ID:horecaos-staff-login}
+    # ADR 0176: the sign-in client's internal id (a UUID, not the clientId). Keycloak's
+    # offline-session listing takes it, and reading it would need view-clients, which the
+    # provisioning credential deliberately lacks, so it is configuration:
+    # infra/keycloak/create-staff-login-client.sh prints the line to set. Unset, the sessions
+    # card lists the platform's own record and says Keycloak's state is unavailable.
+    staff-login-client-uuid: ${HORECAOS_KEYCLOAK_STAFF_LOGIN_CLIENT_UUID:}
   routing:
     osrm:
       # ADR 0147. The platform's own road-distance engine, behind the ROAD delivery

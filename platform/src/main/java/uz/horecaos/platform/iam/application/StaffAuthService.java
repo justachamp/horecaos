@@ -15,9 +15,11 @@ import uz.horecaos.platform.iam.application.mfa.MfaMetrics.Outcome;
 import uz.horecaos.platform.iam.application.mfa.MfaMetrics.Step;
 import uz.horecaos.platform.iam.application.mfa.MfaPolicy;
 import uz.horecaos.platform.iam.application.mfa.SealedTokens;
+import uz.horecaos.platform.iam.application.sessions.StaffSessionLedger;
 import uz.horecaos.platform.iam.infrastructure.keycloak.StaffDirectGrantClient;
 import uz.horecaos.platform.iam.infrastructure.keycloak.StaffPasswordCheckClient;
 import uz.horecaos.platform.iam.infrastructure.keycloak.StaffPasswordCheckClient.PasswordCheck;
+import uz.horecaos.platform.iam.infrastructure.keycloak.TokenClaims;
 import uz.horecaos.platform.iam.infrastructure.keycloak.TokenOutcome;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -73,6 +75,7 @@ public class StaffAuthService {
     private final StaffAccounts accounts;
     private final SealedTokens tickets;
     private final MfaMetrics metrics;
+    private final StaffSessionLedger ledger;
     private final Clock clock;
 
     public StaffAuthService(
@@ -84,6 +87,7 @@ public class StaffAuthService {
             StaffAccounts accounts,
             SealedTokens tickets,
             MfaMetrics metrics,
+            StaffSessionLedger ledger,
             Clock clock) {
         this.keycloak = keycloak;
         this.passwordCheck = passwordCheck;
@@ -93,6 +97,7 @@ public class StaffAuthService {
         this.accounts = accounts;
         this.tickets = tickets;
         this.metrics = metrics;
+        this.ledger = ledger;
         this.clock = clock;
     }
 
@@ -120,6 +125,18 @@ public class StaffAuthService {
      *     never stored anywhere but this limiter's in-memory bucket map
      */
     public StaffSession signIn(String username, String password, @Nullable String otp, String rateLimitKey) {
+        return signIn(username, password, otp, rateLimitKey, null);
+    }
+
+    /**
+     * {@link #signIn(String, String, String, String)}, and the sign-in is recorded for the sessions
+     * card (ADR 0176) once a session is issued.
+     *
+     * @param userAgent the request's {@code User-Agent}, read only to be reduced to a closed device
+     *     label by {@link StaffSessionLedger}; never stored, logged or returned
+     */
+    public StaffSession signIn(
+            String username, String password, @Nullable String otp, String rateLimitKey, @Nullable String userAgent) {
         RateLimiter.Decision decision =
                 rateLimiter.check(new RateLimiter.Key(SIGN_IN_OPERATION, null, rateLimitKey), SIGN_IN_LIMIT);
         if (!decision.allowed()) {
@@ -148,6 +165,9 @@ public class StaffAuthService {
                 if (otp != null) {
                     metrics.record(Step.CHALLENGE, Outcome.OK);
                 }
+                // After the requirement: a session revoked for want of a second factor is not a sign-in.
+                // Never fails the sign-in (ADR 0176 Decision 2).
+                ledger.recordSignIn(subjectId, issued.organizationIds(), issued.sessionId(), userAgent);
                 yield session;
             }
             case TokenOutcome.Refused refused -> throw signInRefusal(refused.reason(), otp != null);
@@ -189,7 +209,10 @@ public class StaffAuthService {
     /** Proxies the refresh grant. Not rate-limited: a refresh token is not a guessable secret. */
     public StaffSession refresh(String refreshToken) {
         return switch (keycloak.refresh(refreshToken)) {
-            case TokenOutcome.Issued issued -> toSession(issued, false);
+            case TokenOutcome.Issued issued -> {
+                ledger.touch(issued.sessionId());
+                yield toSession(issued, false);
+            }
             case TokenOutcome.Refused ignored ->
                 throw new ApiException(ErrorCode.SESSION_EXPIRED, "Your session has ended. Sign in again.");
         };
@@ -202,6 +225,8 @@ public class StaffAuthService {
      */
     public void signOut(String refreshToken) {
         keycloak.revoke(refreshToken);
+        // The offline refresh token names its session; the history says this device signed out.
+        ledger.signedOut(TokenClaims.sessionId(refreshToken));
     }
 
     private static StaffSession toSession(TokenOutcome.Issued issued, boolean mfaEnrolmentOffered) {

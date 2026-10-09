@@ -544,4 +544,44 @@ public final class ReportingFacts {
             }
         }
     }
+
+    /**
+     * ADR 0156, ADR 0043: one closed staff shift on the business date its start belongs to -- the hours a
+     * payroll conversation needs, built at day close from {@code workforce}'s port and never by a report
+     * reading a workforce table.
+     *
+     * <p>Holds {@code CLOSED} shifts only; an open shift or one awaiting approval is not a fact until it
+     * settles. {@code staffDisplayReference} («S-0142») is the non-personal handle ADR 0029 allows in a
+     * fact: there is no name and no employee number here, and the payroll export is the one place identity
+     * meets hours. Null is not zero: {@code plannedSeconds} and {@code varianceSeconds} are null together,
+     * exactly when no roster entry was matched.
+     */
+    public record StaffShiftFact(
+            UUID tenantId,
+            LocalDate businessDate,
+            UUID shiftId,
+            int boundaryVersion,
+            int metricCalculationVersion,
+            UUID brandId,
+            UUID locationId,
+            UUID staffMemberId,
+            String staffDisplayReference,
+            @Nullable Long plannedSeconds,
+            long workedSeconds,
+            int breakSeconds,
+            long paidSeconds,
+            @Nullable Long varianceSeconds,
+            String approvalStatus,
+            boolean hadRosterEntry,
+            Instant startedAt,
+            Instant endedAt) {
+
+        public StaffShiftFact {
+            Objects.requireNonNull(tenantId, "A fact is tenant-owned");
+            Objects.requireNonNull(shiftId, "A staff shift fact names its shift");
+            if ((plannedSeconds == null) != (varianceSeconds == null)) {
+                throw new IllegalArgumentException("plannedSeconds and varianceSeconds are null together");
+            }
+        }
+    }
 }

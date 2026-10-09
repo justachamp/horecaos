@@ -89,7 +89,23 @@ public final class ConfigurationValueRules {
                             value,
                             "DEVICE_ONLY",
                             "PERSON_OPTIONAL",
-                            "PERSON_REQUIRED")));
+                            "PERSON_REQUIRED")),
+            // ADR 0176: a sign-in row is kept thirty days to two years; past either end it is a typo.
+            Map.entry("iam.staff_sign_in_retention_days", integerBetween("iam.staff_sign_in_retention_days", 30, 730)),
+            // ADR 0156: the working-time keys. Each range is the record's own.
+            Map.entry(
+                    "workforce.shift.variance_threshold_minutes",
+                    integerBetween("workforce.shift.variance_threshold_minutes", 5, 240)),
+            Map.entry(
+                    "workforce.shift.retroactive_edit_days",
+                    integerBetween("workforce.shift.retroactive_edit_days", 0, 60)),
+            Map.entry("workforce.shift.max_open_hours", integerBetween("workforce.shift.max_open_hours", 4, 16)),
+            Map.entry(
+                    "workforce.roster.late_after_minutes",
+                    integerBetween("workforce.roster.late_after_minutes", 1, 120)),
+            Map.entry(
+                    "workforce.roster.match_window_minutes",
+                    integerBetween("workforce.roster.match_window_minutes", 30, 480)));
 
     private ConfigurationValueRules() {}
 
@@ -235,5 +251,16 @@ public final class ConfigurationValueRules {
                     ErrorCode.VALIDATION_FAILED,
                     "kitchen.display.not_seen_after_minutes must be between 1 and " + MAXIMUM_MINUTES);
         }
+    }
+
+    /** A whole number inside the record's stated range; the key's own type already refuses a string. */
+    private static Consumer<Object> integerBetween(String code, int minimum, int maximum) {
+        return value -> {
+            long number = ((Number) value).longValue();
+            if (number < minimum || number > maximum) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED, "%s must be between %d and %d".formatted(code, minimum, maximum));
+            }
+        };
     }
 }

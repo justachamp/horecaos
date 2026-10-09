@@ -24,6 +24,7 @@ import uz.horecaos.platform.reporting.application.ReportingFacts.CallHourFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.OrderFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.OrderLineFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.RefundFact;
+import uz.horecaos.platform.reporting.application.ReportingFacts.StaffShiftFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.TenderFact;
 import uz.horecaos.platform.reporting.domain.BusinessDayBoundary;
 import uz.horecaos.platform.reporting.domain.MetricRegistry;
@@ -34,6 +35,7 @@ import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingSt
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceRefund;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceTender;
 import uz.horecaos.platform.web.api.Quantities;
+import uz.horecaos.platform.workforce.api.StaffShiftFactSource;
 
 /**
  * Builds a business day's facts, and later checks that they were right
@@ -64,6 +66,7 @@ public class DayCloseService {
     private final SubjectPseudonym pseudonym;
     private final Clock clock;
     private final @Nullable PromotionRedemptionSource promotionRedemptions;
+    private final @Nullable StaffShiftFactSource staffShifts;
 
     public DayCloseService(
             JdbcReportingStore store, BusinessDayService businessDays, SubjectPseudonym pseudonym, Clock clock) {
@@ -75,18 +78,34 @@ public class DayCloseService {
      *        through the {@code pricing.api} port and never from pricing's tables (ADR 0023);
      *        null builds no promotion facts, which is what a close with no pricing wired does
      */
-    @Autowired
     public DayCloseService(
             JdbcReportingStore store,
             BusinessDayService businessDays,
             SubjectPseudonym pseudonym,
             Clock clock,
             @Nullable PromotionRedemptionSource promotionRedemptions) {
+        this(store, businessDays, pseudonym, clock, promotionRedemptions, null);
+    }
+
+    /**
+     * @param staffShifts ADR 0156: where the staff-hours fact comes from, read through the {@code
+     *        workforce.api} port and never from workforce's tables (ADR 0023); null builds no staff
+     *        shift facts, which is what a close with no workforce wired does
+     */
+    @Autowired
+    public DayCloseService(
+            JdbcReportingStore store,
+            BusinessDayService businessDays,
+            SubjectPseudonym pseudonym,
+            Clock clock,
+            @Nullable PromotionRedemptionSource promotionRedemptions,
+            @Nullable StaffShiftFactSource staffShifts) {
         this.store = store;
         this.businessDays = businessDays;
         this.pseudonym = pseudonym;
         this.clock = clock;
         this.promotionRedemptions = promotionRedemptions;
+        this.staffShifts = staffShifts;
     }
 
     /**
@@ -124,6 +143,13 @@ public class DayCloseService {
                         .toList(),
                 businessDate);
 
+        // ADR 0156: a shift whose start was corrected onto another business date leaves the day it was
+        // filed under before this day is written, or its hours would count twice.
+        store.clearMisfiledStaffShifts(
+                tenantId,
+                derived.staffShifts().stream().map(StaffShiftFact::shiftId).toList(),
+                businessDate);
+
         derived.orders().forEach(store::insertOrderFact);
         // P39: the tender producer, right beside the order-fact write and inside
         // the same transaction as everything else in this method. A tender fact
@@ -154,13 +180,15 @@ public class DayCloseService {
         // ADR 0140 (7.9): the promotion redemption fact, in the same transaction for the
         // same "a day is written whole or not at all" reason.
         derived.promotionRedemptions().forEach(store::insertPromotionRedemptionFact);
+        // ADR 0156: closed staff shifts, in the same transaction for the same reason.
+        derived.staffShifts().forEach(store::insertStaffShiftFact);
 
         store.completeRun(runId, derived.orders().size(), derived.lines().size(), 0, clock.instant());
 
         log.info(
                 "Closed business day {} for tenant {}: {} orders, {} lines, {} tenders, {} refunds, "
                         + "{} call-hours, {} deliveries, {} fee resolutions, {} external-delivery costs, "
-                        + "{} promotion redemptions",
+                        + "{} promotion redemptions, {} staff shifts",
                 businessDate,
                 tenantId,
                 derived.orders().size(),
@@ -171,7 +199,8 @@ public class DayCloseService {
                 derived.deliveries().size(),
                 derived.feeResolutions().size(),
                 derived.externalDeliveryCosts().size(),
-                derived.promotionRedemptions().size());
+                derived.promotionRedemptions().size(),
+                derived.staffShifts().size());
 
         return new CloseResult(
                 runId,
@@ -249,6 +278,7 @@ public class DayCloseService {
         }
 
         comparePromotionFacts(divergences, tenantId, businessDate, derived.promotionRedemptions());
+        compareStaffShifts(divergences, tenantId, businessDate, derived.staffShifts());
         comparePaymentMix(divergences, tenantId, businessDate, derived.tenders());
 
         for (Divergence divergence : divergences) {
@@ -470,6 +500,32 @@ public class DayCloseService {
                                                 source.redeemedAt()))
                                 .toList();
 
+        // ADR 0156: the closed shifts whose business date is this day, through the workforce port. The
+        // fact carries the non-personal display reference and no name.
+        List<StaffShiftFact> staffShiftFacts = staffShifts == null
+                ? List.of()
+                : staffShifts.closedShiftsOn(tenantId, businessDate).stream()
+                        .map(source -> new StaffShiftFact(
+                                tenantId,
+                                businessDate,
+                                source.shiftId(),
+                                boundary.version(),
+                                MetricRegistry.CALCULATION_VERSION,
+                                source.brandId(),
+                                source.locationId(),
+                                source.staffMemberId(),
+                                source.staffDisplayReference(),
+                                source.plannedSeconds(),
+                                source.workedSeconds(),
+                                source.breakSeconds(),
+                                source.paidSeconds(),
+                                source.varianceSeconds(),
+                                source.approvalStatus().name(),
+                                source.hadRosterEntry(),
+                                source.startedAt(),
+                                source.endedAt()))
+                        .toList();
+
         return new DerivedDay(
                 orders,
                 lines,
@@ -481,7 +537,8 @@ public class DayCloseService {
                 deliveries,
                 feeResolutions,
                 externalDeliveryCosts,
-                promotionFacts);
+                promotionFacts,
+                staffShiftFacts);
     }
 
     /**
@@ -695,6 +752,38 @@ public class DayCloseService {
     }
 
     /**
+     * ADR 0156: the closed staff shifts of a day, per branch, against what the close stored: the shift
+     * count and the worked and paid seconds. A shift edited after its day closed (a corrected clock-out, a
+     * void, an approval that arrived late) leaves the stored fact behind the timesheet; the recut is the
+     * one place that says so, and nothing rewrites the stored row.
+     */
+    private void compareStaffShifts(
+            List<Divergence> into, UUID tenantId, LocalDate businessDate, List<StaffShiftFact> derived) {
+        Map<UUID, long[]> stored = new LinkedHashMap<>();
+        store.readStaffShiftDayTotals(tenantId, businessDate)
+                .forEach(total -> stored.put(
+                        total.locationId(), new long[] {total.shifts(), total.workedSeconds(), total.paidSeconds()}));
+        Map<UUID, long[]> fresh = new LinkedHashMap<>();
+        for (StaffShiftFact fact : derived) {
+            long[] totals = fresh.computeIfAbsent(fact.locationId(), location -> new long[3]);
+            totals[0]++;
+            totals[1] += fact.workedSeconds();
+            totals[2] += fact.paidSeconds();
+        }
+        java.util.Set<UUID> locations = new java.util.LinkedHashSet<>(stored.keySet());
+        locations.addAll(fresh.keySet());
+        long[] none = new long[3];
+        for (UUID location : locations) {
+            long[] before = stored.getOrDefault(location, none);
+            long[] after = fresh.getOrDefault(location, none);
+            String dimension = "location=%s".formatted(location);
+            compare(into, dimension, "staff_hours.shifts", 1, before[0], after[0]);
+            compare(into, dimension, "staff_hours.worked", 1, before[1], after[1]);
+            compare(into, dimension, "staff_hours.paid", 1, before[2], after[2]);
+        }
+    }
+
+    /**
      * ADR 0115 ({@code payment_mix.amount.v1}): the net tendered amount per (branch, legal
      * entity, payment method), over the tenders the metric's inclusion rule counts, against the
      * rows the close stored.
@@ -769,7 +858,8 @@ public class DayCloseService {
             List<uz.horecaos.platform.reporting.application.ReportingFacts.ExternalDeliveryCostFact>
                     externalDeliveryCosts,
             List<uz.horecaos.platform.reporting.application.ReportingFacts.PromotionRedemptionFact>
-                    promotionRedemptions) {}
+                    promotionRedemptions,
+            List<StaffShiftFact> staffShifts) {}
 
     /**
      * One slice whose re-derived figure disagrees with the stored one.

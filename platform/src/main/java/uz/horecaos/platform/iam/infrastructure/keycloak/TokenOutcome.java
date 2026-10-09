@@ -66,6 +66,16 @@ public sealed interface TokenOutcome {
                     .formatted(accessTokenExpiresAt, refreshTokenExpiresAt);
         }
 
+        /** The Keycloak session this grant opened, from the access token's {@code sid} (ADR 0176). */
+        public @Nullable String sessionId() {
+            return TokenClaims.sessionId(accessToken);
+        }
+
+        /** The organizations the account belongs to, from the access token (ADR 0176). */
+        public java.util.Set<String> organizationIds() {
+            return TokenClaims.organizationIds(accessToken);
+        }
+
         /**
          * Whether the access token Keycloak just issued carries this realm role (ADR 0148).
          *

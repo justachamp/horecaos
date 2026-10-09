@@ -157,6 +157,12 @@
   </section>
 
   <!--
+    ADR 0176: the account's sessions, labelled by device, with the audited act that ends them.
+    Its own component, like the second-factor card below it, so each loads and fails on its own.
+  -->
+  <q-my-profile-sessions-card />
+
+  <!--
     ADR 0148: the second factor, built. Its own component because it shares the enrolment form
     with the page a refused sign-in sends an account to.
   -->

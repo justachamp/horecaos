@@ -1,0 +1,137 @@
+<q-modal
+  [title]="(editing() ? 'staff.shifts.entry.editTitle' : 'staff.shifts.entry.addTitle') | t"
+  [dismissible]="!busy()"
+  (dismiss)="dismiss.emit()"
+  data-testid="roster-entry-dialog"
+>
+  @if (!cancelling()) {
+    <p class="q-caption entry__plan">{{ 'staff.shifts.entry.planNote' | t }}</p>
+
+    <label class="entry__field">
+      <span class="q-body-sm">{{ 'staff.shifts.entry.person' | t }}</span>
+      <select
+        class="entry__input q-body-sm"
+        [value]="selectedMember()"
+        [disabled]="editing()"
+        (change)="setMember($any($event.target).value)"
+        [attr.aria-invalid]="memberMissing() ? 'true' : null"
+        data-testid="roster-entry-member"
+      >
+        <option value="">{{ 'staff.shifts.entry.personPlaceholder' | t }}</option>
+        @for (person of people(); track person.memberId) {
+          <option [value]="person.memberId" [selected]="person.memberId === selectedMember()">
+            {{ personLabel(person) }}
+          </option>
+        }
+      </select>
+      @if (memberMissing()) {
+        <span class="q-caption entry__error">{{ 'staff.shifts.entry.personRequired' | t }}</span>
+      }
+    </label>
+
+    <label class="entry__field">
+      <span class="q-body-sm">{{ 'staff.shifts.entry.start' | t }}</span>
+      <input
+        type="datetime-local"
+        class="entry__input q-body-sm"
+        [value]="start()"
+        (input)="setStart($any($event.target).value)"
+        data-testid="roster-entry-start"
+      />
+    </label>
+
+    <label class="entry__field">
+      <span class="q-body-sm">{{ 'staff.shifts.entry.end' | t }}</span>
+      <input
+        type="datetime-local"
+        class="entry__input q-body-sm"
+        [value]="end()"
+        (input)="setEnd($any($event.target).value)"
+        [attr.aria-invalid]="windowInvalid() ? 'true' : null"
+        data-testid="roster-entry-end"
+      />
+      @if (windowInvalid()) {
+        <span class="q-caption entry__error">{{ 'staff.shifts.entry.windowInvalid' | t }}</span>
+      }
+    </label>
+
+    <label class="entry__field">
+      <span class="q-body-sm">{{ 'staff.shifts.entry.break' | t }}</span>
+      <input
+        type="number"
+        min="0"
+        max="240"
+        step="5"
+        class="entry__input q-body-sm"
+        [value]="breakMinutes()"
+        (input)="setBreak($any($event.target).value)"
+        data-testid="roster-entry-break"
+      />
+    </label>
+  } @else {
+    <p class="q-body-sm">{{ 'staff.shifts.entry.cancelLead' | t }}</p>
+    <label class="entry__field">
+      <span class="q-body-sm">{{ 'staff.shifts.entry.cancelReason' | t }}</span>
+      <select
+        class="entry__input q-body-sm"
+        [value]="cancelReason()"
+        (change)="setCancelReason($any($event.target).value)"
+        data-testid="roster-entry-cancel-reason"
+      >
+        <option value="">{{ 'staff.shifts.reason.placeholder' | t }}</option>
+        @for (reason of cancelReasons; track reason) {
+          <option [value]="reason">{{ reasonLabel(reason) }}</option>
+        }
+      </select>
+    </label>
+  }
+
+  @if (failure(); as message) {
+    <p class="q-body-sm entry__error" role="alert" data-testid="roster-entry-failure">
+      {{ message }}
+    </p>
+  }
+
+  <ng-container qModalActions>
+    <button
+      type="button"
+      class="entry__dismiss q-body-sm"
+      (click)="dismiss.emit()"
+      [disabled]="busy()"
+    >
+      {{ 'staff.shifts.entry.close' | t }}
+    </button>
+    @if (!cancelling()) {
+      @if (editing()) {
+        <button
+          type="button"
+          class="entry__dismiss q-body-sm"
+          (click)="startCancelling()"
+          [disabled]="busy()"
+          data-testid="roster-entry-cancel"
+        >
+          {{ 'staff.shifts.entry.cancel' | t }}
+        </button>
+      }
+      <button
+        type="button"
+        class="entry__confirm q-body-sm"
+        (click)="save()"
+        [disabled]="busy()"
+        data-testid="roster-entry-save"
+      >
+        {{ 'staff.shifts.entry.save' | t }}
+      </button>
+    } @else {
+      <button
+        type="button"
+        class="entry__confirm q-body-sm"
+        (click)="confirmCancel()"
+        [disabled]="busy() || cancelReason() === ''"
+        data-testid="roster-entry-cancel-confirm"
+      >
+        {{ 'staff.shifts.entry.cancelConfirm' | t }}
+      </button>
+    }
+  </ng-container>
+</q-modal>
