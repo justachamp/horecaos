@@ -70,7 +70,26 @@ public final class ConfigurationValueRules {
                     value -> requireWholeMinutes("printing.kitchen_ticket.expire_minutes", value, 5, 240)),
             Map.entry(
                     "printing.late_marker_minutes",
-                    value -> requireWholeMinutes("printing.late_marker_minutes", value, 1, MAXIMUM_MINUTES)));
+                    value -> requireWholeMinutes("printing.late_marker_minutes", value, 1, MAXIMUM_MINUTES)),
+            // ADR 0155: the five terminal policy values. Refused here, at the one place every writer passes through, so
+            // a PIN length of 5 or a session of 40 hours is never stored for a reader to trip over.
+            Map.entry("terminal.pin.length", value -> requireOneOf("terminal.pin.length", value, 4, 6)),
+            Map.entry(
+                    "terminal.auto_lock_seconds",
+                    value -> requireBetween("terminal.auto_lock_seconds", value, 30, 3_600)),
+            Map.entry(
+                    "terminal.session.max_hours", value -> requireBetween("terminal.session.max_hours", value, 1, 16)),
+            Map.entry(
+                    "terminal.roster.display",
+                    value -> requireText("terminal.roster.display", value, "NAME_INITIAL", "REFERENCE")),
+            Map.entry(
+                    "terminal.attribution.default",
+                    value -> requireText(
+                            "terminal.attribution.default",
+                            value,
+                            "DEVICE_ONLY",
+                            "PERSON_OPTIONAL",
+                            "PERSON_REQUIRED")));
 
     private ConfigurationValueRules() {}
 
@@ -129,6 +148,42 @@ public final class ConfigurationValueRules {
                     ErrorCode.VALIDATION_FAILED,
                     code + " must be plain text: no control characters other than a line break");
         }
+    }
+
+    private static void requireOneOf(String code, Object value, int... allowed) {
+        int number = ((Number) value).intValue();
+        for (int candidate : allowed) {
+            if (candidate == number) {
+                return;
+            }
+        }
+        throw new ApiException(
+                ErrorCode.VALIDATION_FAILED,
+                code + " must be one of " + java.util.Arrays.toString(allowed),
+                Map.of("field", code));
+    }
+
+    private static void requireBetween(String code, Object value, int minimum, int maximum) {
+        int number = ((Number) value).intValue();
+        if (number < minimum || number > maximum) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "%s must be between %d and %d".formatted(code, minimum, maximum),
+                    Map.of("field", code));
+        }
+    }
+
+    private static void requireText(String code, Object value, String... allowed) {
+        String text = String.valueOf(value);
+        for (String candidate : allowed) {
+            if (candidate.equals(text)) {
+                return;
+            }
+        }
+        throw new ApiException(
+                ErrorCode.VALIDATION_FAILED,
+                code + " must be one of " + String.join(", ", allowed),
+                Map.of("field", code));
     }
 
     private static void requireMinutesWithinADay(Object value) {

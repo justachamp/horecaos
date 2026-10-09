@@ -382,6 +382,15 @@ export const routes: Routes = [
                 data: { spec: 'operations-spec/settings.md §10.5 (Channel setup)' },
               },
               {
+                // ADR 0162: the page a kiosk's QR opens. Declared before `:channelId`, which would otherwise take
+                // the literal segment as a channel id. It approves nothing on arrival.
+                path: 'kiosk-pairing',
+                loadComponent: () =>
+                  import('./features/settings/kiosk/kiosk-pairing-page').then(
+                    (m) => m.KioskPairingPage,
+                  ),
+              },
+              {
                 path: ':channelId',
                 loadComponent: () =>
                   import('./features/settings/channel-setup/channel-setup-page').then(
@@ -560,6 +569,14 @@ export const routes: Routes = [
             path: 'approvals',
             loadComponent: () =>
               import('./features/staff/approvals-page').then((m) => m.ApprovalsPage),
+          },
+          {
+            // Терминалы (ADR 0155, Decisions 6 and 7): the class-neutral registry of a branch's devices and the
+            // tenant's Policy card. A tab beside Approvals; declared before the empty-path Люди child for the same
+            // reason `roles`, `activity` and `approvals` are.
+            path: 'terminals',
+            loadComponent: () =>
+              import('./features/staff/terminals/terminals-page').then((m) => m.TerminalsPage),
           },
           {
             // 9.5 Проверка доступа (ADR 0109, wave W03): a debugging tool

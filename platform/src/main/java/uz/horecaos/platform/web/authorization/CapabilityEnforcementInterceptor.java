@@ -6,11 +6,15 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -23,6 +27,8 @@ import uz.horecaos.platform.iam.api.ResourceScopeVerifier;
 import uz.horecaos.platform.iam.api.TenantAvailability;
 import uz.horecaos.platform.iam.api.TenantSuspensionLookup;
 import uz.horecaos.platform.iam.api.staff.StaffSelfAuthorized;
+import uz.horecaos.platform.iam.api.terminals.TerminalAttribution;
+import uz.horecaos.platform.iam.api.terminals.TerminalSessionGate;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -63,6 +69,7 @@ public class CapabilityEnforcementInterceptor implements HandlerInterceptor {
     private final MeterRegistry meters;
     private final TenantSuspensionLookup availability;
     private final SuspendedTenantReadQuota readQuota;
+    private final TerminalSessionGate terminals;
     private final boolean enforce;
 
     public CapabilityEnforcementInterceptor(
@@ -72,6 +79,7 @@ public class CapabilityEnforcementInterceptor implements HandlerInterceptor {
             MeterRegistry meters,
             TenantSuspensionLookup availability,
             SuspendedTenantReadQuota readQuota,
+            TerminalSessionGate terminals,
             @Value("${horecaos.authorization.enforce:true}") boolean enforce) {
         this.authorization = authorization;
         this.scopes = scopes;
@@ -79,6 +87,7 @@ public class CapabilityEnforcementInterceptor implements HandlerInterceptor {
         this.meters = meters;
         this.availability = availability;
         this.readQuota = readQuota;
+        this.terminals = terminals;
         this.enforce = enforce;
     }
 
@@ -150,14 +159,65 @@ public class CapabilityEnforcementInterceptor implements HandlerInterceptor {
         }
         RequiresCapability declaration = declarationOf(handler);
         if (declaration == null) {
+            observeDevice(request);
             requireStaffSelfCapability(request, handler);
             return true;
         }
         ResourceScope scope = scopeOf(request, declaration.scope());
         authorization.require(subject(), declaration.value(), scope);
         requireRealScope(scope);
+        admitTerminal(request, declaration, scope);
         rationReadsOfASuspendedTenant(request, handler, scope);
         return true;
+    }
+
+    /**
+     * ADR 0155: after the principal's own check, and only then, who is acting at a shared terminal.
+     *
+     * <p>This stays the single place a capability is checked. The device passed ADR 0025's checks unchanged just above; the
+     * gate validates the terminal session in the database, asks {@code AuthorizationService} whether the <em>person</em> holds
+     * the same capability at the same scope, and refuses a mutating request from a {@code PERSON_REQUIRED} device that
+     * carries no live session. What it publishes is a name for the rest of the request ({@link
+     * TerminalAttributionContext}); it confers nothing.
+     */
+    private void admitTerminal(HttpServletRequest request, RequiresCapability declaration, ResourceScope scope) {
+        Optional<TerminalAttribution> attribution = terminals.admit(new TerminalSessionGate.Admission(
+                subject(),
+                request.getHeader(TerminalSessionGate.SESSION_HEADER),
+                request.getHeader(TerminalSessionGate.BUILD_HEADER),
+                isMutating(request.getMethod()),
+                isTerminalSessionEndpoint(request),
+                declaration.value(),
+                scope));
+        attribution.ifPresent(found -> TerminalAttributionContext.bind(request, found));
+    }
+
+    /**
+     * A device's «last seen» is stamped by any authenticated request it makes, including the ones that declare no capability
+     * (its own record, read by a kiosk once a minute). Never refuses and never throws: a stamp that cannot be written must
+     * not stop a screen working.
+     */
+    private void observeDevice(HttpServletRequest request) {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication instanceof JwtAuthenticationToken token
+                    && token.isAuthenticated()
+                    && token.getToken().getSubject() != null) {
+                terminals.observe(token.getToken().getSubject(), request.getHeader(TerminalSessionGate.BUILD_HEADER));
+            }
+        } catch (RuntimeException ignored) {
+            // A failed observation is not a failed request.
+        }
+    }
+
+    private static boolean isMutating(String method) {
+        return "POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method) || "DELETE".equals(method);
+    }
+
+    /** The {@code terminal-session} family opens, touches and ends sessions itself and is attributed to none. */
+    private static boolean isTerminalSessionEndpoint(HttpServletRequest request) {
+        Object pattern = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+        return pattern instanceof String text && text.contains("/terminal-session/");
     }
 
     /**

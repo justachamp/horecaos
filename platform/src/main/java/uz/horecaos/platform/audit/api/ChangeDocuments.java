@@ -61,7 +61,16 @@ public final class ChangeDocuments {
             // phone. Neither was in the set when staff had no record to change,
             // so a key named for either would have been written in clear.
             "employeenumber",
-            "emergency");
+            "emergency",
+            // ADR 0155: a staff PIN, its digest, an activation code and a session token are redacted from every change
+            // document. "token" and "secret" already cover a token's digest; the rest are named for what they hold.
+            "currentpin",
+            "newpin",
+            "pindigest",
+            "pinhash",
+            "activationcode",
+            "codedigest",
+            "pepper");
 
     private ChangeDocuments() {}
 

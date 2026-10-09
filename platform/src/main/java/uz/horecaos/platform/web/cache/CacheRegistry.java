@@ -155,6 +155,37 @@ public enum CacheRegistry {
             "StaffMfaService (evicted on every enrolment, removal and reset)"),
 
     /**
+     * ADR 0155: subjects known not to be an enrolled device, so a staff request does not cost an extra database read to be
+     * told it is not one. Only the negative answer is held. A staff subject never becomes a device, and a device's
+     * subject is minted at enrolment and cannot have made an authenticated request before its row exists; an <em>active</em>
+     * device is always read from {@code iam.device_principals}, so a revocation or a change of attribution mode takes
+     * effect on the next request and not a TTL later. Five minutes only bounds memory.
+     */
+    IAM_NOT_A_DEVICE(
+            "iam.not_a_device",
+            Duration.ofMinutes(5),
+            50_000,
+            "none: only the negative is held, and a subject does not change kind"),
+
+    /**
+     * ADR 0155: the per-node throttle on a device's «last seen» stamp -- present means "stamped within the minute", so a
+     * device's busy board costs one bounded {@code UPDATE} a minute per node. The sixty seconds <em>is</em> the stamp
+     * interval; nothing reads it for a decision and an empty cache only stamps once more.
+     */
+    IAM_DEVICE_LAST_SEEN("iam.device_last_seen", Duration.ofSeconds(60), 20_000, "none: the TTL is the stamp interval"),
+
+    /**
+     * ADR 0155: the roster a terminal shows -- who may unlock it, as labels. A display, so it may be thirty seconds
+     * stale: the unlock, the activation and every later request recompute eligibility from the grants, so a person
+     * who lost their job in the last half minute is still on the list and cannot get in.
+     */
+    TERMINAL_ROSTER(
+            "terminal.roster",
+            Duration.ofSeconds(30),
+            2_000,
+            "none needed: the TTL is the staleness budget, and eligibility is recomputed at unlock"),
+
+    /**
      * ADR 0069: the model's reply to a question already answered from exactly the same
      * facts -- "identical grounded questions are served from cache".
      *

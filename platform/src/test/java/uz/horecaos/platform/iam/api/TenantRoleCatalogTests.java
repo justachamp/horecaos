@@ -54,6 +54,7 @@ class TenantRoleCatalogTests {
                 .doesNotContain(
                         PlatformRole.KITCHEN_DEVICE.code(),
                         PlatformRole.KITCHEN_VDU_DEVICE.code(),
-                        PlatformRole.PRINT_AGENT.code());
+                        PlatformRole.PRINT_AGENT.code(),
+                        PlatformRole.KIOSK_DEVICE.code());
     }
 }

@@ -44,7 +44,28 @@ public enum DevicePrincipalClass {
      * class and never from one: an enrolment that asked to be an agent cannot be approved as a
      * display, and a display's cannot be approved as an agent.
      */
-    PRINT_AGENT;
+    PRINT_AGENT,
+
+    /**
+     * A customer-facing kiosk (ADR 0162): bound to one KIOSK sales channel at one branch, paired by a
+     * code the manager confirms, and granted exactly {@code PlatformRole.KIOSK_DEVICE} -- {@code
+     * kiosk.device.read}, and nothing it could order or take money with. Nobody unlocks it with a PIN
+     * ({@link #unlockable()} is false) and a customer is never a staff identity.
+     */
+    KIOSK;
+
+    /**
+     * Whether a person may unlock a device of this class with a staff PIN (ADR 0155). Only the touch
+     * kitchen display at launch: a wall display has no controls, a kiosk is touched by customers and a
+     * print agent is software. Each class added later states this in the record that adds it, together
+     * with the capability set that makes a person eligible.
+     */
+    public boolean unlockable() {
+        return switch (this) {
+            case KITCHEN_KDS -> true;
+            case KITCHEN_VDU, PRINT_AGENT, KIOSK -> false;
+        };
+    }
 
     /**
      * Whether an enrolment that asked to be this class may be approved as {@code approved}
@@ -62,6 +83,10 @@ public enum DevicePrincipalClass {
             // anything else, or a display approved as an agent, would hand the wrong bundle to a
             // device on the strength of an approval click.
             case PRINT_AGENT -> approved == PRINT_AGENT;
+            // ADR 0162: a kiosk's code is approved as a kiosk and as nothing else, and no other class's
+            // code is ever approved as a kiosk -- that is the second line of the rule, because every
+            // other case above names its own targets and none of them is KIOSK.
+            case KIOSK -> approved == KIOSK;
         };
     }
 }

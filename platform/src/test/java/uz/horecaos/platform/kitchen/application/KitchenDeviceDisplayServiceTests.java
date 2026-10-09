@@ -191,7 +191,8 @@ class KitchenDeviceDisplayServiceTests {
     void eachClassHasItsOwnRole() {
         Set<String> roles = new java.util.HashSet<>();
         for (DevicePrincipalClass deviceClass : DevicePrincipalClass.values()) {
-            assertThat(roles.add(KitchenDeviceService.roleOf(deviceClass).code()))
+            assertThat(roles.add(uz.horecaos.platform.iam.application.devices.DeviceEnrolmentService.roleOf(deviceClass)
+                            .code()))
                     .as("%s must not share a role with another class", deviceClass)
                     .isTrue();
         }

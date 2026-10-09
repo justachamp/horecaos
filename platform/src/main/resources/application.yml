@@ -301,6 +301,11 @@ horecaos:
         # deployment. Rotating the real one invalidates every open challenge's
         # hash, which is why it is an ADR 0028 procedure and not a restart.
         handover-pepper: ${HORECAOS_HANDOVER_PEPPER:horecaos-local-handover-pepper-not-for-use}
+        # ADR 0155's terminal PIN pepper, on the same footing as the handover pepper above: a local-only placeholder
+        # that SecretsProfileGuard keeps off any deployment. Rotating the real one re-keys each PIN on its next
+        # successful unlock (the previous pepper stays resolvable by version until then), which is why it is an
+        # ADR 0028 procedure and not a restart.
+        terminal-pin-pepper: ${HORECAOS_TERMINAL_PIN_PEPPER:horecaos-local-terminal-pin-pepper-not-for-use}
     openbao:
       url: ${HORECAOS_OPENBAO_URL:http://localhost:8200}
       token: ${HORECAOS_OPENBAO_TOKEN:}
@@ -397,6 +402,17 @@ horecaos:
     # profile-scoped document at the end of this file, where it cannot follow a
     # deployment out of a laptop.
     handover-pepper-reference: ${HORECAOS_HANDOVER_PEPPER_REF}
+  terminal:
+    # ADR 0155. A reference, never a value, per ADR 0028, with no default for the reason the handover pepper's has
+    # none: the reference carries the environment segment the secret path is built from, and a default would resolve
+    # against whichever environment it names. An unset HORECAOS_TERMINAL_PIN_PEPPER_REF fails startup naming the
+    # variable. The local value lives in the profile-scoped document at the end of this file.
+    pin-pepper-reference: ${HORECAOS_TERMINAL_PIN_PEPPER_REF}
+    # The version stamped on every digest this pepper keys. Rotation: seed the new secret, point the reference at it,
+    # raise this by one and name the old secret as the previous reference; each PIN is re-keyed on its next
+    # successful unlock, and the previous reference is removed once none is left on the old version.
+    pin-pepper-version: ${HORECAOS_TERMINAL_PIN_PEPPER_VERSION:1}
+    pin-pepper-previous-reference: ${HORECAOS_TERMINAL_PIN_PEPPER_PREVIOUS_REF:}
   security:
     oauth2:
       client-id: ${HORECAOS_OIDC_CLIENT_ID:horecaos-api}
@@ -532,3 +548,5 @@ horecaos:
     # anything else here would be a reference that reads correctly and means
     # nothing.
     handover-pepper-reference: horecaos:local:data_encryption:platform:handover-pepper
+  terminal:
+    pin-pepper-reference: horecaos:local:data_encryption:platform:terminal-pin-pepper

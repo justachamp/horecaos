@@ -1,30 +1,25 @@
 # ADR 0155: Terminals and staff PINs
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Not started — no PIN, no terminal session and no per-person
-  attribution on a shared device exists anywhere in code. A search of
-  `platform/src/main/java` and the migrations for a PIN credential, a PIN digest, a
-  terminal session or a lockout finds nothing (the only hits are map pins and
-  `PINFL`, a courier's national identifier). What exists is the device half, and it
-  attributes to a machine. `iam.device_principals` and `iam.device_enrolment_requests`
-  (V0192) hold a location-scoped principal whose `device_class` is checked against
-  one value, `KITCHEN_KDS` (`DevicePrincipalClass` has one constant, and `ck_device_principal_class`
-  and `ck_device_enrolment_class` accept only it); `PlatformRole.KITCHEN_DEVICE` is
-  `kitchen.ticket.read` plus `kitchen.ticket.advance`; `KitchenDeviceController` lists,
-  approves and revokes under `kitchen.station.manage` and nothing lists devices of any
-  other kind; `DeviceEnrolmentController` runs the unauthenticated begin and poll. Every
-  action a tablet takes is recorded under the device's own Keycloak subject:
-  `KitchenBoardController` passes `currentActor.get().subject()` to start, ready,
-  recall, release and hand-over, and `kitchen.ticket_events.actor_type` is checked
-  against `USER`, `SYSTEM_JOB` and `SERVICE` with a free `actor_id`. The ADR 0119 shell
-  (`frontend/operations/src/app/device/`) renders a touch board and has no notion of a
-  person. The console says so itself: the person card's security block
-  (`staff.detail.security.notBuilt`) reads that sign-in method, last sign-in and terminal
-  PIN are not tracked yet, and «Мой профиль» (`staff.myProfile.security.notBuilt`) says the
-  same of the PIN. `StaffMembers` and `TenantRoleCatalog` already keep a device out
-  of the staff list, and `iam.staff_members` (V0453) is the tenant-scoped record of who
-  a person is, with a never-reused `display_reference`; it carries no credential. ADR
-  0148 (staff MFA) is Not started and explicitly leaves device principals outside it.
+- Implementation status: Partial — built and tested in this tree (batch 20, wave `w2-terminals-kiosk`): `V0525`
+  (`last_seen_at`, `last_seen_build`, `attribution_mode`, `auto_lock_seconds` on `iam.device_principals`) and
+  `V0527` (`iam.staff_pins`, `iam.staff_pin_activations`, `iam.terminal_pin_locks`, `iam.terminal_sessions`,
+  `kitchen.ticket_events.via_device_id`, and the widened `ck_telegram_binding_event_class`); the HMAC-SHA256 digest under
+  an ADR 0028 pepper reference that fails startup when absent (`TerminalConfiguration`, `TerminalPinPepper`,
+  `PinDigests`); the PIN rules, the durable row-locked lockouts and the single-use activation codes (`PinRules`,
+  `PinService`); `TerminalSessionService` and the `X-Terminal-Session` gate in the capability interceptor (a device-bound
+  token, idle and maximum length, authorization as the intersection of device and person, `CurrentActor.attributed()` at
+  the kitchen board's start, ready, recall, release, release-schedule and hand-over); `TerminalSessionController`,
+  `TerminalRegistryController`, `StaffPinController` and `TerminalPolicyController` with the five `terminal.*` keys;
+  `terminal.read`, `terminal.manage` and `terminal.unlock`; the device last-seen throttle; `TerminalMaintenance` (the
+  `TERMINAL_DEVICE_UNSEEN` alert and the 400-day purge) and the `TERMINAL_CREDENTIAL_LOCKED` alert; the audit facts; Staff →
+  Терминалы with its Policy card, the person card's PIN panel, «Мой PIN», and the device shell's roster, keypad, lock and
+  PIN change; `docs/runbooks/terminals-and-kiosks.md`. Proved by `TerminalSessionHttpTests`, `TerminalPinHttpTests`,
+  `TerminalRegistryHttpTests`, `TerminalMaintenanceTests` and the frontend specs. Not done, so not `Built`: no tablet has
+  run in `PERSON_REQUIRED` at a pilot branch, the pepper reference has not been seeded in the pre-production OpenBao, the
+  unlock screen has not been exercised on a real touch tablet, the two alert templates have no tenant-authored wording yet,
+  and the first open input of ADR 0139 is still open in that record. Every device stays `DEVICE_ONLY` until a manager
+  changes it, so nothing a kitchen does today changes.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides

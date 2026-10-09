@@ -33,7 +33,7 @@
 - Date decided: 2026-09-09
 - Deciders: Ayubkhon Abbosov (platform architecture), security
 - Depends on: ADR 0025, ADR 0027, ADR 0028, ADR 0031, ADR 0033, ADR 0041, ADR 0045
-- Supersedes / Superseded by: — / —
+- Supersedes / Superseded by: — / [ADR 0155](../partial/0155-terminals-and-staff-pins.md) for the Alternatives row on per-action attribution (its revisit trigger fired: the owner's row `X.3`), for the Closed input «A device is not a person» where a device of an unlockable class is `PERSON_OPTIONAL` or `PERSON_REQUIRED`, and for the sentence «and nothing else» about `KITCHEN_DEVICE`, which gains one machine capability, `terminal.unlock`; [ADR 0162](../partial/0162-kiosk-device-pairing.md) for `roleCode` as a parameter of `ApproveEnrolment` (approval now takes the approved class and the role follows from it) and, for the `KIOSK` class only, for the typed `userCode` step. Everything else in this record is unchanged
 - Open inputs: Device secret rotation cadence and whether an enrolled device
   should be periodically re-attested rather than trusted indefinitely once
   enrolled (owner: Ayubkhon Abbosov, platform architecture — revisit before a

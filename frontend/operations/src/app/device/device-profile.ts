@@ -8,8 +8,23 @@
  * endpoint returns none, and neither does this type.
  */
 
-/** The classes a kitchen device can be enrolled as (`DevicePrincipalClass`). */
-export type DeviceClass = 'KITCHEN_KDS' | 'KITCHEN_VDU';
+/** The classes a device can be enrolled as (`DevicePrincipalClass`): two kitchen displays and, since ADR 0162, a kiosk. */
+export type DeviceClass = 'KITCHEN_KDS' | 'KITCHEN_VDU' | 'KIOSK';
+
+/**
+ * The label this shell reports in `X-Device-Build` on every request, so the registry can show which build a device runs
+ * (ADR 0155, Decision 6). A label the device chose: bounded and printable on the server, never a credential.
+ */
+export const DEVICE_BUILD = 'operations-device-shell';
+
+/** What a kiosk learns about the channel it sells through (ADR 0162, Decision 5). Nothing here is a secret. */
+export interface DeviceKiosk {
+  readonly channelId: string;
+  readonly channelCode: string;
+  readonly channelName: string;
+  /** The channel's own status; a kiosk whose channel is archived or withdrawn here says so and sells nothing. */
+  readonly channelStatus: string;
+}
 
 /** A station as a wall names it: the three display names it renders, and its stable code. */
 export interface DeviceStation {
@@ -34,9 +49,14 @@ export interface DeviceProfile {
   readonly timezone: string;
   /** For a wall display, the station it shows; null for the whole branch and for a touch KDS. */
   readonly station: DeviceStation | null;
+  /**
+   * For a kiosk, the channel it sells through; null for every other class. Optional because a record cached by an earlier
+   * build of this shell (the profile is kept in `localStorage`) has none.
+   */
+  readonly kiosk?: DeviceKiosk | null;
 }
 
-const CLASSES: readonly string[] = ['KITCHEN_KDS', 'KITCHEN_VDU'];
+const CLASSES: readonly string[] = ['KITCHEN_KDS', 'KITCHEN_VDU', 'KIOSK'];
 
 /** A body that is the record, or null: a malformed answer must not become a half-configured device. */
 export function toDeviceProfile(value: unknown): DeviceProfile | null {
@@ -75,6 +95,23 @@ export function toDeviceProfile(value: unknown): DeviceProfile | null {
     locationName: text('locationName') ?? '',
     timezone,
     station: toStation(candidate.station),
+    kiosk: toKiosk(candidate.kiosk),
+  };
+}
+
+function toKiosk(value: unknown): DeviceKiosk | null {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const kiosk = value as Partial<DeviceKiosk>;
+  if (typeof kiosk.channelId !== 'string' || typeof kiosk.channelCode !== 'string') {
+    return null;
+  }
+  return {
+    channelId: kiosk.channelId,
+    channelCode: kiosk.channelCode,
+    channelName: kiosk.channelName ?? kiosk.channelCode,
+    channelStatus: kiosk.channelStatus ?? 'UNKNOWN',
   };
 }
 

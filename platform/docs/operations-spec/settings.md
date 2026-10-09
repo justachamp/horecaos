@@ -671,6 +671,16 @@ legal entity rather than a typed-in ИНН (ADR 0038: a kiosk is a `fiscal_termi
 printer/terminal/marking block renders as a `LockedState` naming what is not built.
 Device credentials, if ever issued, are `SecretInput` and reveal-once.
 
+**Pairing and the registry (ADR 0162, built behind `feature.kiosk_devices`).** The KIOSK section lists the branch's
+kiosks (name, the KIOSK channel each sells through, last seen and build, who paired it, and who revoked it and why),
+pairs a new one, renames or moves one to another KIOSK channel at the same branch, and revokes with a reason. A kiosk
+shows its own code and a QR of the console's approval page; the manager's phone opens *Pair a kiosk* with the code
+filled in, the manager chooses the channel and ticks that the code on the screen in front of them is the one shown,
+and nothing is paired before that. A kiosk has no credential to type: the device claims its own once, as a kitchen
+display does, and "service PIN" and "device login and password" are deliberately not fields (the lockdown is the
+operating system's, see `docs/runbooks/terminals-and-kiosks.md`). The printer, terminal and marking block is still a
+`LockedState`.
+
 ### QR_TABLE
 
 Three modes, exactly as Delever documents them and ADR 0047 adopts them: view-only menu ·

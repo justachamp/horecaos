@@ -17,12 +17,14 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import uz.horecaos.platform.iam.api.terminals.TerminalAttribution;
 import uz.horecaos.platform.kitchen.domain.ReleaseMode;
 import uz.horecaos.platform.kitchen.domain.RoutingLevel;
 import uz.horecaos.platform.kitchen.domain.StationRole;
 import uz.horecaos.platform.kitchen.domain.TicketItemStatus;
 import uz.horecaos.platform.kitchen.domain.TicketStatus;
 import uz.horecaos.platform.web.api.Quantities;
+import uz.horecaos.platform.web.authorization.TerminalAttributionContext;
 
 /**
  * Kitchen persistence (ADR 0041).
@@ -1023,6 +1025,16 @@ public class JdbcKitchenStore {
         params.put("trigger", trigger);
         params.put("actorType", actorType);
         params.put("actorId", actorId);
+        // ADR 0155: an action taken at a shared terminal by an unlocked person names both -- the person (actor_id) and
+        // the
+        // screen (via_device_id). Only an event whose actor IS the unlocked person is tagged; a scheduler's or another
+        // person's event written during the same request is not an action taken at that screen.
+        params.put(
+                "viaDeviceId",
+                TerminalAttributionContext.current()
+                        .filter(via -> via.personSubject().equals(actorId))
+                        .map(TerminalAttribution::deviceId)
+                        .orElse(null));
         params.put("reasonCode", reasonCode);
         params.put("correlationId", correlationId);
         params.put("occurredAt", utc(occurredAt));
@@ -1030,9 +1042,9 @@ public class JdbcKitchenStore {
         jdbc.sql("""
                 INSERT INTO kitchen.ticket_events (
                     id, tenant_id, ticket_id, ticket_item_id, from_status, to_status,
-                    trigger, actor_type, actor_id, reason_code, occurred_at, correlation_id)
+                    trigger, actor_type, actor_id, reason_code, occurred_at, correlation_id, via_device_id)
                 VALUES (:id, :tenantId, :ticketId, :itemId, :fromStatus, :toStatus,
-                    :trigger, :actorType, :actorId, :reasonCode, :occurredAt, :correlationId)
+                    :trigger, :actorType, :actorId, :reasonCode, :occurredAt, :correlationId, :viaDeviceId)
                 """).params(params).update();
     }
 

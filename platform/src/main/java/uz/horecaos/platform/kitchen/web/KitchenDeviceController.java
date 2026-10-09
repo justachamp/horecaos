@@ -105,10 +105,11 @@ public class KitchenDeviceController {
             @PathVariable UUID locationId,
             @PathVariable String userCode) {
 
-        return ResponseEntity.ok(devices.pendingEnrolment(userCode)
-                .map(pending -> new PendingEnrolmentResponse(
-                        pending.requestedClass().name(), pending.requestedLabel(), pending.expiresAt()))
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No pending enrolment")));
+        return ResponseEntity.ok(
+                devices.pendingEnrolment(userCode, currentActor.get().subject())
+                        .map(pending -> new PendingEnrolmentResponse(
+                                pending.requestedClass().name(), pending.requestedLabel(), pending.expiresAt()))
+                        .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No pending enrolment")));
     }
 
     @PostMapping("/enrolments/{userCode}/approve")

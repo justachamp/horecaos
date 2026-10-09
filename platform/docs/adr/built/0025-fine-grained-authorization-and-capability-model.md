@@ -42,7 +42,7 @@
 - Date decided: 2026-08-20
 - Deciders: Ayubkhon Abbosov (platform architecture), security
 - Depends on: ADR 0002, ADR 0003
-- Supersedes / Superseded by: — / ADR 0049 for non-staff relationship authorization; ADR 0079 for the device principal type
+- Supersedes / Superseded by: — / ADR 0049 for non-staff relationship authorization; ADR 0079 for the device principal type; extended (not superseded) by [ADR 0155](../partial/0155-terminals-and-staff-pins.md): check 3, «an active grant gives the principal the required capability», is asked of a second subject, the person unlocked at a device, for requests that carry a terminal session, and both must hold the capability at the scope
 - Open inputs: none
 - Closed inputs: Capability catalogue and role bundles approved 2026-08-20 (granular role set; tenant executes refunds under ADR 0027 maker-checker; tenant owner and admin manage integrations; no tenant-defined roles in v1)
 

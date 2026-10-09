@@ -1482,4 +1482,74 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
     '«{name}» chaqirib olindi: u endi bu brendga xizmat qila olmaydi.',
   'settings.storefrontApps.denied':
     'Vitrina ilovalarini faqat hisob egasi va administratorlar tanlay oladi.',
+
+  // ------------------------------------------------------------------- kiosk pairing and the KIOSK card (ADR 0162)
+  'settings.kiosk.lead':
+    'Shu filialdagi oʻzi-oʻzi xizmat kiosklari. Kiosk oʻz kodi va QR ni koʻrsatadi; siz kodni tasdiqlaysiz va u sotadigan kanalni tanlaysiz.',
+  'settings.kiosk.pair': 'Kioskni ulash',
+  'settings.kiosk.loading': 'Kiosklar yuklanmoqda',
+  'settings.kiosk.denied': 'Bu filial kiosklariga ruxsat yoʻq',
+  'settings.kiosk.error': 'Kiosklarni yuklab boʻlmadi. Birozdan keyin qayta urinib koʻring.',
+  'settings.kiosk.empty': 'Bu filialda hali kiosk ulanmagan.',
+  'settings.kiosk.column.name': 'Nomi',
+  'settings.kiosk.column.channel': 'Savdo kanali',
+  'settings.kiosk.column.lastSeen': 'Oxirgi aloqa',
+  'settings.kiosk.column.enrolled': 'Ulagan',
+  'settings.kiosk.channel.choose': 'Kanalni tanlang',
+  'settings.kiosk.channel.none': 'Kanal yoʻq',
+  'settings.kiosk.needsAttention':
+    'Bu kiosk sota olmaydi: kanali yoʻq yoki kanal arxivlangan yoxud bu yerda toʻxtatilgan.',
+  'settings.kiosk.lastSeen.never': 'Hali aloqaga chiqmagan',
+  'settings.kiosk.lastSeen.now': 'Hozirgina',
+  'settings.kiosk.lastSeen.minutes': '{minutes} daqiqa oldin',
+  'settings.kiosk.lastSeen.at': 'Oxirgi aloqa {time}',
+  'settings.kiosk.edit.start': 'Oʻzgartirish',
+  'settings.kiosk.edit.save': 'Saqlash',
+  'settings.kiosk.edit.cancel': 'Bekor qilish',
+  'settings.kiosk.edit.stale':
+    'Kioskni boshqa odam oldin oʻzgartirdi. Roʻyxat yangilandi, oʻzgarishni qayta kiriting.',
+  'settings.kiosk.edit.channelUnavailable':
+    'Bu kanal shu filialda sotadigan faol kiosk kanali emas.',
+  'settings.kiosk.revoke.start': 'Oʻchirish',
+  'settings.kiosk.revoke.confirm': 'Kioskni oʻchirish',
+  'settings.kiosk.revoke.cancel': 'Bekor qilish',
+  'settings.kiosk.revoke.reasonPlaceholder': 'Sababi',
+  'settings.kiosk.replace.start': 'Almashtirish',
+  'settings.kiosk.replace.hint':
+    'Kioskni almashtirish uchun uni oʻchiring va yangisini ulang. Kiosk kodni oʻz ekranida koʻrsatadi, konsol kod bermaydi.',
+  'settings.kiosk.revoked.title': 'Oʻchirilgan kiosklar',
+  'settings.kioskPairing.title': 'Kioskni ulash',
+  'settings.kioskPairing.lead':
+    'Bu sahifani kioskdagi QR orqali oching yoki u koʻrsatgan kodni kiriting. Quyida tasdiqlamaguningizcha hech narsa ulanmaydi.',
+  'settings.kioskPairing.noBranch':
+    'Avval qamrov panelida filialni tanlang: kiosk bitta filialga ulanadi.',
+  'settings.kioskPairing.branch': 'Filial: {branch}',
+  'settings.kioskPairing.code.label': 'Kiosk ekranidagi kod',
+  'settings.kioskPairing.code.look': 'Kodni tekshirish',
+  'settings.kioskPairing.notKiosk':
+    'Bu kod kioskka emas, oshxona ekraniga tegishli. Uni Oshxona, Qurilmalar boʻlimida ulang.',
+  'settings.kioskPairing.claim.title': 'Qurilma kiosk boʻlishni soʻramoqda',
+  'settings.kioskPairing.claim.expires': 'Kod {time} gacha amal qiladi.',
+  'settings.kioskPairing.claim.label': 'Qurilma oʻziga bergan nom',
+  'settings.kioskPairing.form.name': 'Roʻyxatdagi nomi',
+  'settings.kioskPairing.form.channel': 'Savdo kanali',
+  'settings.kioskPairing.form.noChannels':
+    'Bu filialda faol kiosk kanali yoʻq. Avval uni qoʻshing.',
+  'settings.kioskPairing.form.confirm': 'Mening oldimdagi kiosk ekranidagi kod: {code}.',
+  'settings.kioskPairing.form.submit': 'Kioskni ulash',
+  'settings.kioskPairing.done': '{name} endi {channel} kanali orqali sotadi.',
+  'settings.kioskPairing.doneHint':
+    'Kiosk bir daqiqa ichida sozlamalarni oʻqiydi va holatni koʻrsatadi. Unda hech narsa kiritish shart emas.',
+  'settings.kioskPairing.back': 'Savdo kanallariga qaytish',
+  'settings.kioskPairing.error.gone':
+    'Kod nomaʻlum, ishlatilgan yoki muddati tugagan. Kioskdan yangisini soʻrang.',
+  'settings.kioskPairing.error.tooMany':
+    'Juda koʻp kod tekshirildi. Bir daqiqa kuting va qayta urinib koʻring.',
+  'settings.kioskPairing.error.denied': 'Siz bu filialda kiosk ulashga ruxsatga ega emassiz.',
+  'settings.kioskPairing.error.failed':
+    'Kodni tekshirib boʻlmadi. Birozdan keyin qayta urinib koʻring.',
+  'settings.kioskPairing.error.classMismatch':
+    'Bu kod boshqa turdagi qurilmani soʻragan, shuning uchun uni kiosk sifatida ulab boʻlmaydi.',
+  'settings.kioskPairing.error.channelUnavailable':
+    'Bu kanal shu filialda sotadigan faol kiosk kanali emas.',
 };

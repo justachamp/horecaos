@@ -405,14 +405,19 @@ docker run --rm apache/kafka:4.3.1 /opt/kafka/bin/kafka-storage.sh random-uuid
 **Check:** `docker compose -f compose.production.yaml --env-file /etc/horecaos/production.env config >/dev/null`
 exits zero. It will name any variable you missed.
 
-Two variables have **no default and no example line**, deliberately, because a
-default for either is worse than a missing one. Add both by hand:
+Three variables have **no default and no example line**, deliberately, because a
+default for any of them is worse than a missing one. Add all three by hand:
 
 ```text
 # ADR 0040. The environment segment is what OpenBao's KV path is built from, so
 # this must name the environment you are deploying, not `local`. The application
 # refuses to start without it — see "the pepper" below.
 HORECAOS_HANDOVER_PEPPER_REF=horecaos:production:data_encryption:platform:handover-pepper
+
+# ADR 0155. The key staff PINs are digested under. Same reasoning, same refusal to
+# start without it, and the same OpenBao shelf: see "the terminal PIN pepper" below
+# and terminals-and-kiosks.md for the rotation.
+HORECAOS_TERMINAL_PIN_PEPPER_REF=horecaos:production:data_encryption:platform:terminal-pin-pepper
 
 # ADR 0034. The bucket outside this building. The nightly backup refuses to run
 # without it rather than quietly keeping a copy on the machine it is backing up,
@@ -511,6 +516,10 @@ bao kv put horecaos/production/data_encryption/platform/backup-passphrase \
 # ADR 0040's handover pepper, at the path HORECAOS_HANDOVER_PEPPER_REF names.
 bao kv put horecaos/production/data_encryption/platform/handover-pepper \
   value="$(head -c 32 /dev/urandom | base64)"
+
+# ADR 0155's terminal PIN pepper, at the path HORECAOS_TERMINAL_PIN_PEPPER_REF names.
+bao kv put horecaos/production/data_encryption/platform/terminal-pin-pepper \
+  value="$(head -c 32 /dev/urandom | base64)"
 ```
 
 **The first two have no second copy anywhere.** Losing the KEK makes every
@@ -524,6 +533,13 @@ instant, so it is an ADR 0028 rotation procedure rather than a restart. The
 application will not start without it: `HandoverCodeHasher` resolves it while the
 context is being built, and there is no fallback value by design — a pepper with
 a default is a pepper every deployment shares.
+
+**The terminal PIN pepper** (ADR 0155) keys the digest of every staff PIN and has the
+same shape: the application will not start without `HORECAOS_TERMINAL_PIN_PEPPER_REF`,
+and it must be a `DATA_ENCRYPTION` secret. Losing it makes every PIN unverifiable (each
+person sets a new one with a new activation code); rotating it is a deploy, not a
+restart, and keeps the old secret until the last PIN has moved. The steps are in
+[terminals-and-kiosks.md](terminals-and-kiosks.md).
 
 The remaining secrets come from Keycloak and the object store (RustFS, ADR
 0135) and can only be created after those services exist:

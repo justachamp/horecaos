@@ -148,6 +148,48 @@ public enum ErrorCode {
      */
     SECOND_APPROVER_REQUIRED(HttpStatus.UNPROCESSABLE_ENTITY, "Second approver required"),
 
+    /**
+     * ADR 0162: a pairing code asked to be one class of device and the approval named another, or came to an
+     * endpoint that approves a different family of device. Distinct from {@link #VALIDATION_FAILED}: the
+     * request is well formed, the code is real, and the answer names both classes so the approver can see
+     * which screen they are really in front of.
+     */
+    DEVICE_CLASS_MISMATCH(HttpStatus.UNPROCESSABLE_ENTITY, "Device class mismatch"),
+
+    /**
+     * ADR 0162: the channel a kiosk is paired or moved to is not a KIOSK channel of this tenant, or is not
+     * active at the branch. One answer for all of them, so a channel id of another tenant is not an oracle.
+     */
+    KIOSK_CHANNEL_NOT_AVAILABLE(HttpStatus.UNPROCESSABLE_ENTITY, "Kiosk channel not available"),
+
+    /**
+     * ADR 0155: a terminal refused an unlock, and says no more than that. A wrong PIN, an unknown member and an
+     * ineligible person answer alike; only a lock is distinguished ({@link #TERMINAL_PIN_LOCKED}), because the
+     * legitimate person needs to know to wait.
+     */
+    TERMINAL_UNLOCK_REFUSED(HttpStatus.FORBIDDEN, "Unlock refused"),
+
+    /** ADR 0155: that person is locked on this device (five wrong PINs) or their credential is locked (twelve in a day). */
+    TERMINAL_PIN_LOCKED(HttpStatus.LOCKED, "PIN locked"),
+
+    /** ADR 0155: the device is in {@code PERSON_REQUIRED} mode and the request carried no live terminal session. */
+    TERMINAL_UNLOCK_REQUIRED(HttpStatus.FORBIDDEN, "Terminal unlock required"),
+
+    /**
+     * ADR 0155: the terminal session is live and the device holds the capability, and the person it names does
+     * not hold it at this location (any more). The intersection of device and person is the authorization.
+     */
+    TERMINAL_PERSON_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "Person not authorized at this terminal"),
+
+    /**
+     * ADR 0155: a terminal session was presented that is not live -- idle-locked, past its maximum, superseded, ended
+     * or never issued to this device. The shell shows the lock; nothing was done.
+     */
+    TERMINAL_SESSION_ENDED(HttpStatus.FORBIDDEN, "Terminal session ended"),
+
+    /** ADR 0155: an activation code that is unknown, spent, expired or burned, or a PIN refused by the entry rules. */
+    TERMINAL_ACTIVATION_REFUSED(HttpStatus.UNPROCESSABLE_ENTITY, "Activation refused"),
+
     RATE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "Rate limit exceeded"),
 
     /**

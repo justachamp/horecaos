@@ -473,6 +473,74 @@ public final class ConfigurationKeys {
             .build();
 
     /**
+     * ADR 0162 (ADR 0082): whether a tenant sees the kiosk pairing and registry cards in Settings → Channel setup,
+     * and whether a paired kiosk's own record carries the channel it sells through. Off until turned on: no
+     * kiosk application exists, so the first tenant to see the cards is chosen by a pilot, not everyone at once.
+     * The enum value, the table and the role are inert without rows; rollback is revoking the device and
+     * switching this off.
+     */
+    public static final ConfigurationKey<Boolean> FEATURE_KIOSK_DEVICES = ConfigurationKey.of(
+                    "feature.kiosk_devices", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("tenancy")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Shows a tenant's managers the kiosk pairing and registry cards in the operations "
+                    + "app, and lets a paired kiosk read the channel it sells through.")
+            .build();
+
+    /**
+     * ADR 0155: the five terminal policy values. Tenant-scope values written only by the Policy card of
+     * Staff → Терминалы ({@code PUT /terminal-policy}, behind {@code terminal.manage} at TENANT scope), so none of them
+     * is tenant-visible: the generic configuration editor neither lists nor writes them, and the capability is the
+     * control. The per-device override of the auto-lock and the device's attribution mode live on the device record.
+     * The lockout numbers are deliberately absent: a security control a tenant can weaken is not one.
+     */
+    public static final ConfigurationKey<Integer> TERMINAL_PIN_LENGTH = ConfigurationKey.of(
+                    "terminal.pin.length", Integer.class)
+            .defaultValue(6)
+            .ownedBy("iam")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("The length of the next staff PIN set at a terminal: 4 or 6. An existing PIN keeps the "
+                    + "length it was set with.")
+            .build();
+
+    public static final ConfigurationKey<Integer> TERMINAL_AUTO_LOCK_SECONDS = ConfigurationKey.of(
+                    "terminal.auto_lock_seconds", Integer.class)
+            .defaultValue(300)
+            .ownedBy("iam")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Seconds without a touch or a mutating request after which a terminal locks (30 to 3600). "
+                    + "A device may override it.")
+            .build();
+
+    public static final ConfigurationKey<Integer> TERMINAL_SESSION_MAX_HOURS = ConfigurationKey.of(
+                    "terminal.session.max_hours", Integer.class)
+            .defaultValue(12)
+            .ownedBy("iam")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Hours after which a terminal session ends whatever its traffic (1 to 16).")
+            .build();
+
+    public static final ConfigurationKey<String> TERMINAL_ROSTER_DISPLAY = ConfigurationKey.of(
+                    "terminal.roster.display", String.class)
+            .defaultValue("NAME_INITIAL")
+            .ownedBy("iam")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("How a colleague reads on a shared terminal: NAME_INITIAL (first name and the initial of "
+                    + "the last) or REFERENCE (the non-personal S-0142).")
+            .build();
+
+    public static final ConfigurationKey<String> TERMINAL_ATTRIBUTION_DEFAULT = ConfigurationKey.of(
+                    "terminal.attribution.default", String.class)
+            .defaultValue("DEVICE_ONLY")
+            .ownedBy("iam")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("The attribution mode a newly approved terminal starts in: DEVICE_ONLY, PERSON_OPTIONAL "
+                    + "or PERSON_REQUIRED.")
+            .build();
+
+    /**
      * Wave P46 (gap map row {@code 10.3b}), settings.md §10.3 cards 2–5:
      * order policy's eleven registry entries. Declared identically in {@code
      * ordering.api.OrderingConfigurationKeys}, which is where every one of
@@ -916,6 +984,12 @@ public final class ConfigurationKeys {
             ASSISTANT_DISCLOSURE_TEXT_RU,
             ASSISTANT_DISCLOSURE_TEXT_UZ,
             FEATURE_SUPPORT_VISITS,
+            FEATURE_KIOSK_DEVICES,
+            TERMINAL_PIN_LENGTH,
+            TERMINAL_AUTO_LOCK_SECONDS,
+            TERMINAL_SESSION_MAX_HOURS,
+            TERMINAL_ROSTER_DISPLAY,
+            TERMINAL_ATTRIBUTION_DEFAULT,
             ORDERING_BUSINESS_DAY_START_HOUR,
             ORDERING_AVERAGE_ORDER_MINUTES,
             ORDERING_MAXIMUM_ORDER_MINUTES,

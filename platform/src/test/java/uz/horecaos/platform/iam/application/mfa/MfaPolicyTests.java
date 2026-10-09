@@ -146,6 +146,8 @@ class MfaPolicyTests {
         for (PlatformRole machine : new PlatformRole[] {
             PlatformRole.KITCHEN_DEVICE,
             PlatformRole.PRINT_AGENT,
+            PlatformRole.KITCHEN_VDU_DEVICE,
+            PlatformRole.KIOSK_DEVICE,
             PlatformRole.SUPPORT_SESSION_VIEW,
             PlatformRole.SUPPORT_SESSION_ASSIST
         }) {

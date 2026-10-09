@@ -16,6 +16,8 @@ import org.springframework.stereotype.Component;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.NonStaffPrincipal;
+import uz.horecaos.platform.iam.api.terminals.TerminalAttribution;
+import uz.horecaos.platform.web.authorization.TerminalAttributionContext;
 
 @Component
 public class JwtCurrentActor implements CurrentActor {
@@ -69,6 +71,11 @@ public class JwtCurrentActor implements CurrentActor {
                 subject,
                 clientRoles(jwt.getClaim("resource_access")),
                 organizationRoles(jwt.getClaim(ORGANIZATION_CLAIM)));
+    }
+
+    @Override
+    public java.util.Optional<TerminalAttribution> terminalAttribution() {
+        return TerminalAttributionContext.current();
     }
 
     private Map<String, Set<String>> organizationRoles(@Nullable Object claim) {

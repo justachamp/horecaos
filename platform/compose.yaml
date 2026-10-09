@@ -182,7 +182,8 @@ services:
         # secret eagerly at bean construction, and only data_encryption/kek
         # and the two identity_admin values above were ever seeded here. The
         # values match application.yml's own "environment" provider fallbacks
-        # (HORECAOS_MEDIA_ACCESS_KEY / _SECRET_KEY and HORECAOS_HANDOVER_PEPPER),
+        # (HORECAOS_MEDIA_ACCESS_KEY / _SECRET_KEY, HORECAOS_HANDOVER_PEPPER and
+        # HORECAOS_TERMINAL_PIN_PEPPER, ADR 0155),
         # so behaviour is identical whichever provider a checkout ends up on.
         bao kv put horecaos/local/object_storage/platform/media-access-key \
           value=horecaos
@@ -190,6 +191,8 @@ services:
           value=horecaos-local-secret
         bao kv put horecaos/local/data_encryption/platform/handover-pepper \
           value=horecaos-local-handover-pepper-not-for-use
+        bao kv put horecaos/local/data_encryption/platform/terminal-pin-pepper \
+          value=horecaos-local-terminal-pin-pepper-not-for-use
         echo "seeded horecaos local secrets"
 
   object-store:

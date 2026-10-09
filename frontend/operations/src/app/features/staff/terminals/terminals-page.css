@@ -1,0 +1,173 @@
+.terminals {
+  padding: 16px 20px;
+  max-width: 980px;
+}
+
+.terminals__state {
+  padding: 32px;
+  text-align: center;
+  color: var(--q-ink-subtle);
+}
+
+.terminals__hint {
+  color: var(--q-ink-subtle);
+  margin: 0 0 12px;
+}
+
+.card {
+  margin-top: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.card h2 {
+  margin: 0 0 8px;
+}
+
+.terminals__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.terminals__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.terminals__field input[type='number'],
+.terminals__field input[type='text'],
+.terminals__field select,
+.terminals__table input,
+.terminals__table select {
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font: inherit;
+  min-width: 120px;
+}
+
+.terminals__radio {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.terminals__source {
+  color: var(--q-ink-subtle);
+}
+
+.terminals__ok {
+  color: var(--q-success-text, var(--q-ink));
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.terminals__error {
+  color: var(--q-error-text);
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.terminals__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.terminals__table th {
+  text-align: start;
+  padding: 8px 12px;
+  font-size: var(--q-type-caption);
+  color: var(--q-ink-subtle);
+  background: var(--q-surface-1);
+}
+
+.terminals__table td {
+  padding: 8px 12px;
+  border-top: 1px solid var(--q-hairline);
+  vertical-align: top;
+}
+
+.terminals__sub td {
+  background: var(--q-surface-1);
+}
+
+.terminals__inline {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.terminals__revoke {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.terminals__history {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.terminals__history li {
+  display: flex;
+  gap: 16px;
+}
+
+/* ADR 0155: a device that must be unlocked and has gone quiet is the only urgent row on the screen. */
+.terminals__unseen {
+  color: var(--q-error-text);
+  font-weight: 600;
+}
+
+.primary {
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+}
+
+.primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.secondary {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-surface-1);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.destructive {
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-error);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+}
+
+.destructive:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

@@ -1,0 +1,98 @@
+<section class="section" data-testid="my-profile-pin">
+  <h2 class="q-emphasis">{{ 'staff.myPin.title' | t }}</h2>
+  <p class="q-caption muted">{{ 'staff.myPin.lead' | t }}</p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">…</p>
+    }
+    @case ('absent') {
+      <p class="q-caption muted" data-testid="my-pin-absent">{{ 'staff.myPin.absent' | t }}</p>
+    }
+    @case ('error') {
+      <p class="q-body-sm error" role="alert" data-testid="my-pin-error">
+        {{ 'staff.myPin.failed' | t }}
+      </p>
+    }
+    @default {
+      @if (pin(); as current) {
+        <p class="q-body-sm" data-testid="my-pin-status">
+          @switch (current.status) {
+            @case ('ACTIVE') {
+              {{
+                'staff.myPin.status.ACTIVE' | t: { date: current.setAt ? when(current.setAt) : '' }
+              }}
+            }
+            @case ('LOCKED') {
+              {{ 'staff.myPin.status.LOCKED' | t }}
+            }
+            @default {
+              {{ 'staff.myPin.status.NOT_SET' | t }}
+            }
+          }
+        </p>
+
+        @if (current.pending; as waiting) {
+          <p class="q-body-sm" data-testid="my-pin-pending">
+            @if (waiting.issuedBy; as by) {
+              {{ 'staff.myPin.pendingManager' | t: { by: by, time: until(waiting.expiresAt) } }}
+            } @else {
+              {{ 'staff.myPin.pendingSelf' | t: { time: until(waiting.expiresAt) } }}
+            }
+          </p>
+        }
+
+        @if (issued(); as code) {
+          <div class="code" role="status" data-testid="my-pin-code-box">
+            <p class="code__value q-mono" data-testid="my-pin-code">{{ shownCode(code.code) }}</p>
+            <p class="q-body-sm">
+              {{ 'staff.myPin.codeHint' | t: { time: until(code.expiresAt) } }}
+            </p>
+            <button
+              type="button"
+              class="text-button"
+              (click)="dismissCode()"
+              data-testid="my-pin-code-done"
+            >
+              {{ 'staff.pin.codeDone' | t }}
+            </button>
+          </div>
+        } @else if (current.status !== 'LOCKED') {
+          <button
+            type="button"
+            class="text-button"
+            (click)="getCode()"
+            [disabled]="busy()"
+            data-testid="my-pin-get-code"
+          >
+            {{ 'staff.myPin.get' | t }}
+          </button>
+        }
+        @if (error(); as message) {
+          <p class="q-body-sm error" role="alert">{{ message }}</p>
+        }
+        @if (current.status === 'ACTIVE') {
+          <p class="q-caption muted">{{ 'staff.myPin.changeHint' | t }}</p>
+        }
+
+        <h3 class="q-emphasis unlocks__title">{{ 'staff.myPin.unlocks' | t }}</h3>
+        <p class="q-caption muted">{{ 'staff.myPin.unlocksHint' | t }}</p>
+        @if (current.unlocks.length === 0) {
+          <p class="q-body-sm" data-testid="my-pin-no-unlocks">
+            {{ 'staff.myPin.unlocksNone' | t }}
+          </p>
+        } @else {
+          <ul class="unlocks" data-testid="my-pin-unlocks">
+            @for (unlock of current.unlocks; track unlock.sessionId) {
+              <li class="q-body-sm unlocks__row">
+                <span>{{ unlock.deviceName }}</span>
+                <span class="q-tnum">{{ when(unlock.openedAt) }}</span>
+                <span class="muted">{{ endedLabel(unlock.endedReason) }}</span>
+              </li>
+            }
+          </ul>
+        }
+      }
+    }
+  }
+</section>

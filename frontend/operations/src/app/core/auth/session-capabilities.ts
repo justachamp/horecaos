@@ -51,7 +51,10 @@ export type Capability =
   | 'STAFF_EMERGENCY_CONTACT_READ'
   | 'TENANT_CONFIGURATION_WRITE'
   | 'IAM_STAFF_MFA_READ'
-  | 'IAM_STAFF_MFA_RESET';
+  | 'IAM_STAFF_MFA_RESET'
+  | 'TERMINAL_READ'
+  | 'TERMINAL_MANAGE'
+  | 'KIOSK_DEVICE_MANAGE';
 
 /**
  * Whether the signed-in operator holds a given capability *anywhere* — the

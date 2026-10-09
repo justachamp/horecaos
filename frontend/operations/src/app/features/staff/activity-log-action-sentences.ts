@@ -1691,6 +1691,76 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Компания сотрудник приглашение отправлено повторно',
       'uz-Latn': 'Kompaniya xodim taklifnoma qayta yuborildi',
     },
+    'kiosk.device.enrolled': {
+      en: 'Kiosk paired',
+      ru: 'Киоск подключён',
+      'uz-Latn': 'Kiosk ulandi',
+    },
+    'kiosk.device.rebound': {
+      en: 'Kiosk moved to another sales channel',
+      ru: 'Киоск переведён на другой канал продаж',
+      'uz-Latn': 'Kiosk boshqa savdo kanaliga oʻtkazildi',
+    },
+    'kiosk.device.revoked': {
+      en: 'Kiosk revoked',
+      ru: 'Киоск отключён',
+      'uz-Latn': 'Kiosk oʻchirildi',
+    },
+    'terminal.device.configured': {
+      en: 'Terminal name or sign-in mode changed',
+      ru: 'Изменено название терминала или способ входа',
+      'uz-Latn': 'Terminal nomi yoki kirish usuli oʻzgartirildi',
+    },
+    'terminal.device.revoked': {
+      en: 'Terminal revoked',
+      ru: 'Терминал отключён',
+      'uz-Latn': 'Terminal oʻchirildi',
+    },
+    'terminal.policy.changed': {
+      en: 'Terminal PIN policy changed',
+      ru: 'Изменены настройки PIN для терминалов',
+      'uz-Latn': 'Terminallar uchun PIN sozlamalari oʻzgartirildi',
+    },
+    'terminal.pin.activation_issued': {
+      en: 'PIN activation code issued',
+      ru: 'Выдан код активации PIN',
+      'uz-Latn': 'PIN faollashtirish kodi berildi',
+    },
+    'terminal.pin.set': {
+      en: 'PIN set with an activation code',
+      ru: 'PIN задан по коду активации',
+      'uz-Latn': 'PIN faollashtirish kodi bilan belgilandi',
+    },
+    'terminal.pin.changed': {
+      en: 'PIN changed at a terminal',
+      ru: 'PIN сменён на терминале',
+      'uz-Latn': 'PIN terminalda almashtirildi',
+    },
+    'terminal.pin.reset': {
+      en: 'PIN reset',
+      ru: 'PIN сброшен',
+      'uz-Latn': 'PIN tiklandi',
+    },
+    'terminal.pin.locked': {
+      en: 'PIN locked after wrong tries',
+      ru: 'PIN заблокирован после неверных попыток',
+      'uz-Latn': 'PIN notoʻgʻri urinishlardan keyin bloklandi',
+    },
+    'terminal.session.opened': {
+      en: 'Terminal unlocked by a person',
+      ru: 'Терминал разблокирован человеком',
+      'uz-Latn': 'Terminalni odam ochdi',
+    },
+    'terminal.session.ended': {
+      en: 'Terminal session ended',
+      ru: 'Сеанс на терминале завершён',
+      'uz-Latn': 'Terminaldagi seans tugadi',
+    },
+    'terminal.unlock.refused': {
+      en: 'Terminal unlock refused',
+      ru: 'Разблокировка терминала отклонена',
+      'uz-Latn': 'Terminalni ochish rad etildi',
+    },
     'voice.presence.changed': {
       en: 'Voice presence changed',
       ru: 'Голос присутствие изменено',

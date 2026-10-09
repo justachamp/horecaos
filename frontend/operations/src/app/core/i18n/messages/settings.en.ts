@@ -1468,4 +1468,72 @@ export const settingsEn = {
   'settings.storefrontApps.revoked': '{name} is revoked; it can no longer serve this brand.',
   'settings.storefrontApps.denied':
     "Only the account's owner and administrators can choose storefront apps.",
+
+  // ------------------------------------------------------------------- kiosk pairing and the KIOSK card (ADR 0162)
+  'settings.kiosk.lead':
+    'Self-service kiosks at this branch. A kiosk shows its own code and a QR; you confirm the code and choose the channel it sells through.',
+  'settings.kiosk.pair': 'Pair a kiosk',
+  'settings.kiosk.loading': 'Loading the kiosks',
+  'settings.kiosk.denied': 'No access to the kiosks of this branch',
+  'settings.kiosk.error': 'Could not load the kiosks. Try again in a moment.',
+  'settings.kiosk.empty': 'No kiosk is paired at this branch yet.',
+  'settings.kiosk.column.name': 'Name',
+  'settings.kiosk.column.channel': 'Sales channel',
+  'settings.kiosk.column.lastSeen': 'Last seen',
+  'settings.kiosk.column.enrolled': 'Paired by',
+  'settings.kiosk.channel.choose': 'Choose a channel',
+  'settings.kiosk.channel.none': 'No channel',
+  'settings.kiosk.needsAttention':
+    'This kiosk cannot sell: it has no channel, or its channel was archived or withdrawn here.',
+  'settings.kiosk.lastSeen.never': 'Never seen',
+  'settings.kiosk.lastSeen.now': 'Just now',
+  'settings.kiosk.lastSeen.minutes': '{minutes} min ago',
+  'settings.kiosk.lastSeen.at': 'Last seen {time}',
+  'settings.kiosk.edit.start': 'Edit',
+  'settings.kiosk.edit.save': 'Save',
+  'settings.kiosk.edit.cancel': 'Cancel',
+  'settings.kiosk.edit.stale':
+    'Someone else changed this kiosk first. The list now shows what is true; make your change again.',
+  'settings.kiosk.edit.channelUnavailable':
+    'That channel is not an active kiosk channel selling at this branch.',
+  'settings.kiosk.revoke.start': 'Revoke',
+  'settings.kiosk.revoke.confirm': 'Revoke the kiosk',
+  'settings.kiosk.revoke.cancel': 'Cancel',
+  'settings.kiosk.revoke.reasonPlaceholder': 'Why',
+  'settings.kiosk.replace.start': 'Replace',
+  'settings.kiosk.replace.hint':
+    'To replace a kiosk, revoke it and then pair the new one. A kiosk shows its own code on its screen, so the console issues none.',
+  'settings.kiosk.revoked.title': 'Revoked kiosks',
+  'settings.kioskPairing.title': 'Pair a kiosk',
+  'settings.kioskPairing.lead':
+    'Open this page from the QR on the kiosk, or type the code it shows. Nothing is paired until you confirm below.',
+  'settings.kioskPairing.noBranch':
+    'Choose a branch in the scope bar first: a kiosk is paired to one branch.',
+  'settings.kioskPairing.branch': 'Branch: {branch}',
+  'settings.kioskPairing.code.label': 'Code on the kiosk screen',
+  'settings.kioskPairing.code.look': 'Check the code',
+  'settings.kioskPairing.notKiosk':
+    'This code belongs to a kitchen display, not a kiosk. Approve it in Kitchen, Devices.',
+  'settings.kioskPairing.claim.title': 'The device asks to be a kiosk',
+  'settings.kioskPairing.claim.expires': 'The code works until {time}.',
+  'settings.kioskPairing.claim.label': 'Name the device gave itself',
+  'settings.kioskPairing.form.name': 'Name in the list',
+  'settings.kioskPairing.form.channel': 'Sales channel',
+  'settings.kioskPairing.form.noChannels':
+    'This branch has no active kiosk channel. Add one first.',
+  'settings.kioskPairing.form.confirm': 'The code on the kiosk screen in front of me is {code}.',
+  'settings.kioskPairing.form.submit': 'Pair the kiosk',
+  'settings.kioskPairing.done': '{name} now sells through {channel}.',
+  'settings.kioskPairing.doneHint':
+    'The kiosk reads its configuration and shows its status within a minute. Nothing needs to be typed on it.',
+  'settings.kioskPairing.back': 'Back to sales channels',
+  'settings.kioskPairing.error.gone':
+    'This code is unknown, already used or expired. Ask the kiosk for a new one.',
+  'settings.kioskPairing.error.tooMany': 'Too many codes were tried. Wait a minute and try again.',
+  'settings.kioskPairing.error.denied': 'You may not pair kiosks at this branch.',
+  'settings.kioskPairing.error.failed': 'Could not check the code. Try again in a moment.',
+  'settings.kioskPairing.error.classMismatch':
+    'This code asked to be a different kind of device, so it cannot be paired as a kiosk.',
+  'settings.kioskPairing.error.channelUnavailable':
+    'That channel is not an active kiosk channel selling at this branch.',
 } as const;

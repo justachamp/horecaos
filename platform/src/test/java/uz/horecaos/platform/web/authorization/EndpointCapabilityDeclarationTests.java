@@ -269,6 +269,7 @@ class EndpointCapabilityDeclarationTests {
                     || isDeviceEnrolmentBootstrapEndpoint(handler)
                     || isPreAccountPickupLocationSearchEndpoint(handler)
                     || isDeliveryFeePreviewEndpoint(handler)
+                    || isTerminalSecretEndpoint(handler)
                     || isDispatchRuleSimulationEndpoint(handler)
                     || isPromotionSimulationEndpoint(handler)
                     || isGeocodeLookupEndpoint(handler)
@@ -615,6 +616,59 @@ class EndpointCapabilityDeclarationTests {
         String path = pathOf(handler);
         return path.equals("/api/v1/control-plane/device-enrolments")
                 || path.equals("/api/v1/control-plane/device-enrolments/{deviceCode}/poll");
+    }
+
+    /**
+     * ADR 0155: the endpoints of the terminal-session family and the two activation-code issuers, whose responses carry a
+     * secret -- a session token, an activation code -- or whose only effect is a timestamp moved forward.
+     *
+     * <p>Each declares an authorization strategy (the device's {@code terminal.unlock}, a person's {@code
+     * staff.self.manage}, a manager's {@code staff.profile.manage}), so the test above still holds them to it; what they are
+     * exempt from is {@code Idempotency-Key}, for the reason the sign-in endpoints are: a stored response would put a bearer
+     * or a code into {@code platform.idempotency_records} for the retention day, and the request body of an unlock holds a
+     * PIN, which a stored hash of the body would turn into a six-digit guessing table. {@code touch} and {@code locks} carry no
+     * secret and are idempotent by nature -- a repeat is identical.
+     *
+     * <p>Matched on exact paths, never a prefix: the next endpoint added under {@code /terminal-session/} is not quietly
+     * exempted along with these five.
+     */
+    private static boolean isTerminalSecretEndpoint(Method handler) {
+        String path = pathOf(handler);
+        String session = "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/terminal-session";
+        String staff = "/api/v1/operations/tenants/{tenantId}";
+        return path.equals(session + "/unlocks")
+                || path.equals(session + "/pin-activations")
+                || path.equals(session + "/pin-changes")
+                || path.equals(session + "/touch")
+                || path.equals(session + "/locks")
+                || path.equals(staff + "/staff/me/pin-activations")
+                || path.equals(staff + "/staff/members/{memberId}/pin-activations")
+                || path.equals(
+                        staff + "/brands/{brandId}/locations/{locationId}/staff/members/{memberId}/pin-activations");
+    }
+
+    @Test
+    void theTerminalSessionExemptionsAreExactAndEveryOtherTerminalSessionEndpointIsHeldToReplayProtection() {
+        // The exemption above is by exact path; this proves its edge: a handler under /terminal-session/ that is not
+        // one of the five is not exempt, and the five are the only ones that exist today.
+        List<String> exempt = new ArrayList<>();
+        List<String> underSession = new ArrayList<>();
+        for (Method handler : mutatingHandlers()) {
+            String path = pathOf(handler);
+            if (path.contains("/terminal-session/")) {
+                underSession.add(path);
+                if (isTerminalSecretEndpoint(handler)) {
+                    exempt.add(path);
+                }
+            }
+        }
+
+        assertThat(underSession).as("a scan that finds none would pass forever").hasSizeGreaterThanOrEqualTo(5);
+        assertThat(exempt).containsExactlyInAnyOrderElementsOf(underSession);
+        assertThat(underSession)
+                .as("exactly the five endpoints the record names, none of them added quietly")
+                .allSatisfy(path -> assertThat(path.substring(path.lastIndexOf('/')))
+                        .isIn("/unlocks", "/pin-activations", "/pin-changes", "/touch", "/locks"));
     }
 
     /**

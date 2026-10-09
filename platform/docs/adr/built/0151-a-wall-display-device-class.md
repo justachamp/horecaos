@@ -29,7 +29,7 @@
   decides
 - Depends on: ADR 0025, ADR 0027, ADR 0028, ADR 0030, ADR 0031, ADR 0041, ADR 0045,
   ADR 0062, ADR 0079, ADR 0119
-- Supersedes / Superseded by: — (ADR 0079 anticipated this: a VDU "would reuse this
+- Supersedes / Superseded by: Superseded by [ADR 0162](../partial/0162-kiosk-device-pairing.md) for Decision 3's placement of the class-to-role map in `KitchenDeviceService` (the map moves to `DeviceEnrolmentService`; the narrowing rule is unchanged). Otherwise — (ADR 0079 anticipated this: a VDU "would reuse this
   primitive with its own role bundle, not reopen this one", "it adds an enum value
   and a role, it does not change this decision")
 - Open inputs: each is closed on its proposed default if the owner accepts the

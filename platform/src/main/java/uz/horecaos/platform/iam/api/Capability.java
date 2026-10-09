@@ -2175,6 +2175,42 @@ public enum Capability {
     STAFF_SELF_MANAGE("staff.self.manage", "staff", "self.manage"),
 
     /**
+     * ADR 0162: reading the calling kiosk's own configuration ({@code GET .../kiosk/configuration}) and
+     * nothing else. Machine-only: held by {@link PlatformRole#KIOSK_DEVICE} and no staff bundle, so a
+     * customer-facing device is granted nothing it could order, read a customer or take money with.
+     */
+    KIOSK_DEVICE_READ("kiosk.device.read", "kiosk", "device.read"),
+
+    /**
+     * ADR 0162: pairing a kiosk, listing a branch's kiosks, renaming or re-binding one and revoking it.
+     * Not {@link #KITCHEN_STATION_MANAGE} (the person who may attach a customer-facing device that will
+     * one day take orders and money to a branch is not the head chef) and not the tenant-wide {@link
+     * #CHANNEL_MANAGE}. Held at {@code LOCATION} scope by the branch manager and above, by no machine.
+     */
+    KIOSK_DEVICE_MANAGE("kiosk.device.manage", "kiosk", "device.manage"),
+
+    /**
+     * ADR 0155: the class-neutral registry of a location's device principals and the tenant's terminal
+     * policy -- the list, the per-device record, who is unlocked now, the session history.
+     */
+    TERMINAL_READ("terminal.read", "terminal", "read"),
+
+    /**
+     * ADR 0155: renaming a device, setting its attribution mode and auto-lock, revoking it from the
+     * registry, and saving the tenant's terminal policy. The policy is tenant-scoped and is reached
+     * only by a grant held at {@code TENANT} scope; a location manager's grant does not cover it.
+     */
+    TERMINAL_MANAGE("terminal.manage", "terminal", "manage"),
+
+    /**
+     * ADR 0155: a device asking the platform to open, touch, end or change the PIN of a terminal session
+     * for a person -- the roster, the unlock, the activation, the keypad's touch. Machine-only: held by
+     * {@link PlatformRole#KITCHEN_DEVICE} and by no person's bundle. It opens no board data; the
+     * session it opens confers nothing the device and the person do not both hold already.
+     */
+    TERMINAL_UNLOCK("terminal.unlock", "terminal", "unlock"),
+
+    /**
      * Global control-plane administration. Issued by Keycloak as described in
      * ADR 0003 and never granted through tenant administration.
      */

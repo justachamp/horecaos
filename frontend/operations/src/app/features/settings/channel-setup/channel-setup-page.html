@@ -352,10 +352,9 @@
 
     <!-- (e) Kiosk pairing -->
     @if (ch.systemType === 'KIOSK') {
-      <section class="facet-card">
-        <h2 class="q-subhead">{{ 'settings.channelSetup.kiosk.title' | t }}</h2>
-        <p class="q-body-sm status locked">{{ 'settings.channelSetup.kiosk.locked' | t }}</p>
-      </section>
+      @if (kioskScope(); as scope) {
+        <q-kiosk-card [scope]="scope" />
+      }
     }
 
     @if (

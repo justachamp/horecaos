@@ -12,6 +12,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,19 +35,33 @@ import uz.horecaos.platform.iam.api.devices.DevicePrincipalClass;
  *
  * <p>What authorizes the flow is never this controller: the
  * human-in-the-loop half of enrolment — approving a pending code — lives in
- * {@code kitchen.web.KitchenDeviceController}, behind {@code
- * kitchen.station.manage}, because approving a device is a decision about one
- * branch's kitchen, and {@code iam} does not know what a kitchen is.
+ * the module that owns the class: {@code kitchen.web.KitchenDeviceController}, behind {@code
+ * kitchen.station.manage}, for the two kitchen displays, and the tenancy module's kiosk
+ * controller, behind {@code kiosk.device.manage}, for a kiosk (ADR 0162). Approving a device is a
+ * decision about what that device will be allowed to do at one branch.
  */
 @RestController
 @RequestMapping("/api/v1/control-plane/device-enrolments")
 @Tag(name = "Device enrolment", description = "ADR 0079: how an unenrolled device gets a Keycloak identity")
 public class DeviceEnrolmentController {
 
-    private final DeviceEnrolmentPort enrolment;
+    /**
+     * The route of the console's approval page for a kiosk (ADR 0162), under the operations origin. The
+     * one place a pairing link is built, so the link is the configured origin plus this path plus the
+     * pending user code and nothing a device or a proxy header supplied.
+     */
+    static final String KIOSK_APPROVAL_PATH = "/settings/channel-setup/kiosk-pairing";
 
-    public DeviceEnrolmentController(DeviceEnrolmentPort enrolment) {
+    private final DeviceEnrolmentPort enrolment;
+    private final String operationsOrigin;
+
+    public DeviceEnrolmentController(
+            DeviceEnrolmentPort enrolment,
+            @Value("${horecaos.frontends.operations-origin:http://localhost:4200}") String operationsOrigin) {
         this.enrolment = enrolment;
+        this.operationsOrigin = operationsOrigin.endsWith("/")
+                ? operationsOrigin.substring(0, operationsOrigin.length() - 1)
+                : operationsOrigin;
     }
 
     @PostMapping
@@ -59,8 +74,14 @@ public class DeviceEnrolmentController {
 
         var result = enrolment.beginEnrolment(
                 new DeviceEnrolmentPort.BeginEnrolment(body.deviceClass(), body.label()), callerKey(request));
+        // ADR 0162: for a kiosk only, a link the manager's own phone camera can open. The kitchen display's
+        // code stays typed (ADR 0079/0119) until a record says otherwise, and the approval page refuses
+        // any class but KIOSK, so no link is offered for the others. The device code is never in it.
+        String approvalUrl = body.deviceClass() == DevicePrincipalClass.KIOSK
+                ? operationsOrigin + KIOSK_APPROVAL_PATH + "?code=" + result.userCode()
+                : null;
         return ResponseEntity.ok(new BeginResponse(
-                result.deviceCode(), result.userCode(), result.expiresAt(), result.pollIntervalSeconds()));
+                result.deviceCode(), result.userCode(), result.expiresAt(), result.pollIntervalSeconds(), approvalUrl));
     }
 
     @PostMapping("/{deviceCode}/poll")
@@ -107,7 +128,17 @@ public class DeviceEnrolmentController {
             @NotNull DevicePrincipalClass deviceClass,
             @Nullable @Size(max = 120) String label) {}
 
-    record BeginResponse(String deviceCode, String userCode, Instant expiresAt, int pollIntervalSeconds) {}
+    /**
+     * @param approvalUrl the console page a manager's phone opens from the QR (ADR 0162); present for a kiosk
+     *                    request only, built from the configured operations origin, and never containing the
+     *                    device code
+     */
+    record BeginResponse(
+            String deviceCode,
+            String userCode,
+            Instant expiresAt,
+            int pollIntervalSeconds,
+            @Nullable String approvalUrl) {}
 
     record CredentialResponse(String tokenEndpoint, String clientId, String clientSecret) {}
 

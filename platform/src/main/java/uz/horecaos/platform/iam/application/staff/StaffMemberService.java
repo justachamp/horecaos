@@ -313,6 +313,27 @@ public class StaffMemberService implements StaffMemberRegistry {
         return fullView(row, held);
     }
 
+    /** A member a manager has been asked to act on, as far as acting on them needs to know. */
+    public record Changeable(UUID memberId, String subject, String displayReference) {}
+
+    /**
+     * Whether a manager's reach lets them change this member at all -- the same two refusals {@link #updateByManager} makes
+     * ("no such member" for anyone the reach does not include, and the missing capability for a person who also works
+     * outside a branch) -- so every act on another person's record answers the way the profile edit does. Changes nothing.
+     */
+    @Transactional(readOnly = true)
+    public Changeable requireChangeable(UUID tenantId, Reach reach, UUID memberId) {
+        MemberRow row = store.find(tenantId, memberId).orElseThrow(StaffMemberService::noSuchMember);
+        List<GrantPlace> held = placesOf(tenantId, row.principalSubject());
+        if (!reach.matches(held)) {
+            throw noSuchMember();
+        }
+        if (!reach.mayChange(held)) {
+            throw ApiException.insufficientCapability(Capability.STAFF_PROFILE_MANAGE.code(), "TENANT");
+        }
+        return new Changeable(row.id(), row.principalSubject(), row.displayReference());
+    }
+
     /** The caller's own record. */
     @Transactional(readOnly = true)
     public MemberView self(UUID tenantId, String subject) {
