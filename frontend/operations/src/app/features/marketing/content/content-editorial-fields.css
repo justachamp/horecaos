@@ -1,0 +1,74 @@
+.editorial-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.editorial-fields__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.editorial-fields__input {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: inherit;
+}
+
+.editorial-fields__input--area {
+  height: auto;
+  padding: 6px 8px;
+  resize: vertical;
+}
+
+.editorial-fields__vacancy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.editorial-fields__body,
+.editorial-fields__album {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.editorial-fields__image {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.editorial-fields__hint {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+.editorial-fields__warn {
+  margin: 0;
+  color: var(--q-warning-text, var(--q-ink-muted));
+}
+
+.editorial-fields__remove {
+  align-self: flex-start;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-error-text);
+  cursor: pointer;
+}

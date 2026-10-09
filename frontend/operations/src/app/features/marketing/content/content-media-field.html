@@ -1,0 +1,55 @@
+<div class="media-field" data-testid="content-media-field">
+  @if (label(); as text) {
+    <span class="q-caption media-field__label">{{ text }}</span>
+  }
+  @if (assetId(); as id) {
+    <div class="media-field__current" data-testid="content-media-current">
+      @if (thumbnail(); as url) {
+        <img class="media-field__thumb" [src]="url" alt="" />
+      } @else {
+        <span class="media-field__missing q-caption">{{
+          'marketing.content.media.noPreview' | t
+        }}</span>
+      }
+      @if (isVideo()) {
+        <span class="media-field__badge q-caption">{{ 'marketing.content.media.video' | t }}</span>
+      }
+      <button
+        type="button"
+        class="media-field__remove"
+        [disabled]="disabled() || busy()"
+        (click)="remove()"
+        data-testid="content-media-remove"
+      >
+        {{ 'marketing.content.media.remove' | t }}
+      </button>
+    </div>
+  } @else {
+    <p class="q-caption media-field__hint">
+      {{ 'marketing.content.media.none' | t }}
+      @if (minWidthPx() > 0) {
+        {{ 'marketing.content.media.shapeHint' | t: { ratio: ratio(), width: minWidthPx() } }}
+      }
+    </p>
+  }
+  @if (!disabled()) {
+    <q-media-uploader
+      [aspectRatios]="ratios()"
+      [exportEdgePx]="exportEdgePx()"
+      [allowVideo]="allowVideo()"
+      [accept]="accept()"
+      [uploading]="busy()"
+      (cropped)="onCropped($event)"
+      (videoReady)="onVideo($event)"
+      (rejected)="onRejected($event)"
+    />
+  }
+  @if (busy()) {
+    <p class="q-caption" role="status">{{ 'marketing.content.media.processing' | t }}</p>
+  }
+  @if (error(); as message) {
+    <p class="q-caption media-field__error" role="alert" data-testid="content-media-error">
+      {{ message }}
+    </p>
+  }
+</div>

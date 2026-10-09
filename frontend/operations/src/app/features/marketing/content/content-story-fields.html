@@ -1,0 +1,101 @@
+<div class="story-fields" data-testid="content-story-fields">
+  <label class="story-fields__field">
+    <span class="q-caption">{{ 'marketing.content.story.title' | t }}</span>
+    <input
+      type="text"
+      class="story-fields__input"
+      maxlength="40"
+      [value]="title()"
+      [disabled]="disabled()"
+      (input)="setTitle($any($event.target).value)"
+      data-testid="content-title"
+    />
+  </label>
+
+  <q-content-media-field
+    [label]="'marketing.content.story.avatar' | t"
+    [assetId]="avatar()"
+    ratio="1:1"
+    [exportEdgePx]="512"
+    [disabled]="disabled()"
+    (changed)="setAvatar($event)"
+  />
+
+  <div class="story-fields__slides">
+    <span class="q-caption">
+      {{ 'marketing.content.story.slides' | t: { count: slides().length, max: maxSlides } }}
+    </span>
+    @if (slides().length > 0) {
+      <q-rule-list
+        [items]="items()"
+        [showToggle]="false"
+        [selectable]="true"
+        [selectedId]="current() === null ? null : '' + current()"
+        (selected)="select($event)"
+        (reorder)="reorder($event)"
+      />
+    }
+    <button
+      type="button"
+      class="story-fields__add"
+      [disabled]="disabled() || slides().length >= maxSlides"
+      (click)="addSlide()"
+      data-testid="content-story-add"
+    >
+      + {{ 'marketing.content.story.addSlide' | t }}
+    </button>
+  </div>
+
+  @if (slide(); as current) {
+    <div class="story-fields__slide" data-testid="content-story-slide">
+      <q-content-media-field
+        [label]="'marketing.content.story.slideMedia' | t"
+        [assetId]="current.assetId"
+        [posterId]="current.posterAssetId"
+        ratio="9:16"
+        [exportEdgePx]="1280"
+        [minWidthPx]="720"
+        [allowVideo]="allowVideo()"
+        [disabled]="disabled()"
+        (changed)="setMedia($event)"
+      />
+      <label class="story-fields__row">
+        <span class="q-body-sm">{{ 'marketing.content.story.duration' | t }}</span>
+        <q-number-stepper
+          [value]="current.durationSeconds"
+          [min]="3"
+          [max]="15"
+          [ariaLabel]="'marketing.content.story.duration' | t"
+          [disabled]="disabled()"
+          (valueChange)="setDuration($event)"
+        />
+      </label>
+      <label class="story-fields__field">
+        <span class="q-caption">{{ 'marketing.content.story.caption' | t }}</span>
+        <input
+          type="text"
+          class="story-fields__input"
+          maxlength="140"
+          [value]="caption()"
+          [disabled]="disabled()"
+          (input)="setCaption($any($event.target).value)"
+          data-testid="content-story-caption"
+        />
+      </label>
+      <q-content-link-picker
+        [link]="current.link"
+        [disabled]="disabled()"
+        (linkChange)="setLink($event)"
+      />
+      <button
+        type="button"
+        class="story-fields__remove"
+        [disabled]="disabled()"
+        (click)="removeSlide()"
+        data-testid="content-story-remove"
+      >
+        {{ 'marketing.content.story.removeSlide' | t }}
+      </button>
+    </div>
+  }
+</div>
