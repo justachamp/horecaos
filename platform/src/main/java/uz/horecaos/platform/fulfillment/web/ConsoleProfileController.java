@@ -4,8 +4,11 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -53,16 +56,44 @@ public class ConsoleProfileController {
                     + "profile puts away and the handovers the New order screen offers. A presentation "
                     + "of the one console: it grants nothing, and a put-away section is still open to "
                     + "anyone who holds its capability. Needs a grant of some kind in the tenant, else 404.")
-    public ResponseEntity<ConsoleProfileResponse> consoleProfile(@RequestParam UUID tenantId) {
+    public ResponseEntity<ConsoleProfileResponse> consoleProfile(
+            @RequestParam UUID tenantId,
+            @RequestHeader(value = "If-None-Match", required = false) @Nullable String ifNoneMatch) {
         var view = authorization.viewFor(currentActor.get().subject(), tenantId);
         if (view.scopes().isEmpty()) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such tenant");
         }
         ConsoleProfileService.ConsoleProfile profile = profiles.profileFor(tenantId);
+        String etag = "\"" + profile.version() + "\"";
+        if (matches(ifNoneMatch, etag)) {
+            // The shell asks again on every navigation it cannot prove is current; a profile that has not
+            // moved is answered without a body.
+            return ResponseEntity.status(HttpStatus.NOT_MODIFIED).eTag(etag).build();
+        }
         return ResponseEntity.ok()
-                .eTag("\"" + profile.version() + "\"")
+                .eTag(etag)
                 .body(new ConsoleProfileResponse(
                         profile.variant().name(), profile.landing(), profile.hiddenSections(), profile.handovers()));
+    }
+
+    /** Whether any validator in an {@code If-None-Match} header names this tag, weak or strong. */
+    private static boolean matches(@Nullable String ifNoneMatch, String etag) {
+        if (ifNoneMatch == null || ifNoneMatch.isBlank()) {
+            return false;
+        }
+        if ("*".equals(ifNoneMatch.trim())) {
+            return true;
+        }
+        for (String candidate : ifNoneMatch.split(",")) {
+            String tag = candidate.trim();
+            if (tag.startsWith("W/")) {
+                tag = tag.substring(2);
+            }
+            if (tag.equals(etag)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public record ConsoleProfileResponse(
