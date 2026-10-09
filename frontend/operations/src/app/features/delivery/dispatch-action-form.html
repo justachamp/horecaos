@@ -158,7 +158,10 @@
           {{ 'delivery.rules.grouping.locked' | t }}
         </p>
       } @else if (!runPayDecided()) {
-        <p class="q-caption action__muted" [attr.data-testid]="idPrefix() + '-grouping-pay-undecided'">
+        <p
+          class="q-caption action__muted"
+          [attr.data-testid]="idPrefix() + '-grouping-pay-undecided'"
+        >
           {{ 'delivery.rules.grouping.payUndecided' | t }}
           <a
             routerLink="/delivery/courier-policy"
@@ -202,7 +205,10 @@
               [attr.data-testid]="idPrefix() + '-grouping-wait'"
             />
           </label>
-          <p class="q-caption action__muted" [attr.data-testid]="idPrefix() + '-grouping-wait-note'">
+          <p
+            class="q-caption action__muted"
+            [attr.data-testid]="idPrefix() + '-grouping-wait-note'"
+          >
             {{ 'delivery.rules.grouping.waitNotAvailable' | t }}
           </p>
         </div>

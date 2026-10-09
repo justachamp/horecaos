@@ -245,7 +245,10 @@ describe('DispatchSimulator (ADR 0142 Decision 4: the simulator is the evaluator
 
     const grouping = control(host, 'sim-grouping').textContent ?? '';
     expect(grouping).toContain('Couriers measured for grouping');
-    const groupable = control(host, 'sim-grouping-aaaaaaaa-1111-2222-3333-444444444444').textContent;
+    const groupable = control(
+      host,
+      'sim-grouping-aaaaaaaa-1111-2222-3333-444444444444',
+    ).textContent;
     expect(groupable).toContain('aaaaaaaa');
     expect(groupable).toContain('carrying 1 of 3');
     expect(groupable).toContain('280 m');
@@ -259,7 +262,9 @@ describe('DispatchSimulator (ADR 0142 Decision 4: the simulator is the evaluator
   });
 
   it('says no courier was measured when the fleet is empty', async () => {
-    const simulate = vi.fn().mockResolvedValue({ ...RESULT, grouping: { candidates: 0, measured: [] } });
+    const simulate = vi
+      .fn()
+      .mockResolvedValue({ ...RESULT, grouping: { candidates: 0, measured: [] } });
     const { fixture, host } = await render({}, simulate);
 
     control<HTMLButtonElement>(host, 'sim-run').click();

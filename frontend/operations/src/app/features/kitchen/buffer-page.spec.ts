@@ -412,7 +412,9 @@ describe('BufferPage', () => {
       (fixture.nativeElement as HTMLElement).querySelector('[data-testid="paid-hold"]');
 
     it('shows what the branch is held under beside the buffer, in trial until someone publishes', async () => {
-      await render({ board: () => Promise.resolve({ tickets: [], warnings: [] } satisfies BoardResponse) });
+      await render({
+        board: () => Promise.resolve({ tickets: [], warnings: [] } satisfies BoardResponse),
+      });
 
       expect(cardOf()).not.toBeNull();
       expect(cardOf()?.textContent).toContain('Trial (count only)');

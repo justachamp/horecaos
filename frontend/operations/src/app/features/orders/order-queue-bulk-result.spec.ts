@@ -129,15 +129,29 @@ describe('OrderQueueBulkResult: bulk courier assignment notes (ADR 0172)', () =>
         appliedCount: 3,
         failedCount: 0,
         items: [
-          { orderId: 'a', itemStatus: 'APPLIED', note: 'OVERRODE_DISPATCH_RULE', ruleId: 'FAR-ZONE' },
+          {
+            orderId: 'a',
+            itemStatus: 'APPLIED',
+            note: 'OVERRODE_DISPATCH_RULE',
+            ruleId: 'FAR-ZONE',
+          },
           { orderId: 'b', itemStatus: 'APPLIED', note: 'NO_OPEN_SHIFT', ruleId: 'FAR-ZONE' },
-          { orderId: 'c', itemStatus: 'APPLIED', note: 'NO_OPEN_SHIFT,OVERRODE_DISPATCH_RULE', ruleId: 'DEFAULT' },
+          {
+            orderId: 'c',
+            itemStatus: 'APPLIED',
+            note: 'NO_OPEN_SHIFT,OVERRODE_DISPATCH_RULE',
+            ruleId: 'DEFAULT',
+          },
         ],
       } as Partial<BulkActionResponse>),
     );
 
-    const rules = [...host.querySelectorAll('[data-testid="order-queue-bulk-result-applied-note"]')].map(
-      (row) => row.querySelector('[data-testid="order-queue-bulk-result-rule"]')?.textContent?.trim() ?? null,
+    const rules = [
+      ...host.querySelectorAll('[data-testid="order-queue-bulk-result-applied-note"]'),
+    ].map(
+      (row) =>
+        row.querySelector('[data-testid="order-queue-bulk-result-rule"]')?.textContent?.trim() ??
+        null,
     );
     expect(rules).toEqual(['rule FAR-ZONE', null, 'rule DEFAULT']);
   });

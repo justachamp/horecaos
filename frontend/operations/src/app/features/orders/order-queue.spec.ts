@@ -1923,7 +1923,9 @@ describe('OrderQueue: selection and bulk actions (orders.md §2.10, wave P07)', 
     await flushMicrotasks();
     (host.querySelector('[data-testid="order-queue-bulk-assign"]') as HTMLButtonElement).click();
     await flushMicrotasks();
-    (host.querySelectorAll('[data-testid="order-bulk-assign-courier"]')[0] as HTMLInputElement).click();
+    (
+      host.querySelectorAll('[data-testid="order-bulk-assign-courier"]')[0] as HTMLInputElement
+    ).click();
     await flushMicrotasks();
     (host.querySelector('[data-testid="order-bulk-assign-confirm"]') as HTMLButtonElement).click();
     await flushMicrotasks();
@@ -1945,7 +1947,9 @@ describe('OrderQueue: selection and bulk actions (orders.md §2.10, wave P07)', 
     ).toContain('1 orders could not be assigned');
     expect(host.querySelectorAll('[data-testid="order-bulk-assign-tried"]')).toHaveLength(1);
 
-    (host.querySelectorAll('[data-testid="order-bulk-assign-courier"]')[1] as HTMLInputElement).click();
+    (
+      host.querySelectorAll('[data-testid="order-bulk-assign-courier"]')[1] as HTMLInputElement
+    ).click();
     await flushMicrotasks();
     (host.querySelector('[data-testid="order-bulk-assign-confirm"]') as HTMLButtonElement).click();
     await flushMicrotasks();

@@ -274,7 +274,10 @@
                     }}
                     @if (courier.groupableWithMetres !== null) {
                       —
-                      {{ 'delivery.rules.sim.grouping.metres' | t: { metres: courier.groupableWithMetres } }}
+                      {{
+                        'delivery.rules.sim.grouping.metres'
+                          | t: { metres: courier.groupableWithMetres }
+                      }}
                       —
                       {{ basisLabel(courier.payBasis) | t }}
                     } @else {

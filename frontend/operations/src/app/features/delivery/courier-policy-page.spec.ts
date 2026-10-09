@@ -428,11 +428,9 @@ describe('CourierPolicyPage', () => {
     };
 
     it('opens the editor with first-full-then-increment chosen when the dispatch rules send the operator here to decide', async () => {
-      const host = await render(
-        { policy: () => Promise.resolve(POLICY) },
-        noExtraConfig,
-        [routeWith({ prefill: 'FIRST_FULL_THEN_INCREMENT' })],
-      );
+      const host = await render({ policy: () => Promise.resolve(POLICY) }, noExtraConfig, [
+        routeWith({ prefill: 'FIRST_FULL_THEN_INCREMENT' }),
+      ]);
 
       expect(host.querySelector('[data-testid="policy-publish"]')).not.toBeNull();
       expect(
@@ -514,13 +512,11 @@ describe('CourierPolicyPage', () => {
     });
 
     it('publishes the chosen mode with the acknowledgement, and an undecided one as null', async () => {
-      const writePolicy = vi
-        .fn()
-        .mockResolvedValue({
-          ...POLICY,
-          runPayMode: 'FIRST_FULL_THEN_INCREMENT',
-          policyVersion: 2,
-        });
+      const writePolicy = vi.fn().mockResolvedValue({
+        ...POLICY,
+        runPayMode: 'FIRST_FULL_THEN_INCREMENT',
+        policyVersion: 2,
+      });
       const host = await openEditor({ policy: () => Promise.resolve(POLICY), writePolicy });
       fill(host, 'policy-input-reason', 'Grouping pilot');
       fill(host, 'policy-input-runPayMode', 'FIRST_FULL_THEN_INCREMENT', 'change');

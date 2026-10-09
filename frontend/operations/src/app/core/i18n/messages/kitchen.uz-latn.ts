@@ -360,8 +360,7 @@ export const kitchenUzLatn: AreaMessages<typeof kitchenEn> = {
   'kitchen.paidHold.scope.tenant': 'Butun kompaniya uchun',
   'kitchen.paidHold.replaces': 'Shu darajadagi siyosat yuqoridagisini butunlay almashtiradi.',
   'kitchen.paidHold.reason': 'Nima uchun oʻzgartiryapsiz?',
-  'kitchen.paidHold.invalid':
-    'Daqiqalar 1 dan 1440 gacha butun son, sabab majburiy.',
+  'kitchen.paidHold.invalid': 'Daqiqalar 1 dan 1440 gacha butun son, sabab majburiy.',
   'kitchen.paidHold.stale':
     'Siz tahrirlayotganingizda kimdir bu siyosatni oʻzgartirdi. Bekor qilib, qaytadan oching.',
   'kitchen.paidHold.save': 'Saqlash',

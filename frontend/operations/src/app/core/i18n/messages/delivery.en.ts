@@ -175,15 +175,15 @@ export const deliveryEn = {
     'No courier type of this company can carry as many orders as this rule groups, so no run will form.',
   'delivery.rules.sim.note.GROUPING_NEEDS_A_PLAN_TO_MEASURE':
     'Choose a recent order to see which couriers would be measured: a typed scenario has no door.',
-  'delivery.rules.sim.note.FLEET_NOT_MEASURABLE':
-    'The courier fleet could not be measured here.',
+  'delivery.rules.sim.note.FLEET_NOT_MEASURABLE': 'The courier fleet could not be measured here.',
   'delivery.rules.sim.grouping.heading': 'Couriers measured for grouping',
   'delivery.rules.sim.grouping.empty': 'No courier is on shift to be measured.',
   'delivery.rules.sim.grouping.carrying': 'carrying {n} of {max}',
   'delivery.rules.sim.grouping.metres': '{metres} m from a drop-off they carry',
   'delivery.rules.sim.grouping.notGroupable': 'not groupable',
   'delivery.rules.sim.grouping.basis.DIRECT': 'would be offered the order at its own pay',
-  'delivery.rules.sim.grouping.basis.RUN_INCREMENT': 'would be offered it paid on the extra distance',
+  'delivery.rules.sim.grouping.basis.RUN_INCREMENT':
+    'would be offered it paid on the extra distance',
   'delivery.rules.sim.violations': 'This draft cannot be published as it stands:',
   'delivery.rules.sim.noProvider': 'No partner was called and no price was asked.',
   'delivery.timings.heading': 'Timing',

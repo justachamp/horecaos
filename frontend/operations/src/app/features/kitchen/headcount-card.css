@@ -52,7 +52,7 @@
 .headcount__table td {
   padding: 6px 10px;
   border-top: 1px solid var(--q-hairline);
-  text-align: left;
+  text-align: start;
   white-space: nowrap;
 }
 
@@ -77,12 +77,12 @@
 }
 
 .headcount__band {
-  margin-left: 4px;
+  margin-inline-start: 4px;
   color: var(--q-ink-subtle);
 }
 
 .headcount__flag {
-  margin-left: 4px;
+  margin-inline-start: 4px;
   font-weight: 700;
 }
 
@@ -93,7 +93,7 @@
 
 .headcount__limits {
   margin: 12px 0 0;
-  padding-left: 20px;
+  padding-inline-start: 20px;
 }
 
 .headcount__nopolicy {

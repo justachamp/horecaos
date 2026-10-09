@@ -45,7 +45,9 @@
                 <span class="q-caption muted profileNote" data-testid="console-profile-note">{{
                   i18n.t('tenants.profileNote.courierServiceWithoutModule')
                 }}</span>
-              } @else if (tenant.consoleProfileNote === 'DELIVERIES_CONSOLE_WITHOUT_COURIER_SERVICE') {
+              } @else if (
+                tenant.consoleProfileNote === 'DELIVERIES_CONSOLE_WITHOUT_COURIER_SERVICE'
+              ) {
                 <span class="q-caption muted profileNote" data-testid="console-profile-note">{{
                   i18n.t('tenants.profileNote.moduleWithoutCourierService')
                 }}</span>

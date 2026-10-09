@@ -354,8 +354,7 @@ export const kitchenRu: AreaMessages<typeof kitchenEn> = {
   'kitchen.paidHold.scope.tenant': 'Всей компании',
   'kitchen.paidHold.replaces': 'Политика на этом уровне целиком заменяет политику уровнем выше.',
   'kitchen.paidHold.reason': 'Почему вы это меняете?',
-  'kitchen.paidHold.invalid':
-    'Минуты — целое число от 1 до 1440, причина обязательна.',
+  'kitchen.paidHold.invalid': 'Минуты — целое число от 1 до 1440, причина обязательна.',
   'kitchen.paidHold.stale':
     'Кто-то изменил эту политику, пока вы её редактировали. Отмените и откройте заново.',
   'kitchen.paidHold.save': 'Сохранить',

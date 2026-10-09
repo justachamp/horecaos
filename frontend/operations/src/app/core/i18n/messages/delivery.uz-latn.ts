@@ -183,7 +183,8 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.rules.sim.grouping.metres': 'olib ketayotgan manzilidan {metres} m',
   'delivery.rules.sim.grouping.notGroupable': 'birlashtirishga mos emas',
   'delivery.rules.sim.grouping.basis.DIRECT': 'buyurtmani oʻz toʻlovi bilan oladi',
-  'delivery.rules.sim.grouping.basis.RUN_INCREMENT': 'buyurtmani qoʻshimcha masofa uchun toʻlov bilan oladi',
+  'delivery.rules.sim.grouping.basis.RUN_INCREMENT':
+    'buyurtmani qoʻshimcha masofa uchun toʻlov bilan oladi',
   'delivery.rules.sim.note.NO_ZONE_EVIDENCE':
     'Buyurtmada zona yoʻq, shuning uchun zona qoidalari mos kelmaydi.',
   'delivery.rules.sim.violations': 'Bu qoralamani bunday holda eʻlon qilib boʻlmaydi:',
