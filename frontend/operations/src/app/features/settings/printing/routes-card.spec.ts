@@ -119,6 +119,28 @@ describe('RoutesCard', () => {
     );
   });
 
+  it('drops the automatic switch when the printer is changed to a browser one after it was ticked', async () => {
+    const createRoute = vi.fn().mockResolvedValue(route());
+    const { fixture } = await render(
+      { createRoute },
+      { printers: [printer(), browserPrinter()], routes: [] },
+    );
+
+    await click(fixture, '[data-testid="print-route-add"]');
+    pick(fixture, '[data-testid="print-route-printer"]', 'printer-1');
+    check(fixture, '[data-testid="print-route-auto"]', true);
+    pick(fixture, '[data-testid="print-route-printer"]', 'printer-browser');
+
+    const auto = el<HTMLInputElement>(fixture, '[data-testid="print-route-auto"]');
+    expect(auto.disabled).toBe(true);
+    expect(auto.checked).toBe(false);
+    await click(fixture, '[data-testid="print-route-save"]');
+    expect(createRoute).toHaveBeenCalledWith(
+      SCOPE,
+      expect.objectContaining({ printerId: 'printer-browser', autoPrint: false }),
+    );
+  });
+
   it('sends no station for a document that has none', async () => {
     const createRoute = vi.fn().mockResolvedValue(route());
     const { fixture } = await render({ createRoute }, { routes: [] });

@@ -1306,54 +1306,53 @@ to set correctly.
 
 **What it is for.** What gets printed, where, and what the customer ends up holding.
 
-**Layout.** A short page of three cards. It is thin on purpose and the page should say why rather
-than pretending to be complete.
+**Owned by [ADR 0154](../adr/not-started/0154-printing-and-receipts.md)** (accepted 2026-10-07), which
+reopens this section's earlier decline: ADR 0011's port list still has no print capability, and the
+decision does not add one. «Печать в POS» keeps meaning "send to the till" (the `Экспорт в кассу`
+action, `ORDER_EXPORT`); printing on a printer HorecaOS knows is a separate module (`printing`) that
+turns facts other modules own into one 1-bit bitmap per document and hands it to a print agent at
+the branch.
 
-**No ADR owns printing.** This is a genuine gap, not an oversight in this document: ADR 0011's
-capability port list is `CatalogRead`, `AvailabilityRead`, `OrderApproval`, `OrderExport`,
-`OrderCancellation`, `PreparationStatus` — **there is no print capability**, and the parity matrix
-names print-to-POS as one of two capabilities "genuinely absent from the port list". ADR 0038 owns
-the *fiscal* document but not the *paper*. A new decision is needed before this screen can be more
-than the three cards below.
+**Where.** Settings → Деньги и налоги → *Печать и чеки*, shown only while `feature.printing` is on for
+the tenant (ADR 0082). The page needs a branch (the scope bar's) for printers, routes, agents and the
+queue; the receipt profile belongs to the brand and is shown with or without a branch.
 
-### Card 1 — Печать через POS
+**Nothing prints until a manager creates a route.** The first line of the page says so, and so does
+the empty routes card. A document with no route prints nowhere, and the order detail's «Печать»
+action says that (`NO_ROUTE`) instead of looking as if it worked.
 
-| Field | Source |
-|---|---|
-| Печатать заказ на POS | per binding — needs a `PrintCapability` port on ADR 0011. **Not built** |
-| Что печатать: кухонный талон / чек клиента / оба | **not built** |
-| Автопечать при подтверждении заказа | **not built** |
+### Card 1 — Принтеры и маршруты (replaces «Печать через POS»)
 
-Until the capability exists, the `Печать на POS` action in Orders 1.2 must be **suppressed, not
-disabled**, for bindings that do not declare it — the IA says exactly this, and the Togora review
-queue pattern (§2n) is the right precedent: omit an affordance that cannot work rather than
-graying it out.
+*Printers:* name, roll (58 or 80 mm), how it prints (this workstation's browser, or an enrolled print
+agent and the alias that agent advertises), the status the agent last reported, a test page, retire
+and restore. The platform stores no printer address. *Print agents:* enrol by the code the agent shows
+(ADR 0079), see what the code claims before approving, revoke with a reason. *Routes:* (document type,
+optional station) → printer, copies 1–3, automatic or only when asked; automatic needs an agent
+printer. Where the branch has an active `ORDER_EXPORT` binding the card says **«Ваша касса, возможно,
+уже печатает это»** beside the kitchen-ticket route; it states the possibility and creates no route.
+The POS line stays a read-only statement of what ADR 0011 says.
 
 ### Card 2 — Фискальный чек
 
-Read-only projection of 10.7: which legal entity issues, which responsibility discharges the
-obligation for each payment method, and where the customer receives the receipt (a link, an SMS, a
-paper roll at the kiosk). Sourced from `payments.payment_methods.responsibility` (built, V0042) and
-`fiscal.fiscal_documents` (built, V0039/V0053) — and unlike most of 10.7, this one already has an
-operations reader: `FiscalDocumentController` at `/api/v1/tenants/{tenantId}/fiscal` serves exactly
-the blocked worklist and coverage report this card projects, plus the retry and unblock commands
-ADR 0038 asks for. This card's own read-only summary is what is not yet wired up.
-
-The one thing that must be true and visible: **every accepted order resolves to issued, evidenced
-as not required, or visibly blocked.** ADR 0038's words. There is no path where an order is
-delivered and nobody knows whether a receipt exists, and this card is where an admin confirms the
-configuration that makes that so. The per-order queue is Finance 8.2.
+Read-only. What a printed fiscal receipt is (the evidence the fiscal operator returned, printed as
+stored, with the QR of the stored receipt link; every print after the first marked as a copy; an
+order summary never called a receipt), and the branch's print policy for it as the routes state it. It
+cautions, when a fiscal-receipt route is automatic, that the legal wording is the tenant's
+accountant's to confirm (ADR 0154 open input 3). The per-order fiscal queue is Finance 8.2.
 
 ### Card 3 — Ширина ленты и оформление
 
-Printer width (58 / 80 mm), whether to print the logo, footer text per language. Today the only
-place a printer width exists is the kiosk form, and **kiosk hardware integration is declined**
-(matrix). So this card renders as `LockedState` naming the declined scope and the ADR that would
-have to exist, rather than shipping fields nothing reads.
+Brand scope. The logo switch and up to three footer lines per language (48 characters, to fit an
+80 mm roll). The seller, order number, totals, QR and fiscal block are **not fields**. Tape width is
+the printer's, set on the printer. **Judgement unchanged:** no receipt-template designer.
 
-**Judgement:** do not build a receipt-template designer. A restaurant that needs one has a POS that
-already has one, and HorecaOS's job at the print boundary is to hand the POS a correct order and to
-hand the customer a correct fiscal document.
+### Print queue
+
+Beside the cards: every job at the branch, newest first, filterable by state, with the failure in
+words, a picture of what it printed (until its document is erased), *cancel* for a queued job and
+*print again* for a finished one. A reprint asks why, makes a new job marked as a copy, and the
+activity log keeps who asked and why. A browser printer's job is handed to this workstation's print
+dialog at the roll's width.
 
 ---
 

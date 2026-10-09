@@ -86,7 +86,8 @@ describe('PrintQueueCard', () => {
   });
 
   it('starts again from no cursor when the state filter changes', async () => {
-    const jobs = vi.fn().mockResolvedValue(page([], null));
+    // The first page has a next one, so a filter change that kept its cursor would be visibly wrong.
+    const jobs = vi.fn().mockResolvedValue(page([job({ id: 'a' })], 'cursor-1'));
     const fixture = await render({ jobs });
     expect(jobs).toHaveBeenLastCalledWith(SCOPE, null, null);
 

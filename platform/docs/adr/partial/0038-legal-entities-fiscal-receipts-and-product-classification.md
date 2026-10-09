@@ -88,8 +88,9 @@
   document in any other state and never invents a fiscal identifier. Still not
   built: the receipt's line items are the same synthetic aggregate the bridge
   sends (real classification does not exist), the legal wording a printed
-  receipt must carry is an external input, and no screen routes a receipt to a
-  printer yet.
+  receipt must carry is an external input, and a branch prints a receipt only
+  where a manager has routed one (Settings → Printing and receipts; automatic
+  printing is off until switched on per route).
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-22
 - Deciders: Ayubkhon Abbosov (platform architecture; cash fiscalization, 2026-08-22), finance (VAT registration, tax treatment, evidence retention), legal (fiscal agency per settlement path)

@@ -1,8 +1,8 @@
 # ADR 0154: Printing and receipts
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Partial — 2026-10-08 (operations batch 20, wave w1-printing,
-  backend only; the screens are the next step). The `printing` module exists and is dark
+- Implementation status: Partial — 2026-10-09 (operations batch 20, wave w1-printing:
+  the backend, the console screens and the reference agent). The `printing` module exists and is dark
   behind `feature.printing`. Built: V0520–V0523 (the `printing` schema with printers,
   routes, receipt profiles, jobs and the agents' advertised printers, all under
   row-level security; `PRINT_AGENT` in both device-class CHECKs; `PRINTER_OFFLINE` and
@@ -23,9 +23,21 @@
   test page, preview, agent approval and revocation) with ADR 0027 facts; and a runbook
   (`platform/docs/runbooks/print-agent-and-printers.md`). Tested over HTTP against a fake
   printer on a loopback socket and a fake agent holding a real device principal; the
-  receipt QR is decoded back from the bytes the printer received. Not built: the
-  Settings → Printing and receipts screens and the order «Печать» action;
-  `tools/print-agent` and the `make up` fake-printer service; a render in CI inside the
+  receipt QR is decoded back from the bytes the printer received. The console is built
+  (lazy, shown only while `feature.printing` is on): Settings → Money and tax → Printing and
+  receipts has the printers (a browser, or a print agent's advertised alias; roll width; test
+  page; retire), the print agents (approve a typed code after seeing what it claims; revoke with
+  a reason), the routes (nothing prints until one exists; automatic printing only on an agent
+  printer; «your point of sale may already print this» beside the kitchen-ticket route when an
+  `ORDER_EXPORT` binding is active), the read-only fiscal receipt card, the brand's receipt
+  profile (the logo switch and three footer lines per language) and the print queue (cancel,
+  picture, reprint with a reason; a browser printer's job goes to the print dialog at the
+  roll's width), and the order detail has «Печать» beside «Экспорт в кассу». The reference agent
+  is `tools/print-agent` (Node, no dependencies, with a fake printer that is also the `printing`
+  profile's `fake-printer` service in `compose.yaml`), run by `make print-agent-test` in CI, and
+  the runbook documents running it and the wire contract. Not built: the Settings editors for the
+  two location policy keys `printing.document_locale` and `printing.late_marker_minutes` (they
+  are settable through the configuration API and default to `ru` and 5); a render in CI inside the
   production image (the runtime image already carries `fontconfig` and `freetype`, and one
   render was run by hand in it on 2026-10-08, with the same layout and a 0.04% difference
   in dots from the developer's macOS rasteriser); the pilot's printer model (nothing has

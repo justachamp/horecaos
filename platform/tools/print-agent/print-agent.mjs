@@ -590,7 +590,7 @@ export async function enrol(config, label, { log = makeLogger(), fetchImpl = fet
   const platform = new Platform(config, log, fetchImpl);
   const begun = await platform.beginEnrolment(label);
   out('');
-  out(`  Approve this machine in the console (Settings > Printing and receipts > Agents), code:  ${begun.userCode}`);
+  out(`  Approve this machine in the console (Settings > Money and tax > Printing and receipts > Print agents), code:  ${begun.userCode}`);
   out(`  The code is valid until ${begun.expiresAt}.`);
   out('');
   const pace = Math.max(1, Number(begun.pollIntervalSeconds ?? 3)) * 1000;

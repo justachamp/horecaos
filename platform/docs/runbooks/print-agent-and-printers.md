@@ -203,6 +203,120 @@ To stop a queued job instead: `POST $API/print/jobs/<JOB_ID>/cancel` with an
 `Idempotency-Key`. Only a queued job cancels; one an agent has claimed is already
 on its way to paper and is answered `422`.
 
+## 6. Run the reference agent at the branch (HorecaOS support, with the manager)
+
+The agent in `platform/tools/print-agent/print-agent.mjs` is the whole of what
+runs at the branch: Node 20 or newer, no packages to install, and it only ever
+dials **out** (HTTPS to the platform and to the identity server, and the printers
+on the branch network). Nothing is opened inbound.
+
+1. Copy `print-agent.mjs` to the branch machine and write its own config. The
+   printers are listed **here and nowhere else**; the alias on the left is what
+   the console later binds a printer to, and the platform is never told an
+   address:
+
+```json
+{
+  "apiBase": "https://api.horecaos.uz",
+  "printers": {
+    "counter": { "kind": "tcp", "host": "192.168.1.50", "port": 9100 },
+    "grill": { "kind": "tcp", "host": "192.168.1.51" },
+    "usb-bar": { "kind": "file", "path": "/dev/usb/lp0" },
+    "office": { "kind": "command", "command": ["lp", "-d", "Receipt", "-o", "raw"] }
+  }
+}
+```
+
+   `tcp` is a LAN printer on raw port 9100 (the usual case; status is read with
+   `DLE EOT`). `file` is a device file and `command` is a spool command that is
+   handed the bytes on its standard input; for those two the agent cannot ask the
+   printer how it is, and reports `UNKNOWN`, which the platform treats as
+   claimable.
+
+2. See that the agent can reach each printer, before involving the platform:
+
+```bash
+node print-agent.mjs status --config agent.json
+# counter    ONLINE
+# grill      OFFLINE      <- off, unplugged, or the wrong address
+```
+
+3. Enrol it (section 2). `node print-agent.mjs enrol --config agent.json --label
+   "Pilot branch mini PC"` prints a code; the manager types it into **Settings >
+   Money and tax > Printing and receipts > Print agents**, checks the label, and
+   approves. The credential is written once to
+   `~/.horecaos-print-agent/credential.json`, readable by its owner only; it is a
+   secret (ADR 0028) and is never printed or logged.
+
+4. Run it. `node print-agent.mjs run --config agent.json` claims, draws, reports
+   and claims again until it is stopped (the first `SIGTERM` or `Ctrl-C` finishes
+   the job in hand). On the branch machine run it as a service so that it comes
+   back after a power cut:
+
+```ini
+# /etc/systemd/system/horecaos-print-agent.service
+[Unit]
+Description=HorecaOS print agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=horecaos
+ExecStart=/usr/bin/node /opt/horecaos-print-agent/print-agent.mjs run --config /etc/horecaos-print-agent/agent.json
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Check:** on the console, **Print agents** lists it `Active` with the aliases it
+reports, then register the printers (section 3) and send a test page from each.
+The agent exits with `3` when the platform refuses its credential (revoked or
+removed: enrol again, do not retry), `2` for a bad config, and `1` for anything
+else; the service restarts it on `1` and a person has to act on `2` and `3`.
+
+**Rehearsing without hardware** (a developer, or support before the visit):
+`node print-agent.mjs fake-printer --port 9100 --out ./pages` (or
+`docker compose --profile printing up -d fake-printer` in `platform/`) listens
+where a thermal printer listens, answers the status questions "online, paper
+present", draws every page it receives as text in its log and saves it as a
+`.pbm` picture. Point an `agent.json` printer at `127.0.0.1:9100`.
+`make print-agent-test` proves the agent against a fake platform and that printer.
+
+## 7. The wire contract (what the agent calls)
+
+For an engineer writing another agent, or reading a trace. Every call is made by
+the agent's own device token, at its own branch only; `{base}` is
+`/api/v1/tenants/{t}/brands/{b}/locations/{l}/print`.
+
+| Step | Call | Notes |
+|---|---|---|
+| Enrol | `POST /api/v1/control-plane/device-enrolments` `{deviceClass:"PRINT_AGENT", label}` then `POST .../{deviceCode}/poll` | Unauthenticated by design (ADR 0079). The poll returns the credential once, on approval |
+| Token | client-credentials grant at the `tokenEndpoint` in the credential | Short-lived; renew once on a 401 |
+| Where am I | `GET /api/v1/devices/me` | Learns the tenant, brand and branch it was approved at |
+| Claim | `POST {base}/claims` with an `Idempotency-Key`; body `{printers:[{key,status}], maxJobs, waitSeconds, agentBuild}` | Long-polls up to 20 s. Reply `{jobs:[{jobId, printerKey, documentType, leaseToken, leaseExpiresAt}]}`. It first repeats this agent's own unexpired leases, so a retry after a lost reply loses nothing; it never holds the paper |
+| Bytes | `GET {base}/jobs/{jobId}/artifact?lease={leaseToken}` | `application/octet-stream`, header `X-Print-Protocol`. `409` if the lease is stale or not yours; `422 RENDER_FAILED` if the document cannot be drawn (the job is already dead) |
+| Report | `POST {base}/jobs/{jobId}/results` with an `Idempotency-Key`; body `{leaseToken, outcome:"PRINTED"\|"FAILED", failureCode}` | `409` for a stale or foreign lease, changing nothing; the same `PRINTED` twice answers `200 REPLAYED` |
+
+The rules the contract rests on:
+
+* **A lease is 60 seconds.** If the agent goes silent the job returns to the queue
+  with the attempt counted and prints again (at least once, never at most once).
+  Report with the **same** `Idempotency-Key` on a retry of the same report.
+* **One job at a time per printer, in the order queued**, so a station's tickets
+  keep their order. A printer that reports anything but `ONLINE` or `UNKNOWN`
+  is not claimed from; its jobs wait (and expire, for a kitchen ticket).
+* **`status`** is one of `ONLINE`, `OFFLINE`, `OUT_OF_PAPER`, `COVER_OPEN`,
+  `ERROR`, `UNKNOWN`. **`failureCode`** is one of `PRINTER_OFFLINE`,
+  `OUT_OF_PAPER`, `COVER_OPEN`, `TRANSPORT`, `RENDER`. Six failures end a job
+  `DEAD`.
+* **The bytes** are `ESC @`, raster bands (`GS v 0`) at the printer's dot width
+  (384 for 58 mm, 576 for 80 mm), `ESC d` feed and a cut. The agent does not
+  parse, change or add to them, and holds no template, language or business rule.
+* **What the agent logs** is identifiers and outcomes: a job id, an alias, a
+  document type, a byte count. Never the document, a note or a name.
+
 ## What to watch
 
 | Signal | Meaning |
