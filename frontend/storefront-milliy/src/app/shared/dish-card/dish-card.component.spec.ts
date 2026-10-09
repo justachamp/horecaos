@@ -627,8 +627,22 @@ describe('DishCardComponent: tag badges (ADR 0174)', () => {
       item: {
         ...dish(),
         tags: [
-          { id: 't1', code: 'spicy', icon: 'FLAME', showAsBadge: true, showAsFilter: true, name: 'Achchiq' },
-          { id: 't2', code: 'vegan', icon: null, showAsBadge: false, showAsFilter: true, name: 'Vegan' },
+          {
+            id: 't1',
+            code: 'spicy',
+            icon: 'FLAME',
+            showAsBadge: true,
+            showAsFilter: true,
+            name: 'Achchiq',
+          },
+          {
+            id: 't2',
+            code: 'vegan',
+            icon: null,
+            showAsBadge: false,
+            showAsFilter: true,
+            name: 'Vegan',
+          },
         ],
       },
     });

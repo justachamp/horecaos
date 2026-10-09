@@ -4,7 +4,6 @@ import { provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Versioned } from '../../core/api/aggregate-version';
-import { ApiError } from '../../core/api/problem-details';
 import { LocationScope } from '../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { Auth } from '../../core/auth/auth';

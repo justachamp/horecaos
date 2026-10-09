@@ -78,7 +78,13 @@ import { TranslatePipe } from '../translate/translate.pipe';
 @Component({
   selector: 'app-dish-card',
   standalone: true,
-  imports: [NgTemplateOutlet, RouterLink, PhysicalFactsComponent, TagBadgesComponent, TranslatePipe],
+  imports: [
+    NgTemplateOutlet,
+    RouterLink,
+    PhysicalFactsComponent,
+    TagBadgesComponent,
+    TranslatePipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './dish-card.component.html',
   styleUrl: './dish-card.component.scss',

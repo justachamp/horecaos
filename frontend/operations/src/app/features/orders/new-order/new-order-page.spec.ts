@@ -3093,13 +3093,11 @@ describe('NewOrderPage', () => {
     });
 
     it('gives a mandatory rule’s line no remove control, and says it cannot be removed', async () => {
-      const quote = vi
-        .fn()
-        .mockResolvedValue(
-          quoteOf({
-            autoAdded: [autoAddedLine({ mandatory: true, ruleCode: 'kit', ruleId: 'r-kit' })],
-          }),
-        );
+      const quote = vi.fn().mockResolvedValue(
+        quoteOf({
+          autoAdded: [autoAddedLine({ mandatory: true, ruleCode: 'kit', ruleId: 'r-kit' })],
+        }),
+      );
       await render({ quote });
       await startBasket();
       await afterTheDebounce();

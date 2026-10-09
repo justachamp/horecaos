@@ -20,7 +20,11 @@
 </nav>
 
 @if (filterOptions().length > 0) {
-  <nav class="rail chips chips--tags" [attr.aria-label]="'menu.filter.title' | t" data-testid="tag-filter">
+  <nav
+    class="rail chips chips--tags"
+    [attr.aria-label]="'menu.filter.title' | t"
+    data-testid="tag-filter"
+  >
     @for (tag of filterOptions(); track tag.id) {
       <button
         type="button"
@@ -34,7 +38,12 @@
       </button>
     }
     @if (selectedTags().size > 0) {
-      <button type="button" class="chip chip--clear" data-testid="tag-filter-clear" (click)="clearTags()">
+      <button
+        type="button"
+        class="chip chip--clear"
+        data-testid="tag-filter-clear"
+        (click)="clearTags()"
+      >
         {{ 'menu.filter.clear' | t }}
       </button>
     }
