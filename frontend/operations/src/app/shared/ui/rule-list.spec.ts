@@ -228,7 +228,8 @@ describe('RuleList without its enable switch (ADR 0157: the content placement or
     expect(host.querySelectorAll('.rule-list__toggle')).toHaveLength(0);
     expect(host.querySelectorAll('input[type="checkbox"]')).toHaveLength(0);
 
-    host.querySelectorAll<HTMLButtonElement>('.rule-list__move')[3].click();
+    // Buttons run up, down per row; index 2 is the second row's "move up".
+    host.querySelectorAll<HTMLButtonElement>('.rule-list__move')[2].click();
     expect(fixture.componentInstance.lastReorder).toEqual(['r2', 'r1', 'r3']);
     expect(fixture.componentInstance.switched).toBe(false);
   });

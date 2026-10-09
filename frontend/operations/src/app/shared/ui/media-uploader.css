@@ -120,3 +120,17 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+.uploader__box--video {
+  cursor: default;
+  touch-action: auto;
+}
+
+.uploader__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
