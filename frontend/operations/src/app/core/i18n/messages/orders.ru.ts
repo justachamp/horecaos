@@ -892,4 +892,32 @@ export const ordersRu: AreaMessages<typeof ordersEn> = {
   'orders.marking.scanner.sound': 'Звук',
   'orders.marking.scanner.progress': 'Отсканировано {captured} из {required}',
   'orders.marking.scanner.refused': 'Скан отклонён',
+  // ---------------------------------------------------------------- print action (ADR 0154)
+  'orders.detail.section.print': 'Печать',
+  'orders.detail.print.lead':
+    'Печатает на бумаге в этом филиале. Это не «Экспорт в кассу»: тот отправляет заказ в кассу.',
+  'orders.detail.print.document': 'Документ',
+  'orders.detail.print.printer': 'Принтер',
+  'orders.detail.print.printerRoute': 'Куда ведёт маршрут',
+  'orders.detail.print.reason': 'Зачем',
+  'orders.detail.print.submit': 'Напечатать',
+  'orders.detail.print.submitting': 'Печатаем…',
+  'orders.detail.print.queued': 'Поставлено в очередь печати: {count}.',
+  'orders.detail.print.browser': 'Открыто окно печати браузера.',
+  'orders.detail.print.error.off':
+    'Печать для вашего аккаунта не включена. Попросите поддержку HorecaOS включить её.',
+  'orders.detail.print.error.noRoute':
+    'Для этого документа в филиале ничего не настроено. Менеджер добавляет маршрут в разделе «Настройки → Печать и чеки»; либо выберите принтер здесь.',
+  'orders.detail.print.error.picture':
+    'Задание создано, но его картинку не удалось открыть в браузере.',
+  'orders.detail.print.doc.orderSlip': 'Сводка заказа',
+  'orders.detail.print.doc.kitchenTicket': 'Кухонный тикет',
+  'orders.detail.print.doc.fiscalReceipt': 'Фискальный чек',
+  'orders.detail.print.reason.customerRequest': 'Попросил клиент',
+  'orders.detail.print.reason.paperJam': 'Замялась бумага',
+  'orders.detail.print.reason.printerFault': 'Неисправность принтера',
+  'orders.detail.print.reason.kitchenRequest': 'Попросила кухня',
+  'orders.detail.print.reason.amendedOrder': 'Заказ изменили',
+  'orders.detail.print.reason.test': 'Проверка',
+  'orders.detail.print.reason.other': 'Другое',
 };

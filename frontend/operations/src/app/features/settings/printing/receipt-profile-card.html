@@ -1,0 +1,91 @@
+<section
+  class="card"
+  data-testid="print-profile"
+  [attr.aria-label]="'settings.printing.profile.title' | t"
+>
+  <h2 class="q-subhead">{{ 'settings.printing.profile.title' | t }}</h2>
+  <p class="q-body-sm muted">{{ 'settings.printing.profile.lead' | t }}</p>
+
+  @if (loading() && profile() === null) {
+    <p class="q-body-sm" data-testid="print-profile-loading">
+      {{ 'settings.printing.loading' | t }}
+    </p>
+  } @else if (loadError(); as message) {
+    <p class="q-body-sm error" role="alert" data-testid="print-profile-load-error">{{ message }}</p>
+    <button type="button" class="secondary" (click)="retry()">
+      {{ 'settings.printing.retry' | t }}
+    </button>
+  } @else if (profile() !== null) {
+    <p class="q-body-sm banner" data-testid="print-profile-fixed">
+      {{ 'settings.printing.profile.fixed' | t }}
+    </p>
+
+    <form class="form" data-testid="print-profile-form" (submit)="$event.preventDefault(); save()">
+      <label class="q-body-sm inline">
+        <input
+          type="checkbox"
+          data-testid="print-profile-logo"
+          [checked]="printLogo()"
+          (change)="setLogo($any($event.target).checked)"
+        />
+        {{ 'settings.printing.profile.logo' | t }}
+      </label>
+      <p class="q-caption muted">{{ 'settings.printing.profile.logoNote' | t }}</p>
+
+      @for (locale of locales; track locale.code) {
+        <fieldset class="locale" [attr.data-locale]="locale.code">
+          <legend class="q-body-sm">{{ locale.labelKey | t }}</legend>
+          @for (index of lineIndexes; track index) {
+            <input
+              class="field"
+              type="text"
+              [maxLength]="lineLength"
+              [attr.aria-label]="
+                ('settings.printing.profile.footerLine' | t: { n: index + 1 }) +
+                ' · ' +
+                (locale.labelKey | t)
+              "
+              [attr.data-testid]="'print-profile-footer-' + locale.code + '-' + index"
+              [value]="line(locale.code, index)"
+              (input)="setLine(locale.code, index, $any($event.target).value)"
+            />
+          }
+        </fieldset>
+      }
+      <p class="q-caption muted">
+        {{ 'settings.printing.profile.footerNote' | t: { max: lineLength } }}
+      </p>
+
+      @if (error(); as message) {
+        <p class="q-body-sm error" role="alert" data-testid="print-profile-error">{{ message }}</p>
+      }
+      @if (notice(); as message) {
+        <p class="q-body-sm success" role="status" data-testid="print-profile-notice">
+          {{ message }}
+        </p>
+      }
+      @if (profile(); as stored) {
+        @if (stored.updatedAt; as at) {
+          <p class="q-caption muted">
+            {{
+              'settings.printing.profile.updated'
+                | t: { by: stored.updatedBy ?? '—', time: savedAt(at) }
+            }}
+          </p>
+        }
+      }
+
+      <div class="form__actions">
+        <button
+          type="submit"
+          class="primary"
+          data-testid="print-profile-save"
+          [disabled]="!canSave()"
+        >
+          {{ 'settings.printing.save' | t }}
+        </button>
+      </div>
+    </form>
+    <p class="q-caption muted">{{ 'settings.printing.profile.tapeNote' | t }}</p>
+  }
+</section>

@@ -484,6 +484,12 @@ export const routes: Routes = [
               ),
           },
           {
+            // 10.14 Printing and receipts (ADR 0154), shown while `feature.printing` is on for this tenant.
+            path: 'printing',
+            loadComponent: () =>
+              import('./features/settings/printing/printing-page').then((m) => m.PrintingPage),
+          },
+          {
             path: 'notifications',
             loadComponent: () =>
               import('./features/settings/notifications/notifications-page').then(

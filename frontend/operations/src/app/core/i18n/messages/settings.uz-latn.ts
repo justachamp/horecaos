@@ -1557,4 +1557,239 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
     'Bu kod boshqa turdagi qurilmani soʻragan, shuning uchun uni kiosk sifatida ulab boʻlmaydi.',
   'settings.kioskPairing.error.channelUnavailable':
     'Bu kanal shu filialda sotadigan faol kiosk kanali emas.',
+  // ---------------------------------------------------------------- printing and receipts (ADR 0154)
+  'settings.nav.printing': 'Chop etish va cheklar',
+  'settings.home.description.printing': 'Qaysi printer nimani chop etadi va chekda nima bor.',
+  'settings.printing.title': 'Chop etish va cheklar',
+  'settings.printing.lead':
+    'Quyida marshrut qoʻshmaguningizcha filial hech narsa chop etmaydi. Marshrut qaysi hujjat qaysi printerga borishini belgilaydi.',
+  'settings.printing.loading': 'Yuklanmoqda…',
+  'settings.printing.denied': 'Chop etish sozlamalari menejerlar uchun.',
+  'settings.printing.loadError': 'Chop etish sozlamalarini yuklab boʻlmadi.',
+  'settings.printing.retry': 'Qayta urinish',
+  'settings.printing.off':
+    'Hisobingiz uchun chop etish hali yoqilmagan. Koʻrib chiqish mumkin; HorecaOS yordami yoqmaguncha saqlash rad etiladi.',
+  'settings.printing.pickBranch':
+    'Printerlar va marshrutlarni sozlash uchun yuqoridagi panelda filialni tanlang. Quyidagi chek pastki matni brendga tegishli.',
+  'settings.printing.save': 'Saqlash',
+  'settings.printing.cancel': 'Bekor qilish',
+  'settings.printing.edit': 'Oʻzgartirish',
+  'settings.printing.error.off':
+    'Hisobingiz uchun chop etish yoqilmagan. HorecaOS yordamidan uni yoqishni soʻrang.',
+  'settings.printing.error.noRoute':
+    'Bu hujjatni bu yerda chop etish sozlanmagan. Avval marshrut qoʻshing yoki printerni tanlang.',
+  'settings.printing.doc.kitchenTicket': 'Oshxona chiptasi',
+  'settings.printing.doc.orderSlip': 'Buyurtma xulosasi',
+  'settings.printing.doc.fiscalReceipt': 'Fiskal chek',
+  'settings.printing.doc.testPage': 'Sinov sahifasi',
+  'settings.printing.printers.title': 'Printerlar',
+  'settings.printing.printers.lead':
+    'Printer bitta filialga tegishli. U shu brauzer orqali yoki chop etish agenti orqali chop etadi — filialdagi kompyuterda ishlaydigan, printerga yeta oladigan kichik dastur. HorecaOS printerning tarmoq manzilini saqlamaydi.',
+  'settings.printing.printers.add': 'Printer qoʻshish',
+  'settings.printing.printers.empty':
+    'Hozircha printer yoʻq. Printer qoʻshing, soʻng unga hujjat yuborish uchun marshrut qoʻshing.',
+  'settings.printing.printers.saved': 'Printer saqlandi.',
+  'settings.printing.printers.retired':
+    'Printer ishdan chiqarildi. Uning marshrutlari chop etishni toʻxtatadi; oldingi topshiriqlar saqlanadi.',
+  'settings.printing.printers.restored': 'Printer qayta ishga tushirildi.',
+  'settings.printing.printers.testBrowser':
+    'Sinov sahifasi brauzerning chop etish oynasiga yuborildi.',
+  'settings.printing.printers.testQueued':
+    'Sinov sahifasi navbatga qoʻyildi. Agent olgach, chop etiladi.',
+  'settings.printing.printers.testPage': 'Sinov sahifasi',
+  'settings.printing.printers.retire': 'Ishdan chiqarish',
+  'settings.printing.printers.restore': 'Qaytarish',
+  'settings.printing.printers.col.name': 'Nomi',
+  'settings.printing.printers.col.roll': 'Lenta',
+  'settings.printing.printers.col.connection': 'Ulanish',
+  'settings.printing.printers.col.status': 'Holati',
+  'settings.printing.printers.tape': '{width} mm',
+  'settings.printing.printers.kind.browser': 'Shu ish joyining brauzeri',
+  'settings.printing.printers.kind.agent': 'Chop etish agenti orqali',
+  'settings.printing.printers.status.retired': 'Ishdan chiqarilgan',
+  'settings.printing.printers.form.name': 'Nomi',
+  'settings.printing.printers.form.tape': 'Lenta kengligi',
+  'settings.printing.printers.form.connection': 'Qanday chop etadi',
+  'settings.printing.printers.form.browserNote':
+    'Chop etishni brauzerda inson bosadi. U oʻzi hech narsa chop etmaydi, shuning uchun bunday printerga marshrut avtomatik boʻla olmaydi.',
+  'settings.printing.printers.form.noAgent':
+    'Bu filialda hali tasdiqlangan chop etish agenti yoʻq. Uni quyidagi boʻlimda tasdiqlang va shu yerga qayting.',
+  'settings.printing.printers.form.agent': 'Chop etish agenti',
+  'settings.printing.printers.form.alias': 'Agent yeta oladigan printer',
+  'settings.printing.printers.form.noAlias':
+    'Bu agent hali birorta printer haqida xabar bermagan. U ishlayotganini va sozlamalarida printer koʻrsatilganini tekshiring.',
+  'settings.printing.printers.form.aliasNote':
+    'Bu agent printerga bergan nom. Printer tarmoqda qayerdaligi faqat agentning oʻz sozlamalarida belgilanadi.',
+  'settings.printing.printer.status.online': 'Tarmoqda',
+  'settings.printing.printer.status.offline': 'Tarmoqda emas',
+  'settings.printing.printer.status.outOfPaper': 'Qogʻoz yoʻq',
+  'settings.printing.printer.status.coverOpen': 'Qopqoq ochiq',
+  'settings.printing.printer.status.error': 'Xato',
+  'settings.printing.printer.status.unknown': 'Maʻlumot yoʻq',
+  'settings.printing.agents.title': 'Chop etish agentlari',
+  'settings.printing.agents.lead':
+    'Agent — HorecaOS yordami filialdagi kompyuterda ishga tushiradigan kichik dastur. U ishga tushganda qisqa kod koʻrsatadi; agentni tasdiqlash uchun kodni shu yerga kiriting. Tasdiqlangan agent faqat chop etish topshiriqlarini olishi va natijani xabar qilishi mumkin.',
+  'settings.printing.agents.code': 'Agent koʻrsatgan kod',
+  'settings.printing.agents.codeNote':
+    'Kod agent ishga tushgandan keyin bir necha daqiqa amal qiladi.',
+  'settings.printing.agents.lookUp': 'Kodni tekshirish',
+  'settings.printing.agents.codeUnknown':
+    'Bunday kodli agent kutmayapti. Kod muddati tugagan boʻlishi mumkin — yangisini olish uchun agentni qayta ishga tushiring.',
+  'settings.printing.agents.claims': 'Bu kod egasi: {label}',
+  'settings.printing.agents.grantNote':
+    'Tasdiqlash unga shu filial chop etish topshiriqlarini olish va natijani xabar qilish imkonini beradi. U tizimga kira olmaydi va boshqa hech narsani oʻqiy olmaydi.',
+  'settings.printing.agents.name': 'Agent nomi',
+  'settings.printing.agents.approve': 'Agentni tasdiqlash',
+  'settings.printing.agents.approved': 'Agent tasdiqlandi.',
+  'settings.printing.agents.empty': 'Bu filialda chop etish agentlari yoʻq.',
+  'settings.printing.agents.status.active': 'Faol',
+  'settings.printing.agents.status.revoked': 'Chaqirib olingan',
+  'settings.printing.agents.enrolled': '{by} tasdiqladi, {time}',
+  'settings.printing.agents.revokedAt': '{by} chaqirib oldi, {time}',
+  'settings.printing.agents.advertises': 'U xabar qiladigan printerlar:',
+  'settings.printing.agents.advertisesNone': 'U birorta printer haqida xabar bermagan.',
+  'settings.printing.agents.revoke': 'Chaqirib olish',
+  'settings.printing.agents.revokeNote':
+    'Agentga keyingi soʻrovdayoq ruxsat berilmaydi. Hech kim tizimdan chiqarilmaydi.',
+  'settings.printing.agents.reason': 'Nima uchun chaqirib olyapsiz (faoliyat jurnalida saqlanadi)',
+  'settings.printing.agents.revoked': 'Agent chaqirib olindi.',
+  'settings.printing.routes.title': 'Nima qayerga chop etiladi',
+  'settings.printing.routes.lead':
+    'Marshrut bir turdagi hujjatni bitta printerga yuboradi. Oshxona chiptasi har bir stansiya uchun alohida printerga borishi mumkin; oʻz marshruti yoʻq stansiya stansiyasiz marshrutdan foydalanadi.',
+  'settings.printing.routes.add': 'Marshrut qoʻshish',
+  'settings.printing.routes.empty':
+    'Hozircha marshrut yoʻq, shuning uchun filial hech narsa chop etmaydi. Buyurtma ekranidagi «Chop etish» amali hujjat uchun printer yoʻqligini aytadi.',
+  'settings.printing.routes.noPrinter': 'Avval printer qoʻshing — marshrut uchun u kerak.',
+  'settings.printing.routes.posMayPrint':
+    'Kassangiz buni allaqachon chop etayotgan boʻlishi mumkin.',
+  'settings.printing.routes.posExplain':
+    'HorecaOS kassa qabul qilganini chop etishini bila olmaydi va marshrutni oʻzi qoʻshmaydi. Qoʻshishdan oldin tekshirib koʻring: bitta buyurtmaga ikkita qogʻoz chipta — xato.',
+  'settings.printing.routes.col.document': 'Hujjat',
+  'settings.printing.routes.col.station': 'Stansiya',
+  'settings.printing.routes.col.printer': 'Printer',
+  'settings.printing.routes.col.copies': 'Nusxalar',
+  'settings.printing.routes.col.auto': 'Chop etadi',
+  'settings.printing.routes.anyStation': 'Oʻz marshruti yoʻq istalgan stansiya',
+  'settings.printing.routes.autoOn': 'Oʻzi',
+  'settings.printing.routes.autoOff': 'Faqat soʻralganda',
+  'settings.printing.routes.inactive': 'Oʻchirilgan',
+  'settings.printing.routes.delete': 'Oʻchirish',
+  'settings.printing.routes.deleteConfirm': 'Butunlay oʻchirish',
+  'settings.printing.routes.deleted':
+    'Marshrut oʻchirildi. U boʻyicha yaratilgan topshiriqlar qoladi.',
+  'settings.printing.routes.saved': 'Marshrut saqlandi.',
+  'settings.printing.routes.form.document': 'Hujjat',
+  'settings.printing.routes.form.station': 'Stansiya',
+  'settings.printing.routes.form.anyStation': 'Oʻz marshruti yoʻq istalgan stansiya',
+  'settings.printing.routes.form.stationNote':
+    'Oʻz marshruti yoʻq stansiya chiptasi stansiyasiz marshrutga boradi.',
+  'settings.printing.routes.form.printer': 'Printer',
+  'settings.printing.routes.form.copies': 'Nusxalar',
+  'settings.printing.routes.form.auto': 'Avtomatik chop etish',
+  'settings.printing.routes.form.autoNote':
+    'Oshxona chiptasi oshxonaga yuborilganda, buyurtma xulosasi buyurtma tasdiqlanganda, fiskal chek savdo fiskallashtirilganda chop etiladi.',
+  'settings.printing.routes.form.autoNeedsAgent':
+    'Avtomatik chop etish faqat chop etish agenti orqali ulangan printerda mumkin.',
+  'settings.printing.routes.form.active': 'Marshrut faol',
+  'settings.printing.fiscal.title': 'Fiskal chek',
+  'settings.printing.fiscal.lead':
+    'Chop etilgan fiskal chek nima. Bu maʻlumot — bu yerda hech narsa tahrirlanmaydi.',
+  'settings.printing.fiscal.evidence':
+    'Chekda chek raqami, fiskal belgi, terminal maʻlumoti, roʻyxatga olish vaqti hamda sotuvchining nomi va STIRi fiskal operator qaytargan holda chop etiladi.',
+  'settings.printing.fiscal.qr':
+    'Uning ostida saqlangan chek havolasining QR-kodi chop etiladi; telefon uni chekning oʻziga ochadi.',
+  'settings.printing.fiscal.copy':
+    'Bir chekning birinchisidan keyingi har bir chop etilishi nusxa deb belgilanadi.',
+  'settings.printing.fiscal.slip':
+    'Buyurtma xulosasi hech qachon chek emas: unda fiskal hujjat emasligi yozilgan.',
+  'settings.printing.fiscal.policy': 'Shu filialda',
+  'settings.printing.fiscal.noRoute':
+    'Fiskal cheklar uchun marshrut yoʻq, shuning uchun chek faqat buyurtma ekranidan soʻralganda chop etiladi.',
+  'settings.printing.fiscal.routeAuto':
+    '«{printer}» printerida oʻzi chop etiladi (nusxalar: {copies}).',
+  'settings.printing.fiscal.routeManual':
+    'Soʻralganda «{printer}» printeriga boradi (nusxalar: {copies}).',
+  'settings.printing.fiscal.caution':
+    'Avtomatik chop etishni yoqilgan holda qoldirishdan oldin buxgalteringizdan chop etilgan chek qanday soʻzlarni oʻz ichiga olishi kerakligini tasdiqlashni soʻrang. HorecaOS fiskal operator qaytarganini chop etadi va huquqiy matnni sizning oʻrningizga tekshira olmaydi.',
+  'settings.printing.profile.title': 'Lenta kengligi va rasmiylashtirish',
+  'settings.printing.profile.lead':
+    'Brend qogʻozida nima boʻladi: xohlasangiz logotip va pastda bir necha qator. Qolgani qotirib qoʻyilgan.',
+  'settings.printing.profile.fixed':
+    'Sotuvchining nomi va STIRi, buyurtma raqami, jamilar, QR-kod va fiskal blokni koʻchirib, oʻlchamini oʻzgartirib yoki olib tashlab boʻlmaydi.',
+  'settings.printing.profile.logo': 'Brend logotipini yuqorida chop etish',
+  'settings.printing.profile.logoNote':
+    'U qora-oq nuqtalarga aylantiriladi. Oddiy, kontrastli logotip eng yaxshi chop etiladi.',
+  'settings.printing.profile.locale.ru': 'Ruscha',
+  'settings.printing.profile.locale.uzLatn': 'Oʻzbekcha (lotin)',
+  'settings.printing.profile.locale.en': 'Inglizcha',
+  'settings.printing.profile.footerLine': 'Pastki matn {n}-qator',
+  'settings.printing.profile.footerNote':
+    'Har bir til uchun uchtagacha qator, har biri {max} belgigacha, shunda qator 80 mm lentaga sigʻadi. Hujjat bitta tilda — filial tilida chop etiladi, mijoz tilida emas.',
+  'settings.printing.profile.saved': 'Saqlandi.',
+  'settings.printing.profile.updated': 'Oxirgi saqlash: {by}, {time}',
+  'settings.printing.profile.tapeNote':
+    'Lenta kengligi (58 yoki 80 mm) har bir printerning xususiyati; u printerning oʻzida belgilanadi.',
+  'settings.printing.queue.title': 'Chop etish navbati',
+  'settings.printing.queue.lead':
+    'Yangilari birinchi. Chop etilmagan, muddati oʻtgan yoki bekor qilingan topshiriqni qayta chop etish mumkin; qayta chop etish nusxa deb belgilanadi va kim va nima uchun soʻraganini saqlaydi.',
+  'settings.printing.queue.filter': 'Koʻrsatish',
+  'settings.printing.queue.all': 'Barcha topshiriqlar',
+  'settings.printing.queue.refresh': 'Yangilash',
+  'settings.printing.queue.empty': 'Chop etish topshiriqlari hali yoʻq.',
+  'settings.printing.queue.col.queued': 'Navbatga qoʻyilgan',
+  'settings.printing.queue.col.document': 'Hujjat',
+  'settings.printing.queue.col.printer': 'Printer',
+  'settings.printing.queue.col.state': 'Holati',
+  'settings.printing.queue.copy': 'Nusxa',
+  'settings.printing.queue.attempt': '{n}-urinish',
+  'settings.printing.queue.preview': 'Koʻrish',
+  'settings.printing.queue.reprint': 'Qayta chop etish',
+  'settings.printing.queue.cancel': 'Bekor qilish',
+  'settings.printing.queue.cancelled': 'Topshiriq bekor qilindi.',
+  'settings.printing.queue.reprintNote':
+    'Hujjatning hozirgi maʻlumotlari asosida yangi topshiriq yaratiladi. U «nusxa» belgisi bilan chop etiladi.',
+  'settings.printing.queue.reason': 'Nima uchun (faoliyat jurnalida saqlanadi)',
+  'settings.printing.queue.reprintPrinter': 'Printer',
+  'settings.printing.queue.reprintConfirm': 'Qayta chop etish',
+  'settings.printing.queue.reprinted': 'Yangi chop etish topshirigʻi yaratildi.',
+  'settings.printing.queue.more': 'Eskilarini koʻrsatish',
+  'settings.printing.job.status.queued': 'Navbatda',
+  'settings.printing.job.status.claimed': 'Chop etilmoqda',
+  'settings.printing.job.status.printed': 'Chop etildi',
+  'settings.printing.job.status.handedOff': 'Brauzerga yuborildi',
+  'settings.printing.job.status.dead': 'Chop etilmadi',
+  'settings.printing.job.status.cancelled': 'Bekor qilindi',
+  'settings.printing.job.status.expired': 'Muddati oʻtdi',
+  'settings.printing.job.failure.printerOffline': 'Printer tarmoqda emas edi.',
+  'settings.printing.job.failure.outOfPaper': 'Printerda qogʻoz tugagan edi.',
+  'settings.printing.job.failure.coverOpen': 'Printer qopqogʻi ochiq edi.',
+  'settings.printing.job.failure.transport': 'Agent printerga ulana olmadi.',
+  'settings.printing.job.failure.render': 'Hujjatni chizib boʻlmadi.',
+  'settings.printing.job.failure.leaseLapsed': 'Agent oʻz vaqtida javob bermadi.',
+  'settings.printing.job.failure.unknown': 'Muvaffaqiyatsiz boʻldi.',
+  'settings.printing.reason.customerRequest': 'Mijoz soʻradi',
+  'settings.printing.reason.paperJam': 'Qogʻoz tiqilib qoldi',
+  'settings.printing.reason.printerFault': 'Printer nosozligi',
+  'settings.printing.reason.kitchenRequest': 'Oshxona soʻradi',
+  'settings.printing.reason.amendedOrder': 'Buyurtma oʻzgartirildi',
+  'settings.printing.reason.test': 'Sinov',
+  'settings.printing.reason.other': 'Boshqa',
+  'settings.printing.policy.title': 'Til va muddatlar',
+  'settings.printing.policy.lead':
+    'Shu filial uchun belgilanadi. Bu yerda belgilamagan qiymatingiz brenddan, kompaniyadan yoki standartdan olinadi.',
+  'settings.printing.policy.locale.label': 'Chop etilgan hujjatlar tili',
+  'settings.printing.policy.locale.hint': 'Hujjat uchun bitta til — filial tili, mijozniki emas.',
+  'settings.printing.policy.expire.label':
+    'Kutayotgan oshxona chiptasi necha daqiqadan keyin tashlab yuboriladi',
+  'settings.printing.policy.expire.hint':
+    'Printerni shuncha kutgan chipta kech chop etilmaydi, tashlab yuboriladi (5 dan 240 gacha).',
+  'settings.printing.policy.late.label':
+    'Chop etilgan hujjat necha daqiqadan keyin «kechikkan» deb belgilanadi',
+  'settings.printing.policy.late.hint':
+    'Navbatda shundan koʻp turgan hujjat navbatga qoʻyilgan vaqtini koʻrsatadi (1 dan 1440 gacha).',
+  'settings.printing.policy.minutes': '{n} daq',
+  'settings.printing.policy.reason': 'Nima uchun oʻzgartiryapsiz (faoliyat jurnalida saqlanadi)',
+  'settings.printing.policy.saved': 'Shu filial uchun saqlandi.',
+  'settings.printing.policy.reverted': 'Filial qiymatni yana meros qilib oladi.',
+  'settings.printing.policy.revertReason': 'Meros qilib olingan qiymatga qaytarildi',
 };

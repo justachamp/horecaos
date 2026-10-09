@@ -28,6 +28,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.iam.api.devices.DeviceEnrolmentPort.DevicePrincipalView;
+import uz.horecaos.platform.printing.application.PosExportHint;
 import uz.horecaos.platform.printing.application.PrintAgentService;
 import uz.horecaos.platform.printing.application.PrintAgentService.AgentView;
 import uz.horecaos.platform.printing.application.PrintJobQueue;
@@ -73,6 +74,7 @@ public class PrintConsoleController {
     private final PrintJobQueue queue;
     private final PrintOnDemandService onDemand;
     private final PrintAgentService agents;
+    private final PosExportHint posExport;
     private final CurrentActor currentActor;
 
     public PrintConsoleController(
@@ -81,12 +83,14 @@ public class PrintConsoleController {
             PrintJobQueue queue,
             PrintOnDemandService onDemand,
             PrintAgentService agents,
+            PosExportHint posExport,
             CurrentActor currentActor) {
         this.printers = printers;
         this.routes = routes;
         this.queue = queue;
         this.onDemand = onDemand;
         this.agents = agents;
+        this.posExport = posExport;
         this.currentActor = currentActor;
     }
 
@@ -242,6 +246,20 @@ public class PrintConsoleController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/print/pos-export")
+    @RequiresCapability(value = Capability.PRINT_READ, scope = ScopeType.LOCATION)
+    @Operation(
+            operationId = "printGetPosExport",
+            summary = "Whether the branch's point of sale may already print",
+            description = "True when the branch has an active binding that provides ORDER_EXPORT. The platform "
+                    + "cannot read whether the till prints what it receives, so the routes screen says \"your "
+                    + "point of sale may already print this\" beside the kitchen-ticket route. A statement: it "
+                    + "creates, removes and refuses nothing.")
+    public ResponseEntity<PrintPosExportResponse> posExportState(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
+        return ResponseEntity.ok(new PrintPosExportResponse(posExport.orderExportBound(tenantId, brandId, locationId)));
+    }
+
     // ==================================================================== jobs
 
     @GetMapping("/print/jobs")
@@ -317,6 +335,28 @@ public class PrintConsoleController {
             @PathVariable UUID locationId,
             @PathVariable UUID jobId) {
         return ResponseEntity.ok(PrintJobResponse.of(queue.cancel(tenantId, locationId, jobId)));
+    }
+
+    @PostMapping("/print/jobs/{jobId}/reprint")
+    @RequiresCapability(value = Capability.PRINT_REPRINT, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            operationId = "printReprintJob",
+            summary = "Print a finished job's document again",
+            description = "For a dead, expired, cancelled or printed job: a new job, regenerated from the facts "
+                    + "as they are now, marked as a copy, linked to the first print and recorded with the "
+                    + "person and the reason. printerId chooses the printer; without it the document goes to "
+                    + "the printer the old job was for, which must still be active. A job still queued or "
+                    + "claimed, and a test page, are refused 422; a fiscal receipt is refused naming the "
+                    + "state if its document is no longer an ISSUED SALE.")
+    public ResponseEntity<PrintJobResponse> reprintJob(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID jobId,
+            @Valid @RequestBody PrintReprintJobRequest body) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(PrintJobResponse.of(onDemand.reprintJob(
+                        tenantId, brandId, locationId, jobId, body.printerId(), body.reasonCode(), actor())));
     }
 
     @PostMapping("/orders/{orderId}/print-jobs")
@@ -617,6 +657,11 @@ public class PrintConsoleController {
                     row.version());
         }
     }
+
+    public record PrintReprintJobRequest(
+            @Nullable UUID printerId, @NotNull PrintOnDemandService.Reason reasonCode) {}
+
+    public record PrintPosExportResponse(boolean orderExportActive) {}
 
     public record PrintReprintRequest(
             @NotNull PrintDocumentType documentType,

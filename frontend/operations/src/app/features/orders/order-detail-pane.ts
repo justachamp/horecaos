@@ -102,6 +102,7 @@ import { OrderPaymentPanel } from './order-payment-panel';
 import { LabelledAction } from './order-row-actions';
 import { OrderPosExportApi, OrderPosExportView, PosExportPushResult } from './order-pos-export-api';
 import { OrderPosExportPanel } from './order-pos-export-panel';
+import { OrderPrintPanel } from './order-print-panel';
 import { POS_EXPORT_STATE_LABEL_KEYS, posExportReachedTheTill } from './order-pos-export-labels';
 import {
   OrderRejectReasonDialog,
@@ -221,6 +222,7 @@ type DialogKind =
     OrderMarkingPanel,
     OrderDetailMoney,
     OrderPosExportPanel,
+    OrderPrintPanel,
     // ---------------------------------------------------- wave 10 financial commands
     OrderAddLinesDialog,
     OrderChangeQuantityDialog,
@@ -237,6 +239,8 @@ type DialogKind =
 export class OrderDetailPane {
   private readonly api = inject(ApiClient);
   private readonly location = inject(CurrentLocation);
+  /** The branch the order is read from, for the «Печать» panel (ADR 0154), which makes its own calls. */
+  protected readonly printScope = this.location.scope;
   private readonly actionsApi = inject(OrderActionsApi);
   private readonly amendmentsApi = inject(OrderAmendmentsApi);
   private readonly rejectReasonsApi = inject(RejectReasonsApi);

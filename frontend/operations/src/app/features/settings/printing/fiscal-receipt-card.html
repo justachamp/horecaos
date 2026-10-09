@@ -1,0 +1,39 @@
+<section
+  class="card"
+  data-testid="print-fiscal"
+  [attr.aria-label]="'settings.printing.fiscal.title' | t"
+>
+  <h2 class="q-subhead">{{ 'settings.printing.fiscal.title' | t }}</h2>
+  <p class="q-body-sm muted">{{ 'settings.printing.fiscal.lead' | t }}</p>
+  <ul class="q-body-sm facts">
+    <li>{{ 'settings.printing.fiscal.evidence' | t }}</li>
+    <li>{{ 'settings.printing.fiscal.qr' | t }}</li>
+    <li>{{ 'settings.printing.fiscal.copy' | t }}</li>
+    <li>{{ 'settings.printing.fiscal.slip' | t }}</li>
+  </ul>
+
+  <h3 class="q-body-sm policy-title">{{ 'settings.printing.fiscal.policy' | t }}</h3>
+  @if (receiptRoutes().length === 0) {
+    <p class="q-body-sm" data-testid="print-fiscal-none">
+      {{ 'settings.printing.fiscal.noRoute' | t }}
+    </p>
+  } @else {
+    <ul class="q-body-sm facts" data-testid="print-fiscal-routes">
+      @for (route of receiptRoutes(); track route.id) {
+        <li>
+          {{
+            (route.autoPrint
+              ? 'settings.printing.fiscal.routeAuto'
+              : 'settings.printing.fiscal.routeManual'
+            ) | t: { printer: printerName(route.printerId), copies: route.copies }
+          }}
+        </li>
+      }
+    </ul>
+  }
+  @if (automatic()) {
+    <p class="q-body-sm banner" data-testid="print-fiscal-caution">
+      {{ 'settings.printing.fiscal.caution' | t }}
+    </p>
+  }
+</section>

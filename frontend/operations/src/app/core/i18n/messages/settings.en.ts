@@ -1541,4 +1541,233 @@ export const settingsEn = {
     'This code asked to be a different kind of device, so it cannot be paired as a kiosk.',
   'settings.kioskPairing.error.channelUnavailable':
     'That channel is not an active kiosk channel selling at this branch.',
+  // ---------------------------------------------------------------- printing and receipts (ADR 0154)
+  'settings.nav.printing': 'Printing and receipts',
+  'settings.home.description.printing': 'Which printer prints what, and what the receipt carries.',
+  'settings.printing.title': 'Printing and receipts',
+  'settings.printing.lead':
+    'Nothing prints at a branch until you add a route below. A route says which document goes to which printer.',
+  'settings.printing.loading': 'Loading…',
+  'settings.printing.denied': 'Printing settings are for managers.',
+  'settings.printing.loadError': 'Could not load the printing settings.',
+  'settings.printing.retry': 'Try again',
+  'settings.printing.off':
+    'Printing is not switched on for your account yet. You can look around; saving is refused until HorecaOS support switches it on.',
+  'settings.printing.pickBranch':
+    'Choose a branch in the bar above to set up its printers and routes. The receipt footer below belongs to the brand.',
+  'settings.printing.save': 'Save',
+  'settings.printing.cancel': 'Cancel',
+  'settings.printing.edit': 'Edit',
+  'settings.printing.error.off':
+    'Printing is not switched on for your account. Ask HorecaOS support to switch it on.',
+  'settings.printing.error.noRoute':
+    'Nothing is set up to print this here. Add a route first, or choose a printer.',
+  'settings.printing.doc.kitchenTicket': 'Kitchen ticket',
+  'settings.printing.doc.orderSlip': 'Order summary',
+  'settings.printing.doc.fiscalReceipt': 'Fiscal receipt',
+  'settings.printing.doc.testPage': 'Test page',
+  'settings.printing.printers.title': 'Printers',
+  'settings.printing.printers.lead':
+    'A printer belongs to one branch. It prints through this browser, or through a print agent: a small program on a machine at the branch that can reach the printer. HorecaOS never stores a printer’s network address.',
+  'settings.printing.printers.add': 'Add a printer',
+  'settings.printing.printers.empty':
+    'No printers yet. Add one, then add a route to send a document to it.',
+  'settings.printing.printers.saved': 'Printer saved.',
+  'settings.printing.printers.retired':
+    'Printer retired. Its routes stop printing; its past jobs stay.',
+  'settings.printing.printers.restored': 'Printer restored.',
+  'settings.printing.printers.testBrowser':
+    'The test page was sent to your browser’s print dialog.',
+  'settings.printing.printers.testQueued':
+    'Test page queued. It prints when the agent picks it up.',
+  'settings.printing.printers.testPage': 'Test page',
+  'settings.printing.printers.retire': 'Retire',
+  'settings.printing.printers.restore': 'Restore',
+  'settings.printing.printers.col.name': 'Name',
+  'settings.printing.printers.col.roll': 'Roll',
+  'settings.printing.printers.col.connection': 'Connection',
+  'settings.printing.printers.col.status': 'Status',
+  'settings.printing.printers.tape': '{width} mm',
+  'settings.printing.printers.kind.browser': 'This workstation’s browser',
+  'settings.printing.printers.kind.agent': 'Through a print agent',
+  'settings.printing.printers.status.retired': 'Retired',
+  'settings.printing.printers.form.name': 'Name',
+  'settings.printing.printers.form.tape': 'Roll width',
+  'settings.printing.printers.form.connection': 'How it prints',
+  'settings.printing.printers.form.browserNote':
+    'A person presses print in the browser. Nothing prints by itself, so a route to this printer cannot be automatic.',
+  'settings.printing.printers.form.noAgent':
+    'No print agent is approved at this branch yet. Approve one in the section below, then come back.',
+  'settings.printing.printers.form.agent': 'Print agent',
+  'settings.printing.printers.form.alias': 'Printer the agent can reach',
+  'settings.printing.printers.form.noAlias':
+    'This agent has not reported any printer yet. Check that it is running and that a printer is set up in its settings.',
+  'settings.printing.printers.form.aliasNote':
+    'This is the name the agent gave the printer. Where the printer is on the network is set only in the agent’s own settings.',
+  'settings.printing.printer.status.online': 'Online',
+  'settings.printing.printer.status.offline': 'Offline',
+  'settings.printing.printer.status.outOfPaper': 'Out of paper',
+  'settings.printing.printer.status.coverOpen': 'Cover open',
+  'settings.printing.printer.status.error': 'Error',
+  'settings.printing.printer.status.unknown': 'Not reported',
+  'settings.printing.agents.title': 'Print agents',
+  'settings.printing.agents.lead':
+    'An agent is a small program run by HorecaOS support on a machine at the branch. It shows a short code when it starts; type the code here to approve it. An approved agent can fetch print jobs and report the result, and nothing else.',
+  'settings.printing.agents.code': 'Code shown by the agent',
+  'settings.printing.agents.codeNote': 'A code works for a few minutes after the agent starts.',
+  'settings.printing.agents.lookUp': 'Check the code',
+  'settings.printing.agents.codeUnknown':
+    'No agent is waiting with that code. It may have expired; restart the agent to get a new one.',
+  'settings.printing.agents.claims': 'This code belongs to: {label}',
+  'settings.printing.agents.grantNote':
+    'Approving lets it fetch print jobs for this branch and report their outcome. It cannot sign in or read anything else.',
+  'settings.printing.agents.name': 'Name for this agent',
+  'settings.printing.agents.approve': 'Approve agent',
+  'settings.printing.agents.approved': 'Agent approved.',
+  'settings.printing.agents.empty': 'No print agents at this branch.',
+  'settings.printing.agents.status.active': 'Active',
+  'settings.printing.agents.status.revoked': 'Revoked',
+  'settings.printing.agents.enrolled': 'Approved by {by}, {time}',
+  'settings.printing.agents.revokedAt': 'Revoked by {by}, {time}',
+  'settings.printing.agents.advertises': 'Printers it reports:',
+  'settings.printing.agents.advertisesNone': 'It has not reported any printer.',
+  'settings.printing.agents.revoke': 'Revoke',
+  'settings.printing.agents.revokeNote':
+    'The agent is refused on its very next request. Nobody is signed out.',
+  'settings.printing.agents.reason': 'Why you are revoking it (kept in the activity log)',
+  'settings.printing.agents.revoked': 'Agent revoked.',
+  'settings.printing.routes.title': 'What prints where',
+  'settings.printing.routes.lead':
+    'A route sends one kind of document to one printer. A kitchen ticket can go to a different printer for each station; a station with no route of its own uses the route with no station.',
+  'settings.printing.routes.add': 'Add a route',
+  'settings.printing.routes.empty':
+    'No routes yet, so nothing prints at this branch. The order screen’s “Print” action will say there is no printer for the document.',
+  'settings.printing.routes.noPrinter': 'Add a printer first; a route needs one.',
+  'settings.printing.routes.posMayPrint': 'Your point of sale may already print this.',
+  'settings.printing.routes.posExplain':
+    'HorecaOS cannot tell whether the till prints what it receives, and it does not add a route for you. Look before adding one: two paper tickets for one order is a mistake.',
+  'settings.printing.routes.col.document': 'Document',
+  'settings.printing.routes.col.station': 'Station',
+  'settings.printing.routes.col.printer': 'Printer',
+  'settings.printing.routes.col.copies': 'Copies',
+  'settings.printing.routes.col.auto': 'Prints',
+  'settings.printing.routes.anyStation': 'Any station without its own route',
+  'settings.printing.routes.autoOn': 'By itself',
+  'settings.printing.routes.autoOff': 'Only when asked',
+  'settings.printing.routes.inactive': 'Inactive',
+  'settings.printing.routes.delete': 'Delete',
+  'settings.printing.routes.deleteConfirm': 'Delete for good',
+  'settings.printing.routes.deleted': 'Route deleted. Jobs already made from it stay.',
+  'settings.printing.routes.saved': 'Route saved.',
+  'settings.printing.routes.form.document': 'Document',
+  'settings.printing.routes.form.station': 'Station',
+  'settings.printing.routes.form.anyStation': 'Any station without its own route',
+  'settings.printing.routes.form.stationNote':
+    'A ticket for a station with no route of its own goes to the route with no station.',
+  'settings.printing.routes.form.printer': 'Printer',
+  'settings.printing.routes.form.copies': 'Copies',
+  'settings.printing.routes.form.auto': 'Print automatically',
+  'settings.printing.routes.form.autoNote':
+    'A kitchen ticket prints when it is released to the kitchen, an order summary when the order is confirmed, a fiscal receipt when the sale is fiscalised.',
+  'settings.printing.routes.form.autoNeedsAgent':
+    'Automatic printing needs a printer reached through a print agent.',
+  'settings.printing.routes.form.active': 'This route is active',
+  'settings.printing.fiscal.title': 'Fiscal receipt',
+  'settings.printing.fiscal.lead':
+    'What a printed fiscal receipt is. This is a statement; nothing here can be edited.',
+  'settings.printing.fiscal.evidence':
+    'It prints the receipt number, fiscal sign, terminal reference, registration time and the seller’s name and tax number exactly as the fiscal operator returned them.',
+  'settings.printing.fiscal.qr':
+    'Below it is a QR code for the stored receipt link, which a phone opens to the receipt itself.',
+  'settings.printing.fiscal.copy':
+    'Every print of the same receipt after the first is marked as a copy.',
+  'settings.printing.fiscal.slip':
+    'An order summary is never a receipt: it says it is not a fiscal document.',
+  'settings.printing.fiscal.policy': 'At this branch',
+  'settings.printing.fiscal.noRoute':
+    'There is no route for fiscal receipts, so one prints only when someone asks for it from the order screen.',
+  'settings.printing.fiscal.routeAuto': 'Prints by itself on {printer} (copies: {copies}).',
+  'settings.printing.fiscal.routeManual': 'Goes to {printer} when someone asks (copies: {copies}).',
+  'settings.printing.fiscal.caution':
+    'Before you leave automatic printing on, ask your accountant to confirm the wording a printed receipt must carry. HorecaOS prints what the fiscal operator returned and cannot check the legal text for you.',
+  'settings.printing.profile.title': 'Tape width and presentation',
+  'settings.printing.profile.lead':
+    'What the brand’s paper carries: its logo, if you want one, and a few footer lines. Everything else is fixed.',
+  'settings.printing.profile.fixed':
+    'The seller’s name and tax number, the order number, the totals, the QR code and the fiscal block cannot be moved, resized or removed.',
+  'settings.printing.profile.logo': 'Print the brand logo at the top',
+  'settings.printing.profile.logoNote':
+    'It is turned into black and white dots. A simple, high-contrast logo prints best.',
+  'settings.printing.profile.locale.ru': 'Russian',
+  'settings.printing.profile.locale.uzLatn': 'Uzbek (Latin)',
+  'settings.printing.profile.locale.en': 'English',
+  'settings.printing.profile.footerLine': 'Footer line {n}',
+  'settings.printing.profile.footerNote':
+    'Up to three lines per language, {max} characters each, so a line fits an 80 mm roll. A document prints in one language, the branch’s, never the customer’s.',
+  'settings.printing.profile.saved': 'Saved.',
+  'settings.printing.profile.updated': 'Last saved by {by}, {time}',
+  'settings.printing.profile.tapeNote':
+    'Tape width (58 or 80 mm) belongs to each printer; set it on the printer.',
+  'settings.printing.queue.title': 'Print queue',
+  'settings.printing.queue.lead':
+    'Newest first. A job that failed, expired or was cancelled can be printed again; a reprint is marked as a copy and records who asked and why.',
+  'settings.printing.queue.filter': 'Show',
+  'settings.printing.queue.all': 'All jobs',
+  'settings.printing.queue.refresh': 'Refresh',
+  'settings.printing.queue.empty': 'No print jobs yet.',
+  'settings.printing.queue.col.queued': 'Queued',
+  'settings.printing.queue.col.document': 'Document',
+  'settings.printing.queue.col.printer': 'Printer',
+  'settings.printing.queue.col.state': 'State',
+  'settings.printing.queue.copy': 'Copy',
+  'settings.printing.queue.attempt': 'attempt {n}',
+  'settings.printing.queue.preview': 'Preview',
+  'settings.printing.queue.reprint': 'Print again',
+  'settings.printing.queue.cancel': 'Cancel',
+  'settings.printing.queue.cancelled': 'Job cancelled.',
+  'settings.printing.queue.reprintNote':
+    'A new job is made from the document’s facts as they are now. It prints marked as a copy.',
+  'settings.printing.queue.reason': 'Why (kept in the activity log)',
+  'settings.printing.queue.reprintPrinter': 'Printer',
+  'settings.printing.queue.reprintConfirm': 'Print again',
+  'settings.printing.queue.reprinted': 'A new print job was made.',
+  'settings.printing.queue.more': 'Show older',
+  'settings.printing.job.status.queued': 'Queued',
+  'settings.printing.job.status.claimed': 'Printing',
+  'settings.printing.job.status.printed': 'Printed',
+  'settings.printing.job.status.handedOff': 'Sent to browser',
+  'settings.printing.job.status.dead': 'Failed',
+  'settings.printing.job.status.cancelled': 'Cancelled',
+  'settings.printing.job.status.expired': 'Expired',
+  'settings.printing.job.failure.printerOffline': 'The printer was offline.',
+  'settings.printing.job.failure.outOfPaper': 'The printer was out of paper.',
+  'settings.printing.job.failure.coverOpen': 'The printer cover was open.',
+  'settings.printing.job.failure.transport': 'The agent could not reach the printer.',
+  'settings.printing.job.failure.render': 'The document could not be drawn.',
+  'settings.printing.job.failure.leaseLapsed': 'The agent did not answer in time.',
+  'settings.printing.job.failure.unknown': 'It failed.',
+  'settings.printing.reason.customerRequest': 'The customer asked',
+  'settings.printing.reason.paperJam': 'Paper jam',
+  'settings.printing.reason.printerFault': 'Printer fault',
+  'settings.printing.reason.kitchenRequest': 'The kitchen asked',
+  'settings.printing.reason.amendedOrder': 'The order was changed',
+  'settings.printing.reason.test': 'Test',
+  'settings.printing.reason.other': 'Something else',
+  'settings.printing.policy.title': 'Language and timing',
+  'settings.printing.policy.lead':
+    'Set for this branch. A value you do not set here is inherited from the brand, the company or the platform’s default.',
+  'settings.printing.policy.locale.label': 'Language of printed documents',
+  'settings.printing.policy.locale.hint':
+    'One language per document: the branch’s, never the customer’s.',
+  'settings.printing.policy.expire.label': 'Minutes before a waiting kitchen ticket is dropped',
+  'settings.printing.policy.expire.hint':
+    'A ticket still waiting for its printer after this long is dropped rather than printed stale (5 to 240).',
+  'settings.printing.policy.late.label': 'Minutes before a printed document says “delayed”',
+  'settings.printing.policy.late.hint':
+    'A document that waited longer than this in the queue prints the time it was queued (1 to 1440).',
+  'settings.printing.policy.minutes': '{n} min',
+  'settings.printing.policy.reason': 'Why you are changing it (kept in the activity log)',
+  'settings.printing.policy.saved': 'Saved for this branch.',
+  'settings.printing.policy.reverted': 'This branch inherits the value again.',
+  'settings.printing.policy.revertReason': 'Back to the inherited value',
 } as const;

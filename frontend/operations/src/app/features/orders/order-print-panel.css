@@ -1,0 +1,67 @@
+:host {
+  display: contents;
+}
+
+.pane__section {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.pane__section-title {
+  margin: 0 0 8px;
+}
+
+.print__lead {
+  margin: 0 0 8px;
+  color: var(--q-ink-muted);
+}
+
+.print__form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+}
+
+.print__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.print__input {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+  font-size: var(--q-type-body-sm);
+}
+
+.print__button {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-primary);
+  cursor: pointer;
+  font-size: var(--q-type-body-sm);
+}
+
+.print__button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.print__notice {
+  margin: 8px 0 0;
+  color: var(--q-success-text);
+}
+
+.print__error {
+  margin: 8px 0 0;
+  color: var(--q-error-text);
+}

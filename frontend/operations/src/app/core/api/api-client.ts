@@ -92,6 +92,17 @@ export class ApiClient {
   }
 
   /**
+   * A POST that reads a picture back and changes nothing: the print preview (ADR 0154), whose request
+   * carries a body only because a query string cannot. It is a read, so it declares no intent and sends
+   * no `Idempotency-Key`; an effect must go through {@link post}, which cannot be called without one.
+   */
+  readBlob<TRequest>(path: string, body: TRequest): Observable<Blob> {
+    return this.http
+      .post(this.url(path), body, { responseType: 'blob' })
+      .pipe(catchError(toApiError));
+  }
+
+  /**
    * A GET whose body is read normally, plus one or more raw values read off
    * response headers rather than the body.
    *

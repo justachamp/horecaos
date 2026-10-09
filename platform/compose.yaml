@@ -336,6 +336,23 @@ services:
         create_bucket http://object-store:9000 horecaos-audit-archive --object-lock-enabled-for-bucket
         echo "created horecaos-audit-archive with Object Lock enabled"
 
+  fake-printer:
+    # ADR 0154: the end of a print agent's path when no hardware is attached. It listens where a thermal
+    # printer listens (raw TCP 9100), answers the agent's DLE EOT status questions "online, paper present",
+    # and draws every page it is sent as text in its log, so a developer can see what would have come out
+    # of the roll. The reference agent (tools/print-agent) is pointed at it with
+    #     "printers": { "counter": { "kind": "tcp", "host": "127.0.0.1", "port": 9100 } }
+    # In a profile of its own: `make up` does not pull a Node image for people who never print.
+    #     docker compose --profile printing up -d fake-printer && docker compose logs -f fake-printer
+    profiles: ["printing"]
+    image: node:22-alpine
+    working_dir: /app
+    command: ["node", "print-agent.mjs", "fake-printer", "--port", "9100"]
+    volumes:
+      - ./tools/print-agent:/app:ro
+    ports:
+      - "9100:9100"
+
 volumes:
   object-store-data:
   object-store-offsite-data:

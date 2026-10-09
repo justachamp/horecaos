@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -477,6 +478,149 @@ class PrintAgentHttpTests extends PrintingSpringTest {
 
         assertThat(fake.claimed(5)).as("thirty-one minutes late is stale").isEmpty();
         assertThat(reload(job).status().name()).isEqualTo("EXPIRED");
+    }
+
+    // ------------------------------------------------------ an agent knows its branch
+
+    @Test
+    @DisplayName(
+            "an enrolled print agent learns which tenant, brand and branch it was approved at from the device self-read, and a revoked one is refused it")
+    void anAgentReadsItsOwnBranch() throws Exception {
+        MvcResult me = call(getAs("/api/v1/devices/me", agent.subject()));
+        assertThat(me.getResponse().getStatus())
+                .as(me.getResponse().getContentAsString())
+                .isEqualTo(200);
+        String body = me.getResponse().getContentAsString();
+        assertThat(body)
+                .contains("\"deviceClass\":\"PRINT_AGENT\"")
+                .contains(TENANT.toString())
+                .contains(BRAND.toString())
+                .contains(LOCATION.toString())
+                .as("the self-read never returns a secret, a client id or a token")
+                .doesNotContain("secret")
+                .doesNotContain("clientId");
+
+        ok(postJson(PRINT + "/agents/" + agent.deviceId() + "/revoke", MANAGER, "{\"reason\":\"machine replaced\"}"));
+        assertThat(status(getAs("/api/v1/devices/me", agent.subject())))
+                .as("a token that outlives a revocation stops at once")
+                .isEqualTo(403);
+    }
+
+    // -------------------------------------------------------------- what is kept
+
+    @Test
+    @DisplayName(
+            "a finished job's document is erased seven days after it ended and a dead job's after thirty; the row, its digest and its outcome stay")
+    void theDocumentIsErasedOnSchedule() throws Exception {
+        JobRow printed = slipJob("A-014");
+        JobRow dying = slipJob("A-015");
+        // The first claim takes the older job: print it.
+        UUID lease =
+                UUID.fromString(fake.claimed(1).getFirst().get("leaseToken").asString());
+        assertThat(fake.report(printed.id(), lease, "PRINTED", null)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+        Instant printedAt = clock.instant();
+        // The second dies on six transport failures, a little later.
+        for (int attempt = 1; attempt <= 6; attempt++) {
+            JsonNode claimed = fake.claimed(1).getFirst();
+            fake.report(dying.id(), UUID.fromString(claimed.get("leaseToken").asString()), "FAILED", "TRANSPORT");
+            clock.advance(Duration.ofMinutes(6));
+        }
+        Instant diedAt = clock.instant().minus(Duration.ofMinutes(6));
+        assertThat(reload(dying).status().name()).isEqualTo("DEAD");
+        String digest = reload(printed).documentDigest();
+
+        clock.set(printedAt.plus(Duration.ofDays(7)).minusSeconds(60));
+        maintenance.runOnce();
+        assertThat(reload(printed).protectedDocument())
+                .as("a minute short of seven days after the print: kept")
+                .isNotNull();
+
+        clock.set(printedAt.plus(Duration.ofDays(7)).plusSeconds(60));
+        PrintMaintenance.Pass pass = maintenance.runOnce();
+
+        assertThat(pass.purged()).as("only the printed one is due").isEqualTo(1);
+        JobRow erased = reload(printed);
+        assertThat(erased.protectedDocument())
+                .as("the printed job's document is gone")
+                .isNull();
+        assertThat(erased.status().name()).isEqualTo("PRINTED");
+        assertThat(erased.documentDigest()).as("the digest says what it was").isEqualTo(digest);
+        assertThat(reload(dying).protectedDocument())
+                .as("a dead job is kept for thirty days, long enough to be looked at")
+                .isNotNull();
+
+        clock.set(diedAt.plus(Duration.ofDays(30)).minusSeconds(60));
+        maintenance.runOnce();
+        assertThat(reload(dying).protectedDocument())
+                .as("a minute short of thirty days after it died: kept")
+                .isNotNull();
+
+        clock.set(diedAt.plus(Duration.ofDays(30)).plusSeconds(60));
+        maintenance.runOnce();
+        assertThat(reload(dying).protectedDocument())
+                .as("thirty days after it died")
+                .isNull();
+        assertThat(reload(dying).status().name()).isEqualTo("DEAD");
+
+        // An erased document cannot be drawn again, by the agent or for a preview.
+        MvcResult preview =
+                call(postJson(PRINT + "/documents/preview", MANAGER, "{\"jobId\":\"" + printed.id() + "\"}"));
+        assertThat(preview.getResponse().getStatus()).isGreaterThanOrEqualTo(400);
+    }
+
+    @Test
+    @DisplayName(
+            "a kitchen ticket waiting two minutes on a printer that reports itself offline raises one alert, and the same outage raises no second")
+    void anOfflinePrinterWithATicketWaitingIsAnAlert() throws Exception {
+        routes.create(
+                TENANT,
+                BRAND,
+                LOCATION,
+                new RouteDraft(PrintDocumentType.KITCHEN_TICKET, null, counter.id(), 1, true, true),
+                MANAGER);
+        SeededOrder order = world.order(LOCATION, "K-002", null, false, LineSpec.of("Plov", 1, 50_000));
+        UUID ticket = world.releasedTicket(order, LOCATION, "K-002", Map.of(0, PrintingWorld.GRILL), clock.instant());
+        new TransactionTemplate(transactions)
+                .executeWithoutResult(
+                        status -> events.publishEvent(new uz.horecaos.platform.kitchen.api.KitchenTicketReleased(
+                                UUID.randomUUID(), TENANT, BRAND, LOCATION, ticket, order.orderId(), clock.instant())));
+        fake.reportsStatus("counter", "OFFLINE");
+        fake.claimed(1);
+
+        clock.advance(Duration.ofSeconds(90));
+        assertThat(maintenance.runOnce().offlineAlerts())
+                .as("ninety seconds is not yet two minutes")
+                .isZero();
+
+        clock.advance(Duration.ofSeconds(40));
+        assertThat(maintenance.runOnce().offlineAlerts()).isEqualTo(1);
+        maintenance.runOnce();
+
+        List<uz.horecaos.platform.support.RecordingOperationsAlertPort.Call> raised = alerts.calls().stream()
+                .filter(call -> call.eventClass().equals("PRINTER_OFFLINE"))
+                .filter(call -> call.subjectId().equals(counter.id()))
+                .toList();
+        assertThat(raised)
+                .as("the sweep runs every half minute; one outage is one episode")
+                .isNotEmpty();
+        assertThat(raised.stream().map(call -> call.idempotencyKeyBase()).distinct())
+                .as("every repeat of the same episode carries one key, which the fan-out de-duplicates")
+                .hasSize(1);
+        assertThat(raised.getFirst().locationId()).isEqualTo(LOCATION);
+        assertThat(raised.getFirst().variables()).containsEntry("printerStatus", "OFFLINE");
+
+        // The printer comes back: the agent's next claim says so, the ticket is handed out, and nothing more is raised.
+        long before = alerts.calls().size();
+        fake.reportsStatus("counter", "ONLINE");
+        assertThat(fake.claimed(1))
+                .as("the waiting ticket is claimed once the printer is back")
+                .hasSize(1);
+        clock.advance(Duration.ofMinutes(5));
+        maintenance.runOnce();
+        assertThat(alerts.calls().size()).as("an online printer raises nothing").isEqualTo((int) before);
     }
 
     // ---------------------------------------------------- late and retried paper

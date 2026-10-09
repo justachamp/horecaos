@@ -1,0 +1,240 @@
+<section
+  class="card"
+  data-testid="print-printers"
+  [attr.aria-label]="'settings.printing.printers.title' | t"
+>
+  <div class="card__head">
+    <h2 class="q-subhead">{{ 'settings.printing.printers.title' | t }}</h2>
+    @if (editing() === null) {
+      <button type="button" class="primary" data-testid="print-printer-add" (click)="openNew()">
+        {{ 'settings.printing.printers.add' | t }}
+      </button>
+    }
+  </div>
+  <p class="q-body-sm muted">{{ 'settings.printing.printers.lead' | t }}</p>
+
+  @if (notice(); as message) {
+    <p class="q-body-sm success" role="status" data-testid="print-printers-notice">{{ message }}</p>
+  }
+  @if (error(); as message) {
+    <p class="q-body-sm error" role="alert" data-testid="print-printers-error">{{ message }}</p>
+  }
+
+  @if (editing() !== null) {
+    <form class="form" data-testid="print-printer-form" (submit)="$event.preventDefault(); save()">
+      <label class="q-body-sm">
+        {{ 'settings.printing.printers.form.name' | t }}
+        <input
+          class="field"
+          type="text"
+          maxlength="120"
+          data-testid="print-printer-name"
+          [value]="name()"
+          (input)="name.set($any($event.target).value)"
+        />
+      </label>
+
+      <label class="q-body-sm">
+        {{ 'settings.printing.printers.form.tape' | t }}
+        <select
+          class="field"
+          data-testid="print-printer-tape"
+          [value]="tape()"
+          (change)="tape.set($any($event.target).value === '58' ? 58 : 80)"
+        >
+          @for (width of widths; track width) {
+            <option [value]="width" [selected]="tape() === width">
+              {{ 'settings.printing.printers.tape' | t: { width } }}
+            </option>
+          }
+        </select>
+      </label>
+
+      <label class="q-body-sm">
+        {{ 'settings.printing.printers.form.connection' | t }}
+        <select
+          class="field"
+          data-testid="print-printer-kind"
+          [value]="kind()"
+          (change)="setKind($any($event.target).value === 'AGENT' ? 'AGENT' : 'BROWSER')"
+        >
+          <option value="BROWSER" [selected]="kind() === 'BROWSER'">
+            {{ 'settings.printing.printers.kind.browser' | t }}
+          </option>
+          <option value="AGENT" [selected]="kind() === 'AGENT'">
+            {{ 'settings.printing.printers.kind.agent' | t }}
+          </option>
+        </select>
+      </label>
+
+      @if (kind() === 'BROWSER') {
+        <p class="q-caption muted">{{ 'settings.printing.printers.form.browserNote' | t }}</p>
+      } @else {
+        @if (activeAgents().length === 0) {
+          <p class="q-body-sm banner" data-testid="print-printer-no-agent">
+            {{ 'settings.printing.printers.form.noAgent' | t }}
+          </p>
+        } @else {
+          <label class="q-body-sm">
+            {{ 'settings.printing.printers.form.agent' | t }}
+            <select
+              class="field"
+              data-testid="print-printer-agent"
+              [value]="agentId()"
+              (change)="setAgent($any($event.target).value)"
+            >
+              <option value="" [selected]="agentId() === ''">—</option>
+              @for (agent of activeAgents(); track agent.device.deviceId) {
+                <option
+                  [value]="agent.device.deviceId"
+                  [selected]="agentId() === agent.device.deviceId"
+                >
+                  {{ agent.device.displayName }}
+                </option>
+              }
+            </select>
+          </label>
+          @if (agentId() !== '') {
+            @if (aliases().length === 0) {
+              <p class="q-body-sm banner" data-testid="print-printer-no-alias">
+                {{ 'settings.printing.printers.form.noAlias' | t }}
+              </p>
+            } @else {
+              <label class="q-body-sm">
+                {{ 'settings.printing.printers.form.alias' | t }}
+                <select
+                  class="field"
+                  data-testid="print-printer-alias"
+                  [value]="agentKey()"
+                  (change)="agentKey.set($any($event.target).value)"
+                >
+                  <option value="" [selected]="agentKey() === ''">—</option>
+                  @for (alias of aliases(); track alias.key) {
+                    <option [value]="alias.key" [selected]="agentKey() === alias.key">
+                      {{ alias.key }} · {{ statusKeys[alias.status] | t }}
+                    </option>
+                  }
+                </select>
+              </label>
+              <p class="q-caption muted">{{ 'settings.printing.printers.form.aliasNote' | t }}</p>
+            }
+          }
+        }
+      }
+
+      <div class="form__actions">
+        <button type="button" class="secondary" [disabled]="busy()" (click)="cancel()">
+          {{ 'settings.printing.cancel' | t }}
+        </button>
+        <button
+          type="submit"
+          class="primary"
+          data-testid="print-printer-save"
+          [disabled]="!canSave()"
+        >
+          {{ 'settings.printing.save' | t }}
+        </button>
+      </div>
+    </form>
+  }
+
+  @if (printers().length === 0) {
+    <p class="q-body-sm banner" data-testid="print-printers-empty">
+      {{ 'settings.printing.printers.empty' | t }}
+    </p>
+  } @else {
+    <table class="table q-body-sm">
+      <thead>
+        <tr>
+          <th>{{ 'settings.printing.printers.col.name' | t }}</th>
+          <th>{{ 'settings.printing.printers.col.roll' | t }}</th>
+          <th>{{ 'settings.printing.printers.col.connection' | t }}</th>
+          <th>{{ 'settings.printing.printers.col.status' | t }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (printer of printers(); track printer.id) {
+          <tr [attr.data-printer]="printer.id" [attr.data-status]="printer.status">
+            <td>{{ printer.displayName }}</td>
+            <td>{{ 'settings.printing.printers.tape' | t: { width: printer.tapeWidthMm } }}</td>
+            <td>
+              @if (printer.connectionKind === 'BROWSER') {
+                {{ 'settings.printing.printers.kind.browser' | t }}
+              } @else {
+                {{ agentName(printer) ?? '—' }} ·
+                <span class="q-mono">{{ printer.agentPrinterKey }}</span>
+              }
+            </td>
+            <td>
+              @if (printer.status === 'RETIRED') {
+                <span class="chip q-caption">{{
+                  'settings.printing.printers.status.retired' | t
+                }}</span>
+              } @else if (printer.connectionKind === 'BROWSER') {
+                <span class="muted">—</span>
+              } @else if (printer.lastStatus && printer.lastStatusAt) {
+                <span
+                  class="chip q-caption"
+                  [class.chip--good]="printer.lastStatus === 'ONLINE'"
+                  [class.chip--bad]="
+                    printer.lastStatus !== 'ONLINE' && printer.lastStatus !== 'UNKNOWN'
+                  "
+                  [attr.data-testid]="'print-printer-status-' + printer.id"
+                  >{{ statusKeys[printer.lastStatus] | t }}</span
+                >
+                <span class="q-caption muted">{{ seen(printer.lastStatusAt) }}</span>
+              } @else {
+                <span class="chip q-caption">{{
+                  'settings.printing.printer.status.unknown' | t
+                }}</span>
+              }
+            </td>
+            <td>
+              <div class="row-actions">
+                @if (printer.status === 'ACTIVE') {
+                  <button
+                    type="button"
+                    class="link"
+                    [disabled]="busy()"
+                    [attr.data-testid]="'print-printer-test-' + printer.id"
+                    (click)="testPage(printer)"
+                  >
+                    {{ 'settings.printing.printers.testPage' | t }}
+                  </button>
+                  <button
+                    type="button"
+                    class="link"
+                    [disabled]="busy()"
+                    (click)="openEdit(printer)"
+                  >
+                    {{ 'settings.printing.edit' | t }}
+                  </button>
+                  <button
+                    type="button"
+                    class="link"
+                    [disabled]="busy()"
+                    [attr.data-testid]="'print-printer-retire-' + printer.id"
+                    (click)="setRetired(printer, true)"
+                  >
+                    {{ 'settings.printing.printers.retire' | t }}
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    class="link"
+                    [disabled]="busy()"
+                    [attr.data-testid]="'print-printer-restore-' + printer.id"
+                    (click)="setRetired(printer, false)"
+                  >
+                    {{ 'settings.printing.printers.restore' | t }}
+                  </button>
+                }
+              </div>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</section>

@@ -1,0 +1,44 @@
+:host {
+  display: block;
+  max-width: 1100px;
+}
+
+.lead {
+  color: var(--q-ink-muted);
+  margin-block-start: 4px;
+  max-width: 720px;
+}
+
+.banner {
+  margin: 16px 0 0;
+  padding: 8px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+}
+
+.denied {
+  color: var(--q-error-text);
+}
+
+.error-band {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-block-start: 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--q-error-text);
+  border-radius: var(--q-radius);
+  color: var(--q-error-text);
+}
+
+.secondary {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}

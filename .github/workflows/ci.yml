@@ -89,6 +89,12 @@ jobs:
           python3 tools/ci/test_shard_tests.py
           python3 tools/ci/shard_tests.py check
 
+      - name: Reference print agent (ADR 0154)
+        # The agent a support engineer runs at a branch, proven against a fake platform
+        # and a fake printer on loopback. Node is on the runner; the agent has no
+        # dependencies, so there is nothing to install.
+        run: node --test tools/print-agent/print-agent.test.mjs
+
       - name: Makefile reaches Maven under the build lock
         # make test/arch/verify go through tools/mvn-serial; make run compiles
         # under it and serves outside it, so a dev server never holds the tree.
