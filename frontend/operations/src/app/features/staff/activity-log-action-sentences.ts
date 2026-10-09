@@ -200,6 +200,101 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       'uz-Latn': 'Tasdiqlash soʻralindi',
     },
     'audit.read': { en: 'Audit read', ru: 'Журнал просмотр', 'uz-Latn': 'Jurnal koʻrish' },
+    'catalog.autoAddRule.activated': {
+      en: 'Auto-add rule activated',
+      ru: 'Правило автодобавления активировано',
+      'uz-Latn': 'Avtomatik qoʻshish qoidasi faollashtirildi',
+    },
+    'catalog.autoAddRule.archived': {
+      en: 'Auto-add rule archived',
+      ru: 'Правило автодобавления архивировано',
+      'uz-Latn': 'Avtomatik qoʻshish qoidasi arxivlandi',
+    },
+    'catalog.autoAddRule.created': {
+      en: 'Auto-add rule created',
+      ru: 'Правило автодобавления создано',
+      'uz-Latn': 'Avtomatik qoʻshish qoidasi yaratildi',
+    },
+    'catalog.autoAddRule.updated': {
+      en: 'Auto-add rule changed',
+      ru: 'Правило автодобавления изменено',
+      'uz-Latn': 'Avtomatik qoʻshish qoidasi oʻzgartirildi',
+    },
+    'catalog.ingredient.archived': {
+      en: 'Ingredient archived',
+      ru: 'Ингредиент архивирован',
+      'uz-Latn': 'Tarkibiy qism arxivlandi',
+    },
+    'catalog.ingredient.created': {
+      en: 'Ingredient created',
+      ru: 'Ингредиент создан',
+      'uz-Latn': 'Tarkibiy qism yaratildi',
+    },
+    'catalog.ingredient.updated': {
+      en: 'Ingredient changed',
+      ru: 'Ингредиент изменён',
+      'uz-Latn': 'Tarkibiy qism oʻzgartirildi',
+    },
+    'catalog.mxikReference.import-applied': {
+      en: 'IKPU/MXIK reference import applied',
+      ru: 'Загрузка справочника ИКПУ/MXIK применена',
+      'uz-Latn': 'IKPU/MXIK maʻlumotnomasini yuklash qoʻllandi',
+    },
+    'catalog.mxikReference.import-failed': {
+      en: 'IKPU/MXIK reference import failed',
+      ru: 'Загрузка справочника ИКПУ/MXIK не удалась',
+      'uz-Latn': 'IKPU/MXIK maʻlumotnomasini yuklash muvaffaqiyatsiz',
+    },
+    'catalog.mxikReference.import-held': {
+      en: 'IKPU/MXIK reference import held for review',
+      ru: 'Загрузка справочника ИКПУ/MXIK задержана для проверки',
+      'uz-Latn': 'IKPU/MXIK maʻlumotnomasini yuklash tekshiruv uchun toʻxtatildi',
+    },
+    'catalog.mxikReference.import-rejected': {
+      en: 'IKPU/MXIK reference import rejected',
+      ru: 'Загрузка справочника ИКПУ/MXIK отклонена',
+      'uz-Latn': 'IKPU/MXIK maʻlumotnomasini yuklash rad etildi',
+    },
+    'catalog.mxikReference.import-validated': {
+      en: 'IKPU/MXIK reference file checked (dry run)',
+      ru: 'Файл справочника ИКПУ/MXIK проверен (пробный прогон)',
+      'uz-Latn': 'IKPU/MXIK maʻlumotnomasi fayli tekshirildi (sinov)',
+    },
+    'catalog.product.ingredients-set': {
+      en: 'Product ingredients set',
+      ru: 'Состав товара задан',
+      'uz-Latn': 'Mahsulot tarkibi belgilandi',
+    },
+    'catalog.product.tags-set': {
+      en: 'Product tags set',
+      ru: 'Теги товара заданы',
+      'uz-Latn': 'Mahsulot teglari belgilandi',
+    },
+    'catalog.tag.archived': {
+      en: 'Tag archived',
+      ru: 'Тег архивирован',
+      'uz-Latn': 'Teg arxivlandi',
+    },
+    'catalog.tag.created': {
+      en: 'Tag created',
+      ru: 'Тег создан',
+      'uz-Latn': 'Teg yaratildi',
+    },
+    'catalog.tag.updated': {
+      en: 'Tag changed',
+      ru: 'Тег изменён',
+      'uz-Latn': 'Teg oʻzgartirildi',
+    },
+    'inventory.stock.disposed': {
+      en: 'Stock put back or written off after a sale',
+      ru: 'Остаток возвращён на склад или списан после продажи',
+      'uz-Latn': 'Sotuvdan keyin zaxira omborga qaytarildi yoki hisobdan chiqarildi',
+    },
+    'ordering.order.line-removed': {
+      en: 'Item removed from a confirmed order',
+      ru: 'Позиция убрана из подтверждённого заказа',
+      'uz-Latn': 'Tasdiqlangan buyurtmadan pozitsiya olib tashlandi',
+    },
     'catalog.channelMediaOverride.replaced': {
       en: 'Photos shown on a channel replaced',
       ru: 'Фото для канала заменены',

@@ -1251,6 +1251,9 @@ export class NewOrderPage implements OnInit {
   /** The rules' lines the last quote added and the operator has not declined. */
   protected readonly autoAddedLines = computed(() => this.serverQuote()?.autoAdded ?? []);
 
+  /** The declined rules, in the order they were declined, for the "put back" list. */
+  protected readonly declinedAutoAddList = computed(() => [...this.declinedAutoAdd().values()]);
+
   protected declineAutoAdd(line: QuotedAutoAddLine): void {
     if (line.mandatory) {
       return;

@@ -869,11 +869,11 @@ export const catalogUzLatn: AreaMessages<typeof catalogEn> = {
     'Tavsiya etilgan mahsulotlar: mahsulot tahrirlagichidagi «Tavsiyalar» yorligʻi',
   'catalog.referenceData.link.brands': 'Brendlar: Sozlamalar, Brend',
   'catalog.referenceData.tags.lead':
-    'Teg — mahsulot kartasidagi belgi va/yoki menyudagi filtr varianti. Kodni bir marta tanlang; mijoz oʻqiydigan nom har bir tilda kiritiladi. Bitta mahsulotga ko‘pi bilan oʻn ikkita.',
+    'Teg — mahsulot kartasidagi belgi va/yoki menyudagi filtr varianti. Kodni bir marta tanlang; mijoz oʻqiydigan nom har bir tilda kiritiladi. Bitta mahsulotga koʻpi bilan oʻn ikkita.',
   'catalog.referenceData.ingredients.lead':
-    'Tarkib — mahsulot sahifasida koʻrsatiladigan tarkib yozuvi. Uning narxi, qoldigʻi yoʻq, buyurtma qilinmaydi va sanalmaydi, allergenlarni eʼlon qilmaydi: bu roʻyxatni allergenlar haqidagi bayonot sifatida ishlatmang. Bitta mahsulotga koʻpi bilan qirqta.',
+    'Tarkib — mahsulot sahifasida koʻrsatiladigan tarkib yozuvi. Uning narxi, qoldigʻi yoʻq, buyurtma qilinmaydi va sanalmaydi, allergenlarni eʻlon qilmaydi: bu roʻyxatni allergenlar haqidagi bayonot sifatida ishlatmang. Bitta mahsulotga koʻpi bilan qirqta.',
   'catalog.referenceData.tenantWide':
-    'Shu tenantning barcha brendlari uchun umumiy. Arxivlash yozuvni tanlovdan va keyingi eʼlondan olib tashlaydi; unga ega mahsulotlarda u saqlanadi.',
+    'Shu tenantning barcha brendlari uchun umumiy. Arxivlash yozuvni tanlovdan va keyingi eʻlondan olib tashlaydi; unga ega mahsulotlarda u saqlanadi.',
   'catalog.referenceData.form.title': 'Yangi yozuv',
   'catalog.referenceData.form.code': 'Kod',
   'catalog.referenceData.form.codeHint':
@@ -929,7 +929,7 @@ export const catalogUzLatn: AreaMessages<typeof catalogEn> = {
   'catalog.editor.vocabulary.noneLeft':
     'Roʻyxatdagi hammasi tanlangan. Yangilarini «Katalog, Maʻlumotnomalar»da qoʻshing.',
   'catalog.editor.vocabulary.save': 'Saqlash',
-  'catalog.editor.vocabulary.saved': 'Saqlandi. Mijozlar buni keyingi eʼlondan keyin koʻradi.',
+  'catalog.editor.vocabulary.saved': 'Saqlandi. Mijozlar buni keyingi eʻlondan keyin koʻradi.',
   'catalog.editor.vocabulary.refusal.limit':
     'Mahsulotda cheklangan son boʻladi; avval bittasini olib tashlang.',
   'catalog.editor.vocabulary.refusal.archived': 'Arxivdagi yozuvni qoʻshib boʻlmaydi.',

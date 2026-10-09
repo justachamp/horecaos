@@ -175,7 +175,7 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   'orders.dialog.removal.reasonPlaceholder': 'Sababni tanlang',
   'orders.dialog.removal.noReasons':
     'Ijarachida faol olib tashlash sababi yoʻq, shuning uchun taomni buyurtmadan hozircha olib boʻlmaydi.',
-  'orders.dialog.removal.noReasonsLink': 'Maʼlumotnomalarda qoʻshing',
+  'orders.dialog.removal.noReasonsLink': 'Maʻlumotnomalarda qoʻshing',
   'orders.dialog.removeLines.title': 'Taomlarni olib tashlash',
   'orders.dialog.removeLines.lead':
     'Buyurtmadan nimani olib tashlashni tanlang. Kombo butunlay olib tashlanadi.',
@@ -187,7 +187,7 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   'orders.dialog.amendConfirm.stock.returned': 'Omborga qaytadi: {count}.',
   'orders.dialog.amendConfirm.stock.released': 'Bron bekor qilinadi: {count}.',
   'orders.dialog.amendConfirm.stock.kitchen':
-    'Oshxona tayyorlashni boshlagan, shuning uchun sabab qanday boʻlishidan qatʼi nazar hisobdan chiqariladi.',
+    'Oshxona tayyorlashni boshlagan, shuning uchun sabab qanday boʻlishidan qatʻi nazar hisobdan chiqariladi.',
 
   'orders.dialog.changeAddress.line2': 'Manzil, 2-qator',
   'orders.dialog.changeAddress.city': 'Shahar',
@@ -712,6 +712,11 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   'orders.newOrder.order.total': 'Jami',
   'orders.newOrder.order.totalPending': 'Har bir taom narxi aniqlangach hisoblanadi',
   'orders.newOrder.order.totalWithDelivery': 'Yetkazib berish bilan jami',
+  'orders.newOrder.autoAdd.added': 'avtomatik qoʻshilgan',
+  'orders.newOrder.autoAdd.mandatory': 'olib tashlab boʻlmaydi',
+  'orders.newOrder.autoAdd.decline': 'Olib tashlash',
+  'orders.newOrder.autoAdd.declined': '{name}: bu buyurtmadan olib tashlandi',
+  'orders.newOrder.autoAdd.restore': 'Qaytarish',
   'orders.newOrder.order.submit': 'Yaratish',
   'orders.newOrder.order.submitting': 'Yaratilmoqda…',
   'orders.newOrder.order.cancel': 'Bekor qilish',

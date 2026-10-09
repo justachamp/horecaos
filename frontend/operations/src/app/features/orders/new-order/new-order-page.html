@@ -782,16 +782,16 @@
                 </span>
               </li>
             }
-            @for (declined of declinedAutoAdd() | keyvalue; track declined.key) {
+            @for (declined of declinedAutoAddList(); track declined.ruleId) {
               <li
                 class="q-caption new-order__order-row"
-                [attr.data-testid]="'new-order-auto-add-declined-' + declined.value.ruleCode"
+                [attr.data-testid]="'new-order-auto-add-declined-' + declined.ruleCode"
               >
-                <span>{{ 'orders.newOrder.autoAdd.declined' | t: { name: autoAddLabel(declined.value) } }}</span>
+                <span>{{ 'orders.newOrder.autoAdd.declined' | t: { name: autoAddLabel(declined) } }}</span>
                 <button
                   type="button"
                   class="new-order__link"
-                  (click)="restoreAutoAdd(declined.key)"
+                  (click)="restoreAutoAdd(declined.ruleId)"
                 >
                   {{ 'orders.newOrder.autoAdd.restore' | t }}
                 </button>
