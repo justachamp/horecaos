@@ -1316,7 +1316,7 @@ to set correctly.
 
 **What it is for.** What gets printed, where, and what the customer ends up holding.
 
-**Owned by [ADR 0154](../adr/not-started/0154-printing-and-receipts.md)** (accepted 2026-10-07), which
+**Owned by [ADR 0154](../adr/partial/0154-printing-and-receipts.md)** (accepted 2026-10-07), which
 reopens this section's earlier decline: ADR 0011's port list still has no print capability, and the
 decision does not add one. «Печать в POS» keeps meaning "send to the till" (the `Экспорт в кассу`
 action, `ORDER_EXPORT`); printing on a printer HorecaOS knows is a separate module (`printing`) that
