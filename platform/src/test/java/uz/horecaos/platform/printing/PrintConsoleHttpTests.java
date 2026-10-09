@@ -689,4 +689,192 @@ class PrintConsoleHttpTests extends PrintingSpringTest {
                 .isEqualTo(404);
         assertThat(auditCount("printing.agent.enrolled")).isEqualTo(1);
     }
+
+    // ------------------------------------------------- the queue's own reprint
+
+    private String jobReprint(String jobId) {
+        return PRINT + "/jobs/" + jobId + "/reprint";
+    }
+
+    @Test
+    @DisplayName(
+            "a finished job is printed again from the queue: a new marked copy linked to the first, with the person and the reason; one still on its way, a test page and a retired printer are refused")
+    void reprintFromTheQueue() throws Exception {
+        JsonNode counter = agentPrinter("Counter", "counter");
+        route("ORDER_SLIP", null, counter.get("id").asString(), true);
+        SeededOrder order = anOrder();
+        confirm(order);
+        JobRow original =
+                store.listJobs(TENANT, LOCATION, List.of(), null, null, 5).getFirst();
+        String reason = "{\"reasonCode\":\"PAPER_JAM\"}";
+
+        MvcResult early = call(postJson(jobReprint(original.id().toString()), MANAGER, reason));
+        assertThat(early.getResponse().getStatus()).isEqualTo(422);
+        assertThat(early.getResponse().getContentAsString())
+                .as("a job still on its way to paper is not printed twice by pressing a button")
+                .contains("JOB_NOT_FINISHED");
+
+        assertThat(fake.handleOnce()).hasSize(1);
+        assertThat(store.findJob(TENANT, original.id()).orElseThrow().status().name())
+                .isEqualTo("PRINTED");
+
+        JsonNode again = created(postJson(jobReprint(original.id().toString()), CASHIER, reason));
+        assertThat(again.get("origin").asString()).isEqualTo("MANUAL");
+        assertThat(again.get("status").asString()).isEqualTo("QUEUED");
+        assertThat(again.get("documentType").asString()).isEqualTo("ORDER_SLIP");
+        assertThat(again.get("printerId").asString())
+                .as("without a printer it goes where the old job went")
+                .isEqualTo(counter.get("id").asString());
+        assertThat(again.get("reasonCode").asString()).isEqualTo("PAPER_JAM");
+        assertThat(again.get("requestedBy").asString()).isEqualTo(CASHIER);
+        assertThat(again.get("reprintOf").asString()).isEqualTo(original.id().toString());
+        assertThat(again.get("sourceId").asString()).isEqualTo(order.orderId().toString());
+        JobRow stored = store.findJob(TENANT, UUID.fromString(again.get("id").asString()))
+                .orElseThrow();
+        assertThat(PrintingSteps.documentOf(stored, protection, codec).copyMarker())
+                .as("every print after the first says it is a copy")
+                .isTrue();
+        assertThat(jdbc.sql("SELECT actor_subject FROM audit.audit_events WHERE action_code = 'printing.job.reprinted'")
+                        .query(String.class)
+                        .list())
+                .containsExactly(CASHIER);
+        assertThat(jdbc.sql("SELECT reason FROM audit.audit_events WHERE action_code = 'printing.job.reprinted'")
+                        .query(String.class)
+                        .single())
+                .isEqualTo("PAPER_JAM");
+
+        String testPageId = created(
+                        postJson(PRINT + "/printers/" + counter.get("id").asString() + "/test-page", MANAGER, null))
+                .get("id")
+                .asString();
+        // A printer is served one job at a time, in order: drain the copy and the test page.
+        while (!fake.handleOnce().isEmpty()) {
+            clock.advance(Duration.ofSeconds(1));
+        }
+        MvcResult testPage = call(postJson(jobReprint(testPageId), MANAGER, reason));
+        assertThat(testPage.getResponse().getStatus()).isEqualTo(422);
+        assertThat(testPage.getResponse().getContentAsString()).contains("JOB_NOT_REPRINTABLE");
+
+        ok(putJson(
+                PRINT + "/printers/" + counter.get("id").asString(),
+                MANAGER,
+                counter.get("version").asLong(),
+                "{\"displayName\":\"Counter\",\"tapeWidthMm\":80,\"agentDeviceId\":\"" + agent.deviceId()
+                        + "\",\"agentPrinterKey\":\"counter\",\"status\":\"RETIRED\"}"));
+        MvcResult retired = call(postJson(jobReprint(original.id().toString()), MANAGER, reason));
+        assertThat(retired.getResponse().getStatus()).isEqualTo(422);
+        assertThat(retired.getResponse().getContentAsString()).contains("PRINTER_RETIRED");
+        JsonNode desk = browserPrinter("Front desk", 80);
+        assertThat(created(postJson(
+                                jobReprint(original.id().toString()),
+                                MANAGER,
+                                "{\"printerId\":\"" + desk.get("id").asString() + "\",\"reasonCode\":\"OTHER\"}"))
+                        .get("status")
+                        .asString())
+                .as("a chosen browser printer is handed off")
+                .isEqualTo("HANDED_OFF");
+
+        assertThat(status(postJson(jobReprint(original.id().toString()), SIBLING_MANAGER, reason)))
+                .as("a manager of another branch")
+                .isIn(403, 404);
+        assertThat(status(postJson(jobReprint(UUID.randomUUID().toString()), MANAGER, reason)))
+                .isEqualTo(404);
+        assertThat(status(postJson(jobReprint(original.id().toString()), MANAGER, "{\"reasonCode\":\"NOT_A_REASON\"}")))
+                .isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName(
+            "a kitchen ticket that was printed is reprinted for its own station from the queue, with the amendment as it is now")
+    void reprintAKitchenTicketFromTheQueue() throws Exception {
+        JsonNode counter = agentPrinter("Counter", "counter");
+        route("KITCHEN_TICKET", PrintingWorld.GRILL, counter.get("id").asString(), true);
+        SeededOrder order = world.order(LOCATION, "K-007", null, false, LineSpec.of("Plov", 1, 50_000));
+        UUID ticket = world.releasedTicket(order, LOCATION, "K-007", Map.of(0, PrintingWorld.GRILL), clock.instant());
+        new TransactionTemplate(transactions)
+                .executeWithoutResult(
+                        status -> events.publishEvent(new uz.horecaos.platform.kitchen.api.KitchenTicketReleased(
+                                UUID.randomUUID(), TENANT, BRAND, LOCATION, ticket, order.orderId(), clock.instant())));
+        JobRow original =
+                store.listJobs(TENANT, LOCATION, List.of(), null, null, 5).getFirst();
+        assertThat(fake.handleOnce()).hasSize(1);
+
+        JsonNode again = created(
+                postJson(jobReprint(original.id().toString()), MANAGER, "{\"reasonCode\":\"KITCHEN_REQUEST\"}"));
+
+        assertThat(again.get("documentType").asString()).isEqualTo("KITCHEN_TICKET");
+        assertThat(again.get("sourceType").asString()).isEqualTo("KITCHEN_TICKET");
+        assertThat(again.get("sourceId").asString()).isEqualTo(ticket.toString());
+        assertThat(again.get("stationId").asString()).isEqualTo(PrintingWorld.GRILL.toString());
+        assertThat(again.get("reprintOf").asString()).isEqualTo(original.id().toString());
+        assertThat(PrintingSteps.documentOf(
+                                store.findJob(
+                                                TENANT,
+                                                UUID.fromString(again.get("id").asString()))
+                                        .orElseThrow(),
+                                protection,
+                                codec)
+                        .copyMarker())
+                .isTrue();
+    }
+
+    // ----------------------------------------------- whether the till may print
+
+    @Test
+    @DisplayName(
+            "the routes screen is told whether the branch has an active order-export binding, which is the only fact the platform holds about its till printing")
+    void theTillMayAlreadyPrint() throws Exception {
+        assertThat(ok(getAs(PRINT + "/pos-export", MANAGER))
+                        .get("orderExportActive")
+                        .asBoolean())
+                .as("a branch with no POS binding")
+                .isFalse();
+
+        UUID installation = UUID.randomUUID();
+        UUID binding = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO integration.installations
+                    (id, tenant_id, provider_category, provider_type, environment_code,
+                     display_name, status, secret_reference)
+                VALUES (:id, :tenantId, 'POS', 'clopos', 'clopos-open-api-v2', 'The till', 'ACTIVE', :secret)
+                """)
+                .param("id", installation)
+                .param("tenantId", TENANT)
+                .param("secret", "horecaos:local:provider_pos:" + installation + ":key")
+                .update();
+        jdbc.sql("""
+                INSERT INTO integration.bindings
+                    (id, tenant_id, installation_id, brand_id, location_id, status, priority, effective_from)
+                VALUES (:id, :tenantId, :installation, :brandId, :locationId, 'ACTIVE', 1,
+                        now() - interval '1 hour')
+                """)
+                .param("id", binding)
+                .param("tenantId", TENANT)
+                .param("installation", installation)
+                .param("brandId", BRAND)
+                .param("locationId", LOCATION)
+                .update();
+        jdbc.sql("""
+                INSERT INTO integration.binding_capabilities
+                    (binding_id, tenant_id, capability_code, enabled, is_primary, verified_at)
+                VALUES (:binding, :tenantId, 'ORDER_EXPORT', true, true, now())
+                """).param("binding", binding).param("tenantId", TENANT).update();
+
+        assertThat(ok(getAs(PRINT + "/pos-export", MANAGER))
+                        .get("orderExportActive")
+                        .asBoolean())
+                .as("an active binding that provides ORDER_EXPORT here")
+                .isTrue();
+        assertThat(ok(getAs(
+                                "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + PrintingWorld.SIBLING
+                                        + "/print/pos-export",
+                                SIBLING_MANAGER))
+                        .get("orderExportActive")
+                        .asBoolean())
+                .as("another branch of the same brand has no binding of its own")
+                .isFalse();
+        assertThat(status(getAs(PRINT + "/pos-export", SIBLING_MANAGER)))
+                .as("a manager of another branch")
+                .isIn(403, 404);
+    }
 }

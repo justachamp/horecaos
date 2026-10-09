@@ -480,6 +480,32 @@ class PrintAgentHttpTests extends PrintingSpringTest {
         assertThat(reload(job).status().name()).isEqualTo("EXPIRED");
     }
 
+    // ------------------------------------------------------ an agent knows its branch
+
+    @Test
+    @DisplayName(
+            "an enrolled print agent learns which tenant, brand and branch it was approved at from the device self-read, and a revoked one is refused it")
+    void anAgentReadsItsOwnBranch() throws Exception {
+        MvcResult me = call(getAs("/api/v1/devices/me", agent.subject()));
+        assertThat(me.getResponse().getStatus())
+                .as(me.getResponse().getContentAsString())
+                .isEqualTo(200);
+        String body = me.getResponse().getContentAsString();
+        assertThat(body)
+                .contains("\"deviceClass\":\"PRINT_AGENT\"")
+                .contains(TENANT.toString())
+                .contains(BRAND.toString())
+                .contains(LOCATION.toString())
+                .as("the self-read never returns a secret, a client id or a token")
+                .doesNotContain("secret")
+                .doesNotContain("clientId");
+
+        ok(postJson(PRINT + "/agents/" + agent.deviceId() + "/revoke", MANAGER, "{\"reason\":\"machine replaced\"}"));
+        assertThat(status(getAs("/api/v1/devices/me", agent.subject())))
+                .as("a token that outlives a revocation stops at once")
+                .isEqualTo(403);
+    }
+
     // -------------------------------------------------------------- what is kept
 
     @Test

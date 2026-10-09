@@ -7816,6 +7816,10 @@ export interface PrintPendingAgentResponse {
   requestedLabel?: string;
 }
 
+export interface PrintPosExportResponse {
+  orderExportActive?: boolean;
+}
+
 export interface PrintPreviewRequest {
   documentType?: "KITCHEN_TICKET" | "ORDER_SLIP" | "FISCAL_RECEIPT" | "TEST_PAGE";
   jobId?: string;
@@ -7849,6 +7853,11 @@ export interface PrintPrinterResponse {
 export interface PrintReportedPrinter {
   key: string;
   status: string;
+}
+
+export interface PrintReprintJobRequest {
+  printerId?: string;
+  reasonCode: "CUSTOMER_REQUEST" | "PAPER_JAM" | "PRINTER_FAULT" | "KITCHEN_REQUEST" | "AMENDED_ORDER" | "TEST" | "OTHER";
 }
 
 export interface PrintReprintRequest {
@@ -12862,7 +12871,9 @@ export interface Operations {
   "printGetJob": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/print/jobs/{jobId}"; request: { parameters: { path: { brandId: string; jobId: string; locationId: string; tenantId: string } } }; responses: { "200": PrintJobResponse } };
   "printJobArtifact": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/print/jobs/{jobId}/artifact"; request: { parameters: { path: { brandId: string; jobId: string; locationId: string; tenantId: string }; query: { lease: string } } }; responses: { "200": string } };
   "printCancelJob": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/print/jobs/{jobId}/cancel"; request: { parameters: { path: { brandId: string; jobId: string; locationId: string; tenantId: string } } }; responses: { "200": PrintJobResponse } };
+  "printReprintJob": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/print/jobs/{jobId}/reprint"; request: { parameters: { path: { brandId: string; jobId: string; locationId: string; tenantId: string } }; body: PrintReprintJobRequest }; responses: { "200": PrintJobResponse } };
   "printReportResult": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/print/jobs/{jobId}/results"; request: { parameters: { path: { brandId: string; jobId: string; locationId: string; tenantId: string } }; body: PrintResultRequest }; responses: { "200": PrintResultResponse } };
+  "printGetPosExport": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/print/pos-export"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": PrintPosExportResponse } };
   "printListPrinters": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/print/printers"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<PrintPrinterResponse> } };
   "printRegisterPrinter": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/print/printers"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: PrintPrinterRequest }; responses: { "200": PrintPrinterResponse } };
   "printUpdatePrinter": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/print/printers/{printerId}"; request: { parameters: { path: { brandId: string; locationId: string; printerId: string; tenantId: string } }; body: PrintPrinterRequest }; responses: { "200": PrintPrinterResponse } };

@@ -214,6 +214,130 @@ public class PrintOnDemandService {
         return made;
     }
 
+    /**
+     * Prints the document of a job in the queue again (ADR 0154, "Print queue ... with reprint and cancel"): a dead
+     * job, an expired kitchen ticket, a paper jam. It is a new job, regenerated from the facts as they are now,
+     * marked as a copy, linked to the first print of that document and recorded with the person and the reason; it
+     * never resurrects the old job. Without {@code printerId} the document goes to the printer the old job was
+     * for, which must still be active.
+     *
+     * <p>The job names its source (an order, a kitchen ticket and station, a fiscal document), so the queue can
+     * reprint a document whose order the queue does not know. A fiscal receipt is rebuilt through the same
+     * builder as the first print and so is refused, naming the state, if its document is no longer an
+     * {@code ISSUED} {@code SALE}.
+     */
+    @Transactional
+    public JobRow reprintJob(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID jobId,
+            @Nullable UUID printerId,
+            Reason reason,
+            String actorSubject) {
+        rls.bindTenant(tenantId);
+        guard.requireEnabled(tenantId, brandId, locationId);
+        JobRow old = store.findJob(tenantId, jobId)
+                .filter(found -> found.locationId().equals(locationId))
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such print job"));
+        if (old.documentType() == PrintDocumentType.TEST_PAGE || old.sourceId() == null) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "A test page has no document to print again; ask for a new test page on the printer",
+                    Map.of(
+                            "reason",
+                            "JOB_NOT_REPRINTABLE",
+                            "documentType",
+                            old.documentType().name()));
+        }
+        if (old.status() == JobStatus.QUEUED || old.status() == JobStatus.CLAIMED) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "That job is still on its way to paper; wait for it, or cancel it first",
+                    Map.of("reason", "JOB_NOT_FINISHED", "state", old.status().name()));
+        }
+        PrinterRow printer = activePrinter(tenantId, locationId, printerId != null ? printerId : old.printerId());
+        UUID sourceId = old.sourceId();
+        Instant now = clock.instant();
+        JobRow made;
+        switch (old.documentType()) {
+            case ORDER_SLIP -> {
+                OrderSummary order = orders.summary(tenantId, sourceId)
+                        .filter(found -> found.locationId().equals(locationId))
+                        .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order"));
+                Built built = documents.orderSlip(printer, sourceId, true);
+                made = manual(
+                        printer,
+                        old.documentType(),
+                        "ORDER",
+                        sourceId,
+                        order.version(),
+                        null,
+                        built,
+                        reason,
+                        actorSubject,
+                        now);
+            }
+            case FISCAL_RECEIPT -> {
+                Built built = documents.fiscalReceipt(printer, sourceId, true);
+                made = manual(
+                        printer,
+                        old.documentType(),
+                        "FISCAL_DOCUMENT",
+                        sourceId,
+                        0,
+                        null,
+                        built,
+                        reason,
+                        actorSubject,
+                        now);
+            }
+            case KITCHEN_TICKET -> {
+                PrintableTicket ticket = tickets.find(tenantId, sourceId)
+                        .filter(found -> found.locationId().equals(locationId))
+                        .orElseThrow(() -> new ApiException(
+                                ErrorCode.UNPROCESSABLE_STATE,
+                                "This order has no kitchen ticket",
+                                Map.of("reason", "NO_KITCHEN_TICKET")));
+                UUID stationId = old.stationId();
+                if (stationId == null) {
+                    throw new ApiException(
+                            ErrorCode.UNPROCESSABLE_STATE,
+                            "That kitchen job names no station",
+                            Map.of("reason", "JOB_NOT_REPRINTABLE"));
+                }
+                Built built = documents.kitchenTicket(printer, sourceId, stationId, true, ticket.amendmentRevision());
+                made = manual(
+                        printer,
+                        old.documentType(),
+                        "KITCHEN_TICKET",
+                        sourceId,
+                        ticket.amendmentRevision(),
+                        stationId,
+                        built,
+                        reason,
+                        actorSubject,
+                        now);
+            }
+            default -> throw new IllegalStateException("not a reprintable document: " + old.documentType());
+        }
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("reprintOfJobId", old.id().toString());
+        after.put("sourceType", old.sourceType());
+        after.put("sourceId", sourceId.toString());
+        after.put("documentType", made.documentType().name());
+        after.put("printerId", made.printerId().toString());
+        after.put("reasonCode", reason.name());
+        after.put("status", made.status().name());
+        audit.created(
+                "printing.job.reprinted",
+                AuditClass.BUSINESS,
+                new Subject(
+                        tenantId, brandId, locationId, "printing.print_job", made.id(), actorSubject, reason.name()),
+                after);
+        return made;
+    }
+
     /** Asks for a test page on one printer: the roll's width, a ruler, every glyph, a QR and the printer's name. */
     @Transactional
     public JobRow testPage(UUID tenantId, UUID brandId, UUID locationId, UUID printerId, String actorSubject) {
