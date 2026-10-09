@@ -1,6 +1,8 @@
 package uz.horecaos.platform.fulfillment.infrastructure.persistence;
 
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,6 +57,8 @@ public class JdbcDeliveryFeeResolutionStore {
         params.put("distanceMode", name(resolution.distanceMode()));
         params.put("distanceSource", name(resolution.distanceSource()));
         params.put("routingProvider", resolution.routingProvider());
+        params.put("routingSeconds", resolution.routingSeconds());
+        params.put("routingDatasetVersion", resolution.routingDatasetVersion());
         params.put("providerQuote", resolution.providerQuoteMinor());
         params.put("computedFee", resolution.computedFeeMinor());
         params.put("finalFee", resolution.finalFeeMinor());
@@ -69,6 +73,7 @@ public class JdbcDeliveryFeeResolutionStore {
                     zone_id, zone_version, tariff_id, tariff_version,
                     band_sequence, time_rule_sequence,
                     distance_meters, distance_mode, distance_source, routing_provider,
+                    routing_seconds, routing_dataset_version,
                     provider_quote_minor, computed_fee_minor, final_fee_minor,
                     tariff_discount_minor, discount_sequence, currency,
                     losing_zone_ids, evidence)
@@ -77,6 +82,7 @@ public class JdbcDeliveryFeeResolutionStore {
                     :zoneId, :zoneVersion, :tariffId, :tariffVersion,
                     :bandSequence, :timeRuleSequence,
                     :distanceMeters, :distanceMode, :distanceSource, :routingProvider,
+                    :routingSeconds, :routingDatasetVersion,
                     :providerQuote, :computedFee, :finalFee,
                     :tariffDiscount, :discountSequence, :currency,
                     :losingZoneIds, CAST(:evidence AS jsonb))
@@ -96,6 +102,7 @@ public class JdbcDeliveryFeeResolutionStore {
                        zone_id, zone_version, tariff_id, tariff_version,
                        band_sequence, time_rule_sequence,
                        distance_meters, distance_mode, distance_source, routing_provider,
+                       routing_seconds, routing_dataset_version,
                        provider_quote_minor, computed_fee_minor, final_fee_minor,
                        tariff_discount_minor, discount_sequence, currency,
                        losing_zone_ids, created_at
@@ -127,6 +134,8 @@ public class JdbcDeliveryFeeResolutionStore {
                         row.getString("distance_mode"),
                         row.getString("distance_source"),
                         row.getString("routing_provider"),
+                        row.getObject("routing_seconds", Integer.class),
+                        row.getString("routing_dataset_version"),
                         row.getObject("provider_quote_minor", Long.class),
                         row.getObject("computed_fee_minor", Long.class),
                         row.getObject("final_fee_minor", Long.class),
@@ -137,6 +146,57 @@ public class JdbcDeliveryFeeResolutionStore {
                         row.getObject("created_at", OffsetDateTime.class).toInstant()))
                 .list();
     }
+
+    /**
+     * What routing has done for one version of a {@code ROAD} tariff since an instant
+     * (ADR 0147): how many fees the engine measured, how many fell back to the straight
+     * line, and what the most recent of either was.
+     *
+     * <p>Counts stored resolutions only, so a simulation or a storefront preview, which
+     * write nothing, are not in it: this is what was charged, not what was tried. Read
+     * through {@code ix_fee_resolution_tariff_range}.
+     */
+    public RoutingActivity routingActivity(UUID tenantId, UUID tariffId, int tariffVersion, Instant since) {
+        return jdbc.sql("""
+                SELECT count(*) FILTER (WHERE distance_source = 'ROAD') AS road_fees,
+                       count(*) FILTER (WHERE distance_source = 'RADIUS_FALLBACK') AS fallback_fees,
+                       (array_agg(distance_source ORDER BY created_at DESC, id)
+                            FILTER (WHERE distance_source IN ('ROAD', 'RADIUS_FALLBACK')))[1] AS last_source,
+                       max(created_at) FILTER (WHERE distance_source IN ('ROAD', 'RADIUS_FALLBACK')) AS last_at,
+                       (array_agg(routing_dataset_version ORDER BY created_at DESC, id)
+                            FILTER (WHERE distance_source = 'ROAD'))[1] AS last_dataset
+                  FROM fulfillment.delivery_fee_resolutions
+                 WHERE tenant_id = :tenantId AND tariff_id = :tariffId AND tariff_version = :tariffVersion
+                   AND created_at >= :since
+                   AND distance_mode = 'ROAD'
+                """)
+                .param("tenantId", tenantId)
+                .param("tariffId", tariffId)
+                .param("tariffVersion", tariffVersion)
+                .param("since", OffsetDateTime.ofInstant(since, ZoneOffset.UTC))
+                .query((row, number) -> {
+                    String lastSource = row.getString("last_source");
+                    OffsetDateTime lastAt = row.getObject("last_at", OffsetDateTime.class);
+                    return new RoutingActivity(
+                            row.getLong("road_fees"),
+                            row.getLong("fallback_fees"),
+                            lastSource == null ? null : DistanceSource.valueOf(lastSource),
+                            lastAt == null ? null : lastAt.toInstant(),
+                            row.getString("last_dataset"));
+                })
+                .single();
+    }
+
+    /**
+     * @param lastSource  {@code ROAD} or {@code RADIUS_FALLBACK}, from the newest such row, or null
+     * @param lastDatasetVersion the dataset on the newest {@code ROAD} row, or null when there is none
+     */
+    public record RoutingActivity(
+            long roadFees,
+            long fallbackFees,
+            @Nullable DistanceSource lastSource,
+            @Nullable Instant lastAt,
+            @Nullable String lastDatasetVersion) {}
 
     public Optional<ResolutionRow> latestForQuote(UUID tenantId, UUID quoteId) {
         return forQuote(tenantId, quoteId).stream().findFirst();
@@ -159,6 +219,8 @@ public class JdbcDeliveryFeeResolutionStore {
             String distanceMode,
             String distanceSource,
             String routingProvider,
+            Integer routingSeconds,
+            String routingDatasetVersion,
             Long providerQuoteMinor,
             Long computedFeeMinor,
             Long finalFeeMinor,
@@ -166,7 +228,7 @@ public class JdbcDeliveryFeeResolutionStore {
             Integer discountSequence,
             String currency,
             List<UUID> losingZoneIds,
-            java.time.Instant createdAt) {}
+            Instant createdAt) {}
 
     /**
      * Reads a {@code uuid[]} without assuming the driver's element type.

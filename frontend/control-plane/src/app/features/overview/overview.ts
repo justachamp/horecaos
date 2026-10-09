@@ -36,23 +36,39 @@ export class Overview {
   protected readonly loadError = signal<string | null>(null);
   protected readonly health = signal<PlatformHealth | null>(null);
 
-  protected readonly tenantsActive = computed(() => this.count(this.health()?.tenantsByStatus, 'ACTIVE'));
-  protected readonly tenantsProvisioning = computed(() => this.count(this.health()?.tenantsByStatus, 'PROVISIONING'));
+  protected readonly tenantsActive = computed(() =>
+    this.count(this.health()?.tenantsByStatus, 'ACTIVE'),
+  );
+  protected readonly tenantsProvisioning = computed(() =>
+    this.count(this.health()?.tenantsByStatus, 'PROVISIONING'),
+  );
   protected readonly tenantsOther = computed(() => {
     const counts = this.health()?.tenantsByStatus ?? {};
     return total(counts) - (counts['ACTIVE'] ?? 0) - (counts['PROVISIONING'] ?? 0);
   });
   protected readonly ordersLive = computed(() => total(this.health()?.orders.liveByStatus ?? {}));
-  protected readonly receiptsIssued = computed(() => this.health()?.receipts.lastDayByStatus['ISSUED'] ?? 0);
-  protected readonly receiptsDay = computed(() => total(this.health()?.receipts.lastDayByStatus ?? {}));
-  protected readonly outboxWaiting = computed(() => (this.health()?.queues.outbox ?? []).reduce((sum, q) => sum + q.pending, 0));
-  protected readonly inboxWaiting = computed(() => (this.health()?.queues.inbox ?? []).reduce((sum, q) => sum + q.pending, 0));
+  protected readonly receiptsIssued = computed(
+    () => this.health()?.receipts.lastDayByStatus['ISSUED'] ?? 0,
+  );
+  protected readonly receiptsDay = computed(() =>
+    total(this.health()?.receipts.lastDayByStatus ?? {}),
+  );
+  protected readonly outboxWaiting = computed(() =>
+    (this.health()?.queues.outbox ?? []).reduce((sum, q) => sum + q.pending, 0),
+  );
+  protected readonly inboxWaiting = computed(() =>
+    (this.health()?.queues.inbox ?? []).reduce((sum, q) => sum + q.pending, 0),
+  );
   protected readonly oldestQueueWait = computed(() => {
     const queues = this.health()?.queues;
     if (!queues) {
       return 0;
     }
-    return Math.max(0, ...queues.outbox.map((q) => q.oldestAgeSeconds), ...queues.inbox.map((q) => q.oldestAgeSeconds));
+    return Math.max(
+      0,
+      ...queues.outbox.map((q) => q.oldestAgeSeconds),
+      ...queues.inbox.map((q) => q.oldestAgeSeconds),
+    );
   });
 
   constructor() {

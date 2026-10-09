@@ -137,10 +137,16 @@ public enum StreamChannel {
      * changed, the same reasoning {@code ORDER_QUEUE}/{@code ORDER_DETAIL}
      * already share one cadence cap for.
      *
-     * <p>{@code kitchen.ticket.read} rather than a new capability: a wall
-     * display or a touch KDS reads the identical aggregate a desk console
-     * already reads, at the identical {@code LOCATION} scope, so there is
-     * nothing here for a fourth capability to separate.
+     * <p>{@code kitchen.ticket.read}: a touch KDS or a desk console reads the
+     * identical aggregate at the identical {@code LOCATION} scope, so the channel
+     * needs no capability of its own for them. <strong>A wall display does not
+     * subscribe.</strong> ADR 0151 gave it a class whose only capability is {@code
+     * kitchen.display.read}, which opens the VDU projection and nothing else, so
+     * it cannot satisfy this channel (nor {@code location.read}, the stream's own
+     * gate), and the wall polls every ten seconds, the fallback ADR 0045 requires of
+     * every surface anyway. Widening the stream's gate for a device is a decision
+     * of its own, not taken here; the manager's preview of a wall on a staff
+     * session keeps the stream.
      */
     KITCHEN_BOARD(
             EnumSet.of(ScopeType.LOCATION),

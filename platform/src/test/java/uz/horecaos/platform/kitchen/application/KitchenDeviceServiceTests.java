@@ -30,6 +30,9 @@ import uz.horecaos.platform.iam.application.devices.DeviceEnrolmentService;
 import uz.horecaos.platform.iam.application.devices.FakeDeviceClientProvisioner;
 import uz.horecaos.platform.iam.infrastructure.authorization.JdbcAuthorizationService;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
+import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenDeviceDisplayStore;
+import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore;
+import uz.horecaos.platform.support.FakeConfigurationResolver;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.cache.InProcessRateLimiter;
 
@@ -58,6 +61,7 @@ class KitchenDeviceServiceTests {
     private JdbcClient jdbc;
     private DeviceEnrolmentPort enrolment;
     private KitchenDeviceService devices;
+    private KitchenDeviceDisplayService displays;
 
     @BeforeAll
     static void startDatabase() {
@@ -113,8 +117,16 @@ class KitchenDeviceServiceTests {
 
         enrolment = new DeviceEnrolmentService(
                 jdbc, new FakeDeviceClientProvisioner(), grants, new InProcessRateLimiter(clock), clock);
-        devices = new KitchenDeviceService(
-                enrolment, new JdbcAuditRecorder(jdbc, JsonMapper.builder().build()), clock);
+        JdbcAuditRecorder audit =
+                new JdbcAuditRecorder(jdbc, JsonMapper.builder().build());
+        displays = new KitchenDeviceDisplayService(
+                new JdbcKitchenDeviceDisplayStore(jdbc),
+                new JdbcKitchenStore(jdbc),
+                enrolment,
+                new FakeConfigurationResolver(),
+                audit,
+                clock);
+        devices = new KitchenDeviceService(enrolment, displays, audit, clock);
 
         insertHierarchy();
     }
@@ -123,7 +135,8 @@ class KitchenDeviceServiceTests {
     void approvingWritesASecurityAuditFactNamingTheManagerAndTheDevice() {
         String userCode = begin();
 
-        DevicePrincipalView device = devices.approve(TENANT, BRAND, LOCATION, userCode, "Line 1 KDS", "manager-1");
+        DevicePrincipalView device = devices.approve(
+                TENANT, BRAND, LOCATION, userCode, "Line 1 KDS", DevicePrincipalClass.KITCHEN_KDS, "manager-1");
 
         assertThat(jdbc.sql("""
                         SELECT actor_subject, target_type, target_id
@@ -153,7 +166,8 @@ class KitchenDeviceServiceTests {
     @Test
     void revokingWritesASecurityAuditFactAndASecondRevokeWritesNone() {
         String userCode = begin();
-        DevicePrincipalView device = devices.approve(TENANT, BRAND, LOCATION, userCode, "Line 1 KDS", "manager-1");
+        DevicePrincipalView device = devices.approve(
+                TENANT, BRAND, LOCATION, userCode, "Line 1 KDS", DevicePrincipalClass.KITCHEN_KDS, "manager-1");
 
         boolean first = devices.revoke(TENANT, BRAND, LOCATION, device.id(), "Screen replaced", "manager-1");
         boolean second = devices.revoke(TENANT, BRAND, LOCATION, device.id(), "Pressed again", "manager-1");
@@ -179,7 +193,7 @@ class KitchenDeviceServiceTests {
     @Test
     void aBranchsDeviceListNeverIncludesASiblingBranchsDevice() {
         String userCode = begin();
-        devices.approve(TENANT, BRAND, LOCATION, userCode, "Line 1 KDS", "manager-1");
+        devices.approve(TENANT, BRAND, LOCATION, userCode, "Line 1 KDS", DevicePrincipalClass.KITCHEN_KDS, "manager-1");
 
         assertThat(devices.list(TENANT, LOCATION)).hasSize(1);
         assertThat(devices.list(TENANT, SIBLING_LOCATION)).isEmpty();

@@ -5,12 +5,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Versioned } from '../../core/api/aggregate-version';
 import { LocationScope } from '../../core/api/operations-paths';
+import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { Auth } from '../../core/auth/auth';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { Capability, SessionCapabilities } from '../../core/auth/session-capabilities';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { BrandProfileApi } from '../settings/brand-profile/brand-profile-api';
+import { addressEditorFakes } from './address-editor-fakes.testing';
+import { ContactAttempt, CustomerCard, LeadsApi } from './leads-api';
 import { ReviewsApi } from './reviews/reviews-api';
 import {
   BlacklistStatus,
@@ -58,6 +61,7 @@ function fakeCapabilities(
     'CUSTOMER_MANAGE',
     'CUSTOMER_PII_REVEAL',
     'CUSTOMER_ERASURE_EXECUTE',
+    'CUSTOMER_LEAD_MANAGE',
     'LOYALTY_ADJUST',
   ],
 ): { has: (capability: Capability) => boolean } {
@@ -70,6 +74,82 @@ const FAKE_REVIEWS_API = { list: vi.fn().mockResolvedValue({ items: [], nextCurs
 
 const FAKE_BRAND_PROFILE_API = { list: vi.fn().mockResolvedValue([]) };
 
+/** ADR 0111: opening the pane opens the card, which is an audited read — the fake counts the opens. */
+const CARD: CustomerCard = {
+  customerAccountId: 'customer-1',
+  status: 'ACTIVE',
+  displayName: 'Dilnoza Karimova',
+  preferredLocale: 'ru',
+  version: 3,
+  blacklisted: false,
+  leads: [],
+  history: [
+    {
+      kind: 'NOTIFICATION',
+      occurredAt: '2026-09-01T10:00:00Z',
+      channel: 'SMS',
+      statusCode: 'DELIVERED',
+      detailCode: 'order.confirmation',
+      referenceId: 'notification-1',
+      orderId: 'order-1',
+      rating: null,
+      label: null,
+    },
+  ],
+  nextBefore: null,
+  nextBeforeId: null,
+};
+
+const FAKE_LEADS_API = {
+  openCard: vi.fn().mockResolvedValue(CARD),
+  recordCustomerAttempt: vi.fn(),
+};
+
+/** A promise the test settles by hand, to answer requests in the order that exposes a race. */
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((onResolve, onReject) => {
+    resolve = onResolve;
+    reject = onReject;
+  });
+  return { promise, resolve, reject };
+}
+
+function cardOf(
+  accountId: string,
+  detailCode: string,
+  nextBefore: string | null = null,
+): CustomerCard {
+  return {
+    ...CARD,
+    customerAccountId: accountId,
+    nextBefore,
+    nextBeforeId: nextBefore === null ? null : `cursor-${detailCode}`,
+    history: [{ ...CARD.history[0], detailCode, referenceId: `n-${detailCode}` }],
+  };
+}
+
+const RECORDED: ContactAttempt = {
+  id: 'attempt-row-1',
+  brandId: 'brand-1',
+  leadId: null,
+  customerAccountId: 'customer-1',
+  direction: 'OUTBOUND',
+  attemptId: 'a-1',
+  outcome: 'CONNECTED',
+  blockingReason: null,
+  operatorActorId: 'operator-subject-1',
+  occurredAt: '2026-10-08T09:00:00Z',
+  recordedAt: '2026-10-08T09:00:00Z',
+  nextAction: null,
+  nextActionAt: null,
+};
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -80,6 +160,8 @@ describe('CustomerDetailPane', () => {
   let api: Record<string, ReturnType<typeof vi.fn>>;
 
   beforeEach(async () => {
+    FAKE_LEADS_API.openCard.mockReset().mockResolvedValue(CARD);
+    FAKE_LEADS_API.recordCustomerAttempt.mockReset();
     api = {
       profile: vi.fn().mockResolvedValue(PROFILE),
       updateProfile: vi.fn().mockResolvedValue(PROFILE.value),
@@ -106,11 +188,13 @@ describe('CustomerDetailPane', () => {
       imports: [CustomerDetailPane],
       providers: [
         provideRouter([]),
+        ...addressEditorFakes().providers,
         { provide: CustomersApi, useValue: api },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
         { provide: Auth, useValue: FAKE_AUTH },
         { provide: SessionCapabilities, useValue: fakeCapabilities() },
         { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+        { provide: LeadsApi, useValue: FAKE_LEADS_API },
         { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
       ],
     }).compileComponents();
@@ -125,6 +209,25 @@ describe('CustomerDetailPane', () => {
   it('reads the profile through the operator’s own tenant/brand scope', () => {
     expect(api['profile']).toHaveBeenCalledWith(SCOPE, 'customer-1');
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Dilnoza Karimova');
+  });
+
+  it('opens the card once when the account is shown, and the Contacts tab renders it without opening it again', async () => {
+    const host: HTMLElement = fixture.nativeElement;
+    expect(FAKE_LEADS_API.openCard).toHaveBeenCalledTimes(1);
+    expect(FAKE_LEADS_API.openCard).toHaveBeenCalledWith(
+      'tenant-1',
+      'customer-1',
+      'Operations console: open customer card',
+    );
+
+    (host.querySelector('[data-testid="tab-history"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelectorAll('[data-testid="card-entry"]')).toHaveLength(1);
+    expect(host.textContent).toContain('order.confirmation');
+    expect(FAKE_LEADS_API.openCard).toHaveBeenCalledTimes(1);
   });
 
   it('shows "not blacklisted" on the Blacklist tab, with no reveal call made', async () => {
@@ -217,11 +320,13 @@ describe('CustomerDetailPane', () => {
         imports: [CustomerDetailPane],
         providers: [
           provideRouter([]),
+          ...addressEditorFakes().providers,
           { provide: CustomersApi, useValue: api },
           { provide: CurrentLocation, useValue: denied },
           { provide: Auth, useValue: FAKE_AUTH },
           { provide: SessionCapabilities, useValue: fakeCapabilities() },
           { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+          { provide: LeadsApi, useValue: FAKE_LEADS_API },
           { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
         ],
       })
@@ -239,12 +344,14 @@ describe('CustomerDetailPane', () => {
   });
 
   /**
-   * Pins the `customer-detail-pane.ts:493-495` guard: `saveEditedAddress`
-   * carries `original.latitude`/`original.longitude`/`original.coordinateSource`
-   * through unchanged, because this form has no map or pin picker and the
-   * backend refuses a `coordinateSource` that claims a point with none
-   * attached. A regression here silently drops a storefront pin the moment
-   * an operator fixes a typo in the street name.
+   * Pins the 5.2c guard: an address edit that does not touch the pin carries
+   * `original.latitude`/`original.longitude`/`original.coordinateSource`
+   * through unchanged -- now that this form has a map and a pin picker, the
+   * easy mistake is the opposite one, re-labelling a storefront pin as the
+   * operator's own. The backend refuses a `coordinateSource` that claims a
+   * point with none attached, and a regression here silently drops or
+   * re-labels a customer's pin the moment an operator fixes a typo in the
+   * street name.
    */
   it('editing an address field carries the existing pin through, never dropping it', async () => {
     const address: RevealedCustomerAddress = {
@@ -272,11 +379,13 @@ describe('CustomerDetailPane', () => {
         imports: [CustomerDetailPane],
         providers: [
           provideRouter([]),
+          ...addressEditorFakes().providers,
           { provide: CustomersApi, useValue: updateApi },
           { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
           { provide: Auth, useValue: FAKE_AUTH },
           { provide: SessionCapabilities, useValue: fakeCapabilities() },
           { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+          { provide: LeadsApi, useValue: FAKE_LEADS_API },
           { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
         ],
       })
@@ -302,9 +411,10 @@ describe('CustomerDetailPane', () => {
     addressFixture.detectChanges();
 
     // Only the street line is touched — a typo fix, nothing about the point.
-    const line1Input = host.querySelectorAll('.address-form input')[1] as HTMLInputElement;
+    const line1Input = host.querySelector('[data-testid="q-address-street"]') as HTMLInputElement;
     line1Input.value = 'Amir Temur ko’chasi 14';
     line1Input.dispatchEvent(new Event('input'));
+    addressFixture.detectChanges();
 
     const saveButton = Array.from(
       host.querySelectorAll('.address-form .form__actions button'),
@@ -368,6 +478,7 @@ describe('CustomerDetailPane', () => {
           { provide: Auth, useValue: FAKE_AUTH },
           { provide: SessionCapabilities, useValue: fakeCapabilities() },
           { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+          { provide: LeadsApi, useValue: FAKE_LEADS_API },
           { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
         ],
       })
@@ -452,6 +563,7 @@ describe('CustomerDetailPane', () => {
           { provide: Auth, useValue: FAKE_AUTH },
           { provide: SessionCapabilities, useValue: fakeCapabilities() },
           { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+          { provide: LeadsApi, useValue: FAKE_LEADS_API },
           { provide: BrandProfileApi, useValue: brandProfiles },
         ],
       })
@@ -519,6 +631,7 @@ describe('CustomerDetailPane', () => {
           { provide: Auth, useValue: FAKE_AUTH },
           { provide: SessionCapabilities, useValue: fakeCapabilities() },
           { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+          { provide: LeadsApi, useValue: FAKE_LEADS_API },
           { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
         ],
       })
@@ -586,6 +699,7 @@ describe('CustomerDetailPane', () => {
             { provide: Auth, useValue: FAKE_AUTH },
             { provide: SessionCapabilities, useValue: fakeCapabilities(held) },
             { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+            { provide: LeadsApi, useValue: FAKE_LEADS_API },
             { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
           ],
         })
@@ -614,5 +728,399 @@ describe('CustomerDetailPane', () => {
       'CUSTOMER_ERASURE_EXECUTE',
     ]);
     expect(withExecute.host.querySelector('[data-testid="erasure-execute"]')).not.toBeNull();
+  });
+
+  // ------------------------------------- rows 5.2c / 1.3b (ADR 0145): a pin on a saved address
+
+  describe('saved addresses with a pin', () => {
+    const EXISTING: RevealedCustomerAddress = {
+      id: 'address-1',
+      label: 'Home',
+      fields: { line1: 'Bunyodkor 12', city: 'Toshkent', district: 'Chilonzor' },
+      deliveryInstructions: null,
+      latitude: 41.31,
+      longitude: 69.28,
+      coordinateSource: 'CUSTOMER_PIN',
+      version: 4,
+    };
+
+    async function mountAddresses(addresses: readonly RevealedCustomerAddress[]): Promise<{
+      host: HTMLElement;
+      view: ComponentFixture<CustomerDetailPane>;
+      fakes: ReturnType<typeof addressEditorFakes>;
+      customers: Record<string, ReturnType<typeof vi.fn>>;
+    }> {
+      const fakes = addressEditorFakes();
+      const customers = {
+        ...api,
+        revealAddresses: vi.fn().mockResolvedValue(addresses),
+        addAddress: vi.fn().mockResolvedValue({ id: 'address-new' }),
+        updateAddress: vi.fn().mockResolvedValue(undefined),
+      };
+      await TestBed.resetTestingModule()
+        .configureTestingModule({
+          imports: [CustomerDetailPane],
+          providers: [
+            provideRouter([]),
+            ...fakes.providers,
+            { provide: CustomersApi, useValue: customers },
+            { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+            { provide: Auth, useValue: FAKE_AUTH },
+            { provide: SessionCapabilities, useValue: fakeCapabilities() },
+            { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+            { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
+          ],
+        })
+        .compileComponents();
+      TestBed.inject(I18n).setLocale('en');
+      const view = TestBed.createComponent(CustomerDetailPane);
+      view.componentRef.setInput('accountId', 'customer-1');
+      view.detectChanges();
+      await flushMicrotasks();
+      view.detectChanges();
+      const host: HTMLElement = view.nativeElement;
+      (host.querySelectorAll('.tab')[1] as HTMLButtonElement).click();
+      view.detectChanges();
+      await flushMicrotasks();
+      view.detectChanges();
+      return { host, view, fakes, customers };
+    }
+
+    const button = (host: HTMLElement, text: string): HTMLButtonElement =>
+      Array.from(host.querySelectorAll('button')).find((b) =>
+        b.textContent?.trim().includes(text),
+      ) as HTMLButtonElement;
+
+    function typeInto(host: HTMLElement, testId: string, value: string): void {
+      const field = host.querySelector(`[data-testid="${testId}"]`) as HTMLInputElement;
+      field.value = value;
+      field.dispatchEvent(new Event('input'));
+    }
+
+    it('creates an address with a pin the operator placed: coordinates and OPERATOR_PIN together', async () => {
+      const { host, view, customers } = await mountAddresses([]);
+
+      button(host, 'Add address').click();
+      view.detectChanges();
+      await flushMicrotasks();
+      view.detectChanges();
+      typeInto(host, 'q-address-street', 'Bunyodkor 12');
+      typeInto(host, 'address-editor-city', 'Toshkent');
+      typeInto(host, 'address-editor-district', 'Chilonzor');
+      typeInto(host, 'q-map-pin-latitude', '41.3');
+      typeInto(host, 'q-map-pin-longitude', '69.2');
+      view.detectChanges();
+      await flushMicrotasks();
+      view.detectChanges();
+      button(host, 'Save').click();
+      await flushMicrotasks();
+
+      expect(customers['addAddress']).toHaveBeenCalledTimes(1);
+      const request = customers['addAddress'].mock.calls[0][2];
+      expect(request.latitude).toBe(41.3);
+      expect(request.longitude).toBe(69.2);
+      expect(request.coordinateSource).toBe('OPERATOR_PIN');
+      expect(request.fields.line1).toBe('Bunyodkor 12');
+      expect(request.fields.city).toBe('Toshkent');
+    });
+
+    it('still creates an address with no pin at all, honestly NOT_GEOCODED, when there is no map or no time', async () => {
+      const { host, view, customers } = await mountAddresses([]);
+
+      button(host, 'Add address').click();
+      view.detectChanges();
+      await flushMicrotasks();
+      view.detectChanges();
+      typeInto(host, 'q-address-street', 'Bunyodkor 12');
+      typeInto(host, 'address-editor-city', 'Toshkent');
+      typeInto(host, 'address-editor-district', 'Chilonzor');
+      view.detectChanges();
+      button(host, 'Save').click();
+      await flushMicrotasks();
+
+      const request = customers['addAddress'].mock.calls[0][2];
+      expect(request.latitude).toBeNull();
+      expect(request.longitude).toBeNull();
+      expect(request.coordinateSource).toBe('NOT_GEOCODED');
+    });
+
+    it('will not save an address missing a street line, a city or a district', async () => {
+      const { host, view, customers } = await mountAddresses([]);
+
+      button(host, 'Add address').click();
+      view.detectChanges();
+      await flushMicrotasks();
+      view.detectChanges();
+      typeInto(host, 'q-address-street', 'Bunyodkor 12');
+      view.detectChanges();
+
+      const save = button(host, 'Save');
+      expect(save.disabled).toBe(true);
+      save.click();
+      await flushMicrotasks();
+
+      expect(customers['addAddress']).not.toHaveBeenCalled();
+      expect(host.querySelector('[data-testid="address-editor-incomplete"]')).not.toBeNull();
+    });
+
+    it('moves a saved pin: the new point is the operator’s, with its coordinates, at the address’s own version', async () => {
+      const { host, view, fakes, customers } = await mountAddresses([EXISTING]);
+
+      button(host, 'Edit').click();
+      view.detectChanges();
+      await flushMicrotasks();
+      view.detectChanges();
+      fakes.map.map.livePins[0].simulateDrag({ latitude: 41.35, longitude: 69.3 });
+      view.detectChanges();
+      await flushMicrotasks();
+      view.detectChanges();
+      button(host, 'Save').click();
+      await flushMicrotasks();
+
+      const [, , , request, version] = customers['updateAddress'].mock.calls[0];
+      expect(request.latitude).toBe(41.35);
+      expect(request.longitude).toBe(69.3);
+      expect(request.coordinateSource).toBe('OPERATOR_PIN');
+      expect(version).toBe(4);
+    });
+
+    it('shows the point a saved address carries, so a missing one is visible at a glance', async () => {
+      const { host } = await mountAddresses([
+        EXISTING,
+        {
+          ...EXISTING,
+          id: 'address-2',
+          latitude: null,
+          longitude: null,
+          coordinateSource: 'LANDMARK_ONLY',
+        },
+      ]);
+
+      const points = host.querySelectorAll('[data-testid="address-card-point"]');
+      expect(points).toHaveLength(1);
+      expect(points[0].textContent).toContain('41.31');
+    });
+  });
+
+  describe('the card across a change of guest and a lost or refused call (ADR 0111)', () => {
+    const host = (): HTMLElement => fixture.nativeElement;
+
+    async function settle(): Promise<void> {
+      await flushMicrotasks();
+      fixture.detectChanges();
+    }
+
+    async function showGuest(accountId: string): Promise<void> {
+      fixture.componentRef.setInput('accountId', accountId);
+      fixture.detectChanges();
+      await settle();
+    }
+
+    async function openHistoryTab(): Promise<void> {
+      (host().querySelector('[data-testid="tab-history"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      await settle();
+    }
+
+    function timeline(): string {
+      return host().querySelector('[data-testid="card-timeline"]')?.textContent ?? '';
+    }
+
+    it('drops the slow card of the guest first shown instead of putting it in the pane of the guest now shown', async () => {
+      const slowFirst = deferred<CustomerCard>();
+      FAKE_LEADS_API.openCard.mockImplementation((_tenant: string, accountId: string) =>
+        accountId === 'guest-a'
+          ? slowFirst.promise
+          : Promise.resolve(cardOf('guest-b', 'for-guest-b')),
+      );
+      await openHistoryTab();
+
+      await showGuest('guest-a');
+      await showGuest('guest-b');
+      expect(timeline()).toContain('for-guest-b');
+
+      slowFirst.resolve(cardOf('guest-a', 'for-guest-a'));
+      await settle();
+
+      expect(timeline()).toContain('for-guest-b');
+      expect(timeline()).not.toContain('for-guest-a');
+    });
+
+    it('drops the answer to a guest it was moved back from: the number is the showing, not the guest', async () => {
+      const firstShowing = deferred<CustomerCard>();
+      FAKE_LEADS_API.openCard
+        .mockImplementationOnce(() => firstShowing.promise)
+        .mockImplementation(() => Promise.resolve(cardOf('guest-a', 'second-showing')));
+      await openHistoryTab();
+
+      await showGuest('guest-a');
+      await showGuest('guest-b');
+      await showGuest('guest-a');
+      firstShowing.resolve(cardOf('guest-a', 'first-showing'));
+      await settle();
+
+      expect(timeline()).toContain('second-showing');
+      expect(timeline()).not.toContain('first-showing');
+    });
+
+    it('does not let the loading flag of a guest already left clear the loading of the one now shown', async () => {
+      const slowFirst = deferred<CustomerCard>();
+      const slowSecond = deferred<CustomerCard>();
+      FAKE_LEADS_API.openCard.mockImplementation((_tenant: string, accountId: string) =>
+        accountId === 'guest-a' ? slowFirst.promise : slowSecond.promise,
+      );
+      await openHistoryTab();
+      await showGuest('guest-a');
+      await showGuest('guest-b');
+
+      slowFirst.resolve(cardOf('guest-a', 'for-guest-a'));
+      await settle();
+
+      expect(host().textContent).toContain('Loading the card');
+      slowSecond.resolve(cardOf('guest-b', 'for-guest-b'));
+      await settle();
+      expect(timeline()).toContain('for-guest-b');
+    });
+
+    it('drops an older page requested for the guest left behind', async () => {
+      const olderOfA = deferred<CustomerCard>();
+      FAKE_LEADS_API.openCard.mockImplementation(
+        (_tenant: string, accountId: string, _purpose: string, before?: string) => {
+          if (accountId === 'guest-a' && before === undefined) {
+            return Promise.resolve(cardOf('guest-a', 'newest-of-a', '2026-08-01T00:00:00Z'));
+          }
+          if (accountId === 'guest-b') {
+            return Promise.resolve(cardOf('guest-b', 'for-guest-b'));
+          }
+          return olderOfA.promise;
+        },
+      );
+      await openHistoryTab();
+      await showGuest('guest-a');
+      (host().querySelector('[data-testid="card-older"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      await settle();
+
+      await showGuest('guest-b');
+      olderOfA.resolve(cardOf('guest-a', 'older-of-a'));
+      await settle();
+
+      expect(timeline()).toContain('for-guest-b');
+      expect(timeline()).not.toContain('older-of-a');
+      expect(host().querySelector('[data-testid="card-older"]')).toBeNull();
+    });
+
+    it('asks for the older page with the instant and the id the card handed out, and moves both on', async () => {
+      FAKE_LEADS_API.openCard.mockResolvedValueOnce(
+        cardOf('guest-a', 'newest-of-a', '2026-08-01T00:00:00Z'),
+      );
+      await openHistoryTab();
+      await showGuest('guest-a');
+      FAKE_LEADS_API.openCard.mockResolvedValueOnce(
+        cardOf('guest-a', 'older-of-a', '2026-07-01T00:00:00Z'),
+      );
+
+      (host().querySelector('[data-testid="card-older"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      await settle();
+
+      expect(FAKE_LEADS_API.openCard).toHaveBeenLastCalledWith(
+        'tenant-1',
+        'guest-a',
+        'Operations console: open customer card',
+        '2026-08-01T00:00:00Z',
+        'cursor-newest-of-a',
+      );
+      expect(timeline()).toContain('newest-of-a');
+      expect(timeline()).toContain('older-of-a');
+
+      FAKE_LEADS_API.openCard.mockResolvedValueOnce(cardOf('guest-a', 'oldest-of-a'));
+      (host().querySelector('[data-testid="card-older"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      await settle();
+
+      expect(FAKE_LEADS_API.openCard).toHaveBeenLastCalledWith(
+        'tenant-1',
+        'guest-a',
+        'Operations console: open customer card',
+        '2026-07-01T00:00:00Z',
+        'cursor-older-of-a',
+      );
+      expect(host().querySelector('[data-testid="card-older"]')).toBeNull();
+    });
+
+    async function submitCall(): Promise<void> {
+      (host().querySelector('[data-testid="recorder-submit"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      await settle();
+    }
+
+    async function openCallForm(): Promise<void> {
+      await openHistoryTab();
+      (host().querySelector('[data-testid="card-record-call"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+    }
+
+    it('keeps the call form open with the reason when the call is refused, and a retry is the same call', async () => {
+      FAKE_LEADS_API.recordCustomerAttempt
+        .mockRejectedValueOnce(new ApiError(ApiErrorCode.NETWORK_UNREACHABLE, 0, null, null))
+        .mockResolvedValueOnce(RECORDED);
+      await openCallForm();
+
+      await submitCall();
+
+      expect(host().querySelector('[data-testid="call-recorder"]')).not.toBeNull();
+      expect(host().querySelector('[data-testid="card-record-error"]')).not.toBeNull();
+      expect(host().querySelectorAll('[data-testid="card-entry"]')).toHaveLength(1);
+
+      await submitCall();
+
+      const [first, second] = FAKE_LEADS_API.recordCustomerAttempt.mock.calls;
+      expect(second[3].attemptId).toBeTruthy();
+      expect(second[3].attemptId).toBe(first[3].attemptId);
+      expect(host().querySelector('[data-testid="call-recorder"]')).toBeNull();
+      expect(host().querySelector('[data-testid="card-record-error"]')).toBeNull();
+      expect(host().querySelectorAll('[data-testid="card-entry"]')).toHaveLength(2);
+      expect(host().querySelector('[data-testid="card-entry"]')!.textContent).toContain(
+        'Spoke to them',
+      );
+    });
+
+    it('does not write a call answered after the pane moved to another guest into that guest’s card', async () => {
+      const slowCall = deferred<ContactAttempt>();
+      FAKE_LEADS_API.recordCustomerAttempt.mockReturnValue(slowCall.promise);
+      await openCallForm();
+      await submitCall();
+      FAKE_LEADS_API.openCard.mockResolvedValue(cardOf('guest-b', 'for-guest-b'));
+
+      await showGuest('guest-b');
+      slowCall.resolve(RECORDED);
+      await settle();
+
+      expect(host().querySelectorAll('[data-testid="card-entry"]')).toHaveLength(1);
+      expect(timeline()).toContain('for-guest-b');
+      expect(host().querySelector('[data-testid="call-recorder"]')).toBeNull();
+    });
+
+    it('lets the next guest be recorded straight away: a call still in flight for the last one does not hold the form busy', async () => {
+      const slowCall = deferred<ContactAttempt>();
+      FAKE_LEADS_API.recordCustomerAttempt.mockReturnValueOnce(slowCall.promise);
+      await openCallForm();
+      await submitCall();
+      FAKE_LEADS_API.openCard.mockResolvedValue(cardOf('guest-b', 'for-guest-b'));
+      await showGuest('guest-b');
+      FAKE_LEADS_API.recordCustomerAttempt.mockResolvedValueOnce({
+        ...RECORDED,
+        customerAccountId: 'guest-b',
+      });
+
+      (host().querySelector('[data-testid="card-record-call"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      await submitCall();
+
+      expect(FAKE_LEADS_API.recordCustomerAttempt).toHaveBeenCalledTimes(2);
+      expect(FAKE_LEADS_API.recordCustomerAttempt.mock.calls[1][1]).toBe('guest-b');
+      expect(host().querySelectorAll('[data-testid="card-entry"]')).toHaveLength(2);
+    });
   });
 });

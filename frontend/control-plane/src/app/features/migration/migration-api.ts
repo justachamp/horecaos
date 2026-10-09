@@ -63,7 +63,12 @@ export interface RunView {
 
 export type RunType = 'BACKFILL' | 'CATCH_UP' | 'REMEDIATION' | 'RECONCILIATION';
 export type RunStatus = 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
-export const RUN_TYPES: readonly RunType[] = ['BACKFILL', 'CATCH_UP', 'REMEDIATION', 'RECONCILIATION'];
+export const RUN_TYPES: readonly RunType[] = [
+  'BACKFILL',
+  'CATCH_UP',
+  'REMEDIATION',
+  'RECONCILIATION',
+];
 
 /** A legacy row that could not be migrated: its legacy id, a reason code, and a pointer to sanitized evidence. */
 export interface QuarantineItemView {
@@ -80,7 +85,11 @@ export interface QuarantineItemView {
 }
 
 /** How a quarantined row is settled; the server takes any upper-snake code, these are the three it names. */
-export const RESOLUTION_CODES = ['REIMPORTED_AFTER_SOURCE_FIX', 'MAPPED_BY_HAND', 'ACCEPTED_NOT_MIGRATABLE'] as const;
+export const RESOLUTION_CODES = [
+  'REIMPORTED_AFTER_SOURCE_FIX',
+  'MAPPED_BY_HAND',
+  'ACCEPTED_NOT_MIGRATABLE',
+] as const;
 
 /** Everything a scope may cover, in the platform's own order. */
 export const MIGRATION_CAPABILITIES = [
@@ -161,7 +170,12 @@ export class MigrationApi {
     );
   }
 
-  async changeProgramStatus(programId: string, status: ProgramStatus, expectedVersion: number, reason: string): Promise<void> {
+  async changeProgramStatus(
+    programId: string,
+    status: ProgramStatus,
+    expectedVersion: number,
+    reason: string,
+  ): Promise<void> {
     await firstValueFrom(
       this.api.post<void>(`/api/v1/platform-admin/migration/programs/${programId}/status`, {
         status,
@@ -177,7 +191,11 @@ export class MigrationApi {
     );
   }
 
-  async listScopes(programId: string, cursor: string | null = null, limit = 50): Promise<Page<ScopeView>> {
+  async listScopes(
+    programId: string,
+    cursor: string | null = null,
+    limit = 50,
+  ): Promise<Page<ScopeView>> {
     return firstValueFrom(
       this.api.getPage<ScopeView>(`/api/v1/platform-admin/migration/programs/${programId}/scopes`, {
         cursor,
@@ -296,7 +314,11 @@ export class MigrationApi {
   async decideCutover(
     scope: ScopeView,
     decision: 'approve' | 'refuse',
-    request: { readonly requestedBy: string; readonly evidence: Readonly<Record<string, string>>; readonly reason: string },
+    request: {
+      readonly requestedBy: string;
+      readonly evidence: Readonly<Record<string, string>>;
+      readonly reason: string;
+    },
   ): Promise<void> {
     await firstValueFrom(
       this.api.post<void>(
@@ -311,16 +333,27 @@ export class MigrationApi {
 
   async listRuns(scope: ScopeView, limit = 50): Promise<Page<RunView>> {
     return firstValueFrom(
-      this.api.getPage<RunView>(this.scopePath(scope.id, 'runs'), { limit }, { query: { tenantId: scope.tenantId } }),
+      this.api.getPage<RunView>(
+        this.scopePath(scope.id, 'runs'),
+        { limit },
+        { query: { tenantId: scope.tenantId } },
+      ),
     );
   }
 
   async startRun(
     scope: ScopeView,
-    request: { readonly runType: RunType; readonly transformationVersion: number; readonly startedBy: string; readonly reason: string },
+    request: {
+      readonly runType: RunType;
+      readonly transformationVersion: number;
+      readonly startedBy: string;
+      readonly reason: string;
+    },
   ): Promise<RunView> {
     return firstValueFrom(
-      this.api.post<RunView>(this.scopePath(scope.id, 'runs'), request, { query: { tenantId: scope.tenantId } }),
+      this.api.post<RunView>(this.scopePath(scope.id, 'runs'), request, {
+        query: { tenantId: scope.tenantId },
+      }),
     );
   }
 
@@ -352,7 +385,12 @@ export class MigrationApi {
     );
   }
 
-  async resolveQuarantine(tenantId: string, itemId: string, resolutionCode: string, reason: string): Promise<void> {
+  async resolveQuarantine(
+    tenantId: string,
+    itemId: string,
+    resolutionCode: string,
+    reason: string,
+  ): Promise<void> {
     await firstValueFrom(
       this.api.post<void>(
         `/api/v1/platform-admin/migration/quarantine-items/${itemId}/resolution`,

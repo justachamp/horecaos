@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { formatMoney } from '../../../core/format/money';
@@ -19,6 +20,8 @@ import {
   TenantModuleView,
   UsageView,
 } from '../commercial-api';
+import { StatementPaymentView, TenantWalletView, WalletApi } from '../wallet/wallet-api';
+import { walletDate, walletMoney } from '../wallet/wallet-format';
 
 type LoadState = 'loading' | 'ready' | 'denied' | 'error';
 
@@ -109,16 +112,30 @@ const STATEMENT_LINE_KIND_KEYS: Readonly<Record<string, MessageKey>> = {
  * the last month the module bills is read from the statement rule, not
  * guessed by this screen.
  *
+ * **The arrears banner offers a way out (ADR 0095, ADR 0127).** It used to
+ * describe a restriction and stop. It now also says what is owed on issued
+ * statements and which ways of paying exist right now (`TenantArrearsView.owed`
+ * and `.waysToPay`), and links to the Wallet tab, where the tenant tops up or
+ * asks for an invoice. It appears when something is restricted, when the
+ * subscription is past due, or when anything is owed at all: owing is not
+ * the same as being restricted, and a tenant who owes nothing and is restricted
+ * by nothing still sees nothing extra. It never offers to restore the
+ * subscription — ADR 0089: nothing moves a subscription by itself, and paying
+ * is a signal to HorecaOS staff, not a switch. Each statement also shows what
+ * the wallet has paid and what is still due (`WalletApi.statementPayments`),
+ * read best-effort: a role that may read statements but not the wallet sees a
+ * dash, not an error.
+ *
  * **What is honestly not.** Period close is HorecaOS-staff work: ADR 0088
  * decided a month is closed by issuing its statement, deliberately manual
  * until tax and invoicing are approved, so this screen has nothing left to
- * add for it. The prepaid wallet stays blocked on ADR 0095. Nor is there a
+ * add for it. The prepaid wallet itself is the Wallet tab's. Nor is there a
  * grace window that voids a purchase undone at once: no proration means even
  * an immediate undo bills the month, which the End dialog says.
  */
 @Component({
   selector: 'q-subscription-page',
-  imports: [TPipe, ConfirmDialog],
+  imports: [TPipe, ConfirmDialog, RouterLink],
   templateUrl: './subscription-page.html',
   styleUrl: './subscription-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -126,6 +143,7 @@ const STATEMENT_LINE_KIND_KEYS: Readonly<Record<string, MessageKey>> = {
 export class SubscriptionPage {
   private readonly tenant = inject(CurrentTenant);
   private readonly api = inject(CommercialApi);
+  private readonly wallet = inject(WalletApi);
   protected readonly i18n = inject(I18n);
 
   protected readonly state = signal<LoadState>('loading');
@@ -179,6 +197,30 @@ export class SubscriptionPage {
   protected readonly arrears = signal<TenantArrearsView | null>(null);
   protected readonly arrearsDenied = signal(false);
 
+  /**
+   * The wallet at a glance: both balances and the credit about to lapse, so a tenant on this tab is told
+   * what it would otherwise only learn on the Wallet tab (IA 8.6 puts the credit-expiry warning here).
+   * Null when this role may not read the wallet, which hides the card rather than showing an error.
+   */
+  protected readonly walletSummary = signal<TenantWalletView | null>(null);
+
+  /** What the wallet has paid of each issued statement, by statement id; empty when the wallet cannot be read. */
+  protected readonly statementPayments = signal<ReadonlyMap<string, StatementPaymentView>>(
+    new Map(),
+  );
+
+  /**
+   * Whether the standing banner shows: something is restricted, the subscription is past due, or
+   * something is owed. A tenant in good standing who owes nothing sees nothing extra.
+   */
+  protected readonly bannerVisible = computed(() => {
+    const standing = this.arrears();
+    return (
+      standing !== null &&
+      (this.restricted(standing) || standing.status === 'PAST_DUE' || standing.owed !== null)
+    );
+  });
+
   private tenantId: string | null = null;
 
   constructor() {
@@ -199,31 +241,42 @@ export class SubscriptionPage {
     }
     this.tenantId = tenantId;
     try {
-      const [subscription, entitlements, usage, statements, modulesOnSale, modulesHeld, arrears] =
-        await Promise.all([
-          this.api.subscription(tenantId).catch((error) => {
-            if (error instanceof ApiError && error.status === 403) {
-              this.subscriptionDenied.set(true);
-            }
-            return null;
-          }),
-          this.api.entitlements(tenantId),
-          this.api.usage(tenantId),
-          this.api.statements(tenantId),
-          this.api.modulesOnSale(tenantId).catch((error) => {
-            if (error instanceof ApiError && error.status === 403) {
-              this.modulesDenied.set(true);
-            }
-            return [];
-          }),
-          this.api.modulesHeld(tenantId).catch(() => []),
-          this.api.arrears(tenantId).catch((error) => {
-            if (error instanceof ApiError && error.status === 403) {
-              this.arrearsDenied.set(true);
-            }
-            return null;
-          }),
-        ]);
+      const [
+        subscription,
+        entitlements,
+        usage,
+        statements,
+        modulesOnSale,
+        modulesHeld,
+        arrears,
+        payments,
+        walletOverview,
+      ] = await Promise.all([
+        this.api.subscription(tenantId).catch((error) => {
+          if (error instanceof ApiError && error.status === 403) {
+            this.subscriptionDenied.set(true);
+          }
+          return null;
+        }),
+        this.api.entitlements(tenantId),
+        this.api.usage(tenantId),
+        this.api.statements(tenantId),
+        this.api.modulesOnSale(tenantId).catch((error) => {
+          if (error instanceof ApiError && error.status === 403) {
+            this.modulesDenied.set(true);
+          }
+          return [];
+        }),
+        this.api.modulesHeld(tenantId).catch(() => []),
+        this.api.arrears(tenantId).catch((error) => {
+          if (error instanceof ApiError && error.status === 403) {
+            this.arrearsDenied.set(true);
+          }
+          return null;
+        }),
+        this.wallet.statementPayments(tenantId).catch(() => [] as readonly StatementPaymentView[]),
+        this.wallet.overview(tenantId).catch(() => null),
+      ]);
       this.subscription.set(subscription);
       this.entitlements.set(entitlements);
       this.usage.set(usage);
@@ -231,6 +284,10 @@ export class SubscriptionPage {
       this.modulesOnSale.set(modulesOnSale);
       this.modulesHeld.set(modulesHeld);
       this.arrears.set(arrears);
+      this.statementPayments.set(
+        new Map(payments.map((payment) => [payment.statementId, payment])),
+      );
+      this.walletSummary.set(walletOverview);
       this.state.set('ready');
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
@@ -272,6 +329,50 @@ export class SubscriptionPage {
   protected arrearsStatusLabel(status: string): string {
     const key = STATUS_KEYS[status as SubscriptionView['status']] as MessageKey | undefined;
     return key ? this.i18n.t(key) : status;
+  }
+
+  /** A money figure for the wallet card: unscaled rather than thrown on for a currency this console has no scale for. */
+  protected walletFigure(value: { amountMinor: number; currency: string }): string {
+    return walletMoney(value, this.i18n.locale());
+  }
+
+  protected lapsesOn(instant: string): string {
+    return walletDate(instant);
+  }
+
+  /** Something is restricted: additions are blocked or the plan's entitlements no longer apply. */
+  protected restricted(standing: TenantArrearsView): boolean {
+    return standing.additionsBlocked || !standing.planEntitlementsApply;
+  }
+
+  /**
+   * What the wallet has paid of one statement and what is still due, or an em dash for a void statement
+   * or a wallet this role cannot read.
+   */
+  protected paidOf(statement: StatementView): string {
+    const payment = statement.statementId
+      ? this.statementPayments().get(statement.statementId)
+      : undefined;
+    return payment ? this.money(payment.paid) : '—';
+  }
+
+  protected dueOf(statement: StatementView): string {
+    const payment = statement.statementId
+      ? this.statementPayments().get(statement.statementId)
+      : undefined;
+    return payment ? this.money(payment.due) : '—';
+  }
+
+  /** The ways to pay the server says exist right now, as the sentences the banner offers. */
+  protected waysToPay(standing: TenantArrearsView): readonly MessageKey[] {
+    const ways: MessageKey[] = [];
+    if (standing.waysToPay.cardPaymentsAvailable && standing.waysToPay.cardOnFile) {
+      ways.push('finance.subscription.arrears.pay.card');
+    }
+    if (standing.waysToPay.bankTransferAvailable) {
+      ways.push('finance.subscription.arrears.pay.bank');
+    }
+    return ways.length > 0 ? ways : ['finance.subscription.arrears.pay.none'];
   }
 
   /** True once this tenant has a live (not-ended) instance of the module. */

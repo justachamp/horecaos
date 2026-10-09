@@ -3,6 +3,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { ApiError } from '../../core/api/problem';
 import { I18nService } from '../../core/i18n/i18n.service';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { MessageKey } from '../../core/i18n/messages.en';
 import {
   InvitationLocale,
@@ -113,6 +114,7 @@ const ENDED = new Set(['CANCELLED', 'FAILED']);
 })
 export class TenantOnboarding {
   protected readonly i18n = inject(I18nService);
+  private readonly registry = inject(PlatformLocales);
   private readonly tenantsApi = inject(TenantsApi);
   private readonly route = inject(ActivatedRoute);
 
@@ -126,13 +128,19 @@ export class TenantOnboarding {
   protected readonly starting = signal(false);
   protected readonly ownerEmail = signal('');
   /** The owner's invitation language, starting from the operator's own. */
-  protected readonly ownerLocale = signal<InvitationLocale>('ru');
+  protected readonly ownerLocale = signal<InvitationLocale>(this.registry.fallback());
   protected readonly invitation = signal<OwnerInvitationView | null>(null);
   protected readonly resendReason = signal('');
   protected readonly resendLocale = signal<InvitationLocale | ''>('');
   protected readonly resending = signal(false);
   protected readonly resent = signal(false);
-  protected readonly invitationLocales: readonly InvitationLocale[] = ['uz', 'ru', 'en'];
+  /** The languages the platform writes an invitation in: the registry's messages tier, not a list kept here. */
+  protected readonly invitationLocales = computed(() => this.registry.active('MESSAGES'));
+
+  /** A language's name as the registry gives it, in the console's own language. */
+  protected localeName(tag: string): string {
+    return this.registry.nameOf(tag, this.i18n.locale());
+  }
 
   /**
    * Whether to plant a sample menu (ADR 0099). On by default for a new tenant:
@@ -184,7 +192,10 @@ export class TenantOnboarding {
 
   constructor() {
     const locale = this.i18n.locale();
-    this.ownerLocale.set(locale === 'uz-Latn' ? 'uz' : locale === 'en' ? 'en' : 'ru');
+    // The operator's own language, when the platform writes in it; the fallback otherwise.
+    this.ownerLocale.set(
+      this.invitationLocales().includes(locale) ? locale : this.registry.fallback(),
+    );
     void this.load();
   }
 

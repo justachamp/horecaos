@@ -1,8 +1,14 @@
 import { StaffMember } from '../../core/api/staff-member';
 import { UpdateMyProfileRequest, UpdateStaffMemberRequest } from './staff-members-api';
 
-/** The three languages the form offers for the interface and for "speaks". Anything else a record already carries is kept untouched. */
-export const OFFERED_LANGUAGES = ['ru', 'uz', 'en'] as const;
+/**
+ * The ISO 639 language codes the form offers under "speaks" (`uz`, never `uz-Latn`: a person who
+ * speaks Uzbek speaks it in either script, ADR 0149): the primary subtags of the languages the
+ * registry has live in its content tier. Anything else a record already carries is kept untouched.
+ */
+export function spokenLanguageCodes(contentTags: readonly string[]): readonly string[] {
+  return [...new Set(contentTags.map((tag) => tag.split('-')[0]))];
+}
 
 /** The statuses a manager can move someone between; ending employment is its own act. */
 export type EditableStatus = 'ACTIVE' | 'ON_LEAVE';
@@ -17,9 +23,9 @@ export interface ProfileDraft {
   firstName: string;
   lastName: string;
   phone: string;
-  /** `''` (no preference), `ru`, `uz` or `en`. */
+  /** `''` (no preference), or the registry's tag of a language the console is live in: `ru`, `uz-Latn`, `en`. */
   uiLocale: string;
-  /** Every language code the person speaks, the offered three and any other the record already carried. */
+  /** Every ISO 639 language code the person speaks, the offered ones and any other the record already carried. */
   spokenLanguages: readonly string[];
   /** Manager only. `''` when the status is not one a manager may set (PENDING, ENDED). */
   status: EditableStatus | '';

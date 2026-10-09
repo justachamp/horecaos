@@ -1,0 +1,32 @@
+{
+  "response": {
+    "GeoObjectCollection": {
+      "metaDataProperty": {"GeocoderResponseMetaData": {"request": "Fixture ko'chasi 1", "results": "5", "found": "1"}},
+      "featureMember": [
+        {
+          "GeoObject": {
+            "metaDataProperty": {
+              "GeocoderMetaData": {
+                "kind": "house",
+                "text": "Кыргызстан, Бишкек, Fixture ko'chasi, 1",
+                "precision": "exact",
+                "Address": {
+                  "country_code": "KG",
+                  "formatted": "Кыргызстан, Бишкек, Fixture ko'chasi, 1",
+                  "Components": [
+                    {"kind": "country", "name": "Кыргызстан"},
+                    {"kind": "locality", "name": "Бишкек"},
+                    {"kind": "street", "name": "Fixture ko'chasi"},
+                    {"kind": "house", "name": "1"}
+                  ]
+                }
+              }
+            },
+            "name": "Fixture ko'chasi, 1",
+            "Point": {"pos": "74.612200 42.874600"}
+          }
+        }
+      ]
+    }
+  }
+}

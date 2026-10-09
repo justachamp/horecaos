@@ -1,0 +1,97 @@
+@if (canRead()) {
+  <div class="mfa" data-testid="staff-mfa-panel">
+    <dt class="q-caption">{{ 'staff.mfa.field' | t }}</dt>
+    <dd class="q-body-sm" data-testid="staff-mfa-method">
+      @switch (state()) {
+        @case ('loading') {
+          …
+        }
+        @case ('noAccount') {
+          {{ 'staff.mfa.noAccount' | t }}
+        }
+        @case ('unknown') {
+          {{ 'staff.mfa.unknown' | t }}
+        }
+        @default {
+          @if (mfa(); as current) {
+            {{ (current.enrolled ? 'staff.mfa.passwordAndCode' : 'staff.mfa.passwordOnly') | t }}
+            @if (current.enrolled) {
+              <span class="q-caption muted">
+                {{ 'staff.mfa.devices' | t: { count: current.authenticators.length } }}
+              </span>
+            }
+          }
+        }
+      }
+    </dd>
+
+    @if (mfa(); as current) {
+      <p class="q-caption muted" data-testid="staff-mfa-requirement">
+        {{ requirementKey[current.requirement] | t }}
+      </p>
+      @if (current.authenticators.length > 0) {
+        <ul class="q-body-sm devices" data-testid="staff-mfa-devices">
+          @for (device of current.authenticators; track device.id) {
+            <li>
+              {{ device.label ?? '—' }}
+              @if (device.createdAt) {
+                <span class="q-caption muted">{{ device.createdAt.slice(0, 10) }}</span>
+              }
+            </li>
+          }
+        </ul>
+      }
+    }
+
+    @if (notice(); as message) {
+      <p class="q-body-sm notice" role="status" data-testid="staff-mfa-notice">{{ message }}</p>
+    }
+
+    @if (canReset() && state() === 'ready' && mfa()?.enrolled) {
+      @if (resetOpen()) {
+        <div class="reset" data-testid="staff-mfa-reset-form">
+          <h3 class="q-emphasis">{{ 'staff.mfa.resetTitle' | t }}</h3>
+          <p class="q-body-sm">{{ 'staff.mfa.resetBody' | t }}</p>
+          <label class="q-caption field-label" for="mfa-reset-reason">{{
+            'staff.mfa.resetReason' | t
+          }}</label>
+          <textarea
+            id="mfa-reset-reason"
+            class="q-body field"
+            rows="3"
+            maxlength="1000"
+            [value]="reason()"
+            (input)="onReason($event)"
+            [disabled]="busy()"
+          ></textarea>
+          @if (error(); as message) {
+            <p class="q-body-sm error" role="alert">{{ message }}</p>
+          }
+          <div class="actions">
+            <button type="button" class="text-button" (click)="closeReset()" [disabled]="busy()">
+              {{ 'staff.mfa.resetCancel' | t }}
+            </button>
+            <button
+              type="button"
+              class="text-button text-button--destructive"
+              (click)="confirmReset()"
+              [disabled]="busy() || reason().trim() === ''"
+              data-testid="staff-mfa-reset-confirm"
+            >
+              {{ 'staff.mfa.resetConfirm' | t }}
+            </button>
+          </div>
+        </div>
+      } @else {
+        <button
+          type="button"
+          class="text-button text-button--destructive"
+          (click)="openReset()"
+          data-testid="staff-mfa-reset"
+        >
+          {{ 'staff.mfa.reset' | t }}
+        </button>
+      }
+    }
+  </div>
+}

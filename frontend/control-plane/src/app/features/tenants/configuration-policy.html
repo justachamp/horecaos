@@ -11,7 +11,11 @@
     <form class="pickerForm" (submit)="resolve($event)">
       <label class="field">
         <span class="q-caption">{{ i18n.t('configurationPolicy.picker.key') }}</span>
-        <select class="q-body-sm" [value]="keyCode()" (change)="keyCode.set($any($event.target).value)">
+        <select
+          class="q-body-sm"
+          [value]="keyCode()"
+          (change)="keyCode.set($any($event.target).value)"
+        >
           <option value="">{{ i18n.t('configurationPolicy.picker.keyPlaceholder') }}</option>
           @for (key of keys(); track key.code) {
             <option [value]="key.code">{{ key.code }}</option>
@@ -21,7 +25,11 @@
 
       <label class="field">
         <span class="q-caption">{{ i18n.t('configurationPolicy.picker.scopeType') }}</span>
-        <select class="q-body-sm" [value]="scopeType()" (change)="scopeType.set($any($event.target).value)">
+        <select
+          class="q-body-sm"
+          [value]="scopeType()"
+          (change)="scopeType.set($any($event.target).value)"
+        >
           <option value="PLATFORM">{{ i18n.t('configurationPolicy.scope.platform') }}</option>
           <option value="TENANT">{{ i18n.t('configurationPolicy.scope.tenant') }}</option>
           <option value="BRAND">{{ i18n.t('configurationPolicy.scope.brand') }}</option>
@@ -32,24 +40,43 @@
       @if (scopeType() !== 'PLATFORM') {
         <label class="field">
           <span class="q-caption">{{ i18n.t('configurationPolicy.picker.tenantId') }}</span>
-          <input class="q-body-sm" type="text" [value]="tenantId()" (input)="tenantId.set($any($event.target).value)" />
+          <input
+            class="q-body-sm"
+            type="text"
+            [value]="tenantId()"
+            (input)="tenantId.set($any($event.target).value)"
+          />
         </label>
       }
       @if (scopeType() === 'BRAND' || scopeType() === 'LOCATION') {
         <label class="field">
           <span class="q-caption">{{ i18n.t('configurationPolicy.picker.brandId') }}</span>
-          <input class="q-body-sm" type="text" [value]="brandId()" (input)="brandId.set($any($event.target).value)" />
+          <input
+            class="q-body-sm"
+            type="text"
+            [value]="brandId()"
+            (input)="brandId.set($any($event.target).value)"
+          />
         </label>
       }
       @if (scopeType() === 'LOCATION') {
         <label class="field">
           <span class="q-caption">{{ i18n.t('configurationPolicy.picker.locationId') }}</span>
-          <input class="q-body-sm" type="text" [value]="locationId()" (input)="locationId.set($any($event.target).value)" />
+          <input
+            class="q-body-sm"
+            type="text"
+            [value]="locationId()"
+            (input)="locationId.set($any($event.target).value)"
+          />
         </label>
       }
 
       <button type="submit" class="primary" [disabled]="!canResolve()">
-        {{ resolving() ? i18n.t('configurationPolicy.picker.resolving') : i18n.t('configurationPolicy.picker.resolve') }}
+        {{
+          resolving()
+            ? i18n.t('configurationPolicy.picker.resolving')
+            : i18n.t('configurationPolicy.picker.resolve')
+        }}
       </button>
     </form>
 
@@ -70,7 +97,11 @@
         <dd class="q-body-sm">{{ trace.winningScope ?? '—' }}</dd>
         <dt class="q-caption">{{ i18n.t('configurationPolicy.result.storedVersion') }}</dt>
         <dd class="q-body-sm q-tnum">
-          {{ trace.currentVersionAtScope === null ? i18n.t('configurationPolicy.result.storedVersion.none') : trace.currentVersionAtScope }}
+          {{
+            trace.currentVersionAtScope === null
+              ? i18n.t('configurationPolicy.result.storedVersion.none')
+              : trace.currentVersionAtScope
+          }}
         </dd>
       </dl>
 
@@ -102,11 +133,20 @@
         <p class="q-body-sm state">{{ i18n.t('configurationPolicy.write.notConsumed') }}</p>
       } @else if (!settableAtCurrentScope()) {
         <p class="q-body-sm state">
-          {{ i18n.t('configurationPolicy.write.notSettableAtScope', { scopes: settableScopesLabel() }) }}
+          {{
+            i18n.t('configurationPolicy.write.notSettableAtScope', {
+              scopes: settableScopesLabel(),
+            })
+          }}
         </p>
       } @else {
         <p class="scopeBanner">
-          {{ i18n.t('configurationPolicy.write.scopeBanner', { code: keyCode(), scope: currentScopeDescription() }) }}
+          {{
+            i18n.t('configurationPolicy.write.scopeBanner', {
+              code: keyCode(),
+              scope: currentScopeDescription(),
+            })
+          }}
         </p>
 
         @if (startupNoteKey(); as note) {
@@ -189,7 +229,11 @@
           </label>
 
           <button type="submit" class="primary" [disabled]="!canSave()">
-            {{ saving() ? i18n.t('configurationPolicy.write.saving') : i18n.t('configurationPolicy.write.save') }}
+            {{
+              saving()
+                ? i18n.t('configurationPolicy.write.saving')
+                : i18n.t('configurationPolicy.write.save')
+            }}
           </button>
         </form>
 

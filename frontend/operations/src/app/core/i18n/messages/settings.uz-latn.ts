@@ -484,9 +484,12 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.field.businessDayStartHour': 'Ish kuni boshlanishi (soat)',
   'settings.orderPolicy.field.averageOrderMinutes': 'Oʻrtacha buyurtma vaqti (daqiqa)',
   'settings.orderPolicy.field.maximumOrderMinutes': 'Maksimal buyurtma vaqti (daqiqa)',
-  'settings.orderPolicy.field.lateOrderThresholdMinutes': 'Buyurtma kechikadi (daqiqa)',
+  'settings.orderPolicy.notApplied.hint':
+    'Hozircha qoʻllanilmaydi: bu qiymatni hech narsa oʻqimaydi, shuning uchun uni oʻzgartirish hech narsani oʻzgartirmaydi.',
+  'settings.orderPolicy.field.lateOrderThresholdMinutes':
+    'Belgilangan vaqti yoʻq buyurtma kechikadi (daqiqa)',
   'settings.orderPolicy.lateOrderThresholdMinutes.hint':
-    'Hozircha qoʻllanilmaydi: bu qiymatni hech narsa oʻqimaydi, shuning uchun uni oʻzgartirish buyurtma qachon kechikkan hisoblanishiga taʻsir qilmaydi. Buyurtma qachon kechikkan hisoblanishi quyidagi «Buyurtma qachon kechikkan hisoblanadi» blokida belgilanadi.',
+    'Faqat belgilangan vaqti yoʻq buyurtmalar uchun (masalan, agregatorlardan): buyurtma yaratilganidan necha daqiqa oʻtgach kechikkan hisoblanadi. Belgilangan vaqti bor buyurtma quyidagi chegaralar boʻyicha kechikadi, bu son unga taʻsir qilmaydi. Quyidagi kechikish chegaralarida oʻz qiymati boʻlmagan buyurtma turi uchun standart qiymat.',
   'settings.orderPolicy.field.atRiskBeforeMinutes':
     'Belgilangan vaqtdan oldin ogohlantirish (daqiqa)',
   'settings.orderPolicy.atRiskBeforeMinutes.hint':
@@ -532,6 +535,10 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.latenessPolicy.field.atRisk': 'Belgilangan vaqtdan oldin ogohlantirish (daqiqa)',
   'settings.latenessPolicy.field.lateAfter': 'Belgilangan vaqtdan keyin kechikish (soniya)',
   'settings.latenessPolicy.field.fallback': 'Vaʻdasiz: kechikish (daqiqa)',
+  'settings.latenessPolicy.blankFallbackMeansDefault':
+    '“Vaʻdasiz: kechikish” maydonini standart qiymat uchun boʻsh qoldiring: {minutes} daqiqa ({source}).',
+  'settings.latenessPolicy.fallbackDefault.scalar':
+    'yuqoridagi “Belgilangan vaqti yoʻq buyurtma kechikadi” qiymati',
   'settings.latenessPolicy.blankMeansDefault':
     '“Belgilangan vaqtdan oldin ogohlantirish” maydonini standart qiymat uchun boʻsh qoldiring: {minutes} daqiqa ({source}).',
   'settings.latenessPolicy.default.scalar':
@@ -1336,4 +1343,143 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
     'Aksiya yoki yirik mijozlar eksporti ikkinchi imzoni kutadigan chegaralar.',
   'settings.fiscalization.noAccess': 'Ruxsat yoʻq',
   'settings.fiscalization.responsibility': 'Chekni kim beradi',
+  'settings.locations.pin.title': 'Xaritadagi nuqta',
+  'settings.locations.pin.none':
+    'Filialning xaritada nuqtasi yoʻq. U boʻlmaguncha filialdan masofa oʻlchab boʻlmaydi va uning atrofida yetkazib berish zonasi chizib boʻlmaydi. Nuqtani qoʻyish uchun tahrirlashni oching.',
+  'settings.locations.pin.hint':
+    'Nuqtani filial eshigiga olib keling: xaritani bosing, nuqtani sudrang yoki koordinatalarni kiriting. Nuqta faqat siz surgan boʻlsangiz saqlanadi; filial nuqtasini koʻchirish mumkin, oʻchirib boʻlmaydi.',
+  'settings.dataPrivacy.egress.action.orderMapPointsRevealed':
+    'Kunlik yetkazib berish nuqtalari xaritada ochildi',
+
+  // Chat assistant (ADR 0069).
+  'settings.nav.assistant': 'Chat yordamchisi',
+  'settings.home.description.assistant':
+    'Yordamchi botingizda mijozlarga javob beradimi, bu qancha turadi va u avval nima deydi.',
+  'settings.assistant.title': 'Chat yordamchisi',
+  'settings.assistant.lead':
+    'Telegram botingizga yozgan mijozlarga (narxlar, mavjudlik, filiallar, ish vaqti, yetkazib berish) faqat oʻzingizning menyu, filiallar va yozuvlaringiz asosida javob beradi, qolganini jamoangizga topshiradi.',
+  'settings.assistant.brandLevelNote':
+    'Yordamchi brend uchun sozlanadi. Filial oʻz brendining sozlamasidan foydalanadi, shuning uchun bu yerdagi oʻzgarish butun brendga taʻsir qiladi.',
+  'settings.assistant.revertReason': 'Meros qiymatiga qaytarildi',
+  'settings.assistant.on': 'Yoqilgan',
+  'settings.assistant.off': 'Oʻchirilgan',
+  'settings.assistant.switch.title': 'Mijozlarga javob berish',
+  'settings.assistant.switch.body':
+    'Yoqilganda yordamchi botingizga yozgan va hech bir oqimingiz hal qilmaydigan mijoz savollariga javob beradi. Ishonchli javob bera olmagan har narsa butun yozishma bilan jamoangiz suhbatlariga tushadi.',
+  'settings.assistant.switch.field': 'Yordamchi mijozlarga javob beradi',
+  'settings.assistant.switch.privacy':
+    'Javob berish uchun mijoz savoli tashqi sunʻiy intellekt xizmatida qayta ishlanadi. Ism, telefon raqami va manzillar avval olib tashlanadi va platformadan chiqmaydi.',
+  'settings.assistant.switch.noProvider':
+    'Platformaga hali sunʻiy intellekt xizmati ulanmagan, shuning uchun yordamchi yoqilgan boʻlsa ham javob bera olmaydi. Uni HorecaOS ulaydi.',
+  'settings.assistant.switch.notEntitled': 'Tarifingizda yordamchi yoʻq.',
+  'settings.assistant.usage.title': 'Shu oyda',
+  'settings.assistant.usage.month': 'Oy: {month} (UTC)',
+  'settings.assistant.usage.turns': 'Qabul qilingan savollar',
+  'settings.assistant.usage.answered': 'Javob berilgan',
+  'settings.assistant.usage.handedOver': 'Jamoangizga topshirilgan',
+  'settings.assistant.usage.cached': 'Oldingi javob bilan javob berilgan',
+  'settings.assistant.usage.spend': 'Sunʻiy intellekt xizmati narxi',
+  'settings.assistant.usage.spendOf': '{ceiling} dan {spent}',
+  'settings.assistant.usage.ceilingNote':
+    'Chegarani HorecaOS hisobingiz uchun belgilaydi. Unga yetilganda yordamchi javob berishni toʻxtatadi va mijozlarni jamoangizga topshiradi; chegarani oʻzgartirish uchun yordam xizmatiga murojaat qiling.',
+  'settings.assistant.usage.ceilingReached':
+    'Oylik chegaraga yetildi: mijozlar kelasi oygacha jamoangizga topshiriladi.',
+  'settings.assistant.usage.denied': 'Rolingiz yordamchi sarfini koʻrishga ruxsat bermaydi.',
+  'settings.assistant.usage.notes': 'Eʻlon qilingan yozuvlar: {count}.',
+  'settings.assistant.usage.manageNotes': 'Yozuvlarni boshqarish',
+  'settings.assistant.disclosure.title': 'Mijozga avval nima deyiladi',
+  'settings.assistant.disclosure.body':
+    'Suhbatdagi birinchi javobidan oldin yordamchi buni mijoz tilida aytadi. Matnni oʻz mijozlaringiz uchun yozing. Boʻsh qoldirilsa, HorecaOS iborasi ishlatiladi; bu xabarni oʻchirib boʻlmaydi.',
+  'settings.assistant.disclosure.legal':
+    'HorecaOS ning standart iborasi huquqiy maslahat emas. Avtomatik javoblar va tashqi qayta ishlovchilar haqida mijozlarga nimani aytishingiz kerakligi oʻzingizning majburiyatingiz.',
+  'settings.assistant.disclosure.field.ru': 'Rus tilida aytadi',
+  'settings.assistant.disclosure.field.uz': 'Oʻzbek tilida aytadi',
+  'settings.assistant.disclosure.field.en': 'Ingliz tilida aytadi',
+  'settings.assistant.disclosure.blank': 'HorecaOS ning standart iborasi',
+  'settings.assistant.disclosure.default': 'Standart ibora: {text}',
+  'settings.assistant.disclosure.counter': '{max} belgidan {count} tasi',
+
+  // Chat assistant notes (ADR 0069).
+  'settings.assistant.notes.title': 'Yordamchi yozuvlari',
+  'settings.assistant.notes.lead':
+    'Jamoangiz yordamchi uchun yozadigan qisqa javoblar: avtoturargoh, allergenlar, oilaviy set nimadan iborat. Mijoz yozuv qamrab olgan narsani soʻraganda yordamchi uni ishlatadi. Narxlar va ish vaqti platformadan olinadi va hech qachon yozuvdan olinmaydi.',
+  'settings.assistant.notes.back': 'Yordamchi sozlamalariga qaytish',
+  'settings.assistant.notes.hint.tenant':
+    'Butun kompaniya yozuvlari koʻrsatilmoqda. Bitta brend yoki filial uchun yozuv yozish uchun yuqoridagi panelda brendni tanlang.',
+  'settings.assistant.notes.hint.brand':
+    'Shu brendning yozuvlari, filiallarniki bilan birga koʻrsatilmoqda. Kompaniyaning umumiy yozuvlari uchun yuqoridagi panelda butun kompaniyani tanlang.',
+  'settings.assistant.notes.new': 'Yangi yozuv',
+  'settings.assistant.notes.empty':
+    'Hozircha yozuvlar yoʻq. Yozuvsiz yordamchi faqat menyu, filiallar va ish vaqti boʻyicha javob bera oladi.',
+  'settings.assistant.notes.field.locale': 'Mijoz yozadigan til',
+  'settings.assistant.notes.field.applies': 'Amal qiladi',
+  'settings.assistant.notes.field.question': 'Mijoz buni qanday soʻraydi',
+  'settings.assistant.notes.field.question.hint':
+    'Mijozning oʻz soʻzlari bilan, masalan “Avtoturargoh bormi?”. Yordamchi savolni shu matn bilan solishtiradi.',
+  'settings.assistant.notes.field.answer': 'Yordamchi nima deyishi mumkin',
+  'settings.assistant.notes.field.answer.hint':
+    'Mijoz uchun yozilgan oddiy matn. Narx va ish vaqtini bu yerga yozmang: yordamchi ularni platformadan oladi.',
+  'settings.assistant.notes.counter': '{max} belgidan {count} tasi',
+  'settings.assistant.notes.publish': 'Yozuvni eʻlon qilish',
+  'settings.assistant.notes.publishVersion': 'Yangi versiyani eʻlon qilish',
+  'settings.assistant.notes.revise': 'Yangi versiyani eʻlon qilish',
+  'settings.assistant.notes.retire': 'Eʻlondan olish',
+  'settings.assistant.notes.retire.body':
+    'Yordamchi bu yozuvdan darhol foydalanishni toʻxtatadi. Avval aytganlari tarixda qoladi.',
+  'settings.assistant.notes.history': 'Tarix',
+  'settings.assistant.notes.history.error': 'Tarixni yuklab boʻlmadi.',
+  'settings.assistant.notes.history.line': '{version}-versiya, {status}, {author}, {when}',
+  'settings.assistant.notes.history.reason': 'Sababi: {reason}',
+  'settings.assistant.notes.version': '{version}-versiya',
+  'settings.assistant.notes.by': '{author}, {when}',
+  'settings.assistant.notes.locale.ru': 'Rus tili',
+  'settings.assistant.notes.locale.uz': 'Oʻzbek tili',
+  'settings.assistant.notes.locale.en': 'Ingliz tili',
+  'settings.assistant.notes.scope.TENANT': 'Butun kompaniya',
+  'settings.assistant.notes.scope.BRAND': 'Butun brend',
+  'settings.assistant.notes.scope.LOCATION': '«{name}» filiali',
+  'settings.assistant.notes.scope.LOCATION.unnamed': 'Bitta filial',
+  'settings.assistant.notes.status.PUBLISHED': 'Amalda',
+  'settings.assistant.notes.status.RETIRED': 'Olib tashlangan',
+  'settings.nav.storefrontApps': 'Vitrina ilovalari',
+  'settings.home.description.storefrontApps':
+    'Qaysi vitrinalar brend nomidan buyurtma qabul qilishini tanlang va istalgan vaqtda birini chaqirib oling.',
+  'settings.storefrontApps.title': 'Vitrina ilovalari',
+  'settings.storefrontApps.lead':
+    'Vitrina — menyuingizni koʻrsatadigan va brend nomidan buyurtma qabul qiladigan ilova. Unga ruxsat bering — u brendga xizmat qila oladi; chaqirib oling — u keyingi soʻrovdayoq toʻxtaydi. Qaysi vitrinani tanlamang, buyurtmalar, narxlar va mijozlar oʻzgarmaydi.',
+  'settings.storefrontApps.loading': 'Vitrinalar yuklanmoqda…',
+  'settings.storefrontApps.empty': 'Tanlash uchun hozircha vitrina ilovalari yoʻq.',
+  'settings.storefrontApps.noBrands': 'Bu hisobda vitrina tanlash uchun brend yoʻq.',
+  'settings.storefrontApps.brandPicker.label': 'Brend',
+  'settings.storefrontApps.by': 'Ishlab chiqaruvchi: {vendor}',
+  'settings.storefrontApps.firstParty': 'HorecaOS tomonidan yaratilgan',
+  'settings.storefrontApps.clientType.public': 'Xaridorning brauzerida ishlaydi',
+  'settings.storefrontApps.clientType.confidential': 'Ishlab chiqaruvchining serverida ishlaydi',
+  'settings.storefrontApps.clientType.publicNote':
+    'Unda sir yoʻq, chunki brauzer uni saqlay olmaydi. HorecaOS qaysi vitrina murojaat qilayotganini biladi va uni toʻxtata oladi, lekin uning ortida kim turganini isbotlay olmaydi.',
+  'settings.storefrontApps.clientType.confidentialNote':
+    'U oʻzini faqat oʻz serverida mavjud sir bilan tasdiqlaydi.',
+  'settings.storefrontApps.conformance.label': 'Muvofiqlik tekshiruvi',
+  'settings.storefrontApps.conformance.passed': 'oʻtgan',
+  'settings.storefrontApps.conformance.failed': 'oʻtmagan',
+  'settings.storefrontApps.conformance.expired': 'eskirgan: platforma shartnomasi oʻzgargan',
+  'settings.storefrontApps.conformance.notRun': 'hali oʻtkazilmagan',
+  'settings.storefrontApps.notActive':
+    'HorecaOS bu ilovani toʻxtatgan yoki chaqirib olgan. Bu oʻzgarmaguncha u hech bir brendga xizmat qila olmaydi.',
+  'settings.storefrontApps.standing.authorised': 'Ruxsat berilgan',
+  'settings.storefrontApps.standing.revoked': 'Chaqirib olingan',
+  'settings.storefrontApps.standing.notAuthorised': 'Ruxsat berilmagan',
+  'settings.storefrontApps.authorise': 'Ruxsat berish',
+  'settings.storefrontApps.revoke': 'Chaqirib olish',
+  'settings.storefrontApps.cancel': 'Bekor qilish',
+  'settings.storefrontApps.reason': 'Buni nima uchun qilyapsiz (audit jurnaliga yoziladi)',
+  'settings.storefrontApps.confirm.authorise':
+    'Bu vitrina brendning menyusini koʻrsata oladi va uning nomidan buyurtma qabul qila oladi.',
+  'settings.storefrontApps.confirm.revoke':
+    'Bu vitrina keyingi soʻrovdayoq brendga xizmat qilishni toʻxtatadi.',
+  'settings.storefrontApps.authorised': '«{name}» ilovasiga ruxsat berildi.',
+  'settings.storefrontApps.revoked':
+    '«{name}» chaqirib olindi: u endi bu brendga xizmat qila olmaydi.',
+  'settings.storefrontApps.denied':
+    'Vitrina ilovalarini faqat hisob egasi va administratorlar tanlay oladi.',
 };

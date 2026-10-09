@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,7 @@ import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerSto
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore.ContactPointRow;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore.ErasureRequestRow;
 import uz.horecaos.platform.customers.spi.CustomerErasureParticipant;
+import uz.horecaos.platform.customers.spi.CustomerErasureParticipant.ErasedContacts;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
@@ -252,11 +254,14 @@ public class CustomerErasureService {
             return store.erasureRequest(tenantId, requestId).orElseThrow(NoSuchErasureRequestException::new);
         }
 
+        // Read before anonymize() overwrites them: after it no number is left to match another
+        // module's rows against.
+        ErasedContacts held = heldContacts(tenantId, accountId);
         if (!"ANONYMIZED".equals(account.status())) {
             anonymize(tenantId, accountId, now);
         }
         for (CustomerErasureParticipant participant : participants) {
-            participant.erase(tenantId, accountId);
+            participant.erase(tenantId, accountId, held);
         }
 
         // Staff 9.3a: "status" genuinely moves from PENDING to COMPLETED.
@@ -270,6 +275,13 @@ public class CustomerErasureService {
                 Map.of("requestId", requestId.toString(), "status", "COMPLETED"));
 
         return store.erasureRequest(tenantId, requestId).orElseThrow(NoSuchErasureRequestException::new);
+    }
+
+    private ErasedContacts heldContacts(UUID tenantId, UUID accountId) {
+        return new ErasedContacts(store.contactPoints(tenantId, accountId).stream()
+                .filter(contact -> "PHONE".equals(contact.type()))
+                .map(ContactPointRow::normalizedHash)
+                .collect(Collectors.toSet()));
     }
 
     private void anonymize(UUID tenantId, UUID accountId, Instant now) {

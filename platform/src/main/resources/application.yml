@@ -124,6 +124,15 @@ horecaos:
         enabled: ${HORECAOS_IDEMPOTENCY_PURGE_ENABLED:true}
         initial-delay: ${HORECAOS_IDEMPOTENCY_PURGE_INITIAL_DELAY:PT5M}
         interval: ${HORECAOS_IDEMPOTENCY_PURGE_INTERVAL:PT1H}
+  storefront:
+    app-identity:
+      # ADR 0070's rollout. false (the default, stage one): the app id header is
+      # checked wherever it is sent, and a request without it still works but is
+      # counted as unattributed. true (stage three): a storefront request without
+      # it is refused by name, which is only safe once the unattributed count has
+      # been zero for a stated period. Rollback at any stage is setting this back
+      # to false; nothing else depends on it having been true.
+      required: ${HORECAOS_STOREFRONT_APP_IDENTITY_REQUIRED:false}
   keycloak:
     # ADR 0009 administration. The provisioning client secret is resolved from
     # the ADR 0028 manager at call time, so rotation needs no restart.
@@ -134,6 +143,29 @@ horecaos:
     # exchange staff credentials with Keycloak. Same base-url/realm as above --
     # this is not a second Keycloak, just a second client on it.
     staff-login-client-id: ${HORECAOS_KEYCLOAK_STAFF_LOGIN_CLIENT_ID:horecaos-staff-login}
+  routing:
+    osrm:
+      # ADR 0147. The platform's own road-distance engine, behind the ROAD delivery
+      # tariffs. Off by default everywhere, which is also the rollback: with it off every
+      # ROAD fee prices from the straight line times the tariff's detour factor and says
+      # RADIUS_FALLBACK. Switched on only on a deployment that runs deploy/compose.production.yml's
+      # `routing` profile (the engine and its dataset), and the dataset version is that
+      # profile's image tag: it is recorded on every fee the engine measures, so an enabled
+      # engine with no dataset version, or one longer than the fee row's 32 characters,
+      # answers nothing and logs why at start.
+      enabled: ${HORECAOS_ROUTING_OSRM_ENABLED:false}
+      dataset-version: ${HORECAOS_ROUTING_OSRM_DATASET_VERSION:}
+      # The whole exchange, body included. ADR 0147 gives the checkout path 500 ms. The quote
+      # thread waits this long for every uncached ROAD quote, so the adapter holds it to 1 s
+      # whatever is set here (OsrmProperties.MAX_TIMEOUT).
+      timeout: ${HORECAOS_ROUTING_OSRM_TIMEOUT:500ms}
+      # An answered call slower than this counts towards opening the breaker, like a fault does:
+      # an engine that answers in 450 ms is not failing and is stalling every quote.
+      slow-call-threshold: ${HORECAOS_ROUTING_OSRM_SLOW_CALL_THRESHOLD:250ms}
+      # How many quote threads may wait on the engine at once; the rest fall back at once.
+      max-concurrent-calls: ${HORECAOS_ROUTING_OSRM_MAX_CONCURRENT_CALLS:16}
+      # How far from a road a coordinate may be and still count as on the network.
+      snap-radius-meters: ${HORECAOS_ROUTING_OSRM_SNAP_RADIUS_METERS:1000}
   iam:
     # ADR 0025 fresh-deployment bootstrap (PlatformAdminBootstrapReconciler).
     # A comma-separated list of Keycloak subject ids that must hold the
@@ -280,6 +312,31 @@ horecaos:
       url: ${HORECAOS_OPENBAO_URL:http://localhost:8200}
       token: ${HORECAOS_OPENBAO_TOKEN:}
       mount: ${HORECAOS_OPENBAO_MOUNT:horecaos}
+  # ADR 0069: the grounded assistant's model provider -- the platform's own
+  # account, because the provider is a processor the tenant did not choose.
+  # With no secret reference the assistant takes no turns and conversations
+  # behave exactly as they did before it existed. The reference names the key
+  # in the ADR 0028 manager (for example
+  # horecaos:production:provider_assistant:platform:anthropic); it is never a
+  # value here, and the endpoint is the approved provider environment
+  # `anthropic-production` of integration.provider_environments, never a URL.
+  # The model id, and the two request parameters the provider ties to it
+  # (thinking, effort), are configuration: change all three together, blank
+  # to omit. The prices are the model's list prices in millionths of a US
+  # dollar per token (one dollar per million tokens is one per token) and are
+  # what the per-tenant spend ceiling is counted in -- a stale price silently
+  # understates spend, so a model swap updates them in the same change.
+  assistant:
+    provider:
+      secret-reference: ${HORECAOS_ASSISTANT_SECRET_REF:}
+      environment-code: ${HORECAOS_ASSISTANT_ENVIRONMENT_CODE:anthropic-production}
+      model-id: ${HORECAOS_ASSISTANT_MODEL_ID:claude-sonnet-5-5}
+      thinking: ${HORECAOS_ASSISTANT_THINKING:between_tools}
+      effort: ${HORECAOS_ASSISTANT_EFFORT:low}
+      max-output-tokens: ${HORECAOS_ASSISTANT_MAX_OUTPUT_TOKENS:700}
+      timeout: ${HORECAOS_ASSISTANT_TIMEOUT:PT20S}
+      input-usd-micros-per-token: ${HORECAOS_ASSISTANT_INPUT_USD_MICROS_PER_TOKEN:2}
+      output-usd-micros-per-token: ${HORECAOS_ASSISTANT_OUTPUT_USD_MICROS_PER_TOKEN:10}
   # ADR 0097: the platform's own email, over SMTP submission to a hosted
   # provider. With no host set nothing is sent, and whatever wanted to send
   # waits and says so, instead of failing. The password is never a value
@@ -294,6 +351,25 @@ horecaos:
       security: ${HORECAOS_MAIL_SMTP_SECURITY:STARTTLS}
       username: ${HORECAOS_MAIL_SMTP_USERNAME:}
       password-reference: ${HORECAOS_MAIL_SMTP_PASSWORD_REF:}
+  # ADR 0145: the map and geocoding provider. Unset is `none`, which is correct for every
+  # environment that has no key: every lookup answers NOT_CONFIGURED, GET .../map-config says
+  # `configured: false`, and the screens state it. Nothing here is a secret.
+  #
+  #   provider                 none | yandex  (`fake` exists only under the local profile and
+  #                            in a production environment is reported as not configured)
+  #   yandex.secret-reference  the ADR 0028 reference of the SERVER key, in the platform-owned
+  #                            provider_geocoding category, e.g.
+  #                            horecaos:production:provider_geocoding:platform:yandex-server-key
+  #                            Written by the owner with `bao kv put`; no tenant can write it.
+  #   yandex.browser-key       the PUBLIC, referrer-restricted key for the vendor's map script,
+  #                            delivered to browsers by GET .../map-config so it can be rotated
+  #                            without a build. Unset means no tiles.
+  #   yandex.attribution       the provider's own attribution text (default: its own).
+  geo:
+    provider: ${HORECAOS_GEO_PROVIDER:none}
+    yandex:
+      secret-reference: ${HORECAOS_GEO_YANDEX_SECRET_REFERENCE:}
+      browser-key: ${HORECAOS_GEO_YANDEX_BROWSER_KEY:}
   # ADR 0058: this platform's own public origin, from Telegram's point of view
   # — what TelegramWebhookRegistrationService builds a bot's webhook URL from
   # (this origin + /providers/telegram/{installationId}/webhook). Telegram

@@ -14,11 +14,22 @@
       <app-tenant-picker [value]="installTenantId()" (tenantChange)="installTenantId.set($event)" />
       <label class="field">
         <span class="q-caption">{{ i18n.t('installationsExplorer.install.environment') }}</span>
-        <select class="q-body-sm" name="environment" (change)="environmentCode.set($any($event.target).value)">
-          <option value="" [selected]="environmentCode() === ''">{{ i18n.t('installationsExplorer.install.chooseEnvironment') }}</option>
+        <select
+          class="q-body-sm"
+          name="environment"
+          (change)="environmentCode.set($any($event.target).value)"
+        >
+          <option value="" [selected]="environmentCode() === ''">
+            {{ i18n.t('installationsExplorer.install.chooseEnvironment') }}
+          </option>
           @for (env of environments(); track env.code) {
             <option [value]="env.code" [selected]="env.code === environmentCode()">
-              {{ env.providerType }} · {{ env.code }} · {{ env.production ? i18n.t('installationsExplorer.install.live') : i18n.t('installationsExplorer.install.test') }}
+              {{ env.providerType }} · {{ env.code }} ·
+              {{
+                env.production
+                  ? i18n.t('installationsExplorer.install.live')
+                  : i18n.t('installationsExplorer.install.test')
+              }}
             </option>
           }
         </select>
@@ -28,13 +39,24 @@
       </label>
       <label class="field">
         <span class="q-caption">{{ i18n.t('installationsExplorer.install.displayName') }}</span>
-        <input class="q-body-sm" name="displayName" [value]="displayName()" (input)="displayName.set($any($event.target).value)" />
+        <input
+          class="q-body-sm"
+          name="displayName"
+          [value]="displayName()"
+          (input)="displayName.set($any($event.target).value)"
+        />
       </label>
       @if (environment(); as env) {
         @if (acceptsCredential(env.category)) {
           <label class="field">
             <span class="q-caption">
-              {{ credentialField() ? i18n.t('installationsExplorer.install.credentialNamed', { field: credentialField()! }) : i18n.t('installationsExplorer.install.credential') }}
+              {{
+                credentialField()
+                  ? i18n.t('installationsExplorer.install.credentialNamed', {
+                      field: credentialField()!,
+                    })
+                  : i18n.t('installationsExplorer.install.credential')
+              }}
             </span>
             <input
               class="q-body-sm"
@@ -45,18 +67,27 @@
               [value]="credential()"
               (input)="credential.set($any($event.target).value)"
             />
-            <span class="q-caption muted">{{ i18n.t('installationsExplorer.install.credentialHint') }}</span>
+            <span class="q-caption muted">{{
+              i18n.t('installationsExplorer.install.credentialHint')
+            }}</span>
           </label>
         }
       }
       <label class="field">
         <span class="q-caption">{{ i18n.t('installationsExplorer.install.account') }}</span>
-        <input class="q-body-sm" name="externalAccount" [value]="externalAccount()" (input)="externalAccount.set($any($event.target).value)" />
+        <input
+          class="q-body-sm"
+          name="externalAccount"
+          [value]="externalAccount()"
+          (input)="externalAccount.set($any($event.target).value)"
+        />
       </label>
       @if (installError(); as message) {
         <p class="q-body-sm error">{{ message }}</p>
       }
-      <button type="submit" class="rowButton primary" [disabled]="!canInstall()">{{ i18n.t('installationsExplorer.install.submit') }}</button>
+      <button type="submit" class="rowButton primary" [disabled]="!canInstall()">
+        {{ i18n.t('installationsExplorer.install.submit') }}
+      </button>
     </form>
   }
 }
@@ -83,17 +114,33 @@
       @for (installation of installations(); track installation.id) {
         <tr>
           <td class="q-body-sm">
-            <a [routerLink]="['/tenants', installation.tenantId]">{{ installation.tenantDisplayName }}</a>
+            <a [routerLink]="['/tenants', installation.tenantId]">{{
+              installation.tenantDisplayName
+            }}</a>
           </td>
           <td class="q-body-sm">{{ installation.providerType }}</td>
           <td class="q-body-sm">
-            <span class="pill" [class]="'pill-' + installation.status">{{ installation.status }}</span>
+            <span class="pill" [class]="'pill-' + installation.status">{{
+              installation.status
+            }}</span>
           </td>
-          <td class="q-body-sm">{{ installation.lastConnectionStatus ?? i18n.t('installationsExplorer.neverChecked') }}</td>
-          <td class="q-body-sm">{{ installation.lastSecretRotatedAt ? i18n.day(asDate(installation.lastSecretRotatedAt)) : i18n.t('installationsExplorer.neverRotated') }}</td>
+          <td class="q-body-sm">
+            {{ installation.lastConnectionStatus ?? i18n.t('installationsExplorer.neverChecked') }}
+          </td>
+          <td class="q-body-sm">
+            {{
+              installation.lastSecretRotatedAt
+                ? i18n.day(asDate(installation.lastSecretRotatedAt))
+                : i18n.t('installationsExplorer.neverRotated')
+            }}
+          </td>
           <td class="q-body-sm">
             <button type="button" class="rowButton" (click)="toggle(installation)">
-              {{ openId() === installation.id ? i18n.t('installationsExplorer.hide') : i18n.t('installationsExplorer.manage') }}
+              {{
+                openId() === installation.id
+                  ? i18n.t('installationsExplorer.hide')
+                  : i18n.t('installationsExplorer.manage')
+              }}
             </button>
           </td>
         </tr>
@@ -105,14 +152,25 @@
               }
               <div class="check">
                 <p class="q-body-sm muted">{{ i18n.t('installationsExplorer.check.lead') }}</p>
-                <button type="button" class="rowButton" [disabled]="checking()" (click)="checkConnection(installation)">
-                  {{ checking() ? i18n.t('installationsExplorer.check.working') : i18n.t('installationsExplorer.check.action') }}
+                <button
+                  type="button"
+                  class="rowButton"
+                  [disabled]="checking()"
+                  (click)="checkConnection(installation)"
+                >
+                  {{
+                    checking()
+                      ? i18n.t('installationsExplorer.check.working')
+                      : i18n.t('installationsExplorer.check.action')
+                  }}
                 </button>
                 @if (checkResult(); as result) {
                   <span class="q-body-sm">{{ result }}</span>
                 }
               </div>
-              <h3 class="q-body-sm subTitle">{{ i18n.t('installationsExplorer.bindings.title') }}</h3>
+              <h3 class="q-body-sm subTitle">
+                {{ i18n.t('installationsExplorer.bindings.title') }}
+              </h3>
               @if (bindingMessage(); as message) {
                 <p class="q-body-sm muted">{{ message }}</p>
               }
@@ -123,19 +181,42 @@
                   @for (binding of bindings(); track binding.id) {
                     <li class="q-body-sm">
                       <span>{{ placeOf(binding) }}</span>
-                      <span class="pill" [class]="'pill-' + binding.status">{{ binding.status }}</span>
+                      <span class="pill" [class]="'pill-' + binding.status">{{
+                        binding.status
+                      }}</span>
                       @if (changingBinding()?.id === binding.id) {
                         @if (changingBinding()?.action === 'suspend') {
-                          <span class="muted">{{ i18n.t('installationsExplorer.bindings.suspendLead') }}</span>
+                          <span class="muted">{{
+                            i18n.t('installationsExplorer.bindings.suspendLead')
+                          }}</span>
                         }
-                        <input class="q-body-sm" type="text" name="bindingReason" [placeholder]="i18n.t('installationsExplorer.bindings.reason')" [value]="bindingReason()" (input)="bindingReason.set($any($event.target).value)" />
-                        <button type="button" class="rowButton" [class.danger]="changingBinding()?.action === 'suspend'" [disabled]="bindingReason().trim().length === 0" (click)="confirmBindingChange(installation)">
+                        <input
+                          class="q-body-sm"
+                          type="text"
+                          name="bindingReason"
+                          [placeholder]="i18n.t('installationsExplorer.bindings.reason')"
+                          [value]="bindingReason()"
+                          (input)="bindingReason.set($any($event.target).value)"
+                        />
+                        <button
+                          type="button"
+                          class="rowButton"
+                          [class.danger]="changingBinding()?.action === 'suspend'"
+                          [disabled]="bindingReason().trim().length === 0"
+                          (click)="confirmBindingChange(installation)"
+                        >
                           {{ i18n.t('installationsExplorer.bindings.confirm') }}
                         </button>
-                        <button type="button" class="rowButton" (click)="changingBinding.set(null)">{{ i18n.t('tenants.create.cancel') }}</button>
+                        <button type="button" class="rowButton" (click)="changingBinding.set(null)">
+                          {{ i18n.t('tenants.create.cancel') }}
+                        </button>
                       } @else {
                         <button type="button" class="rowButton" (click)="askBindingChange(binding)">
-                          {{ binding.status === 'ACTIVE' ? i18n.t('installationsExplorer.bindings.suspend') : i18n.t('installationsExplorer.bindings.activate') }}
+                          {{
+                            binding.status === 'ACTIVE'
+                              ? i18n.t('installationsExplorer.bindings.suspend')
+                              : i18n.t('installationsExplorer.bindings.activate')
+                          }}
                         </button>
                       }
                     </li>
@@ -145,18 +226,37 @@
 
               @if (session.has('INTEGRATION_INSTALLATION_MANAGE')) {
                 <div class="manageBlock bindForm">
-                  <h3 class="q-body-sm subTitle">{{ i18n.t('installationsExplorer.bind.title') }}</h3>
+                  <h3 class="q-body-sm subTitle">
+                    {{ i18n.t('installationsExplorer.bind.title') }}
+                  </h3>
                   <div class="inline">
-                    <select class="q-body-sm" name="bindBrand" (change)="bindBrandId.set($any($event.target).value); bindLocationId.set('')">
-                      <option value="" [selected]="bindBrandId() === ''">{{ i18n.t('installationsExplorer.bind.chooseBrand') }}</option>
+                    <select
+                      class="q-body-sm"
+                      name="bindBrand"
+                      (change)="bindBrandId.set($any($event.target).value); bindLocationId.set('')"
+                    >
+                      <option value="" [selected]="bindBrandId() === ''">
+                        {{ i18n.t('installationsExplorer.bind.chooseBrand') }}
+                      </option>
                       @for (brand of brands(); track brand.id) {
-                        <option [value]="brand.id" [selected]="brand.id === bindBrandId()">{{ brand.displayName }}</option>
+                        <option [value]="brand.id" [selected]="brand.id === bindBrandId()">
+                          {{ brand.displayName }}
+                        </option>
                       }
                     </select>
-                    <select class="q-body-sm" name="bindLocation" [disabled]="bindBrandId() === ''" (change)="bindLocationId.set($any($event.target).value)">
-                      <option value="">{{ i18n.t('installationsExplorer.bindings.wholeBrand') }}</option>
+                    <select
+                      class="q-body-sm"
+                      name="bindLocation"
+                      [disabled]="bindBrandId() === ''"
+                      (change)="bindLocationId.set($any($event.target).value)"
+                    >
+                      <option value="">
+                        {{ i18n.t('installationsExplorer.bindings.wholeBrand') }}
+                      </option>
                       @for (location of bindLocations(); track location.id) {
-                        <option [value]="location.id" [selected]="location.id === bindLocationId()">{{ location.displayName }}</option>
+                        <option [value]="location.id" [selected]="location.id === bindLocationId()">
+                          {{ location.displayName }}
+                        </option>
                       }
                     </select>
                   </div>
@@ -176,13 +276,20 @@
                     </div>
                   }
                   <p class="q-caption muted">{{ i18n.t('installationsExplorer.bind.hint') }}</p>
-                  <button type="button" class="rowButton bindSubmit" [disabled]="busy() || bindBrandId() === ''" (click)="bind(installation)">
+                  <button
+                    type="button"
+                    class="rowButton bindSubmit"
+                    [disabled]="busy() || bindBrandId() === ''"
+                    (click)="bind(installation)"
+                  >
                     {{ i18n.t('installationsExplorer.bind.submit') }}
                   </button>
                 </div>
 
                 <div class="manageBlock rotateForm">
-                  <h3 class="q-body-sm subTitle">{{ i18n.t('installationsExplorer.rotate.title') }}</h3>
+                  <h3 class="q-body-sm subTitle">
+                    {{ i18n.t('installationsExplorer.rotate.title') }}
+                  </h3>
                   <div class="inline">
                     <input
                       class="q-body-sm"
@@ -204,13 +311,19 @@
                     <button
                       type="button"
                       class="rowButton rotateSubmit"
-                      [disabled]="busy() || rotateValue().trim().length === 0 || rotateReason().trim().length === 0"
+                      [disabled]="
+                        busy() ||
+                        rotateValue().trim().length === 0 ||
+                        rotateReason().trim().length === 0
+                      "
                       (click)="rotate(installation)"
                     >
                       {{ i18n.t('installationsExplorer.rotate.submit') }}
                     </button>
                   </div>
-                  <p class="q-caption muted">{{ i18n.t('installationsExplorer.install.credentialHint') }}</p>
+                  <p class="q-caption muted">
+                    {{ i18n.t('installationsExplorer.install.credentialHint') }}
+                  </p>
                 </div>
 
                 @if (clerkApproval() !== null) {

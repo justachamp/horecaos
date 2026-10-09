@@ -1,0 +1,49 @@
+# ADR 0147's two routing alerts, in their own file rather than appended to
+# adr-0023-alerts.yml: that file's header says every threshold in it is copied from
+# ADR 0023's table and may be changed in only two places, and these thresholds belong
+# to a different record. prometheus.yml's `*-alerts.yml` glob picks this file up.
+#
+# Both are morning-digest tier. A ROAD fee that fell back to the straight line is a
+# fee that is a little wrong and says so on its own row; nothing stops an order being
+# taken, which is the whole reason ADR 0147 puts routing behind a fallback. These exist
+# so the fallback is not quietly the normal path, and so the map does not go stale
+# unnoticed. Neither wakes anyone, and ADR 0034's three-alert ceiling for the night
+# tier is untouched.
+groups:
+  - name: adr-0147-morning
+    rules:
+      - alert: HorecaosRoadRoutingFallingBack
+        # "Alert when fallbacks exceed 5% of ROAD quotes over fifteen minutes."
+        # The denominator is the resolver's own count of every ROAD-mode measurement,
+        # whichever way it came out (horecaos.delivery.distance.road_measurements), so a
+        # fallback rate has a total to be a rate of. The `>= 20` guard is not in the ADR:
+        # at pilot volume one fallback in a handful of quotes is 20% of nothing, and a
+        # digest line per such quarter hour would be read once and then never.
+        expr: >
+          (
+            sum(increase(horecaos_delivery_distance_fallbacks_total{mode="ROAD"}[15m]))
+            /
+            sum(increase(horecaos_delivery_distance_road_measurements_total{mode="ROAD"}[15m]))
+          ) > 0.05
+          and
+          sum(increase(horecaos_delivery_distance_road_measurements_total{mode="ROAD"}[15m])) >= 20
+        for: 0m
+        labels:
+          tier: morning
+        annotations:
+          summary: >-
+            ROAD delivery fees are falling back to the straight line for more than 5% of
+            quotes over the last 15 minutes
+          runbook: docs/runbooks/load-uzbekistan-routing-dataset.md
+
+      - alert: HorecaosRoutingDatasetStale
+        # "...or when the dataset is older than 60 days." A monthly refresh that has
+        # silently stopped is a map ageing under fees. The gauge exists only when the
+        # dataset tag starts with an ISO date, which is how ADR 0147 names it.
+        expr: max(horecaos_routing_dataset_age_days) > 60
+        for: 5m
+        labels:
+          tier: morning
+        annotations:
+          summary: the routing dataset is {{ $value }} days old
+          runbook: docs/runbooks/load-uzbekistan-routing-dataset.md

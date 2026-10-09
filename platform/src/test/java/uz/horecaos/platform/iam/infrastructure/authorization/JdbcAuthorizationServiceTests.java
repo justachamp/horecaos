@@ -384,10 +384,19 @@ class JdbcAuthorizationServiceTests {
                 Capability.DELIVERY_DISPATCH_RULES_READ,
                 Capability.COURIER_POSITION_READ,
                 Capability.KITCHEN_TICKET_READ,
+                // ADR 0151: the wall's one capability. It reads the same tickets KITCHEN_TICKET_READ
+                // reads, through the same projection, so a suspended tenant's wall keeps showing the
+                // kitchen exactly as its staff's board does; it takes nothing out.
+                Capability.KITCHEN_DISPLAY_READ,
                 Capability.RESERVATION_READ,
                 Capability.DINEIN_SESSION_READ,
                 Capability.MARKETPLACE_LIVENESS_READ,
                 Capability.CUSTOMER_READ,
+                // ADR 0111: the callback queue and one lead's detail. Like CUSTOMER_READ it never
+                // decrypts -- the queue shows a masked number, and the number itself stays behind
+                // CUSTOMER_PII_REVEAL -- so a suspended tenant's call centre may still see who is
+                // waiting for a call; it takes nothing out.
+                Capability.CUSTOMER_LEAD_READ,
                 Capability.POS_SYNC_READ,
                 Capability.POS_EXPORT_READ,
                 // ADR 0139: a suspended tenant's managers may still look at who
@@ -430,6 +439,10 @@ class JdbcAuthorizationServiceTests {
                 Capability.COURIER_SETTLEMENT_READ,
                 Capability.PARTNER_INVOICE_READ,
                 Capability.TERMS_READ,
+                // ADR 0069: the assistant's own knowledge entries, their history and its
+                // month-to-date usage. A suspended tenant reading what it told its customers
+                // and what that cost takes nothing out.
+                Capability.ASSISTANT_READ,
                 Capability.VOICE_PRESENCE_READ,
                 Capability.VOICE_SCREEN_POP_READ,
                 Capability.VOICE_CALL_LOG_READ,
@@ -441,7 +454,11 @@ class JdbcAuthorizationServiceTests {
                 // A suspended tenant's owner may still read it; it takes nothing out.
                 Capability.SUPPORT_SESSION_READ,
                 // ADR 0085: the platform's incident list names metrics and runs, never tenant data.
-                Capability.CONTROL_PLANE_ALERT_READ);
+                Capability.CONTROL_PLANE_ALERT_READ,
+                // ADR 0148: whether a person holds a second factor, and when each authenticator was
+                // added. Ids, a name the person typed and dates -- never a secret or a code, which the
+                // platform does not hold -- so a suspended tenant's administrator may still see it.
+                Capability.IAM_STAFF_MFA_READ);
 
         java.util.Set<Capability> classified = java.util.Arrays.stream(Capability.values())
                 .filter(Capability::isRead)

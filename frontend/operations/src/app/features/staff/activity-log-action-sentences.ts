@@ -74,6 +74,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Маркетинг кампания возобновлено',
       'uz-Latn': 'Marketing kampaniya davom ettirildi',
     },
+    MARKETING_CONTACT_POLICY_REMOVED: {
+      en: 'Marketing contact rule removed',
+      ru: 'Правило политики контактов удалено',
+      'uz-Latn': 'Aloqa siyosati qoidasi olib tashlandi',
+    },
+    MARKETING_CONTACT_POLICY_SET: {
+      en: 'Marketing contact rule set',
+      ru: 'Правило политики контактов задано',
+      'uz-Latn': 'Aloqa siyosati qoidasi belgilandi',
+    },
     MARKETING_COURIER_BROADCAST_DRAFTED: {
       en: 'Marketing courier broadcast drafted',
       ru: 'Маркетинг курьер рассылка черновик сохранён',
@@ -98,6 +108,46 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Marketing link minted',
       ru: 'Маркетинг ссылка создано',
       'uz-Latn': 'Marketing havola yaratildi',
+    },
+    MARKETING_OFFER_CREATED: {
+      en: 'Marketing offer drafted',
+      ru: 'Предложение маркетинга создано как черновик',
+      'uz-Latn': 'Marketing taklifi qoralama sifatida yaratildi',
+    },
+    MARKETING_OFFER_PUBLISHED: {
+      en: 'Marketing offer published',
+      ru: 'Предложение маркетинга опубликовано',
+      'uz-Latn': 'Marketing taklifi eʻlon qilindi',
+    },
+    MARKETING_OFFER_RETIRED: {
+      en: 'Marketing offer retired',
+      ru: 'Предложение маркетинга снято',
+      'uz-Latn': 'Marketing taklifi bekor qilindi',
+    },
+    MARKETING_OFFER_REWRITTEN: {
+      en: 'Marketing offer draft rewritten',
+      ru: 'Черновик предложения маркетинга переписан',
+      'uz-Latn': 'Marketing taklifi qoralamasi qayta yozildi',
+    },
+    MARKETING_OFFER_VERSION_CREATED: {
+      en: 'Marketing offer new version drafted',
+      ru: 'Создана новая версия предложения маркетинга',
+      'uz-Latn': 'Marketing taklifining yangi versiyasi yaratildi',
+    },
+    MARKETING_SCENARIO_DRAFTED: {
+      en: 'Marketing scenario drafted',
+      ru: 'Сценарий маркетинга создан как черновик',
+      'uz-Latn': 'Marketing ssenariysi qoralama sifatida yaratildi',
+    },
+    MARKETING_SCENARIO_REVISED: {
+      en: 'Marketing scenario revised, new version drafted',
+      ru: 'Сценарий маркетинга пересмотрен, создана новая версия',
+      'uz-Latn': 'Marketing ssenariysi qayta koʻrib chiqildi, yangi versiya yaratildi',
+    },
+    MARKETING_SCENARIO_STEPS_REPLACED: {
+      en: 'Marketing scenario steps replaced',
+      ru: 'Шаги сценария маркетинга заменены',
+      'uz-Latn': 'Marketing ssenariysi qadamlari almashtirildi',
     },
     MARKETING_SUPPRESSION_LIFTED: {
       en: 'Marketing suppression lifted',
@@ -385,6 +435,36 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Изменён канал продаж',
       'uz-Latn': 'Savdo kanali tahrirlandi',
     },
+    'commercial.arrears.paid_in_full': {
+      en: 'Overdue balance paid in full',
+      ru: 'Просроченный долг оплачен полностью',
+      'uz-Latn': 'Muddati oʻtgan qarz toʻliq toʻlandi',
+    },
+    'commercial.billing.bank_details_changed': {
+      en: 'Bank details for invoices changed',
+      ru: 'Изменены банковские реквизиты для счетов',
+      'uz-Latn': 'Hisob-fakturalar uchun bank rekvizitlari oʻzgartirildi',
+    },
+    'commercial.card_installation.active': {
+      en: 'Card payment account activated',
+      ru: 'Платёжный аккаунт для карт активирован',
+      'uz-Latn': 'Karta uchun toʻlov hisobi faollashtirildi',
+    },
+    'commercial.card_installation.created': {
+      en: 'Card payment account added',
+      ru: 'Добавлен платёжный аккаунт для карт',
+      'uz-Latn': 'Karta uchun toʻlov hisobi qoʻshildi',
+    },
+    'commercial.card_installation.suspended': {
+      en: 'Card payment account suspended',
+      ru: 'Платёжный аккаунт для карт приостановлен',
+      'uz-Latn': 'Karta uchun toʻlov hisobi toʻxtatildi',
+    },
+    'commercial.einvoicing.classification.updated': {
+      en: 'Electronic invoice line classification changed',
+      ru: 'Изменена классификация позиций электронного счёта-фактуры',
+      'uz-Latn': 'Elektron hisob-faktura qatorlari tasnifi oʻzgartirildi',
+    },
     'commercial.entitlement_override.granted': {
       en: 'Commercial entitlement override granted',
       ru: 'Коммерция право доступа переопределение предоставлено',
@@ -455,6 +535,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Коммерция кошелёк карта попытка заменено',
       'uz-Latn': 'Tijorat hamyon karta urinish almashtirildi',
     },
+    'commercial.wallet.card_bound': {
+      en: 'Card put on file',
+      ru: 'Карта добавлена',
+      'uz-Latn': 'Karta qoʻshildi',
+    },
     'commercial.wallet.card_charge_after_supersede': {
       en: 'Commercial wallet card charge after supersede',
       ru: 'Коммерция кошелёк карта списание после заменить',
@@ -475,6 +560,21 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Коммерция кошелёк карта списано',
       'uz-Latn': 'Tijorat hamyon karta yechildi',
     },
+    'commercial.wallet.card_removed': {
+      en: 'Card taken off file',
+      ru: 'Карта удалена',
+      'uz-Latn': 'Karta oʻchirildi',
+    },
+    'commercial.wallet.card_top_up_declined': {
+      en: 'Card top-up declined',
+      ru: 'Пополнение картой отклонено',
+      'uz-Latn': 'Karta orqali toʻldirish rad etildi',
+    },
+    'commercial.wallet.card_topped_up': {
+      en: 'Wallet topped up by card',
+      ru: 'Кошелёк пополнен картой',
+      'uz-Latn': 'Hamyon karta orqali toʻldirildi',
+    },
     'commercial.wallet.deposit_recorded': {
       en: 'Commercial wallet deposit recorded',
       ru: 'Коммерция кошелёк депозит зафиксировано',
@@ -489,6 +589,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Commercial wallet payment method changed',
       ru: 'Коммерция кошелёк платёж способ изменено',
       'uz-Latn': 'Tijorat hamyon toʻlov usul oʻzgartirildi',
+    },
+    'commercial.wallet.prepayment_invoice_cancelled': {
+      en: 'Prepayment invoice withdrawn',
+      ru: 'Счёт на предоплату отозван',
+      'uz-Latn': 'Oldindan toʻlov hisob-fakturasi bekor qilindi',
+    },
+    'commercial.wallet.prepayment_invoice_issued': {
+      en: 'Prepayment invoice issued',
+      ru: 'Выставлен счёт на предоплату',
+      'uz-Latn': 'Oldindan toʻlov hisob-fakturasi chiqarildi',
     },
     'commercial.wallet.refunded': {
       en: 'Commercial wallet refunded',
@@ -680,6 +790,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Клиент чёрный список раскрыто',
       'uz-Latn': 'Mijoz qora roʻyxat ochib berildi',
     },
+    'customer.card.viewed': {
+      en: 'Customer card viewed',
+      ru: 'Карточка клиента открыта',
+      'uz-Latn': 'Mijoz kartochkasi ochildi',
+    },
+    'customer.contact_attempt.recorded': {
+      en: 'Contact attempt recorded',
+      ru: 'Попытка связи записана',
+      'uz-Latn': 'Aloqa urinishi qayd etildi',
+    },
     'customer.csv_import_queued': {
       en: 'Customer CSV import queued',
       ru: 'Клиент CSV импорт в очереди',
@@ -689,6 +809,31 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Customer identity merged',
       ru: 'Клиент личность объединено',
       'uz-Latn': 'Mijoz shaxs birlashtirildi',
+    },
+    'customer.lead.assigned': {
+      en: 'Lead handed to a branch',
+      ru: 'Лид передан в филиал',
+      'uz-Latn': 'Lid filialga topshirildi',
+    },
+    'customer.lead.linked': {
+      en: 'Lead identified as a customer',
+      ru: 'Лид опознан как клиент',
+      'uz-Latn': 'Lid mijoz sifatida aniqlandi',
+    },
+    'customer.lead.registered': {
+      en: 'Lead registered',
+      ru: 'Лид зарегистрирован',
+      'uz-Latn': 'Lid roʻyxatga olindi',
+    },
+    'customer.lead.revealed': {
+      en: 'Lead phone number revealed',
+      ru: 'Номер телефона лида раскрыт',
+      'uz-Latn': 'Lid telefon raqami ochib berildi',
+    },
+    'customer.lead.status_changed': {
+      en: 'Lead status changed',
+      ru: 'Статус лида изменён',
+      'uz-Latn': 'Lid holati oʻzgartirildi',
     },
     'customer.list.exported': {
       en: 'Customer list exported',
@@ -875,6 +1020,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Контактные лица филиала изменены',
       'uz-Latn': 'Filialning aloqa shaxslari oʻzgartirildi',
     },
+    'integration.installation_created': {
+      en: 'Provider installation created',
+      ru: 'Подключение провайдера создано',
+      'uz-Latn': 'Provayder ulanmasi yaratildi',
+    },
     'integration.secret_written': {
       en: 'Integration secret written',
       ru: 'Интеграция секрет записано',
@@ -994,6 +1144,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Kitchen device enrolled',
       ru: 'Кухня устройство зарегистрировано',
       'uz-Latn': 'Oshxona qurilma roʻyxatga olindi',
+    },
+    'kitchen.device.display_configured': {
+      en: 'Kitchen wall display configured',
+      ru: 'Настроен настенный экран кухни',
+      'uz-Latn': 'Oshxonadagi devor ekrani sozlandi',
     },
     'kitchen.device.revoked': {
       en: 'Kitchen device revoked',
@@ -1119,6 +1274,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Notifications template provider review recorded',
       ru: 'Уведомления шаблон провайдер проверка зафиксировано',
       'uz-Latn': 'Bildirishnomalar shablon provayder koʻrib chiqish qayd etildi',
+    },
+    'order.map_points.revealed': {
+      en: 'The day’s delivery points opened on a map',
+      ru: 'Открыты на карте точки доставки за день',
+      'uz-Latn': 'Kunlik yetkazib berish nuqtalari xaritada ochildi',
     },
     'ordering.acceptance-policy.authored': {
       en: 'Order acceptance policy published',

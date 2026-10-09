@@ -1,0 +1,127 @@
+<div class="wallet">
+  <h1 class="q-title">{{ 'finance.wallet.title' | t }}</h1>
+  <p class="q-body-sm subtitle">{{ 'finance.wallet.subtitle' | t }}</p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm denied" data-testid="wallet-denied">{{ 'finance.wallet.denied' | t }}</p>
+    }
+    @case ('error') {
+      <div class="band band--error" role="alert">
+        <span class="q-body-sm">{{ loadErrorText() }}</span>
+        <button type="button" class="secondary" (click)="retry()">
+          {{ 'reports.error.retry' | t }}
+        </button>
+      </div>
+    }
+    @case ('ready') {
+      @if (wallet(); as w) {
+        <div class="notices">
+          @if (owed(); as o) {
+            <div class="band band--warn" role="status" data-testid="wallet-owed">
+              <span class="q-body-sm">
+                {{
+                  'finance.wallet.notice.owed'
+                    | t: { amount: money(o.due), count: o.openStatements }
+                }}
+              </span>
+            </div>
+          }
+          @if (w.lapsingGrants.length > 0) {
+            <div class="band band--warn" role="status" data-testid="wallet-lapsing">
+              <div>
+                <strong class="q-body-sm">{{ 'finance.wallet.notice.lapsing' | t }}</strong>
+                <ul class="notice-list">
+                  @for (grant of w.lapsingGrants; track grant.grantId) {
+                    <li class="q-body-sm q-tnum">
+                      {{
+                        'finance.wallet.notice.lapsing.line'
+                          | t: { amount: money(grant.remaining), date: date(grant.expiresAt) }
+                      }}
+                    </li>
+                  }
+                </ul>
+                <p class="q-caption muted">{{ 'finance.wallet.notice.lapsing.hint' | t }}</p>
+              </div>
+            </div>
+          }
+          @if (w.pendingTopUp; as pending) {
+            <div class="band" role="status" data-testid="wallet-pending">
+              <span class="q-body-sm">
+                {{ 'finance.wallet.notice.pending' | t: { amount: money(pending.amount) } }}
+              </span>
+            </div>
+          }
+          @if (!w.cardPaymentsAvailable) {
+            <div class="band" role="status" data-testid="wallet-card-not-connected-banner">
+              <span class="q-body-sm">{{ 'finance.wallet.notice.cardNotConnected' | t }}</span>
+            </div>
+          }
+          @if (!w.bankTransferAvailable) {
+            <div class="band" role="status" data-testid="wallet-bank-not-connected-banner">
+              <span class="q-body-sm">{{ 'finance.wallet.notice.bankNotConnected' | t }}</span>
+            </div>
+          }
+        </div>
+
+        <div class="tiles">
+          <div class="tile" data-testid="wallet-paid-tile">
+            <span class="q-caption muted">{{ 'finance.wallet.paid' | t }}</span>
+            <strong class="q-subhead q-tnum tile__figure">{{ money(w.paidBalance) }}</strong>
+            <span class="q-caption muted">{{ 'finance.wallet.paid.hint' | t }}</span>
+          </div>
+          <div class="tile" data-testid="wallet-bonus-tile">
+            <span class="q-caption muted">{{ 'finance.wallet.bonus' | t }}</span>
+            <!--
+              The spendable figure leads, because it is the one a statement can draw on. The ledger sum
+              follows only while the two differ (a grant past its date until the sweep lapses it).
+            -->
+            <strong class="q-subhead q-tnum tile__figure">{{
+              money(w.bonusSpendableBalance)
+            }}</strong>
+            @if (w.bonusSpendableBalance.amountMinor !== w.bonusBalance.amountMinor) {
+              <span class="q-caption muted">{{
+                'finance.wallet.bonus.inLedger' | t: { amount: money(w.bonusBalance) }
+              }}</span>
+            }
+            <span class="q-caption muted">{{ 'finance.wallet.bonus.hint' | t }}</span>
+          </div>
+          <div class="tile" data-testid="wallet-collected-tile">
+            <span class="q-caption muted">{{ 'finance.wallet.collectedBy' | t }}</span>
+            <strong class="q-subhead tile__figure">{{ collectedBy() }}</strong>
+            <span class="q-caption muted">{{ 'finance.wallet.collectedBy.hint' | t }}</span>
+          </div>
+        </div>
+
+        @if (tenantId(); as id) {
+          <q-wallet-topup-panel
+            [tenantId]="id"
+            [wallet]="w"
+            [paymentDetails]="paymentDetails()"
+            [revision]="revision()"
+            (changed)="onChanged()"
+          />
+          <q-wallet-method-panel [tenantId]="id" [wallet]="w" (changed)="onChanged()" />
+          <q-wallet-invoices-panel
+            [tenantId]="id"
+            [revision]="revision()"
+            (changed)="onChanged()"
+          />
+          <q-wallet-ledger-panel [tenantId]="id" [revision]="revision()" />
+        }
+
+        <p class="q-body-sm footer-note">
+          <a
+            class="link-inline"
+            routerLink="/finance/subscription"
+            data-testid="wallet-subscription-link"
+            >{{ 'finance.wallet.footerLink' | t }}</a
+          >
+        </p>
+      }
+    }
+  }
+</div>

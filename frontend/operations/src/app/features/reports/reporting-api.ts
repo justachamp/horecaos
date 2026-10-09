@@ -188,6 +188,20 @@ export interface DistanceBucketSetResponse {
   readonly buckets: readonly DistanceBucketDefinitionResponse[];
 }
 
+/** Row 7.10 (ADR 0145): one delivery zone's deliveries — mirrors `ReportingController.ZoneDensityRowResponse`. `zoneId` null is the deliveries no drawn zone covered. */
+export interface ZoneDensityRowResponse {
+  readonly zoneId: string | null;
+  readonly deliveryCount: number;
+  /** Integer minor units of {@link currency}; never summed across currencies. */
+  readonly totalFeeMinor: number;
+  readonly currency: string;
+}
+
+export interface ZoneDensityResponse {
+  readonly zones: readonly ZoneDensityRowResponse[];
+  readonly provenance: ProvenanceResponse;
+}
+
 /** Wave 9 w4-reports-distance-crm (7.1): delivery_distance.average.v1 — see {@link ReportingApi.deliveryDistance}. */
 export interface DistanceResponse {
   readonly averageMeters: number | null;
@@ -235,7 +249,9 @@ export interface PaymentMixRowResponse {
 /**
  * P39 (7.1c/7.3b): `payment_mix.amount.v1` — the cash-collection control
  * figure. `overview` is what the business-overview card renders; `byLocation`
- * is what a future branch report (7.3b) would split by.
+ * is what the branch report's payment table (7.3b, Table D) splits by. Both
+ * keep one row per legal entity (ADR 0038): this is money, and two taxpayers'
+ * takings are never summed into one figure.
  */
 export interface PaymentMixResponse {
   readonly overview: readonly PaymentMixRowResponse[];
@@ -839,6 +855,16 @@ export class ReportingApi {
     return result.value;
   }
 
+  /** Row 7.10 (ADR 0145): deliveries per delivery zone — the zone dimension of the fee-resolution fact, never a doorstep. */
+  async zoneDensity(tenantId: string, params: RangeParams): Promise<ZoneDensityResponse> {
+    const result = await firstValueFrom(
+      this.api.get<ZoneDensityResponse>(reportsPaths.zoneDensity(tenantId), {
+        params: { from: params.from, to: params.to, locationId: params.locationId },
+      }),
+    );
+    return result.value;
+  }
+
   /** Row 7.10b: the published bucket boundaries and version — the distance histogram's own formula panel. */
   async distanceBucketSet(tenantId: string): Promise<DistanceBucketSetResponse> {
     const result = await firstValueFrom(
@@ -902,6 +928,8 @@ export class ReportingApi {
       readonly to: string;
       readonly locationId?: readonly string[];
       readonly paymentMethodCode?: readonly string[];
+      /** ADR 0038: narrows both halves to one taxpayer; absent keeps every entity, each on its own rows. */
+      readonly legalEntityId?: readonly string[];
     },
   ): Promise<PaymentMixResponse> {
     const result = await firstValueFrom(
@@ -911,6 +939,7 @@ export class ReportingApi {
           to: params.to,
           locationId: params.locationId,
           paymentMethodCode: params.paymentMethodCode,
+          legalEntityId: params.legalEntityId,
         },
       }),
     );

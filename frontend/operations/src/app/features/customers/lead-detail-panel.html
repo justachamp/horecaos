@@ -1,0 +1,329 @@
+@if (current(); as lead) {
+  <aside class="panel" data-testid="lead-panel">
+    <div class="head">
+      <h2 class="q-title">{{ lead.phoneMasked }}</h2>
+      <button type="button" class="link" (click)="close()" data-testid="lead-panel-close">
+        {{ 'customers.leads.detail.close' | t }}
+      </button>
+    </div>
+
+    @if (error(); as message) {
+      <p class="q-body-sm error" role="alert" data-testid="lead-panel-error">{{ message }}</p>
+    }
+
+    <dl class="fields">
+      <div class="field">
+        <dt class="q-caption">{{ 'customers.leads.detail.status' | t }}</dt>
+        <dd class="q-body-sm" data-testid="lead-status">{{ statusLabel(lead) }}</dd>
+      </div>
+      <div class="field">
+        <dt class="q-caption">{{ 'customers.leads.detail.source' | t }}</dt>
+        <dd class="q-body-sm">{{ sourceLabel(lead) }}</dd>
+      </div>
+      <div class="field">
+        <dt class="q-caption">{{ 'customers.leads.detail.created' | t }}</dt>
+        <dd class="q-body-sm q-tnum">{{ formatWhen(lead.createdAt) }}</dd>
+      </div>
+      <div class="field">
+        <dt class="q-caption">{{ 'customers.leads.detail.branch' | t }}</dt>
+        <dd class="q-body-sm">{{ branchLabel(lead) }}</dd>
+      </div>
+      @if (lead.callbackDueAt; as due) {
+        <div class="field">
+          <dt class="q-caption">{{ 'customers.leads.detail.callback' | t }}</dt>
+          <dd class="q-body-sm q-tnum">{{ formatWhen(due) }}</dd>
+        </div>
+      }
+      @if (lead.closedReason; as reason) {
+        <div class="field">
+          <dt class="q-caption">{{ 'customers.leads.detail.closedReason' | t }}</dt>
+          <dd class="q-body-sm">{{ reasonLabel(reason) }}</dd>
+        </div>
+      }
+      @if (lead.convertedOrderId; as orderId) {
+        <div class="field">
+          <dt class="q-caption">{{ 'customers.leads.detail.order' | t }}</dt>
+          <dd class="q-body-sm">
+            <a class="link" [routerLink]="['/orders', orderId]">{{
+              'customers.leads.detail.open' | t
+            }}</a>
+          </dd>
+        </div>
+      }
+      @if (lead.convertedReservationId) {
+        <div class="field">
+          <dt class="q-caption">{{ 'customers.leads.detail.reservation' | t }}</dt>
+          <dd class="q-body-sm q-mono">{{ lead.convertedReservationId }}</dd>
+        </div>
+      }
+      @if (lead.customerAccountId; as accountId) {
+        <div class="field">
+          <dt class="q-caption">{{ 'customers.leads.detail.customer' | t }}</dt>
+          <dd class="q-body-sm">
+            @if (canOpenCustomer()) {
+              <a class="link" [routerLink]="['/customers', accountId]">{{
+                'customers.leads.detail.open' | t
+              }}</a>
+            } @else {
+              <span data-testid="lead-linked">{{ 'customers.leads.detail.linked' | t }}</span>
+            }
+          </dd>
+        </div>
+      }
+    </dl>
+
+    @if (lead.possibleAccountIds.length > 0) {
+      <div class="hint" data-testid="lead-hint-accounts">
+        <p class="q-caption">{{ 'customers.leads.detail.hints.accounts' | t }}</p>
+        @for (accountId of lead.possibleAccountIds; track accountId) {
+          <div class="hint-account">
+            @if (canOpenCustomer()) {
+              <a class="link" [routerLink]="['/customers', accountId]">{{
+                'customers.leads.detail.open' | t
+              }}</a>
+            }
+            @if (canLink()) {
+              <button
+                type="button"
+                class="secondary"
+                [disabled]="busy()"
+                (click)="linkTo(accountId)"
+                data-testid="lead-link-customer"
+              >
+                {{ 'customers.leads.detail.hints.link' | t }}
+              </button>
+            }
+          </div>
+        }
+      </div>
+    }
+    @if (lead.otherOpenLeadIds.length > 0) {
+      <p class="q-body-sm hint" data-testid="lead-hint-leads">
+        {{ 'customers.leads.detail.hints.leads' | t }}: {{ lead.otherOpenLeadIds.length }}
+      </p>
+    }
+
+    <!-- ------------------------------------------------------------ the one decrypt -->
+    @if (revealed(); as contact) {
+      <dl class="fields revealed" data-testid="lead-revealed">
+        <div class="field">
+          <dt class="q-caption">{{ 'customers.leads.detail.phone' | t }}</dt>
+          <dd class="q-body-sm q-tnum" data-testid="lead-phone">{{ contact.phone }}</dd>
+        </div>
+        @if (contact.displayName) {
+          <div class="field">
+            <dt class="q-caption">{{ 'customers.leads.detail.name' | t }}</dt>
+            <dd class="q-body-sm">{{ contact.displayName }}</dd>
+          </div>
+        }
+        @if (contact.notes) {
+          <div class="field">
+            <dt class="q-caption">{{ 'customers.leads.detail.notes' | t }}</dt>
+            <dd class="q-body-sm">{{ contact.notes }}</dd>
+          </div>
+        }
+      </dl>
+      <button type="button" class="link" (click)="hide()">
+        {{ 'customers.leads.detail.hide' | t }}
+      </button>
+    } @else if (access().canReveal) {
+      <button
+        type="button"
+        class="secondary"
+        [disabled]="revealing()"
+        (click)="reveal()"
+        data-testid="lead-reveal"
+      >
+        {{
+          revealing()
+            ? ('customers.leads.detail.revealing' | t)
+            : ('customers.leads.detail.reveal' | t)
+        }}
+      </button>
+      <p class="q-caption muted">{{ 'customers.leads.detail.revealNote' | t }}</p>
+    }
+
+    <!-- ----------------------------------------------------------------- the machine -->
+    @if (canWork()) {
+      <div class="actions" data-testid="lead-actions">
+        @if (canContact()) {
+          <button
+            type="button"
+            class="secondary"
+            [disabled]="busy()"
+            (click)="markContacted()"
+            data-testid="action-contacted"
+          >
+            {{ 'customers.leads.action.contacted' | t }}
+          </button>
+        }
+        <button
+          type="button"
+          class="secondary"
+          (click)="choose('schedule')"
+          data-testid="action-schedule"
+        >
+          {{ 'customers.leads.action.schedule' | t }}
+        </button>
+        <button
+          type="button"
+          class="secondary"
+          (click)="choose('convert')"
+          data-testid="action-convert"
+        >
+          {{ 'customers.leads.action.convert' | t }}
+        </button>
+        <button
+          type="button"
+          class="secondary"
+          (click)="choose('decline')"
+          data-testid="action-decline"
+        >
+          {{ 'customers.leads.action.decline' | t }}
+        </button>
+        <button type="button" class="secondary" (click)="choose('lose')" data-testid="action-lose">
+          {{ 'customers.leads.action.lose' | t }}
+        </button>
+        @if (canAssign()) {
+          <button
+            type="button"
+            class="secondary"
+            (click)="choose('assign')"
+            data-testid="action-assign"
+          >
+            {{ 'customers.leads.action.assign' | t }}
+          </button>
+        }
+      </div>
+
+      @if (action(); as chosen) {
+        <form
+          class="form"
+          (submit)="$event.preventDefault(); submitAction()"
+          data-testid="lead-action-form"
+        >
+          @switch (chosen) {
+            @case ('schedule') {
+              <label class="field-input">
+                <span class="q-caption">{{ 'customers.leads.action.scheduleAt' | t }}</span>
+                <input
+                  type="datetime-local"
+                  [value]="callbackAt()"
+                  (input)="callbackAt.set($any($event.target).value)"
+                  data-testid="schedule-at"
+                />
+              </label>
+            }
+            @case ('convert') {
+              <label class="field-input">
+                <span class="q-caption">{{ 'customers.leads.action.convertKind' | t }}</span>
+                <select
+                  [value]="convertKind()"
+                  (change)="setConvertKind($any($event.target).value)"
+                  data-testid="convert-kind"
+                >
+                  <option value="order">{{ 'customers.leads.action.convertOrder' | t }}</option>
+                  <option value="reservation">
+                    {{ 'customers.leads.action.convertReservation' | t }}
+                  </option>
+                </select>
+              </label>
+              <label class="field-input">
+                <span class="q-caption">{{ 'customers.leads.action.convertId' | t }}</span>
+                <input
+                  type="text"
+                  [value]="convertId()"
+                  (input)="convertId.set($any($event.target).value)"
+                  data-testid="convert-id"
+                />
+              </label>
+            }
+            @case ('decline') {
+              <label class="field-input">
+                <span class="q-caption">{{ 'customers.leads.action.reason' | t }}</span>
+                <select
+                  [value]="closedReason()"
+                  (change)="setClosedReason($any($event.target).value)"
+                  data-testid="closed-reason"
+                >
+                  @for (reason of closedReasons; track reason) {
+                    <option [value]="reason">{{ reasonLabel(reason) }}</option>
+                  }
+                </select>
+              </label>
+            }
+            @case ('lose') {
+              <label class="field-input">
+                <span class="q-caption">{{ 'customers.leads.action.reason' | t }}</span>
+                <select
+                  [value]="closedReason()"
+                  (change)="setClosedReason($any($event.target).value)"
+                  data-testid="closed-reason"
+                >
+                  @for (reason of closedReasons; track reason) {
+                    <option [value]="reason">{{ reasonLabel(reason) }}</option>
+                  }
+                </select>
+              </label>
+            }
+            @case ('assign') {
+              <label class="field-input">
+                <span class="q-caption">{{ 'customers.leads.action.assignChoose' | t }}</span>
+                <select
+                  [value]="assignTo()"
+                  (change)="assignTo.set($any($event.target).value)"
+                  data-testid="assign-to"
+                >
+                  <option value="">—</option>
+                  @for (location of locations(); track location.id) {
+                    <option [value]="location.id">{{ location.displayName }}</option>
+                  }
+                </select>
+              </label>
+            }
+          }
+          <div class="buttons">
+            <button type="submit" class="primary" [disabled]="busy()" data-testid="action-submit">
+              {{ 'customers.leads.action.submit' | t }}
+            </button>
+            <button type="button" class="link" (click)="cancelAction()">
+              {{ 'customers.leads.action.cancel' | t }}
+            </button>
+          </div>
+        </form>
+      }
+    } @else if (!open()) {
+      <p class="q-body-sm muted" data-testid="lead-finished">
+        {{ 'customers.leads.action.finished' | t }}
+      </p>
+    }
+
+    <!-- ----------------------------------------------------------------- the journal -->
+    <h3 class="q-subtitle">{{ 'customers.leads.attempts.title' | t }}</h3>
+    <ul class="attempts" data-testid="lead-attempts">
+      @for (attempt of attempts(); track attempt.id) {
+        <li class="q-body-sm">
+          <span class="q-tnum">{{ formatWhen(attempt.occurredAt) }}</span>
+          — {{ attemptSummary(attempt) }}
+        </li>
+      } @empty {
+        <li class="q-body-sm muted">{{ 'customers.leads.attempts.empty' | t }}</li>
+      }
+    </ul>
+
+    @if (access().canManage) {
+      @if (recording()) {
+        <q-call-recorder [busy]="busy()" (submitted)="record($event)" />
+      } @else {
+        <button
+          type="button"
+          class="secondary"
+          (click)="recording.set(true)"
+          data-testid="lead-record-call"
+        >
+          {{ 'customers.leads.attempts.record' | t }}
+        </button>
+      }
+    }
+  </aside>
+}

@@ -2,6 +2,7 @@ package uz.horecaos.platform.courier.api;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -44,4 +45,17 @@ public interface BusinessDayWindows {
      *                               condition a caller can recover from
      */
     LocalDate businessDateOf(UUID tenantId, Instant at);
+
+    /**
+     * The latest business date of this tenant whose close has completed (ADR 0043), empty
+     * before the first close.
+     *
+     * <p>Every day up to and including it is a closed fact set: {@code reporting} derived its
+     * facts once and will not build the day again, and a recut only reports what changed since.
+     * An accrual that learns of a delivery after its day closed must therefore not date itself
+     * on that day (see {@code CourierAccrualService}: the earning and its cost line land on the
+     * first open day, {@code lastClosed + 1}), or a delivery-cost total over the closed day would
+     * move after the manager acted on it.
+     */
+    Optional<LocalDate> lastClosedBusinessDate(UUID tenantId);
 }

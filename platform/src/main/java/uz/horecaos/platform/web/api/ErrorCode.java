@@ -39,6 +39,24 @@ public enum ErrorCode {
      */
     SESSION_EXPIRED(HttpStatus.UNAUTHORIZED, "Session expired"),
 
+    /**
+     * ADR 0070: a storefront request carried no app identity, at a time when the
+     * platform requires one. Distinct from {@link #UNAUTHENTICATED}, which is about
+     * the customer: the app tier says <em>which storefront</em> is asking, the
+     * session says which customer, and a vendor whose app is missing its header
+     * must be told that, not told to sign a customer in.
+     */
+    APP_IDENTITY_REQUIRED(HttpStatus.UNAUTHORIZED, "App identity required"),
+
+    /** ADR 0070: the app id names no registered storefront app, or is not an id at all. */
+    APP_UNREGISTERED(HttpStatus.UNAUTHORIZED, "App not registered"),
+
+    /**
+     * ADR 0070: a confidential app presented no secret, or one that does not match.
+     * Never says which, so a guess learns nothing about how close it was.
+     */
+    APP_SECRET_INVALID(HttpStatus.UNAUTHORIZED, "App secret missing or invalid"),
+
     /** ADR 0025: the principal lacks the required capability at the required scope. */
     INSUFFICIENT_CAPABILITY(HttpStatus.FORBIDDEN, "Insufficient capability"),
 
@@ -50,6 +68,24 @@ public enum ErrorCode {
     ENTITLEMENT_REQUIRED(HttpStatus.FORBIDDEN, "Entitlement required"),
 
     TENANT_ACCESS_DENIED(HttpStatus.FORBIDDEN, "Tenant access denied"),
+
+    /**
+     * ADR 0070: the app is suspended or retired by the platform, for every tenant at
+     * once. Distinct from {@link #APP_REVOKED}, which is one brand's own decision.
+     */
+    APP_SUSPENDED(HttpStatus.FORBIDDEN, "App suspended"),
+
+    /** ADR 0070: a registered app that this tenant's brand has never authorised. */
+    APP_NOT_AUTHORISED(HttpStatus.FORBIDDEN, "App not authorised"),
+
+    /** ADR 0070: this tenant's brand authorised the app once and has since withdrawn it. */
+    APP_REVOKED(HttpStatus.FORBIDDEN, "App authorisation revoked"),
+
+    /**
+     * ADR 0070: a public client's request came from an origin its registration does
+     * not list. The only protection a browser-only client has, so it is refused by name.
+     */
+    APP_ORIGIN_MISMATCH(HttpStatus.FORBIDDEN, "App origin not allowed"),
 
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "Resource not found"),
 
@@ -127,6 +163,46 @@ public enum ErrorCode {
      * completely different — finish account setup, not retype a password.
      */
     ACCOUNT_ACTION_REQUIRED(HttpStatus.UNAUTHORIZED, "Account action required"),
+
+    /**
+     * ADR 0148: the password was right and the account holds a second factor,
+     * and no code was sent. Answered only after the password-only client has
+     * confirmed the password, so it is reachable by someone who already knows
+     * the password and by nobody else: an unknown name and a wrong password
+     * keep the uniform {@link #UNAUTHENTICATED}.
+     */
+    MFA_REQUIRED(HttpStatus.UNAUTHORIZED, "Second factor required"),
+
+    /**
+     * ADR 0148: the password was right and the code was not. Like {@link
+     * #MFA_REQUIRED} it is reachable only after the password was confirmed, and
+     * the platform's own attempt budget has already been charged by then.
+     */
+    MFA_CODE_INVALID(HttpStatus.UNAUTHORIZED, "Second-factor code invalid"),
+
+    /**
+     * ADR 0148: the account needs a second factor and holds none. The session
+     * Keycloak issued has been revoked; the answer carries a short-lived
+     * enrolment ticket that opens the enrolment endpoints and nothing else.
+     */
+    MFA_ENROLMENT_REQUIRED(HttpStatus.FORBIDDEN, "Second factor enrolment required"),
+
+    /**
+     * ADR 0148: an enrolment or removal re-proves the current password and the
+     * caller got it wrong. Deliberately not {@link #UNAUTHENTICATED}: the caller
+     * is signed in, and a console that treats every 401 as an ended session
+     * would sign them out for a typo.
+     */
+    CURRENT_PASSWORD_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "Current password invalid"),
+
+    /**
+     * ADR 0148: the code that confirms an enrolment, or an authenticator's
+     * removal, did not verify. A new authenticator's credential is deleted
+     * again when its first code fails. Distinct from {@link #MFA_CODE_INVALID}
+     * for the same reason {@link #CURRENT_PASSWORD_INVALID} is distinct from
+     * {@link #UNAUTHENTICATED}: the caller is signed in.
+     */
+    MFA_CONFIRMATION_CODE_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "Confirmation code invalid"),
 
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal error"),
 

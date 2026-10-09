@@ -27,12 +27,28 @@ final class FakeCampaignMessagePort implements CampaignMessagePort {
     private final Map<String, UUID> byIdempotencyKey = new LinkedHashMap<>();
     private final List<MarketingMessage> sent = new ArrayList<>();
     private final Map<String, String> bodies = new LinkedHashMap<>();
+    private final Map<String, Map<String, String>> bodiesByTemplate = new LinkedHashMap<>();
     private boolean wired = true;
+    private String notWiredReason = "NO_PROVIDER_BINDING";
+    private final java.util.Set<String> refusedPurposes = new java.util.HashSet<>();
+    private final List<String> wiringAsked = new ArrayList<>();
     private OptionalDouble ratePerSecond = OptionalDouble.empty();
     private int suppressedForNotSending;
 
     FakeCampaignMessagePort withBody(String locale, String body) {
         bodies.put(locale, body);
+        return this;
+    }
+
+    /**
+     * The wording of one template, which wins over {@link #withBody} for that key. A scenario's
+     * steps carry their own templates, and a test that prices them has to be able to give them
+     * different lengths.
+     */
+    FakeCampaignMessagePort withTemplateBody(String templateKey, String locale, String body) {
+        bodiesByTemplate
+                .computeIfAbsent(templateKey, key -> new LinkedHashMap<>())
+                .put(locale, body);
         return this;
     }
 
@@ -55,12 +71,18 @@ final class FakeCampaignMessagePort implements CampaignMessagePort {
 
     @Override
     public Map<String, String> templateBodies(UUID tenantId, UUID brandId, String templateKey, String channel) {
-        return Map.copyOf(bodies);
+        return Map.copyOf(bodiesByTemplate.getOrDefault(templateKey, bodies));
     }
 
     @Override
-    public boolean isWired(String channel) {
-        return wired;
+    public Wiring wiring(UUID tenantId, UUID brandId, String channel, String purpose) {
+        wiringAsked.add(channel + "/" + purpose);
+        if (!wired) {
+            return Wiring.no(notWiredReason);
+        }
+        // A purpose the fake has been told this brand's account is not cleared for
+        // is refused with the same stable code production answers with.
+        return refusedPurposes.contains(purpose) ? Wiring.no("SMS_PURPOSE_NOT_PERMITTED") : Wiring.yes();
     }
 
     @Override
@@ -75,6 +97,17 @@ final class FakeCampaignMessagePort implements CampaignMessagePort {
 
     void unwire() {
         wired = false;
+    }
+
+    /** The brand's account is bound but not cleared for this purpose. */
+    FakeCampaignMessagePort refusingPurpose(String purpose) {
+        refusedPurposes.add(purpose);
+        return this;
+    }
+
+    /** Every {@code channel/purpose} wiring was asked about, so a test can prove which question a caller put. */
+    List<String> wiringAsked() {
+        return List.copyOf(wiringAsked);
     }
 
     List<MarketingMessage> sent() {

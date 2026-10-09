@@ -3,7 +3,9 @@ package uz.horecaos.platform.commercial.application;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -33,6 +35,7 @@ import uz.horecaos.platform.commercial.domain.BonusGrantBalance;
 import uz.horecaos.platform.commercial.domain.PaymentMethod;
 import uz.horecaos.platform.commercial.domain.StatementPayment;
 import uz.horecaos.platform.commercial.domain.Subscription;
+import uz.horecaos.platform.commercial.domain.SubscriptionStatus;
 import uz.horecaos.platform.commercial.domain.TenantBilling;
 import uz.horecaos.platform.commercial.domain.WalletBalances;
 import uz.horecaos.platform.commercial.domain.WalletEntry;
@@ -164,6 +167,29 @@ public class WalletService {
         return wallet.liveGrants(tenantId, clock.instant());
     }
 
+    /**
+     * The live grants that lapse inside {@code horizon} from now, soonest first: the warning a tenant is
+     * owed before credit it was given disappears (IA 8/X.3). Only grants with something left are
+     * reported, because a grant that is already spent has nothing to lose.
+     */
+    public List<BonusGrantBalance> grantsLapsingWithin(UUID tenantId, Duration horizon) {
+        Instant now = clock.instant();
+        Instant end = now.plus(horizon);
+        return wallet.liveGrants(tenantId, now).stream()
+                .filter(grant -> !grant.expiresAt().isAfter(end))
+                .toList();
+    }
+
+    /** What each tenant still owes on issued statements, in one query; a tenant owing nothing is absent. */
+    public java.util.Map<UUID, JdbcWalletStore.OpenDue> openDueByTenant(java.util.Collection<UUID> tenantIds) {
+        return wallet.openDueByTenant(tenantIds);
+    }
+
+    /** What is safe to say about the tenant's card on file; empty when none is. */
+    public Optional<uz.horecaos.platform.commercial.domain.CardOnFile> cardOnFile(UUID tenantId) {
+        return wallet.findCardOnFile(tenantId);
+    }
+
     /** The tenant's payment method; {@code INVOICE} with no card token when nothing has ever been recorded. */
     public TenantBilling billing(UUID tenantId) {
         return wallet.findBilling(tenantId)
@@ -199,6 +225,24 @@ public class WalletService {
             ActorRef actor,
             String reason,
             String correlationId) {
+        return recordTransfer(tenantId, amountMinor, bankReference, null, actor, reason, correlationId);
+    }
+
+    /**
+     * A bank transfer that pays a prepayment invoice (V0506): the same one-person audited act, and the
+     * entry names the invoice, so what the invoice has been paid is the ledger's own sum and no status
+     * is stored beside it. The caller has already checked the invoice belongs to this tenant and is not
+     * cancelled, under the billing lock this method takes again.
+     */
+    @Transactional
+    public UUID recordTransfer(
+            UUID tenantId,
+            long amountMinor,
+            String bankReference,
+            @Nullable UUID prepaymentInvoiceId,
+            ActorRef actor,
+            String reason,
+            String correlationId) {
         if (amountMinor <= 0) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "A transfer is a positive amount");
         }
@@ -206,31 +250,38 @@ public class WalletService {
         wallet.lockBilling(tenantId, clock.instant());
         Instant now = clock.instant();
         UUID id = Ids.newId();
-        appendMoneyIn(new WalletEntry(
-                id,
-                tenantId,
-                WalletEntry.PAID,
-                WalletEntry.TOP_UP,
-                amountMinor,
-                wallet.currencyOf(tenantId),
-                null,
-                null,
-                null,
-                null,
-                bankReference,
-                reason,
-                subject(actor),
-                null,
-                null,
-                now));
+        appendMoneyIn(
+                new WalletEntry(
+                        id,
+                        tenantId,
+                        WalletEntry.PAID,
+                        WalletEntry.TOP_UP,
+                        amountMinor,
+                        wallet.currencyOf(tenantId),
+                        null,
+                        null,
+                        null,
+                        null,
+                        bankReference,
+                        reason,
+                        subject(actor),
+                        null,
+                        null,
+                        now),
+                prepaymentInvoiceId);
 
+        Map<String, Object> recorded = new LinkedHashMap<>();
+        recorded.put("amountMinor", amountMinor);
+        if (prepaymentInvoiceId != null) {
+            recorded.put("prepaymentInvoiceId", prepaymentInvoiceId.toString());
+        }
         audit.record(AuditFact.of("commercial.wallet.transfer_recorded", AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
                 .target("commercial.wallet_entry", id)
                 .because(reason)
                 // Staff 9.3a: a brand-new ledger entry, no prior state to diff against.
-                .changed(ChangeDocuments.created(Map.of("amountMinor", amountMinor)))
+                .changed(ChangeDocuments.created(recorded))
                 .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
                 .correlatedBy(correlationId)
                 .occurredAt(now)
@@ -343,7 +394,8 @@ public class WalletService {
                 .occurredAt(now)
                 .build());
 
-        applyAvailableFunds(tenantId);
+        // The deposit fell due with the subscription, before any stage it can be in now.
+        applyFunds(tenantId, List.of(Instant.EPOCH));
         return id;
     }
 
@@ -869,11 +921,24 @@ public class WalletService {
      */
     @Transactional
     public long applyAvailableFunds(UUID tenantId) {
+        return applyFunds(tenantId, List.of());
+    }
+
+    /**
+     * @param alsoCleared when each obligation this call's caller has just paid outside the statements (an
+     *     activation deposit) first fell due, so that clearing it can be told with the statements this pass
+     *     pays and not twice
+     */
+    private long applyFunds(UUID tenantId, List<Instant> alsoCleared) {
         Instant now = clock.instant();
         wallet.lockBilling(tenantId, now);
         String currency = wallet.currencyOf(tenantId);
         List<StatementPayment> open = wallet.openStatementsOldestFirst(tenantId, currency);
+        List<Instant> cleared = new ArrayList<>(alsoCleared);
         if (open.isEmpty()) {
+            if (!cleared.isEmpty()) {
+                noteArrearsClearedByPayment(tenantId, currency, now, cleared);
+            }
             return 0;
         }
 
@@ -890,6 +955,7 @@ public class WalletService {
             if (remainingDue <= 0) {
                 continue;
             }
+            long dueBefore = remainingDue;
             for (BonusGrantBalance grant : grants) {
                 if (remainingDue <= 0) {
                     break;
@@ -943,8 +1009,70 @@ public class WalletService {
                 remainingDue -= draw;
                 totalPaid += draw;
             }
+            if (remainingDue < dueBefore) {
+                cleared.add(statement.issuedAt());
+            }
+        }
+        if (!cleared.isEmpty()) {
+            noteArrearsClearedByPayment(tenantId, currency, now, cleared);
         }
         return totalPaid;
+    }
+
+    /**
+     * Says, once, that a payment left a past-due or suspended tenant owing nothing (ADR 0089, ADR 0127).
+     *
+     * <p>It only says it. ADR 0089 decided that nothing moves a subscription by itself and that lateness
+     * is a conversation, so restoring the subscription stays the staff transition it always was; what
+     * this adds is that the person holding that conversation is told the tenant has paid, on the
+     * activity log and on the dunning board, instead of finding out by asking.
+     *
+     * <p><strong>Owing nothing is more than having no open statement.</strong> An activation deposit is
+     * owed beside the statements and is on none of them ({@code subscriptions.deposit_due_minor}), so a
+     * tenant with every statement paid and its deposit outstanding has not paid in full.
+     *
+     * <p><strong>One clearing is one fact.</strong> It is written when a payment settles something the
+     * tenant already owed when it went late: a statement issued at or before the moment its stage began,
+     * or the deposit. A statement issued after that moment and paid at issue from the money left over is
+     * not what made the tenant late, and saying "paid in full" again for each such month would make the
+     * fact mean "a statement was paid", which the ledger already says.
+     *
+     * @param clearedIssuedAt when each obligation this payment settled first fell due
+     */
+    private void noteArrearsClearedByPayment(
+            UUID tenantId, String currency, Instant now, List<Instant> clearedIssuedAt) {
+        Optional<JdbcSubscriptionStore.LiveStage> live = subscriptions.findLiveStage(tenantId);
+        if (live.isEmpty()) {
+            return;
+        }
+        JdbcSubscriptionStore.LiveStage stage = live.get();
+        SubscriptionStatus status = stage.status();
+        if (status != SubscriptionStatus.PAST_DUE && status != SubscriptionStatus.SUSPENDED) {
+            return;
+        }
+        boolean settledWhatMadeItLate =
+                clearedIssuedAt.stream().anyMatch(issuedAt -> !issuedAt.isAfter(stage.statusChangedAt()));
+        if (!settledWhatMadeItLate) {
+            return;
+        }
+        boolean stillOwes = stage.depositDueMinor() > 0
+                || wallet.openStatementsOldestFirst(tenantId, currency).stream()
+                        .anyMatch(statement -> statement.dueMinor() > 0);
+        if (stillOwes) {
+            return;
+        }
+        audit.record(AuditFact.of("commercial.arrears.paid_in_full", AuditClass.BUSINESS)
+                .by(ActorRef.systemJob("wallet-settlement"))
+                .at(ResourceScope.tenant(tenantId))
+                .target("commercial.subscription", stage.subscriptionId())
+                .because("everything this tenant owed when it went late is now paid; the subscription stays "
+                        + status.name().toLowerCase(Locale.ROOT)
+                        + " until a person moves it, because nothing moves a subscription by itself (ADR 0089)")
+                .changed(ChangeDocuments.created(Map.of("subscriptionStatus", status.name())))
+                .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
+                .correlatedBy(stage.subscriptionId().toString())
+                .occurredAt(now)
+                .build());
     }
 
     /**
@@ -1122,6 +1250,20 @@ public class WalletService {
             log.warn("A card charge for statement {} of tenant {} was never answered", statementId, tenantId);
             log.debug("The card charger threw", unanswered);
             countCardCharge("unanswered");
+            return 0;
+        }
+        if (attempt.reused() && CardCharger.saysNothingAboutAnAttemptAlreadyAsked(outcome)) {
+            // Asked before, under a merchant account that is not answering now (suspended or replaced). The
+            // first ask may have moved the money and lost the answer, and the account in front of us never saw
+            // the key: that is neither a decline nor "not configured", and settling it as either is final. It
+            // stays PENDING until the account that holds the key is active again. A card swapped in the
+            // meantime still supersedes it (beginCardAttempt), with its late success audited for finance.
+            log.warn(
+                    "A card charge for statement {} of tenant {} was asked under a merchant account that is not "
+                            + "the active one; it stays pending until that account is active again",
+                    statementId,
+                    tenantId);
+            countCardCharge("stranded");
             return 0;
         }
         return Objects.requireNonNull(unitOfWork.execute(status -> recordCardOutcome(tenantId, attempt, outcome)));
@@ -1637,7 +1779,76 @@ public class WalletService {
                 null,
                 null,
                 now));
+        noteArrearsClearedByPayment(
+                tenantId, attempt.currency(), now, List.of(wallet.statementIssuedAt(tenantId, attempt.statementId())));
         return applied;
+    }
+
+    /**
+     * Credits a successful card top-up (V0505) and pays whatever the tenant owes from it, in the
+     * transaction the caller settles the top-up row in, so the row can never say SUCCEEDED without the
+     * ledger holding the money and the money can never be on the ledger with the row still PENDING.
+     *
+     * <p>Money in is unique on the provider's reference (V0211), so the same success reported twice —
+     * a reconciliation pass racing the request that charged — is refused rather than credited twice.
+     *
+     * @return the id of the ledger entry that holds the money
+     */
+    @Transactional
+    public UUID creditCardTopUp(
+            UUID tenantId,
+            long amountMinor,
+            String currency,
+            String providerReference,
+            String recordedBy,
+            ActorRef actor,
+            UUID topUpId) {
+        Instant now = clock.instant();
+        wallet.lockBilling(tenantId, now);
+        String walletCurrency = wallet.currencyOf(tenantId);
+        if (!walletCurrency.equals(currency)) {
+            // The card was charged in one currency and the wallet now holds another. Crediting the face
+            // value would record the wrong money (decision 2); losing it would be worse, so this stays
+            // loud and the top-up stays PENDING for a person to reconcile.
+            throw new IllegalStateException("card top-up %s was charged in %s but the wallet holds %s"
+                    .formatted(topUpId, currency, walletCurrency));
+        }
+        UUID id = Ids.newId();
+        appendMoneyIn(new WalletEntry(
+                id,
+                tenantId,
+                WalletEntry.PAID,
+                WalletEntry.TOP_UP,
+                amountMinor,
+                currency,
+                null,
+                null,
+                null,
+                null,
+                providerReference,
+                "card top-up",
+                recordedBy,
+                null,
+                null,
+                now));
+        audit.record(AuditFact.of("commercial.wallet.card_topped_up", AuditClass.BUSINESS)
+                .by(actor)
+                .at(ResourceScope.tenant(tenantId))
+                .target("commercial.wallet_entry", id)
+                .because("the tenant topped its wallet up from its card")
+                .changed(ChangeDocuments.created(Map.of(
+                        "amountMinor",
+                        amountMinor,
+                        "topUpId",
+                        topUpId.toString(),
+                        "providerReference",
+                        providerReference)))
+                .usingCapability(Capability.COMMERCIAL_WALLET_MANAGE.code())
+                .correlatedBy(topUpId.toString())
+                .occurredAt(now)
+                .build());
+        applyAvailableFunds(tenantId);
+        return id;
     }
 
     private @Nullable StatementPayment openStatement(UUID tenantId, String currency, UUID statementId) {
@@ -1741,6 +1952,10 @@ public class WalletService {
      * empty ledger before either wrote to it.
      */
     private void appendMoneyIn(WalletEntry entry) {
+        appendMoneyIn(entry, null);
+    }
+
+    private void appendMoneyIn(WalletEntry entry, @Nullable UUID prepaymentInvoiceId) {
         String reference = Objects.requireNonNull(
                 entry.externalReference(), "V0211's ck_wallet_entry_reference makes money in carry one");
         wallet.findMoneyInByNormalisedReference(entry.tenantId(), normalise(reference), uniqueAmong(entry.entryType()))
@@ -1748,7 +1963,7 @@ public class WalletService {
                     throw alreadyRecorded(reference, onFile.externalReference());
                 });
         try {
-            wallet.append(entry);
+            wallet.append(entry, prepaymentInvoiceId);
         } catch (DuplicateKeyException raced) {
             // Two recorders inside the same millisecond, one of whom read the
             // ledger before the other wrote to it. The check above cannot see

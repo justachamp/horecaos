@@ -78,15 +78,12 @@ runs them; what they cover differs by app.
   `npm run lint:rules` runs `tools/lint-config.test.mjs`, which feeds the configured linter code
   that is wrong and code that is fine, so a config that silently lost its rules fails instead of
   passing for ever.
-- **Formatting** is the plain `npm run format:check` over the whole `src/` tree for `operations`,
-  `storefront` and `storefront-milliy`; each was reformatted in one commit ("whole-tree prettier,
-  no behaviour change") and CI keeps it clean. Fix a failure with `npm run format` in the app.
-  `control-plane` is still a ratchet, not a tree gate: it has on the order of a hundred files that
-  predate its prettier config, and a blanket reformat while other branches are open would conflict
-  with every one of them. CI runs `tools/format_changed.py`, which checks only the `src/` files a
-  change added or edited (against the merge base), so a file a change touches must be
-  prettier-clean. When nothing is in flight, reformat it in a single commit (`npm run format`) and
-  switch its CI step to `npm run format:check`, as the other three did.
+- **Formatting** is the plain `npm run format:check` over the whole `src/` tree for all four apps;
+  each was reformatted in one commit ("whole-tree prettier, no behaviour change") and CI keeps it
+  clean. Fix a failure with `npm run format` in the app. `control-plane` was the last to move: it
+  used to be a changed-files ratchet, because a blanket reformat while other branches are open
+  would conflict with every one of them. `tools/format_changed.py` remains as a local shortcut that
+  checks only the `src/` files you added or edited (against the merge base); CI does not call it.
 
   ```bash
   python3 frontend/tools/format_changed.py --app control-plane --base main --list   # what would be checked

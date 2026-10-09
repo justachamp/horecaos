@@ -4,11 +4,43 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../core/api/operations-paths';
 import { I18n } from '../core/i18n/i18n';
-import { DeviceBoardApi } from './device-board-api';
+import { DeviceBoardApi, DeviceBoardError } from './device-board-api';
+import { DeviceProfile } from './device-profile';
 import { DeviceShell } from './device-shell';
-import { DeviceCredential, DeviceSession } from './device-session';
+import {
+  DeviceAuthError,
+  DeviceCredential,
+  DeviceSession,
+  DeviceTokenUnavailableError,
+} from './device-session';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
+
+const TOUCH: DeviceProfile = {
+  deviceId: 'dev-kds',
+  deviceClass: 'KITCHEN_KDS',
+  displayName: 'Line 1',
+  tenantId: 't1',
+  brandId: 'b1',
+  locationId: 'l1',
+  locationName: 'Chilanzar',
+  timezone: 'Asia/Tashkent',
+  station: null,
+};
+
+const WALL: DeviceProfile = {
+  ...TOUCH,
+  deviceId: 'dev-vdu',
+  deviceClass: 'KITCHEN_VDU',
+  displayName: 'Grill TV',
+  station: {
+    stationId: 's-grill',
+    code: 'GRILL',
+    displayNameRu: 'Гриль',
+    displayNameUz: 'Gril',
+    displayNameEn: 'Grill',
+  },
+};
 
 function setNavigatorOnLine(value: boolean): void {
   Object.defineProperty(navigator, 'onLine', { value, configurable: true });
@@ -26,16 +58,25 @@ describe('DeviceShell', () => {
     overrides: {
       setUp?: boolean;
       enrolled?: boolean;
+      profile?: DeviceProfile | null;
       saveSetup?: DeviceSession['saveSetup'];
       beginEnrolment?: DeviceSession['beginEnrolment'];
       pollOnce?: DeviceSession['pollOnce'];
     } = {},
   ): Partial<DeviceSession> {
+    const profile = signal<DeviceProfile | null>(overrides.profile ?? null);
+    const setup = signal<LocationScope | null>(overrides.setUp || overrides.profile ? SCOPE : null);
     return {
-      isSetUp: signal(overrides.setUp ?? false),
+      isSetUp: signal(overrides.setUp ?? Boolean(overrides.profile)),
       isEnrolled: signal(overrides.enrolled ?? false),
-      setup: signal<LocationScope | null>(overrides.setUp ? SCOPE : null),
+      setup,
+      profile,
       credential: signal<DeviceCredential | null>(null),
+      // As the real session does: the server's word on the branch replaces whatever was typed.
+      saveProfile: vi.fn<DeviceSession['saveProfile']>((next) => {
+        profile.set(next);
+        setup.set({ tenantId: next.tenantId, brandId: next.brandId, locationId: next.locationId });
+      }),
       saveSetup: overrides.saveSetup ?? vi.fn<DeviceSession['saveSetup']>(),
       clearSetup: vi.fn<DeviceSession['clearSetup']>(),
       forgetCredential: vi.fn<DeviceSession['forgetCredential']>(),
@@ -58,6 +99,7 @@ describe('DeviceShell', () => {
   async function render(
     session: Partial<DeviceSession>,
     boardApi: Partial<DeviceBoardApi> = {
+      me: vi.fn().mockResolvedValue(TOUCH),
       board: vi.fn().mockResolvedValue({ tickets: [], warnings: [] }),
     },
   ): Promise<void> {
@@ -72,6 +114,15 @@ describe('DeviceShell', () => {
     fixture = TestBed.createComponent(DeviceShell);
     fixture.detectChanges();
     await flushMicrotasks();
+    fixture.detectChanges();
+  }
+
+  function openManualSetup(): void {
+    (
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="device-enrol-manual"]',
+      ) as HTMLButtonElement
+    ).click();
     fixture.detectChanges();
   }
 
@@ -138,9 +189,20 @@ describe('DeviceShell', () => {
     expect(() => window.dispatchEvent(new Event('offline'))).not.toThrow();
   });
 
-  it('renders the setup panel when the device has not been configured yet', async () => {
+  it('starts at pairing, not at a form: an unconfigured device is told its branch by the server once enrolled (ADR 0151)', async () => {
     await render(makeSession({ setUp: false }));
     const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="device-enrol-panel"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="device-setup-panel"]')).toBeNull();
+  });
+
+  it('keeps the typed setup as the fallback, one tap away', async () => {
+    await render(makeSession({ setUp: false }));
+    const host = fixture.nativeElement as HTMLElement;
+
+    (host.querySelector('[data-testid="device-enrol-manual"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
     expect(host.querySelector('[data-testid="device-setup-panel"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="device-enrol-panel"]')).toBeNull();
   });
@@ -148,6 +210,7 @@ describe('DeviceShell', () => {
   it('refuses to save an incomplete setup', async () => {
     const saveSetup = vi.fn<DeviceSession['saveSetup']>();
     await render(makeSession({ setUp: false, saveSetup }));
+    openManualSetup();
     (
       (fixture.nativeElement as HTMLElement).querySelector(
         '[data-testid="device-setup-save"]',
@@ -162,6 +225,7 @@ describe('DeviceShell', () => {
   it('saves a complete setup with the three typed IDs', async () => {
     const saveSetup = vi.fn<DeviceSession['saveSetup']>();
     await render(makeSession({ setUp: false, saveSetup }));
+    openManualSetup();
     const host = fixture.nativeElement as HTMLElement;
 
     const setValue = (testid: string, value: string) => {
@@ -201,14 +265,35 @@ describe('DeviceShell', () => {
     fixture.detectChanges();
 
     expect(beginEnrolment).toHaveBeenCalledTimes(1);
+    expect(beginEnrolment).toHaveBeenCalledWith(null, 'KITCHEN_KDS');
     expect(host.querySelector('[data-testid="device-user-code"]')?.textContent).toContain(
       'ABCD-1234',
     );
     expect(host.querySelector('q-qr-code')).not.toBeNull();
   });
 
+  it('asks to be a wall display when the installer says so: the class is a claim the approver sees', async () => {
+    const beginEnrolment = vi.fn<DeviceSession['beginEnrolment']>().mockResolvedValue({
+      deviceCode: 'code-1',
+      userCode: 'ABCD-1234',
+      expiresAt: '2026-09-14T09:00:00Z',
+      pollIntervalSeconds: 5,
+    });
+    await render(makeSession({ enrolled: false, beginEnrolment }));
+
+    (
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="device-enrol-begin-wall"]',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(beginEnrolment).toHaveBeenCalledWith(null, 'KITCHEN_VDU');
+  });
+
   it('renders the board, not the enrolment panel, once enrolled', async () => {
     await render(makeSession({ setUp: true, enrolled: true }), {
+      me: vi.fn().mockResolvedValue(TOUCH),
       board: vi.fn().mockResolvedValue({ tickets: [], warnings: [] }),
     });
     const host = fixture.nativeElement as HTMLElement;
@@ -219,7 +304,10 @@ describe('DeviceShell', () => {
 
   it('lets the device be reset back to an unconfigured state', async () => {
     const session = makeSession({ setUp: true, enrolled: true });
-    await render(session, { board: vi.fn().mockResolvedValue({ tickets: [], warnings: [] }) });
+    await render(session, {
+      me: vi.fn().mockResolvedValue(TOUCH),
+      board: vi.fn().mockResolvedValue({ tickets: [], warnings: [] }),
+    });
 
     (
       (fixture.nativeElement as HTMLElement).querySelector(
@@ -258,7 +346,10 @@ describe('DeviceShell', () => {
       ],
       warnings: [],
     });
-    await render(makeSession({ setUp: true, enrolled: true }), { board });
+    await render(makeSession({ setUp: true, enrolled: true }), {
+      me: vi.fn().mockResolvedValue(TOUCH),
+      board,
+    });
     TestBed.inject(I18n).setLocale('ru');
     fixture.detectChanges();
 
@@ -267,5 +358,325 @@ describe('DeviceShell', () => {
         .querySelector('.device-shell__item-qty')
         ?.textContent?.trim(),
     ).toBe('×0,5');
+  });
+
+  // ---------------------------------------------------------------------
+  // ADR 0151: the device asks what it is, and a wall is a mode of this shell
+  // ---------------------------------------------------------------------
+
+  const WIRE_POLICY = (overrides: Record<string, unknown> = {}) => ({
+    delivery: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 2700 },
+    pickup: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 2700 },
+    dineIn: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 2700 },
+    isPlatformDefault: true,
+    lateColour: null,
+    ...overrides,
+  });
+
+  function vduTicket(overrides: Record<string, unknown> = {}) {
+    return {
+      ticketId: 'ticket-1',
+      sequenceLabel: 'A-014',
+      fulfilmentMode: 'DELIVERY',
+      status: 'FIRED',
+      targetReadyAt: null,
+      createdAt: new Date().toISOString(),
+      items: [],
+      ...overrides,
+    };
+  }
+
+  function wallApis(
+    overrides: {
+      profile?: DeviceProfile;
+      vdu?: ReturnType<typeof vi.fn>;
+      me?: ReturnType<typeof vi.fn>;
+    } = {},
+  ) {
+    const board = vi.fn();
+    const start = vi.fn();
+    const ready = vi.fn();
+    const me = overrides.me ?? vi.fn().mockResolvedValue(overrides.profile ?? WALL);
+    const vdu =
+      overrides.vdu ??
+      vi.fn().mockResolvedValue({ tickets: [vduTicket()], lateness: WIRE_POLICY() });
+    // The shell sees a `DeviceBoardApi`; the test sees the spies behind it.
+    return { board, start, ready, me, vdu } as unknown as Partial<DeviceBoardApi> &
+      Record<'board' | 'start' | 'ready' | 'me' | 'vdu', ReturnType<typeof vi.fn>>;
+  }
+
+  it('asks the server what it is when enrolled, and runs as a wall when the server says it is one', async () => {
+    const apis = wallApis();
+    const session = makeSession({ enrolled: true });
+    await render(session, apis);
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(apis.me).toHaveBeenCalledTimes(1);
+    expect(session.saveProfile).toHaveBeenCalledWith(WALL);
+    expect(host.querySelector('[data-testid="device-wall"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="device-board"]')).toBeNull();
+    expect(apis.vdu).toHaveBeenCalledWith(SCOPE);
+    expect(host.querySelectorAll('[data-testid="wallboard-vdu-card"]')).toHaveLength(1);
+  });
+
+  it('shows no control in wall mode: no button, no link, no field, and no reset a passer-by could press', async () => {
+    const apis = wallApis();
+    await render(makeSession({ enrolled: true }), apis);
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(
+      host.querySelectorAll('button, a, input, select, textarea, [role="button"]'),
+    ).toHaveLength(0);
+    expect(host.querySelector('[data-testid="device-reset"]')).toBeNull();
+    expect(apis.board).not.toHaveBeenCalled();
+    expect(apis.start).not.toHaveBeenCalled();
+    expect(apis.ready).not.toHaveBeenCalled();
+  });
+
+  it('comes back after a restart showing the station the server holds, with nobody typing', async () => {
+    // A restart is a cold shell: the persisted profile is the last record, and the server's answer is
+    // what the screen shows.
+    const apis = wallApis();
+    await render(makeSession({ enrolled: true, profile: WALL }), apis);
+    TestBed.inject(I18n).setLocale('ru');
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement)
+        .querySelector('[data-testid="wallboard-vdu-station"]')
+        ?.textContent?.trim(),
+    ).toBe('Гриль');
+  });
+
+  it('reads the clock in the branch’s own zone, not the console’s placeholder', async () => {
+    const apis = wallApis({
+      profile: { ...WALL, timezone: 'America/New_York' },
+      vdu: vi.fn().mockResolvedValue({
+        tickets: [vduTicket({ targetReadyAt: '2026-10-07T12:00:00Z' })],
+        lateness: WIRE_POLICY(),
+      }),
+    });
+    await render(makeSession({ enrolled: true }), apis);
+
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('08:00');
+  });
+
+  it('paints a ticket by the policy the projection carries: past the tenant’s late line but inside the default’s, it is late, in the tenant’s colour', async () => {
+    // Created 30 minutes ago with no promise. The platform's forty-five minutes calls it on time; this
+    // tenant's twenty calls it late. A wall that read no policy of its own would show it on time and
+    // nothing on the screen would say why: seen failing first against a wall that ignores the policy.
+    const apis = wallApis({
+      vdu: vi.fn().mockResolvedValue({
+        tickets: [
+          vduTicket({
+            createdAt: new Date(Date.now() - 30 * 60_000).toISOString(),
+            targetReadyAt: null,
+          }),
+        ],
+        lateness: WIRE_POLICY({
+          delivery: {
+            atRiskBeforeSeconds: 300,
+            lateAfterSeconds: 0,
+            noPromiseFallbackSeconds: 1200,
+          },
+          isPlatformDefault: false,
+          lateColour: '#C0392B',
+        }),
+      }),
+    });
+    await render(makeSession({ enrolled: true }), apis);
+
+    const card = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+      '[data-testid="wallboard-vdu-card"]',
+    ) as HTMLElement;
+    expect(card.classList.contains('wv__card--danger')).toBe(true);
+    expect(card.style.getPropertyValue('--q-sla-late')).toBe('#c0392b');
+  });
+
+  it('stays a touch board when the server says it is one, and never reads the wall projection', async () => {
+    const apis = wallApis({ profile: TOUCH });
+    const board = vi.fn().mockResolvedValue({ tickets: [], warnings: [] });
+    await render(makeSession({ enrolled: true }), { ...apis, board });
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="device-board"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="device-wall"]')).toBeNull();
+    expect(apis.vdu).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="device-reset"]')).not.toBeNull();
+  });
+
+  it('falls back to the typed branch as a touch board when the server cannot answer yet', async () => {
+    const me = vi.fn().mockRejectedValue(new TypeError('network'));
+    const board = vi.fn().mockResolvedValue({ tickets: [], warnings: [] });
+    await render(makeSession({ enrolled: true, setUp: true }), { me, board });
+
+    expect(board).toHaveBeenCalledWith(SCOPE);
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="device-board"]'),
+    ).not.toBeNull();
+  });
+
+  it('says it cannot read its own record when it has neither a profile nor a typed branch, and offers both ways out', async () => {
+    const me = vi.fn().mockRejectedValue(new TypeError('network'));
+    await render(makeSession({ enrolled: true }), {
+      me,
+      vdu: vi.fn().mockResolvedValue({ tickets: [] }),
+    });
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="device-profile-failed"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="device-enrol-manual"]')).not.toBeNull();
+
+    me.mockResolvedValue(WALL);
+    (host.querySelector('[data-testid="device-profile-retry"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="device-wall"]')).not.toBeNull();
+  });
+
+  it('falls back to the pairing screen when the server refuses the device: revoked', async () => {
+    const me = vi.fn().mockRejectedValue(new DeviceBoardError(403, 'refused'));
+    const session = makeSession({ enrolled: true });
+    await render(session, { me });
+
+    expect(session.forgetCredential).toHaveBeenCalled();
+  });
+
+  it('forgets itself mid-shift when the projection starts refusing the wall', async () => {
+    vi.useFakeTimers();
+    const vdu = vi
+      .fn()
+      .mockResolvedValueOnce({ tickets: [vduTicket()], lateness: WIRE_POLICY() })
+      .mockRejectedValue(new DeviceBoardError(403, 'revoked'));
+    const session = makeSession({ enrolled: true });
+    await TestBed.configureTestingModule({
+      imports: [DeviceShell],
+      providers: [
+        { provide: DeviceSession, useValue: session },
+        { provide: DeviceBoardApi, useValue: { me: vi.fn().mockResolvedValue(WALL), vdu } },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(DeviceShell);
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.forgetCredential).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(11_000);
+
+    expect(session.forgetCredential).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps its session and its last rows through an identity-provider outage, and recovers on the next poll', async () => {
+    vi.useFakeTimers();
+    const vdu = vi
+      .fn()
+      .mockResolvedValueOnce({ tickets: [vduTicket()], lateness: WIRE_POLICY() })
+      .mockRejectedValueOnce(new DeviceTokenUnavailableError(503, 'keycloak is down'))
+      .mockRejectedValueOnce(new DeviceTokenUnavailableError(null, 'keycloak is unreachable'))
+      .mockResolvedValue({ tickets: [vduTicket()], lateness: WIRE_POLICY() });
+    const session = makeSession({ enrolled: true });
+    await TestBed.configureTestingModule({
+      imports: [DeviceShell],
+      providers: [
+        { provide: DeviceSession, useValue: session },
+        { provide: DeviceBoardApi, useValue: { me: vi.fn().mockResolvedValue(WALL), vdu } },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(DeviceShell);
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelectorAll('[data-testid="wallboard-vdu-card"]')).toHaveLength(1);
+
+    // Two polls while Keycloak is down: the wall is not logged out, and still shows what it knew.
+    await vi.advanceTimersByTimeAsync(21_000);
+    fixture.detectChanges();
+    expect(vdu.mock.calls.length).toBeGreaterThanOrEqual(3);
+    expect(session.forgetCredential).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="device-wall"]')).not.toBeNull();
+    expect(host.querySelectorAll('[data-testid="wallboard-vdu-card"]')).toHaveLength(1);
+
+    // It asks again and is back.
+    await vi.advanceTimersByTimeAsync(11_000);
+    fixture.detectChanges();
+    expect(vdu.mock.calls.length).toBeGreaterThanOrEqual(4);
+    expect(session.forgetCredential).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="device-wall"]')).not.toBeNull();
+  });
+
+  it('keeps a touch board’s session through the same outage, and says the read failed rather than pairing again', async () => {
+    const board = vi
+      .fn()
+      .mockRejectedValue(new DeviceTokenUnavailableError(502, 'keycloak is failing'));
+    const session = makeSession({ enrolled: true });
+    await render(session, { me: vi.fn().mockResolvedValue(TOUCH), board });
+
+    expect(board).toHaveBeenCalled();
+    expect(session.forgetCredential).not.toHaveBeenCalled();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="device-board"]'),
+    ).not.toBeNull();
+  });
+
+  it('keeps the profile it holds when its own record cannot be read for the same reason', async () => {
+    const me = vi.fn().mockRejectedValue(new DeviceTokenUnavailableError(503, 'keycloak is down'));
+    const session = makeSession({ enrolled: true, profile: WALL });
+    await render(session, { me, vdu: vi.fn().mockResolvedValue({ tickets: [] }) });
+
+    expect(session.forgetCredential).not.toHaveBeenCalled();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="device-wall"]'),
+    ).not.toBeNull();
+  });
+
+  it('still falls back to pairing when Keycloak really refuses the client', async () => {
+    const me = vi.fn().mockRejectedValue(new DeviceAuthError('refused'));
+    const session = makeSession({ enrolled: true });
+    await render(session, { me });
+
+    expect(session.forgetCredential).toHaveBeenCalled();
+  });
+
+  it('re-reads its own record about once a minute, so a station a manager changes shows its new name', async () => {
+    vi.useFakeTimers();
+    const bar: DeviceProfile = {
+      ...WALL,
+      station: {
+        stationId: 's-bar',
+        code: 'BAR',
+        displayNameRu: 'Бар',
+        displayNameUz: 'Bar',
+        displayNameEn: 'Bar',
+      },
+    };
+    const me = vi.fn().mockResolvedValueOnce(WALL).mockResolvedValue(bar);
+    const vdu = vi.fn().mockResolvedValue({ tickets: [], lateness: WIRE_POLICY() });
+    await TestBed.configureTestingModule({
+      imports: [DeviceShell],
+      providers: [
+        { provide: DeviceSession, useValue: makeSession({ enrolled: true }) },
+        { provide: DeviceBoardApi, useValue: { me, vdu } },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(DeviceShell);
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges();
+    const station = () =>
+      (fixture.nativeElement as HTMLElement)
+        .querySelector('[data-testid="wallboard-vdu-station"]')
+        ?.textContent?.trim();
+    expect(station()).toBe('Grill');
+    expect(me).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(70_000);
+    fixture.detectChanges();
+
+    expect(me.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(station()).toBe('Bar');
   });
 });

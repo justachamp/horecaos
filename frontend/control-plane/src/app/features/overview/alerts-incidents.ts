@@ -8,7 +8,11 @@ import { MessageKey } from '../../core/i18n/messages.en';
 import { IncidentView, IncidentsApi } from './incidents-api';
 
 /** Alert classes this console has words for; any other shows its code. */
-const KNOWN_CLASSES = new Set(['CONTROL_BAND_ESCALATED', 'ONBOARDING_RUN_STUCK', 'COMMERCIAL_ARREARS_REVIEW']);
+const KNOWN_CLASSES = new Set([
+  'CONTROL_BAND_ESCALATED',
+  'ONBOARDING_RUN_STUCK',
+  'COMMERCIAL_ARREARS_REVIEW',
+]);
 
 /**
  * IA 1.2 Alerts & incidents -- every platform alert, kept until someone
@@ -77,7 +81,9 @@ export class AlertsIncidents {
 
   protected open(incident: IncidentView, mode: 'acknowledge' | 'resolve'): void {
     const current = this.acting();
-    this.acting.set(current?.id === incident.id && current.mode === mode ? null : { id: incident.id, mode });
+    this.acting.set(
+      current?.id === incident.id && current.mode === mode ? null : { id: incident.id, mode },
+    );
     this.note.set('');
     this.actionError.set(null);
   }

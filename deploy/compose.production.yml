@@ -130,6 +130,11 @@ services:
       # fail-closed value: every Payme callback is rejected until the owner
       # sets this to Payme's real, currently-published addresses.
       HORECAOS_PAYME_ALLOWED_IPS: ${HORECAOS_PAYME_ALLOWED_IPS:-0.0.0.0/32}
+      # ADR 0146: the SMS gateway's published source addresses for
+      # /providers/sms/*/receipts, which for a gateway whose callback carries
+      # nothing verifiable (VAS) are the whole of its authentication. Defaulted to
+      # the same non-routable address as Payme's so an unset list fails closed.
+      HORECAOS_SMS_RECEIPT_ALLOWED_IPS: ${HORECAOS_SMS_RECEIPT_ALLOWED_IPS:-0.0.0.0/32}
       # Empty in production. `deploy/local-smoke.sh` sets this to `internal`
       # so Caddy issues from its own internal CA instead of asking Let's
       # Encrypt for a certificate for a hostname the public internet cannot
@@ -385,6 +390,13 @@ services:
       HORECAOS_MAIL_SMTP_SECURITY: ${HORECAOS_MAIL_SMTP_SECURITY:-STARTTLS}
       HORECAOS_MAIL_SMTP_USERNAME: ${HORECAOS_MAIL_SMTP_USERNAME:-}
       HORECAOS_MAIL_SMTP_PASSWORD_REF: ${HORECAOS_MAIL_SMTP_PASSWORD_REF:-}
+      # ADR 0069: the grounded assistant's model provider. Empty means the
+      # assistant takes no turns. The key is never a value here: the reference
+      # names it in OpenBao, for example
+      # horecaos:production:provider_assistant:platform:anthropic, stored with
+      #   bao kv put horecaos/production/provider_assistant/platform/anthropic value=...
+      HORECAOS_ASSISTANT_SECRET_REF: ${HORECAOS_ASSISTANT_SECRET_REF:-}
+      HORECAOS_ASSISTANT_MODEL_ID: ${HORECAOS_ASSISTANT_MODEL_ID:-claude-sonnet-5-5}
       # Where an invitation's link points: the operations console the owner
       # sets their password in. The control-plane origin is here for ADR 0098's
       # password reset, which comes back to whichever console asked for it —
@@ -439,6 +451,15 @@ services:
 
       HORECAOS_API_DOCS_ENABLED: "false"
       HORECAOS_SWAGGER_UI_ENABLED: "false"
+
+      # ADR 0147: the road-distance engine. Off by default, and with it off every
+      # ROAD delivery fee prices from the straight line times the tariff's detour
+      # factor and says RADIUS_FALLBACK -- which is also the rollback. It is
+      # switched on only on a deployment that runs the `routing` profile below, and
+      # the dataset tag is the one that profile deploys: it is the `datasetVersion`
+      # recorded on every fee the engine measures, so the two move together.
+      HORECAOS_ROUTING_OSRM_ENABLED: ${HORECAOS_ROUTING_OSRM_ENABLED:-false}
+      HORECAOS_ROUTING_OSRM_DATASET_VERSION: ${HORECAOS_ROUTING_DATASET_TAG:-}
 
       TZ: Asia/Tashkent
     volumes:
@@ -821,6 +842,123 @@ services:
           memory: 128M
 
   # ---------------------------------------------------------------------------
+  # Routing (ADR 0147)
+  # ---------------------------------------------------------------------------
+  #
+  # Opt-in: both services carry the `routing` profile, so a deployment that has not
+  # published a dataset image keeps pulling and starting exactly what it did before.
+  # Turn them on with COMPOSE_PROFILES=routing (deploy/env.template) once
+  # HORECAOS_ROUTING_DATASET_TAG names a dataset image CI has published, then set
+  # HORECAOS_ROUTING_OSRM_ENABLED=true. platform-app deliberately does NOT depend
+  # on either: a missing or stopped engine must degrade a fee to RADIUS_FALLBACK,
+  # never stop the application from starting. The runbook for building, loading and
+  # rolling back the dataset is platform/docs/runbooks/load-uzbekistan-routing-dataset.md.
+
+  osrm-dataset:
+    # The map, shipped the way the application is (ADR 0061, ADR 0147 decision 5):
+    # CI builds it monthly -- Geofabrik's Uzbekistan extract, osrm-extract and
+    # osrm-partition/osrm-customize with the car profile, MLD -- and publishes it as
+    # an image tagged with the extract date. Nothing is preprocessed on this host.
+    # The tag IS the dataset version; it is what platform-app records on every fee.
+    #
+    # A one-shot job that copies the preprocessed files from its image into the
+    # named volume the engine reads, so the engine image stays a pinned third-party
+    # image and the dataset moves by tag alone. `restart: "no"`: it runs on every
+    # `up`, replaces the volume's contents with the tag's, and exits.
+    profiles: ["routing"]
+    # `:-unset`, not `:?`: Compose interpolates every service in the file whether or
+    # not its profile is active, so a required-variable check here would stop every
+    # deployment that does not run routing from starting at all. With the profile on
+    # and no tag the pull of `...:unset` fails by name, which is as loud as it needs
+    # to be.
+    image: ${HORECAOS_REGISTRY}/horecaos-routing-dataset:${HORECAOS_ROUTING_DATASET_TAG:-unset}
+    <<: *hardening
+    restart: "no"
+    # Replaces the whole dataset rather than overlaying it: a half-old, half-new
+    # .osrm file set is a routing graph that answers wrongly instead of failing.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        rm -rf /data/* /data/.[!.]* 2>/dev/null || true
+        cp -a /dataset/. /data/
+        echo "routing dataset $$HORECAOS_ROUTING_DATASET_TAG loaded: $$(ls /data | wc -l) files"
+    environment:
+      HORECAOS_ROUTING_DATASET_TAG: ${HORECAOS_ROUTING_DATASET_TAG:-unset}
+    volumes:
+      - osrm-data:/data
+    networks:
+      - core
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+
+  osrm:
+    # The engine, pinned by digest like every other third-party image here (the
+    # index digest of ghcr.io/project-osrm/osrm-backend:v6.0.0, read 2026-10-07;
+    # re-read before bumping). The public demo server is out of the question for
+    # production -- its own usage page restricts it to reasonable non-commercial use.
+    profiles: ["routing"]
+    image: ghcr.io/project-osrm/osrm-backend:v6.0.0@sha256:729461bcc9ae9e6aafa92c0f93db9b060a32e85d5e72092c01ae4a4a9f1eb564
+    <<: *hardening
+    restart: unless-stopped
+    read_only: true
+    # MLD with the car profile, matching how the dataset image was preprocessed:
+    # the algorithm at run time must be the one the files were built for, or the
+    # engine refuses to start. The file name is the extract's, kept stable across
+    # dataset tags so only the tag changes between months.
+    command: ["osrm-routed", "--algorithm", "mld", "--ip", "0.0.0.0", "--port", "5000", "/data/uzbekistan-latest.osrm"]
+    environment:
+      # Not read by the engine. It is here so the engine's own resolved configuration
+      # names the dataset it was started on: Compose recreates a service only when that
+      # configuration changed, and `osrm` named nothing that varies with the tag. A
+      # refresh (`up -d osrm-dataset osrm`) then replaced the files in the volume under a
+      # running engine that had loaded the old graph into memory, while platform-app
+      # started stamping the new tag on every fee: the fee said it was measured on the
+      # new map and the metres came from the old one, and the route cache kept those
+      # metres under the new tag for a day (ADR 0147: the dataset version on a fee is the
+      # one that produced it). Rolling the tag back had the same hole. With the tag here,
+      # any change of tag, in either direction, recreates the engine after osrm-dataset
+      # has finished writing the volume (`depends_on` below).
+      HORECAOS_ROUTING_DATASET_TAG: ${HORECAOS_ROUTING_DATASET_TAG:-unset}
+    volumes:
+      - osrm-data:/data:ro
+    depends_on:
+      osrm-dataset:
+        condition: service_completed_successfully
+    healthcheck:
+      # osrm-routed listens only after the dataset has loaded, so an open port is
+      # "ready". Bash because the image is Debian-based and carries no curl; this
+      # check has not been run against the image from this repository -- the runbook's
+      # first-deploy step reads `docker compose ps` and the engine's own log.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/5000"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    # Internal network only, and no published port (ADR 0147): the application
+    # reaches it as http://osrm:5000, which is the approved `osrm_internal`
+    # environment (V0493). Nothing on the public network can name it.
+    networks:
+      - core
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: ${HORECAOS_OSRM_CPU_LIMIT:-2.0}
+          # ADR 0147 plans 2 GB for a country-sized dataset and says no figure is
+          # measured: the pilot machine's real resident size replaces this default
+          # (the runbook has the measurement) before the engine is enabled. If it
+          # does not fit beside PostgreSQL's cache, ADR 0147's second choice, a
+          # hosted routing API, applies and the rest of that record is unchanged.
+          memory: ${HORECAOS_OSRM_MEMORY_LIMIT:-2G}
+
+  # ---------------------------------------------------------------------------
   # Identity
   # ---------------------------------------------------------------------------
 
@@ -1080,6 +1218,9 @@ volumes:
   keycloak-db-data:
   kafka-data:
   object-store-data:
+  # ADR 0147: the routing dataset, written by osrm-dataset and read by osrm. Holds
+  # only files the dataset image can recreate, so it is not backed up.
+  osrm-data:
   openbao-data:
   edge-data:
   edge-config:

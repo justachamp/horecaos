@@ -32,6 +32,8 @@ export type Capability =
   | 'COMMERCIAL_STATEMENT_ISSUE'
   | 'COMMERCIAL_WALLET_READ'
   | 'COMMERCIAL_WALLET_MANAGE'
+  | 'COMMERCIAL_EINVOICE_SEND'
+  | 'COMMERCIAL_EINVOICING_MANAGE'
   | 'PAYMENT_READ'
   | 'REPORTING_READ'
   | 'AUDIT_READ'
@@ -52,6 +54,8 @@ export type Capability =
   // §3) -- not the tenant self-service connect/rotate flow, which ADR 0065's
   // 2026-09-02 amendment moved to the operations app's Settings section.
   | 'INTEGRATION_INSTALLATION_MANAGE'
+  // ADR 0070: the platform's own registry of storefront apps -- platform staff only.
+  | 'STOREFRONT_APP_REGISTRY_MANAGE'
   | 'NOTIFICATION_READ'
   | 'CUSTOMER_PII_REVEAL'
   | 'NOTIFICATION_TEMPLATE_ACTIVATE'

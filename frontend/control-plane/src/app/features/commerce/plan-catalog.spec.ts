@@ -7,7 +7,10 @@ import { ru } from '../../core/i18n/messages.ru';
 import { CommerceApi, EntitlementKeyView, PlanDetail, PlanVersionDetail } from './commerce-api';
 import { PlanCatalog } from './plan-catalog';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const LIVE: PlanVersionDetail = {
   planVersionId: 'v1',
@@ -47,11 +50,29 @@ const DRAFT: PlanVersionDetail = {
   activatedAt: null,
 };
 
-const NETWORK: PlanDetail = { planId: 'plan-1', code: 'NETWORK', name: 'Network', status: 'ACTIVE', versions: [DRAFT, LIVE] };
+const NETWORK: PlanDetail = {
+  planId: 'plan-1',
+  code: 'NETWORK',
+  name: 'Network',
+  status: 'ACTIVE',
+  versions: [DRAFT, LIVE],
+};
 
 const KEYS: EntitlementKeyView[] = [
-  { code: 'locations.max_count', counted: true, unit: 'location', defaultMode: 'METER_ONLY', resetPeriod: 'NONE' },
-  { code: 'pos.integrations.enabled', counted: false, unit: 'feature', defaultMode: 'METER_ONLY', resetPeriod: 'NONE' },
+  {
+    code: 'locations.max_count',
+    counted: true,
+    unit: 'location',
+    defaultMode: 'METER_ONLY',
+    resetPeriod: 'NONE',
+  },
+  {
+    code: 'pos.integrations.enabled',
+    counted: false,
+    unit: 'feature',
+    defaultMode: 'METER_ONLY',
+    resetPeriod: 'NONE',
+  },
 ];
 
 class FakeCommerceApi {
@@ -75,7 +96,10 @@ describe('PlanCatalog', () => {
       providers: [
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: CommerceApi, useValue: api },
-        { provide: SessionContextService, useValue: { has: () => true, current: () => ({ subject }) } },
+        {
+          provide: SessionContextService,
+          useValue: { has: () => true, current: () => ({ subject }) },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(PlanCatalog);
@@ -94,9 +118,9 @@ describe('PlanCatalog', () => {
   }
 
   function button(label: string): HTMLButtonElement {
-    const found = (Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[]).find(
-      (candidate) => candidate.textContent?.trim() === label,
-    );
+    const found = (
+      Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[]
+    ).find((candidate) => candidate.textContent?.trim() === label);
     if (!found) {
       throw new Error(`no button "${label}"`);
     }
@@ -113,7 +137,9 @@ describe('PlanCatalog', () => {
   it('shows a draft beside the live version it would replace, with who drafted and who approved', async () => {
     await create('someone-else');
 
-    const rows = Array.from(fixture.nativeElement.querySelectorAll('.plan tbody tr')) as HTMLElement[];
+    const rows = Array.from(
+      fixture.nativeElement.querySelectorAll('.plan tbody tr'),
+    ) as HTMLElement[];
     expect(rows[0].textContent).toContain('v2');
     expect(rows[0].textContent).toContain(ru['planCatalog.status.DRAFT']);
     expect(rows[0].textContent).toContain('colleague');
@@ -173,7 +199,9 @@ describe('PlanCatalog', () => {
     await settle();
     expect(el<HTMLInputElement>('input[name="price"]').value).toBe('9 000 000');
     expect(el<HTMLInputElement>('input[name="limit-locations.max_count"]').value).toBe('20');
-    expect(el<HTMLInputElement>('input[name="include-pos.integrations.enabled"]').checked).toBe(false);
+    expect(el<HTMLInputElement>('input[name="include-pos.integrations.enabled"]').checked).toBe(
+      false,
+    );
 
     await type('input[name="price"]', '9 500 000');
     await type('input[name="limit-locations.max_count"]', '25');

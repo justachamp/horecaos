@@ -1,6 +1,8 @@
 package uz.horecaos.platform.reporting.application;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.courier.api.BusinessDayWindows;
@@ -28,8 +30,13 @@ public class CourierBusinessDayWindowsAdapter implements BusinessDayWindows {
     }
 
     @Override
-    public java.time.LocalDate businessDateOf(UUID tenantId, Instant at) {
+    public LocalDate businessDateOf(UUID tenantId, Instant at) {
         BusinessDayBoundary boundary = businessDays.boundaryFor(tenantId);
         return boundary.dateOf(at);
+    }
+
+    @Override
+    public Optional<LocalDate> lastClosedBusinessDate(UUID tenantId) {
+        return businessDays.lastClosedDate(tenantId);
     }
 }

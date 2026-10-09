@@ -133,6 +133,95 @@ class OrderLatenessPolicyTests {
                 .isEqualTo(LatenessLevel.LATE);
     }
 
+    // ------------------------------- ADR 0150: acceptance never starts or shortens a clock
+
+    @Test
+    void anOrderAwaitingApprovalIsLateByTheSameRuleAsAnyOtherBecauseItsClockStartedAtCheckout() {
+        // ADR 0036: the promise starts at checkout, "including for an order that will sit in
+        // AWAITING_APPROVAL". There is no accepted_at to wait for, and evaluate() takes none.
+        Instant promisedAt = PLACED.plus(Duration.ofMinutes(30));
+        OrderPromise promise = promised(promisedAt);
+
+        assertThat(POLICY.evaluate(
+                        FulfillmentMode.PICKUP,
+                        promise,
+                        OrderStatus.AWAITING_APPROVAL,
+                        PLACED,
+                        promisedAt.minusSeconds(1)))
+                .isEqualTo(LatenessLevel.AT_RISK);
+        assertThat(POLICY.evaluate(
+                        FulfillmentMode.PICKUP,
+                        promise,
+                        OrderStatus.AWAITING_APPROVAL,
+                        PLACED,
+                        promisedAt.plusSeconds(1)))
+                .as("forty minutes waiting for approval is late, which is the case a manager most needs flagged")
+                .isEqualTo(LatenessLevel.LATE);
+    }
+
+    @Test
+    void anUnpromisedOrderAwaitingApprovalIsLateAtTheFallbackFromCreation() {
+        assertThat(POLICY.evaluate(
+                        FulfillmentMode.PICKUP,
+                        OrderPromise.notPromised(),
+                        OrderStatus.AWAITING_APPROVAL,
+                        PLACED,
+                        PLACED.plusSeconds(1801)))
+                .isEqualTo(LatenessLevel.LATE);
+    }
+
+    @Test
+    void aScheduledOrderTakenHoursAheadIsLateAgainstItsSlotAndNotAgainstTheDayItWasPlaced() {
+        Instant slot = PLACED.plus(Duration.ofHours(6));
+        OrderPromise scheduled = OrderPromise.scheduled(slot);
+
+        assertThat(POLICY.evaluate(
+                        FulfillmentMode.PICKUP,
+                        scheduled,
+                        OrderStatus.CONFIRMED,
+                        PLACED,
+                        PLACED.plus(Duration.ofHours(5)).plus(Duration.ofMinutes(50))))
+                .as("an elapsed limit from acceptance would have flagged it hours ago")
+                .isEqualTo(LatenessLevel.NORMAL);
+        assertThat(POLICY.evaluate(
+                        FulfillmentMode.PICKUP, scheduled, OrderStatus.CONFIRMED, PLACED, slot.minusSeconds(60)))
+                .isEqualTo(LatenessLevel.AT_RISK);
+        assertThat(POLICY.evaluate(
+                        FulfillmentMode.PICKUP, scheduled, OrderStatus.CONFIRMED, PLACED, slot.plusSeconds(1)))
+                .isEqualTo(LatenessLevel.LATE);
+    }
+
+    @Test
+    void theNoPromiseFallbackItEvaluatesIsTheOneTheResolvedDocumentCarries() {
+        // The scalar reaches the evaluator only as the concrete fallback the service resolves (ADR 0150):
+        // 21 minutes after creation is late at a 20-minute threshold and not at the platform's 45.
+        OrderLatenessPolicy twentyMinutes = new OrderLatenessPolicy(
+                new LatenessThresholds(300, 0, 1200),
+                new LatenessThresholds(300, 0, 1200),
+                new LatenessThresholds(300, 0, 1200));
+        Instant now = PLACED.plus(Duration.ofMinutes(21));
+
+        assertThat(twentyMinutes.evaluate(
+                        FulfillmentMode.DELIVERY, OrderPromise.notPromised(), OrderStatus.RECEIVED, PLACED, now))
+                .isEqualTo(LatenessLevel.LATE);
+        assertThat(OrderLatenessPolicy.platformDefault()
+                        .evaluate(
+                                FulfillmentMode.DELIVERY,
+                                OrderPromise.notPromised(),
+                                OrderStatus.RECEIVED,
+                                PLACED,
+                                now))
+                .isEqualTo(LatenessLevel.NORMAL);
+        assertThat(twentyMinutes.evaluate(
+                        FulfillmentMode.DELIVERY,
+                        promised(now.plus(Duration.ofMinutes(10))),
+                        OrderStatus.RECEIVED,
+                        PLACED,
+                        now))
+                .as("a promised order is the document's grace and nothing the threshold touches")
+                .isEqualTo(LatenessLevel.NORMAL);
+    }
+
     /**
      * The rule {@link OrderPromise#lateAt} already enforces on its own predicate,
      * pinned again here through {@link OrderLatenessPolicy#evaluate} — its

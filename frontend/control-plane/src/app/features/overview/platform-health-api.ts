@@ -46,7 +46,10 @@ export function total(counts: Readonly<Record<string, number>>): number {
 }
 
 /** A wait in the unit a person reads it in: seconds, minutes or hours. */
-export function waited(seconds: number): { readonly value: number; readonly unit: 's' | 'm' | 'h' } {
+export function waited(seconds: number): {
+  readonly value: number;
+  readonly unit: 's' | 'm' | 'h';
+} {
   if (seconds < 120) {
     return { value: Math.round(seconds), unit: 's' };
   }

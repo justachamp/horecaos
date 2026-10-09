@@ -110,4 +110,36 @@ class CustomerConfigurationKeysTests {
                 .as("an export is a tenant-level act: there is no brand or branch it could be narrower for")
                 .containsExactlyInAnyOrder(ScopeType.PLATFORM, ScopeType.TENANT);
     }
+
+    @Test
+    void theRegistryAndTheCustomersModuleDeclareTheSameLeadCallbackReminderKey() {
+        ConfigurationKey<?> registered =
+                ConfigurationKeys.require(CustomerConfigurationKeys.LEAD_CALLBACK_REMINDER_MINUTES_CODE);
+        ConfigurationKey<Integer> used = CustomerConfigurationKeys.LEAD_CALLBACK_REMINDER_MINUTES;
+
+        assertThat(registered.valueType()).isEqualTo(used.valueType());
+        assertThat(registered.defaultValue()).isEqualTo(used.defaultValue());
+        assertThat(registered.settableScopes()).isEqualTo(used.settableScopes());
+        assertThat(registered.owningModule()).isEqualTo(used.owningModule());
+        assertThat(registered.tenantVisible()).isEqualTo(used.tenantVisible());
+        assertThat(registered.explicitNullTerminates()).isEqualTo(used.explicitNullTerminates());
+    }
+
+    @Test
+    void theLeadCallbackReminderIsAnHourByDefaultAndATenantWideNumber() {
+        ConfigurationKey<Integer> key = CustomerConfigurationKeys.LEAD_CALLBACK_REMINDER_MINUTES;
+
+        assertThat(key.code()).as("the code ADR 0111 names").isEqualTo("customer.lead.callback_reminder_minutes");
+        assertThat(key.defaultValue()).isEqualTo(60);
+        assertThat(key.settableScopes())
+                .as("a call-centre queue has no branch of its own to set it for")
+                .containsExactlyInAnyOrder(ScopeType.PLATFORM, ScopeType.TENANT);
+    }
+
+    @Test
+    void thereIsNoSwitchForCardViewAuditing() {
+        assertThat(ConfigurationKeys.all().stream().map(ConfigurationKey::code))
+                .as("ADR 0111 §7: card-view auditing is unconditional until counsel answers whether it must be")
+                .noneMatch(code -> code.contains("card.view_audit"));
+    }
 }

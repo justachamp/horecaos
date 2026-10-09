@@ -622,7 +622,7 @@ class NotificationDeliveryTests {
         assertThat(catchThrowable(() -> templates.addVersion(TENANT, BRAND, templateId, twoOfThree, Map.of())))
                 .as("a missing translation must fail at authoring time, not at 22:00 at a counter")
                 .isInstanceOf(IncompleteTranslationException.class)
-                .hasMessageContaining("UZ_LATN");
+                .hasMessageContaining("uz-Latn");
     }
 
     @Test

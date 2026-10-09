@@ -18,10 +18,12 @@ import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
-import uz.horecaos.platform.legal.domain.TermsLocale;
 import uz.horecaos.platform.legal.domain.TermsVersion;
 import uz.horecaos.platform.legal.domain.TermsVersionSummary;
 import uz.horecaos.platform.legal.infrastructure.persistence.JdbcTermsStore;
+import uz.horecaos.platform.tenancy.api.PlatformLocale;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -74,7 +76,7 @@ public class TermsPublishingService {
     /**
      * Publishes the next version.
      *
-     * @param contentsByLocale keyed by {@link TermsLocale#tag()}; a tenant may
+     * @param contentsByLocale keyed by {@link PlatformLocale#tag()}; a tenant may
      *                         author fewer than all three languages, but must
      *                         author at least one — publishing nothing is not
      *                         a version, it is a no-op dressed as one
@@ -125,10 +127,13 @@ public class TermsPublishingService {
         }
         Map<String, String> normalized = new LinkedHashMap<>();
         for (Map.Entry<String, String> entry : contentsByLocale.entrySet()) {
-            TermsLocale locale = TermsLocale.parse(entry.getKey())
+            // ADR 0149: terms are tenant-authored content, so the languages they can be written in are
+            // the registry's content tier (a bare "uz" is read as uz-Latn and stored as the tag).
+            PlatformLocale locale = PlatformLocales.parseActive(entry.getKey(), Tier.CONTENT)
                     .orElseThrow(() -> new ApiException(
                             ErrorCode.VALIDATION_FAILED,
-                            "\"" + entry.getKey() + "\" is not one of the supported locales " + TermsLocale.tags()));
+                            "\"" + entry.getKey() + "\" is not one of the supported locales "
+                                    + PlatformLocales.activeTags(Tier.CONTENT)));
             String body = entry.getValue() == null ? "" : entry.getValue().strip();
             if (body.isEmpty()) {
                 // An operator clearing a field is dropping that language from this

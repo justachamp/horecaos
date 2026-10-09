@@ -1,0 +1,205 @@
+<h1 class="q-title">{{ 'settings.assistant.title' | t }}</h1>
+<p class="q-body-sm lead">{{ 'settings.assistant.lead' | t }}</p>
+
+@if (brandStandsInForBranch()) {
+  <p class="q-caption note" data-testid="assistant-brand-level-note">
+    {{ 'settings.assistant.brandLevelNote' | t }}
+  </p>
+}
+
+<!-- One editor for every field: the value's own control plus a required reason. -->
+<ng-template #reasonAndActions>
+  <label class="q-caption" for="assistant-reason">{{
+    'settings.orderPolicy.field.reason' | t
+  }}</label>
+  <input
+    id="assistant-reason"
+    class="q-body field"
+    type="text"
+    [value]="draftReason()"
+    (input)="draftReason.set($any($event.target).value)"
+  />
+
+  @if (saveError(); as message) {
+    <p class="q-body-sm error" role="alert" data-testid="assistant-save-error">{{ message }}</p>
+  }
+
+  <div class="form__actions">
+    <button type="button" class="q-body secondary" (click)="cancelEditing()" [disabled]="saving()">
+      {{ 'settings.orderPolicy.cancel' | t }}
+    </button>
+    <button
+      type="button"
+      class="q-body primary"
+      (click)="save()"
+      [disabled]="!canSave()"
+      data-testid="assistant-save"
+    >
+      {{
+        saving() ? ('settings.orderPolicy.publishing' | t) : ('settings.orderPolicy.publish' | t)
+      }}
+    </button>
+  </div>
+</ng-template>
+
+@if (loading()) {
+  <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+} @else if (denied()) {
+  <p class="q-body-sm denied">{{ 'settings.scope.denied' | t }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm error" role="alert">{{ message }}</p>
+} @else {
+  <section class="card" data-testid="assistant-switch-card">
+    <h2 class="q-subhead">{{ 'settings.assistant.switch.title' | t }}</h2>
+    <p class="q-body-sm">{{ 'settings.assistant.switch.body' | t }}</p>
+
+    @if (editingCode() === enabledCode) {
+      <div class="form">
+        <label class="checkbox q-body-sm">
+          <input
+            type="checkbox"
+            data-testid="assistant-switch-input"
+            [checked]="draftSwitch()"
+            (change)="draftSwitch.set($any($event.target).checked)"
+          />
+          {{ 'settings.assistant.switch.field' | t }}
+        </label>
+        <p class="q-caption hint">{{ 'settings.assistant.switch.privacy' | t }}</p>
+        <ng-container *ngTemplateOutlet="reasonAndActions" />
+      </div>
+    } @else {
+      <q-inherited-field
+        [label]="'settings.assistant.switch.field' | t"
+        [resolution]="resolutionFor(enabledCode)"
+        [currentScopeType]="level()"
+        [settableScopes]="settableScopes"
+        [formatValue]="formatOnOff"
+        (override)="startEditingSwitch()"
+        (setValueRequested)="startEditingSwitch()"
+        (revertToInherit)="revert(enabledCode)"
+      />
+      @if (saveError(); as message) {
+        <p class="q-body-sm error" role="alert">{{ message }}</p>
+      }
+    }
+
+    @if (noProviderNotice()) {
+      <p class="q-body-sm notice" data-testid="assistant-no-provider">
+        {{ 'settings.assistant.switch.noProvider' | t }}
+      </p>
+    }
+    @if (notEntitledNotice()) {
+      <p class="q-body-sm notice" data-testid="assistant-not-entitled">
+        {{ 'settings.assistant.switch.notEntitled' | t }}
+      </p>
+    }
+  </section>
+
+  <section class="card" data-testid="assistant-usage-card">
+    <h2 class="q-subhead">{{ 'settings.assistant.usage.title' | t }}</h2>
+    @if (usageDenied()) {
+      <p class="q-body-sm denied" data-testid="assistant-usage-denied">
+        {{ 'settings.assistant.usage.denied' | t }}
+      </p>
+    } @else if (usageError(); as message) {
+      <p class="q-body-sm error" role="alert">{{ message }}</p>
+    } @else if (usage(); as report) {
+      <p class="q-caption">{{ 'settings.assistant.usage.month' | t: { month: report.month } }}</p>
+      <dl class="stats">
+        <div>
+          <dt class="q-caption">{{ 'settings.assistant.usage.turns' | t }}</dt>
+          <dd class="q-body q-tnum" data-testid="assistant-usage-turns">{{ report.turns }}</dd>
+        </div>
+        <div>
+          <dt class="q-caption">{{ 'settings.assistant.usage.answered' | t }}</dt>
+          <dd class="q-body q-tnum" data-testid="assistant-usage-answered">
+            {{ report.answered }}
+          </dd>
+        </div>
+        <div>
+          <dt class="q-caption">{{ 'settings.assistant.usage.handedOver' | t }}</dt>
+          <dd class="q-body q-tnum" data-testid="assistant-usage-handed">{{ handedOver() }}</dd>
+        </div>
+        <div>
+          <dt class="q-caption">{{ 'settings.assistant.usage.cached' | t }}</dt>
+          <dd class="q-body q-tnum">{{ report.servedFromCache }}</dd>
+        </div>
+      </dl>
+
+      <p class="q-body spend" data-testid="assistant-usage-spend">
+        <span class="q-caption">{{ 'settings.assistant.usage.spend' | t }}</span>
+        {{ 'settings.assistant.usage.spendOf' | t: { spent: spendText(), ceiling: ceilingText() } }}
+      </p>
+      @if (report.ceilingReached) {
+        <p class="q-body-sm error" role="alert" data-testid="assistant-ceiling-reached">
+          {{ 'settings.assistant.usage.ceilingReached' | t }}
+        </p>
+      }
+      <p class="q-caption hint">{{ 'settings.assistant.usage.ceilingNote' | t }}</p>
+
+      <p class="q-body-sm notes">
+        {{ 'settings.assistant.usage.notes' | t: { count: report.publishedKnowledgeEntries } }}
+        <a
+          routerLink="knowledge"
+          queryParamsHandling="preserve"
+          data-testid="assistant-notes-link"
+          >{{ 'settings.assistant.usage.manageNotes' | t }}</a
+        >
+      </p>
+    }
+  </section>
+
+  <section class="card" data-testid="assistant-disclosure-card">
+    <h2 class="q-subhead">{{ 'settings.assistant.disclosure.title' | t }}</h2>
+    <p class="q-body-sm">{{ 'settings.assistant.disclosure.body' | t }}</p>
+    <p class="q-caption hint">{{ 'settings.assistant.disclosure.legal' | t }}</p>
+
+    @for (field of disclosureFields; track field.code) {
+      <div class="field-row" [attr.data-testid]="'assistant-disclosure-' + field.locale">
+        @if (editingCode() === field.code) {
+          <div class="form">
+            <label class="q-caption" [for]="'assistant-text-' + field.locale">{{
+              field.labelKey | t
+            }}</label>
+            <textarea
+              [id]="'assistant-text-' + field.locale"
+              class="q-body field text"
+              rows="4"
+              data-testid="assistant-disclosure-input"
+              [value]="draftText()"
+              (input)="draftText.set($any($event.target).value)"
+            ></textarea>
+            <p class="q-caption counter" [class.counter--over]="draftTooLong()">
+              {{
+                'settings.assistant.disclosure.counter'
+                  | t: { count: draftLength(), max: maximumCharacters }
+              }}
+            </p>
+            @if (defaultWording(field); as wording) {
+              <p class="q-caption hint">
+                {{ 'settings.assistant.disclosure.default' | t: { text: wording } }}
+              </p>
+            }
+            <ng-container *ngTemplateOutlet="reasonAndActions" />
+          </div>
+        } @else {
+          <q-inherited-field
+            [label]="field.labelKey | t"
+            [resolution]="resolutionFor(field.code)"
+            [currentScopeType]="level()"
+            [settableScopes]="settableScopes"
+            [formatValue]="disclosureFormatter(field)"
+            (override)="startEditingDisclosure(field)"
+            (setValueRequested)="startEditingDisclosure(field)"
+            (revertToInherit)="revert(field.code)"
+          />
+          @if (defaultWording(field); as wording) {
+            <p class="q-caption hint">
+              {{ 'settings.assistant.disclosure.default' | t: { text: wording } }}
+            </p>
+          }
+        }
+      </div>
+    }
+  </section>
+}

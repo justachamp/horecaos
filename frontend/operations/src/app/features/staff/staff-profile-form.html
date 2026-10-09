@@ -60,7 +60,7 @@
         data-testid="staff-profile-ui-locale"
       >
         <option value="">{{ 'staff.profile.uiLocale.none' | t }}</option>
-        @for (code of languages; track code) {
+        @for (code of uiLanguages(); track code) {
           <option [value]="code" [selected]="draft().uiLocale === code">
             {{ languageName(code) }}
           </option>
@@ -71,7 +71,7 @@
     <fieldset class="field field--group">
       <legend class="q-body-sm">{{ 'staff.profile.field.spoken' | t }}</legend>
       <div class="checks">
-        @for (code of languages; track code) {
+        @for (code of spokenCodes(); track code) {
           <label class="check q-body-sm">
             <input
               type="checkbox"
@@ -80,7 +80,7 @@
               [disabled]="busy()"
               [attr.data-testid]="'staff-profile-spoken-' + code"
             />
-            {{ languageName(code) }}
+            {{ spokenName(code) }}
           </label>
         }
       </div>

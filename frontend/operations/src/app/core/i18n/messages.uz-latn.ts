@@ -16,6 +16,7 @@ import { deliveryUzLatn } from './messages/delivery.uz-latn';
 import { couriersUzLatn } from './messages/couriers.uz-latn';
 import { deviceUzLatn } from './messages/device.uz-latn';
 import { wallboardUzLatn } from './messages/wallboard.uz-latn';
+import { mapUzLatn } from './messages/map.uz-latn';
 
 /**
  * Uzbek in the Latin script, every area together.
@@ -50,4 +51,5 @@ export const messagesUzLatn: MessageCatalogue = {
   ...couriersUzLatn,
   ...deviceUzLatn,
   ...wallboardUzLatn,
+  ...mapUzLatn,
 };

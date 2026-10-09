@@ -46,6 +46,7 @@ import uz.horecaos.platform.loyalty.api.LoyaltyBalanceChanged;
 import uz.horecaos.platform.marketing.application.AutomationFiringService;
 import uz.horecaos.platform.marketing.application.AutomationRuleService;
 import uz.horecaos.platform.marketing.application.AutomationSweepService;
+import uz.horecaos.platform.marketing.application.ContactPolicyService;
 import uz.horecaos.platform.marketing.application.CustomerMetricProjectionService;
 import uz.horecaos.platform.marketing.application.LoyaltyBalanceChangeAutomationTrigger;
 import uz.horecaos.platform.marketing.application.MarketingEligibility;
@@ -56,9 +57,11 @@ import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAutomationR
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAutomationRuleStore.AutomationRuleRow;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAutomationRunStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAutomationRunStore.AutomationRunRow;
+import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcContactPolicyStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCustomerMetricStore;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcEngagementStore;
 import uz.horecaos.platform.ordering.api.AbandonedCartDirectory;
+import uz.horecaos.platform.ordering.api.LateOrderDirectory;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.api.ApiException;
@@ -167,8 +170,19 @@ class AutomationTests {
         MarketingEligibility eligibility = new MarketingEligibility(consent, contacts, engagementStore);
         projection = new CustomerMetricProjectionService(metricStore, clock);
         rules = new AutomationRuleService(ruleStore, objectMapper, port, audit, clock);
-        firing = new AutomationFiringService(runStore, audienceStore, engagementStore, eligibility, port, audit, clock);
-        sweeps = new AutomationSweepService(ruleStore, metricStore, engagementStore, carts, orders, firing, clock);
+        // Through the tenant contact policy (ADR 0112), as production wires it: with no override set
+        // it must behave exactly as the platform's own quiet hours and caps always did.
+        firing = new AutomationFiringService(
+                runStore,
+                audienceStore,
+                engagementStore,
+                eligibility,
+                new ContactPolicyService(new JdbcContactPolicyStore(jdbc), engagementStore, audit, clock),
+                port,
+                audit,
+                clock);
+        sweeps = new AutomationSweepService(
+                ruleStore, metricStore, engagementStore, carts, orders, new NoLateOrders(), firing, clock);
         cashbackTrigger = new LoyaltyBalanceChangeAutomationTrigger(ruleStore, firing, clock);
     }
 
@@ -317,7 +331,14 @@ class AutomationTests {
                 audit,
                 Clock.fixed(NOW, ZoneOffset.UTC));
         sweeps = new AutomationSweepService(
-                ruleStore, metricStore, engagementStore, carts, orders, firing, Clock.fixed(NOW, ZoneOffset.UTC));
+                ruleStore,
+                metricStore,
+                engagementStore,
+                carts,
+                orders,
+                new NoLateOrders(),
+                firing,
+                Clock.fixed(NOW, ZoneOffset.UTC));
 
         UUID ruleId = createAndActivate(AutomationTriggerType.CART_ABANDONMENT, Map.of("abandonmentDelayHours", 2), 30);
 
@@ -806,6 +827,20 @@ class AutomationTests {
     }
 
     /** A stand-in for {@link OrderDirectory} — only {@link #recentForCustomer} is exercised. */
+    /** The late-order read with nothing late in it: these tests are about the other three triggers. */
+    private static final class NoLateOrders implements LateOrderDirectory {
+        @Override
+        public List<LateOrder> completedLate(
+                UUID tenantId, UUID brandId, int lateByMinutes, Instant closedAfter, Instant closedBefore, int limit) {
+            return List.of();
+        }
+
+        @Override
+        public boolean hasRemedy(UUID tenantId, UUID orderId) {
+            return false;
+        }
+    }
+
     private static final class FakeOrderDirectory implements OrderDirectory {
         private final Map<UUID, RecentOrder> recentByAccount = new java.util.HashMap<>();
 

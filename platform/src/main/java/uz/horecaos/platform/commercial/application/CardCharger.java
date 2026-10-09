@@ -78,6 +78,26 @@ public interface CardCharger {
      */
     StatusOutcome status(String idempotencyKey);
 
+    /**
+     * Whether {@code outcome}, given for an attempt that has already been asked once, says nothing about
+     * what happened to it.
+     *
+     * <p>The merchant account that was asked may no longer be the one answering: it was suspended, or it
+     * was replaced. The gateway then has nobody to put the key to, and says {@code NotConfigured} (no
+     * account at all) or a decline naming the account (a reference minted under another). Neither is the
+     * provider's word on the attempt. The first ask may have moved the money and lost the answer, so
+     * recording either as the end of the attempt would turn a charge nobody is looking for into "declined"
+     * for good. A caller leaves such an attempt {@code PENDING}: it resolves when the account that holds
+     * the key answers again, and until then it is visible, counted, and not repeated.
+     *
+     * <p>A <em>fresh</em> attempt is different: nothing was sent, and both answers are the whole truth.
+     */
+    static boolean saysNothingAboutAnAttemptAlreadyAsked(Outcome outcome) {
+        return outcome instanceof Outcome.NotConfigured
+                || (outcome instanceof Outcome.Failed failed
+                        && CardTokenReferences.BOUND_UNDER_ANOTHER_ACCOUNT.equals(failed.reason()));
+    }
+
     /** What an attempted card charge did. */
     sealed interface Outcome permits Outcome.Succeeded, Outcome.Failed, Outcome.NotConfigured {
 

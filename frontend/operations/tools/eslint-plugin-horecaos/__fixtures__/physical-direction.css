@@ -1,0 +1,13 @@
+.card {
+  margin-left: 8px;
+  padding-right: 4px;
+  border-left: 2px solid red;
+  text-align: right;
+}
+
+.badge {
+  position: absolute;
+  right: 0;
+  float: left;
+  border-top-left-radius: 4px;
+}

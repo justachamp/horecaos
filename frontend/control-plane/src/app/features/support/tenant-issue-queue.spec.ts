@@ -12,7 +12,10 @@ import { TenantsApi } from '../tenants/tenants-api';
 import { PosExportCandidate, PosExportView, PosExportsApi } from './pos-exports-api';
 import { TenantIssueQueue } from './tenant-issue-queue';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const exportRow = (exportId: string, state: string): PosExportView => ({
   exportId,
@@ -49,9 +52,18 @@ describe('TenantIssueQueue', () => {
   async function create(
     rows: PosExportView[],
     candidates: PosExportCandidate[] = [],
-    due: { id: string; kind: string; providerType: string; label: string; lastRotatedAt: string | null; daysOld: number }[] = [],
+    due: {
+      id: string;
+      kind: string;
+      providerType: string;
+      label: string;
+      lastRotatedAt: string | null;
+      daysOld: number;
+    }[] = [],
   ): Promise<void> {
-    providers = { credentialsDue: vi.fn().mockResolvedValue({ rotationIntervalDays: 180, credentials: due }) };
+    providers = {
+      credentialsDue: vi.fn().mockResolvedValue({ rotationIntervalDays: 180, credentials: due }),
+    };
     pos = {
       awaiting: vi.fn().mockResolvedValue({ items: rows, nextCursor: null }),
       candidates: vi.fn().mockResolvedValue({ items: candidates, nextCursor: null }),
@@ -64,12 +76,27 @@ describe('TenantIssueQueue', () => {
         provideRouter([]),
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: PosExportsApi, useValue: pos },
-        { provide: IntegrationOpsApi, useValue: { outboxFailures: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) } },
-        { provide: FiscalApi, useValue: { blocked: vi.fn().mockResolvedValue({ documents: [], warning: null }) } },
+        {
+          provide: IntegrationOpsApi,
+          useValue: { outboxFailures: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) },
+        },
+        {
+          provide: FiscalApi,
+          useValue: { blocked: vi.fn().mockResolvedValue({ documents: [], warning: null }) },
+        },
         { provide: ProvidersApi, useValue: providers },
-        { provide: TenantsApi, useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) } },
-        { provide: SessionContextService, useValue: { has: () => true, current: () => ({ subject: 'me' }) } },
-        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({ tenantId: 'tenant-1' }) } } },
+        {
+          provide: TenantsApi,
+          useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) },
+        },
+        {
+          provide: SessionContextService,
+          useValue: { has: () => true, current: () => ({ subject: 'me' }) },
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap({ tenantId: 'tenant-1' }) } },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(TenantIssueQueue);
@@ -139,17 +166,36 @@ describe('TenantIssueQueue', () => {
     el<HTMLButtonElement>('.confirmDecision').click();
     await settle();
 
-    expect(pos.resolve).toHaveBeenCalledWith('tenant-1', 'e3', 'ABSENT', 'the till was offline all morning', undefined);
+    expect(pos.resolve).toHaveBeenCalledWith(
+      'tenant-1',
+      'e3',
+      'ABSENT',
+      'the till was offline all morning',
+      undefined,
+    );
   });
 
   it('lists a credential not rotated within the interval, and says how old it is', async () => {
-    await create([], [], [
-      { id: 'inst-1', kind: 'INSTALLATION', providerType: 'SMSGW_VAS', label: 'SMS gateway', lastRotatedAt: null, daysOld: 400 },
-    ]);
+    await create(
+      [],
+      [],
+      [
+        {
+          id: 'inst-1',
+          kind: 'INSTALLATION',
+          providerType: 'SMSGW_VAS',
+          label: 'SMS gateway',
+          lastRotatedAt: null,
+          daysOld: 400,
+        },
+      ],
+    );
 
     const row = fixture.nativeElement.querySelector('[data-credential="inst-1"]') as HTMLElement;
     expect(row.textContent).toContain('SMSGW_VAS');
-    expect(row.textContent).toContain(ru['tenantIssueQueue.credentials.never'].replace('{days}', '400'));
+    expect(row.textContent).toContain(
+      ru['tenantIssueQueue.credentials.never'].replace('{days}', '400'),
+    );
     expect(providers.credentialsDue).toHaveBeenCalledWith('tenant-1');
   });
 });

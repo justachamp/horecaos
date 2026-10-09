@@ -61,7 +61,9 @@ export class TenantLegalEntities {
 
   protected readonly locations = signal<readonly PickableLocation[]>([]);
   /** Every location's assignments, most recent first, keyed by location id. */
-  protected readonly assignments = signal<ReadonlyMap<string, readonly LocationFiscalAssignmentView[]>>(new Map());
+  protected readonly assignments = signal<
+    ReadonlyMap<string, readonly LocationFiscalAssignmentView[]>
+  >(new Map());
   protected readonly historyOpen = signal<string | null>(null);
   protected readonly detailsOpen = signal<string | null>(null);
   protected readonly assignEffectiveFrom = signal('');
@@ -82,7 +84,10 @@ export class TenantLegalEntities {
       this.entities.set(entities);
       const perBrand = await Promise.all(
         brands.map(async (brand) =>
-          (await this.tenantsApi.getLocations(this.tenantId, brand.id)).map((location) => ({ brand, location })),
+          (await this.tenantsApi.getLocations(this.tenantId, brand.id)).map((location) => ({
+            brand,
+            location,
+          })),
         ),
       );
       this.locations.set(perBrand.flat());
@@ -95,13 +100,19 @@ export class TenantLegalEntities {
   }
 
   private async loadAssignments(pick: PickableLocation): Promise<void> {
-    const history = await this.tenantsApi.getLocationAssignments(this.tenantId, pick.brand.id, pick.location.id);
+    const history = await this.tenantsApi.getLocationAssignments(
+      this.tenantId,
+      pick.brand.id,
+      pick.location.id,
+    );
     this.assignments.update((current) => new Map(current).set(pick.location.id, history));
   }
 
   /** Today in the console's timezone, as the yyyy-mm-dd a date input takes. */
   private today(): string {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: this.config.displayTimeZone }).format(new Date());
+    return new Intl.DateTimeFormat('en-CA', { timeZone: this.config.displayTimeZone }).format(
+      new Date(),
+    );
   }
 
   /** The assignment in force today, if any: started, and not yet ended. */
@@ -178,7 +189,11 @@ export class TenantLegalEntities {
   protected async activate(entity: LegalEntityView): Promise<void> {
     this.actionError.set(null);
     try {
-      const activated = await this.tenantsApi.activateLegalEntity(this.tenantId, entity.id, entity.version);
+      const activated = await this.tenantsApi.activateLegalEntity(
+        this.tenantId,
+        entity.id,
+        entity.version,
+      );
       this.entities.update((entities) => entities.map((e) => (e.id === entity.id ? activated : e)));
     } catch (error) {
       this.actionError.set(this.i18n.describe(error as ApiError));

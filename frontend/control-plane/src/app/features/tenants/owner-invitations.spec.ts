@@ -174,7 +174,7 @@ describe('OwnerInvitations', () => {
     reason.value = 'the owner says nothing arrived';
     reason.dispatchEvent(new Event('input'));
     const language = form.querySelector('select') as HTMLSelectElement;
-    language.value = 'uz';
+    language.value = 'uz-Latn';
     language.dispatchEvent(new Event('change'));
     await settle();
 
@@ -184,7 +184,7 @@ describe('OwnerInvitations', () => {
     expect(api.resendOwnerInvitation).toHaveBeenCalledWith(
       'tenant-waiting',
       'the owner says nothing arrived',
-      'uz',
+      'uz-Latn',
     );
     expect(api.ownerInvitations).toHaveBeenCalledTimes(2);
     expect(fixture.nativeElement.querySelector('.resendForm')).toBeNull();
@@ -193,6 +193,28 @@ describe('OwnerInvitations', () => {
     const after = fixture.nativeElement.querySelectorAll('tbody tr')[0] as HTMLElement;
     expect(after.querySelector('.success')?.textContent).toContain(ru['ownerInvitations.resent']);
     expect(after.querySelector('.actions button')).not.toBeNull();
+  });
+
+  it("offers the languages the registry has live in the messages tier, named in the console's language, and no other", async () => {
+    api.ownerInvitations.mockResolvedValue([WAITING]);
+    await render();
+    (fixture.nativeElement.querySelector('tbody tr .actions button') as HTMLButtonElement).click();
+    await settle();
+
+    const options = [
+      ...(fixture.nativeElement.querySelectorAll(
+        '.resendForm select option',
+      ) as NodeListOf<HTMLOptionElement>),
+    ];
+
+    // The first option is "the same language"; the rest are the registry's, Kazakh and Georgian
+    // being declared and live nowhere. Uzbek is the tag, never the bare uz.
+    expect(options.map((option) => option.value)).toEqual(['', 'ru', 'uz-Latn', 'en']);
+    expect(options.map((option) => option.textContent?.trim()).slice(1)).toEqual([
+      'Русский',
+      'Узбекский',
+      'Английский',
+    ]);
   });
 
   it('will not resend without a reason', async () => {

@@ -1,4 +1,10 @@
-import { HttpErrorResponse, HttpEvent, HttpHandlerFn, HttpInterceptorFn, HttpRequest } from '@angular/common/http';
+import {
+  HttpErrorResponse,
+  HttpEvent,
+  HttpHandlerFn,
+  HttpInterceptorFn,
+  HttpRequest,
+} from '@angular/common/http';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, catchError, from, switchMap, throwError } from 'rxjs';
@@ -57,7 +63,10 @@ export const bearerTokenInterceptor: HttpInterceptorFn = (request, next) => {
 export const problemDetailsInterceptor: HttpInterceptorFn = (request, next) =>
   handleProblems(request, next);
 
-function handleProblems(request: HttpRequest<unknown>, next: HttpHandlerFn): Observable<HttpEvent<unknown>> {
+function handleProblems(
+  request: HttpRequest<unknown>,
+  next: HttpHandlerFn,
+): Observable<HttpEvent<unknown>> {
   if (!request.context.get(PLATFORM_API_REQUEST)) {
     return next(request);
   }

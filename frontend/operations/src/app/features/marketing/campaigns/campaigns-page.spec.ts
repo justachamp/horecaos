@@ -1,23 +1,28 @@
-import { signal } from '@angular/core';
+import { Provider, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { BrandScope } from '../../../core/api/catalog-paths';
 import { CurrentBrand } from '../../../core/auth/current-brand';
 import { applyRegionalFormats, resetRegionalFormats } from '../../../core/format/regional-format';
 import { I18n } from '../../../core/i18n/i18n';
+import { ContactPolicyApi } from '../contact-policy/contact-policy-api';
+import { LoyaltyApi } from '../loyalty/loyalty-api';
 import { AudienceSummary, CampaignView, ChannelView, MarketingApi } from '../marketing-api';
+import { OffersApi } from '../offers/offers-api';
+import { PromotionsApi } from '../promotions/promotions-api';
+import { ScenariosApi } from '../scenarios/scenarios-api';
 import { CampaignsPage } from './campaigns-page';
 
 const SCOPE: BrandScope = { tenantId: 'tenant-1', brandId: 'brand-1' };
 
 /** T18: isWired true for every channel this fixture knows, unless a test overrides it. */
 const CHANNELS: readonly ChannelView[] = [
-  { channel: 'SMS', carriesMarginalCost: true, isWired: true },
-  { channel: 'EMAIL', carriesMarginalCost: true, isWired: true },
-  { channel: 'PUSH', carriesMarginalCost: false, isWired: true },
-  { channel: 'MESSAGING_APP', carriesMarginalCost: false, isWired: true },
+  { channel: 'SMS', carriesMarginalCost: true, isWired: true, notWiredReason: null },
+  { channel: 'EMAIL', carriesMarginalCost: true, isWired: true, notWiredReason: null },
+  { channel: 'PUSH', carriesMarginalCost: false, isWired: true, notWiredReason: null },
+  { channel: 'MESSAGING_APP', carriesMarginalCost: false, isWired: true, notWiredReason: null },
 ];
 
 const AUDIENCE: AudienceSummary = {
@@ -61,9 +66,13 @@ function campaign(overrides: Partial<CampaignView> = {}): CampaignView {
     scheduledAt: null,
     haltedReason: null,
     isWired: true,
+    notWiredReason: null,
     createdAt: '2026-09-01T08:00:00Z',
     updatedAt: '2026-09-01T08:00:00Z',
     version: 1,
+    kind: 'BROADCAST',
+    controlGroupPercent: null,
+    supersedesCampaignId: null,
     ...overrides,
   };
 }
@@ -82,6 +91,7 @@ describe('CampaignsPage', () => {
   async function render(
     campaigns: readonly CampaignView[],
     channels: readonly ChannelView[] = CHANNELS,
+    extraProviders: readonly Provider[] = [],
   ): Promise<void> {
     api = {
       listCampaigns: vi.fn().mockResolvedValue(campaigns),
@@ -103,6 +113,7 @@ describe('CampaignsPage', () => {
             ensureLoaded: () => Promise.resolve(),
           },
         },
+        ...extraProviders,
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -111,6 +122,38 @@ describe('CampaignsPage', () => {
     await flushMicrotasks();
     fixture.detectChanges();
   }
+
+  /** What the Offers and Contact policy tabs, and the scenario editor, read: nothing, successfully. */
+  const SIDE_APIS: readonly Provider[] = [
+    {
+      provide: OffersApi,
+      useValue: { list: vi.fn().mockResolvedValue([]) },
+    },
+    { provide: PromotionsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
+    { provide: LoyaltyApi, useValue: { listAccrualRules: vi.fn().mockResolvedValue([]) } },
+    {
+      provide: ContactPolicyApi,
+      useValue: {
+        read: vi.fn().mockResolvedValue({
+          platform: {
+            quietHoursStartNoLaterThan: '21:00:00',
+            quietHoursEndNoEarlierThan: '10:00:00',
+            dailyCapCeiling: 3,
+            weeklyCapCeiling: 3,
+            rolling7DayCapCeiling: 3,
+            rolling30DayCapCeiling: 8,
+          },
+          overrides: [],
+        }),
+        defaults: vi.fn().mockResolvedValue({
+          channelPriorityOrder: [],
+          inAppShowCapPerDay: 3,
+          controlGroupPercentDefault: 10,
+        }),
+      },
+    },
+    { provide: ScenariosApi, useValue: { get: vi.fn(), create: vi.fn(), replaceSteps: vi.fn() } },
+  ];
 
   it('lists a campaign with its channel and status', async () => {
     await render([campaign()]);
@@ -129,6 +172,17 @@ describe('CampaignsPage', () => {
     )!;
 
     expect(row.textContent?.replace(/\s/g, ' ')).toContain('UZS 42,000–63,000');
+  });
+
+  it('hints the languages a customer can be written to from the registry, not from a list of its own (ADR 0149)', async () => {
+    await render([campaign()]);
+    const page = fixture.componentInstance as unknown as {
+      fixedValuesOfRow(row: { type: string }): readonly string[] | null;
+    };
+
+    expect(page.fixedValuesOfRow({ type: 'PREFERRED_LOCALE' })).toEqual(['ru', 'uz-Latn', 'en']);
+    // A predicate with no closed set of its own has no hint.
+    expect(page.fixedValuesOfRow({ type: 'ORDER_COUNT' })).toBeNull();
   });
 
   it('hints a maker that their own campaign is awaiting a second signature', async () => {
@@ -162,11 +216,28 @@ describe('CampaignsPage', () => {
     await render(
       [],
       [
-        { channel: 'SMS', carriesMarginalCost: true, isWired: false },
-        { channel: 'MESSAGING_APP', carriesMarginalCost: false, isWired: true },
+        {
+          channel: 'SMS',
+          carriesMarginalCost: true,
+          isWired: false,
+          notWiredReason: 'NO_DELIVERY_ADAPTER',
+        },
+        {
+          channel: 'MESSAGING_APP',
+          carriesMarginalCost: false,
+          isWired: true,
+          notWiredReason: null,
+        },
       ],
     );
     (fixture.componentInstance as unknown as { openCreateCampaign(): void }).openCreateCampaign();
+    fixture.detectChanges();
+
+    // The form opens on a channel that can deliver, so the one that cannot has to be picked
+    // for its hint to show.
+    (
+      fixture.componentInstance as unknown as { newCampaignChannel: { set(v: string): void } }
+    ).newCampaignChannel.set('SMS');
     fixture.detectChanges();
 
     const host = fixture.nativeElement as HTMLElement;
@@ -323,6 +394,254 @@ describe('CampaignsPage', () => {
         predicates: [expect.objectContaining({ type: 'ORDER_COUNT', operator: 'AT_LEAST' })],
       }),
     );
+  });
+
+  // ------------------------------------------------------ ADR 0112: scenarios, offers, policy
+
+  describe('scenario campaigns', () => {
+    it('says which campaigns are broadcasts and which are scenarios', async () => {
+      await render([
+        campaign({ campaignId: 'b', name: 'One-off' }),
+        campaign({ campaignId: 's', name: 'Win back', kind: 'SCENARIO', channel: 'MESSAGING_APP' }),
+      ]);
+      const rows = [
+        ...(fixture.nativeElement as HTMLElement).querySelectorAll('[data-testid="campaign-row"]'),
+      ].map((row) => row.textContent!);
+
+      expect(rows[0]).toContain('Broadcast');
+      expect(rows[1]).toContain('Scenario');
+    });
+
+    it('opens the scenario editor, not the broadcast form, from "New scenario"', async () => {
+      await render([], CHANNELS, SIDE_APIS);
+      const host = fixture.nativeElement as HTMLElement;
+
+      host.querySelector<HTMLButtonElement>('[data-testid="new-scenario"]')!.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(host.querySelector('q-scenario-editor')).not.toBeNull();
+      expect(host.querySelector('[data-testid="campaign-channel-select"]')).toBeNull();
+      // The list and the tabs give way to the editor: one thing at a time.
+      expect(host.querySelector('[data-testid="campaign-row"]')).toBeNull();
+    });
+
+    it('goes back to the list when the editor is abandoned', async () => {
+      await render([campaign()], CHANNELS, SIDE_APIS);
+      const host = fixture.nativeElement as HTMLElement;
+      host.querySelector<HTMLButtonElement>('[data-testid="new-scenario"]')!.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      host.querySelector<HTMLButtonElement>('[data-testid="scenario-cancel"]')!.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(host.querySelector('q-scenario-editor')).toBeNull();
+      expect(host.querySelector('[data-testid="campaign-row"]')).not.toBeNull();
+    });
+
+    it('opens the scenario editor on a draft when the address says so, and the new-scenario form on "new"', async () => {
+      await render([campaign()], CHANNELS, SIDE_APIS);
+      const router = TestBed.inject(Router);
+
+      await router.navigateByUrl('/?scenario=new');
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('q-scenario-editor'),
+      ).not.toBeNull();
+    });
+
+    it('opens the editor on an existing draft when the address names it', async () => {
+      const get = vi.fn().mockResolvedValue({
+        campaign: {
+          campaignId: 'c-9',
+          name: 'Win back',
+          status: 'DRAFT',
+          consentPurpose: 'MARKETING_PROMOTIONS',
+          controlGroupPercent: null,
+          supersedesCampaignId: null,
+          createdAt: '2026-10-01T00:00:00Z',
+        },
+        steps: [],
+        participants: {},
+        decisions: {},
+      });
+      await render([], CHANNELS, [...SIDE_APIS, { provide: ScenariosApi, useValue: { get } }]);
+
+      await TestBed.inject(Router).navigateByUrl('/?scenario=c-9');
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(get).toHaveBeenCalledWith(SCOPE, 'c-9');
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('q-scenario-editor'),
+      ).not.toBeNull();
+    });
+
+    it('moves to the saved scenario, so it can be estimated and sent for approval', async () => {
+      await render([], CHANNELS, SIDE_APIS);
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+      const host = fixture.nativeElement as HTMLElement;
+      host.querySelector<HTMLButtonElement>('[data-testid="new-scenario"]')!.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      (
+        fixture.componentInstance as unknown as { onScenarioSaved(id: string): void }
+      ).onScenarioSaved('s-1');
+
+      expect(navigate).toHaveBeenCalledWith(['/marketing/campaigns', 's-1']);
+    });
+  });
+
+  describe('offers and contact policy', () => {
+    it('has a tab for each, beside audiences and suppressions', async () => {
+      await render([]);
+      const host = fixture.nativeElement as HTMLElement;
+
+      expect(host.querySelector('[data-testid="tab-offers"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="tab-contact-policy"]')).not.toBeNull();
+    });
+
+    it('switches tab without leaving the address it is on: a docked campaign stays open', async () => {
+      await render([], CHANNELS, SIDE_APIS);
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      (fixture.nativeElement as HTMLElement)
+        .querySelector<HTMLButtonElement>('[data-testid="tab-offers"]')!
+        .click();
+
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it('shows the offers screen on its tab', async () => {
+      await render([], CHANNELS, SIDE_APIS);
+      const host = fixture.nativeElement as HTMLElement;
+
+      host.querySelector<HTMLButtonElement>('[data-testid="tab-offers"]')!.click();
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(host.querySelector('q-offers-panel')).not.toBeNull();
+      expect(host.querySelector('[data-testid="offers-create"]')).not.toBeNull();
+    });
+
+    it('shows the contact policy on its tab, with its explainer of why a guest is blocked', async () => {
+      await render([], CHANNELS, SIDE_APIS);
+      const host = fixture.nativeElement as HTMLElement;
+
+      host.querySelector<HTMLButtonElement>('[data-testid="tab-contact-policy"]')!.click();
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(host.querySelector('q-contact-policy-panel')).not.toBeNull();
+      expect(host.querySelector('[data-testid="policy-explainer"]')).not.toBeNull();
+    });
+
+    it('opens on the tab the address names, so another screen can link to one', async () => {
+      await render([], CHANNELS, SIDE_APIS);
+      await TestBed.inject(Router).navigateByUrl('/?view=contactPolicy');
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('q-contact-policy-panel'),
+      ).not.toBeNull();
+    });
+  });
+
+  describe('channels, honestly', () => {
+    const GATED: readonly ChannelView[] = [
+      {
+        channel: 'SMS',
+        carriesMarginalCost: true,
+        isWired: false,
+        notWiredReason: 'SMS_PURPOSE_NOT_PERMITTED',
+      },
+      {
+        channel: 'EMAIL',
+        carriesMarginalCost: true,
+        isWired: false,
+        notWiredReason: 'NO_DELIVERY_ADAPTER',
+      },
+      {
+        channel: 'PUSH',
+        carriesMarginalCost: false,
+        isWired: false,
+        notWiredReason: 'NO_DELIVERY_ADAPTER',
+      },
+      { channel: 'MESSAGING_APP', carriesMarginalCost: false, isWired: true, notWiredReason: null },
+    ];
+
+    it('opens the broadcast form on a channel that can deliver, not on SMS when SMS is gated', async () => {
+      await render([], GATED);
+      (fixture.componentInstance as unknown as { openCreateCampaign(): void }).openCreateCampaign();
+      fixture.detectChanges();
+
+      const select = (fixture.nativeElement as HTMLElement).querySelector<HTMLSelectElement>(
+        '[data-testid="campaign-channel-select"]',
+      )!;
+      expect(select.value).toBe('MESSAGING_APP');
+    });
+
+    it('explains the SMS gate when SMS is picked, not just that it is unwired', async () => {
+      await render([], GATED);
+      (fixture.componentInstance as unknown as { openCreateCampaign(): void }).openCreateCampaign();
+      fixture.detectChanges();
+      (
+        fixture.componentInstance as unknown as { newCampaignChannel: { set(v: string): void } }
+      ).newCampaignChannel.set('SMS');
+      fixture.detectChanges();
+
+      const hint = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="channel-unwired-hint"]',
+      )!;
+      expect(hint.textContent).toContain('not cleared to carry marketing messages');
+    });
+
+    it('says email and push are not connected, each in its own words', async () => {
+      await render([], GATED);
+      (fixture.componentInstance as unknown as { openCreateCampaign(): void }).openCreateCampaign();
+      fixture.detectChanges();
+      const component = fixture.componentInstance as unknown as {
+        newCampaignChannel: { set(v: string): void };
+      };
+      const hint = () =>
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="channel-unwired-hint"]',
+        )!.textContent;
+
+      component.newCampaignChannel.set('EMAIL');
+      fixture.detectChanges();
+      expect(hint()).toContain('mail service sends staff invitations');
+
+      component.newCampaignChannel.set('PUSH');
+      fixture.detectChanges();
+      expect(hint()).toContain('no push provider');
+    });
+
+    it('marks each unconnected channel in the list itself', async () => {
+      await render([], GATED);
+      (fixture.componentInstance as unknown as { openCreateCampaign(): void }).openCreateCampaign();
+      fixture.detectChanges();
+
+      const options = [
+        ...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+          '[data-testid="campaign-channel-select"] option',
+        ),
+      ];
+      expect(options.find((o) => o.value === 'SMS')!.textContent).toContain('not connected');
+      expect(options.find((o) => o.value === 'MESSAGING_APP')!.textContent).not.toContain(
+        'not connected',
+      );
+    });
   });
 
   it('shows the denied state when the brand grant is missing', async () => {

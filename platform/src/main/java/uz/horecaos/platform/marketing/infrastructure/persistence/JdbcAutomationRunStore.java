@@ -35,9 +35,13 @@ public class JdbcAutomationRunStore {
      * Reserves the guard key. {@code ON CONFLICT DO NOTHING} on {@code
      * uq_automation_run_guard} — the database is the guard, not this method.
      *
+     * <p>No conflict target: the (rule, customer, guard key) guard is one unique
+     * index and the one-apology-per-order guard (V0581) is another, and a firing
+     * either of them refuses is the same answer, "already decided".
+     *
      * @return false when this exact (rule, customer, guard key) already has a
-     *         row, meaning this firing has already been decided and nothing
-     *         more should happen
+     *         row, or another rule already holds the order's apology, meaning this
+     *         firing has already been decided and nothing more should happen
      */
     public boolean claim(
             UUID id,
@@ -56,7 +60,7 @@ public class JdbcAutomationRunStore {
                     trigger_type, guard_key, subject_id, status, fired_at)
                 VALUES (:id, :tenantId, :brandId, :ruleId, :accountId, :triggerType, :guardKey,
                     :subjectId, 'PENDING', :now)
-                ON CONFLICT (tenant_id, automation_rule_id, customer_account_id, guard_key) DO NOTHING
+                ON CONFLICT DO NOTHING
                 """)
                         .param("id", id)
                         .param("tenantId", tenantId)
@@ -66,6 +70,66 @@ public class JdbcAutomationRunStore {
                         .param("triggerType", triggerType)
                         .param("guardKey", guardKey)
                         .param("subjectId", subjectId)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
+    /**
+     * Whether a rule other than {@code ruleId} already has a firing for this subject that is
+     * sent or in flight: the question that makes "once per order" hold across rules and not
+     * only within one.
+     */
+    public boolean subjectHeldByAnotherRule(UUID tenantId, String triggerType, UUID subjectId, UUID ruleId) {
+        return Boolean.TRUE.equals(jdbc.sql("""
+                SELECT EXISTS (
+                    SELECT 1 FROM marketing.automation_runs
+                     WHERE tenant_id = :tenantId AND trigger_type = :triggerType AND subject_id = :subjectId
+                       AND automation_rule_id <> :ruleId AND status IN ('PENDING', 'FIRED'))
+                """)
+                .param("tenantId", tenantId)
+                .param("triggerType", triggerType)
+                .param("subjectId", subjectId)
+                .param("ruleId", ruleId)
+                .query(Boolean.class)
+                .single());
+    }
+
+    /**
+     * Writes a firing that was decided without being attempted, already {@code CANCELLED}
+     * with its reason: this rule's own guard key is spent, so the sweep does not come back
+     * to it, and the rule's history says why it did not send.
+     *
+     * @return false when this rule already has a row for the guard key
+     */
+    public boolean recordCancelled(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID automationRuleId,
+            UUID customerAccountId,
+            String triggerType,
+            String guardKey,
+            @Nullable UUID subjectId,
+            String reason,
+            Instant now) {
+        return jdbc.sql("""
+                INSERT INTO marketing.automation_runs (
+                    id, tenant_id, brand_id, automation_rule_id, customer_account_id,
+                    trigger_type, guard_key, subject_id, status, cancelled_reason, fired_at)
+                VALUES (:id, :tenantId, :brandId, :ruleId, :accountId, :triggerType, :guardKey,
+                    :subjectId, 'CANCELLED', :reason, :now)
+                ON CONFLICT DO NOTHING
+                """)
+                        .param("id", id)
+                        .param("tenantId", tenantId)
+                        .param("brandId", brandId)
+                        .param("ruleId", automationRuleId)
+                        .param("accountId", customerAccountId)
+                        .param("triggerType", triggerType)
+                        .param("guardKey", guardKey)
+                        .param("subjectId", subjectId)
+                        .param("reason", reason.length() > 200 ? reason.substring(0, 200) : reason)
                         .param("now", utc(now))
                         .update()
                 == 1;
@@ -96,6 +160,23 @@ public class JdbcAutomationRunStore {
                 .update();
     }
 
+    /**
+     * A refusal with the sentence that explains it (ADR 0112): which rule, and the numbers it
+     * was applied with. The sentence names no contact value and no message body.
+     */
+    public void markRefused(UUID tenantId, UUID id, String refusalReason, @Nullable String detail) {
+        jdbc.sql("""
+                UPDATE marketing.automation_runs
+                   SET status = 'REFUSED', refusal_reason = :reason, refusal_detail = :detail
+                 WHERE tenant_id = :tenantId AND id = :id
+                """)
+                .param("tenantId", tenantId)
+                .param("id", id)
+                .param("reason", refusalReason)
+                .param("detail", detail == null ? null : detail.length() > 500 ? detail.substring(0, 500) : detail)
+                .update();
+    }
+
     public void markCancelled(UUID tenantId, UUID id, String reason) {
         jdbc.sql("""
                 UPDATE marketing.automation_runs
@@ -111,7 +192,7 @@ public class JdbcAutomationRunStore {
     /** The rule's own recent firing history, newest first — the console's audit view. */
     public List<AutomationRunRow> recentByRule(UUID tenantId, UUID automationRuleId, int limit) {
         return jdbc.sql("""
-                SELECT id, customer_account_id, trigger_type, status, refusal_reason,
+                SELECT id, customer_account_id, trigger_type, status, refusal_reason, refusal_detail,
                        cancelled_reason, notification_id, fired_at
                   FROM marketing.automation_runs
                  WHERE tenant_id = :tenantId AND automation_rule_id = :ruleId
@@ -132,6 +213,7 @@ public class JdbcAutomationRunStore {
                 row.getString("trigger_type"),
                 row.getString("status"),
                 row.getString("refusal_reason"),
+                row.getString("refusal_detail"),
                 row.getString("cancelled_reason"),
                 row.getObject("notification_id", UUID.class),
                 row.getObject("fired_at", OffsetDateTime.class).toInstant());
@@ -147,6 +229,7 @@ public class JdbcAutomationRunStore {
             String triggerType,
             String status,
             @Nullable String refusalReason,
+            @Nullable String refusalDetail,
             @Nullable String cancelledReason,
             @Nullable UUID notificationId,
             Instant firedAt) {}

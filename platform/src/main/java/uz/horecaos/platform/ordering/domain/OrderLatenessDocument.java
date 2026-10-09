@@ -12,16 +12,20 @@ import uz.horecaos.platform.tenancy.api.FulfillmentMode;
  * §2.7, gap map rows {@code X.39}/{@code 10.3b}), as opposed to {@link OrderLatenessPolicy}, the
  * concrete thresholds the boards evaluate against.
  *
- * <p>The two differ in exactly one respect. A mode's at-risk window here is <em>optional</em>:
- * {@code null} means "this mode has no value of its own", and the window falls back to the tenant's
- * {@code ordering.at_risk_before_minutes} scalar (batch 15) and, failing that, to the platform's
- * five minutes. That is what lets the scalar stay as the default for the modes a document does not
- * set while a document can still give one mode its own number. Grace-after-promise and the
- * no-promise fallback are always present, as they always were in the stored JSON.
+ * <p>The two differ in two respects, and both are the same rule. A mode's at-risk window and its
+ * no-promise fallback are <em>optional</em> here: {@code null} means "this mode has no value of
+ * its own", and the window falls back to the tenant's {@code ordering.at_risk_before_minutes}
+ * scalar (batch 15) and, failing that, to the platform's five minutes; the fallback falls back to
+ * the tenant's {@code ordering.late_order_threshold_minutes} scalar (ADR 0150) and, failing that,
+ * to the platform's forty-five. That is what lets each scalar stay the tenant-wide default for the
+ * modes a document does not set while a document can still give one mode its own number.
+ * Grace-after-promise is always present, as it always was in the stored JSON.
  *
  * <p>The stored JSON is unchanged from the document {@link OrderLatenessPolicy} used to be
  * (same field names, same units), so a document written before this type existed still reads: its
- * at-risk numbers are simply values the mode carries of its own.
+ * numbers are simply values the mode carries of its own. A document written after ADR 0150 may
+ * carry {@code null} for the fallback as it already could for the at-risk window, and both
+ * generations read through the same record.
  *
  * <p>Seconds throughout, matching {@link LatenessThresholds}: the stored contract does not depend on a
  * serializer's choice of duration representation. Whole-minute granularity for the two windows a
@@ -43,15 +47,14 @@ public record OrderLatenessDocument(ModeThresholds delivery, ModeThresholds pick
     }
 
     /**
-     * What resolves when nothing was authored anywhere: no mode owns an at-risk window (so the
-     * scalar, then the platform's five minutes, applies), no grace, forty-five minutes without a
-     * promise. {@link #effective} of this with the platform's own at-risk seconds is exactly {@link
-     * OrderLatenessPolicy#platformDefault()}.
+     * What resolves when nothing was authored anywhere: no mode owns an at-risk window or a
+     * no-promise fallback (so each scalar, then the platform's five and forty-five minutes,
+     * applies), and no grace. {@link #effective} of this with the platform's own two defaults is
+     * exactly {@link OrderLatenessPolicy#platformDefault()}.
      */
     public static OrderLatenessDocument platformDefault() {
         LatenessThresholds defaults = OrderLatenessPolicy.platformDefault().delivery();
-        ModeThresholds unset =
-                new ModeThresholds(null, defaults.lateAfterSeconds(), defaults.noPromiseFallbackSeconds());
+        ModeThresholds unset = new ModeThresholds(null, defaults.lateAfterSeconds(), null);
         return new OrderLatenessDocument(unset, unset, unset);
     }
 
@@ -65,14 +68,15 @@ public record OrderLatenessDocument(ModeThresholds delivery, ModeThresholds pick
     }
 
     /**
-     * The concrete thresholds the boards evaluate: each mode's own at-risk window when it has one,
-     * {@code defaultAtRiskSeconds} otherwise.
+     * The concrete thresholds the boards evaluate: each mode's own at-risk window and no-promise
+     * fallback when it has one, {@code defaultAtRiskSeconds} and {@code defaultNoPromiseSeconds}
+     * otherwise (ADR 0150: a blank in the document means "none of its own").
      */
-    public OrderLatenessPolicy effective(int defaultAtRiskSeconds) {
+    public OrderLatenessPolicy effective(int defaultAtRiskSeconds, int defaultNoPromiseSeconds) {
         return new OrderLatenessPolicy(
-                delivery.effective(defaultAtRiskSeconds),
-                pickup.effective(defaultAtRiskSeconds),
-                dineIn.effective(defaultAtRiskSeconds));
+                delivery.effective(defaultAtRiskSeconds, defaultNoPromiseSeconds),
+                pickup.effective(defaultAtRiskSeconds, defaultNoPromiseSeconds),
+                dineIn.effective(defaultAtRiskSeconds, defaultNoPromiseSeconds));
     }
 
     /**
@@ -95,16 +99,19 @@ public record OrderLatenessDocument(ModeThresholds delivery, ModeThresholds pick
      *                                 the mode has no value of its own
      * @param lateAfterSeconds         grace past the promise before it counts as breached
      * @param noPromiseFallbackSeconds how long from {@code created_at} an order with no promise runs
-     *                                 before it is late anyway
+     *                                 before it is late anyway, or null when the mode has no value of
+     *                                 its own (ADR 0150)
      */
     public record ModeThresholds(
-            @Nullable Integer atRiskBeforeSeconds, int lateAfterSeconds, int noPromiseFallbackSeconds) {
+            @Nullable Integer atRiskBeforeSeconds,
+            int lateAfterSeconds,
+            @Nullable Integer noPromiseFallbackSeconds) {
 
-        LatenessThresholds effective(int defaultAtRiskSeconds) {
+        LatenessThresholds effective(int defaultAtRiskSeconds, int defaultNoPromiseSeconds) {
             return new LatenessThresholds(
                     atRiskBeforeSeconds != null ? atRiskBeforeSeconds : defaultAtRiskSeconds,
                     lateAfterSeconds,
-                    noPromiseFallbackSeconds);
+                    noPromiseFallbackSeconds != null ? noPromiseFallbackSeconds : defaultNoPromiseSeconds);
         }
 
         private void addViolations(String mode, List<String> found) {
@@ -118,9 +125,10 @@ public record OrderLatenessDocument(ModeThresholds delivery, ModeThresholds pick
             if (lateAfterSeconds < 0 || lateAfterSeconds > MAX_SECONDS) {
                 found.add("%s lateAfterSeconds must be between 0 and %d".formatted(mode, MAX_SECONDS));
             }
-            if (noPromiseFallbackSeconds < MIN_NO_PROMISE_FALLBACK_SECONDS
-                    || noPromiseFallbackSeconds > MAX_SECONDS
-                    || noPromiseFallbackSeconds % 60 != 0) {
+            if (noPromiseFallbackSeconds != null
+                    && (noPromiseFallbackSeconds < MIN_NO_PROMISE_FALLBACK_SECONDS
+                            || noPromiseFallbackSeconds > MAX_SECONDS
+                            || noPromiseFallbackSeconds % 60 != 0)) {
                 found.add("%s noPromiseFallbackSeconds must be a whole number of minutes between %d and %d"
                         .formatted(mode, MIN_NO_PROMISE_FALLBACK_SECONDS, MAX_SECONDS));
             }

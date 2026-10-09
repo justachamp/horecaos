@@ -7,14 +7,26 @@ import { SessionContextService } from '../../core/auth/session-context.service';
 import { APP_CONFIG, AppConfig } from '../../core/config/app-config';
 import { ReferenceDataScreen } from './reference-data';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const DATA = {
-  countries: [{ code: 'UZ', name: 'Uzbekistan', defaultCurrency: 'UZS', defaultTimezone: 'Asia/Tashkent' }],
+  countries: [
+    { code: 'UZ', name: 'Uzbekistan', defaultCurrency: 'UZS', defaultTimezone: 'Asia/Tashkent' },
+  ],
   locales: [{ code: 'ru', displayName: 'Русский' }],
   holidays: [
     { holidayId: 'h1', countryCode: 'UZ', name: 'Navruz', month: 3, day: 21, date: null },
-    { holidayId: 'h2', countryCode: 'UZ', name: 'Ramazon Hayit', month: null, day: null, date: '2027-03-10' },
+    {
+      holidayId: 'h2',
+      countryCode: 'UZ',
+      name: 'Ramazon Hayit',
+      month: null,
+      day: null,
+      date: '2027-03-10',
+    },
   ],
 };
 const SLA = {
@@ -45,7 +57,10 @@ describe('ReferenceDataScreen', () => {
             delete: del,
           },
         },
-        { provide: SessionContextService, useValue: { has: () => true, current: () => ({ subject: 'me' }) } },
+        {
+          provide: SessionContextService,
+          useValue: { has: () => true, current: () => ({ subject: 'me' }) },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(ReferenceDataScreen);
@@ -102,6 +117,8 @@ describe('ReferenceDataScreen', () => {
     el<HTMLButtonElement>('.confirmRemove').click();
     await settle();
 
-    expect(del).toHaveBeenCalledWith('/api/v1/control-plane/reference-data/holidays/h2', { reason: 'moved a day' });
+    expect(del).toHaveBeenCalledWith('/api/v1/control-plane/reference-data/holidays/h2', {
+      reason: 'moved a day',
+    });
   });
 });

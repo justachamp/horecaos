@@ -21,8 +21,11 @@ import {
   TelegramStaffLinkView,
 } from './staff-api';
 import { StaffInviteDialog } from './staff-invite-dialog';
+import { StaffReach } from './staff-reach';
 import { StaffJobDialog } from './staff-job-dialog';
-import { StaffMember, StaffMembersApi } from './staff-members-api';
+import { StaffMfaPolicyCard } from './staff-mfa-policy-card';
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
+import { MfaSummaryRow, StaffMember, StaffMembersApi } from './staff-members-api';
 import { roleLabel, scopeLevelLabel } from './staff-role-labels';
 import {
   COMPANY_WIDE_GROUP,
@@ -70,7 +73,14 @@ interface GroupRow {
  */
 @Component({
   selector: 'q-staff-page',
-  imports: [TPipe, RouterOutlet, StaffJobDialog, StaffAccessDialog, StaffInviteDialog],
+  imports: [
+    TPipe,
+    RouterOutlet,
+    StaffJobDialog,
+    StaffAccessDialog,
+    StaffInviteDialog,
+    StaffMfaPolicyCard,
+  ],
   templateUrl: './staff-page.html',
   styleUrl: './staff-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -78,12 +88,16 @@ interface GroupRow {
 export class StaffPage {
   private readonly api = inject(StaffApi);
   private readonly membersApi = inject(StaffMembersApi);
+  private readonly reach = inject(StaffReach);
   private readonly tenant = inject(CurrentTenant);
   private readonly auth = inject(Auth);
+  private readonly capabilities = inject(SessionCapabilities);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   protected readonly i18n = inject(I18n);
 
+  /** ADR 0103: her `iam.grant.manage` stops at a branch or brand, so this is that place's team and not the company's. */
+  protected readonly scoped = this.reach.scoped;
   protected readonly loading = signal(true);
   protected readonly denied = signal(false);
   protected readonly loadError = signal<string | null>(null);
@@ -236,6 +250,33 @@ export class StaffPage {
 
   protected onOutletDeactivate(): void {
     this.docked.set(false);
+  }
+
+  /**
+   * ADR 0148: the «Способ входа» column, read from Keycloak's credential lists in one call.
+   * Absent for a holder of neither `iam.staff.mfa.read` nor a working Keycloak: the column
+   * then shows nothing for a person, never a confident "password only".
+   */
+  private readonly mfaByMember = signal<ReadonlyMap<string, MfaSummaryRow>>(new Map());
+  protected readonly showMfaColumn = computed(() => this.capabilities.has('IAM_STAFF_MFA_READ'));
+
+  protected mfaOf(person: StaffPerson): MfaSummaryRow | null {
+    const memberId = person.member?.memberId;
+    const row = memberId === undefined ? undefined : this.mfaByMember().get(memberId);
+    return row !== undefined && row.state === 'KNOWN' ? row : null;
+  }
+
+  private async loadMfaSummary(tenantId: string): Promise<void> {
+    if (!this.showMfaColumn()) {
+      return;
+    }
+    try {
+      const rows = await this.membersApi.mfaSummary(tenantId);
+      this.mfaByMember.set(new Map(rows.map((row) => [row.memberId, row])));
+    } catch {
+      // The column is an aid: a failed read leaves it blank, never the list.
+      this.mfaByMember.set(new Map());
+    }
   }
 
   protected isSelf(subject: string): boolean {
@@ -668,6 +709,7 @@ export class StaffPage {
     this.invitations.set(invitations);
     this.members.set(members);
     this.loadedAt.set(new Date());
+    void this.loadMfaSummary(tenantId);
   }
 
   private async load(): Promise<void> {
@@ -697,6 +739,7 @@ export class StaffPage {
       this.invitations.set(invitations);
       this.members.set(members);
       this.loadedAt.set(new Date());
+      void this.loadMfaSummary(tenantId);
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
         this.denied.set(true);

@@ -796,6 +796,13 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
             document.put("deliveryTariffVersion", inputs.deliveryCharge().tariffVersion());
             document.put("deliveryDistanceMeters", inputs.deliveryCharge().distanceMeters());
             document.put("deliveryDistanceSource", inputs.deliveryCharge().distanceSource());
+            if (inputs.deliveryCharge().routingDatasetVersion() != null) {
+                // ADR 0147: which map measured the road distance. Beside the quote and not
+                // in its context hash, so a refreshed dataset re-measures the next quote
+                // and leaves this one's fee exactly as issued.
+                document.put(
+                        "deliveryRoutingDatasetVersion", inputs.deliveryCharge().routingDatasetVersion());
+            }
         }
         if (result.deliveryShortfallMinor() != null) {
             document.put("deliveryShortfallMinor", result.deliveryShortfallMinor());

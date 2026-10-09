@@ -10,7 +10,10 @@ import { TenantsApi } from '../tenants/tenants-api';
 import { CommerceApi, EntitlementSnapshot, PlanDetail, SubscriptionView } from './commerce-api';
 import { Entitlements } from './entitlements';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const SNAPSHOT: EntitlementSnapshot = {
   tenantId: 'tenant-1',
@@ -75,7 +78,13 @@ const version = (id: string, n: number, status: string) => ({
 });
 
 const PLANS: PlanDetail[] = [
-  { planId: 'p1', code: 'NETWORK', name: 'Network', status: 'ACTIVE', versions: [version('v2', 2, 'DRAFT'), version('v1', 1, 'ACTIVE')] },
+  {
+    planId: 'p1',
+    code: 'NETWORK',
+    name: 'Network',
+    status: 'ACTIVE',
+    versions: [version('v2', 2, 'DRAFT'), version('v1', 1, 'ACTIVE')],
+  },
 ];
 
 class FakeCommerceApi {
@@ -101,8 +110,14 @@ describe('Entitlements', () => {
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: CommerceApi, useValue: api },
         { provide: Colleagues, useValue: { others: vi.fn().mockResolvedValue(['approver-b']) } },
-        { provide: TenantsApi, useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) } },
-        { provide: SessionContextService, useValue: { has: () => true, current: () => ({ subject: 'me' }) } },
+        {
+          provide: TenantsApi,
+          useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) },
+        },
+        {
+          provide: SessionContextService,
+          useValue: { has: () => true, current: () => ({ subject: 'me' }) },
+        },
         {
           provide: ActivatedRoute,
           useValue: { snapshot: { queryParamMap: convertToParamMap({ tenantId: 'tenant-1' }) } },
@@ -156,13 +171,17 @@ describe('Entitlements', () => {
     TestBed.resetTestingModule();
     await create(SUBSCRIPTION);
     expect(el('.depositDue')).toBeNull();
-    expect(fixture.nativeElement.textContent).not.toContain(ru['entitlements.subscription.depositDue']);
+    expect(fixture.nativeElement.textContent).not.toContain(
+      ru['entitlements.subscription.depositDue'],
+    );
   });
 
   it('offers only the moves the server allows, and sends the version it read', async () => {
     await create(SUBSCRIPTION);
 
-    const options = Array.from(el<HTMLSelectElement>('select[name="nextStatus"]').options).map((o) => o.value);
+    const options = Array.from(el<HTMLSelectElement>('select[name="nextStatus"]').options).map(
+      (o) => o.value,
+    );
     expect(options).toEqual(['', 'CANCELLATION_SCHEDULED', 'PAST_DUE', 'SUSPENDED', 'TERMINATED']);
 
     await set('select[name="nextStatus"]', 'SUSPENDED', 'change');
@@ -187,13 +206,17 @@ describe('Entitlements', () => {
 
     await set('select[name="nextStatus"]', 'TERMINATED', 'change');
 
-    expect(fixture.nativeElement.textContent).toContain(ru['entitlements.transition.terminalWarning']);
+    expect(fixture.nativeElement.textContent).toContain(
+      ru['entitlements.transition.terminalWarning'],
+    );
   });
 
   it('puts a tenant with no subscription on a live version only', async () => {
     await create(null);
 
-    const options = Array.from(el<HTMLSelectElement>('select[name="startPlan"]').options).map((o) => o.value);
+    const options = Array.from(el<HTMLSelectElement>('select[name="startPlan"]').options).map(
+      (o) => o.value,
+    );
     expect(options).toEqual(['', 'v1']);
 
     await set('select[name="startPlan"]', 'v1', 'change');
@@ -202,21 +225,35 @@ describe('Entitlements', () => {
     el<HTMLButtonElement>('.startForm button[type="submit"]').click();
     await settle();
 
-    expect(api.startSubscription).toHaveBeenCalledWith('tenant-1', 'v1', 'signed the Network contract', 14, 1);
+    expect(api.startSubscription).toHaveBeenCalledWith(
+      'tenant-1',
+      'v1',
+      'signed the Network contract',
+      14,
+      1,
+    );
   });
 
   it('offers the terms the chosen version sells and sends the one picked', async () => {
     await create(null);
 
     await set('select[name="startPlan"]', 'v1', 'change');
-    const terms = Array.from(el<HTMLSelectElement>('select[name="startTerm"]').options).map((o) => o.value);
+    const terms = Array.from(el<HTMLSelectElement>('select[name="startTerm"]').options).map(
+      (o) => o.value,
+    );
     expect(terms).toEqual(['1', '12']);
     await set('select[name="startTerm"]', '12', 'change');
     await set('input[name="startReason"]', 'a year up front');
     el<HTMLButtonElement>('.startForm button[type="submit"]').click();
     await settle();
 
-    expect(api.startSubscription).toHaveBeenCalledWith('tenant-1', 'v1', 'a year up front', undefined, 12);
+    expect(api.startSubscription).toHaveBeenCalledWith(
+      'tenant-1',
+      'v1',
+      'a year up front',
+      undefined,
+      12,
+    );
   });
 
   it('grants an override with the operator’s own reason and a colleague as the second name', async () => {

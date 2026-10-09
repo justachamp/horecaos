@@ -30,6 +30,69 @@ export const staffPaths = {
     return `${CONTROL_PLANE}/tenants/${enc(tenantId)}/roles`;
   },
 
+  /**
+   * `ScopedGrantController` (ADR 0103) — a branch or brand manager's own team. The
+   * tenant-wide `grants` route above needs `iam.grant.manage` at TENANT scope, which
+   * a grant at her branch never covers (ADR 0025); these name the place in the path,
+   * which is what her grant does cover.
+   */
+  locationGrants(scope: LocationScope): string {
+    return `${OPERATIONS}/operations/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/locations/${enc(scope.locationId)}/grants`;
+  },
+
+  locationGrant(scope: LocationScope, grantId: string): string {
+    return `${this.locationGrants(scope)}/${enc(grantId)}`;
+  },
+
+  /** The jobs, each with whether the caller may give it at this branch. */
+  locationGrantRoles(scope: LocationScope): string {
+    return `${OPERATIONS}/operations/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/locations/${enc(scope.locationId)}/grant-roles`;
+  },
+
+  /** The names of this branch and its brand. */
+  locationGrantPlaces(scope: LocationScope): string {
+    return `${OPERATIONS}/operations/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/locations/${enc(scope.locationId)}/grant-places`;
+  },
+
+  locationStaffInvitations(scope: LocationScope): string {
+    return `${OPERATIONS}/operations/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/locations/${enc(scope.locationId)}/staff/invitations`;
+  },
+
+  brandGrants(tenantId: string, brandId: string): string {
+    return `${OPERATIONS}/operations/tenants/${enc(tenantId)}/brands/${enc(brandId)}/grants`;
+  },
+
+  brandGrant(tenantId: string, brandId: string, grantId: string): string {
+    return `${this.brandGrants(tenantId, brandId)}/${enc(grantId)}`;
+  },
+
+  brandGrantRoles(tenantId: string, brandId: string): string {
+    return `${OPERATIONS}/operations/tenants/${enc(tenantId)}/brands/${enc(brandId)}/grant-roles`;
+  },
+
+  brandGrantPlaces(tenantId: string, brandId: string): string {
+    return `${OPERATIONS}/operations/tenants/${enc(tenantId)}/brands/${enc(brandId)}/grant-places`;
+  },
+
+  brandStaffInvitations(tenantId: string, brandId: string): string {
+    return `${OPERATIONS}/operations/tenants/${enc(tenantId)}/brands/${enc(brandId)}/staff/invitations`;
+  },
+
+  /** `StaffMemberController.listForBrand` — the people of one brand, for a holder of `staff.profile.read` there. */
+  brandMembers(tenantId: string, brandId: string): string {
+    return `${OPERATIONS}/operations/tenants/${enc(tenantId)}/brands/${enc(brandId)}/staff/members`;
+  },
+
+  /** `StaffMemberController.detailForLocation` — one person of one branch, in full. */
+  locationMember(scope: LocationScope, memberId: string): string {
+    return `${this.locationMembers(scope)}/${enc(memberId)}`;
+  },
+
+  /** `StaffMemberController.detailForBrand`. */
+  brandMember(tenantId: string, brandId: string, memberId: string): string {
+    return `${this.brandMembers(tenantId, brandId)}/${enc(memberId)}`;
+  },
+
   /** `TelegramStaffLinkCodeController.listLinks` — already on the operations surface. */
   telegramStaffLinks(tenantId: string): string {
     return `${OPERATIONS}/tenants/${enc(tenantId)}/staff/telegram/links`;
@@ -163,6 +226,24 @@ export const staffPaths = {
 
   member(tenantId: string, memberId: string): string {
     return `${this.members(tenantId)}/${enc(memberId)}`;
+  },
+
+  /**
+   * `StaffMfaAdministrationController` (ADR 0148) -- whether the person holds a second factor,
+   * and its reset. Read and reset are two capabilities (`iam.staff.mfa.read`, `.reset`) at tenant
+   * scope; the reset carries the member's version in `If-Match` and a reason.
+   */
+  memberMfa(tenantId: string, memberId: string): string {
+    return `${this.member(tenantId, memberId)}/mfa`;
+  },
+
+  memberMfaReset(tenantId: string, memberId: string): string {
+    return `${this.memberMfa(tenantId, memberId)}/resets`;
+  },
+
+  /** The staff list's «Способ входа» column, for the whole tenant, in one call. */
+  mfaSummary(tenantId: string): string {
+    return `${OPERATIONS}/operations/tenants/${enc(tenantId)}/staff/mfa-summary`;
   },
 
   /** `StaffMemberController.endEmployment` -- sets ENDED and revokes every job in the same act. */

@@ -192,6 +192,18 @@ public class DayCloseService {
      * report 7.9) is compared beside them, per brand, on the redemption count and
      * the discount and markup given: the ledger moves after a day closes when an
      * amendment restates a row, and this is where that is reported.
+     *
+     * <p>The tender fact (ADR 0115, {@code payment_mix.amount.v1}) is compared the same
+     * way, per (branch, legal entity, payment method): a tender fact is a net-in-place
+     * snapshot taken at close, so a refund that lands the next morning, or a capture the
+     * acquirer confirms after the day closed, leaves the stored figure behind the payment
+     * ledger. The recut is the one place that says so; nothing rewrites the stored row.
+     *
+     * <p>The delivery fact (ADR 0125, {@code delivery.count}) is compared per branch the same
+     * way. The accrual is dated on the courier's own «delivered» tap, but the earning is written
+     * when the operator completes the order, which can be after the tap's business day has closed:
+     * the close built {@code fact_delivery} before that earning existed and never builds the day
+     * again, while the courier ledger pays the delivery. Only the recut can say so.
      */
     @Transactional
     public CloseResult recut(UUID tenantId, LocalDate businessDate) {
@@ -243,6 +255,8 @@ public class DayCloseService {
         }
 
         comparePromotionFacts(divergences, tenantId, businessDate, derived.promotionRedemptions());
+        comparePaymentMix(divergences, tenantId, businessDate, derived.tenders());
+        compareDeliveries(divergences, tenantId, businessDate, derived.deliveries());
 
         for (Divergence divergence : divergences) {
             store.insertDivergence(
@@ -363,6 +377,7 @@ public class DayCloseService {
                                 MetricRegistry.CALCULATION_VERSION,
                                 source.courierId(),
                                 source.locationId(),
+                                source.brandId(),
                                 source.shipmentId(),
                                 source.assignmentAttemptId(),
                                 source.distanceMeters(),
@@ -684,6 +699,92 @@ public class DayCloseService {
             compare(into, dimension, "promotion.discount", 1, before[1], after[1]);
             compare(into, dimension, "promotion.markup", 1, before[2], after[2]);
         }
+    }
+
+    /**
+     * ADR 0115 ({@code payment_mix.amount.v1}): the net tendered amount per (branch, legal
+     * entity, payment method), over the tenders the metric's inclusion rule counts, against the
+     * rows the close stored.
+     *
+     * <p>Net-in-place is what makes this comparison necessary rather than decorative: the
+     * record chooses a snapshot of "what is in the till for this order, by method" over a
+     * movement ledger, and the price of that choice is that a refund recorded after the close
+     * is invisible to the stored fact. The comparison reads the same SQL the report reads
+     * ({@link JdbcReportingStore#readPaymentMix}), so what it calls "stored" is exactly what a
+     * manager saw on the screen.
+     */
+    private void comparePaymentMix(
+            List<Divergence> into, UUID tenantId, LocalDate businessDate, List<TenderFact> derived) {
+        Map<String, Long> stored = new LinkedHashMap<>();
+        store.readPaymentMix(tenantId, businessDate, businessDate, List.of(), List.of())
+                .forEach(row -> stored.merge(
+                        paymentMixDimension(row.locationId(), row.legalEntityId(), row.paymentMethodCode()),
+                        row.amountSom(),
+                        Long::sum));
+        Map<String, Long> fresh = new LinkedHashMap<>();
+        for (var fact : derived) {
+            if (!countsInPaymentMix(fact.tenderStatus())) {
+                continue;
+            }
+            fresh.merge(
+                    paymentMixDimension(fact.locationId(), fact.legalEntityId(), fact.paymentMethodCode()),
+                    fact.amountSom(),
+                    Long::sum);
+        }
+        java.util.Set<String> slices = new java.util.LinkedHashSet<>(stored.keySet());
+        slices.addAll(fresh.keySet());
+        for (String slice : slices) {
+            compare(
+                    into,
+                    slice,
+                    "payment_mix.amount",
+                    1,
+                    stored.getOrDefault(slice, 0L),
+                    fresh.getOrDefault(slice, 0L));
+        }
+    }
+
+    /**
+     * ADR 0125 ({@code delivery.count}): the internal deliveries per branch, over the earnings
+     * whose courier tap falls in the day, against the rows the close stored.
+     *
+     * <p>The close selects earnings by their {@code delivered_at}, so an earning written after its
+     * day closed is in this derivation and not in the stored fact. That is not a bug in either
+     * side, it is the order of events (tap, close, operator's «completed»), and the record that
+     * dates the accrual on the tap leaves it to the recut to say so. Like every other
+     * comparison here it only reports: the stored day, and the SLA buckets and leaderboards cut
+     * from it, stay as the manager saw them.
+     */
+    private void compareDeliveries(
+            List<Divergence> into,
+            UUID tenantId,
+            LocalDate businessDate,
+            List<uz.horecaos.platform.reporting.application.ReportingFacts.DeliveryFact> derived) {
+        Map<UUID, Long> stored = new LinkedHashMap<>();
+        store.readDeliveryDayCounts(tenantId, businessDate)
+                .forEach(count -> stored.put(count.locationId(), count.deliveries()));
+        Map<UUID, Long> fresh = new LinkedHashMap<>();
+        derived.forEach(fact -> fresh.merge(fact.locationId(), 1L, Long::sum));
+        java.util.Set<UUID> locations = new java.util.LinkedHashSet<>(stored.keySet());
+        locations.addAll(fresh.keySet());
+        for (UUID location : locations) {
+            compare(
+                    into,
+                    "location=%s".formatted(location),
+                    "delivery.count",
+                    1,
+                    stored.getOrDefault(location, 0L),
+                    fresh.getOrDefault(location, 0L));
+        }
+    }
+
+    /** {@code payment_mix.amount.v1}'s inclusion rule, {@code SETTLED_OR_REVERSED_TENDERS}. */
+    private static boolean countsInPaymentMix(String tenderStatus) {
+        return "SETTLED".equals(tenderStatus) || "REVERSED".equals(tenderStatus);
+    }
+
+    private static String paymentMixDimension(UUID locationId, @Nullable UUID legalEntityId, String paymentMethodCode) {
+        return "location=%s;entity=%s;method=%s".formatted(locationId, legalEntityId, paymentMethodCode);
     }
 
     private static List<BranchDayKey> union(java.util.Set<BranchDayKey> left, java.util.Set<BranchDayKey> right) {

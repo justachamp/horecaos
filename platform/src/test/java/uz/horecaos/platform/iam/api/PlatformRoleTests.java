@@ -48,12 +48,21 @@ class PlatformRoleTests {
             // transfer or change its own payment method would be deciding what it
             // owes -- the same reasoning as COMMERCIAL_STATEMENT_ISSUE above.
             Capability.COMMERCIAL_WALLET_MANAGE,
+            // ADR 0096: HorecaOS is the seller on the invoice it sends to an operator, and
+            // the account it sends through is HorecaOS's own -- a tenant holding either
+            // would be deciding what it is invoiced and by which account.
+            Capability.COMMERCIAL_EINVOICE_SEND,
+            Capability.COMMERCIAL_EINVOICING_MANAGE,
             Capability.MIGRATION_READ,
             Capability.MIGRATION_SCOPE_MANAGE,
             Capability.MIGRATION_RUN_EXECUTE,
             Capability.MIGRATION_CUTOVER_APPROVE,
             Capability.MIGRATION_QUARANTINE_RESOLVE,
-            Capability.CONTROL_PLANE_ALERT_RAISE);
+            Capability.CONTROL_PLANE_ALERT_RAISE,
+            // ADR 0070: the storefront app registry is the platform's own. One
+            // registration is authorised by many tenants, so suspending it or
+            // editing its origins changes what all of them serve at once.
+            Capability.STOREFRONT_APP_REGISTRY_MANAGE);
 
     /**
      * ADR 0049 operations authorised by a typed non-staff relationship rather
@@ -210,6 +219,25 @@ class PlatformRoleTests {
                 .containsExactlyInAnyOrder(PlatformRole.COURIER_DISPATCHER, PlatformRole.LOCATION_MANAGER);
     }
 
+    /**
+     * ADR 0145 decision 8, row 7.10a: opening a branch's whole day of doorsteps at once is a
+     * bulk form of the address reveal, held by the two bundles that already hold both the live
+     * courier map and that reveal -- and by nothing wider.
+     */
+    @Test
+    void theDaysDoorstepsAreOpenedByDispatchAndTheBranchOnly() {
+        assertThat(Arrays.stream(PlatformRole.values())
+                        .filter(role -> role != PlatformRole.PLATFORM_ADMIN)
+                        .filter(role -> role.grants(Capability.ORDER_POINTS_REVEAL))
+                        .toList())
+                .containsExactlyInAnyOrder(PlatformRole.COURIER_DISPATCHER, PlatformRole.LOCATION_MANAGER);
+        assertThat(PlatformRole.COURIER_DISPATCHER.grants(Capability.CUSTOMER_PII_REVEAL))
+                .as("it is a bulk form of an address reveal, so nobody holds it who could not open one address")
+                .isTrue();
+        assertThat(PlatformRole.LOCATION_MANAGER.grants(Capability.CUSTOMER_PII_REVEAL))
+                .isTrue();
+    }
+
     @Test
     void platformSupportCanReadButNeverMutate() {
         Set<Capability> mutations = EnumSet.of(
@@ -300,6 +328,77 @@ class PlatformRoleTests {
                 .isTrue();
     }
 
+    /**
+     * ADR 0103's default: the same capability, held at their own scope, and by no
+     * bundle that is not a manager of something. A cook, a finance clerk, a
+     * dispatcher and a support agent administer nobody's access, and a support
+     * session never does (the test above pins that one).
+     */
+    @Test
+    void grantManagementIsHeldByTheOwnerTheAdministratorAndTheTwoManagersOnly() {
+        assertThat(Arrays.stream(PlatformRole.values())
+                        .filter(role -> role != PlatformRole.PLATFORM_ADMIN)
+                        .filter(role -> role.grants(Capability.IAM_GRANT_MANAGE))
+                        .toList())
+                .containsExactlyInAnyOrder(
+                        PlatformRole.TENANT_OWNER,
+                        PlatformRole.TENANT_ADMIN,
+                        PlatformRole.BRAND_MANAGER,
+                        PlatformRole.LOCATION_MANAGER);
+        assertThat(PlatformRole.LOCATION_MANAGER.scopeType())
+                .as("held at the branch: the bundle is granted at LOCATION, so the capability never reaches the tenant")
+                .isEqualTo(ScopeType.LOCATION);
+    }
+
+    /**
+     * What the branch manager can give is her own bundle's subset, so the two jobs
+     * below her are exactly what the picker offers (ADR 0103 Question 2's default).
+     * Written as a fact about the bundles so a later capability added to
+     * {@code location-staff} that the manager lacks fails here, loudly, rather than
+     * silently shrinking what she can hand out.
+     */
+    @Test
+    void aLocationManagerHoldsEverythingTheJobsBelowHerCarry() {
+        assertThat(PlatformRole.LOCATION_MANAGER.capabilities())
+                .containsAll(PlatformRole.LOCATION_STAFF.capabilities());
+        assertThat(PlatformRole.LOCATION_MANAGER.capabilities())
+                .containsAll(PlatformRole.KITCHEN_DEVICE.capabilities());
+    }
+
+    /**
+     * ADR 0111's two capabilities: the call centre's queue is read by those who run it and by support,
+     * and worked only by those who run it. A line cook holds neither, because the number to ring is
+     * behind {@code customer.pii.reveal} and a floor that cannot reveal it has no use for a queue of
+     * people to call.
+     */
+    @Test
+    void theLeadQueueIsWorkedByTheManagersAndReadBySupport() {
+        assertThat(rolesHolding(Capability.CUSTOMER_LEAD_MANAGE))
+                .containsExactlyInAnyOrder(
+                        PlatformRole.TENANT_OWNER,
+                        PlatformRole.TENANT_ADMIN,
+                        PlatformRole.BRAND_MANAGER,
+                        PlatformRole.LOCATION_MANAGER);
+        assertThat(rolesHolding(Capability.CUSTOMER_LEAD_READ))
+                .containsExactlyInAnyOrder(
+                        PlatformRole.TENANT_OWNER,
+                        PlatformRole.TENANT_ADMIN,
+                        PlatformRole.BRAND_MANAGER,
+                        PlatformRole.LOCATION_MANAGER,
+                        PlatformRole.SUPPORT_AGENT);
+        assertThat(Capability.CUSTOMER_LEAD_READ.isRead())
+                .as("a suspended tenant's people may still look at the queue, and may not work it")
+                .isTrue();
+        assertThat(Capability.CUSTOMER_LEAD_MANAGE.isRead()).isFalse();
+    }
+
+    private static List<PlatformRole> rolesHolding(Capability capability) {
+        return Arrays.stream(PlatformRole.values())
+                .filter(role -> role != PlatformRole.PLATFORM_ADMIN)
+                .filter(role -> role.grants(capability))
+                .toList();
+    }
+
     @Test
     void integrationInstallationIsLimitedToTenantOwnerAndAdmin() {
         assertThat(Arrays.stream(PlatformRole.values())
@@ -341,6 +440,38 @@ class PlatformRoleTests {
             assertThat(role.capabilities())
                     .doesNotContain(Capability.TENANT_WRITE, Capability.COMMERCIAL_SUBSCRIPTION_MANAGE);
         }
+    }
+
+    // ------------------------------------------------------- ADR 0151: the wall display's bundle
+
+    @Test
+    void everyBundleThatReadsTheTicketsAlsoReadsTheWallProjectionSoNoStaffUserLosesTheVduPage() {
+        for (PlatformRole role : PlatformRole.values()) {
+            if (role.capabilities().contains(Capability.KITCHEN_TICKET_READ)) {
+                assertThat(role.capabilities())
+                        .as("%s holds kitchen.ticket.read, so it must hold kitchen.display.read (ADR 0151)", role)
+                        .contains(Capability.KITCHEN_DISPLAY_READ);
+            }
+        }
+    }
+
+    @Test
+    void aWallDisplayHoldsExactlyTheOneCapabilityThatOpensItsProjection() {
+        assertThat(PlatformRole.KITCHEN_VDU_DEVICE.capabilities())
+                .as("no ticket read, no advance, no order read, no location read: a read added later under "
+                        + "kitchen.ticket.read must not reach a wall by accident")
+                .containsExactly(Capability.KITCHEN_DISPLAY_READ);
+        assertThat(PlatformRole.KITCHEN_VDU_DEVICE.scopeType()).isEqualTo(ResourceScope.ScopeType.LOCATION);
+        assertThat(Capability.KITCHEN_DISPLAY_READ.code()).isEqualTo("kitchen.display.read");
+    }
+
+    @Test
+    void aTouchDisplayKeepsItsOwnTwoCapabilitiesAndNothingElseBeyondTheWallRead() {
+        assertThat(PlatformRole.KITCHEN_DEVICE.capabilities())
+                .containsExactlyInAnyOrder(
+                        Capability.KITCHEN_TICKET_READ,
+                        Capability.KITCHEN_DISPLAY_READ,
+                        Capability.KITCHEN_TICKET_ADVANCE);
     }
 
     @Test

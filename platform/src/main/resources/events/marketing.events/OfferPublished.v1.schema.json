@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/marketing.events/OfferPublished.v1.schema.json",
+  "title": "OfferPublished v1 payload",
+  "description": "An offer version was put in front of campaigns (ADR 0112). The offer, its brand and its version number; never the promotion or accrual rule it references, which a consumer reads through the authorized offers API.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["offerId", "brandId", "version"],
+  "properties": {
+    "offerId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": "string", "format": "uuid" },
+    "version": { "type": "integer", "minimum": 1 }
+  }
+}

@@ -322,6 +322,10 @@ public final class ReportingFacts {
      *                                   ({@code uq_earning_attempt}, V0040),
      *                                   so one earning is exactly one
      *                                   delivery fact
+     * @param brandId                   ADR 0125 (V0510): the brand the delivery was
+     *                                  made for. The earning carries none; the close
+     *                                  reads it from the earning's shipment, the way
+     *                                  it reads {@code acceptedAt} from the attempt
      * @param transitSeconds            {@code deliveredAt - acceptedAt}, the
      *                                  figure {@code 7.4}'s "transit hours"
      *                                  and {@code 7.4a}'s SLA buckets are
@@ -335,6 +339,7 @@ public final class ReportingFacts {
             int metricCalculationVersion,
             UUID courierId,
             UUID locationId,
+            UUID brandId,
             UUID shipmentId,
             UUID assignmentAttemptId,
             int distanceMeters,
@@ -347,6 +352,7 @@ public final class ReportingFacts {
         public DeliveryFact {
             Objects.requireNonNull(tenantId, "A fact is tenant-owned");
             Objects.requireNonNull(courierAssignmentEarningId, "A delivery fact names its earning");
+            Objects.requireNonNull(brandId, "A delivery fact names its brand");
             if (transitSeconds < 0) {
                 throw new IllegalArgumentException("A delivery cannot be delivered before it was accepted");
             }

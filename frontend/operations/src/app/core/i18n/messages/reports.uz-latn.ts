@@ -127,7 +127,7 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.overview.tile.averageCheck': 'Oʻrtacha chek',
   'reports.overview.tile.cancelled': 'Bekor qilinganlar',
   'reports.overview.tile.cancelled.subtitle': 'yakunlangan buyurtmalarga nisbatan ulushi: {share}',
-  'reports.overview.tile.late': 'Kechikishlar',
+  'reports.overview.tile.late': 'Belgilangan vaqtdan keyingi kechikishlar',
   'reports.overview.tile.late.subtitle': 'mediana {minutes}',
   'reports.overview.tile.distance': 'Yetkazib berish masofasi',
   'reports.overview.tile.deltaSuffix': 'bir hafta oldingi shu davrga nisbatan',
@@ -149,6 +149,11 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.overview.mix.byRevenue': 'Tushum boʻyicha',
   'reports.overview.mix.fulfilment': 'Olish turi',
   'reports.overview.mix.payment': 'Toʻlov',
+  'reports.paymentMix.provisional': 'Dastlabki: moliya bu koʻrsatkich taʻrifini hali imzolamagan.',
+  'reports.paymentMix.openQuestion':
+    'Toʻlov paytida yozilgan summa boʻyicha hisoblanadi. Karta yoki hamyon provayderi oʻz komissiyasini ushlab qolgach oʻtkazadigan summa bu yerda hisobga olinmaydi.',
+  'reports.paymentMix.notCutBy':
+    'Bu boʻlinish kanal va olish turi boʻyicha ajratilmaydi; u davr, filial, yuridik shaxs va toʻlov usuli filtrlariga amal qiladi.',
   'reports.overview.funnel.title': 'Buyurtmalar natijasi',
   'reports.overview.funnel.completed': 'Yakunlangan',
   'reports.overview.funnel.notCompleted': 'Yakunlanmagan',
@@ -181,14 +186,14 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.orders.tab.commercial': 'Buyurtmalar',
   'reports.orders.tab.daily': 'Kunlik',
   'reports.orders.tab.summary': 'Yigʻma',
-  'reports.orders.tab.late': 'Kechikishlar',
+  'reports.orders.tab.late': 'Belgilangan vaqtdan keyingi kechikishlar',
   'reports.orders.boundedNote':
     'Chegara ichida eng yomon qatorlar koʻrsatilmoqda — juda keng davr uchun toʻliq roʻyxat emas.',
   'reports.orders.commercial.piiNote':
     'Mijoz, operator va kuryer alohida, tekshiriladigan manbadan (order.read) olinadi — hisobotning oʻzi shaxsiy maʻlumot saqlamaydi (ADR 0029). Telefon maskalangan; bu maʻlumotni eksport qilish tekshiriladigan PII chiqishi hisoblanadi.',
   'reports.orders.late.empty': 'Tanlangan davrda kechikishlar yoʻq',
   'reports.orders.late.summary':
-    'Davr uchun: {count} kechikish · mediana {median} · eng yomoni {worst}',
+    'Davr uchun: belgilangan vaqtdan keyin topshirilgan {count} buyurtma · mediana {median} · eng yomoni {worst}',
 
   'reports.orders.column.orderId': 'Buyurtma',
   'reports.orders.column.date': 'Sana',
@@ -290,6 +295,7 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.branches.channels.empty': 'Bu davrda buyurtmalar yoʻq.',
   'reports.branches.payments.title': 'Toʻlov usullari',
   'reports.branches.payments.column.method': 'Usul',
+  'reports.branches.payments.column.legalEntity': 'Yuridik shaxs',
   'reports.branches.payments.column.count': 'Operatsiyalar',
   'reports.branches.payments.column.amount': 'Summa',
   'reports.branches.payments.empty': 'Bu davrda operatsiyalar yoʻq.',
@@ -574,10 +580,8 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   // ---------------------------------------------------------------- 7.10 Geography: histograms and the week grid (wave W04)
   'reports.geography.title': 'Geografiya',
   'reports.geography.intro':
-    'Yetkazib berish vaqti va masofasi gistogrammalari, hafta kuni/soat issiqlik jadvali.',
+    'Yetkazib berish vaqti va masofasi gistogrammalari, hafta kuni / soat issiqlik jadvali hamda yetkazib berishlarning zonalar boʻyicha taqsimoti.',
   'reports.geography.loading': 'Yuklanmoqda…',
-  'reports.geography.mapDeferred':
-    'Zichlik xaritasi va buyurtma nuqtalari xarita provayderigacha kechiktirildi (X.4).',
   'reports.geography.branch.label': 'Filial',
   'reports.geography.section.histograms': 'Yetkazib berish vaqti va masofasi gistogrammalari',
   'reports.geography.histogram.duration.title': 'Qayta ishlash vaqti',
@@ -601,4 +605,28 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.products.combos.column.sold': 'Sotilgan',
   'reports.products.combos.note':
     'Faqat yakunlangan buyurtmalar. Alohida sotilgan taom kombo emas.',
+  'reports.geography.section.density': 'Yetkazib berishlar qayerga boradi: zonalar boʻyicha',
+  'reports.geography.density.intro':
+    'Har bir yetkazib berish zonasi oxirgi 30 kunda uning tarifi narxlagan yetkazib berishlar soniga qarab boʻyalgan, eng band zona eng toʻq. Chizilgan zonalardan birortasi qamrab olmagan yetkazib berishlar alohida qator: bu raqam zona yomon chizilganini yoki qamrov zonasi yoʻqligini koʻrsatadi.',
+  'reports.geography.density.mapLabel': 'Yetkazib berishlar soniga qarab boʻyalgan zonalar',
+  'reports.geography.density.areaLabel': '{zone}: yetkazib berishlar — {count}',
+  'reports.geography.density.scale':
+    'Zona qanchalik toʻq boʻlsa, shunchalik koʻp yetkazib berish; xira zonada kam yoki umuman yoʻq.',
+  'reports.geography.density.zonesNotReadable':
+    'Sizning rolingiz hisobotlarni oʻqiy oladi, ammo yetkazib berish zonalarini emas, shuning uchun quyidagi hisoblarda zona nomlari yoʻq va xarita ham yoʻq.',
+  'reports.geography.density.column.zone': 'Zona',
+  'reports.geography.density.column.deliveries': 'Yetkazib berishlar',
+  'reports.geography.density.column.share': 'Ulushi',
+  'reports.geography.density.column.fees': 'Yetkazib berish toʻlovi',
+  'reports.geography.density.outside': 'Barcha chizilgan zonalardan tashqarida',
+  'reports.geography.density.zoneUnknown': 'Zona',
+  'reports.geography.density.outsideNote':
+    'Manzilini hech bir chizilgan zona qamrab olmagani uchun filialning oʻz tarifi narxlagan yetkazib berishlar: {count}. Agar ular kutilganidan koʻp boʻlsa, zona yomon chizilgan yoki qamrov zonasi yoʻq.',
+  'reports.geography.density.empty':
+    'Bu davrda yetkazib berishlar narxlanmagan, brendda esa amaldagi yetkazib berish zonalari yoʻq.',
+  'reports.geography.density.basis':
+    'Haqini tarif aniqlagan yetkazib berishlar, shu filialda {from} dan {to} gacha yopilgan ish kunlari boʻyicha. Bugungi kun kirmaydi, tarif modelidan tashqarida narxlangan yetkazib berishlar (qoʻlda toʻlov, agregatorning oʻz narxi) ham kirmaydi.',
+  'reports.geography.section.pins': 'Bugungi buyurtmalar nuqtalar sifatida',
+  'reports.geography.pins.intro':
+    'Shu filialning bugungi yetkazib berish buyurtmalari qayerga ketayotgani, har bir buyurtma uchun bitta nuqta: toʻplanishlar va chetga chiqqanlarni koʻrish uchun. Bu yetkazib berish manzillarini ochadi, shuning uchun qayd etiladi va dispetcherlar hamda filial menejerlarida bor; yuqoridagi hisobotga kirmaydi.',
 };

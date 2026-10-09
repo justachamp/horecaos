@@ -5,7 +5,13 @@ import type { MessageCatalogue, MessageKey } from './messages.en';
 import { coreRu } from './messages/core.ru';
 
 /**
- * The three locales this platform supports (ADR 0035).
+ * The languages this *build* has a message catalogue for (ADR 0035, ADR 0149).
+ *
+ * This is the one list a console keeps, on purpose: the catalogues are compile-time and typed, so a
+ * missing translation fails the build, and a language the build does not hold cannot be rendered
+ * whatever the platform says. It is not the platform's list of languages -- that is the registry
+ * (`platform-locales.ts`), which narrows what is offered to the languages live in the staff-UI tier.
+ * Adding a language is its catalogues here plus its registry entry going live; nothing else.
  *
  * `uz-Latn` carries its script subtag because uz-Latn and uz-Cyrl are different
  * locales and a bare `uz` is ambiguous.
@@ -57,6 +63,7 @@ const LOADERS: Record<Locale, Partial<Record<MessageArea, Loader>>> = {
     couriers: () => import('./messages/couriers.ru').then((m) => m.couriersRu),
     device: () => import('./messages/device.ru').then((m) => m.deviceRu),
     wallboard: () => import('./messages/wallboard.ru').then((m) => m.wallboardRu),
+    map: () => import('./messages/map.ru').then((m) => m.mapRu),
   },
   'uz-Latn': {
     core: () => import('./messages/core.uz-latn').then((m) => m.coreUzLatn),
@@ -76,6 +83,7 @@ const LOADERS: Record<Locale, Partial<Record<MessageArea, Loader>>> = {
     couriers: () => import('./messages/couriers.uz-latn').then((m) => m.couriersUzLatn),
     device: () => import('./messages/device.uz-latn').then((m) => m.deviceUzLatn),
     wallboard: () => import('./messages/wallboard.uz-latn').then((m) => m.wallboardUzLatn),
+    map: () => import('./messages/map.uz-latn').then((m) => m.mapUzLatn),
   },
   en: {
     core: () => import('./messages/core.en').then((m) => m.coreEn),
@@ -95,6 +103,7 @@ const LOADERS: Record<Locale, Partial<Record<MessageArea, Loader>>> = {
     couriers: () => import('./messages/couriers.en').then((m) => m.couriersEn),
     device: () => import('./messages/device.en').then((m) => m.deviceEn),
     wallboard: () => import('./messages/wallboard.en').then((m) => m.wallboardEn),
+    map: () => import('./messages/map.en').then((m) => m.mapEn),
   },
 };
 

@@ -5,7 +5,10 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.springframework.cache.annotation.CacheEvict;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -53,17 +56,50 @@ public class JdbcConfigurationResolver implements ConfigurationResolver, Configu
                )
             """;
 
-    private final JdbcClient jdbc;
+    /** ADR 0033's cache for "what does this key resolve to here". */
+    public static final String CACHE_NAME = "tenant.configuration";
 
+    static final String KEY_SEPARATOR = "|";
+
+    private final JdbcClient jdbc;
+    private final @Nullable ConfigurationValueCacheEvictor evictor;
+
+    /** A fixture built by hand: nothing is cached, so there is nothing to evict. */
     public JdbcConfigurationResolver(JdbcClient jdbc) {
         this.jdbc = jdbc;
+        this.evictor = null;
+    }
+
+    @Autowired
+    public JdbcConfigurationResolver(JdbcClient jdbc, ObjectProvider<CacheManager> caches) {
+        this.jdbc = jdbc;
+        CacheManager manager = caches.getIfAvailable();
+        this.evictor = manager == null ? null : new ConfigurationValueCacheEvictor(manager);
+    }
+
+    /**
+     * The key {@link #resolve} caches under: the setting, then the requesting scope as {@code
+     * TYPE:tenant:brand:location} (an absent id is the text {@code null}). One definition for the
+     * annotation below and for {@link ConfigurationValueCacheEvictor}, which has to recognise the keys
+     * of every scope a write reaches.
+     */
+    public static String cacheKey(String keyCode, ResourceScope scope) {
+        return keyCode
+                + KEY_SEPARATOR
+                + scope.type()
+                + ':'
+                + scope.tenantId()
+                + ':'
+                + scope.brandId()
+                + ':'
+                + scope.locationId();
     }
 
     @Override
     @Cacheable(
-            cacheNames = "tenant.configuration",
-            key = "#key.code() + '|' + #scope.type() + ':' + #scope.tenantId() "
-                    + "+ ':' + #scope.brandId() + ':' + #scope.locationId()")
+            cacheNames = CACHE_NAME,
+            key = "T(uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcConfigurationResolver)"
+                    + ".cacheKey(#key.code(), #scope)")
     public <T> Resolved<T> resolve(ConfigurationKey<T> key, ResourceScope scope) {
         return ScopeResolution.resolve(key, scope, storedValues(key, scope));
     }
@@ -76,15 +112,15 @@ public class JdbcConfigurationResolver implements ConfigurationResolver, Configu
     /**
      * Called by {@code JdbcConfigurationValueAuthor} right after it writes the
      * row, so the value just set resolves on the very next call instead of
-     * waiting out the registry's TTL.
+     * waiting out the registry's TTL -- at the scope written and at every
+     * brand and location beneath it, whose own cached resolutions held the
+     * value just replaced (see {@link ConfigurationValueCacheEvictor}).
      */
     @Override
-    @CacheEvict(
-            cacheNames = "tenant.configuration",
-            key = "#keyCode + '|' + #scope.type() + ':' + #scope.tenantId() "
-                    + "+ ':' + #scope.brandId() + ':' + #scope.locationId()")
     public void evict(String keyCode, ResourceScope scope) {
-        // The annotation is the whole method.
+        if (evictor != null) {
+            evictor.evict(keyCode, scope);
+        }
     }
 
     private <T> Resolved<T> resolveErased(ConfigurationKey<T> key, ResourceScope scope) {

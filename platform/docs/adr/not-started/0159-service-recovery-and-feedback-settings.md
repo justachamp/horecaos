@@ -58,7 +58,7 @@
   [ADR 0135](../partial/0135-object-storage-runtime-rustfs-replaces-minio.md),
   [ADR 0139](../partial/0139-staff-identity-the-staff-person-record.md),
   [ADR 0146](../not-started/0146-sms-gateway-contract.md),
-  [ADR 0149](../not-started/0149-languages-beyond-ru-uz-latn-and-en.md)
+  [ADR 0149](../partial/0149-languages-beyond-ru-uz-latn-and-en.md)
 - Supersedes / Superseded by: Amends [ADR 0071](../built/0071-order-reviews-a-rating-the-tenant-can-see.md)
   without replacing it: that record stays Accepted and Built, and this one does not
   edit it. It also reopens one decision each in
@@ -919,7 +919,7 @@ carries a comment or a note, and an erasure leaves ratings and nulls both.
   [ADR 0042](../partial/0042-courier-compensation-shifts-and-settlement.md),
   [ADR 0087](../built/0087-a-module-is-sold-on-its-own-unit-and-switches-features-on.md),
   [ADR 0140](../partial/0140-promotions-the-automatic-discount-and-markup-rule-engine.md) (the fact
-  pattern), [ADR 0149](../not-started/0149-languages-beyond-ru-uz-latn-and-en.md),
+  pattern), [ADR 0149](../partial/0149-languages-beyond-ru-uz-latn-and-en.md),
   [ADR 0145](../not-started/0145-map-and-geocoding-provider.md) (the record shape)
 - [`operations-gap-map.md`](../../operations-gap-map.md) rows `5.4`, `5.5`, `5.2h`, `6.2a`, `X.5`, `X.12`
 - [`frontend-information-architecture.md`](../../frontend-information-architecture.md) §5.4, §5.5 and

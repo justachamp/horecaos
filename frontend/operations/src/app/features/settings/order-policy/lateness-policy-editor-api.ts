@@ -18,13 +18,23 @@ export interface LatenessModeView {
   /** What the boards actually use for this mode. */
   readonly effectiveAtRiskBeforeSeconds: number;
   readonly lateAfterSeconds: number;
-  readonly noPromiseFallbackSeconds: number;
+  /** The mode's own no-promise fallback in seconds; null when it takes {@link LatenessEditorView.noPromiseDefault} (ADR 0150). */
+  readonly noPromiseFallbackSeconds: number | null;
+  /** What the boards actually use for an order of this mode with no promised time. */
+  readonly effectiveNoPromiseFallbackSeconds: number;
 }
 
 /** Mirrors `OrderLatenessPolicyEditorController.AtRiskDefaultResponse`. */
 export interface LatenessAtRiskDefault {
   readonly seconds: number;
   /** `SCALAR`: `ordering.at_risk_before_minutes` was set somewhere in the chain. `PLATFORM_DEFAULT`: nothing was. */
+  readonly source: 'SCALAR' | 'PLATFORM_DEFAULT';
+}
+
+/** Mirrors `OrderLatenessPolicyEditorController.NoPromiseDefaultResponse` (ADR 0150). */
+export interface LatenessNoPromiseDefault {
+  readonly seconds: number;
+  /** `SCALAR`: `ordering.late_order_threshold_minutes` was set somewhere in the chain. `PLATFORM_DEFAULT`: nothing was. */
   readonly source: 'SCALAR' | 'PLATFORM_DEFAULT';
 }
 
@@ -45,6 +55,7 @@ export interface LatenessEditorView {
   readonly pickup: LatenessModeView;
   readonly dineIn: LatenessModeView;
   readonly atRiskDefault: LatenessAtRiskDefault;
+  readonly noPromiseDefault: LatenessNoPromiseDefault;
   readonly isPlatformDefault: boolean;
   /** The scope whose document is in force; null when the platform default applies. */
   readonly winningScope: ConfigurationScopeType | null;
@@ -55,11 +66,11 @@ export interface LatenessEditorView {
   readonly inspectedLevels: readonly LatenessLevelView[];
 }
 
-/** One mode as it is sent: seconds throughout, an unset at-risk window as null. */
+/** One mode as it is sent: seconds throughout, an unset at-risk window or no-promise fallback as null. */
 export interface LatenessModeInput {
   readonly atRiskBeforeSeconds: number | null;
   readonly lateAfterSeconds: number;
-  readonly noPromiseFallbackSeconds: number;
+  readonly noPromiseFallbackSeconds: number | null;
 }
 
 /** Mirrors `OrderLatenessPolicyEditorController.AuthorLatenessPolicyRequest` — no tenantId; the path supplies it. */

@@ -57,7 +57,10 @@ export class InstallationsExplorer {
   protected readonly manageError = signal<string | null>(null);
   protected readonly checking = signal(false);
   protected readonly checkResult = signal<string | null>(null);
-  protected readonly changingBinding = signal<{ id: string; action: 'suspend' | 'activate' } | null>(null);
+  protected readonly changingBinding = signal<{
+    id: string;
+    action: 'suspend' | 'activate';
+  } | null>(null);
   protected readonly bindingReason = signal('');
   protected readonly bindingMessage = signal<string | null>(null);
 
@@ -78,13 +81,15 @@ export class InstallationsExplorer {
   protected readonly externalAccount = signal('');
   protected readonly installError = signal<string | null>(null);
   protected readonly environment = computed(
-    () => this.environments().find((candidate) => candidate.code === this.environmentCode()) ?? null,
+    () =>
+      this.environments().find((candidate) => candidate.code === this.environmentCode()) ?? null,
   );
   /** The name the provider gives its credential (Click's secret key, a bot token), when the build declares it. */
   protected readonly credentialField = computed(() => {
     const environment = this.environment();
     const declaration = this.declarations().find(
-      (candidate) => candidate.providerType.toLowerCase() === environment?.providerType.toLowerCase(),
+      (candidate) =>
+        candidate.providerType.toLowerCase() === environment?.providerType.toLowerCase(),
     );
     return declaration?.fields.find((field) => field.secret)?.key ?? null;
   });
@@ -163,7 +168,9 @@ export class InstallationsExplorer {
       ]);
       this.bindings.set(bindings);
       this.brands.set(brands);
-      const perBrand = await Promise.all(brands.map((b) => this.tenantsApi.getLocations(installation.tenantId, b.id)));
+      const perBrand = await Promise.all(
+        brands.map((b) => this.tenantsApi.getLocations(installation.tenantId, b.id)),
+      );
       this.locations.set(perBrand.flat());
     } catch (error) {
       this.manageError.set(this.i18n.describe(error as ApiError));
@@ -172,11 +179,13 @@ export class InstallationsExplorer {
 
   /** A binding's place by name: the brand, and the location when it names one. */
   protected placeOf(binding: BindingView): string {
-    const brand = this.brands().find((b) => b.id === binding.brandId)?.displayName ?? binding.brandId ?? '';
+    const brand =
+      this.brands().find((b) => b.id === binding.brandId)?.displayName ?? binding.brandId ?? '';
     if (binding.locationId === null) {
       return `${brand} · ${this.i18n.t('installationsExplorer.bindings.wholeBrand')}`;
     }
-    const location = this.locations().find((l) => l.id === binding.locationId)?.displayName ?? binding.locationId;
+    const location =
+      this.locations().find((l) => l.id === binding.locationId)?.displayName ?? binding.locationId;
     return `${brand} › ${location}`;
   }
 
@@ -189,7 +198,9 @@ export class InstallationsExplorer {
       const status = result.connectionStatus ?? 'SUCCEEDED';
       this.checkResult.set(this.i18n.t('installationsExplorer.check.result', { status }));
       this.installations.update((rows) =>
-        rows.map((row) => (row.id === installation.id ? { ...row, lastConnectionStatus: status } : row)),
+        rows.map((row) =>
+          row.id === installation.id ? { ...row, lastConnectionStatus: status } : row,
+        ),
       );
     } catch (error) {
       this.manageError.set(this.i18n.describe(error as ApiError));
@@ -199,7 +210,10 @@ export class InstallationsExplorer {
   }
 
   protected askBindingChange(binding: BindingView): void {
-    this.changingBinding.set({ id: binding.id, action: binding.status === 'ACTIVE' ? 'suspend' : 'activate' });
+    this.changingBinding.set({
+      id: binding.id,
+      action: binding.status === 'ACTIVE' ? 'suspend' : 'activate',
+    });
     this.bindingReason.set('');
     this.bindingMessage.set(null);
   }
@@ -215,9 +229,18 @@ export class InstallationsExplorer {
       const result =
         change.action === 'suspend'
           ? await this.api.suspendBinding(installation.tenantId, installation.id, change.id, reason)
-          : await this.api.activateBinding(installation.tenantId, installation.id, change.id, reason);
+          : await this.api.activateBinding(
+              installation.tenantId,
+              installation.id,
+              change.id,
+              reason,
+            );
       this.bindingMessage.set(
-        this.i18n.t(result.changed ? 'installationsExplorer.bindings.changed' : 'installationsExplorer.bindings.noChange'),
+        this.i18n.t(
+          result.changed
+            ? 'installationsExplorer.bindings.changed'
+            : 'installationsExplorer.bindings.noChange',
+        ),
       );
       this.changingBinding.set(null);
       this.bindings.set(await this.api.bindings(installation.tenantId, installation.id));
@@ -230,11 +253,15 @@ export class InstallationsExplorer {
   private async loadProviderDetail(installation: PlatformInstallationView): Promise<void> {
     if (installation.category === 'POS') {
       const matrix = await this.api.capabilityMatrix().catch(() => []);
-      const declared = matrix.find((row) => row.providerType.toLowerCase() === installation.providerType.toLowerCase());
+      const declared = matrix.find(
+        (row) => row.providerType.toLowerCase() === installation.providerType.toLowerCase(),
+      );
       this.declaredCapabilities.set(declared?.declaredCapabilities ?? []);
     }
     if (installation.providerType.toLowerCase() === 'clopos') {
-      const settings = await this.api.cloposSettings(installation.tenantId, installation.id).catch(() => null);
+      const settings = await this.api
+        .cloposSettings(installation.tenantId, installation.id)
+        .catch(() => null);
       this.clerkApproval.set(settings?.requireClerkApproval ?? null);
     }
   }
@@ -288,7 +315,12 @@ export class InstallationsExplorer {
     try {
       const secretReference =
         value.trim().length > 0 && acceptsCredential(environment.category)
-          ? await this.api.writeCredential(tenantId, environment.category, environment.providerType, value)
+          ? await this.api.writeCredential(
+              tenantId,
+              environment.category,
+              environment.providerType,
+              value,
+            )
           : undefined;
       await this.api.install(tenantId, {
         category: environment.category,
@@ -302,7 +334,11 @@ export class InstallationsExplorer {
       this.displayName.set('');
       this.externalAccount.set('');
       this.environmentCode.set('');
-      this.actionMessage.set(this.i18n.t('installationsExplorer.install.done', { tenant: this.directory.nameOf(tenantId) }));
+      this.actionMessage.set(
+        this.i18n.t('installationsExplorer.install.done', {
+          tenant: this.directory.nameOf(tenantId),
+        }),
+      );
       await this.load();
     } catch (error) {
       this.installError.set(this.i18n.describe(error as ApiError));
@@ -370,7 +406,9 @@ export class InstallationsExplorer {
       this.bindingMessage.set(this.i18n.t('installationsExplorer.rotate.done'));
       const now = new Date().toISOString();
       this.installations.update((rows) =>
-        rows.map((row) => (row.id === installation.id ? { ...row, lastSecretRotatedAt: now } : row)),
+        rows.map((row) =>
+          row.id === installation.id ? { ...row, lastSecretRotatedAt: now } : row,
+        ),
       );
     } catch (error) {
       this.manageError.set(this.i18n.describe(error as ApiError));
@@ -379,7 +417,10 @@ export class InstallationsExplorer {
     }
   }
 
-  protected async setClerkApproval(installation: PlatformInstallationView, required: boolean): Promise<void> {
+  protected async setClerkApproval(
+    installation: PlatformInstallationView,
+    required: boolean,
+  ): Promise<void> {
     if (this.busy()) {
       return;
     }

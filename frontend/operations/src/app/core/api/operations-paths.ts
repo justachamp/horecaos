@@ -56,6 +56,15 @@ export const operationsPaths = {
   },
 
   /**
+   * `POST`: opens today's delivery orders of this branch as map points (rows `7.10a`, `3.1`; ADR 0145
+   * decision 8). A dispatcher-scope reveal with a stated purpose and one audit fact, never a
+   * reporting fact. Mutation: key required.
+   */
+  orderMapPointReveals(scope: LocationScope): string {
+    return `${this.orders(scope)}/map-point-reveals`;
+  },
+
+  /**
    * The order board (orders.md §2.4, ADR 0102, wave P07) — the branch's
    * orders, filtered in the database and cursor-paged, superseding {@link
    * orders} for any caller that needs a filter this console's toolbar offers
@@ -412,7 +421,7 @@ export const operationsPaths = {
     return `${this.conversation(scope, conversationId)}/replies`;
   },
 
-  /** Take a FLOW_ACTIVE conversation over from the flow engine. Mutation: key and `If-Match`. */
+  /** Take a conversation over from the flow engine or, since ADR 0069, the assistant. Mutation: key and `If-Match`. */
   conversationTakeover(scope: LocationScope, conversationId: string): string {
     return `${this.conversation(scope, conversationId)}/takeover`;
   },
@@ -425,6 +434,14 @@ export const operationsPaths = {
   /** Close a conversation. Mutation: key and `If-Match`. */
   conversationClose(scope: LocationScope, conversationId: string): string {
     return `${this.conversation(scope, conversationId)}/close`;
+  },
+
+  /**
+   * "Why did it say that" (ADR 0069): one assistant turn's outcome and the facts it stood on, read
+   * from the id an `ASSISTANT` message carries. Brand-scoped like {@link conversations}.
+   */
+  assistantTurn(scope: LocationScope, turnId: string): string {
+    return `${OPERATIONS}${tenantBrand(scope)}/assistant/turns/${encodeURIComponent(turnId)}`;
   },
 
   /**
@@ -707,6 +724,21 @@ export const operationsPaths = {
   /** Approves a pending enrolment by the `userCode` a new device's own screen shows. */
   kitchenDeviceApprove(scope: LocationScope, userCode: string): string {
     return `${this.kitchenDevices(scope)}/enrolments/${encodeURIComponent(userCode)}/approve`;
+  },
+
+  /** What a pending code claims (ADR 0151): the class the device asked for, read before approving. */
+  kitchenDeviceEnrolment(scope: LocationScope, userCode: string): string {
+    return `${this.kitchenDevices(scope)}/enrolments/${encodeURIComponent(userCode)}`;
+  },
+
+  /** A wall display's configuration (ADR 0151): which station it shows. */
+  kitchenDeviceDisplay(scope: LocationScope, deviceId: string): string {
+    return `${this.kitchenDevices(scope)}/${encodeURIComponent(deviceId)}/display`;
+  },
+
+  /** An enrolled kitchen device reads its own record (ADR 0151). Not under a branch: the device learns its branch from it. */
+  deviceSelf(): string {
+    return '/api/v1/devices/me';
   },
 
   /** Revokes one enrolled device. Idempotent — revoking an already-revoked device is not an error. */

@@ -3,14 +3,12 @@
 
 What it is for
 --------------
-The prettier gate for the apps whose tree is not prettier-clean yet. `operations`,
-`storefront` and `storefront-milliy` were each reformatted in one commit, so CI runs the plain
-`npm run format:check` for them and this script is only a local shortcut there. `control-plane`
-still has on the order of a hundred files that predate its prettier config, and a blanket
-reformat while other branches are open would conflict with every one of them; for it CI runs
-this script instead, so the ratchet is: a file a change adds or edits must be prettier-clean.
-Once nothing is in flight, reformat the app in one commit, switch its CI step to
-`npm run format:check`, and stop calling this script for it.
+A fast local shortcut: check only the files you changed before pushing, without prettier
+walking the whole tree. CI does not call it. Every app's `src/` tree is prettier-clean, so CI
+runs the plain `npm run format:check` for all four (`operations`, `storefront`,
+`storefront-milliy`, and `control-plane`, which was the last one on a changed-files ratchet
+until it was reformatted in one commit). The script remains for the local case and its own
+tests (`test_format_changed.py`, which also pins how ci.yml wires the lint and format steps).
 
 What "touched" means
 --------------------
@@ -173,7 +171,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "\nformat_changed: the [warn] files above are not prettier-formatted. Fix them with\n"
             f"  cd frontend/{args.app} && npx prettier --write <those files>\n"
             "(only files this change touched are checked here; `npm run format:check` checks the whole tree,"
-            " which CI runs only for operations).",
+            " which is what CI runs for every app).",
             file=sys.stderr,
         )
     return status

@@ -94,7 +94,84 @@ public enum CacheRegistry {
             "staff.display_names",
             Duration.ofMinutes(10),
             20_000,
-            "StaffMemberChanged (evicted on every profile write)");
+            "StaffMemberChanged (evicted on every profile write)"),
+
+    /**
+     * Geocoder answers (ADR 0145, ADR 0033), keyed by tenant, region and version, locale,
+     * operation and a keyed hash of the normalized query.
+     *
+     * <p>Thirty days, which is the narrowest licence limit in force: Yandex's standard terms
+     * let results be cached for up to thirty days, and a longer life would be a storage
+     * decision the record deliberately did not make (ADR 0145 decision 5). There is no
+     * invalidation event, and none is needed: a stale answer is a suggestion a person looks
+     * at on a map before it becomes a pin, and editing a region changes its version, which is
+     * part of the key. Only non-empty answers are held.
+     *
+     * <p>An entry is personal data (ADR 0029): it holds an address. It lives in process
+     * memory only, under a key that carries a hash and never the query text, and is held to
+     * the rules of the address it came from.
+     */
+    GEO_RESPONSES(
+            "geo.responses",
+            Duration.ofDays(30),
+            20_000,
+            "none: the TTL is the provider licence limit, and a region edit changes the key"),
+
+    /**
+     * The road routes the OSRM adapter has measured (ADR 0147, decision 4), keyed by
+     * tenant, installation, the branch's exact point, the destination rounded to four
+     * decimals (about 11 m) and the routing dataset version.
+     *
+     * <p>Twenty-four hours, because a road network does not change between two
+     * checkouts and a repeated destination is the common case, and no event ever
+     * evicts: the dataset version is part of the key, so a new image tag simply
+     * misses every entry and the old ones age out. The installation is re-read from
+     * the database on every call before this is consulted, so suspending it (the
+     * rollback) takes effect at once rather than a TTL later.
+     *
+     * <p>A performance aid and never an authority. The fee row stores the metres it
+     * used, not a cache key, and an entry lost to eviction or a restart costs one
+     * engine call.
+     */
+    ROUTING_ROAD_ROUTES(
+            "routing.road_routes",
+            Duration.ofHours(24),
+            50_000,
+            "none: the dataset version is part of the key, so a new dataset misses every entry"),
+
+    /**
+     * ADR 0148: the authenticators a staff account holds at Keycloak, keyed by subject, for the
+     * staff list's «Способ входа» column and the person card.
+     *
+     * <p>Sixty seconds, evicted by every enrolment, removal and reset the platform performs. It
+     * holds ids, labels and dates and never a secret, because the identity provider returns none.
+     * Nothing decides on it: a sign-in asks Keycloak, and the requirement is evaluated from the
+     * grant tables, fresh.
+     */
+    IAM_STAFF_MFA_CREDENTIALS(
+            "iam.staff_mfa_credentials",
+            Duration.ofSeconds(60),
+            5_000,
+            "StaffMfaService (evicted on every enrolment, removal and reset)"),
+
+    /**
+     * ADR 0069: the model's reply to a question already answered from exactly the same
+     * facts -- "identical grounded questions are served from cache".
+     *
+     * <p>The key is the tenant, the brand, the reply language and a digest of the
+     * question's skeleton <em>and of every retrieved fact</em>, so a price that changed,
+     * a dish that sold out and a knowledge entry that was republished are each a
+     * different key: nothing needs evicting, and a cached reply is by construction one
+     * composed from the facts a fresh retrieval just returned. The facts are read live on
+     * every turn; this saves only the model call. Never holds a reply composed from a
+     * customer's own order, and the value is a reply and its citations -- no customer text.
+     * The five-minute TTL only bounds how long an unused entry occupies memory.
+     */
+    ASSISTANT_GROUNDED_REPLIES(
+            "assistant.grounded_replies",
+            Duration.ofMinutes(5),
+            5_000,
+            "None needed: the key carries a digest of the retrieved facts, so changed facts miss");
 
     private static final Map<String, CacheRegistry> BY_NAME = Arrays.stream(values())
             .collect(Collectors.toUnmodifiableMap(CacheRegistry::cacheName, Function.identity()));

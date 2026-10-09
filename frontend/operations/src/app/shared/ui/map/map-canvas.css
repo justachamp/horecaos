@@ -1,0 +1,27 @@
+.q-map {
+  display: grid;
+  gap: 8px;
+}
+
+.q-map__surface {
+  width: 100%;
+  height: var(--q-map-height, 360px);
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-surface-1);
+  overflow: hidden;
+}
+
+.q-map__status {
+  margin: 0;
+  color: var(--q-ink-subtle);
+}
+
+.q-map__retry {
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  padding: 2px 8px;
+  background: var(--q-surface-0, transparent);
+  color: inherit;
+  cursor: pointer;
+}

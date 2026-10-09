@@ -49,6 +49,8 @@ import uz.horecaos.platform.inventory.api.StockAvailabilityPort;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.ordering.api.RejectReasonDirectory;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.cache.RateLimiter;
@@ -257,6 +259,20 @@ public class TelegramUpdateHandler {
         // additive.
         if (message.get("contact") instanceof Map<?, ?> rawContact) {
             handleContactShare(installation, asMap(rawContact), message);
+            return;
+        }
+
+        // ADR 0069: a shared position carries no "text" either. Private chats only,
+        // and only when the chat is the sender's own -- every other shape of
+        // message without text stays the silent no-op it always was.
+        if (message.get("location") instanceof Map<?, ?> rawLocation
+                && message.get("chat") instanceof Map<?, ?> locationChat
+                && "private".equals(String.valueOf(locationChat.get("type")))
+                && locationChat.get("id") instanceof Number locationChatId
+                && rawLocation.get("latitude") instanceof Number latitude
+                && rawLocation.get("longitude") instanceof Number longitude) {
+            handlePrivateSharedLocation(
+                    installation, locationChatId.longValue(), latitude.doubleValue(), longitude.doubleValue());
             return;
         }
 
@@ -710,12 +726,7 @@ public class TelegramUpdateHandler {
     /** {@code ru}/{@code uz-Latn}/{@code en} label lookup, same fallback order {@link TelegramBotMessages#pick} uses. */
     private String rejectReasonLabel(RejectReasonDirectory.Option option) {
         Map<String, String> labels = option.labelsByLocale();
-        String resolved =
-                switch (defaultLocale == null ? "" : defaultLocale.toLowerCase(Locale.ROOT)) {
-                    case "uz-latn", "uz" -> labels.get("uz-Latn");
-                    case "en" -> labels.get("en");
-                    default -> labels.get("ru");
-                };
+        String resolved = labels.get(PlatformLocales.resolve(defaultLocale, Tier.MESSAGES));
         return resolved != null ? resolved : option.code();
     }
 
@@ -1094,10 +1105,32 @@ public class TelegramUpdateHandler {
             return;
         }
         Optional<UUID> brandId = resolveBrandForChat(installation, chatId);
-        if (brandId.isEmpty() || !conversations.hasActiveFlow(installation.tenantId(), brandId.get())) {
+        // ADR 0069: "an active flow exists" widened to "the engine has something to
+        // do with this text" -- a flow, or a participant willing to answer the long
+        // tail the flows do not model. Without a flow the text is still only ever
+        // recorded or answered by a participant; no flow is started by it.
+        if (brandId.isEmpty() || !conversations.acceptsFreeText(installation.tenantId(), brandId.get())) {
             return;
         }
         conversations.handleText(channelRef(installation, brandId.get(), chatId), text);
+    }
+
+    /**
+     * ADR 0069: a map position shared in a private chat, offered to the
+     * conversations engine so a participant can answer whether a branch delivers
+     * to it. Same gates as {@link #handlePrivateFreeText}; the engine records
+     * only that a position was shared, never the coordinates.
+     */
+    private void handlePrivateSharedLocation(
+            WebhookInstallation installation, long chatId, double latitude, double longitude) {
+        if (!entitlements.featureEnabled(installation.tenantId(), EntitlementKeys.TELEGRAM_CONVERSATIONS_ENABLED)) {
+            return;
+        }
+        Optional<UUID> brandId = resolveBrandForChat(installation, chatId);
+        if (brandId.isEmpty() || !conversations.acceptsFreeText(installation.tenantId(), brandId.get())) {
+            return;
+        }
+        conversations.handleSharedLocation(channelRef(installation, brandId.get(), chatId), latitude, longitude);
     }
 
     /**

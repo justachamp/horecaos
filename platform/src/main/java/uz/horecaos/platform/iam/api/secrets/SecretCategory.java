@@ -24,6 +24,58 @@ public enum SecretCategory {
      */
     PROVIDER_MARKETPLACE,
 
+    /**
+     * ADR 0145 decision 4: the platform's one key for the map provider's server-side geocoder
+     * (suggest, geocode, reverse geocode).
+     *
+     * <p>Platform-owned, and so deliberately <em>not</em> {@link #tenantWritable()}: one licence
+     * serves every tenant, no tenant holds a relationship with the vendor, and a door that let a
+     * tenant write here would let a tenant administrator replace the key every other tenant's
+     * address search runs on. The owner writes it as an operator, the same way the database
+     * password and the object-storage credentials are written
+     * ({@code bao kv put horecaos/production/provider_geocoding/platform/<id> value=...}), and
+     * the application only ever reads it. The browser key is a different thing: it is public by
+     * construction, is delivered by {@code GET .../map-config}, and is plain configuration.
+     */
+    PROVIDER_GEOCODING,
+
+    /**
+     * ADR 0069: the platform's own account with the language-model provider
+     * behind the grounded assistant. Platform-owned like {@link #IDENTITY_ADMIN}
+     * and {@link #DATA_ENCRYPTION}: the provider is a processor the tenant did
+     * not choose, so no tenant action may write or replace its credential
+     * ({@link #tenantWritable()} is false). An operator stores it out of band
+     * and the application only reads it.
+     */
+    PROVIDER_ASSISTANT,
+
+    /**
+     * ADR 0070: the secret a CONFIDENTIAL storefront app presents beside its app
+     * id. The platform mints the value, writes it here once, and the vendor is
+     * shown it once; what the registry keeps is this reference. Unlike the other
+     * {@code PROVIDER_*} categories the application does resolve it, on every
+     * request that carries the app's secret header, to compare in constant time.
+     *
+     * <p>Written through the same door as the rest, by the control plane's
+     * registration and rotation and by nothing a tenant reaches: the owner scope
+     * is a platform-derived constant, never a tenant's.
+     */
+    PROVIDER_STOREFRONT_APP,
+
+    /**
+     * ADR 0096: HorecaOS's own account with an e-invoicing operator (Didox,
+     * Faktura.uz) -- the platform is the seller on every invoice it sends, so
+     * this credential is the platform's, not any tenant's.
+     *
+     * <p>Platform-owned: an operator puts the value there with {@code bao kv put}
+     * (ADR 0028, "every secret outside a provider installation ... is still
+     * manual") and the platform installation stores only the reference.
+     * Deliberately not {@link #tenantWritable()}: no tenant action may ever
+     * overwrite the account HorecaOS invoices its tenants through. The value is
+     * one JSON object of the operator's own login fields, never logged.
+     */
+    PROVIDER_EINVOICING,
+
     /** Keycloak service-account credentials, per ADR 0009. */
     IDENTITY_ADMIN,
 
@@ -48,6 +100,7 @@ public enum SecretCategory {
                 || this == PROVIDER_DELIVERY
                 || this == PROVIDER_NOTIFICATION
                 || this == PROVIDER_VOICE
-                || this == PROVIDER_MARKETPLACE;
+                || this == PROVIDER_MARKETPLACE
+                || this == PROVIDER_STOREFRONT_APP;
     }
 }

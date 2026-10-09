@@ -158,6 +158,18 @@ export interface TenantArrearsView {
     readonly total: Money;
     readonly issuedAt: string;
   } | null;
+  /**
+   * What the tenant still owes on issued statements and on how many, or null
+   * when it owes nothing. ADR 0095: the wallet pays a statement at issue, so
+   * this is only the part the wallet did not cover.
+   */
+  readonly owed: { readonly due: Money; readonly openStatements: number } | null;
+  /** Which ways of paying exist for this tenant right now, so the banner can offer one. */
+  readonly waysToPay: {
+    readonly cardOnFile: boolean;
+    readonly cardPaymentsAvailable: boolean;
+    readonly bankTransferAvailable: boolean;
+  };
 }
 
 /** Mirrors `CommercialOperationsController.UsageResponse`. */
@@ -204,10 +216,14 @@ export interface UsageView {
  * `endModule`. A tenant undoes a module it bought itself and no other: one
  * HorecaOS assigned stays HorecaOS's to end (`TenantModuleView.acquiredVia`).
  *
+ * **The prepaid wallet is `WalletApi`'s** (`wallet/wallet-api.ts`, ADR 0095):
+ * its own screen, its own client. This one only reads what the arrears banner
+ * needs of it — what is owed and which ways of paying exist (`arrears`).
+ *
  * **What is still not.** Period close is HorecaOS-staff work — ADR 0088
  * decided a month is closed by issuing its statement, deliberately manual
  * until tax and invoicing are approved — so there is nothing for this screen
- * to add for it. The prepaid wallet stays blocked on ADR 0095.
+ * to add for it.
  */
 @Injectable({ providedIn: 'root' })
 export class CommercialApi {

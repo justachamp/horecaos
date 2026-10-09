@@ -20,7 +20,8 @@ export type ScopeType = 'PLATFORM' | 'TENANT' | 'BRAND' | 'LOCATION';
 /** ConfigurationController.TraceLevel. */
 export interface TraceLevelView {
   readonly scopeType: ScopeType;
-  readonly outcome: 'NOT_SET' | 'VALUE' | 'EXPLICIT_NULL_CONTINUED' | 'EXPLICIT_NULL_TERMINATED' | (string & {});
+  readonly outcome:
+    'NOT_SET' | 'VALUE' | 'EXPLICIT_NULL_CONTINUED' | 'EXPLICIT_NULL_TERMINATED' | (string & {});
 }
 
 /**
@@ -133,7 +134,10 @@ export class ConfigurationApi {
    * declare settable, a value whose shape does not match the key's declared
    * type, or a stale `expectedVersion` (`STALE_VERSION`).
    */
-  async setValue(keyCode: string, request: SetConfigurationValueRequest): Promise<ConfigurationValueView> {
+  async setValue(
+    keyCode: string,
+    request: SetConfigurationValueRequest,
+  ): Promise<ConfigurationValueView> {
     return firstValueFrom(
       this.api.post<ConfigurationValueView>(
         `/api/v1/control-plane/configuration/keys/${encodeURIComponent(keyCode)}/values`,

@@ -15,6 +15,7 @@ import { deliveryEn } from './messages/delivery.en';
 import { couriersEn } from './messages/couriers.en';
 import { deviceEn } from './messages/device.en';
 import { wallboardEn } from './messages/wallboard.en';
+import { mapEn } from './messages/map.en';
 
 /**
  * The canonical message catalogue.
@@ -64,6 +65,7 @@ export const messagesEn = {
   ...couriersEn,
   ...deviceEn,
   ...wallboardEn,
+  ...mapEn,
 } as const;
 
 /** Every key the application may ask for. Derived, never hand-maintained. */

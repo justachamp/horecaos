@@ -46,6 +46,18 @@ public class MarketingDeliveryConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(MarketingDeliveryConfiguration.class);
 
+    /**
+     * Nothing can address a courier by number in this build (see {@link
+     * uz.horecaos.platform.marketing.api.CourierContactSource}), so the default
+     * answers {@code false} and a courier broadcast is refused with a stable
+     * code instead of being recorded as sent.
+     */
+    @Bean
+    @ConditionalOnMissingBean(uz.horecaos.platform.marketing.api.CourierContactSource.class)
+    uz.horecaos.platform.marketing.api.CourierContactSource unwiredCourierContactSource() {
+        return () -> false;
+    }
+
     @Bean
     @ConditionalOnMissingBean(CampaignMessagePort.class)
     CampaignMessagePort unwiredCampaignMessagePort() {
@@ -68,8 +80,8 @@ public class MarketingDeliveryConfiguration {
             }
 
             @Override
-            public boolean isWired(String channel) {
-                return false;
+            public Wiring wiring(UUID tenantId, UUID brandId, String channel, String purpose) {
+                return Wiring.no("NO_DELIVERY_ADAPTER");
             }
 
             @Override

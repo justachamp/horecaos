@@ -73,7 +73,12 @@ describe('ConsoleShell', () => {
     // fiscal reads scoped by tenant) is the same one their fuller screens use.
     session.held.set(new Set<string>(['TENANT_READ']));
     fixture.detectChanges();
-    expect(railLabels()).toEqual(['Обзор', 'Клиенты', 'Глобальный поиск', 'Очередь проблем клиента']);
+    expect(railLabels()).toEqual([
+      'Обзор',
+      'Клиенты',
+      'Глобальный поиск',
+      'Очередь проблем клиента',
+    ]);
   });
 
   it('never renders more rail links than routed sections, however much is granted', () => {
@@ -102,7 +107,7 @@ describe('ConsoleShell', () => {
       ]),
     );
     fixture.detectChanges();
-    expect(railLabels()).toHaveLength(40);
+    expect(railLabels()).toHaveLength(41);
   });
 
   it('names the operator in the rail', () => {

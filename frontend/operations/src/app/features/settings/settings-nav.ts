@@ -136,6 +136,15 @@ export const SETTINGS_NAVIGATION: readonly SettingsNavGroup[] = [
         description: 'settings.home.description.notifications',
         builtRoute: true,
       },
+      {
+        // ADR 0069: the assistant that answers customers in the Telegram bot -- its switch, what it
+        // costs this month, what it says first, and the notes it answers from. Beside Notifications
+        // because it is the other thing a customer is told by the business.
+        path: 'assistant',
+        label: 'settings.nav.assistant',
+        description: 'settings.home.description.assistant',
+        builtRoute: true,
+      },
     ],
   },
   {
@@ -145,6 +154,13 @@ export const SETTINGS_NAVIGATION: readonly SettingsNavGroup[] = [
         path: 'integrations',
         label: 'settings.nav.integrations',
         description: 'settings.home.description.integrations',
+        builtRoute: true,
+      },
+      {
+        // 10.15 Storefront apps (ADR 0070): which registered storefronts may serve each brand.
+        path: 'storefront-apps',
+        label: 'settings.nav.storefrontApps',
+        description: 'settings.home.description.storefrontApps',
         builtRoute: true,
       },
     ],

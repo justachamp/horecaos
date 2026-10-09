@@ -14,6 +14,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import uz.horecaos.platform.customers.infrastructure.security.CustomerSessionAuthenticationFilter;
 import uz.horecaos.platform.customers.infrastructure.security.CustomerSessionBearerTokenResolver;
 import uz.horecaos.platform.observability.LocalMetricsScrapeMatcher;
+import uz.horecaos.platform.storefrontapps.infrastructure.web.StorefrontAppIdentityFilter;
 
 @Configuration(proxyBeanMethods = false)
 @EnableMethodSecurity
@@ -29,15 +30,24 @@ public class SecurityConfiguration {
      * without it the resource server would grab a customer token first, hand it to
      * the JWT decoder, and answer a signed-in customer with a complaint about a
      * malformed token.
+     *
+     * <p>ADR 0070: {@code appIdentity} runs before both. A storefront request names the app
+     * that is asking in addition to the customer's session, and it is checked first, on the
+     * {@code permitAll} browse paths as much as the authenticated ones — those paths are
+     * anonymous for the <em>customer</em> and were never meant to be anonymous for the
+     * <em>app</em>. The filter looks only at {@code /api/v1/storefront/**}, so no other
+     * surface's behaviour changes.
      */
     @Bean
     SecurityFilterChain apiSecurity(
             HttpSecurity http,
             LocalMetricsScrapeMatcher localMetricsScrape,
             CustomerSessionAuthenticationFilter customerSessions,
+            StorefrontAppIdentityFilter appIdentity,
             CustomerSessionBearerTokenResolver bearerTokenResolver)
             throws Exception {
         return http.addFilterBefore(customerSessions, BearerTokenAuthenticationFilter.class)
+                .addFilterBefore(appIdentity, CustomerSessionAuthenticationFilter.class)
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
@@ -180,6 +190,13 @@ public class SecurityConfiguration {
                                 // would protect. See StorefrontAnalyticsConfigController's
                                 // own doc comment.
                                 "/api/v1/storefront/tenants/*/brands/*/analytics",
+                                // ADR 0149: which languages exist and where each is live. A
+                                // read of code, not of a table -- the same answer for every
+                                // tenant and every visitor, naming nobody -- and wanted before
+                                // an account exists, because the language picker is the first
+                                // thing a storefront paints. The staff surfaces' twins stay
+                                // behind a session.
+                                "/api/v1/storefront/locales",
                                 // ADR 0047: the guest's own running bill. Outside
                                 // the resource server's principal model on purpose
                                 // — see the POST pair below — and authorised by the
@@ -331,6 +348,16 @@ public class SecurityConfiguration {
                         // registration ever had anything to prove.
                         .requestMatchers(HttpMethod.POST, "/providers/telegram/*/webhook")
                         .permitAll()
+                        // ADR 0146 Decision 4: an SMS gateway's delivery receipts.
+                        // Authenticated inside SmsReceiptController (a
+                        // per-installation secret where the provider can carry
+                        // one, the edge allowlist where it cannot), and every
+                        // refusal there is the same 404, so a provider type with
+                        // no receipt source is unreachable rather than
+                        // unauthenticated. Without this line the callback would
+                        // meet anyRequest().authenticated() and a bodyless 401.
+                        .requestMatchers(HttpMethod.POST, "/providers/sms/*/receipts")
+                        .permitAll()
                         // ADR 0062: staff sign in on a first-party page instead of a
                         // Keycloak redirect, and the backend takes the credentials to
                         // Keycloak on the caller's behalf. Sign-in is unavoidably
@@ -359,6 +386,22 @@ public class SecurityConfiguration {
                                 HttpMethod.DELETE,
                                 "/api/v1/control-plane/auth/sessions/current",
                                 "/api/v1/operations/auth/sessions/current")
+                        .permitAll()
+                        // ADR 0148: enrolling a second factor, on both staff prefixes. The two
+                        // POSTs authenticate their caller themselves, by a session when there is
+                        // one and otherwise by the enrolment ticket a refused sign-in carried:
+                        // the account a rule has just locked out of the console has no session to
+                        // present, which is exactly who needs these. Both re-prove the current
+                        // password, so a ticket alone enrols nothing, and a ticket is sealed to the
+                        // one account it was issued for and the one purpose. An invalid bearer is
+                        // still refused here, as everywhere on this chain. The list and the removal
+                        // of an authenticator are not opened: they need a session.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/control-plane/auth/mfa/enrolments",
+                                "/api/v1/control-plane/auth/mfa/enrolments/confirm",
+                                "/api/v1/operations/auth/mfa/enrolments",
+                                "/api/v1/operations/auth/mfa/enrolments/confirm")
                         .permitAll()
                         // ADR 0097: an invited owner setting up their account. They have
                         // no password yet, so there is no session to authenticate with;

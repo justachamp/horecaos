@@ -42,7 +42,7 @@
             "type" : "boolean"
           },
           "requestedCapability" : {
-            "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "INVENTORY_AVAILABILITY_MANAGE", "INVENTORY_STOP_MANAGE", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PAYMENT_WINDOW_MANAGE", "ORDER_PLACE", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "PAYMENT_METHOD_READ", "PAYMENT_METHOD_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "DELIVERY_POLICY_READ", "DELIVERY_POLICY_WRITE", "DELIVERY_DISPATCH_RULES_READ", "DELIVERY_DISPATCH_RULES_WRITE", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "COURIER_BROADCAST_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_SHIFT_RECEIVE", "MARKETPLACE_AVAILABILITY_PULL", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_VERIFY", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_CREATE", "CUSTOMER_PII_REVEAL", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_SYNC_MANAGE", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_ROUTING_MANAGE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "MARKETING_LINK_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "COMMERCIAL_MODULE_READ", "COMMERCIAL_ARREARS_READ", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "REPORT_EXPORT", "CUSTOMER_PII_EXPORT", "REPORTING_CLASSIFICATION_RUN", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_DELIVERY_READ", "COURIER_OFFER_ACCEPT", "COURIER_OFFER_DECLINE", "COURIER_DELIVERY_ADVANCE", "COURIER_DELIVERY_PAYMENT_CONFIRM", "COURIER_DELIVERY_LOCATION_REVEAL", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "STAFF_PROFILE_READ", "STAFF_PROFILE_MANAGE", "STAFF_EMERGENCY_CONTACT_READ", "STAFF_SELF_MANAGE", "PLATFORM_ADMIN" ],
+            "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "INVENTORY_AVAILABILITY_MANAGE", "INVENTORY_STOP_MANAGE", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PAYMENT_WINDOW_MANAGE", "ORDER_PLACE", "ORDER_POINTS_REVEAL", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "PAYMENT_METHOD_READ", "PAYMENT_METHOD_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "GEO_LOOKUP", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "DELIVERY_POLICY_READ", "DELIVERY_POLICY_WRITE", "DELIVERY_DISPATCH_RULES_READ", "DELIVERY_DISPATCH_RULES_WRITE", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "COURIER_BROADCAST_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_DISPLAY_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_SHIFT_RECEIVE", "MARKETPLACE_AVAILABILITY_PULL", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_VERIFY", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_CREATE", "CUSTOMER_PII_REVEAL", "CUSTOMER_LEAD_READ", "CUSTOMER_LEAD_MANAGE", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "STOREFRONT_APP_REGISTRY_MANAGE", "STOREFRONT_APP_AUTHORISE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_SYNC_MANAGE", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_ROUTING_MANAGE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "MARKETING_OFFER_MANAGE", "MARKETING_CONTACT_POLICY_MANAGE", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "MARKETING_LINK_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "COMMERCIAL_MODULE_READ", "COMMERCIAL_ARREARS_READ", "COMMERCIAL_WALLET_TOPUP", "COMMERCIAL_CARD_MANAGE", "COMMERCIAL_EINVOICE_SEND", "COMMERCIAL_EINVOICING_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "IAM_STAFF_MFA_READ", "IAM_STAFF_MFA_RESET", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "REPORT_EXPORT", "CUSTOMER_PII_EXPORT", "REPORTING_CLASSIFICATION_RUN", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_DELIVERY_READ", "COURIER_OFFER_ACCEPT", "COURIER_OFFER_DECLINE", "COURIER_DELIVERY_ADVANCE", "COURIER_DELIVERY_PAYMENT_CONFIRM", "COURIER_DELIVERY_LOCATION_REVEAL", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "ASSISTANT_READ", "ASSISTANT_KNOWLEDGE_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "STAFF_PROFILE_READ", "STAFF_PROFILE_MANAGE", "STAFF_EMERGENCY_CONTACT_READ", "STAFF_SELF_MANAGE", "PLATFORM_ADMIN" ],
             "type" : "string"
           },
           "view" : {
@@ -412,8 +412,17 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "depositDue" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
           "latestStatement" : {
             "$ref" : "#/components/schemas/LatestStatementView"
+          },
+          "owed" : {
+            "$ref" : "#/components/schemas/OwedView"
+          },
+          "paidInFull" : {
+            "type" : "boolean"
           },
           "planCode" : {
             "type" : "string"
@@ -788,6 +797,21 @@
         },
         "type" : "object"
       },
+      "AuthenticatorResponse" : {
+        "properties" : {
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "AuthorFlowDocumentRequest" : {
         "properties" : {
           "activate" : {
@@ -918,10 +942,62 @@
         },
         "type" : "object"
       },
+      "BankDetailsView" : {
+        "properties" : {
+          "account" : {
+            "type" : "string"
+          },
+          "approvedBy" : {
+            "type" : "string"
+          },
+          "bankName" : {
+            "type" : "string"
+          },
+          "beneficiary" : {
+            "type" : "string"
+          },
+          "configured" : {
+            "type" : "boolean"
+          },
+          "mfo" : {
+            "type" : "string"
+          },
+          "taxId" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "type" : "string"
+          },
+          "updatedBy" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "BeginEnrolmentRequest" : {
+        "properties" : {
+          "enrolmentTicket" : {
+            "maxLength" : 2048,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "password" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "password" ],
+        "type" : "object"
+      },
       "BeginRequest" : {
         "properties" : {
           "deviceClass" : {
-            "enum" : [ "KITCHEN_KDS" ],
+            "enum" : [ "KITCHEN_KDS", "KITCHEN_VDU" ],
             "type" : "string"
           },
           "label" : {
@@ -1542,6 +1618,17 @@
         },
         "type" : "object"
       },
+      "CancelInvoiceRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "CandidateView" : {
         "properties" : {
           "correlationEchoed" : {
@@ -1578,7 +1665,7 @@
             "type" : "array"
           },
           "category" : {
-            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "OTHER" ],
+            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "ROUTING", "ASSISTANT", "OTHER" ],
             "type" : "string"
           },
           "installationId" : {
@@ -1612,7 +1699,7 @@
           },
           "capabilities" : {
             "items" : {
-              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "INVENTORY_AVAILABILITY_MANAGE", "INVENTORY_STOP_MANAGE", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PAYMENT_WINDOW_MANAGE", "ORDER_PLACE", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "PAYMENT_METHOD_READ", "PAYMENT_METHOD_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "DELIVERY_POLICY_READ", "DELIVERY_POLICY_WRITE", "DELIVERY_DISPATCH_RULES_READ", "DELIVERY_DISPATCH_RULES_WRITE", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "COURIER_BROADCAST_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_SHIFT_RECEIVE", "MARKETPLACE_AVAILABILITY_PULL", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_VERIFY", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_CREATE", "CUSTOMER_PII_REVEAL", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_SYNC_MANAGE", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_ROUTING_MANAGE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "MARKETING_LINK_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "COMMERCIAL_MODULE_READ", "COMMERCIAL_ARREARS_READ", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "REPORT_EXPORT", "CUSTOMER_PII_EXPORT", "REPORTING_CLASSIFICATION_RUN", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_DELIVERY_READ", "COURIER_OFFER_ACCEPT", "COURIER_OFFER_DECLINE", "COURIER_DELIVERY_ADVANCE", "COURIER_DELIVERY_PAYMENT_CONFIRM", "COURIER_DELIVERY_LOCATION_REVEAL", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "STAFF_PROFILE_READ", "STAFF_PROFILE_MANAGE", "STAFF_EMERGENCY_CONTACT_READ", "STAFF_SELF_MANAGE", "PLATFORM_ADMIN" ],
+              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "INVENTORY_AVAILABILITY_MANAGE", "INVENTORY_STOP_MANAGE", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PAYMENT_WINDOW_MANAGE", "ORDER_PLACE", "ORDER_POINTS_REVEAL", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "PAYMENT_METHOD_READ", "PAYMENT_METHOD_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "GEO_LOOKUP", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "DELIVERY_POLICY_READ", "DELIVERY_POLICY_WRITE", "DELIVERY_DISPATCH_RULES_READ", "DELIVERY_DISPATCH_RULES_WRITE", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "COURIER_BROADCAST_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_DISPLAY_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_SHIFT_RECEIVE", "MARKETPLACE_AVAILABILITY_PULL", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_VERIFY", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_CREATE", "CUSTOMER_PII_REVEAL", "CUSTOMER_LEAD_READ", "CUSTOMER_LEAD_MANAGE", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "STOREFRONT_APP_REGISTRY_MANAGE", "STOREFRONT_APP_AUTHORISE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_SYNC_MANAGE", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_ROUTING_MANAGE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "MARKETING_OFFER_MANAGE", "MARKETING_CONTACT_POLICY_MANAGE", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "MARKETING_LINK_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "COMMERCIAL_MODULE_READ", "COMMERCIAL_ARREARS_READ", "COMMERCIAL_WALLET_TOPUP", "COMMERCIAL_CARD_MANAGE", "COMMERCIAL_EINVOICE_SEND", "COMMERCIAL_EINVOICING_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "IAM_STAFF_MFA_READ", "IAM_STAFF_MFA_RESET", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "REPORT_EXPORT", "CUSTOMER_PII_EXPORT", "REPORTING_CLASSIFICATION_RUN", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_DELIVERY_READ", "COURIER_OFFER_ACCEPT", "COURIER_OFFER_DECLINE", "COURIER_DELIVERY_ADVANCE", "COURIER_DELIVERY_PAYMENT_CONFIRM", "COURIER_DELIVERY_LOCATION_REVEAL", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "ASSISTANT_READ", "ASSISTANT_KNOWLEDGE_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "STAFF_PROFILE_READ", "STAFF_PROFILE_MANAGE", "STAFF_EMERGENCY_CONTACT_READ", "STAFF_SELF_MANAGE", "PLATFORM_ADMIN" ],
               "type" : "string"
             },
             "type" : "array",
@@ -1629,6 +1716,103 @@
             "type" : "array"
           },
           "subject" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CardInstallationCreated" : {
+        "properties" : {
+          "installationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CardInstallationSuspendRequest" : {
+        "properties" : {
+          "acknowledgeUnresolvedCharges" : {
+            "type" : "boolean"
+          },
+          "expectedVersion" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "expectedVersion", "reason" ],
+        "type" : "object"
+      },
+      "CardInstallationView" : {
+        "properties" : {
+          "configuration" : {
+            "additionalProperties" : { },
+            "type" : "object"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "environmentCode" : {
+            "type" : "string"
+          },
+          "externalAccountReference" : {
+            "type" : "string"
+          },
+          "installationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "providerType" : {
+            "type" : "string"
+          },
+          "secretConfigured" : {
+            "type" : "boolean"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CardOnFileView" : {
+        "properties" : {
+          "boundAt" : {
+            "type" : "string"
+          },
+          "brand" : {
+            "type" : "string"
+          },
+          "expiryMonth" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "expiryYear" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lapsed" : {
+            "type" : "boolean"
+          },
+          "lapsesSoon" : {
+            "type" : "boolean"
+          },
+          "last4" : {
             "type" : "string"
           }
         },
@@ -1911,6 +2095,21 @@
           },
           "status" : {
             "enum" : [ "PLANNING", "ACTIVE", "COMPLETED", "ABANDONED" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason", "status" ],
+        "type" : "object"
+      },
+      "ChangeStatusRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "ACTIVE", "SUSPENDED", "RETIRED" ],
             "type" : "string"
           }
         },
@@ -2390,6 +2589,62 @@
         "required" : [ "reason" ],
         "type" : "object"
       },
+      "CommercialAdminControllerTransitionRequest" : {
+        "properties" : {
+          "cancelAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "expectedVersion" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "status" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "suspensionReason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason", "status" ],
+        "type" : "object"
+      },
+      "CommercialBillingSetupControllerTransitionRequest" : {
+        "properties" : {
+          "expectedVersion" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "expectedVersion", "reason" ],
+        "type" : "object"
+      },
+      "CommercialBillingSetupControllerWalletChangeResponse" : {
+        "properties" : {
+          "approvalRequestId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "CommercialControlPlaneControllerEntitlementSnapshotResponse" : {
         "properties" : {
           "entitlements" : {
@@ -2552,6 +2807,42 @@
         "required" : [ "reason" ],
         "type" : "object"
       },
+      "CommercialWalletControllerStatementPaymentView" : {
+        "properties" : {
+          "due" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "number" : {
+            "type" : "string"
+          },
+          "paid" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "periodKey" : {
+            "type" : "string"
+          },
+          "statementId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "total" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          }
+        },
+        "type" : "object"
+      },
+      "CommercialWalletControllerWalletChangeResponse" : {
+        "properties" : {
+          "approvalRequestId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ConfigurationKeyResponse" : {
         "properties" : {
           "code" : {
@@ -2639,6 +2930,62 @@
         },
         "type" : "object"
       },
+      "ConfirmEnrolmentRequest" : {
+        "properties" : {
+          "code" : {
+            "minLength" : 1,
+            "pattern" : "^[0-9]{6}$",
+            "type" : "string"
+          },
+          "enrolmentTicket" : {
+            "maxLength" : 2048,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "label" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "password" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "sealedSecret" : {
+            "maxLength" : 2048,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "code", "password", "sealedSecret" ],
+        "type" : "object"
+      },
+      "ConformanceRequest" : {
+        "properties" : {
+          "contractVersion" : {
+            "maxLength" : 16,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "note" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "result" : {
+            "enum" : [ "NOT_RUN", "PASSED", "FAILED", "EXPIRED" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "contractVersion", "reason", "result" ],
+        "type" : "object"
+      },
       "ConnectField" : {
         "properties" : {
           "key" : {
@@ -2653,7 +3000,7 @@
       "ConnectFieldDeclarationView" : {
         "properties" : {
           "category" : {
-            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "OTHER" ],
+            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "ROUTING", "ASSISTANT", "OTHER" ],
             "type" : "string"
           },
           "environments" : {
@@ -2806,6 +3153,46 @@
           }
         },
         "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "CreateCardInstallationRequest" : {
+        "properties" : {
+          "configuration" : {
+            "additionalProperties" : { },
+            "type" : "object"
+          },
+          "displayName" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "environmentCode" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "externalAccountReference" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "providerType" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "secretReference" : {
+            "maxLength" : 512,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "displayName", "providerType", "reason" ],
         "type" : "object"
       },
       "CreateCatalogRequest" : {
@@ -3639,6 +4026,9 @@
               "$ref" : "#/components/schemas/TimeRuleRequest"
             },
             "type" : "array"
+          },
+          "usePlatformRouting" : {
+            "type" : "boolean"
           }
         },
         "required" : [ "actorId", "bands", "currency", "distanceMode", "feeSource" ],
@@ -3973,6 +4363,357 @@
         },
         "type" : "object"
       },
+      "EInvoiceLineView" : {
+        "properties" : {
+          "classificationCode" : {
+            "type" : "string"
+          },
+          "gross" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "lineNumber" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "net" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "quantity" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unitPrice" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "vat" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "vatRateBp" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "EInvoiceRefreshView" : {
+        "properties" : {
+          "einvoice" : {
+            "$ref" : "#/components/schemas/EInvoiceView"
+          },
+          "unavailableCode" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "EInvoiceSendRequest" : {
+        "properties" : {
+          "legalEntityId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "provider" : {
+            "minLength" : 1,
+            "pattern" : "DIDOX|FAKTURA_UZ",
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "provider", "reason" ],
+        "type" : "object"
+      },
+      "EInvoiceView" : {
+        "properties" : {
+          "buyerLegalEntityId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "buyerName" : {
+            "type" : "string"
+          },
+          "buyerTaxpayerNumber" : {
+            "type" : "string"
+          },
+          "classificationProvisional" : {
+            "type" : "boolean"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "delivery" : {
+            "type" : "string"
+          },
+          "documentDate" : {
+            "type" : "string"
+          },
+          "documentNumber" : {
+            "type" : "string"
+          },
+          "einvoiceId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "failureCode" : {
+            "type" : "string"
+          },
+          "failureDetail" : {
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/EInvoiceLineView"
+            },
+            "type" : "array"
+          },
+          "live" : {
+            "type" : "boolean"
+          },
+          "net" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "operatorDocumentId" : {
+            "type" : "string"
+          },
+          "operatorState" : {
+            "type" : "string"
+          },
+          "operatorStatus" : {
+            "type" : "string"
+          },
+          "provider" : {
+            "type" : "string"
+          },
+          "sellerTaxpayerNumber" : {
+            "type" : "string"
+          },
+          "sendReason" : {
+            "type" : "string"
+          },
+          "sentBy" : {
+            "type" : "string"
+          },
+          "stateChangedAt" : {
+            "type" : "string"
+          },
+          "stateCheckedAt" : {
+            "type" : "string"
+          },
+          "statementId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "total" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "vat" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "EInvoicingAccountUpdate" : {
+        "properties" : {
+          "config" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "displayName" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "secretReference" : {
+            "maxLength" : 512,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "displayName", "reason" ],
+        "type" : "object"
+      },
+      "EInvoicingAccountView" : {
+        "properties" : {
+          "adapterVersion" : {
+            "type" : "string"
+          },
+          "adapterWired" : {
+            "type" : "boolean"
+          },
+          "baseUrl" : {
+            "type" : "string"
+          },
+          "config" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "connected" : {
+            "type" : "boolean"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "environmentCode" : {
+            "type" : "string"
+          },
+          "installationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "missing" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "production" : {
+            "type" : "boolean"
+          },
+          "provider" : {
+            "type" : "string"
+          },
+          "secretBound" : {
+            "type" : "boolean"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "type" : "string"
+          },
+          "updatedBy" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "EInvoicingClassificationUpdate" : {
+        "properties" : {
+          "catalogCode" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "catalogName" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "confirmed" : {
+            "type" : "boolean"
+          },
+          "itemLabel" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "packageCode" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "packageName" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "vatRateBp" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "catalogCode", "catalogName", "itemLabel", "packageCode", "packageName", "reason", "vatRateBp" ],
+        "type" : "object"
+      },
+      "EInvoicingClassificationView" : {
+        "properties" : {
+          "catalogCode" : {
+            "type" : "string"
+          },
+          "catalogName" : {
+            "type" : "string"
+          },
+          "confirmedAt" : {
+            "type" : "string"
+          },
+          "confirmedBy" : {
+            "type" : "string"
+          },
+          "itemLabel" : {
+            "type" : "string"
+          },
+          "lineKind" : {
+            "type" : "string"
+          },
+          "packageCode" : {
+            "type" : "string"
+          },
+          "packageName" : {
+            "type" : "string"
+          },
+          "provisional" : {
+            "type" : "boolean"
+          },
+          "updatedAt" : {
+            "type" : "string"
+          },
+          "updatedBy" : {
+            "type" : "string"
+          },
+          "vatRateBp" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "EInvoicingReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "EffectiveBindingView" : {
         "properties" : {
           "bindingId" : {
@@ -4055,6 +4796,24 @@
           }
         },
         "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "Enrolment" : {
+        "properties" : {
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "otpauthUri" : {
+            "type" : "string"
+          },
+          "sealedSecret" : {
+            "type" : "string"
+          },
+          "secret" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "EntitlementKeyResponse" : {
@@ -5011,7 +5770,7 @@
       "InstallRequest" : {
         "properties" : {
           "category" : {
-            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "OTHER" ],
+            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "ROUTING", "ASSISTANT", "OTHER" ],
             "type" : "string"
           },
           "displayName" : {
@@ -6504,6 +7263,40 @@
         "required" : [ "approvedBy", "entitlementKey", "reason", "validUntil" ],
         "type" : "object"
       },
+      "OwedView" : {
+        "properties" : {
+          "due" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "openStatements" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "OwnMfaResponse" : {
+        "properties" : {
+          "authenticators" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AuthenticatorResponse"
+            },
+            "type" : "array"
+          },
+          "enrolled" : {
+            "type" : "boolean"
+          },
+          "maximum" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "requirement" : {
+            "enum" : [ "NOT_REQUIRED", "OFFERED", "REQUIRED" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "OwnerInvitationEventView" : {
         "properties" : {
           "actor" : {
@@ -7166,6 +7959,29 @@
         "required" : [ "token" ],
         "type" : "object"
       },
+      "PaymentDetailsView" : {
+        "properties" : {
+          "account" : {
+            "type" : "string"
+          },
+          "bankName" : {
+            "type" : "string"
+          },
+          "beneficiary" : {
+            "type" : "string"
+          },
+          "configured" : {
+            "type" : "boolean"
+          },
+          "mfo" : {
+            "type" : "string"
+          },
+          "taxId" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PendingApprovalResponse" : {
         "properties" : {
           "actionCode" : {
@@ -7456,6 +8272,21 @@
         },
         "type" : "object"
       },
+      "PlatformAuthenticator" : {
+        "properties" : {
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "label" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PlatformBlockedDocument" : {
         "properties" : {
           "document" : {
@@ -7631,6 +8462,80 @@
         },
         "type" : "object"
       },
+      "PlatformLocaleEntryResponse" : {
+        "properties" : {
+          "catalogCode" : {
+            "type" : "string"
+          },
+          "direction" : {
+            "type" : "string"
+          },
+          "face" : {
+            "type" : "string"
+          },
+          "fallbackRank" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "inputAliases" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "names" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "script" : {
+            "type" : "string"
+          },
+          "tag" : {
+            "type" : "string"
+          },
+          "tiers" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "PlatformLocalesResponse" : {
+        "properties" : {
+          "fallback" : {
+            "type" : "string"
+          },
+          "locales" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PlatformLocaleEntryResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "PlatformMfaResponse" : {
+        "properties" : {
+          "authenticators" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PlatformAuthenticator"
+            },
+            "type" : "array"
+          },
+          "enrolled" : {
+            "type" : "boolean"
+          },
+          "requirement" : {
+            "enum" : [ "NOT_REQUIRED", "OFFERED", "REQUIRED" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PlatformPendingApprovalResponse" : {
         "properties" : {
           "request" : {
@@ -7639,6 +8544,39 @@
           "tenantId" : {
             "format" : "uuid",
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PlatformResetRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "PlatformResetResponse" : {
+        "properties" : {
+          "approvalRequestId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "authenticatorsRemoved" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "outcome" : {
+            "type" : "string"
+          },
+          "personNotified" : {
+            "type" : "boolean"
+          },
+          "sessionsEnded" : {
+            "type" : "boolean"
           }
         },
         "type" : "object"
@@ -7794,6 +8732,48 @@
           }
         },
         "required" : [ "bindingId" ],
+        "type" : "object"
+      },
+      "PrepaymentInvoiceView" : {
+        "properties" : {
+          "amount" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "beforeTax" : {
+            "type" : "boolean"
+          },
+          "cancelledAt" : {
+            "type" : "string"
+          },
+          "due" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "invoiceId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "issuedAt" : {
+            "type" : "string"
+          },
+          "number" : {
+            "type" : "string"
+          },
+          "paid" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "paymentDetails" : {
+            "$ref" : "#/components/schemas/PaymentDetailsView"
+          },
+          "paymentPurpose" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "validUntil" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "PresentationRequest" : {
@@ -8422,10 +9402,46 @@
         },
         "type" : "object"
       },
+      "ProposeBankDetailsRequest" : {
+        "properties" : {
+          "account" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "bankName" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "beneficiary" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "mfo" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "taxId" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "account", "bankName", "beneficiary", "mfo", "reason", "taxId" ],
+        "type" : "object"
+      },
       "ProviderConnectDeclaration" : {
         "properties" : {
           "category" : {
-            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "OTHER" ],
+            "enum" : [ "POS", "PAYMENT", "DELIVERY", "MARKETPLACE", "NOTIFICATION", "GEOCODING", "VOICE", "ANALYTICS", "ROUTING", "ASSISTANT", "OTHER" ],
             "type" : "string"
           },
           "fields" : {
@@ -8821,6 +9837,11 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "prepaymentInvoiceNumber" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
           "reason" : {
             "maxLength" : 1000,
             "minLength" : 0,
@@ -8901,6 +9922,42 @@
         },
         "type" : "object"
       },
+      "RegisterAppRequest" : {
+        "properties" : {
+          "clientType" : {
+            "enum" : [ "PUBLIC", "CONFIDENTIAL" ],
+            "type" : "string"
+          },
+          "firstParty" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "originAllowlist" : {
+            "items" : {
+              "maxLength" : 300,
+              "minLength" : 0,
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "vendor" : {
+            "maxLength" : 160,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "clientType", "name", "reason", "vendor" ],
+        "type" : "object"
+      },
       "RegisterLegalEntityRequest" : {
         "properties" : {
           "code" : {
@@ -8952,6 +10009,33 @@
           }
         },
         "required" : [ "code", "legalName", "tin" ],
+        "type" : "object"
+      },
+      "RegisteredAppResponse" : {
+        "properties" : {
+          "app" : {
+            "$ref" : "#/components/schemas/StorefrontAppView"
+          },
+          "secretValue" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "RemoveAuthenticatorRequest" : {
+        "properties" : {
+          "code" : {
+            "minLength" : 1,
+            "pattern" : "^[0-9]{6}$",
+            "type" : "string"
+          },
+          "password" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "code", "password" ],
         "type" : "object"
       },
       "RemoveHolidayRequest" : {
@@ -9299,6 +10383,55 @@
         "required" : [ "reason", "value" ],
         "type" : "object"
       },
+      "RoutingView" : {
+        "properties" : {
+          "basis" : {
+            "type" : "string"
+          },
+          "basisEvidence" : {
+            "type" : "string"
+          },
+          "engineDatasetVersion" : {
+            "type" : "string"
+          },
+          "engineEnabled" : {
+            "type" : "boolean"
+          },
+          "fallbackFees" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "installationStatus" : {
+            "type" : "string"
+          },
+          "lastDatasetVersion" : {
+            "type" : "string"
+          },
+          "lastDistanceSource" : {
+            "type" : "string"
+          },
+          "lastResolvedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "provider" : {
+            "type" : "string"
+          },
+          "roadFactorBasisPoints" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "roadFees" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "windowHours" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "RowEntry" : {
         "properties" : {
           "chatId" : {
@@ -9621,7 +10754,7 @@
         "properties" : {
           "capabilities" : {
             "items" : {
-              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "INVENTORY_AVAILABILITY_MANAGE", "INVENTORY_STOP_MANAGE", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PAYMENT_WINDOW_MANAGE", "ORDER_PLACE", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "PAYMENT_METHOD_READ", "PAYMENT_METHOD_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "DELIVERY_POLICY_READ", "DELIVERY_POLICY_WRITE", "DELIVERY_DISPATCH_RULES_READ", "DELIVERY_DISPATCH_RULES_WRITE", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "COURIER_BROADCAST_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_SHIFT_RECEIVE", "MARKETPLACE_AVAILABILITY_PULL", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_VERIFY", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_CREATE", "CUSTOMER_PII_REVEAL", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_SYNC_MANAGE", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_ROUTING_MANAGE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "MARKETING_LINK_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "COMMERCIAL_MODULE_READ", "COMMERCIAL_ARREARS_READ", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "REPORT_EXPORT", "CUSTOMER_PII_EXPORT", "REPORTING_CLASSIFICATION_RUN", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_DELIVERY_READ", "COURIER_OFFER_ACCEPT", "COURIER_OFFER_DECLINE", "COURIER_DELIVERY_ADVANCE", "COURIER_DELIVERY_PAYMENT_CONFIRM", "COURIER_DELIVERY_LOCATION_REVEAL", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "STAFF_PROFILE_READ", "STAFF_PROFILE_MANAGE", "STAFF_EMERGENCY_CONTACT_READ", "STAFF_SELF_MANAGE", "PLATFORM_ADMIN" ],
+              "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "INVENTORY_AVAILABILITY_MANAGE", "INVENTORY_STOP_MANAGE", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PAYMENT_WINDOW_MANAGE", "ORDER_PLACE", "ORDER_POINTS_REVEAL", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "PAYMENT_METHOD_READ", "PAYMENT_METHOD_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "GEO_LOOKUP", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "DELIVERY_POLICY_READ", "DELIVERY_POLICY_WRITE", "DELIVERY_DISPATCH_RULES_READ", "DELIVERY_DISPATCH_RULES_WRITE", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "COURIER_BROADCAST_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_DISPLAY_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_SHIFT_RECEIVE", "MARKETPLACE_AVAILABILITY_PULL", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_VERIFY", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_CREATE", "CUSTOMER_PII_REVEAL", "CUSTOMER_LEAD_READ", "CUSTOMER_LEAD_MANAGE", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "STOREFRONT_APP_REGISTRY_MANAGE", "STOREFRONT_APP_AUTHORISE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_SYNC_MANAGE", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_ROUTING_MANAGE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "MARKETING_OFFER_MANAGE", "MARKETING_CONTACT_POLICY_MANAGE", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "MARKETING_LINK_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "COMMERCIAL_MODULE_READ", "COMMERCIAL_ARREARS_READ", "COMMERCIAL_WALLET_TOPUP", "COMMERCIAL_CARD_MANAGE", "COMMERCIAL_EINVOICE_SEND", "COMMERCIAL_EINVOICING_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "IAM_STAFF_MFA_READ", "IAM_STAFF_MFA_RESET", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "REPORT_EXPORT", "CUSTOMER_PII_EXPORT", "REPORTING_CLASSIFICATION_RUN", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_DELIVERY_READ", "COURIER_OFFER_ACCEPT", "COURIER_OFFER_DECLINE", "COURIER_DELIVERY_ADVANCE", "COURIER_DELIVERY_PAYMENT_CONFIRM", "COURIER_DELIVERY_LOCATION_REVEAL", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "ASSISTANT_READ", "ASSISTANT_KNOWLEDGE_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "STAFF_PROFILE_READ", "STAFF_PROFILE_MANAGE", "STAFF_EMERGENCY_CONTACT_READ", "STAFF_SELF_MANAGE", "PLATFORM_ADMIN" ],
               "type" : "string"
             },
             "type" : "array",
@@ -9701,7 +10834,7 @@
       "SecretIngressRequest" : {
         "properties" : {
           "category" : {
-            "enum" : [ "PROVIDER_POS", "PROVIDER_PAYMENT", "PROVIDER_DELIVERY", "PROVIDER_NOTIFICATION", "PROVIDER_VOICE", "PROVIDER_MARKETPLACE", "IDENTITY_ADMIN", "DATA_ENCRYPTION", "DATABASE", "OBJECT_STORAGE" ],
+            "enum" : [ "PROVIDER_POS", "PROVIDER_PAYMENT", "PROVIDER_DELIVERY", "PROVIDER_NOTIFICATION", "PROVIDER_VOICE", "PROVIDER_MARKETPLACE", "PROVIDER_GEOCODING", "PROVIDER_ASSISTANT", "PROVIDER_STOREFRONT_APP", "PROVIDER_EINVOICING", "IDENTITY_ADMIN", "DATA_ENCRYPTION", "DATABASE", "OBJECT_STORAGE" ],
             "type" : "string"
           },
           "providerType" : {
@@ -10036,6 +11169,9 @@
             "format" : "date-time",
             "type" : "string"
           },
+          "mfaEnrolmentOffered" : {
+            "type" : "boolean"
+          },
           "refreshToken" : {
             "type" : "string"
           },
@@ -10051,6 +11187,10 @@
       },
       "StaffSignInRequest" : {
         "properties" : {
+          "otp" : {
+            "pattern" : "^[0-9]{6}$",
+            "type" : "string"
+          },
           "password" : {
             "maxLength" : 255,
             "minLength" : 0,
@@ -10184,30 +11324,6 @@
             "type" : "string"
           },
           "unitPrice" : {
-            "$ref" : "#/components/schemas/ApiMoney"
-          }
-        },
-        "type" : "object"
-      },
-      "StatementPaymentView" : {
-        "properties" : {
-          "due" : {
-            "$ref" : "#/components/schemas/ApiMoney"
-          },
-          "number" : {
-            "type" : "string"
-          },
-          "paid" : {
-            "$ref" : "#/components/schemas/ApiMoney"
-          },
-          "periodKey" : {
-            "type" : "string"
-          },
-          "statementId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "total" : {
             "$ref" : "#/components/schemas/ApiMoney"
           }
         },
@@ -10348,6 +11464,165 @@
         },
         "type" : "object"
       },
+      "StorefrontAppAuthorisationView" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "brandName" : {
+            "type" : "string"
+          },
+          "grantedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "grantedBy" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "revokedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "revokedBy" : {
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "ACTIVE", "REVOKED" ],
+            "type" : "string"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenantName" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "StorefrontAppConformance" : {
+        "properties" : {
+          "contractVersion" : {
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "recordedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "NOT_RUN", "PASSED", "FAILED", "EXPIRED" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "StorefrontAppDetailView" : {
+        "properties" : {
+          "app" : {
+            "$ref" : "#/components/schemas/StorefrontAppView"
+          },
+          "authorisations" : {
+            "items" : {
+              "$ref" : "#/components/schemas/StorefrontAppAuthorisationView"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "StorefrontAppRegistryControllerReasonRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
+      "StorefrontAppSummaryView" : {
+        "properties" : {
+          "activeAuthorisations" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "activeTenants" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "app" : {
+            "$ref" : "#/components/schemas/StorefrontAppView"
+          }
+        },
+        "type" : "object"
+      },
+      "StorefrontAppView" : {
+        "properties" : {
+          "clientType" : {
+            "enum" : [ "PUBLIC", "CONFIDENTIAL" ],
+            "type" : "string"
+          },
+          "conformance" : {
+            "$ref" : "#/components/schemas/StorefrontAppConformance"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "firstParty" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "originAllowlist" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "secretConfigured" : {
+            "type" : "boolean"
+          },
+          "secretRotatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "ACTIVE", "SUSPENDED", "RETIRED" ],
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "vendor" : {
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "SubdomainRequest" : {
         "properties" : {
           "slug" : {
@@ -10466,6 +11741,9 @@
         "properties" : {
           "activeVersion" : {
             "$ref" : "#/components/schemas/ActiveVersionResponse"
+          },
+          "routing" : {
+            "$ref" : "#/components/schemas/RoutingView"
           },
           "tariff" : {
             "$ref" : "#/components/schemas/TariffSummaryResponse"
@@ -10993,6 +12271,34 @@
         },
         "type" : "object"
       },
+      "TopUpView" : {
+        "properties" : {
+          "amount" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "outcome" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "requestedAt" : {
+            "type" : "string"
+          },
+          "settledAt" : {
+            "type" : "string"
+          },
+          "topUpId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "walletEntryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "TraceLevel" : {
         "properties" : {
           "outcome" : {
@@ -11003,34 +12309,6 @@
             "type" : "string"
           }
         },
-        "type" : "object"
-      },
-      "TransitionRequest" : {
-        "properties" : {
-          "cancelAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "expectedVersion" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "reason" : {
-            "maxLength" : 1000,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "status" : {
-            "minLength" : 1,
-            "type" : "string"
-          },
-          "suspensionReason" : {
-            "maxLength" : 500,
-            "minLength" : 0,
-            "type" : "string"
-          }
-        },
-        "required" : [ "reason", "status" ],
         "type" : "object"
       },
       "TranslateRequest" : {
@@ -11093,6 +12371,35 @@
             "type" : "boolean"
           }
         },
+        "type" : "object"
+      },
+      "UpdateAppRequest" : {
+        "properties" : {
+          "name" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "originAllowlist" : {
+            "items" : {
+              "maxLength" : 300,
+              "minLength" : 0,
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "reason" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "vendor" : {
+            "maxLength" : 160,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "name", "reason", "vendor" ],
         "type" : "object"
       },
       "UpdateBrandProfileRequest" : {
@@ -11563,18 +12870,6 @@
         "required" : [ "expiresAt", "reason" ],
         "type" : "object"
       },
-      "WalletChangeResponse" : {
-        "properties" : {
-          "approvalRequestId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "status" : {
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "WalletDepositReversalRequest" : {
         "properties" : {
           "depositEntryId" : {
@@ -11651,8 +12946,14 @@
           "bonusSpendableBalance" : {
             "$ref" : "#/components/schemas/ApiMoney"
           },
+          "card" : {
+            "$ref" : "#/components/schemas/CardOnFileView"
+          },
           "cardTokenReference" : {
             "type" : "string"
+          },
+          "hasCard" : {
+            "type" : "boolean"
           },
           "paidBalance" : {
             "$ref" : "#/components/schemas/ApiMoney"
@@ -11907,7 +13208,7 @@
           "name" : "capability",
           "required" : false,
           "schema" : {
-            "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "INVENTORY_AVAILABILITY_MANAGE", "INVENTORY_STOP_MANAGE", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PAYMENT_WINDOW_MANAGE", "ORDER_PLACE", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "PAYMENT_METHOD_READ", "PAYMENT_METHOD_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "DELIVERY_POLICY_READ", "DELIVERY_POLICY_WRITE", "DELIVERY_DISPATCH_RULES_READ", "DELIVERY_DISPATCH_RULES_WRITE", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "COURIER_BROADCAST_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_SHIFT_RECEIVE", "MARKETPLACE_AVAILABILITY_PULL", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_VERIFY", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_CREATE", "CUSTOMER_PII_REVEAL", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_SYNC_MANAGE", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_ROUTING_MANAGE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "MARKETING_LINK_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "COMMERCIAL_MODULE_READ", "COMMERCIAL_ARREARS_READ", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "REPORT_EXPORT", "CUSTOMER_PII_EXPORT", "REPORTING_CLASSIFICATION_RUN", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_DELIVERY_READ", "COURIER_OFFER_ACCEPT", "COURIER_OFFER_DECLINE", "COURIER_DELIVERY_ADVANCE", "COURIER_DELIVERY_PAYMENT_CONFIRM", "COURIER_DELIVERY_LOCATION_REVEAL", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "STAFF_PROFILE_READ", "STAFF_PROFILE_MANAGE", "STAFF_EMERGENCY_CONTACT_READ", "STAFF_SELF_MANAGE", "PLATFORM_ADMIN" ],
+            "enum" : [ "TENANT_READ", "TENANT_WRITE", "TENANT_ONBOARDING_MANAGE", "BRAND_READ", "BRAND_WRITE", "LOCATION_READ", "LOCATION_WRITE", "LEGAL_ENTITY_READ", "LEGAL_ENTITY_MANAGE", "FISCAL_TERMINAL_READ", "FISCAL_TERMINAL_MANAGE", "CHANNEL_READ", "CHANNEL_MANAGE", "SERVICEABILITY_MANAGE", "LOCATION_SERVICE_STATE_CHANGE", "CATALOG_READ", "CATALOG_AUTHOR", "CATALOG_PUBLISH", "OFFERING_MANAGE", "MEDIA_READ", "MEDIA_UPLOAD", "INVENTORY_READ", "INVENTORY_ADJUST", "INVENTORY_AVAILABILITY_MANAGE", "INVENTORY_STOP_MANAGE", "PRICING_READ", "PRICING_AUTHOR", "PRICING_ACTIVATE", "PRICING_PROMOTION_MANAGE", "ORDER_READ", "ORDER_APPROVE", "ORDER_ADVANCE", "ORDER_CANCEL", "ORDER_STATE_OVERRIDE", "ORDER_AMEND", "ORDER_BULK_ACTION", "ORDER_OUTCOME_REASON_MANAGE", "ORDER_ACCEPTANCE_POLICY_MANAGE", "ORDER_PAYMENT_WINDOW_MANAGE", "ORDER_PLACE", "ORDER_POINTS_REVEAL", "ORDER_PROVENANCE_RECORD", "REVIEW_READ", "PAYMENT_READ", "PAYMENT_INITIATE", "PAYMENT_ATTEMPT_RESOLVE", "PAYMENT_MERCHANT_BINDING_MANAGE", "PAYMENT_METHOD_READ", "PAYMENT_METHOD_MANAGE", "FISCAL_DOCUMENT_READ", "FISCAL_DOCUMENT_RESOLVE", "REFUND_REQUEST", "REFUND_APPROVE", "REFUND_EXECUTE", "RECOVERY_CASE_MANAGE", "RECOVERY_REMEDY_APPROVE", "DELIVERY_PLAN_READ", "DELIVERY_ZONE_READ", "GEO_LOOKUP", "DELIVERY_ZONE_MANAGE", "DELIVERY_ZONE_ACTIVATE", "DELIVERY_TARIFF_READ", "DELIVERY_TARIFF_MANAGE", "DELIVERY_TARIFF_ACTIVATE", "DELIVERY_FEE_EVIDENCE_READ", "DELIVERY_MANUAL_ASSIGN", "DELIVERY_POLICY_READ", "DELIVERY_POLICY_WRITE", "DELIVERY_DISPATCH_RULES_READ", "DELIVERY_DISPATCH_RULES_WRITE", "SHIPMENT_CANCEL", "COURIER_POSITION_READ", "COURIER_TRACK_REVEAL", "COURIER_DUTY_MANAGE", "COURIER_BROADCAST_MANAGE", "KITCHEN_STATION_MANAGE", "KITCHEN_TICKET_READ", "KITCHEN_DISPLAY_READ", "KITCHEN_TICKET_ADVANCE", "KITCHEN_TICKET_RECALL", "KITCHEN_TICKET_RELEASE", "KITCHEN_TICKET_RELEASE_OVERRIDE", "KITCHEN_TICKET_HANDOVER", "DINEIN_FLOORPLAN_MANAGE", "RESERVATION_READ", "RESERVATION_MANAGE", "DINEIN_SESSION_READ", "DINEIN_SESSION_MANAGE", "DINEIN_SESSION_FORCE_CLOSE", "DINEIN_QR_ROTATE", "MARKETPLACE_ORDER_RECEIVE", "MARKETPLACE_SHIFT_RECEIVE", "MARKETPLACE_AVAILABILITY_PULL", "MARKETPLACE_MENU_PUSH", "MARKETPLACE_AVAILABILITY_PUSH", "MARKETPLACE_HANDOVER_VERIFY", "MARKETPLACE_HANDOVER_BYPASS", "MARKETPLACE_ORDER_CREATE_MANUAL", "MARKETPLACE_LIVENESS_READ", "CUSTOMER_READ", "CUSTOMER_MANAGE", "CUSTOMER_CREATE", "CUSTOMER_PII_REVEAL", "CUSTOMER_LEAD_READ", "CUSTOMER_LEAD_MANAGE", "CUSTOMER_ERASURE_EXECUTE", "CUSTOMER_ERASURE_RAISE", "CUSTOMER_IMPORT", "INTEGRATION_INSTALLATION_MANAGE", "INTEGRATION_BINDING_ACTIVATE", "PARTNER_API_CLIENT_MANAGE", "STOREFRONT_APP_REGISTRY_MANAGE", "STOREFRONT_APP_AUTHORISE", "INTEGRATION_TELEGRAM_LINK_ISSUE", "INTEGRATION_TELEGRAM_STAFF_LINK_ISSUE", "POS_SYNC_READ", "POS_SYNC_EXECUTE", "POS_SYNC_APPLY", "POS_SYNC_MANAGE", "POS_EXPORT_READ", "POS_EXPORT_RESOLVE", "INTEGRATION_FAILURE_READ", "INTEGRATION_FAILURE_RETRY", "INTEGRATION_FAILURE_RESOLVE", "NOTIFICATION_TEMPLATE_AUTHOR", "NOTIFICATION_TEMPLATE_ACTIVATE", "NOTIFICATION_ROUTING_MANAGE", "NOTIFICATION_READ", "NOTIFICATION_RETRY", "CONTROL_PLANE_ALERT_RAISE", "CONTROL_PLANE_ALERT_READ", "CONTROL_PLANE_ALERT_MANAGE", "AUDIENCE_READ", "AUDIENCE_EXPORT", "CAMPAIGN_AUTHOR", "MARKETING_OFFER_MANAGE", "MARKETING_CONTACT_POLICY_MANAGE", "CAMPAIGN_APPROVE", "SUPPRESSION_MANAGE", "MARKETING_LINK_MANAGE", "COMMERCIAL_SUBSCRIPTION_MANAGE", "COMMERCIAL_OVERRIDE_APPROVE", "COMMERCIAL_PLAN_READ", "COMMERCIAL_PLAN_MANAGE", "COMMERCIAL_PLAN_ACTIVATE", "COMMERCIAL_USAGE_READ", "COMMERCIAL_USAGE_ADJUST", "COMMERCIAL_STATEMENT_ISSUE", "COMMERCIAL_WALLET_READ", "COMMERCIAL_WALLET_MANAGE", "COMMERCIAL_MODULE_READ", "COMMERCIAL_ARREARS_READ", "COMMERCIAL_WALLET_TOPUP", "COMMERCIAL_CARD_MANAGE", "COMMERCIAL_EINVOICE_SEND", "COMMERCIAL_EINVOICING_MANAGE", "LOYALTY_READ", "LOYALTY_ADJUST", "LOYALTY_POLICY_MANAGE", "REFERRAL_READ", "REFERRAL_POLICY_MANAGE", "IAM_GRANT_MANAGE", "IAM_STAFF_MFA_READ", "IAM_STAFF_MFA_RESET", "SUPPORT_SESSION_START", "SUPPORT_SESSION_READ", "REPORTING_READ", "REPORT_EXPORT", "CUSTOMER_PII_EXPORT", "REPORTING_CLASSIFICATION_RUN", "METRIC_MANAGE", "AUDIT_READ", "APPROVAL_POLICY_MANAGE", "APPROVAL_DECIDE", "MIGRATION_READ", "MIGRATION_SCOPE_MANAGE", "MIGRATION_RUN_EXECUTE", "MIGRATION_CUTOVER_APPROVE", "MIGRATION_QUARANTINE_RESOLVE", "COURIER_SHIFT_OPEN", "COURIER_SHIFT_BREAK", "COURIER_DELIVERY_READ", "COURIER_OFFER_ACCEPT", "COURIER_OFFER_DECLINE", "COURIER_DELIVERY_ADVANCE", "COURIER_DELIVERY_PAYMENT_CONFIRM", "COURIER_DELIVERY_LOCATION_REVEAL", "COURIER_SHIFT_APPROVE", "COURIER_SHIFT_READ", "COURIER_READ", "COURIER_ENGAGEMENT_MANAGE", "COURIER_REGISTRATION_VERIFY", "COURIER_REGISTRATION_REVEAL", "COURIER_PII_REVEAL", "COURIER_TYPE_MANAGE", "COURIER_RATECARD_MANAGE", "COURIER_RATECARD_READ", "COURIER_ADJUSTMENT_CREATE", "COURIER_ADJUSTMENT_APPROVE", "COURIER_ADJUSTMENT_REASON_MANAGE", "COURIER_CASH_CONFIRM", "COURIER_LEDGER_READ", "COURIER_SETTLEMENT_CLOSE", "COURIER_PAYOUT_AUTHORISE", "DELIVERY_COST_READ", "PARTNER_INVOICE_MANAGE", "COURIER_CASH_READ", "COURIER_SETTLEMENT_READ", "PARTNER_INVOICE_READ", "CONVERSATION_FLOW_MANAGE", "CONVERSATION_INBOX_MANAGE", "ASSISTANT_READ", "ASSISTANT_KNOWLEDGE_MANAGE", "TERMS_READ", "TERMS_MANAGE", "VOICE_PRESENCE_MANAGE", "VOICE_PRESENCE_READ", "VOICE_SCREEN_POP_READ", "VOICE_SCREEN_POP_ACKNOWLEDGE", "VOICE_CALL_LOG_READ", "TENANT_CONFIGURATION_READ", "TENANT_CONFIGURATION_WRITE", "STAFF_PROFILE_READ", "STAFF_PROFILE_MANAGE", "STAFF_EMERGENCY_CONTACT_READ", "STAFF_SELF_MANAGE", "PLATFORM_ADMIN" ],
             "type" : "string"
           }
         } ],
@@ -12046,7 +13347,7 @@
     },
     "/api/v1/control-plane/arrears" : {
       "get" : {
-        "description" : "Past-due and suspended subscriptions with how long each has been there and the last statement issued, beside what each stage restricts. Moving a tenant between stages is the subscription transition, with its reason.",
+        "description" : "Past-due and suspended subscriptions with how long each has been there and the last statement issued, beside what each stage restricts. owed is what the tenant still owes on issued statements, and depositDue the activation deposit it owes beside them, which is on no statement; paidInFull is true when it owes neither. For a PAST_DUE tenant, whose stage is about money by definition, that is the cue to restore it. For a SUSPENDED one it is a fact and not a cue: the suspension's reason is free text, so the platform cannot tell whether paying addressed it — nothing moves a subscription by itself (ADR 0089), so moving a tenant between stages stays the subscription transition, with its reason.",
         "operationId" : "board",
         "responses" : {
           "200" : {
@@ -12062,6 +13363,116 @@
         },
         "summary" : "Tenants in arrears, longest first",
         "tags" : [ "Arrears" ]
+      }
+    },
+    "/api/v1/control-plane/auth/mfa/authenticators" : {
+      "get" : {
+        "operationId" : "ownControlPlane",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OwnMfaResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The caller's own authenticators (control plane)",
+        "tags" : [ "Staff second factor" ]
+      }
+    },
+    "/api/v1/control-plane/auth/mfa/authenticators/{authenticatorId}" : {
+      "delete" : {
+        "description" : "Needs the password and a valid code; charges the same attempt budget as sign-in; never removes the last authenticator.",
+        "operationId" : "removeControlPlane",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "authenticatorId",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RemoveAuthenticatorRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Remove one of the caller's authenticators (control plane)",
+        "tags" : [ "Staff second factor" ]
+      }
+    },
+    "/api/v1/control-plane/auth/mfa/enrolments" : {
+      "post" : {
+        "description" : "Re-proves the current password, generates a TOTP secret and returns it sealed (10 minutes, this account only) with the otpauth URI for the QR code. Nothing is stored. Authenticated by a session, or by the enrolmentTicket a refused sign-in answered with.",
+        "operationId" : "beginControlPlane",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BeginEnrolmentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Enrolment"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Begin enrolling an authenticator (control plane)",
+        "tags" : [ "Staff second factor" ]
+      }
+    },
+    "/api/v1/control-plane/auth/mfa/enrolments/confirm" : {
+      "post" : {
+        "description" : "Registers the credential with Keycloak, proves it with a real sign-in, and deletes it again if the code does not verify. 204 with a session; 201 with the new session when the enrolment began from a ticket.",
+        "operationId" : "confirmControlPlane",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ConfirmEnrolmentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StaffSessionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Confirm an authenticator with its first code (control plane)",
+        "tags" : [ "Staff second factor" ]
       }
     },
     "/api/v1/control-plane/auth/password-resets" : {
@@ -12149,7 +13560,7 @@
     },
     "/api/v1/control-plane/auth/sessions" : {
       "post" : {
-        "description" : "Exchanges a username and password with Keycloak over the OAuth2 direct grant on the backend's own confidential client; the browser never talks to Keycloak. Wrong password and unknown username answer identically to avoid user enumeration.",
+        "description" : "Exchanges a username and password with Keycloak over the OAuth2 direct grant on the backend's own confidential client; the browser never talks to Keycloak. Wrong password and unknown username answer identically to avoid user enumeration. An account with a second factor sends its six-digit code as otp: a missing code answers 401 MFA_REQUIRED and a wrong one 401 MFA_CODE_INVALID, both only once the password is confirmed; the code budget answers 429 RATE_LIMIT_EXCEEDED. An account that must have a second factor and has none answers 403 MFA_ENROLMENT_REQUIRED with an enrolmentTicket (ADR 0148).",
         "operationId" : "signInControlPlane",
         "requestBody" : {
           "content" : {
@@ -12228,6 +13639,49 @@
         },
         "summary" : "Refresh a control-plane session",
         "tags" : [ "Staff sign-in" ]
+      }
+    },
+    "/api/v1/control-plane/billing/bank-details" : {
+      "get" : {
+        "description" : "configured is false while the row still holds the placeholder, and no invoice is issued until it is replaced. Invoices already issued keep the details of their own moment.",
+        "operationId" : "bankDetails",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BankDetailsView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The bank details every invoice carries now",
+        "tags" : [ "Commercial billing setup" ]
+      }
+    },
+    "/api/v1/control-plane/billing/card-installations" : {
+      "get" : {
+        "description" : "At most one is ACTIVE. The secret reference is never returned: secretConfigured says whether one is named.",
+        "operationId" : "cardInstallations",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/CardInstallationView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "HorecaOS's own card merchant accounts",
+        "tags" : [ "Commercial billing setup" ]
       }
     },
     "/api/v1/control-plane/business-types" : {
@@ -12503,6 +13957,52 @@
         },
         "summary" : "Poll for approval",
         "tags" : [ "Device enrolment" ]
+      }
+    },
+    "/api/v1/control-plane/einvoicing/installations" : {
+      "get" : {
+        "description" : "One row per operator account: whether it is connected, and what it still needs while it is not. Never a credential or a secret reference.",
+        "operationId" : "installations_1",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/EInvoicingAccountView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "HorecaOS's own accounts with the e-invoicing operators",
+        "tags" : [ "Commercial e-invoicing" ]
+      }
+    },
+    "/api/v1/control-plane/einvoicing/line-classifications" : {
+      "get" : {
+        "description" : "The classification code, unit and VAT rate per line kind, and whether finance has confirmed it (a provisional row has not).",
+        "operationId" : "classifications",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/EInvoicingClassificationView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What each kind of statement line is invoiced as",
+        "tags" : [ "Commercial e-invoicing" ]
       }
     },
     "/api/v1/control-plane/event-contracts" : {
@@ -13288,6 +14788,26 @@
         "tags" : [ "Integration failures" ]
       }
     },
+    "/api/v1/control-plane/locales" : {
+      "get" : {
+        "description" : "The same answer as the operations surface, for the control plane's own client.",
+        "operationId" : "controlPlane",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformLocalesResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The platform's languages (control plane)",
+        "tags" : [ "Locales" ]
+      }
+    },
     "/api/v1/control-plane/lookup" : {
       "get" : {
         "description" : "An id finds the tenant, brand, location, order, customer, courier, device, installation, POS export or fiscal document it belongs to. Anything else is matched exactly as a tenant slug or name, an order number, a courier's reference, a provider's order or transaction id, or a partner's order reference. Customers and couriers are returned by id only.",
@@ -13722,6 +15242,306 @@
         },
         "summary" : "Where every tenant trades, and where its data is hosted",
         "tags" : [ "Tenant residency and business type" ]
+      }
+    },
+    "/api/v1/control-plane/staff/{subjectId}/mfa" : {
+      "get" : {
+        "description" : "The identity provider's own credential list, cached for sixty seconds. A subject that holds no platform-scope grant answers not-found.",
+        "operationId" : "read_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "subjectId",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformMfaResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether a platform account holds a second factor",
+        "tags" : [ "Platform staff second factor" ]
+      }
+    },
+    "/api/v1/control-plane/staff/{subjectId}/mfa/resets" : {
+      "post" : {
+        "description" : "Needs a second signature (ADR 0027, ADR 0050, fail-closed): the first call raises the approval request and answers AWAITING_APPROVAL with its id; once a second administrator approves it, repeating the call removes every authenticator, ends every session, audits the reset with the reason and emails the person. Nobody resets their own.",
+        "operationId" : "reset",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "subjectId",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlatformResetRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformResetResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reset a platform account's second factor",
+        "tags" : [ "Platform staff second factor" ]
+      }
+    },
+    "/api/v1/control-plane/storefront-apps" : {
+      "get" : {
+        "description" : "Never a secret or the reference to one — only whether a confidential client has one configured and when it last changed. The conformance result a row carries is read against the contract being served: a PASSED result recorded against another major version reads EXPIRED.",
+        "operationId" : "listStorefrontApps",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/StorefrontAppSummaryView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every registered storefront app, with how many brands authorise it",
+        "tags" : [ "Storefront apps" ]
+      },
+      "post" : {
+        "description" : "A PUBLIC client is a browser-only app: no secret, an app id, and the origin allowlist the platform enforces — attributable and revocable, not authenticated. A CONFIDENTIAL client is server-backed: the platform mints its secret, keeps only an ADR 0028 reference, and returns the value exactly once, in this response.",
+        "operationId" : "registerStorefrontApp",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RegisterAppRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RegisteredAppResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Register a storefront app",
+        "tags" : [ "Storefront apps" ]
+      }
+    },
+    "/api/v1/control-plane/storefront-apps/{appId}" : {
+      "get" : {
+        "description" : "The ETag is the version to send as If-Match on a change.",
+        "operationId" : "getStorefrontApp",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "appId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StorefrontAppDetailView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One storefront app and every brand's standing with it",
+        "tags" : [ "Storefront apps" ]
+      },
+      "put" : {
+        "description" : "Needs If-Match with the version read. The client type never changes: a public client cannot become confidential by an edit, because that is a different registration with a different secret.",
+        "operationId" : "updateStorefrontApp",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "appId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateAppRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StorefrontAppView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Change an app's name, vendor and origin allowlist",
+        "tags" : [ "Storefront apps" ]
+      }
+    },
+    "/api/v1/control-plane/storefront-apps/{appId}/conformance-results" : {
+      "post" : {
+        "description" : "Recorded against the contract version being served; a PASSED result expires when the contract's major version moves.",
+        "operationId" : "recordStorefrontAppConformance",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "appId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ConformanceRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StorefrontAppView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record the conformance suite's result for an app",
+        "tags" : [ "Storefront apps" ]
+      }
+    },
+    "/api/v1/control-plane/storefront-apps/{appId}/secret-rotations" : {
+      "post" : {
+        "description" : "Mints a fresh secret and returns it exactly once. The previous one stops working with this response; a public client has none to rotate.",
+        "operationId" : "rotateStorefrontAppSecret",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "appId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StorefrontAppRegistryControllerReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RegisteredAppResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Rotate a confidential client's secret",
+        "tags" : [ "Storefront apps" ]
+      }
+    },
+    "/api/v1/control-plane/storefront-apps/{appId}/status" : {
+      "put" : {
+        "description" : "SUSPENDED refuses the app for every tenant on its next request and can be lifted with ACTIVE. RETIRED is final.",
+        "operationId" : "changeStorefrontAppStatus",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "appId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ChangeStatusRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StorefrontAppView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Suspend, reinstate or retire an app",
+        "tags" : [ "Storefront apps" ]
       }
     },
     "/api/v1/control-plane/support-sessions/mine" : {
@@ -17016,7 +18836,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/menus/{menuId}" : {
       "put" : {
         "description" : "Whole-record PUT with an expected version, the same discipline CommentPresetController's own update already uses.",
-        "operationId" : "update_4",
+        "operationId" : "update_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -19033,7 +20853,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}" : {
       "get" : {
-        "description" : "activeVersion is absent for a tariff drafted but never activated.",
+        "description" : "activeVersion is absent for a tariff drafted but never activated. routing says what a ROAD version's distance is measured by right now: the road engine, or the straight line times the detour factor because routing is not answering, from the recent fees when there are any and from configuration when there are not (ADR 0147).",
         "operationId" : "detail_1",
         "parameters" : [ {
           "in" : "path",
@@ -19182,7 +21002,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/delivery-tariffs/{tariffId}/versions/{version}/activate" : {
       "post" : {
         "description" : "Refuses a band gap, an inverted fee bound, and ROAD distance with no routing binding installed. Every problem is returned at once.",
-        "operationId" : "activate_6",
+        "operationId" : "activate_8",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -19805,7 +21625,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/pricing/price-books/{priceBookId}/activation" : {
       "post" : {
         "description" : "Requires If-Match carrying the book's version, so two operators activating at once cannot both win. Quotes already issued are untouched: they carry their own totals and are honoured at the price the customer was shown until they expire.",
-        "operationId" : "activate_5",
+        "operationId" : "activate_7",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21196,7 +23016,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/service-zones/{zoneId}/versions/{version}/activate" : {
       "post" : {
         "description" : "Refuses self-intersecting rings, geometry outside the region's box, and an area above the platform maximum — which is what stops an operator drawing a polygon around the country by accident. Every reason is returned at once rather than one attempt at a time.",
-        "operationId" : "activate_4",
+        "operationId" : "activate_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21387,7 +23207,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/comment-presets/{presetId}" : {
       "put" : {
         "description" : "Whole-record PUT with an expected version, the same discipline every other versioned reference table in this platform uses. Archiving is status=ARCHIVED here, not a DELETE: a preset already selected on an open order's line must stay resolvable. A language beyond the platform triple that the request does not name in `labels` keeps its wording, so an editor that shows only some languages never deletes the others; the triple is always named (it is required), and an editor keeps a language it does not show by sending the wording the preset already has.",
-        "operationId" : "update_3",
+        "operationId" : "update_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -21497,6 +23317,75 @@
         },
         "summary" : "The tenant's credentials due to be rotated",
         "tags" : [ "Platform integration administration" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/einvoices" : {
+      "get" : {
+        "description" : "Newest first, failed attempts included.",
+        "operationId" : "forTenant",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/EInvoiceView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every attempt to send one of the tenant's statements to an operator",
+        "tags" : [ "Commercial e-invoicing" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/einvoices/{einvoiceId}" : {
+      "get" : {
+        "description" : "The provider-neutral document as it was sent: its parties and lines.",
+        "operationId" : "one",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "einvoiceId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EInvoiceView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One e-invoice with the document that was sent",
+        "tags" : [ "Commercial e-invoicing" ]
       }
     },
     "/api/v1/control-plane/tenants/{tenantId}/entitlements" : {
@@ -22506,7 +24395,7 @@
       },
       "put" : {
         "description" : "Everything but the taxpayer number and the lifecycle status: legal and short name, VAT registration and certificate, tax profile, registered address and contact phone. There was no way to fix any of these before this endpoint existed — a registered entity could never be corrected.",
-        "operationId" : "update_2",
+        "operationId" : "update_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -22561,7 +24450,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}/activate" : {
       "post" : {
         "description" : "Only an ACTIVE entity may be named as a seller. Permitted from DRAFT or SUSPENDED.",
-        "operationId" : "activate_3",
+        "operationId" : "activate_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -22698,7 +24587,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/legal-entities/{entityId}/suspend" : {
       "post" : {
         "description" : "Its assignments are untouched. A branch it still holds blocks rather than silently falling through to another company. Permitted from ACTIVE.",
-        "operationId" : "suspend_1",
+        "operationId" : "suspend_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -22909,7 +24798,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/onboarding-runs/{runId}/activate" : {
       "post" : {
         "description" : "Requires every required step to have completed, plus platform approval where a policy demands it. Activating twice produces one transition.",
-        "operationId" : "activate_2",
+        "operationId" : "activate_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -23366,7 +25255,7 @@
       },
       "put" : {
         "description" : "Outcomes already recorded keep the snapshot they were recorded with. That duplication is deliberate: renaming a reason next year must not rewrite last year's funnel.",
-        "operationId" : "update_1",
+        "operationId" : "update_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -24417,7 +26306,7 @@
     "/api/v1/control-plane/tenants/{tenantId}/sales-channels/{channelId}" : {
       "put" : {
         "description" : "Everything but the code and the system type, which ADR 0036 fixes at creation because behaviour keys on the type.",
-        "operationId" : "update",
+        "operationId" : "update_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -25633,6 +27522,45 @@
         "tags" : [ "Commercial statements" ]
       }
     },
+    "/api/v1/control-plane/tenants/{tenantId}/statements/{statementId}/einvoices" : {
+      "get" : {
+        "operationId" : "forStatement",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "statementId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/EInvoiceView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The attempts to send one statement to an operator, newest first",
+        "tags" : [ "Commercial e-invoicing" ]
+      }
+    },
     "/api/v1/control-plane/tenants/{tenantId}/statements/{statementId}/export" : {
       "get" : {
         "description" : "For the accounting system an invoice is made in. Amounts are integer minor units of the statement's currency.",
@@ -25931,7 +27859,7 @@
     },
     "/api/v1/control-plane/tenants/{tenantId}/wallet" : {
       "get" : {
-        "description" : "Each balance is the SUM of the tenant's own ledger entries; no balance is stored. bonusSpendableBalance is the part of the bonus balance a statement could draw on now — the sum of the live grants' remainders. It is lower than bonusBalance between a grant's expiry and the hourly sweep that lapses it, and after a voided statement hands a draw back to a grant that has already expired.",
+        "description" : "Each balance is the SUM of the tenant's own ledger entries; no balance is stored. bonusSpendableBalance is the part of the bonus balance a statement could draw on now — the sum of the live grants' remainders. It is lower than bonusBalance between a grant's expiry and the hourly sweep that lapses it, and after a voided statement hands a draw back to a grant that has already expired. The card on file is described by its last four digits, brand and expiry only: its token reference, which for a card the tenant bound itself carries the merchant installation and the provider's vault token, is never returned, so cardTokenReference is always null (ADR 0028).",
         "operationId" : "overview",
         "parameters" : [ {
           "in" : "path",
@@ -25987,6 +27915,38 @@
           }
         },
         "summary" : "Live bonus grants with an unspent remainder",
+        "tags" : [ "Commercial wallet" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/wallet/invoices" : {
+      "get" : {
+        "description" : "What finance matches an incoming bank transfer against: each carries its number, which is what the tenant quotes in the payment's purpose, and how much of it the ledger has been paid.",
+        "operationId" : "prepaymentInvoices",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PrepaymentInvoiceView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The tenant's prepayment invoices, newest first",
         "tags" : [ "Commercial wallet" ]
       }
     },
@@ -26054,7 +28014,7 @@
               "*/*" : {
                 "schema" : {
                   "items" : {
-                    "$ref" : "#/components/schemas/StatementPaymentView"
+                    "$ref" : "#/components/schemas/CommercialWalletControllerStatementPaymentView"
                   },
                   "type" : "array"
                 }
@@ -26064,6 +28024,38 @@
           }
         },
         "summary" : "Every issued statement's paid and due amounts",
+        "tags" : [ "Commercial wallet" ]
+      }
+    },
+    "/api/v1/control-plane/tenants/{tenantId}/wallet/top-ups" : {
+      "get" : {
+        "description" : "PENDING is a charge the provider has not answered yet; the platform resolves it by asking the provider under the same key, so it is never charged twice.",
+        "operationId" : "cardTopUps",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/TopUpView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The tenant's recent card top-ups, newest first",
         "tags" : [ "Commercial wallet" ]
       }
     },
@@ -26114,6 +28106,299 @@
         },
         "summary" : "Payment providers' calls to HorecaOS, newest first",
         "tags" : [ "Webhook log" ]
+      }
+    },
+    "/api/v1/platform-admin/commercial/billing/bank-details" : {
+      "post" : {
+        "description" : "Needs a second signature: the first call answers AWAITING_APPROVAL, and the identical call again after a different person approves it writes the details. The approver is shown the whole proposal.",
+        "operationId" : "proposeBankDetails",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ProposeBankDetailsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CommercialBillingSetupControllerWalletChangeResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Propose the bank details every invoice will carry",
+        "tags" : [ "Commercial billing setup" ]
+      }
+    },
+    "/api/v1/platform-admin/commercial/billing/card-installations" : {
+      "post" : {
+        "description" : "The provider type must have an adapter in this build, the environment must come from the approved catalogue, and the credential is a provider_payment secret reference — the value is written to the secrets manager and never passes through this API.",
+        "operationId" : "createCardInstallation",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateCardInstallationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CardInstallationCreated"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Declare a card merchant account, in DRAFT",
+        "tags" : [ "Commercial billing setup" ]
+      }
+    },
+    "/api/v1/platform-admin/commercial/billing/card-installations/{installationId}/activation" : {
+      "post" : {
+        "description" : "Refused while another is active, and for a test double outside a local or test run. Cards bound under a previous account must be added again.",
+        "operationId" : "activate_3",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CommercialBillingSetupControllerTransitionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CardInstallationView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Make this the account cards are charged through",
+        "tags" : [ "Commercial billing setup" ]
+      }
+    },
+    "/api/v1/platform-admin/commercial/billing/card-installations/{installationId}/suspension" : {
+      "post" : {
+        "description" : "Every card tenant is then collected like an invoice tenant until an account is active. Refused with UNRESOLVED_CARD_CHARGES while top-ups or statement charges asked through this account have no answer yet: an idempotency key means something only to the account it was sent to, so the account that replaces this one cannot say whether they took the money. They are resolved by the settlement sweep within minutes. acknowledgeUnresolvedCharges suspends anyway, for an account that is unreachable; the charges then stay PENDING, never declined, and resolve when this account is active again.",
+        "operationId" : "suspend_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CardInstallationSuspendRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CardInstallationView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Stop charging through this account",
+        "tags" : [ "Commercial billing setup" ]
+      }
+    },
+    "/api/v1/platform-admin/commercial/einvoicing/installations/{installationId}" : {
+      "put" : {
+        "description" : "The reference to the login in the secrets manager (the value is put there with `bao kv put`, never sent here; absent keeps the one on file, blank clears it) and the seller's public identity. A missing setting is cleared. Requires If-Match carrying the version the account was read at; 409 STALE_VERSION when it has moved since.",
+        "operationId" : "update",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/EInvoicingAccountUpdate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EInvoicingAccountView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set up HorecaOS's account with an operator",
+        "tags" : [ "Commercial e-invoicing" ]
+      }
+    },
+    "/api/v1/platform-admin/commercial/einvoicing/installations/{installationId}/activation" : {
+      "post" : {
+        "description" : "Requires If-Match. 422 OPERATOR_NOT_CONNECTED, naming what is missing, while the account has no secret reference or no seller identity.",
+        "operationId" : "activate_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/EInvoicingReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EInvoicingAccountView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Connect an operator account",
+        "tags" : [ "Commercial e-invoicing" ]
+      }
+    },
+    "/api/v1/platform-admin/commercial/einvoicing/installations/{installationId}/suspension" : {
+      "post" : {
+        "description" : "The rollback ADR 0096 names: nothing more is sent through the account. Documents already sent keep their last known state. Requires If-Match.",
+        "operationId" : "suspend_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "installationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/EInvoicingReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EInvoicingAccountView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Stop sending through an operator account",
+        "tags" : [ "Commercial e-invoicing" ]
+      }
+    },
+    "/api/v1/platform-admin/commercial/einvoicing/line-classifications/{lineKind}" : {
+      "put" : {
+        "description" : "The classification code, unit and VAT rate. confirmed=true records that finance has stated it, who and when, and clears the provisional flag. Requires If-Match.",
+        "operationId" : "classify",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "lineKind",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/EInvoicingClassificationUpdate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EInvoicingClassificationView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "State what a kind of statement line is invoiced as",
+        "tags" : [ "Commercial e-invoicing" ]
       }
     },
     "/api/v1/platform-admin/commercial/entitlement-keys" : {
@@ -26377,6 +28662,90 @@
         "tags" : [ "Commercial administration" ]
       }
     },
+    "/api/v1/platform-admin/commercial/tenants/{tenantId}/einvoices/{einvoiceId}/release" : {
+      "post" : {
+        "description" : "Documents go out as drafts, and a draft can be deleted in the operator's own product to be fixed and sent again. Once the operator has said it holds nothing under the document's identifier (state UNKNOWN, status NOT_FOUND_AT_OPERATOR), this records that staff released it: the attempt reads CANCELLED, status RELEASED_BY_STAFF, and the statement can be sent again or voided. A reason is required and is audited. Requires If-Match. 422 NOT_RELEASABLE for any other attempt: a document the operator holds, or reports in a status this adapter cannot read, is not released.",
+        "operationId" : "release",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "einvoiceId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/EInvoicingReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EInvoiceView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Release a statement from a document the operator no longer holds",
+        "tags" : [ "Commercial e-invoicing" ]
+      }
+    },
+    "/api/v1/platform-admin/commercial/tenants/{tenantId}/einvoices/{einvoiceId}/state-refresh" : {
+      "post" : {
+        "description" : "Records the state the operator reports (sent, signed by the buyer, refused, cancelled). Also how an invoice whose send had no answer is resolved: by asking, never by sending again.",
+        "operationId" : "refresh",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "einvoiceId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EInvoiceRefreshView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask the operator what became of a sent invoice",
+        "tags" : [ "Commercial e-invoicing" ]
+      }
+    },
     "/api/v1/platform-admin/commercial/tenants/{tenantId}/entitlement-overrides" : {
       "post" : {
         "description" : "Time-bounded is not optional. An open-ended override is a plan change made without changing the plan, and it outlives everyone who remembers why it was granted.",
@@ -26535,6 +28904,53 @@
         "tags" : [ "Commercial statements" ]
       }
     },
+    "/api/v1/platform-admin/commercial/tenants/{tenantId}/statements/{statementId}/einvoices" : {
+      "post" : {
+        "description" : "HorecaOS is the seller and the tenant's legal entity the buyer. The document goes out as a draft invoice; the answer is the attempt as it stands (SUBMITTED, FAILED or UNCERTAIN). 422 OPERATOR_NOT_CONNECTED while HorecaOS has no connected account with that operator. A statement has at most one live invoice across both operators.",
+        "operationId" : "send",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "statementId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/EInvoiceSendRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EInvoiceView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Send an issued statement to an e-invoicing operator",
+        "tags" : [ "Commercial e-invoicing" ]
+      }
+    },
     "/api/v1/platform-admin/commercial/tenants/{tenantId}/statements/{statementId}/void" : {
       "post" : {
         "description" : "It stays on record as void; the month is free to issue again.",
@@ -26592,7 +29008,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/TransitionRequest"
+                "$ref" : "#/components/schemas/CommercialAdminControllerTransitionRequest"
               }
             }
           },
@@ -26747,7 +29163,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/WalletChangeResponse"
+                  "$ref" : "#/components/schemas/CommercialWalletControllerWalletChangeResponse"
                 }
               }
             },
@@ -26786,7 +29202,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/WalletChangeResponse"
+                  "$ref" : "#/components/schemas/CommercialWalletControllerWalletChangeResponse"
                 }
               }
             },
@@ -26864,7 +29280,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/WalletChangeResponse"
+                  "$ref" : "#/components/schemas/CommercialWalletControllerWalletChangeResponse"
                 }
               }
             },
@@ -26872,6 +29288,53 @@
           }
         },
         "summary" : "Propose taking back an activation deposit recorded against the wrong tenant",
+        "tags" : [ "Commercial wallet" ]
+      }
+    },
+    "/api/v1/platform-admin/commercial/tenants/{tenantId}/wallet/invoices/{invoiceId}/cancel" : {
+      "post" : {
+        "description" : "Refused once any money has been recorded against it.",
+        "operationId" : "cancelPrepaymentInvoice",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "invoiceId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CancelInvoiceRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PrepaymentInvoiceView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Withdraw a prepayment invoice nothing has paid",
         "tags" : [ "Commercial wallet" ]
       }
     },
@@ -26935,7 +29398,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/WalletChangeResponse"
+                  "$ref" : "#/components/schemas/CommercialWalletControllerWalletChangeResponse"
                 }
               }
             },
@@ -26948,7 +29411,7 @@
     },
     "/api/v1/platform-admin/commercial/tenants/{tenantId}/wallet/transfers" : {
       "post" : {
-        "description" : "One person's audited act, like issuing a statement — not a correction. Pays the oldest open statement at once.",
+        "description" : "One person's audited act, like issuing a statement — not a correction. Pays the oldest open statement at once. Naming the prepayment invoice it pays makes the entry say so, and the invoice's paid figure is then the ledger's own sum.",
         "operationId" : "recordTransfer",
         "parameters" : [ {
           "in" : "path",
@@ -28143,11 +30606,20 @@
     "description" : "The ADR 0032 code-owned event/schema contract registry",
     "name" : "Event contracts"
   }, {
+    "description" : "The languages the platform knows and where each is live (ADR 0149)",
+    "name" : "Locales"
+  }, {
+    "description" : "A platform account's second factor (ADR 0148)",
+    "name" : "Platform staff second factor"
+  }, {
     "description" : "Read-only: which templates exist and what they configure (ADR 0008)",
     "name" : "Onboarding templates"
   }, {
     "description" : "Combo groups, components, and modifier attachment policy",
     "name" : "Composite products"
+  }, {
+    "description" : "Sending issued statements to Didox and Faktura.uz as electronic invoices",
+    "name" : "Commercial e-invoicing"
   }, {
     "description" : "Reading back draft catalogs, products, categories, and modifier groups",
     "name" : "Catalog reads"
@@ -28266,11 +30738,17 @@
     "description" : "Plans, subscriptions, entitlements, and metered usage",
     "name" : "Commercial"
   }, {
+    "description" : "A staff member's own TOTP authenticators, held by Keycloak (ADR 0148)",
+    "name" : "Staff second factor"
+  }, {
     "description" : "ADR 0092: how the platform treats personal data",
     "name" : "Data protection"
   }, {
     "description" : "Immutable security and business evidence",
     "name" : "Audit"
+  }, {
+    "description" : "ADR 0070: the platform's registry of storefront apps, public and confidential clients",
+    "name" : "Storefront apps"
   }, {
     "description" : "The ADR 0030 code-owned configuration registry and its resolution trace",
     "name" : "Configuration"
@@ -28298,6 +30776,9 @@
   }, {
     "description" : "Monthly statements of what a tenant owes, before tax",
     "name" : "Commercial statements"
+  }, {
+    "description" : "The bank details invoices carry and the card merchant account",
+    "name" : "Commercial billing setup"
   }, {
     "description" : "ADR 0079: how an unenrolled device gets a Keycloak identity",
     "name" : "Device enrolment"

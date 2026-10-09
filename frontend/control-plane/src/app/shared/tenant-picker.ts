@@ -13,12 +13,19 @@ import { TenantDirectory } from './tenant-directory';
   template: `
     <label class="tenantPicker">
       <span class="q-caption">{{ i18n.t('tenantPicker.label') }}</span>
-      <select class="q-body-sm" name="tenant" [value]="value()" (change)="choose($any($event.target).value)">
+      <select
+        class="q-body-sm"
+        name="tenant"
+        [value]="value()"
+        (change)="choose($any($event.target).value)"
+      >
         <option value="">
           {{ directory.loaded() ? i18n.t('tenantPicker.placeholder') : i18n.t('tenants.loading') }}
         </option>
         @for (tenant of directory.tenants(); track tenant.id) {
-          <option [value]="tenant.id" [selected]="tenant.id === value()">{{ tenant.displayName }} · {{ tenant.slug }}</option>
+          <option [value]="tenant.id" [selected]="tenant.id === value()">
+            {{ tenant.displayName }} · {{ tenant.slug }}
+          </option>
         }
       </select>
     </label>

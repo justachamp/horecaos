@@ -48,9 +48,11 @@
             <th>{{ 'delivery.zoneImport.column.externalRef' | t }}</th>
             <th>{{ 'delivery.zoneImport.column.code' | t }}</th>
             <th>{{ 'delivery.zoneImport.column.role' | t }}</th>
+            <th>{{ 'delivery.zoneImport.column.map' | t }}</th>
             @if (report()) {
               <th>{{ 'delivery.zoneImport.column.outcome' | t }}</th>
               <th>{{ 'delivery.zoneImport.column.warnings' | t }}</th>
+              <th></th>
             }
           </tr>
         </thead>
@@ -60,6 +62,29 @@
               <td>{{ row.externalRef }}</td>
               <td class="q-mono">{{ row.code }}</td>
               <td>{{ row.role }}</td>
+              <td data-testid="zone-import-geometry">
+                @if (canDraw(row)) {
+                  <span
+                    class="zone-import__verdict"
+                    [attr.data-verdict]="verdictOf(row)"
+                    data-testid="zone-import-verdict"
+                  >
+                    {{ verdictKey(row)! | t }}
+                  </span>
+                  <button
+                    type="button"
+                    class="zone-import__action"
+                    (click)="showOnMap(row)"
+                    data-testid="zone-import-show"
+                  >
+                    {{ 'delivery.zoneImport.preview.show' | t }}
+                  </button>
+                } @else {
+                  <span class="q-caption" data-testid="zone-import-unreadable">
+                    {{ 'delivery.zoneImport.preview.unreadable' | t }}
+                  </span>
+                }
+              </td>
               @if (report()) {
                 @let outcome = rowOutcomeFor(row);
                 <td data-testid="zone-import-outcome">
@@ -76,6 +101,25 @@
                 <td data-testid="zone-import-warnings">
                   @for (warning of outcome?.warnings ?? []; track warning) {
                     <div class="zone-import__warning">{{ warning }}</div>
+                  }
+                </td>
+                <td>
+                  @if (isActivated(row)) {
+                    <span
+                      class="status-badge status-badge--accepted"
+                      data-testid="zone-import-live"
+                    >
+                      {{ 'delivery.zoneImport.live' | t }}
+                    </span>
+                  } @else if (canReview(row)) {
+                    <button
+                      type="button"
+                      class="zone-import__action"
+                      (click)="openReview(row)"
+                      data-testid="zone-import-review"
+                    >
+                      {{ 'delivery.zoneImport.review.action' | t }}
+                    </button>
                   }
                 </td>
               }
@@ -104,6 +148,96 @@
           {{ 'delivery.zoneImport.commit' | t }}
         </button>
       </div>
+
+      @if (previewRow(); as row) {
+        <section class="zone-import__preview" data-testid="zone-import-preview-panel">
+          <h2 class="q-subhead">
+            {{ 'delivery.zoneImport.preview.title' | t: { ref: row.externalRef } }}
+          </h2>
+          <div class="zone-import__preview-body">
+            <div class="zone-import__preview-map">
+              <q-map-canvas
+                [center]="previewCentre()"
+                [fitTo]="previewFit()"
+                [areas]="previewAreas()"
+                [height]="320"
+                [label]="'delivery.zoneImport.preview.mapLabel' | t: { ref: row.externalRef }"
+                (ready)="onPreviewReady($event)"
+              />
+            </div>
+            <div class="zone-import__preview-source">
+              <h3 class="q-caption">{{ 'delivery.zoneImport.preview.sourceHeading' | t }}</h3>
+              <table class="zone-import__corners" data-testid="zone-import-source">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>{{ 'delivery.zoneImport.preview.inFile' | t }}</th>
+                    <th>{{ 'delivery.zoneImport.preview.readAs' | t }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (corner of previewSourceCorners(); track $index) {
+                    <tr data-testid="zone-import-source-corner">
+                      <td class="q-tnum">{{ $index + 1 }}</td>
+                      <td class="q-mono">[{{ corner.longitude }}, {{ corner.latitude }}]</td>
+                      <td class="q-mono">{{ corner.latitude }}, {{ corner.longitude }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+              @if (previewSimplified()) {
+                <p class="q-caption">{{ 'delivery.zones.review.simplified' | t }}</p>
+              }
+              @if (verdictKey(row); as key) {
+                <p
+                  class="q-body-sm zone-import__verdict"
+                  [attr.data-verdict]="verdictOf(row)"
+                  data-testid="zone-import-preview-verdict"
+                >
+                  {{ key | t }}
+                </p>
+              }
+            </div>
+          </div>
+          <button type="button" class="zone-import__action" (click)="closePreview()">
+            {{ 'delivery.zoneImport.preview.close' | t }}
+          </button>
+        </section>
+      }
+
+      @if (reviewing(); as review) {
+        <div class="q-modal-backdrop" (click)="closeReview()">
+          <div
+            class="q-modal zone-import__review-modal"
+            (click)="$event.stopPropagation()"
+            data-testid="zone-import-review-dialog"
+          >
+            @if (brandScope(); as scope) {
+              <q-zone-outline-review
+                [scope]="scope"
+                [zoneId]="review.zoneId"
+                [version]="review.version"
+                [zoneCode]="review.code"
+                [region]="reviewRegionBounds()"
+                [tariff]="reviewTariff()"
+                mode="activate"
+                [busy]="reviewBusy()"
+                (activate)="confirmActivation()"
+                (closed)="closeReview()"
+              />
+            }
+            @if (reviewError(); as error) {
+              <p
+                class="q-modal__error q-body-sm"
+                role="alert"
+                data-testid="zone-import-review-error"
+              >
+                {{ error }}
+              </p>
+            }
+          </div>
+        </div>
+      }
 
       @if (report(); as result) {
         <p class="q-body-sm zone-import__summary" data-testid="zone-import-summary">

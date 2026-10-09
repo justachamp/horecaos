@@ -95,15 +95,20 @@ export class Entitlements {
   );
 
   /** The terms the chosen version offers, month to month always first. */
-  protected readonly termChoices = computed<readonly { months: number; basisPoints: number }[]>(() => {
-    const version = this.plans()
-      .flatMap((plan) => plan.versions)
-      .find((candidate) => candidate.planVersionId === this.startPlan());
-    return [
-      { months: 1, basisPoints: 0 },
-      ...(version?.terms.termDiscounts ?? []).map((term) => ({ months: term.termMonths, basisPoints: term.discountBasisPoints })),
-    ];
-  });
+  protected readonly termChoices = computed<readonly { months: number; basisPoints: number }[]>(
+    () => {
+      const version = this.plans()
+        .flatMap((plan) => plan.versions)
+        .find((candidate) => candidate.planVersionId === this.startPlan());
+      return [
+        { months: 1, basisPoints: 0 },
+        ...(version?.terms.termDiscounts ?? []).map((term) => ({
+          months: term.termMonths,
+          basisPoints: term.discountBasisPoints,
+        })),
+      ];
+    },
+  );
 
   /** The chosen version's own trial, shown as what an empty trial field means. */
   protected readonly planTrialDays = computed<number | null>(
@@ -131,11 +136,15 @@ export class Entitlements {
     const currency = this.plans()
       .flatMap((plan) => plan.versions)
       .find((candidate) => candidate.planVersionId === live.planVersionId)?.price.currency;
-    return currency === undefined ? null : { amountMinor: live.activationDepositDueMinor, currency };
+    return currency === undefined
+      ? null
+      : { amountMinor: live.activationDepositDueMinor, currency };
   });
 
   protected readonly overrideTarget = computed<ResolvedEntitlement | null>(
-    () => this.snapshot()?.entitlements.find((line) => line.entitlementKey === this.overrideKey()) ?? null,
+    () =>
+      this.snapshot()?.entitlements.find((line) => line.entitlementKey === this.overrideKey()) ??
+      null,
   );
 
   constructor() {
@@ -282,13 +291,16 @@ export class Entitlements {
         // The version read with the subscription: a colleague's move in between is refused, not overwritten.
         expectedVersion: live.version,
         suspensionReason: next === 'SUSPENDED' ? this.suspensionReason().trim() : undefined,
-        cancelAt: next === 'CANCELLATION_SCHEDULED' ? new Date(this.cancelAt()).toISOString() : undefined,
+        cancelAt:
+          next === 'CANCELLATION_SCHEDULED' ? new Date(this.cancelAt()).toISOString() : undefined,
         reason: this.transitionReason().trim(),
       });
       this.suspensionReason.set('');
       this.cancelAt.set('');
       this.transitionReason.set('');
-      return this.i18n.t('entitlements.transition.done', { status: this.i18n.t(this.statusKey(next)) });
+      return this.i18n.t('entitlements.transition.done', {
+        status: this.i18n.t(this.statusKey(next)),
+      });
     });
   }
 

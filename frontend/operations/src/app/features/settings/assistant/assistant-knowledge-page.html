@@ -1,0 +1,270 @@
+<p class="q-caption back">
+  <a routerLink=".." queryParamsHandling="preserve">{{ 'settings.assistant.notes.back' | t }}</a>
+</p>
+<h1 class="q-title">{{ 'settings.assistant.notes.title' | t }}</h1>
+<p class="q-body-sm lead">{{ 'settings.assistant.notes.lead' | t }}</p>
+<p class="q-caption note" data-testid="assistant-notes-level-hint">{{ levelHintKey() | t }}</p>
+
+<!-- The form shared by a new note and a new version of one: the words, then why. -->
+<ng-template #wordsForm>
+  <label class="q-caption" for="note-question">{{
+    'settings.assistant.notes.field.question' | t
+  }}</label>
+  <input
+    id="note-question"
+    class="q-body field"
+    type="text"
+    data-testid="note-question"
+    [attr.maxlength]="questionMax"
+    [value]="draftQuestion()"
+    (input)="draftQuestion.set($any($event.target).value)"
+  />
+  <p class="q-caption hint">{{ 'settings.assistant.notes.field.question.hint' | t }}</p>
+
+  <label class="q-caption" for="note-answer">{{
+    'settings.assistant.notes.field.answer' | t
+  }}</label>
+  <textarea
+    id="note-answer"
+    class="q-body field text"
+    rows="5"
+    data-testid="note-answer"
+    [value]="draftAnswer()"
+    (input)="draftAnswer.set($any($event.target).value)"
+  ></textarea>
+  <p class="q-caption counter" [class.counter--over]="answerLength() > answerMax">
+    {{ 'settings.assistant.notes.counter' | t: { count: answerLength(), max: answerMax } }}
+  </p>
+  <p class="q-caption hint">{{ 'settings.assistant.notes.field.answer.hint' | t }}</p>
+</ng-template>
+
+<ng-template #reasonAndActions let-submitKey="submitKey">
+  <label class="q-caption" for="note-reason">{{ 'settings.orderPolicy.field.reason' | t }}</label>
+  <input
+    id="note-reason"
+    class="q-body field"
+    type="text"
+    data-testid="note-reason"
+    [value]="draftReason()"
+    (input)="draftReason.set($any($event.target).value)"
+  />
+
+  @if (saveError(); as message) {
+    <p class="q-body-sm error" role="alert" data-testid="note-save-error">{{ message }}</p>
+  }
+
+  <div class="form__actions">
+    <button type="button" class="q-body secondary" (click)="cancel()" [disabled]="saving()">
+      {{ 'settings.orderPolicy.cancel' | t }}
+    </button>
+    <button
+      type="button"
+      class="q-body primary"
+      data-testid="note-save"
+      (click)="save()"
+      [disabled]="!canSave()"
+    >
+      {{ saving() ? ('settings.orderPolicy.publishing' | t) : (submitKey | t) }}
+    </button>
+  </div>
+</ng-template>
+
+@if (loading()) {
+  <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+} @else if (denied()) {
+  <p class="q-body-sm denied" data-testid="notes-denied">{{ 'settings.scope.denied' | t }}</p>
+} @else if (loadError(); as message) {
+  <p class="q-body-sm error" role="alert">{{ message }}</p>
+} @else {
+  @if (!creating()) {
+    <p>
+      <button type="button" class="q-body primary" data-testid="note-new" (click)="startCreating()">
+        {{ 'settings.assistant.notes.new' | t }}
+      </button>
+    </p>
+  } @else {
+    <section class="card" data-testid="note-create-form">
+      <h2 class="q-subhead">{{ 'settings.assistant.notes.new' | t }}</h2>
+      <div class="form">
+        <label class="q-caption" for="note-locale">{{
+          'settings.assistant.notes.field.locale' | t
+        }}</label>
+        <select
+          id="note-locale"
+          class="q-body field"
+          data-testid="note-locale"
+          [value]="draftLocale()"
+          (change)="draftLocale.set($any($event.target).value)"
+        >
+          @for (locale of locales; track locale) {
+            <option [value]="locale" [selected]="locale === draftLocale()">
+              {{ localeLabel(locale) }}
+            </option>
+          }
+        </select>
+
+        @if (showsBranchPicker()) {
+          <label class="q-caption" for="note-location">{{
+            'settings.assistant.notes.field.applies' | t
+          }}</label>
+          <select
+            id="note-location"
+            class="q-body field"
+            data-testid="note-location"
+            [value]="draftLocationId()"
+            (change)="draftLocationId.set($any($event.target).value)"
+          >
+            <option value="" [selected]="draftLocationId() === ''">
+              {{ 'settings.assistant.notes.scope.BRAND' | t }}
+            </option>
+            @for (branch of branches(); track branch.id) {
+              <option [value]="branch.id" [selected]="branch.id === draftLocationId()">
+                {{ branch.displayName }}
+              </option>
+            }
+          </select>
+        }
+
+        <ng-container *ngTemplateOutlet="wordsForm" />
+        <ng-container
+          *ngTemplateOutlet="
+            reasonAndActions;
+            context: { submitKey: 'settings.assistant.notes.publish' }
+          "
+        />
+      </div>
+    </section>
+  }
+
+  @for (entry of entries(); track entry.id) {
+    <section
+      class="card"
+      [class.card--retired]="entry.status === 'RETIRED'"
+      data-testid="note-entry"
+    >
+      <p class="q-caption entry-meta">
+        <span class="chip">{{ localeLabel(entry.locale) }}</span>
+        <span class="chip">{{ scopeLabel(entry) }}</span>
+        <span class="chip" [class.chip--retired]="entry.status === 'RETIRED'">{{
+          statusLabel(entry.status)
+        }}</span>
+        <span>{{ 'settings.assistant.notes.version' | t: { version: entry.version } }}</span>
+      </p>
+
+      @if (revisingId() === entry.id) {
+        <div class="form" data-testid="note-revise-form">
+          <ng-container *ngTemplateOutlet="wordsForm" />
+          <ng-container
+            *ngTemplateOutlet="
+              reasonAndActions;
+              context: { submitKey: 'settings.assistant.notes.publishVersion' }
+            "
+          />
+        </div>
+      } @else {
+        <p class="q-emphasis question" data-testid="note-entry-question">
+          {{ entry.questionForm }}
+        </p>
+        <p class="q-body-sm answer" data-testid="note-entry-answer">{{ entry.answerBody }}</p>
+        <p class="q-caption entry-by">
+          {{
+            'settings.assistant.notes.by'
+              | t: { author: entry.authoredBy, when: formatWhen(entry.publishedAt) }
+          }}
+        </p>
+      }
+
+      @if (retiringId() === entry.id) {
+        <div class="form" data-testid="note-retire-form">
+          <p class="q-body-sm">{{ 'settings.assistant.notes.retire.body' | t }}</p>
+          <ng-container
+            *ngTemplateOutlet="
+              reasonAndActions;
+              context: { submitKey: 'settings.assistant.notes.retire' }
+            "
+          />
+        </div>
+      }
+
+      @if (revisingId() !== entry.id && retiringId() !== entry.id) {
+        <div class="actions">
+          @if (entry.status === 'PUBLISHED') {
+            <button
+              type="button"
+              class="q-body secondary"
+              data-testid="note-revise"
+              (click)="startRevising(entry)"
+            >
+              {{ 'settings.assistant.notes.revise' | t }}
+            </button>
+            <button
+              type="button"
+              class="q-body secondary"
+              data-testid="note-retire"
+              (click)="startRetiring(entry)"
+            >
+              {{ 'settings.assistant.notes.retire' | t }}
+            </button>
+          }
+          <button
+            type="button"
+            class="q-body secondary"
+            data-testid="note-history"
+            [attr.aria-expanded]="historyOf(entry) !== null"
+            (click)="toggleHistory(entry)"
+          >
+            {{ 'settings.assistant.notes.history' | t }}
+          </button>
+        </div>
+      }
+
+      @if (historyOf(entry); as history) {
+        <div class="history" data-testid="note-history-list">
+          @switch (history.status) {
+            @case ('loading') {
+              <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
+            }
+            @case ('error') {
+              <p class="q-body-sm error" role="alert">
+                {{ 'settings.assistant.notes.history.error' | t }}
+              </p>
+            }
+            @case ('ready') {
+              @if (history.status === 'ready') {
+                <ol class="versions">
+                  @for (version of history.versions; track version.version) {
+                    <li data-testid="note-version">
+                      <p class="q-caption">
+                        {{
+                          'settings.assistant.notes.history.line'
+                            | t
+                              : {
+                                  version: version.version,
+                                  status: statusLabel(version.status),
+                                  author: version.authoredBy,
+                                  when: formatWhen(version.publishedAt),
+                                }
+                        }}
+                      </p>
+                      <p class="q-body-sm">{{ version.questionForm }}</p>
+                      <p class="q-body-sm answer">{{ version.answerBody }}</p>
+                      <p class="q-caption hint">
+                        {{
+                          'settings.assistant.notes.history.reason' | t: { reason: version.reason }
+                        }}
+                      </p>
+                    </li>
+                  }
+                </ol>
+              }
+            }
+          }
+        </div>
+      }
+    </section>
+  } @empty {
+    <p class="q-body-sm empty" data-testid="notes-empty">
+      {{ 'settings.assistant.notes.empty' | t }}
+    </p>
+  }
+}

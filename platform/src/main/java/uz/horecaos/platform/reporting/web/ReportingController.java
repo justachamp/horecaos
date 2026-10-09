@@ -145,15 +145,19 @@ public class ReportingController {
                     + "amount per payment method, from tenders that reached SETTLED or REVERSED. "
                     + "\"overview\" folds every branch into one row per method and legal entity "
                     + "(ADR 0038: never across two, since this is money); \"byLocation\" keeps the "
-                    + "branch split so 7.3b's cash reconciliation can answer from the same read.")
+                    + "branch split so 7.3b's cash reconciliation can answer from the same read. "
+                    + "legalEntityId narrows both to one taxpayer; paymentMethodCode narrows both to "
+                    + "the named methods.")
     public ResponseEntity<PaymentMixResponse> paymentMix(
             @PathVariable UUID tenantId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) List<UUID> locationId,
-            @RequestParam(required = false) List<String> paymentMethodCode) {
+            @RequestParam(required = false) List<String> paymentMethodCode,
+            @RequestParam(required = false) List<UUID> legalEntityId) {
 
-        var result = queries.paymentMix(tenantId, from, to, orEmpty(locationId), orEmpty(paymentMethodCode));
+        var result = queries.paymentMix(
+                tenantId, from, to, orEmpty(locationId), orEmpty(paymentMethodCode), orEmpty(legalEntityId));
         return ResponseEntity.ok(new PaymentMixResponse(
                 result.overview().stream().map(PaymentMixRowResponse::of).toList(),
                 result.byLocation().stream().map(PaymentMixRowResponse::of).toList(),
@@ -314,6 +318,36 @@ public class ReportingController {
         return ResponseEntity.ok(new DistanceBucketsResponse(
                 result.buckets().stream()
                         .map(bucket -> new DistanceBucketResponse(bucket.bucketCode(), bucket.deliveryCount()))
+                        .toList(),
+                ProvenanceResponse.of(result.provenance())));
+    }
+
+    /**
+     * Row 7.10 (ADR 0145 decision 8): the order-density view's data -- deliveries per delivery
+     * zone, the zone dimension and never a doorstep.
+     */
+    @GetMapping("/zone-density")
+    @RequiresCapability(value = Capability.REPORTING_READ, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "Deliveries per delivery zone over a closed range (7.10)",
+            description = "ADR 0145 and ADR 0037: off reporting.fact_delivery_fee_resolution, the "
+                    + "closed fact that carries the zone a fee was resolved against, so the density "
+                    + "view needs a zone and never a coordinate. A zoneId of null is the deliveries "
+                    + "no drawn zone covered -- priced by the branch's own tariff -- which is the "
+                    + "figure that exposes a badly cut zone. Counted from fee resolutions that named "
+                    + "a tariff, so a delivery priced outside the tariff model is not in it. Money "
+                    + "is integer minor units, grouped by currency.")
+    public ResponseEntity<ZoneDensityResponse> zoneDensity(
+            @PathVariable UUID tenantId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) List<UUID> locationId) {
+
+        var result = queries.zoneDensity(tenantId, from, to, orEmpty(locationId));
+        return ResponseEntity.ok(new ZoneDensityResponse(
+                result.rows().stream()
+                        .map(row -> new ZoneDensityRowResponse(
+                                row.zoneId(), row.deliveryCount(), row.totalFeeMinor(), row.currency()))
                         .toList(),
                 ProvenanceResponse.of(result.provenance())));
     }
@@ -995,6 +1029,12 @@ public class ReportingController {
 
     /** Wave 9 w4-reports-distance-crm (7.1): {@code delivery_distance.average.v1} — see {@link #deliveryDistance}. */
     public record DistanceResponse(@Nullable Integer averageMeters, ProvenanceResponse provenance) {}
+
+    /** Row 7.10: one zone's deliveries; {@code zoneId} null is "no drawn zone covered these". */
+    public record ZoneDensityRowResponse(
+            @Nullable UUID zoneId, int deliveryCount, long totalFeeMinor, String currency) {}
+
+    public record ZoneDensityResponse(List<ZoneDensityRowResponse> zones, ProvenanceResponse provenance) {}
 
     /** Row 7.10b: one distance bucket's delivery count — see {@link #distanceBuckets}. */
     public record DistanceBucketResponse(String bucketCode, int deliveryCount) {}

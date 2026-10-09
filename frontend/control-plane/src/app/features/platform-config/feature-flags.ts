@@ -9,7 +9,9 @@ import { TenantPicker } from '../../shared/tenant-picker';
 import { ConfigurationApi, FeatureFlagTenantSetting, FeatureFlagView } from './configuration-api';
 
 /** Words for the flags this console knows by name; a flag it does not know shows its code. */
-const FLAG_WORDS: Readonly<Record<string, { readonly name: MessageKey; readonly description: MessageKey }>> = {
+const FLAG_WORDS: Readonly<
+  Record<string, { readonly name: MessageKey; readonly description: MessageKey }>
+> = {
   'feature.support_visits': {
     name: 'featureFlags.flag.supportVisits',
     description: 'featureFlags.flag.supportVisits.description',
@@ -18,7 +20,13 @@ const FLAG_WORDS: Readonly<Record<string, { readonly name: MessageKey; readonly 
 
 type PendingChange =
   | { readonly kind: 'platform'; readonly flag: FeatureFlagView; readonly value: boolean }
-  | { readonly kind: 'tenant'; readonly flag: FeatureFlagView; readonly tenantId: string; readonly value: boolean | null; readonly version: number | null };
+  | {
+      readonly kind: 'tenant';
+      readonly flag: FeatureFlagView;
+      readonly tenantId: string;
+      readonly value: boolean | null;
+      readonly version: number | null;
+    };
 
 /**
  * IA 8.1 Feature flags -- what is being rolled out, and to whom.
@@ -137,7 +145,13 @@ export class FeatureFlags {
       return;
     }
     const existing = flag.tenants.find((setting) => setting.tenantId === tenantId);
-    this.ask({ kind: 'tenant', flag, tenantId, value: this.addValue(), version: existing?.version ?? null });
+    this.ask({
+      kind: 'tenant',
+      flag,
+      tenantId,
+      value: this.addValue(),
+      version: existing?.version ?? null,
+    });
   }
 
   /** Writes the pending change through the ordinary configuration write, with the version last read. */

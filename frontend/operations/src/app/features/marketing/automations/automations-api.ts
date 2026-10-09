@@ -6,9 +6,13 @@ import { BrandScope } from '../../../core/api/catalog-paths';
 import { command } from '../../../core/api/idempotency';
 import { marketingPaths } from '../../../core/api/marketing-paths';
 
-/** The trigger kinds this build offers. See `AutomationTriggerType`'s own doc for why not five. */
+/**
+ * The trigger kinds the server has: the five row 6.5 names. `LATE_ORDER_APOLOGY` was
+ * "deliberately absent" under ADR 0044 until ADR 0112 reconciled it with ADR 0013's remedies; see
+ * `AutomationTriggerType`'s own doc for what it is (words, never a benefit) and what it is not.
+ */
 export type AutomationTriggerKind =
-  'BIRTHDAY' | 'INACTIVITY' | 'CART_ABANDONMENT' | 'CASHBACK_CHANGE';
+  'BIRTHDAY' | 'INACTIVITY' | 'CART_ABANDONMENT' | 'CASHBACK_CHANGE' | 'LATE_ORDER_APOLOGY';
 
 /** The one `trigger_config` key each trigger kind reads — `AutomationTriggerType.configKey()`. */
 export const AUTOMATION_TRIGGER_CONFIG_KEY: Readonly<Record<AutomationTriggerKind, string>> = {
@@ -16,6 +20,7 @@ export const AUTOMATION_TRIGGER_CONFIG_KEY: Readonly<Record<AutomationTriggerKin
   INACTIVITY: 'inactivityDays',
   CART_ABANDONMENT: 'abandonmentDelayHours',
   CASHBACK_CHANGE: 'minimumChangeMinor',
+  LATE_ORDER_APOLOGY: 'lateByMinutes',
 };
 
 /** Mirrors `AutomationRuleController.AutomationRuleResponse`. */
@@ -58,14 +63,21 @@ export interface AutomationRunView {
   readonly customerAccountId: string;
   /** `FIRED` | `REFUSED` | `CANCELLED`. */
   readonly status: string;
+  /** A `RefusalReason` name, or `CHANNEL_NOT_WIRED`. */
   readonly refusalReason: string | null;
+  /**
+   * The sentence the engine recorded beside the reason: which rule, which numbers (a cap, a quiet
+   * window). English, and free of any contact value. Null when the reason says it all.
+   */
+  readonly refusalDetail: string | null;
+  /** Why a firing was cancelled (the cart converted; a remedy already covered the order). */
   readonly cancelledReason: string | null;
   readonly firedAt: string;
 }
 
 /**
- * Gap-map row 6.5 (ADR 0044 Triggers) — unattended BIRTHDAY, INACTIVITY and
- * CART_ABANDONMENT rules. Authoring (`campaign.author`) and arming
+ * Gap-map row 6.5 (ADR 0044 Triggers, ADR 0112) — unattended BIRTHDAY, INACTIVITY,
+ * CART_ABANDONMENT, CASHBACK_CHANGE and LATE_ORDER_APOLOGY rules. Authoring (`campaign.author`) and arming
  * (`campaign.approve`) are two distinct calls on the server; this client
  * mirrors that split rather than folding it into one method, so a caller
  * cannot accidentally arm a rule it only meant to save.

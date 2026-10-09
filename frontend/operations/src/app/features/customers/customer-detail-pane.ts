@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 import { Router } from '@angular/router';
 
 import { Versioned } from '../../core/api/aggregate-version';
@@ -17,13 +25,15 @@ import { MoneyInput } from '../../shared/ui/money-input';
 import { describeApiError } from '../orders/order-errors';
 import { orderStatusLabel } from '../orders/order-status';
 import { BrandProfileApi, BrandView } from '../settings/brand-profile/brand-profile-api';
+import { CustomerAddressDraft, CustomerAddressEditor } from './customer-address-editor';
 import { customerStatusLabel } from './customer-status';
+import { CustomerCardHistory } from './customer-card-history';
+import { CustomerCard, HistoryEntry, LeadsApi, RecordContactAttemptRequest } from './leads-api';
 import { ReviewRow, ReviewsApi } from './reviews/reviews-api';
 import {
   BlacklistStatus,
   ConsentDecision,
   ContactType,
-  CustomerAddressFields,
   CustomerCoordinateSource,
   CustomerDiscountHistory,
   CustomerEligibility,
@@ -45,6 +55,7 @@ type Tab =
   | 'profile'
   | 'addresses'
   | 'orders'
+  | 'history'
   | 'consent'
   | 'cashback'
   | 'blacklist'
@@ -113,67 +124,8 @@ const REVEAL_PURPOSE = {
   dateOfBirth: 'Operations console: view customer date of birth',
   addresses: 'Operations console: view customer addresses',
   blacklistHistory: 'Operations console: view blacklist history',
+  openCard: 'Operations console: open customer card',
 } as const;
-
-/**
- * The address form's own draft shape: every field a plain, possibly-empty
- * string, unlike {@link CustomerAddressFields} where `line1`/`city`/`district`
- * are required and the rest are `string | null`. Keeping the draft
- * all-string avoids coercing an empty required field to `null` mid-edit,
- * which `CustomerAddressFields`'s own type would otherwise forbid; {@link
- * toAddressFields} is the one place the draft becomes the real request.
- */
-interface AddressFormState {
-  readonly line1: string;
-  readonly line2: string;
-  readonly city: string;
-  readonly district: string;
-  readonly postalCode: string;
-  readonly entrance: string;
-  readonly floor: string;
-  readonly apartment: string;
-  readonly landmark: string;
-}
-
-const EMPTY_ADDRESS_FORM: AddressFormState = {
-  line1: '',
-  line2: '',
-  city: '',
-  district: '',
-  postalCode: '',
-  entrance: '',
-  floor: '',
-  apartment: '',
-  landmark: '',
-};
-
-function formFromAddressFields(fields: CustomerAddressFields): AddressFormState {
-  return {
-    line1: fields.line1,
-    line2: fields.line2 ?? '',
-    city: fields.city,
-    district: fields.district,
-    postalCode: fields.postalCode ?? '',
-    entrance: fields.entrance ?? '',
-    floor: fields.floor ?? '',
-    apartment: fields.apartment ?? '',
-    landmark: fields.landmark ?? '',
-  };
-}
-
-function toAddressFields(form: AddressFormState): CustomerAddressFields {
-  return {
-    line1: form.line1.trim(),
-    line2: form.line2.trim() || null,
-    city: form.city.trim(),
-    district: form.district.trim(),
-    postalCode: form.postalCode.trim() || null,
-    entrance: form.entrance.trim() || null,
-    floor: form.floor.trim() || null,
-    apartment: form.apartment.trim() || null,
-    landmark: form.landmark.trim() || null,
-  };
-}
 
 /**
  * 5.2 Customer detail — the screen Delever does not have.
@@ -196,7 +148,7 @@ function toAddressFields(form: AddressFormState): CustomerAddressFields {
  */
 @Component({
   selector: 'q-customer-detail-pane',
-  imports: [TPipe, ActorChip, MoneyInput],
+  imports: [TPipe, ActorChip, MoneyInput, CustomerAddressEditor, CustomerCardHistory],
   templateUrl: './customer-detail-pane.html',
   styleUrl: './customer-detail-pane.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -204,6 +156,7 @@ function toAddressFields(form: AddressFormState): CustomerAddressFields {
 export class CustomerDetailPane {
   private readonly api = inject(CustomersApi);
   private readonly reviewsApi = inject(ReviewsApi);
+  private readonly leadsApi = inject(LeadsApi);
   private readonly brandProfiles = inject(BrandProfileApi);
   private readonly baseLocation = inject(CurrentLocation);
   private readonly router = inject(Router);
@@ -220,6 +173,29 @@ export class CustomerDetailPane {
   protected readonly loadError = signal<string | null>(null);
   protected readonly profile = signal<Versioned<CustomerProfile> | null>(null);
   protected readonly notice = signal<string | null>(null);
+
+  /**
+   * ADR 0111: the customer card. Opening the pane opens the card, and **opening the card is the
+   * audited act** — one `customer.card.viewed` fact per open — so this is read once when the account
+   * is shown, whichever tab is on top, and again only when the operator pages further back. It is
+   * never re-read to refresh: a refresh would be a second open she did not ask for.
+   */
+  protected readonly card = signal<CustomerCard | null>(null);
+  protected readonly cardLoading = signal(false);
+  protected readonly cardLoadingMore = signal(false);
+  protected readonly cardError = signal<string | null>(null);
+  protected readonly recordBusy = signal(false);
+  /** Why the last call was refused, shown under the form that stays open; null once one is written. */
+  protected readonly recordError = signal<string | null>(null);
+  /** Calls written for the guest on show; the form closes when this moves, and not on submit. */
+  protected readonly recordedCount = signal(0);
+
+  /**
+   * Which showing of the card a response belongs to. Every request that writes the card remembers the
+   * number it started under and drops its answer if the pane has moved on -- to another guest, or back
+   * to this one -- so a slow page of guest A's history can never land in guest B's pane.
+   */
+  private cardEpoch = 0;
 
   constructor() {
     // The route reuses this component across an `:accountId` change (default
@@ -257,6 +233,9 @@ export class CustomerDetailPane {
     }
   }
 
+  /** The same scope as a signal, for the address editor, whose lookups it selects the path for. */
+  protected readonly locationScope = computed(() => this.baseLocation.scope());
+
   private scope() {
     return this.baseLocation.scope();
   }
@@ -265,7 +244,13 @@ export class CustomerDetailPane {
     this.loading.set(true);
     this.loadError.set(null);
     this.resetTabState();
+    // This showing's number, taken *here* and carried down: reading `cardEpoch` later, after an await,
+    // would read the number of whichever account is on show by then.
+    const epoch = this.cardEpoch;
     await this.baseLocation.ensureLoaded();
+    if (epoch !== this.cardEpoch) {
+      return;
+    }
     const scope = this.scope();
     if (!scope) {
       this.denied.set(this.baseLocation.denied());
@@ -274,16 +259,26 @@ export class CustomerDetailPane {
     }
     this.denied.set(false);
     try {
-      this.profile.set(await this.api.profile(scope, accountId));
+      const profile = await this.api.profile(scope, accountId);
+      if (epoch !== this.cardEpoch) {
+        return;
+      }
+      this.profile.set(profile);
+      void this.openCard(epoch, scope.tenantId, accountId);
       this.loadTabData(this.activeTab());
     } catch (error) {
+      if (epoch !== this.cardEpoch) {
+        return;
+      }
       if (error instanceof ApiError) {
         this.loadError.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
       } else {
         throw error;
       }
     } finally {
-      this.loading.set(false);
+      if (epoch === this.cardEpoch) {
+        this.loading.set(false);
+      }
     }
   }
 
@@ -315,12 +310,150 @@ export class CustomerDetailPane {
       case 'erasure':
         void this.loadErasureRequests();
         return;
+      case 'history':
       case 'profile':
         return;
     }
   }
 
+  // ------------------------------------------------------------------ the card (ADR 0111)
+
+  private async openCard(epoch: number, tenantId: string, accountId: string): Promise<void> {
+    this.cardLoading.set(true);
+    this.cardError.set(null);
+    try {
+      const opened = await this.leadsApi.openCard(tenantId, accountId, REVEAL_PURPOSE.openCard);
+      // The pane may have moved to another account while the card was loading, or back to this one.
+      if (epoch === this.cardEpoch) {
+        this.card.set(opened);
+      }
+    } catch (error) {
+      if (epoch !== this.cardEpoch) {
+        return;
+      }
+      if (error instanceof ApiError) {
+        this.cardError.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
+      } else {
+        throw error;
+      }
+    } finally {
+      if (epoch === this.cardEpoch) {
+        this.cardLoading.set(false);
+      }
+    }
+  }
+
+  protected async loadOlderHistory(): Promise<void> {
+    const scope = this.scope();
+    const current = this.card();
+    if (!scope || !current || current.nextBefore === null || this.cardLoadingMore()) {
+      return;
+    }
+    const epoch = this.cardEpoch;
+    this.cardLoadingMore.set(true);
+    try {
+      const older = await this.leadsApi.openCard(
+        scope.tenantId,
+        current.customerAccountId,
+        REVEAL_PURPOSE.openCard,
+        current.nextBefore,
+        current.nextBeforeId ?? undefined,
+      );
+      if (epoch !== this.cardEpoch) {
+        return;
+      }
+      // Merged into the card as it is now, not as it was when the request left: a call recorded
+      // meanwhile is already at the top of it.
+      this.card.update((latest) =>
+        latest === null
+          ? latest
+          : {
+              ...latest,
+              history: [...latest.history, ...older.history],
+              nextBefore: older.nextBefore,
+              nextBeforeId: older.nextBeforeId,
+            },
+      );
+    } catch (error) {
+      if (epoch === this.cardEpoch) {
+        this.noticeFrom(error);
+      }
+    } finally {
+      if (epoch === this.cardEpoch) {
+        this.cardLoadingMore.set(false);
+      }
+    }
+  }
+
+  protected canRecordCalls(): boolean {
+    return this.capabilities.has('CUSTOMER_LEAD_MANAGE');
+  }
+
+  /**
+   * Records a call with this guest and shows it at the top, without re-opening the card.
+   *
+   * The form is not closed here: it closes when {@link recordedCount} moves, so a refusal leaves it open
+   * with what was typed and a retry carries the same attempt id.
+   */
+  protected async recordCall(request: RecordContactAttemptRequest): Promise<void> {
+    const scope = this.scope();
+    const current = this.card();
+    if (!scope || !current || this.recordBusy()) {
+      return;
+    }
+    const epoch = this.cardEpoch;
+    this.recordBusy.set(true);
+    this.recordError.set(null);
+    try {
+      const recorded = await this.leadsApi.recordCustomerAttempt(
+        scope.tenantId,
+        current.customerAccountId,
+        scope.brandId,
+        request,
+      );
+      if (epoch !== this.cardEpoch) {
+        return;
+      }
+      const entry: HistoryEntry = {
+        kind: 'VOICE_CONTACT',
+        occurredAt: recorded.occurredAt,
+        channel: 'PHONE',
+        statusCode: recorded.outcome,
+        detailCode: recorded.blockingReason,
+        referenceId: recorded.id,
+        orderId: null,
+        rating: null,
+        label: recorded.direction,
+      };
+      this.card.update((latest) =>
+        latest === null ? latest : { ...latest, history: [entry, ...latest.history] },
+      );
+      this.recordedCount.update((count) => count + 1);
+    } catch (error) {
+      if (epoch !== this.cardEpoch) {
+        return;
+      }
+      if (error instanceof ApiError) {
+        this.recordError.set(describeApiError(error, (key, values) => this.i18n.t(key, values)));
+      } else {
+        throw error;
+      }
+    } finally {
+      if (epoch === this.cardEpoch) {
+        this.recordBusy.set(false);
+      }
+    }
+  }
+
   private resetTabState(): void {
+    this.cardEpoch++;
+    this.card.set(null);
+    this.cardError.set(null);
+    this.cardLoading.set(false);
+    this.cardLoadingMore.set(false);
+    this.recordBusy.set(false);
+    this.recordError.set(null);
+    this.recordedCount.set(0);
     this.revealedContacts.set(null);
     this.dateOfBirth.set(undefined);
     this.editingProfile.set(false);
@@ -593,8 +726,8 @@ export class CustomerDetailPane {
   protected readonly editingAddressId = signal<string | null>(null);
   protected readonly addingAddress = signal(false);
   protected readonly addressSaving = signal(false);
-  protected readonly addressLabel = signal('');
-  protected readonly addressFields = signal<AddressFormState>(EMPTY_ADDRESS_FORM);
+  /** What the address editor (map, suggest, structured fields) currently holds; `null` until it has said anything. */
+  protected readonly addressDraft = signal<CustomerAddressDraft | null>(null);
   protected readonly addressInstructions = signal('');
 
   private async loadAddresses(): Promise<void> {
@@ -615,23 +748,25 @@ export class CustomerDetailPane {
   }
 
   protected startAddingAddress(): void {
-    this.addressLabel.set('');
-    this.addressFields.set(EMPTY_ADDRESS_FORM);
+    this.addressDraft.set(null);
     this.addressInstructions.set('');
     this.editingAddressId.set(null);
     this.addingAddress.set(true);
   }
 
   protected startEditingAddress(address: RevealedCustomerAddress): void {
-    this.addressLabel.set(address.label);
-    this.addressFields.set(formFromAddressFields(address.fields));
+    this.addressDraft.set(null);
     this.addressInstructions.set(address.deliveryInstructions ?? '');
     this.editingAddressId.set(address.id);
     this.addingAddress.set(false);
   }
 
-  protected setAddressField(field: keyof AddressFormState, value: string): void {
-    this.addressFields.update((current) => ({ ...current, [field]: value }));
+  protected onAddressDraft(draft: CustomerAddressDraft): void {
+    this.addressDraft.set(draft);
+  }
+
+  protected canSaveAddress(): boolean {
+    return !this.addressSaving() && (this.addressDraft()?.valid ?? false);
   }
 
   protected cancelAddressForm(): void {
@@ -639,18 +774,26 @@ export class CustomerDetailPane {
     this.editingAddressId.set(null);
   }
 
+  /**
+   * A new address, with whatever point the operator confirmed on the map (row `5.2c`): `OPERATOR_PIN`
+   * with its coordinates, or `NOT_GEOCODED`/`LANDMARK_ONLY` with none. The editor keeps the three
+   * consistent, which the server insists on (`requireCoordinatesMatchSource`).
+   */
   protected async saveNewAddress(): Promise<void> {
     const scope = this.scope();
-    if (!scope || this.addressSaving()) {
+    const draft = this.addressDraft();
+    if (!scope || !draft || !this.canSaveAddress()) {
       return;
     }
     this.addressSaving.set(true);
     try {
       await this.api.addAddress(scope, this.accountId(), {
-        label: this.addressLabel().trim(),
-        fields: toAddressFields(this.addressFields()),
+        label: draft.label,
+        fields: draft.fields,
         deliveryInstructions: this.addressInstructions().trim() || null,
-        coordinateSource: 'NOT_GEOCODED',
+        latitude: draft.latitude,
+        longitude: draft.longitude,
+        coordinateSource: draft.coordinateSource,
       });
       this.addingAddress.set(false);
       await this.loadAddresses();
@@ -662,16 +805,15 @@ export class CustomerDetailPane {
   }
 
   /**
-   * `original` supplies the coordinate and its source unchanged: this form has
-   * no map or pin picker, and the backend refuses a `coordinateSource` that
-   * claims a point (`GEOCODER`, `*_PIN`, `LEGACY_UNSOURCED`) with none
-   * attached (`CustomerProfileService#requireCoordinatesMatchSource`) — so
-   * editing the text fields must carry the existing point through rather
-   * than silently dropping it.
+   * The editor starts from `original` and, until the operator touches the pin, hands back its point
+   * and its source unchanged: editing the street's spelling must never re-label a customer's own pin
+   * as the operator's, nor drop it (`requireCoordinatesMatchSource` refuses a source that claims a
+   * point with none attached). A pin the operator moved is theirs, with the new coordinates.
    */
   protected async saveEditedAddress(original: RevealedCustomerAddress): Promise<void> {
     const scope = this.scope();
-    if (!scope || this.addressSaving()) {
+    const draft = this.addressDraft();
+    if (!scope || !draft || !this.canSaveAddress()) {
       return;
     }
     this.addressSaving.set(true);
@@ -681,12 +823,12 @@ export class CustomerDetailPane {
         this.accountId(),
         original.id,
         {
-          label: this.addressLabel().trim(),
-          fields: toAddressFields(this.addressFields()),
+          label: draft.label,
+          fields: draft.fields,
           deliveryInstructions: this.addressInstructions().trim() || null,
-          latitude: original.latitude,
-          longitude: original.longitude,
-          coordinateSource: original.coordinateSource,
+          latitude: draft.latitude,
+          longitude: draft.longitude,
+          coordinateSource: draft.coordinateSource,
         },
         original.version,
       );

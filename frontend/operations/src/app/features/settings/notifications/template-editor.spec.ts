@@ -1,8 +1,10 @@
+import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
 import { I18n } from '../../../core/i18n/i18n';
+import { LocaleSet } from '../../../core/i18n/locale-set';
 import {
   AddVersionRequest,
   NotificationsApi,
@@ -201,5 +203,149 @@ describe('TemplateEditor', () => {
       '[data-testid="editor-body"]',
     ) as HTMLTextAreaElement;
     expect(textarea.value).toBe('Существующий текст');
+  });
+});
+
+/**
+ * ADR 0020 as ADR 0149 changed what it counts: a version needs a wording in every language the
+ * template's brand serves, not in every language the platform has. The server counts the same set
+ * when it saves and activates; the editor asks for exactly that, so a Tashkent restaurant is never
+ * made to author Georgian and never told its two-language version is incomplete.
+ */
+describe('TemplateEditor for a brand that serves two of the languages', () => {
+  let fixture: ComponentFixture<TemplateEditor>;
+  let api: { addVersion: ReturnType<typeof vi.fn>; variableCatalogue: ReturnType<typeof vi.fn> };
+  let served: ReturnType<typeof signal<readonly string[]>>;
+
+  async function open(
+    brandLanguages: readonly string[],
+    prefill: readonly WordingResponse[] | null = null,
+  ): Promise<void> {
+    served = signal(brandLanguages);
+    api = {
+      addVersion: vi
+        .fn()
+        .mockResolvedValue({ templateId: 't1', versionNumber: 1, awaitsProviderReview: false }),
+      variableCatalogue: vi.fn().mockResolvedValue(CATALOGUE),
+    };
+    await TestBed.configureTestingModule({
+      imports: [TemplateEditor],
+      providers: [
+        { provide: NotificationsApi, useValue: api },
+        { provide: LocaleSet, useValue: { locales: served, ensureLoaded: vi.fn() } },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(TemplateEditor);
+    fixture.componentRef.setInput('scope', SCOPE);
+    fixture.componentRef.setInput('templateId', 't1');
+    fixture.componentRef.setInput('templateKey', 'CONFIRMED');
+    fixture.componentRef.setInput('notificationClass', 'TRANSACTIONAL_REQUIRED');
+    fixture.componentRef.setInput('channel', 'SMS');
+    if (prefill) {
+      fixture.componentRef.setInput('prefill', prefill);
+    }
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  }
+
+  const tabs = (): string[] =>
+    Array.from(
+      fixture.nativeElement.querySelectorAll('.locale-tab') as NodeListOf<HTMLElement>,
+    ).map((tab) => (tab.textContent ?? '').trim().split(/\s+/)[0]);
+
+  function type(tabIndex: number, text: string): void {
+    (fixture.nativeElement.querySelectorAll('.locale-tab')[tabIndex] as HTMLButtonElement).click();
+    fixture.detectChanges();
+    const textarea = fixture.nativeElement.querySelector(
+      '[data-testid="editor-body"]',
+    ) as HTMLTextAreaElement;
+    textarea.value = text;
+    textarea.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  }
+
+  const save = (): HTMLButtonElement =>
+    fixture.nativeElement.querySelector('[data-testid="editor-save"]') as HTMLButtonElement;
+
+  it('has a tab for each language the brand serves and none for one it does not', async () => {
+    await open(['ru', 'uz-Latn']);
+
+    expect(tabs()).toEqual(['ru', 'uz-Latn']);
+  });
+
+  it('can be saved with the two wordings the brand needs, and sends exactly those', async () => {
+    await open(['ru', 'uz-Latn']);
+
+    type(0, 'Заказ {{orderNumber}} принят');
+    expect(save().disabled).toBe(true);
+    type(1, 'Buyurtma {{orderNumber}} qabul qilindi');
+    expect(save().disabled).toBe(false);
+    save().click();
+    await flushMicrotasks();
+
+    const [, , request] = api.addVersion.mock.calls[0] as [
+      LocationScope,
+      string,
+      AddVersionRequest,
+    ];
+    expect(Object.keys(request.wordings)).toEqual(['ru', 'uz-Latn']);
+    expect(request.variablesSchema).toEqual({ orderNumber: 'string' });
+  });
+
+  it('asks for a third wording the day the brand adds a third language', async () => {
+    await open(['ru', 'uz-Latn']);
+    type(0, 'Заказ принят');
+    type(1, 'Buyurtma qabul qilindi');
+    expect(save().disabled).toBe(false);
+
+    served.set(['ru', 'uz-Latn', 'en']);
+    fixture.detectChanges();
+
+    expect(tabs()).toEqual(['ru', 'uz-Latn', 'en']);
+    expect(save().disabled).toBe(true);
+  });
+
+  it('does not ask for a language the registry declares but cannot send in, even if the brand lists it', async () => {
+    await open(['ru', 'kk']);
+
+    expect(tabs()).toEqual(['ru']);
+  });
+
+  it('keeps a wording the version already carries in a language the brand does not serve, instead of dropping it', async () => {
+    const wording = (locale: string, body: string): WordingResponse => ({
+      versionNumber: 1,
+      locale,
+      subject: null,
+      body,
+      contentHash: 'h',
+      status: 'ACTIVE',
+      approvedBy: 'ops',
+      variablesSchema: {},
+      providerReview: 'NOT_REQUIRED',
+      providerReviewReference: null,
+      providerReviewNote: null,
+      providerReviewUpdatedAt: null,
+    });
+    await open(
+      ['ru', 'uz-Latn'],
+      [
+        wording('ru', 'Заказ принят'),
+        wording('uz-Latn', 'Buyurtma qabul qilindi'),
+        wording('en', 'Order accepted'),
+      ],
+    );
+
+    expect(tabs()).toEqual(['ru', 'uz-Latn']);
+    save().click();
+    await flushMicrotasks();
+
+    const [, , request] = api.addVersion.mock.calls[0] as [
+      LocationScope,
+      string,
+      AddVersionRequest,
+    ];
+    expect(Object.keys(request.wordings)).toEqual(['ru', 'uz-Latn', 'en']);
   });
 });

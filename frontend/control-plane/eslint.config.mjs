@@ -47,4 +47,15 @@ export default [
       'horecaos/no-raw-px-font-size': 'error',
     },
   },
+  {
+    // ADR 0149, Decision 6: the writing direction is the registry's to state, so a stylesheet says
+    // `margin-inline-start`, not `margin-left`. A ratchet: the stylesheets that predate it are
+    // listed in the plugin's per-app baseline, which can only shrink.
+    files: ['**/*.css'],
+    plugins: { horecaos },
+    languageOptions: { parser: rawTextParser },
+    rules: {
+      'horecaos/no-physical-direction': 'error',
+    },
+  },
 ];

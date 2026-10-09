@@ -3,6 +3,7 @@ package uz.horecaos.platform.courier;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -15,6 +16,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.UUID;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -28,6 +30,7 @@ import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.audit.api.ApprovalRequestCommand;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.courier.api.BusinessDayWindows;
 import uz.horecaos.platform.courier.application.AdjustmentRuleEvaluator;
 import uz.horecaos.platform.courier.application.CourierAccrualService;
 import uz.horecaos.platform.courier.application.CourierAdjustmentService;
@@ -39,6 +42,7 @@ import uz.horecaos.platform.courier.application.CourierShiftService;
 import uz.horecaos.platform.courier.application.DeliveryAccrualOrderCompletionTrigger;
 import uz.horecaos.platform.courier.application.port.LegalEntityResolver;
 import uz.horecaos.platform.courier.domain.LedgerEntryType;
+import uz.horecaos.platform.courier.domain.OnTimeOutcome;
 import uz.horecaos.platform.courier.domain.RateComponent;
 import uz.horecaos.platform.courier.domain.RateComponentType;
 import uz.horecaos.platform.courier.domain.VerificationMethod;
@@ -206,7 +210,17 @@ class DeliveryAccrualOrderCompletionTriggerTests {
                 policyResolver,
                 legalEntities,
                 protection,
-                (tenantId, at) -> at.atZone(ZoneId.of("Asia/Tashkent")).toLocalDate());
+                new BusinessDayWindows() {
+                    @Override
+                    public LocalDate businessDateOf(UUID tenantId, Instant at) {
+                        return at.atZone(ZoneId.of("Asia/Tashkent")).toLocalDate();
+                    }
+
+                    @Override
+                    public Optional<LocalDate> lastClosedBusinessDate(UUID tenantId) {
+                        return Optional.empty();
+                    }
+                });
         var rateCards = new CourierRateCardService(rateCardStore, audit, clock);
         deliveryCompletion = new JdbcDeliveryCompletionAdapter(jdbc);
         cashDue = new FakeCashDueLookupPort();
@@ -353,6 +367,93 @@ class DeliveryAccrualOrderCompletionTriggerTests {
                 .as("the trigger's own documented fallback to the order total must run, never a silent zero")
                 .hasSize(1);
         assertThat(cashEntries.getFirst().amountMinor()).isEqualTo(-45_000L);
+    }
+
+    @Test
+    @DisplayName("ADR 0125: a cash-and-loyalty-balance order collects only the cash leg, read from the real settlement")
+    void aRealSplitSettlementCollectsOnlyTheCashLeg() {
+        // The record's open input -- whether cash-to-collect subtracts a settled loyalty-balance
+        // tender -- is closed on subtracting it. The test above drives a fake that is simply told
+        // the answer; this one wires the real OrderSettlementService over a real two-tender
+        // settlement, so a regression in either half (the SQL that nets the balance leg out, or
+        // the trigger asking for it) turns it red.
+        var realCashDue = new OrderSettlementService(new JdbcSettlementStore(jdbc), unsupportedPointsPort(), clock);
+        var realTrigger = new DeliveryAccrualOrderCompletionTrigger(deliveryCompletion, accruals, shifts, realCashDue);
+        Fixture fixture = seedAssignedShipment("NOT_REQUIRED");
+        seedCashAndBalanceSettlement(fixture.orderId(), 45_000L, 12_000L);
+
+        realTrigger.onOrderingEvent(new OrderCompleted(
+                UUID.randomUUID(), new TenantId(TENANT), fixture.orderId(), NOW, BRAND, branch, NOW, UZS, 45_000L, 1));
+
+        List<LedgerEntryRow> cashEntries = entriesOfType(LedgerEntryType.CASH_COLLECTED);
+        assertThat(cashEntries).hasSize(1);
+        assertThat(cashEntries.getFirst().amountMinor())
+                .as("12 000 of the 45 000 was redeemed from the balance; the courier collects 33 000")
+                .isEqualTo(-33_000L);
+    }
+
+    @Test
+    @DisplayName("ADR 0125: a delivery the courier already closed in the app keeps the courier's own delivered_at")
+    void aDeliveryTheCourierClosedInTheAppKeepsItsOwnDeliveredAt() {
+        // The courier app (gap map 3.9) writes shipments.delivered_at the moment the courier hands
+        // the order over. The operator's «completed» can come hours later, at the end of a shift;
+        // stamping the accrual with that instant turned an on-time delivery into a late one.
+        Fixture fixture = seedAssignedShipment("NOT_REQUIRED");
+        Instant pickedUpAt = NOW.plus(Duration.ofMinutes(20)); // inside the pickup window (NOW + 25 min)
+        Instant deliveredAt = NOW.plus(Duration.ofMinutes(40)); // inside the promise (NOW + 45 min)
+        captureInApp(fixture.shipmentId(), "DELIVERED", pickedUpAt, deliveredAt);
+
+        trigger.onOrderingEvent(orderCompletedAt(fixture.orderId(), 45_000, NOW.plus(Duration.ofHours(3))));
+
+        JdbcCourierLedgerStore.EarningRow earning =
+                ledgerStore.findEarningByAttempt(TENANT, fixture.attemptId()).orElseThrow();
+        assertThat(earning.deliveredAt()).isEqualTo(deliveredAt);
+        assertThat(earning.onTimeOutcome()).isEqualTo(OnTimeOutcome.ON_TIME);
+        assertThat(jdbc.sql("SELECT delivered_at FROM fulfillment.shipments WHERE tenant_id = :t AND id = :id")
+                        .param("t", TENANT)
+                        .param("id", fixture.shipmentId())
+                        .query(OffsetDateTime.class)
+                        .single()
+                        .toInstant())
+                .as("the shipment keeps the instant the courier recorded, not the operator's")
+                .isEqualTo(deliveredAt);
+    }
+
+    @Test
+    @DisplayName("ADR 0125: the courier's pickup is the kitchen handover, so a late delivery behind a late kitchen"
+            + " is LATE_EXCUSED")
+    void theCouriersPickupIsTheKitchenHandover() {
+        Fixture fixture = seedAssignedShipment("NOT_REQUIRED");
+        // The plan said the bag would be ready by NOW + 25 min; the courier collected it at +35.
+        Instant pickedUpAt = NOW.plus(Duration.ofMinutes(35));
+        captureInApp(fixture.shipmentId(), "PICKED_UP", pickedUpAt, null);
+
+        // Delivered, and the operator completes the order, at +65 min: twenty minutes past the promise.
+        trigger.onOrderingEvent(orderCompletedAt(fixture.orderId(), 45_000, NOW.plus(Duration.ofMinutes(65))));
+
+        JdbcCourierLedgerStore.EarningRow earning =
+                ledgerStore.findEarningByAttempt(TENANT, fixture.attemptId()).orElseThrow();
+        assertThat(earning.kitchenHandoverAt()).isEqualTo(pickedUpAt);
+        assertThat(earning.onTimeOutcome())
+                .as("late, but the kitchen handed the bag over after the window the plan promised")
+                .isEqualTo(OnTimeOutcome.LATE_EXCUSED);
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0125: with no capture in the app the order's completion still stands in, and a late delivery is LATE")
+    void withNoCaptureInTheAppAnOrderCompletionStillStandsIn() {
+        Fixture fixture = seedAssignedShipment("NOT_REQUIRED");
+
+        trigger.onOrderingEvent(orderCompletedAt(fixture.orderId(), 45_000, NOW.plus(Duration.ofMinutes(65))));
+
+        JdbcCourierLedgerStore.EarningRow earning =
+                ledgerStore.findEarningByAttempt(TENANT, fixture.attemptId()).orElseThrow();
+        assertThat(earning.deliveredAt()).isEqualTo(NOW.plus(Duration.ofMinutes(65)));
+        assertThat(earning.kitchenHandoverAt())
+                .as("nothing was captured, so nothing is guessed")
+                .isNull();
+        assertThat(earning.onTimeOutcome()).isEqualTo(OnTimeOutcome.LATE);
     }
 
     /** Every method throws: the no-settlement path under test never reaches points. */
@@ -662,6 +763,87 @@ class DeliveryAccrualOrderCompletionTriggerTests {
             Long due = dueByOrder.get(orderId);
             return due == null ? OptionalLong.empty() : OptionalLong.of(due);
         }
+    }
+
+    /**
+     * What the courier app leaves on the shipment when the courier taps «picked up» or «delivered»
+     * ({@code JdbcCourierJobStore.advance}): the status and the two timestamps, nothing else.
+     */
+    private void captureInApp(UUID shipmentId, String status, Instant pickedUpAt, @Nullable Instant deliveredAt) {
+        jdbc.sql("""
+                UPDATE fulfillment.shipments
+                   SET status = :status, picked_up_at = :pickedUpAt, delivered_at = :deliveredAt
+                 WHERE tenant_id = :t AND id = :id
+                """)
+                .param("status", status)
+                .param("pickedUpAt", OffsetDateTime.ofInstant(pickedUpAt, ZoneOffset.UTC))
+                .param(
+                        "deliveredAt",
+                        deliveredAt == null ? null : OffsetDateTime.ofInstant(deliveredAt, ZoneOffset.UTC))
+                .param("t", TENANT)
+                .param("id", shipmentId)
+                .update();
+    }
+
+    private OrderCompleted orderCompletedAt(UUID orderId, long totalMinor, Instant completedAt) {
+        cashDue.set(orderId, totalMinor);
+        return new OrderCompleted(
+                UUID.randomUUID(),
+                new TenantId(TENANT),
+                orderId,
+                completedAt,
+                BRAND,
+                branch,
+                completedAt,
+                UZS,
+                totalMinor,
+                1);
+    }
+
+    /** A settlement of one cash tender and one loyalty-balance tender that has already settled. */
+    private void seedCashAndBalanceSettlement(UUID orderId, long totalDueMinor, long balanceMinor) {
+        UUID cashMethod = UUID.randomUUID();
+        UUID balanceMethod = UUID.randomUUID();
+        UUID settlementId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO payments.payment_methods (
+                    id, tenant_id, code, display_name, responsibility, settles_from_balance, status, version)
+                VALUES (:cash, :t, 'CASH', 'Cash', 'OPERATOR', false, 'ACTIVE', 1),
+                       (:balance, :t, 'POINTS', 'Points', 'OPERATOR', true, 'ACTIVE', 1)
+                """)
+                .param("cash", cashMethod)
+                .param("balance", balanceMethod)
+                .param("t", TENANT)
+                .update();
+        jdbc.sql("""
+                INSERT INTO payments.order_settlements (
+                    id, tenant_id, order_id, currency, total_due_minor, settled_minor, status, version)
+                VALUES (:id, :t, :order, 'UZS', :total, :balance, 'PARTIALLY_SETTLED', 1)
+                """)
+                .param("id", settlementId)
+                .param("t", TENANT)
+                .param("order", orderId)
+                .param("total", totalDueMinor)
+                .param("balance", balanceMinor)
+                .update();
+        jdbc.sql("""
+                INSERT INTO payments.tenders (
+                    id, tenant_id, settlement_id, sequence, payment_method_id, settles_from_balance,
+                    amount_minor, refunded_minor, currency, status, settled_at, idempotency_key, version)
+                VALUES (gen_random_uuid(), :t, :settlement, 1, :balanceMethod, true,
+                        :balance, 0, 'UZS', 'SETTLED', now(), :balanceKey, 1),
+                       (gen_random_uuid(), :t, :settlement, 2, :cashMethod, false,
+                        :cash, 0, 'UZS', 'PLANNED', NULL, :cashKey, 1)
+                """)
+                .param("t", TENANT)
+                .param("settlement", settlementId)
+                .param("balanceMethod", balanceMethod)
+                .param("balance", balanceMinor)
+                .param("cashMethod", cashMethod)
+                .param("cash", totalDueMinor - balanceMinor)
+                .param("balanceKey", "tender-balance-" + settlementId)
+                .param("cashKey", "tender-cash-" + settlementId)
+                .update();
     }
 
     private Map<String, Object> shipmentRow(UUID shipmentId) {

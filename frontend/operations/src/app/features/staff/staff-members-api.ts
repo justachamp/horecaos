@@ -8,6 +8,8 @@ import { Page } from '../../core/api/page';
 import { ApiError } from '../../core/api/problem-details';
 import { EmploymentStatus, StaffMember } from '../../core/api/staff-member';
 import { staffPaths } from '../../core/api/staff-paths';
+import { MfaRequirement, OwnMfa } from '../../core/auth/mfa-api';
+import { ManagedPlace, StaffReach } from './staff-reach';
 
 export type { EmploymentStatus, StaffMember };
 
@@ -85,6 +87,27 @@ export interface EmergencyContactInput {
   readonly phone: string;
 }
 
+/** One row of `GET .../staff/mfa-summary` (ADR 0148): the staff list's «Способ входа» column. */
+export interface MfaSummaryRow {
+  readonly memberId: string;
+  /** `KNOWN` when Keycloak answered; `NO_ACCOUNT` for an invitation not yet accepted; `UNKNOWN` when it could not say. */
+  readonly state: 'KNOWN' | 'NO_ACCOUNT' | 'UNKNOWN';
+  readonly enrolled: boolean;
+  readonly authenticators: number;
+}
+
+/** What `GET .../staff/members/{memberId}/mfa` answers: the same shape as a person's own read. */
+export type MemberMfa = Pick<OwnMfa, 'enrolled' | 'authenticators'> & {
+  readonly requirement: MfaRequirement;
+};
+
+/** `POST .../mfa/resets`'s answer. */
+export interface MfaResetResult {
+  readonly authenticatorsRemoved: number;
+  readonly sessionsEnded: boolean;
+  readonly personNotified: boolean;
+}
+
 /**
  * The staff member record's API seam (ADR 0139): the People screen, the person
  * card, «Мой профиль» and the branch's colleague picker.
@@ -100,6 +123,7 @@ export interface EmergencyContactInput {
 @Injectable({ providedIn: 'root' })
 export class StaffMembersApi {
   private readonly api = inject(ApiClient);
+  private readonly reach = inject(StaffReach);
 
   /**
    * Everyone the tenant keeps a record for, ended people included. The list
@@ -108,10 +132,44 @@ export class StaffMembersApi {
    * because a name is ciphertext in the database.
    */
   async list(tenantId: string): Promise<readonly StaffMember[]> {
+    if (this.reach.scoped()) {
+      return this.listWithin();
+    }
     const result = await firstValueFrom(
       this.api.get<Page<StaffMember>>(staffPaths.members(tenantId)),
     );
     return result.value.items;
+  }
+
+  /**
+   * A branch or brand manager's own people (ADR 0103): one read per place of hers,
+   * each through the route her grant covers, merged on the member id.
+   */
+  private async listWithin(): Promise<readonly StaffMember[]> {
+    const lists = await Promise.all(
+      this.reach
+        .places()
+        .map((place) =>
+          firstValueFrom(this.api.get<Page<StaffMember>>(this.placeMembersPath(place))).then(
+            (result) => result.value.items,
+          ),
+        ),
+    );
+    const byId = new Map<string, StaffMember>();
+    for (const member of lists.flat()) {
+      byId.set(member.memberId, member);
+    }
+    return Array.from(byId.values());
+  }
+
+  private placeMembersPath(place: ManagedPlace): string {
+    return place.locationId === null
+      ? staffPaths.brandMembers(place.tenantId, place.brandId)
+      : staffPaths.locationMembers({
+          tenantId: place.tenantId,
+          brandId: place.brandId,
+          locationId: place.locationId,
+        });
   }
 
   /**
@@ -125,12 +183,79 @@ export class StaffMembersApi {
     return result.value.items;
   }
 
+  /**
+   * `iam.staff.mfa.read`: whether this person holds a second factor, from Keycloak's own
+   * credential list (cached sixty seconds on the platform). Never a secret.
+   */
+  async mfa(tenantId: string, memberId: string): Promise<MemberMfa> {
+    const result = await firstValueFrom(
+      this.api.get<MemberMfa>(staffPaths.memberMfa(tenantId, memberId)),
+    );
+    return result.value;
+  }
+
+  /** The column for the whole list. A person Keycloak could not answer for is `UNKNOWN`, and the rest still render. */
+  async mfaSummary(tenantId: string): Promise<readonly MfaSummaryRow[]> {
+    const result = await firstValueFrom(
+      this.api.get<{ readonly members: readonly MfaSummaryRow[] }>(staffPaths.mfaSummary(tenantId)),
+    );
+    return result.value.members;
+  }
+
+  /**
+   * `iam.staff.mfa.reset`: removes every authenticator, ends the sessions, writes an audit fact
+   * with the reason and emails the person. `version` is the member's, from the read the person
+   * card showed; a reset of a stale card is a 409, not a surprise.
+   */
+  async resetMfa(
+    tenantId: string,
+    memberId: string,
+    reason: string,
+    version: number,
+  ): Promise<MfaResetResult> {
+    return firstValueFrom(
+      this.api.post<{ readonly reason: string }, MfaResetResult>(
+        staffPaths.memberMfaReset(tenantId, memberId),
+        command({ reason }),
+        { expectedVersion: version },
+      ),
+    );
+  }
+
   /** One person in full: phone, employee number and a short-lived photo link. */
   async detail(tenantId: string, memberId: string): Promise<StaffMember> {
+    if (this.reach.scoped()) {
+      return this.detailWithin(memberId);
+    }
     const result = await firstValueFrom(
       this.api.get<StaffMember>(staffPaths.member(tenantId, memberId)),
     );
     return result.value;
+  }
+
+  /**
+   * The first of her places that knows the person. Every other place answers "no such
+   * member" for someone outside its reach, which is the server's deliberate
+   * non-answer, so it is skipped rather than shown.
+   */
+  private async detailWithin(memberId: string): Promise<StaffMember> {
+    let last: unknown = new Error('No place of hers reaches this person');
+    for (const place of this.reach.places()) {
+      const path =
+        place.locationId === null
+          ? staffPaths.brandMember(place.tenantId, place.brandId, memberId)
+          : staffPaths.locationMember(
+              { tenantId: place.tenantId, brandId: place.brandId, locationId: place.locationId },
+              memberId,
+            );
+      try {
+        const result = await firstValueFrom(this.api.get<StaffMember>(path));
+        return result.value;
+      } catch (error) {
+        last = error;
+      }
+    }
+    throw last;
   }
 
   /** `staff.profile.manage`. Replaces the personal and employment fields; `version` is the record's, from the read. */

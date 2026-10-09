@@ -84,6 +84,14 @@ public record EngagementPolicy(
                     "Quiet hours may be tightened and never loosened: an end of %s is earlier than %s"
                             .formatted(end, quietHoursEnd));
         }
+        // Those two bounds are only "tighter" for a window that still wraps midnight. A window
+        // inside one day (05:00 to 11:00) starts no later and ends no later than the default
+        // and leaves the whole evening open, so the shape is part of the rule.
+        if (!start.isAfter(end)) {
+            throw new IllegalArgumentException(
+                    "Quiet hours may be tightened and never loosened: %s to %s does not wrap midnight, so it would leave open hours that %s to %s keeps closed"
+                            .formatted(start, end, quietHoursStart, quietHoursEnd));
+        }
 
         int weekly = override.messagesPer7Days() == null ? messagesPer7Days : override.messagesPer7Days();
         int monthly = override.messagesPer30Days() == null ? messagesPer30Days : override.messagesPer30Days();

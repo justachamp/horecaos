@@ -11,7 +11,12 @@ import { TenantPicker } from '../../shared/tenant-picker';
 import { BlockedDocumentResponse, FiscalApi } from '../compliance/fiscal-api';
 import { FailureSummary, IntegrationOpsApi } from '../integration-ops/integration-ops-api';
 import { DueCredential, ProvidersApi } from '../providers/providers-api';
-import { PosExportCandidate, PosExportDecision, PosExportView, PosExportsApi } from './pos-exports-api';
+import {
+  PosExportCandidate,
+  PosExportDecision,
+  PosExportView,
+  PosExportsApi,
+} from './pos-exports-api';
 
 /**
  * IA 10.2 Tenant issue queue -- one tenant's open problems, with the evidence
@@ -122,8 +127,12 @@ export class TenantIssueQueue {
 
   // ------------------------------------------------------------ POS exports
 
-  protected stateKey(state: string): 'tenantIssueQueue.pos.state.UNCERTAIN' | 'tenantIssueQueue.pos.state.AWAITING_OPERATOR' {
-    return state === 'UNCERTAIN' ? 'tenantIssueQueue.pos.state.UNCERTAIN' : 'tenantIssueQueue.pos.state.AWAITING_OPERATOR';
+  protected stateKey(
+    state: string,
+  ): 'tenantIssueQueue.pos.state.UNCERTAIN' | 'tenantIssueQueue.pos.state.AWAITING_OPERATOR' {
+    return state === 'UNCERTAIN'
+      ? 'tenantIssueQueue.pos.state.UNCERTAIN'
+      : 'tenantIssueQueue.pos.state.AWAITING_OPERATOR';
   }
 
   protected decisionKey(decision: PosExportDecision): MessageKey {
@@ -164,7 +173,9 @@ export class TenantIssueQueue {
       this.actionMessage.set(
         outcome.status === 'SUCCESS'
           ? this.i18n.t('tenantIssueQueue.pos.asked')
-          : this.i18n.t('tenantIssueQueue.pos.askFailed', { detail: outcome.detail || outcome.errorCode }),
+          : this.i18n.t('tenantIssueQueue.pos.askFailed', {
+              detail: outcome.detail || outcome.errorCode,
+            }),
       );
       await this.search();
     } catch (error) {
@@ -200,7 +211,9 @@ export class TenantIssueQueue {
       );
       this.deciding.set(null);
       if (result.changed) {
-        this.posExports.update((rows) => rows.filter((candidate) => candidate.exportId !== row.exportId));
+        this.posExports.update((rows) =>
+          rows.filter((candidate) => candidate.exportId !== row.exportId),
+        );
         this.actionMessage.set(this.i18n.t('tenantIssueQueue.pos.decided'));
       } else {
         this.actionMessage.set(this.i18n.t('tenantIssueQueue.pos.noChange'));

@@ -1,0 +1,49 @@
+.wallet {
+  max-width: 960px;
+}
+
+.subtitle {
+  color: var(--q-ink-muted);
+  margin: 4px 0 16px;
+}
+
+.tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+  flex: 1 1 220px;
+  padding: 16px 20px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-surface-1);
+}
+
+.tile__figure {
+  margin-top: 4px;
+}
+
+.notices {
+  display: flex;
+  flex-direction: column;
+}
+
+.notice-list {
+  margin: 4px 0 0;
+  padding-inline-start: 18px;
+}
+
+.footer-note {
+  margin-top: 32px;
+}
+
+.link-inline {
+  color: var(--q-primary);
+}

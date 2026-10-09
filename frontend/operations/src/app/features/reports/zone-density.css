@@ -1,0 +1,35 @@
+.density {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.density__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.density__table th,
+.density__table td {
+  padding: 6px 12px;
+  text-align: start;
+  font-size: var(--q-type-body-sm);
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.density__table th {
+  font-size: var(--q-type-caption);
+  color: var(--q-ink-subtle);
+}
+
+.density__num {
+  text-align: end !important;
+}
+
+.density__row--outside td {
+  font-style: italic;
+}
+
+.density__outside {
+  margin: 0;
+}

@@ -24,7 +24,9 @@
         @for (row of adapters(); track row.providerType + (row.adapterVersion ?? '')) {
           <tr>
             <td class="q-body-sm">{{ row.providerType }}</td>
-            <td class="q-body-sm q-tnum">{{ row.adapterVersion ?? i18n.t('contractsVersions.adapters.unchecked') }}</td>
+            <td class="q-body-sm q-tnum">
+              {{ row.adapterVersion ?? i18n.t('contractsVersions.adapters.unchecked') }}
+            </td>
             <td class="q-body-sm q-tnum">{{ row.installations }}</td>
             <td class="q-body-sm q-tnum">{{ row.connected }}</td>
           </tr>

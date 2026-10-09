@@ -65,6 +65,10 @@ class MigrationImportSuppressionTests {
             // establishing a starting menu is the import doing its job, not a
             // change a downstream consumer needs to hear about years later.
             Map.entry("integration/outbox/PricingOutboxEventListener.java", ExternalEffect.OUTBOX_PUBLICATION),
+            // ADR 0112's scenario and offer facts, same footing: a legacy guest's history is not a step
+            // decided today, and a scenario run replayed from an import would announce itself to
+            // every consumer of marketing.events.
+            Map.entry("integration/outbox/MarketingOutboxEventListener.java", ExternalEffect.OUTBOX_PUBLICATION),
             Map.entry("notifications/application/OrderNotificationTrigger.java", ExternalEffect.CUSTOMER_NOTIFICATION),
             // The outbound half, and a different effect from the trigger above for
             // the same reason POS splits its two: not writing an intent is a

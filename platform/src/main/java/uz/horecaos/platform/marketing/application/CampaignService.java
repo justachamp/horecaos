@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -56,8 +57,10 @@ public class CampaignService {
     private final CampaignMessagePort messages;
     private final AuditRecorder audit;
     private final EntitlementService entitlements;
+    private final @Nullable ScenarioService scenarios;
     private final Clock clock;
 
+    /** The shape every caller used before ADR 0112: no scenario launch checks. */
     public CampaignService(
             JdbcCampaignStore campaigns,
             JdbcEngagementStore engagement,
@@ -67,6 +70,21 @@ public class CampaignService {
             AuditRecorder audit,
             EntitlementService entitlements,
             Clock clock) {
+        this(campaigns, engagement, audiences, estimator, messages, audit, entitlements, null, clock);
+    }
+
+    @Autowired
+    public CampaignService(
+            JdbcCampaignStore campaigns,
+            JdbcEngagementStore engagement,
+            AudienceService audiences,
+            CampaignCostEstimator estimator,
+            CampaignMessagePort messages,
+            AuditRecorder audit,
+            EntitlementService entitlements,
+            @Nullable ScenarioService scenarios,
+            Clock clock) {
+        this.scenarios = scenarios;
         this.campaigns = campaigns;
         this.engagement = engagement;
         this.audiences = audiences;
@@ -177,8 +195,13 @@ public class CampaignService {
         Map<String, String> bodies =
                 messages.templateBodies(tenantId, campaign.brandId(), campaign.templateKey(), channel.name());
 
-        Optional<CampaignCostEstimator.Estimate> cost = estimator.estimate(
-                channel, bodies, localeCounts, policy.smsPricePerSegmentMinor(), campaign.currency());
+        // A scenario is priced as the whole sequence: every messaging step, on its own channel
+        // and its own template. Its campaign row carries the first step's template only, and
+        // pricing that alone shows an approver the cost of one message of several.
+        Optional<CampaignCostEstimator.Estimate> cost = campaign.isScenario() && scenarios != null
+                ? scenarios.estimate(campaign, localeCounts, policy)
+                : estimator.estimate(
+                        channel, bodies, localeCounts, policy.smsPricePerSegmentMinor(), campaign.currency());
 
         // ADR 0059 stage 4: "estimated delivery window, not a promise", computed
         // at the same moment as the cost estimate and against the same rate the
@@ -322,25 +345,41 @@ public class CampaignService {
     public boolean start(UUID tenantId, UUID campaignId) {
         CampaignRow campaign = require(tenantId, campaignId);
         MarketingChannel channel = MarketingChannel.valueOf(campaign.channel());
-        if (channel == MarketingChannel.MESSAGING_APP) {
-            entitlements.requireFeature(tenantId, EntitlementKeys.TELEGRAM_BROADCASTS_ENABLED);
-        }
+        requireEntitledToItsChannels(campaign);
 
         Instant now = clock.instant();
         boolean momentHasArrived =
                 campaign.scheduledAt() == null || !campaign.scheduledAt().isAfter(now);
         CampaignStatus target = momentHasArrived ? CampaignStatus.SENDING : CampaignStatus.SCHEDULED;
 
-        if (target == CampaignStatus.SENDING && !messages.isWired(channel.name())) {
-            throw new ApiException(
-                    ErrorCode.UNPROCESSABLE_STATE,
-                    "No ADR 0020 delivery path is wired for %s yet; this campaign cannot be launched"
-                            .formatted(channel));
+        if (campaign.isScenario() && scenarios != null) {
+            // Every messaging step's channel and every offer it names, read before the
+            // second signature is spent on a scenario whose third step could not send.
+            scenarios.assertStartable(campaign);
+        }
+        if (target == CampaignStatus.SENDING) {
+            // Scoped to this brand and to the marketing purpose (ADR 0146 Decision
+            // 8): a channel that has an adapter in this build but no cleared account
+            // for this brand cannot send, and the refusal says why in a code a
+            // console can show rather than as a fault three frames deeper.
+            CampaignMessagePort.Wiring wiring = messages.wiring(
+                    tenantId, campaign.brandId(), channel.name(), CampaignMessagePort.PURPOSE_MARKETING);
+            if (!wiring.isWired()) {
+                throw new ApiException(
+                        ErrorCode.UNPROCESSABLE_STATE,
+                        "No ADR 0020 delivery path is wired for %s for this brand (%s); this campaign cannot be launched"
+                                .formatted(channel, wiring.reason()));
+            }
         }
         if (!campaign.status().canTransitionTo(target)) {
             return false;
         }
-        return campaigns.transition(tenantId, campaignId, campaign.status(), target, now);
+        boolean transitioned = campaigns.transition(tenantId, campaignId, campaign.status(), target, now);
+        if (transitioned && target == CampaignStatus.SENDING && campaign.isScenario() && scenarios != null) {
+            // A revision replaces the version it supersedes for everybody, from now.
+            scenarios.onStarted(campaign);
+        }
+        return transitioned;
     }
 
     /**
@@ -471,9 +510,7 @@ public class CampaignService {
     @Transactional
     public ResumeOutcome resume(UUID tenantId, UUID campaignId, ActorRef actor, String reason, String correlationId) {
         CampaignRow campaign = require(tenantId, campaignId);
-        if (MarketingChannel.valueOf(campaign.channel()) == MarketingChannel.MESSAGING_APP) {
-            entitlements.requireFeature(tenantId, EntitlementKeys.TELEGRAM_BROADCASTS_ENABLED);
-        }
+        requireEntitledToItsChannels(campaign);
         if (campaign.status() != CampaignStatus.PAUSED) {
             return ResumeOutcome.refused();
         }
@@ -524,6 +561,25 @@ public class CampaignService {
     @Transactional(readOnly = true)
     public List<CampaignRow> list(UUID tenantId, UUID brandId) {
         return campaigns.listByBrand(tenantId, brandId);
+    }
+
+    /**
+     * The plan must include every channel the campaign sends on, not only the one its audience
+     * was built for.
+     *
+     * <p>A broadcast has one channel. A scenario has one per step, and the campaign row names
+     * only the first messaging step's: an entitlement checked against that alone let a
+     * scenario that opens on SMS and ends on a Telegram step launch for a tenant that was never
+     * sold Telegram broadcasts.
+     */
+    private void requireEntitledToItsChannels(CampaignRow campaign) {
+        boolean telegram = MarketingChannel.valueOf(campaign.channel()) == MarketingChannel.MESSAGING_APP
+                || (campaign.isScenario()
+                        && scenarios != null
+                        && scenarios.messagingChannels(campaign).contains(MarketingChannel.MESSAGING_APP));
+        if (telegram) {
+            entitlements.requireFeature(campaign.tenantId(), EntitlementKeys.TELEGRAM_BROADCASTS_ENABLED);
+        }
     }
 
     public CampaignRow require(UUID tenantId, UUID campaignId) {

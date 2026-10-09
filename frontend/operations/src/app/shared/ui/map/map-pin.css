@@ -1,0 +1,52 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.q-map-pin {
+  display: grid;
+  gap: 8px;
+}
+
+.q-map-pin__hint {
+  margin: 0;
+  color: var(--q-ink-subtle);
+}
+
+.q-map-pin__fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+
+.q-map-pin__field {
+  display: grid;
+  gap: 2px;
+}
+
+.q-map-pin__field input {
+  min-width: 10ch;
+  padding: 6px 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  font-family: var(--q-font-mono);
+}
+
+.q-map-pin__field input[aria-invalid='true'] {
+  border-color: var(--q-error);
+}
+
+.q-map-pin__remove {
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  padding: 6px 10px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.q-map-pin__error {
+  margin: 0;
+  color: var(--q-error-text);
+}

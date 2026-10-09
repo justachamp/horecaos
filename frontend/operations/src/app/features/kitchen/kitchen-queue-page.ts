@@ -68,6 +68,7 @@ import {
   isKitchenTabId,
   isKitchenTabMember,
   ticketItemRows,
+  ticketSeverityInput,
 } from './kitchen-ticket';
 import { lineWeightText } from './kitchen-line-weight';
 
@@ -102,8 +103,9 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  * `sales_channels.system_type`, not a raw `channelCode` chip); server-side
  * tab counts, exact over every matching ticket rather than over the one
  * `stream=live` page this screen loads (wave P16: `BoardResponse.counts`);
- * SLA colour from the ticket's own `targetReadyAt` (a real promise, unlike
- * the order board's ADR 0014 workaround); department routing shown per line
+ * SLA colour from the order's own clock (ADR 0150: its promise, or its
+ * creation plus the no-promise fallback — the order board's definition, not
+ * the ticket's opening time or promise-less-travel); department routing shown per line
  * via the branch's stations; start/ready/recall; the operator's own
  * `kitchenNote`, read from the order the line belongs to (`ItemView` carries
  * no name — see `kitchen-api.ts`'s own doc); a per-line customer note, read
@@ -409,7 +411,7 @@ export class KitchenQueuePage implements OnInit {
   }
 
   protected severityTone(ticket: TicketResponse): 'danger' | 'warning' | 'none' {
-    return computeTicketSeverity(toSeverityInput(ticket), new Date(), this.latenessPolicy).tone;
+    return computeTicketSeverity(ticketSeverityInput(ticket), new Date(), this.latenessPolicy).tone;
   }
 
   protected fulfilmentModeLabel(mode: string): string {
@@ -1057,18 +1059,6 @@ export class KitchenQueuePage implements OnInit {
   }
 }
 
-function toSeverityInput(ticket: TicketResponse): {
-  targetReadyAt: Date | null;
-  createdAt: Date;
-  fulfilmentMode: string | null | undefined;
-} {
-  return {
-    targetReadyAt: ticket.targetReadyAt ? new Date(ticket.targetReadyAt) : null,
-    createdAt: new Date(ticket.createdAt),
-    fulfilmentMode: ticket.fulfilmentMode,
-  };
-}
-
 const SEVERITY_RANK: Readonly<Record<'danger' | 'warning' | 'none', number>> = {
   danger: 0,
   warning: 1,
@@ -1082,8 +1072,8 @@ function compareBySeverityThenTime(
   return (a, b) => {
     const now = new Date();
     const rankDiff =
-      SEVERITY_RANK[computeTicketSeverity(toSeverityInput(a), now, policy).tone] -
-      SEVERITY_RANK[computeTicketSeverity(toSeverityInput(b), now, policy).tone];
+      SEVERITY_RANK[computeTicketSeverity(ticketSeverityInput(a), now, policy).tone] -
+      SEVERITY_RANK[computeTicketSeverity(ticketSeverityInput(b), now, policy).tone];
     if (rankDiff !== 0) {
       return rankDiff;
     }

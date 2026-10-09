@@ -1512,6 +1512,7 @@ describe('KitchenQueuePage: the tenant late colour (row X.39)', () => {
   /** Mounts the board with the policy read by `read`, without waiting for anything to settle. */
   async function mount(
     read: () => Promise<LatenessPolicy | null>,
+    tickets: readonly TicketResponse[] = [ON_TIME_TICKET, AT_RISK_TICKET, LATE_TICKET],
   ): Promise<ComponentFixture<KitchenQueuePage>> {
     await TestBed.configureTestingModule({
       imports: [KitchenQueuePage],
@@ -1527,7 +1528,7 @@ describe('KitchenQueuePage: the tenant late colour (row X.39)', () => {
         {
           provide: KitchenApi,
           useValue: {
-            board: () => Promise.resolve(board([ON_TIME_TICKET, AT_RISK_TICKET, LATE_TICKET])),
+            board: () => Promise.resolve(board([...tickets])),
             stations: () => Promise.resolve([]),
           },
         },
@@ -1563,8 +1564,11 @@ describe('KitchenQueuePage: the tenant late colour (row X.39)', () => {
     return TestBed.createComponent(KitchenQueuePage);
   }
 
-  async function render(policy: LatenessPolicy): Promise<HTMLElement> {
-    const fixture = await mount(() => Promise.resolve(policy));
+  async function render(
+    policy: LatenessPolicy,
+    tickets?: readonly TicketResponse[],
+  ): Promise<HTMLElement> {
+    const fixture = await mount(() => Promise.resolve(policy), tickets);
     fixture.detectChanges();
     await flushMicrotasks();
     fixture.detectChanges();
@@ -1585,6 +1589,43 @@ describe('KitchenQueuePage: the tenant late colour (row X.39)', () => {
     expect(ticketFor(host, 'A-002').classList).toContain('ticket--warning');
     expect(ticketFor(host, 'A-002').style.getPropertyValue('--q-sla-late')).toBe('');
     expect(ticketFor(host, 'A-003').style.getPropertyValue('--q-sla-late')).toBe('');
+  });
+
+  it('colours a ticket by its ORDER’s clock, as the board does (ADR 0150): late from the order’s creation, and not early because of the road', async () => {
+    const twenty = {
+      atRiskBeforeSeconds: 300,
+      lateAfterSeconds: 0,
+      noPromiseFallbackSeconds: 20 * 60,
+    };
+    // Unpromised, placed half an hour ago, ticket opened ten seconds ago: the board calls it late.
+    const acceptedLate: TicketResponse = {
+      ...DELIVERY_TICKET,
+      ticketId: 'accepted-late',
+      sequenceLabel: 'B-001',
+      targetReadyAt: null,
+      createdAt: new Date(Date.now() - 10_000).toISOString(),
+      orderCreatedAt: new Date(Date.now() - 30 * MINUTE).toISOString(),
+      orderPromisedAt: null,
+      orderTerminal: false,
+    };
+    // Promised in ten minutes with twenty on the road: its target passed ten minutes ago, its promise has not.
+    const onTheRoad: TicketResponse = {
+      ...DELIVERY_TICKET,
+      ticketId: 'on-the-road',
+      sequenceLabel: 'B-002',
+      targetReadyAt: new Date(Date.now() - 10 * MINUTE).toISOString(),
+      orderCreatedAt: new Date(Date.now() - 30 * MINUTE).toISOString(),
+      orderPromisedAt: new Date(Date.now() + 10 * MINUTE).toISOString(),
+      orderTerminal: false,
+    };
+
+    const host = await render(
+      { delivery: twenty, pickup: twenty, dineIn: twenty, lateColour: null },
+      [acceptedLate, onTheRoad],
+    );
+
+    expect(ticketFor(host, 'B-001').classList).toContain('ticket--danger');
+    expect(ticketFor(host, 'B-002').classList).not.toContain('ticket--danger');
   });
 
   it('keeps the design-system token when the tenant has set no colour', async () => {

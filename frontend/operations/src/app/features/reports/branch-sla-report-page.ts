@@ -13,12 +13,14 @@ import {
   PaymentMethodsApi,
 } from '../settings/payment-methods/payment-methods-api';
 import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
+import { FiscalizationApi, LegalEntityView } from '../settings/fiscalization/fiscalization-api';
 import { LocationView, LocationsApi } from '../settings/locations/locations-api';
+import { PaymentMixNote } from './payment-mix-note';
 import { ProvenanceBanner } from './provenance-banner';
 import { formatCount, formatShare } from './report-formatting';
 import { deriveAverageCheck, sumAcrossDays } from './report-rollup';
 import { ReportsFilterState } from './reports-filter-state';
-import { BucketResponse, ProvenanceResponse, ReportingApi } from './reporting-api';
+import { BucketResponse, MetricResponse, ProvenanceResponse, ReportingApi } from './reporting-api';
 
 /**
  * `sla_bucket_set.v1` — the platform-fixed, versioned six (`SlaBucketSet.java`).
@@ -97,10 +99,20 @@ interface ChannelRow {
   readonly averageCheckSom: number | null;
 }
 
-/** Wave T06 (7.3b): one (branch, payment method) cell of the cash-reconciliation split. */
+/** The one metric Table D is computed under (ADR 0115). */
+const PAYMENT_MIX_METRIC = 'payment_mix.amount.v1';
+
+/**
+ * Wave T06 (7.3b): one (branch, legal entity, payment method) cell of the cash-reconciliation
+ * split. The entity is part of the key because the record says a branch trading as two taxpayers
+ * on the same evening never has its takings summed into one figure (ADR 0038, ADR 0115): without
+ * it two rows of the same branch and method are indistinguishable.
+ */
 interface PaymentSplitRow {
   readonly locationId: string;
   readonly locationName: string;
+  readonly legalEntityId: string | null;
+  readonly legalEntityName: string | null;
   readonly paymentMethodCode: string;
   readonly paymentMethodName: string;
   readonly tenderCount: number;
@@ -160,15 +172,20 @@ type SortKey =
  * 'CHANNEL', 'LEGAL_ENTITY']` (money, so `LEGAL_ENTITY` is always named —
  * ADR 0038 — and folded back out client-side, the same move every other
  * money-plus-axis query on this console makes). A flat (branch, channel)
- * table rather than the 2D matrix statistics.md §2.3 draws —
- * `order-reports-page.ts`'s own «Сводка» tab already makes this exact
- * simplification for the same reason: the data is real and correctly
- * summed, only the grid layout is deferred.
+ * list, which is what statistics.md §2.3 specifies for Tables C and D and
+ * what the platform owner confirmed on 2026-10-07: the branch × channel
+ * pivot is «Сводка 2» (§2.2, `order-reports-page.ts`), so this screen has
+ * no grid to be missing.
  *
  * **Table D — payment-method split.** Wave T06 reuses `P39`'s
  * `GET .../reporting/payment-mix` `byLocation` rows unchanged — no new
  * backend, this screen is simply another reader of an endpoint
- * `business-overview-page.ts`'s own payment-mix card already proves.
+ * `business-overview-page.ts`'s own payment-mix card already proves. One
+ * row per (branch, payment method); when a branch trades under more than one
+ * legal entity the taxpayer is a column of its own, because ADR 0115 never
+ * sums two entities' takings into one figure. Beneath it the same
+ * provisional and open-question note the overview card carries
+ * (`q-payment-mix-note`).
  *
  * Every table below is hidden for a single-location tenant, per the spec's
  * own instruction — the bucket distribution alone would be meaningful for
@@ -176,7 +193,7 @@ type SortKey =
  */
 @Component({
   selector: 'q-branch-sla-report-page',
-  imports: [TPipe, ProvenanceBanner, HistogramChart],
+  imports: [TPipe, ProvenanceBanner, PaymentMixNote, HistogramChart],
   templateUrl: './branch-sla-report-page.html',
   styleUrl: './branch-sla-report-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -187,6 +204,7 @@ export class BranchSlaReportPage {
   private readonly locationsApi = inject(LocationsApi);
   private readonly channelsApi = inject(SalesChannelsApi);
   private readonly paymentMethodsApi = inject(PaymentMethodsApi);
+  private readonly fiscalizationApi = inject(FiscalizationApi);
   private readonly slaBucketSets = inject(SlaBucketSetApi);
   private readonly filters = inject(ReportsFilterState);
   protected readonly i18n = inject(I18n);
@@ -196,6 +214,14 @@ export class BranchSlaReportPage {
   protected readonly slaRows = signal<readonly SlaRow[]>([]);
   protected readonly channelRows = signal<readonly ChannelRow[]>([]);
   protected readonly paymentSplitRows = signal<readonly PaymentSplitRow[]>([]);
+  /** Table D names the taxpayer only when more than one appears: a single-entity tenant sees no new column. */
+  protected readonly paymentSplitNamesEntities = computed(
+    () => new Set(this.paymentSplitRows().map((row) => row.legalEntityId)).size > 1,
+  );
+  /** ADR 0115: finance has not signed `payment_mix.amount.v1` — from the payment-mix response's own provenance. */
+  protected readonly paymentMixProvisional = signal(false);
+  /** ADR 0115: the registry still carries the provider-commission `openQuestion` for the metric. */
+  protected readonly paymentMixOpenQuestion = signal(false);
   protected readonly provenance = signal<ProvenanceResponse | null>(null);
   /**
    * The bucket-set version the table's counts were computed under, read from the endpoint the
@@ -315,10 +341,17 @@ export class BranchSlaReportPage {
         locations.map((loc: LocationView) => [loc.id, loc.displayName]),
       );
 
-      const [channels, paymentMethods] = await Promise.all([
+      const [channels, paymentMethods, legalEntities, metricDictionary] = await Promise.all([
         this.channelsApi.list(scope).catch(() => [] as readonly ChannelView[]),
         this.paymentMethodsApi.list(scope).catch(() => [] as readonly PaymentMethodView[]),
+        this.fiscalizationApi
+          .listLegalEntities(scope)
+          .catch(() => [] as readonly LegalEntityView[]),
+        this.api.metrics(scope.tenantId).catch(() => [] as readonly MetricResponse[]),
       ]);
+      const nameByLegalEntity = new Map(
+        legalEntities.map((entity) => [entity.id, entity.shortName ?? entity.legalName]),
+      );
       const nameByChannel = new Map(channels.map((channel) => [channel.code, channel.displayName]));
       // The same channel-classification move order-reports-page.ts's «Посуточно» tab already
       // makes for its per-3PL column: AGGREGATOR is one of ADR 0036's closed system types.
@@ -448,12 +481,24 @@ export class BranchSlaReportPage {
 
       this.channelRows.set(buildChannelRows(channelMoney.rows, nameById, nameByChannel));
 
+      this.paymentMixProvisional.set(
+        mix.provenance.provisionalMetrics.includes(PAYMENT_MIX_METRIC),
+      );
+      this.paymentMixOpenQuestion.set(
+        (metricDictionary.find((metric) => metric.metricCode === PAYMENT_MIX_METRIC)
+          ?.openQuestion ?? null) !== null,
+      );
       this.paymentSplitRows.set(
         mix.byLocation
           .filter((row) => row.locationId !== null)
           .map((row) => ({
             locationId: row.locationId as string,
             locationName: nameById.get(row.locationId as string) ?? (row.locationId as string),
+            legalEntityId: row.legalEntityId,
+            legalEntityName:
+              row.legalEntityId === null
+                ? null
+                : (nameByLegalEntity.get(row.legalEntityId) ?? row.legalEntityId),
             paymentMethodCode: row.paymentMethodCode,
             paymentMethodName:
               nameByPaymentMethod.get(row.paymentMethodCode) ?? row.paymentMethodCode,
@@ -461,7 +506,10 @@ export class BranchSlaReportPage {
             amountSom: row.amountSom,
           }))
           .sort(
-            (a, b) => a.locationName.localeCompare(b.locationName) || b.amountSom - a.amountSom,
+            (a, b) =>
+              a.locationName.localeCompare(b.locationName) ||
+              (a.legalEntityName ?? '').localeCompare(b.legalEntityName ?? '') ||
+              b.amountSom - a.amountSom,
           ),
       );
 
@@ -573,9 +621,8 @@ export function buildSlaRows(
 
 /**
  * Wave T06 (7.3b): the per-channel count-and-average-check block, one flat
- * row per (branch, channel) — `order-reports-page.ts`'s own «Сводка» tab
- * doc explains why a flat table rather than the 2D matrix statistics.md
- * §2.3 draws is the right simplification for this wave.
+ * row per (branch, channel) — the flat list statistics.md §2.3 specifies for
+ * Table C, not a grid; the branch × channel pivot is «Сводка 2» (§2.2).
  */
 function buildChannelRows(
   rows: readonly {

@@ -32,20 +32,32 @@ package uz.horecaos.platform.marketing.domain;
  * threshold: a change smaller than it is not a candidate at all, the same way
  * a customer outside {@code birthdayWindowDays} is not one.
  *
- * <p><strong>One trigger kind this row's own instructions named is still
- * deliberately not offered</strong>, and it is not an oversight:
+ * <p><strong>{@code LATE_ORDER_APOLOGY} is offered now, with the reconciliation ADR 0044
+ * demanded of it.</strong> ADR 0044 left it "deliberately absent": lateness is an ADR 0013
+ * recovery event with a compensation decision attached, and a second, unreconciled
+ * compensation path from marketing is how one late delivery gets both a refund from support
+ * and a promo code from a trigger. ADR 0112 is Accepted, and this kind is built to be that
+ * reconciliation rather than a second path:
  *
  * <ul>
- *   <li>{@code LATE_ORDER_APOLOGY} — ADR 0044's own Triggers section states
- *       it is "deliberately absent": lateness is an ADR 0013 recovery event
- *       with a compensation decision attached, and a second, unreconciled
- *       compensation path from marketing is the exact failure that section
- *       names. ADR 0112 ("Campaigns are versioned, offers reference the
- *       catalogue, and the contact policy decides") is where a late-order
- *       apology is designed as a reconciled scenario — and it is {@code
- *       Proposed}, not {@code Accepted}. Building this trigger here would be
- *       re-deciding an Accepted ADR's explicit exclusion rather than filling
- *       a gap it left open.
+ *   <li><em>Words, never a benefit.</em> A rule names a template and nothing else: the table
+ *       has no offer, promotion or accrual-rule column to state a discount in, so the apology
+ *       cannot compensate. Compensation stays ADR 0013's, decided by a person with a reason.
+ *   <li><em>An order support has already made good is not apologised to again.</em> The
+ *       firing is cancelled, with that reason on its run row, when {@code
+ *       payments.order_remedies} holds any remedy for the order, read inside the firing's own
+ *       transaction after its guard key is claimed.
+ *   <li><em>Support gets first refusal.</em> An order becomes a candidate only once it has
+ *       been closed for {@code AutomationSweepService#APOLOGY_SETTLE_DELAY}, long enough for
+ *       the person handling the complaint to record a remedy before an unattended message
+ *       goes out.
+ *   <li><em>Once per order, across rules.</em> {@link AutomationGuardKeys#order} makes a rule's
+ *       own firing once per order; two armed rules whose thresholds both fit one late order
+ *       are stopped from each apologising by the firing service (the second is cancelled, with
+ *       that reason on its run row), by the partial unique index V0581 puts on {@code
+ *       (tenant_id, subject_id)} for this kind, and by an idempotency key that names the order
+ *       and not the rule. It runs under the same consent, frequency cap, contact policy and
+ *       quiet hours as every other trigger.
  * </ul>
  */
 public enum AutomationTriggerType {
@@ -64,7 +76,14 @@ public enum AutomationTriggerType {
      * at least {@code minimumChangeMinor}. Event-driven, not swept — see this
      * enum's own doc.
      */
-    CASHBACK_CHANGE("minimumChangeMinor");
+    CASHBACK_CHANGE("minimumChangeMinor"),
+
+    /**
+     * A completed order that closed at least {@code lateByMinutes} after the moment it was
+     * promised, and that no ADR 0013 remedy covers. Swept; see this enum's own doc for the
+     * reconciliation it carries.
+     */
+    LATE_ORDER_APOLOGY("lateByMinutes");
 
     private final String configKey;
 

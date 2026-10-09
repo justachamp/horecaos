@@ -32,6 +32,10 @@ describe('message areas', () => {
     expect(areaOfKey('orders.status')).toBe(CORE_AREA);
     expect(areaOfKey('reservations.title')).toBe('orders');
     expect(areaOfKey('wallboardKitchen.title')).toBe('wallboard');
+    // `ui` is core; the map components' own strings are a lazy area.
+    expect(areaOfKey('ui.map.label')).toBe('map');
+    expect(areaOfKey('ui.map.address.unavailable.failed')).toBe('map');
+    expect(areaOfKey('ui.alert.dismiss')).toBe(CORE_AREA);
     expect(areaOfKey('settings.scope.denied')).toBe(CORE_AREA);
     expect(areaOfKey('settings.scopeBar.x')).toBe('settings');
     expect(areaOfKey('nowhere.at.all')).toBeUndefined();

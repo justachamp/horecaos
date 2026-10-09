@@ -86,6 +86,18 @@ export interface BalanceResponse {
   spendable?: ApiMoney;
 }
 
+export interface Banner {
+  imageReference?: string;
+  name?: string;
+  offerId?: string;
+  presentedOfferId?: string;
+  priority?: number;
+}
+
+export interface CallbackRequestResponse {
+  leadId: string;
+}
+
 export interface CartLineResponse {
   comboPicks?: Array<ComboPickResponse>;
   commentPresetCodes?: Array<string>;
@@ -175,6 +187,12 @@ export interface CreateCartRequest {
   channel: string;
   fulfillmentMode: "DELIVERY" | "PICKUP" | "DINE_IN";
   locationId: string;
+}
+
+export interface CustomerCallbackRequest {
+  forCompany?: boolean;
+  note?: string;
+  phone: string;
 }
 
 export interface CustomerSessionResponse {
@@ -567,6 +585,23 @@ export interface PickupLocations {
   locations?: Array<PickupLocation>;
 }
 
+export interface PlatformLocaleEntryResponse {
+  catalogCode?: string;
+  direction?: string;
+  face?: string;
+  fallbackRank?: number;
+  inputAliases?: Array<string>;
+  names?: { [key: string]: string };
+  script?: string;
+  tag?: string;
+  tiers?: Array<string>;
+}
+
+export interface PlatformLocalesResponse {
+  fallback?: string;
+  locales?: Array<PlatformLocaleEntryResponse>;
+}
+
 export interface PricedCartResponse {
   appliedPromotions?: Array<AppliedPromotionResponse>;
   cartId?: string;
@@ -831,6 +866,7 @@ export interface Operations {
   "bill": { method: "GET"; path: "/api/v1/storefront/dine-in/sessions/{sessionId}"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { sessionId: string } } }; responses: { "200": GuestBillResponse } };
   "requestBill": { method: "POST"; path: "/api/v1/storefront/dine-in/sessions/{sessionId}/bill-requests"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { sessionId: string } } }; responses: { "200": GuestBillResponse } };
   "addRound": { method: "POST"; path: "/api/v1/storefront/dine-in/sessions/{sessionId}/rounds"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { sessionId: string } }; body: AddRoundRequest }; responses: { "200": GuestBillResponse } };
+  "storefront": { method: "GET"; path: "/api/v1/storefront/locales"; request: { parameters: Record<string, never> }; responses: { "200": PlatformLocalesResponse } };
   "balance": { method: "GET"; path: "/api/v1/storefront/loyalty/tenants/{tenantId}/accounts/{accountId}"; request: { parameters: { path: { accountId: string; tenantId: string } } }; responses: { "200": BalanceResponse } };
   "entries": { method: "GET"; path: "/api/v1/storefront/loyalty/tenants/{tenantId}/accounts/{accountId}/entries"; request: { parameters: { path: { accountId: string; tenantId: string } } }; responses: { "200": Array<LoyaltyStorefrontControllerEntryResponse> } };
   "nearbyPickupLocations": { method: "POST"; path: "/api/v1/storefront/pickup-locations"; request: { parameters: Record<string, never>; body: PickupLocationSearchRequest }; responses: { "200": PickupLocations } };
@@ -866,6 +902,7 @@ export interface Operations {
   "removeAddress": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } } }; responses: { "200": unknown } };
   "address": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } } }; responses: { "200": StorefrontCustomerControllerAddressResponse } };
   "updateAddress": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } }; body: SaveAddressRequest }; responses: { "200": StorefrontCustomerControllerAddressResponse } };
+  "request": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/callback-requests"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CustomerCallbackRequest }; responses: { "200": CallbackRequestResponse } };
   "currentErasureRequest": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/erasure-request"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": StorefrontCustomerControllerErasureRequestResponse } };
   "requestErasure": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/erasure-request"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": StorefrontCustomerControllerErasureRequestResponse } };
   "cancelErasureRequest": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/erasure-request/cancel"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": StorefrontCustomerControllerErasureRequestResponse } };
@@ -878,6 +915,8 @@ export interface Operations {
   "openPaymentSession": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/payment-sessions"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; orderId: string; tenantId: string } }; body: PaymentSessionRequest }; responses: { "200": StorefrontPaymentControllerPaymentSessionResponse } };
   "reorderPlan": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/reorder"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } } }; responses: { "200": ReorderPlanResponse } };
   "submit": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/review"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } }; body: SubmitReviewRequest }; responses: { "200": StorefrontReviewControllerReviewResponse } };
+  "poll_1": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/presented-offers"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { surface?: string } } }; responses: { "200": Array<Banner> } };
+  "dismiss": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/presented-offers/{presentedOfferId}/dismissals"; request: { parameters: { path: { brandId: string; presentedOfferId: string; tenantId: string } } }; responses: { "200": unknown } };
   "myReferral": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/me"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": MyReferralResponse } };
   "redeem": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/redemptions"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RedeemRequest }; responses: { "200": ReferralStorefrontControllerRedemptionResponse } };
   "myReviews": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PageStorefrontReviewControllerReviewResponse } };

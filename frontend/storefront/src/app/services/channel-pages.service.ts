@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 
 import { ApiClient } from '../core/api/api-client';
 import { APP_CONFIG } from '../core/config/app-config';
-import { LangService } from './lang.service';
+import { LangService, platformTag } from './lang.service';
 
 /** Row 10.5's four static pages. Matches `tenancy.domain.channel.ChannelPageSlug` (Java) one to one. */
 export type ChannelPageSlug = 'about' | 'contacts' | 'delivery-terms' | 'privacy-offer';
@@ -60,17 +60,10 @@ export class ChannelPagesService {
   }
 }
 
+/** The channel-page locale for a language id: the registry's tag, English for one with no page. */
 function toContentLocale(langId: string): string {
-  switch (langId) {
-    case 'uz':
-      return 'uz-Latn';
-    case 'ru':
-      return 'ru';
-    case 'en':
-      return 'en';
-    default:
-      return 'en';
-  }
+  const tag = platformTag(langId);
+  return tag === 'ru' || tag === 'uz-Latn' || tag === 'en' ? tag : 'en';
 }
 
 interface ChannelPageResponse {

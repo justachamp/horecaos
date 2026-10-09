@@ -244,6 +244,24 @@ public enum Capability {
     ORDER_PLACE("order.place", "order", "place"),
 
     /**
+     * ADR 0145 decision 8, row {@code 7.10a}: opening the day's delivery orders as points on a map.
+     *
+     * <p>Seeing where today's orders are going needs the doorstep, and a doorstep is a customer's
+     * home: it lives only inside the order's envelope-encrypted snapshot (ADR 0029), never in a
+     * reporting fact. So this is a reveal, not a report -- the record calls it "a dispatcher-scope
+     * read with an ADR 0027 audited purpose, never a reporting fact". Every call states a purpose
+     * and leaves one audit fact for the whole call; the answer carries an order number and a point
+     * and nothing that identifies a person (no name, no phone, no address text).
+     *
+     * <p>Its own capability rather than {@link #CUSTOMER_PII_REVEAL}, which opens one order's
+     * address for a reason about that order: this opens a branch's whole day at once, which is a
+     * different act with a different blast radius. Held by exactly the two bundles that already
+     * hold both the live courier map and the address reveal -- the dispatcher and the branch
+     * manager -- and by nothing wider.
+     */
+    ORDER_POINTS_REVEAL("order.points.reveal", "order", "points.reveal"),
+
+    /**
      * ADR 0064: attaching the voice call id an order originated from. A narrow
      * capability of its own rather than folded into {@link #ORDER_ADVANCE} or
      * {@link #ORDER_AMEND} — recording where an order came from changes
@@ -387,6 +405,20 @@ public enum Capability {
 
     /** ADR 0037: reading zones, their versions, and the rate tables bound to them. */
     DELIVERY_ZONE_READ("delivery.zone.read", "delivery", "zone.read"),
+
+    /**
+     * ADR 0145: asking the map provider to suggest, find or name an address.
+     *
+     * <p>One capability for three endpoints that serve three different tasks: New order's
+     * address pane ({@code order.place} at a branch), the zone and region editors
+     * ({@code delivery.zone.read}) and the branch pin ({@code location.write}). The record's own
+     * rule is that where an endpoint is shared the build adds a single code-owned capability
+     * "instead of picking the widest" — picking {@code location.write} would shut a cashier out
+     * of address search, and picking {@code order.place} would hand a zone editor a capability
+     * that places orders. A lookup writes nothing and returns what a map would show anybody, so
+     * it is held by exactly the roles that hold one of the three tasks.
+     */
+    GEO_LOOKUP("geo.lookup", "geo", "lookup"),
 
     /** ADR 0037: drawing zones and authoring new versions of them, all of which stay DRAFT. */
     DELIVERY_ZONE_MANAGE("delivery.zone.manage", "delivery", "zone.manage"),
@@ -571,6 +603,17 @@ public enum Capability {
 
     /** ADR 0041: reading a branch's production tickets. Line, expo, and manager. */
     KITCHEN_TICKET_READ("kitchen.ticket.read", "kitchen", "ticket.read"),
+
+    /**
+     * ADR 0151: reading the VDU wall projection ({@code GET .../kitchen/vdu}) and nothing else.
+     *
+     * <p>Separate from {@link #KITCHEN_TICKET_READ} so that a wall display, which holds this and
+     * only this, cannot call the touch board's read, a single ticket, or any read added later under
+     * the ticket capability. Every bundle that holds {@code kitchen.ticket.read} also holds this one,
+     * so no staff member loses the VDU page; {@code PlatformRoleTests} makes that an invariant
+     * rather than a habit.
+     */
+    KITCHEN_DISPLAY_READ("kitchen.display.read", "kitchen", "display.read"),
 
     /**
      * ADR 0041: starting and readying lines, restricted to the principal's own
@@ -842,6 +885,31 @@ public enum Capability {
     CUSTOMER_PII_REVEAL("customer.pii.reveal", "customer", "pii-reveal"),
 
     /**
+     * ADR 0111: the call centre's callback queue and one lead's detail. A lead is a guest
+     * who has phoned in, asked for a callback or enquired about catering and is not yet an
+     * account with an order behind them.
+     *
+     * <p>Held at {@code TENANT}, {@code BRAND} or {@code LOCATION}: a {@code LOCATION} holder
+     * reads only the leads assigned to her branch (the route names the branch, and the query
+     * is written against it). Reading never decrypts: the queue shows a masked number, and
+     * the number itself is {@link #CUSTOMER_PII_REVEAL}, purpose-stamped and audited.
+     * Separate from {@link #CUSTOMER_READ} because that is about accounts and this is about
+     * people who are not one yet.
+     */
+    CUSTOMER_LEAD_READ("customer.lead.read", "customer", "lead.read"),
+    /**
+     * ADR 0111: creating a lead, moving it through its status machine, handing it to a
+     * branch, and recording a voice contact attempt against a lead or a customer.
+     *
+     * <p>Not a four-eyes act: a lead transition is neither irreversible nor cost-bearing the
+     * way a campaign send is, so it carries an audit fact and no approval. Granted to the
+     * roles that already do the call centre's work; a role that should never see a guest's
+     * phone number does not hold it, and holding it still reveals nothing without {@link
+     * #CUSTOMER_PII_REVEAL}.
+     */
+    CUSTOMER_LEAD_MANAGE("customer.lead.manage", "customer", "lead.manage"),
+
+    /**
      * ADR 0029, ADR 0044: performs the transition a raised erasure request only
      * records the intent for — anonymising the account, overwriting its
      * protected fields, and calling every registered erasure participant.
@@ -909,6 +977,36 @@ public enum Capability {
      * separate from it.
      */
     PARTNER_API_CLIENT_MANAGE("partner.api-client.manage", "partner", "api-client.manage"),
+
+    /**
+     * ADR 0070: the platform's own registry of storefront apps — registering one,
+     * changing its name and origins, suspending or retiring it, rotating a
+     * confidential client's secret, and recording what the conformance suite said.
+     *
+     * <p>Platform staff only, and held by no tenant bundle. An app is registered
+     * once and then authorised by many tenants, so changing its registration
+     * changes what every one of them is serving: suspending it stops it for all of
+     * them in a request, and editing its origin allowlist decides who may speak as
+     * it. That is the platform's decision to make, not any one tenant's, which is
+     * the same reasoning that keeps {@link #COMMERCIAL_PLAN_MANAGE} off every tenant
+     * role.
+     */
+    STOREFRONT_APP_REGISTRY_MANAGE("storefront-app.registry.manage", "storefront-app", "registry.manage"),
+
+    /**
+     * ADR 0070: a tenant's own choice of storefront — authorising a registered app
+     * to serve one of its brands, and withdrawing that authorisation.
+     *
+     * <p>Held at {@code BRAND} scope and above by the owner and the administrator.
+     * Deliberately not folded into {@link #INTEGRATION_INSTALLATION_MANAGE}: that
+     * capability configures how the platform calls <em>out</em> to a provider, while
+     * this one decides whose software may call <em>in</em> as the brand's own
+     * storefront — the same blast-radius argument that keeps
+     * {@link #PARTNER_API_CLIENT_MANAGE} separate from it. A tenant's storefront
+     * choice is data, not a deployment (ADR 0070), and revoking it takes effect on
+     * the next request.
+     */
+    STOREFRONT_APP_AUTHORISE("storefront-app.authorise", "storefront-app", "authorise"),
 
     /**
      * ADR 0058: issuing a short-lived {@code /link <code>} for the Telegram
@@ -1093,6 +1191,31 @@ public enum Capability {
     CAMPAIGN_AUTHOR("campaign.author", "campaign", "author"),
 
     /**
+     * ADR 0112: creating, versioning, publishing and retiring a brand's
+     * {@code marketing.offers}.
+     *
+     * <p>A reference and never a discount. Holding this lets a marketer choose which
+     * existing promotion or accrual rule an offer points at, for how long and in which
+     * channels; it grants no authority to create the promotion (that is pricing's) or to
+     * mint points (that is loyalty's), and no editor behind it has a field in which to
+     * invent either. Separate from {@link #CAMPAIGN_AUTHOR} because an offer outlives
+     * any one campaign, and from {@link #CAMPAIGN_APPROVE} because choosing what a
+     * guest may be offered is not the second signature on sending it.
+     */
+    MARKETING_OFFER_MANAGE("marketing.offer.manage", "marketing-offer", "manage"),
+
+    /**
+     * ADR 0112: writing {@code marketing.contact_policy_overrides}: a tighter cap or a
+     * wider quiet-hour exclusion for one channel, campaign purpose and period.
+     *
+     * <p>Tighten-only, enforced by the service and by the table's CHECKs, so holding it
+     * can only ever make a brand quieter. It is still its own capability because the
+     * numbers protect a sending reputation shared across tenants, and because a rule
+     * that silences a campaign is a decision somebody should be able to attribute.
+     */
+    MARKETING_CONTACT_POLICY_MANAGE("marketing.contact_policy.manage", "marketing-contact-policy", "manage"),
+
+    /**
      * ADR 0044: the second signature, and the power to stop a running send.
      *
      * <p>Separate from {@link #CAMPAIGN_AUTHOR} and useless in the same hands: the
@@ -1251,6 +1374,54 @@ public enum Capability {
     COMMERCIAL_ARREARS_READ("commercial.arrears.read", "commercial", "arrears.read"),
 
     /**
+     * ADR 0095: a tenant paying HorecaOS in advance — charging the card it keeps on file to put money in
+     * its wallet, and asking for a prepayment invoice to pay by bank transfer instead.
+     *
+     * <p>The tenant's own act, and the opposite of {@link #COMMERCIAL_WALLET_MANAGE}: that is HorecaOS
+     * deciding what a tenant is owed or owes, this is a tenant putting its own money in. A tenant cannot
+     * credit itself without paying: a card top-up is a charge the provider confirmed, and a bank transfer
+     * waits for HorecaOS finance to record it. Composed into the pair that already holds {@link
+     * #COMMERCIAL_SUBSCRIPTION_MANAGE}, the tenant's other commitment of money.
+     */
+    COMMERCIAL_WALLET_TOPUP("commercial.wallet.topup", "commercial", "wallet.topup"),
+
+    /**
+     * ADR 0095: the card a tenant keeps on file with HorecaOS, and how it chooses to be collected —
+     * invoice and bank transfer, prepaid wallet, or the card charged for each statement's remainder.
+     *
+     * <p>Choosing the card for statements is the tenant's own recorded consent to recurring charges,
+     * which is why it is a capability of its own and not something {@link #COMMERCIAL_WALLET_TOPUP}
+     * implies: a finance clerk who may top the wallet up must not thereby agree that the card is
+     * charged every month.
+     */
+    COMMERCIAL_CARD_MANAGE("commercial.card.manage", "commercial", "card.manage"),
+
+    /**
+     * ADR 0096: sending an issued statement to an e-invoicing operator (Didox or
+     * Faktura.uz) as an electronic invoice, and asking the operator what became of
+     * a document already sent.
+     *
+     * <p>HorecaOS staff only, like {@link #COMMERCIAL_STATEMENT_ISSUE}: HorecaOS is
+     * the seller on the invoice, and a tenant that could send or resend its own
+     * would be deciding what HorecaOS invoices it. Sending is a deliberate act per
+     * statement, never automatic at issue (ADR 0096, accepted trade-off).
+     */
+    COMMERCIAL_EINVOICE_SEND("commercial.einvoice.send", "commercial", "einvoice.send"),
+
+    /**
+     * ADR 0096: HorecaOS's own accounts with the e-invoicing operators (their
+     * platform installations and secret references), and the classification code
+     * and VAT rate each statement line kind is invoiced under.
+     *
+     * <p>HorecaOS staff only and separate from {@link #COMMERCIAL_EINVOICE_SEND}:
+     * connecting an operator account or confirming a tax treatment is finance's
+     * decision, and the person who may press "send" is not thereby the person
+     * who may repoint the account the invoice goes out through. Reading the
+     * configuration is {@link #COMMERCIAL_USAGE_READ} at platform scope.
+     */
+    COMMERCIAL_EINVOICING_MANAGE("commercial.einvoicing.manage", "commercial", "einvoicing.manage"),
+
+    /**
      * ADR 0046: reading a customer's points balance, their movements, and the
      * brand's outstanding liability.
      *
@@ -1322,6 +1493,28 @@ public enum Capability {
 
     /** Granting and revoking roles within a scope the granter already covers. */
     IAM_GRANT_MANAGE("iam.grant.manage", "iam", "grant.manage"),
+
+    /**
+     * ADR 0148: reading whether a person holds a second factor, how many authenticators
+     * and when each was added -- the «Способ входа» field on the person card and the column
+     * on the staff list. Never a secret and never a code: the platform holds neither.
+     *
+     * <p>Declared at {@code TENANT} scope on the staff routes and at {@code PLATFORM} scope
+     * for a platform account.
+     */
+    IAM_STAFF_MFA_READ("iam.staff.mfa.read", "iam", "staff.mfa.read"),
+
+    /**
+     * ADR 0148: removing a person's second factor because the device is lost -- an audited
+     * administrator action, and never a link anyone can follow from a mailbox. Removes every
+     * authenticator, ends the person's sessions, writes an ADR 0027 fact with the reason and
+     * emails the person.
+     *
+     * <p>For a platform-scope account the reset needs a second signature (ADR 0050, fail
+     * closed); a tenant owner's own reset is performed by platform support inside an ADR
+     * 0081 session.
+     */
+    IAM_STAFF_MFA_RESET("iam.staff.mfa.reset", "iam", "staff.mfa.reset"),
 
     /**
      * ADR 0081: opening a support session into one tenant — a time-boxed
@@ -1789,6 +1982,26 @@ public enum Capability {
      * documents as the normal case, not the only permitted one.
      */
     CONVERSATION_INBOX_MANAGE("conversation.inbox.manage", "conversation-inbox", "manage"),
+
+    /**
+     * ADR 0069: reading the grounded assistant's knowledge entries and their
+     * version history, and its month-to-date usage and spend.
+     */
+    ASSISTANT_READ("assistant.read", "assistant", "read"),
+
+    /**
+     * ADR 0069: authoring the tenant's own answers the assistant may retrieve --
+     * creating an entry, publishing its next version, retiring it. Never an
+     * edit in place: a customer was answered with specific words at a specific
+     * time, and rewriting them destroys the only record of what was said.
+     *
+     * <p>Held by the roles that already own tenant content ({@link
+     * #CATALOG_AUTHOR}'s holders). Nothing the assistant itself does escapes a
+     * capability check by being automated; it holds no capability of its own
+     * and reads only what a customer's own question and the tenant's own
+     * published data entitle it to.
+     */
+    ASSISTANT_KNOWLEDGE_MANAGE("assistant.knowledge.manage", "assistant-knowledge", "manage"),
 
     /**
      * ADR 0068: reading a brand's authored terms-of-service versions, their

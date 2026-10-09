@@ -1,0 +1,95 @@
+<section class="card-history" data-testid="card-history">
+  @if (loading()) {
+    <p class="q-body-sm">{{ 'customers.card.loading' | t }}</p>
+  } @else if (error(); as message) {
+    <p class="q-body-sm error" role="alert" data-testid="card-error">{{ message }}</p>
+  } @else if (card(); as c) {
+    <p class="q-caption muted">{{ 'customers.card.opened' | t }}</p>
+
+    @if (c.blacklisted) {
+      <p class="q-body-sm warning" role="status" data-testid="card-blacklisted">
+        {{ 'customers.card.blacklisted' | t }}
+      </p>
+    }
+
+    <h3 class="q-subtitle">{{ 'customers.card.leads.title' | t }}</h3>
+    <ul class="leads" data-testid="card-leads">
+      @for (lead of c.leads; track lead.id) {
+        <li class="q-body-sm">
+          <span class="q-status-badge">{{ leadStatus(lead.status) }}</span>
+          {{ leadSource(lead.source) }} ·
+          <span class="q-tnum">{{ formatWhen(lead.createdAt) }}</span>
+        </li>
+      } @empty {
+        <li class="q-body-sm muted">{{ 'customers.card.leads.empty' | t }}</li>
+      }
+    </ul>
+
+    <h3 class="q-subtitle">{{ 'customers.card.history.title' | t }}</h3>
+    <ul class="timeline" data-testid="card-timeline">
+      @for (entry of c.history; track $index) {
+        <li class="entry" [attr.data-kind]="entry.kind" data-testid="card-entry">
+          <span class="q-caption kind">{{ kindLabel(entry) }}</span>
+          <span class="q-body-sm q-tnum when">{{ formatWhen(entry.occurredAt) }}</span>
+          <span class="q-body-sm what">
+            {{ statusLabel(entry.statusCode) }}
+            @if (channelLabel(entry.channel); as channel) {
+              · {{ channel }}
+            }
+            @if (labelOf(entry); as label) {
+              · {{ label }}
+            }
+            @if (entry.rating !== null) {
+              · {{ entry.rating }}/5
+            }
+            @if (entry.detailCode) {
+              · <span class="q-mono">{{ entry.detailCode }}</span>
+            }
+          </span>
+          @if (entry.orderId; as orderId) {
+            <a class="link" [routerLink]="['/orders', orderId]">{{
+              'customers.card.history.order' | t
+            }}</a>
+          }
+        </li>
+      } @empty {
+        <li class="q-body-sm muted" data-testid="card-empty">
+          {{ 'customers.card.history.empty' | t }}
+        </li>
+      }
+    </ul>
+
+    @if (hasMore()) {
+      <button
+        type="button"
+        class="secondary"
+        [disabled]="loadingMore()"
+        (click)="olderRequested.emit()"
+        data-testid="card-older"
+      >
+        {{ 'customers.card.history.more' | t }}
+      </button>
+    }
+
+    <h3 class="q-subtitle">{{ 'customers.card.record.title' | t }}</h3>
+    @if (canRecord()) {
+      @if (recording()) {
+        @if (recordError(); as message) {
+          <p class="q-body-sm error" role="alert" data-testid="card-record-error">{{ message }}</p>
+        }
+        <q-call-recorder [busy]="recordBusy()" (submitted)="record($event)" />
+      } @else {
+        <button
+          type="button"
+          class="secondary"
+          (click)="openRecorder()"
+          data-testid="card-record-call"
+        >
+          {{ 'customers.leads.attempts.record' | t }}
+        </button>
+      }
+    } @else {
+      <p class="q-body-sm muted">{{ 'customers.card.record.denied' | t }}</p>
+    }
+  }
+</section>

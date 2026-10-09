@@ -4,6 +4,11 @@
       <div>
         <h1 class="q-title">{{ 'staff.people.title' | t }}</h1>
         <p class="q-body-sm lead">{{ 'staff.people.lead' | t }}</p>
+        @if (scoped()) {
+          <p class="q-body-sm lead" data-testid="staff-scoped-note">
+            {{ 'staff.people.scopedLead' | t }}
+          </p>
+        }
       </div>
       <button
         type="button"
@@ -94,6 +99,9 @@
         />
       </div>
 
+      <!-- ADR 0148: the tenant's own switch for whom it asks for an authenticator code. -->
+      <q-staff-mfa-policy-card />
+
       <table class="table">
         <thead>
           <tr>
@@ -101,6 +109,9 @@
             <th class="q-caption">{{ 'staff.column.job' | t }}</th>
             <th class="q-caption">{{ 'staff.column.scope' | t }}</th>
             <th class="q-caption">{{ 'staff.column.access' | t }}</th>
+            @if (showMfaColumn()) {
+              <th class="q-caption">{{ 'staff.mfa.column' | t }}</th>
+            }
             <th class="q-caption"></th>
           </tr>
         </thead>
@@ -108,7 +119,7 @@
           <tbody>
             @if (effectiveViewMode() === 'byBranch') {
               <tr class="group-header">
-                <td colspan="5" class="q-caption">
+                <td [attr.colspan]="showMfaColumn() ? 6 : 5" class="q-caption">
                   {{ group.labelKey ? (group.labelKey | t) : group.label }}
                   <span class="q-caption group-header__count">{{ group.people.length }}</span>
                 </td>
@@ -188,6 +199,15 @@
                     {{ statusLabelKey(person) | t }}
                   </span>
                 </td>
+                @if (showMfaColumn()) {
+                  <td class="q-body-sm" data-testid="staff-row-mfa">
+                    @if (mfaOf(person); as mfa) {
+                      <span class="chip" [class.chip--muted]="!mfa.enrolled">{{
+                        (mfa.enrolled ? 'staff.mfa.columnOn' : 'staff.mfa.columnOff') | t
+                      }}</span>
+                    }
+                  </td>
+                }
                 <td class="row-actions" (click)="$event.stopPropagation()">
                   @if (!isSelf(person.principalSubject)) {
                     @if (pendingInvitationOf(person.principalSubject); as invitation) {
@@ -245,7 +265,7 @@
             } @empty {
               @if (effectiveViewMode() !== 'byBranch') {
                 <tr>
-                  <td class="q-body-sm empty" colspan="5">
+                  <td class="q-body-sm empty" [attr.colspan]="showMfaColumn() ? 6 : 5">
                     {{ 'staff.people.noMatches' | t }}
                     <button type="button" class="text-button" (click)="resetFilters()">
                       {{ 'staff.filter.reset' | t }}

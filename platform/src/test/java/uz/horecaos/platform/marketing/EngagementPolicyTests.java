@@ -80,6 +80,31 @@ class EngagementPolicyTests {
     }
 
     @Test
+    @DisplayName("a quiet window that starts before it ends is not tighter, whatever its bounds say")
+    void aWindowInsideOneDayIsNotATightening() {
+        EngagementPolicy platform = EngagementPolicy.platformDefault();
+
+        // Starts no later than 21:00 and ends no earlier than 10:00, and closes only the
+        // hours from 05:00 to 11:00: the evening and the night would be open.
+        assertThatThrownBy(() -> platform.tightenedBy(
+                        new EngagementOverride(LocalTime.of(5, 0), LocalTime.of(11, 0), null, null, null, null, null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("never loosened")
+                .hasMessageContaining("does not wrap midnight");
+
+        // One end stated on its own can produce the same window against the default.
+        assertThatThrownBy(() -> platform.tightenedBy(
+                        new EngagementOverride(null, LocalTime.of(21, 30), null, null, null, null, null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("does not wrap midnight");
+
+        // A window that wraps and closes more is still accepted.
+        EngagementPolicy tighter = platform.tightenedBy(
+                new EngagementOverride(LocalTime.of(20, 0), LocalTime.of(11, 0), null, null, null, null, null));
+        assertThat(tighter.isQuiet(Instant.parse("2026-08-22T15:30:00Z"))).isTrue(); // 20:30 in Tashkent
+    }
+
+    @Test
     @DisplayName("nothing reaches SENDING except through an approval")
     void theCampaignStateMachineRefusesAnUnapprovedSend() {
         assertThat(CampaignStatus.DRAFT.canTransitionTo(CampaignStatus.SENDING)).isFalse();

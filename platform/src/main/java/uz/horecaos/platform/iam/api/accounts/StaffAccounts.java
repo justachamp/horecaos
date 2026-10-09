@@ -1,5 +1,7 @@
 package uz.horecaos.platform.iam.api.accounts;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
@@ -192,6 +194,62 @@ public interface StaffAccounts {
 
         public StaffAccountAlreadyExistsException(String message) {
             super(message);
+        }
+    }
+
+    /**
+     * The account's one-time-password credentials, oldest first, read fresh from the identity
+     * provider (ADR 0148). Never carries a secret: the identity provider does not return one and
+     * the platform stores none.
+     *
+     * <p>Empty for an account with no second factor and for one that does not exist; a caller
+     * that must tell the two apart asks {@link #find} as well.
+     */
+    default List<OtpCredential> otpCredentials(String subjectId) {
+        throw new UnsupportedOperationException("this StaffAccounts implementation does not list authenticators");
+    }
+
+    /**
+     * Registers a TOTP credential (six digits, thirty seconds, HMAC-SHA-1) whose secret the
+     * platform generated, and clears a pending {@code CONFIGURE_TOTP} required action (ADR 0148).
+     *
+     * <p>{@code secret} is the identity provider's own representation: a twenty-character string
+     * whose UTF-8 bytes are the HMAC key. Held by the caller for the length of one enrolment and
+     * never stored by the platform.
+     *
+     * @return the credential the identity provider created
+     */
+    default OtpCredential addOtpCredential(String subjectId, String secret, String label) {
+        throw new UnsupportedOperationException("this StaffAccounts implementation does not add authenticators");
+    }
+
+    /**
+     * Removes one of the account's OTP credentials, and only an OTP one: an id naming the
+     * password or anything else is refused as not found, because the identity provider's own
+     * delete would remove it (ADR 0148).
+     *
+     * @return whether an OTP credential with that id existed and was removed
+     */
+    default boolean removeOtpCredential(String subjectId, String credentialId) {
+        throw new UnsupportedOperationException("this StaffAccounts implementation does not remove authenticators");
+    }
+
+    /** Removes every OTP credential the account holds; the number removed. */
+    default int removeAllOtpCredentials(String subjectId) {
+        throw new UnsupportedOperationException("this StaffAccounts implementation does not remove authenticators");
+    }
+
+    /**
+     * One authenticator of an account. {@code label} is what the person typed when they added it
+     * ("phone", "tablet") and can identify them, so it never reaches an audit fact, a log or an
+     * email (ADR 0148).
+     */
+    record OtpCredential(
+            String id, @Nullable String label, @Nullable Instant createdAt) {
+
+        @Override
+        public String toString() {
+            return "OtpCredential[id=" + id + "]";
         }
     }
 

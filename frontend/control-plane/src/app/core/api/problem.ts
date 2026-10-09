@@ -120,7 +120,12 @@ function isProblemBody(body: unknown): body is Problem {
  * because "the API said no" and "nothing answered" need different handling and
  * a client that conflates them retries the wrong one.
  */
-export function toProblem(status: number, contentType: string | null, body: unknown, url: string): Problem {
+export function toProblem(
+  status: number,
+  contentType: string | null,
+  body: unknown,
+  url: string,
+): Problem {
   if (status === 0) {
     return {
       status: 0,

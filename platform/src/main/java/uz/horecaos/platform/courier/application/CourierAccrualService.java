@@ -131,9 +131,20 @@ public class CourierAccrualService {
         // never a plain UTC calendar date, which would file a delivery
         // completed in the tenant's early-morning window under the previous
         // trading day.
-        LocalDate businessDate = businessDays.businessDateOf(command.tenantId(), command.deliveredAt());
+        LocalDate workDate = businessDays.businessDateOf(command.tenantId(), command.deliveredAt());
+        // The day the accrual is booked on is not always the day the work happened on. The
+        // delivery is dated on the courier's own tap, and the operator completes the order
+        // afterwards, so the tap's day can already be closed: reporting built its facts once
+        // and will not build them again. An earning or a cost line dated on that day would move
+        // a closed delivery-cost total after somebody acted on it, so it lands on the first
+        // open day instead. deliveredAt, and with it the on-time verdict and the fact
+        // reporting derives from the tap, stays the tap; the recut says what the closed day
+        // is missing (DayCloseService#recut, delivery.count).
+        LocalDate businessDate = bookingDateOf(command.tenantId(), workDate);
+        // The taxpayer who made the delivery is the one in force the day it happened, not the
+        // one in force the day it was booked.
         UUID legalEntityId = legalEntities
-                .resolve(command.tenantId(), command.locationId(), businessDate)
+                .resolve(command.tenantId(), command.locationId(), workDate)
                 .orElse(null);
         UUID earningId = UUID.randomUUID();
         UUID periodId = ledger.currentPeriod(command.tenantId(), command.courierId(), card.currency(), businessDate)
@@ -245,6 +256,18 @@ public class CourierAccrualService {
         return ledgerStore
                 .findEarningByAttempt(command.tenantId(), command.assignmentAttemptId())
                 .orElseThrow();
+    }
+
+    /**
+     * {@code workDate} unless that day has already been closed, then the first day that has not
+     * (ADR 0043): a closed fact set is never added to.
+     */
+    private LocalDate bookingDateOf(UUID tenantId, LocalDate workDate) {
+        return businessDays
+                .lastClosedBusinessDate(tenantId)
+                .filter(lastClosed -> !workDate.isAfter(lastClosed))
+                .map(lastClosed -> lastClosed.plusDays(1))
+                .orElse(workDate);
     }
 
     private UUID courierTypeOf(DeliveredAssignment command) {

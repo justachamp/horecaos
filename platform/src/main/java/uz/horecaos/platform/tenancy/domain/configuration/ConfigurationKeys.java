@@ -374,6 +374,89 @@ public final class ConfigurationKeys {
             .build();
 
     /**
+     * ADR 0111: minutes before its time a scheduled lead callback joins the call centre's
+     * needs-attention view again, declared identically in {@code
+     * customers.api.CustomerConfigurationKeys} (customers cannot import this registry without a
+     * cycle, and {@code CustomerConfigurationKeysTests} keeps the two identical).
+     */
+    public static final ConfigurationKey<Integer> CUSTOMER_LEAD_CALLBACK_REMINDER_MINUTES = ConfigurationKey.of(
+                    "customer.lead.callback_reminder_minutes", Integer.class)
+            .defaultValue(60)
+            .ownedBy("customers")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Minutes before its time a scheduled lead callback joins the call centre's "
+                    + "needs-attention view again (ADR 0111).")
+            .build();
+
+    /**
+     * ADR 0069: the grounded assistant's four keys, declared identically in {@code
+     * assistant.api.AssistantConfigurationKeys}, where they are consumed, for the
+     * reason recorded on {@link #COMMERCIAL_ENFORCEMENT_CEILING}: this registry is
+     * internal to tenancy and a reference the other way would make the modules
+     * cyclic. {@code AssistantConfigurationKeysTests} holds the two together.
+     */
+    public static final ConfigurationKey<Boolean> ASSISTANT_ENABLED = ConfigurationKey.of(
+                    "assistant.enabled", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("assistant")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("Whether the grounded assistant answers customers' questions in this scope's "
+                    + "conversations (ADR 0069). Off until switched on; the plan entitlement "
+                    + "assistant.answering.enabled must also hold.")
+            .build();
+
+    public static final ConfigurationKey<Long> ASSISTANT_MONTHLY_SPEND_CEILING_USD_CENTS = ConfigurationKey.of(
+                    "assistant.monthly_spend_ceiling_usd_cents", Long.class)
+            .defaultValue(2_500L)
+            .ownedBy("assistant")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("The most the platform pays the assistant's model provider for this tenant in one "
+                    + "calendar month (UTC), in US cents. Reaching it hands customers to a person "
+                    + "(ADR 0069).")
+            .build();
+
+    public static final ConfigurationKey<Integer> ASSISTANT_CONVERSATION_TURN_CAP = ConfigurationKey.of(
+                    "assistant.conversation_turn_cap", Integer.class)
+            .defaultValue(20)
+            .ownedBy("assistant")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("Assistant turns in one conversation in a rolling 24 hours before the "
+                    + "conversation is handed to a person (ADR 0069).")
+            .build();
+
+    public static final ConfigurationKey<String> ASSISTANT_PRICE_CHANNEL_CODE = ConfigurationKey.of(
+                    "assistant.price_channel_code", String.class)
+            .defaultValue("STOREFRONT")
+            .ownedBy("assistant")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("The sales channel code whose menu and prices the assistant quotes. Defaults to "
+                    + "STOREFRONT, the channel the Telegram bot's carts are built on (ADR 0075).")
+            .build();
+
+    public static final ConfigurationKey<String> ASSISTANT_DISCLOSURE_TEXT_EN =
+            assistantDisclosureKey("assistant.disclosure_text_en", "English");
+
+    public static final ConfigurationKey<String> ASSISTANT_DISCLOSURE_TEXT_RU =
+            assistantDisclosureKey("assistant.disclosure_text_ru", "Russian");
+
+    public static final ConfigurationKey<String> ASSISTANT_DISCLOSURE_TEXT_UZ =
+            assistantDisclosureKey("assistant.disclosure_text_uz", "Uzbek");
+
+    /** Declared identically by {@code AssistantConfigurationKeys}; see the note above {@link #ASSISTANT_ENABLED}. */
+    private static ConfigurationKey<String> assistantDisclosureKey(String code, String language) {
+        return ConfigurationKey.of(code, String.class)
+                .defaultValue("")
+                .ownedBy("assistant")
+                .tenantVisible()
+                .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+                .describedAs("The " + language + " sentence the assistant says ahead of its first answer in a "
+                        + "conversation, telling the customer it is automated and that the question is "
+                        + "processed by an outside service (ADR 0069). Blank keeps the platform's default wording.")
+                .build();
+    }
+
+    /**
      * ADR 0082: whether a tenant's operations app shows its administrators the
      * HorecaOS support visits to their account (ADR 0081), and lets them end
      * one. Off until turned on: the page is new, and the first tenants to see
@@ -426,7 +509,18 @@ public final class ConfigurationKeys {
             .defaultValue(45)
             .ownedBy("ordering")
             .tenantVisible()
-            .describedAs("Minutes after acceptance at which an order is coloured late on the board.")
+            .describedAs("Minutes from creation after which an order with no promised time counts as late.")
+            .build();
+
+    /**
+     * ADR 0151: declared identically in {@code kitchen.api.KitchenConfigurationKeys}, where it is consumed
+     * (this registry is internal to tenancy and a reference the other way would make the modules cyclic).
+     */
+    public static final ConfigurationKey<Integer> KITCHEN_DISPLAY_NOT_SEEN_AFTER_MINUTES = ConfigurationKey.of(
+                    "kitchen.display.not_seen_after_minutes", Integer.class)
+            .defaultValue(5)
+            .ownedBy("kitchen")
+            .describedAs("Minutes without a read after which a kitchen wall display is shown as not seen.")
             .build();
 
     public static final ConfigurationKey<Integer> ORDERING_AT_RISK_BEFORE_MINUTES = ConfigurationKey.of(
@@ -684,6 +778,72 @@ public final class ConfigurationKeys {
             .describedAs("The most lines a promotion simulation may price.")
             .build();
 
+    /**
+     * ADR 0112: the tenant's ranking of campaign purposes, most important first, as a
+     * comma-separated list of consent purposes. When a scenario step and a broadcast are
+     * both due for one guest on one channel, the higher-ranked purpose is sent and the
+     * other is deferred to the next eligible slot and never dropped. Declared here so a
+     * stored row passes the startup validator, and declared identically in {@code
+     * marketing.api.MarketingConfigurationKeys} for the reason recorded on {@link
+     * #COURIER_APPLICANT_RETENTION_MONTHS}; {@code MarketingConfigurationKeyTests}
+     * fails the build if they drift. Empty by default: with no ranking, a send already
+     * under way wins and the scenario step waits.
+     */
+    public static final ConfigurationKey<String> MARKETING_CHANNEL_PRIORITY_ORDER = ConfigurationKey.of(
+                    "marketing.channel.priority.order", String.class)
+            .defaultValue("")
+            .ownedBy("marketing")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Which campaign purpose is sent first when a scenario step and a broadcast are both "
+                    + "due for one guest: a comma-separated list of consent purposes, most important first.")
+            .build();
+
+    /** ADR 0112: how many times a day a guest may be shown one in-app banner. See {@link #MARKETING_CHANNEL_PRIORITY_ORDER}. */
+    public static final ConfigurationKey<Integer> MARKETING_IN_APP_SHOW_CAP_PER_DAY = ConfigurationKey.of(
+                    "marketing.in_app.show_cap_per_day", Integer.class)
+            .defaultValue(3)
+            .ownedBy("marketing")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("The most times a guest is shown one in-app banner in a day. A banner has no "
+                    + "delivery attempt to count against the messaging frequency cap, so it has its own.")
+            .build();
+
+    /** ADR 0112: the withheld percentage a scenario author is offered. See {@link #MARKETING_CHANNEL_PRIORITY_ORDER}. */
+    public static final ConfigurationKey<Integer> MARKETING_SCENARIO_CONTROL_GROUP_PERCENT_DEFAULT =
+            ConfigurationKey.of("marketing.scenario.control_group_percent.default", Integer.class)
+                    .defaultValue(10)
+                    .ownedBy("marketing")
+                    .tenantVisible()
+                    .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+                    .describedAs("The share of a scenario's audience withheld as a control group that the "
+                            + "authoring form offers by default. A scenario may set its own, or none.")
+                    .build();
+
+    /**
+     * ADR 0148: whom the tenant asks for a second factor at sign-in. {@code OFF} (the default and
+     * what every tenant has until it opens this), {@code SENSITIVE_ROLES} (the owner, the
+     * administrator, finance and the brand manager) or {@code ALL_STAFF}.
+     *
+     * <p>Platform accounts are outside this key: every account holding a platform-scope grant
+     * needs a second factor on a deploy setting of its own ({@code horecaos.iam.mfa.enforcement}).
+     * Read by {@code iam} through the {@code iam.api.mfa.TenantStaffMfaRequirements} port, which
+     * {@code tenancy} implements, because {@code iam} importing this registry would close a
+     * module cycle. Settable at tenant scope only: a brand or a branch asking for less than its
+     * tenant would be a way around the tenant's own control.
+     */
+    public static final ConfigurationKey<String> IAM_STAFF_MFA_REQUIREMENT = ConfigurationKey.of(
+                    "iam.staff_mfa_requirement", String.class)
+            .defaultValue("OFF")
+            .ownedBy("iam")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Whom the tenant asks for an authenticator-app code at sign-in: OFF, "
+                    + "SENSITIVE_ROLES (owner, administrator, finance, brand manager) or ALL_STAFF. "
+                    + "Switching it on ends the affected accounts' sessions so the next sign-in is asked.")
+            .build();
+
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             CART_EXPIRY_MINUTES,
             ORDERING_CART_RETENTION_DAYS,
@@ -699,14 +859,24 @@ public final class ConfigurationKeys {
             TELEMETRY_TRACK_RETENTION_DAYS,
             AUDIT_SECURITY_RETENTION_DAYS,
             AUDIT_BUSINESS_RETENTION_DAYS,
+            IAM_STAFF_MFA_REQUIREMENT,
             CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN,
             CUSTOMERS_OTP_DELIVERY_CHANNEL_ORDER,
             CUSTOMERS_PII_EXPORT_APPROVAL_THRESHOLD_ROWS,
+            CUSTOMER_LEAD_CALLBACK_REMINDER_MINUTES,
+            ASSISTANT_ENABLED,
+            ASSISTANT_MONTHLY_SPEND_CEILING_USD_CENTS,
+            ASSISTANT_CONVERSATION_TURN_CAP,
+            ASSISTANT_PRICE_CHANNEL_CODE,
+            ASSISTANT_DISCLOSURE_TEXT_EN,
+            ASSISTANT_DISCLOSURE_TEXT_RU,
+            ASSISTANT_DISCLOSURE_TEXT_UZ,
             FEATURE_SUPPORT_VISITS,
             ORDERING_BUSINESS_DAY_START_HOUR,
             ORDERING_AVERAGE_ORDER_MINUTES,
             ORDERING_MAXIMUM_ORDER_MINUTES,
             ORDERING_LATE_ORDER_THRESHOLD_MINUTES,
+            KITCHEN_DISPLAY_NOT_SEEN_AFTER_MINUTES,
             ORDERING_AT_RISK_BEFORE_MINUTES,
             ORDERING_LATE_COLOUR,
             ORDERING_MINIMUM_ORDER_AMOUNT_MINOR,
@@ -725,7 +895,10 @@ public final class ConfigurationKeys {
             CATALOG_QR_KIOSK_PRICE_PLANE,
             NOTIFICATIONS_PAYMENT_LINK_AUTO_SEND,
             NOTIFICATIONS_AGGREGATOR_SHIFT_NOTIFICATIONS_ENABLED,
-            DELIVERY_OUT_OF_ZONE_POLICY));
+            DELIVERY_OUT_OF_ZONE_POLICY,
+            MARKETING_CHANNEL_PRIORITY_ORDER,
+            MARKETING_IN_APP_SHOW_CAP_PER_DAY,
+            MARKETING_SCENARIO_CONTROL_GROUP_PERCENT_DEFAULT));
 
     private ConfigurationKeys() {}
 

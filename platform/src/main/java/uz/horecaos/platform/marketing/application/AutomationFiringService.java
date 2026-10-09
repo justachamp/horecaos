@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -18,6 +19,7 @@ import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.marketing.api.CampaignMessagePort;
 import uz.horecaos.platform.marketing.api.CampaignMessagePort.MarketingMessage;
+import uz.horecaos.platform.marketing.domain.AutomationTriggerType;
 import uz.horecaos.platform.marketing.domain.EngagementPolicy;
 import uz.horecaos.platform.marketing.domain.MarketingChannel;
 import uz.horecaos.platform.marketing.domain.RefusalReason;
@@ -59,10 +61,12 @@ public class AutomationFiringService {
     private final JdbcAudienceStore audiences;
     private final JdbcEngagementStore engagement;
     private final MarketingEligibility eligibility;
+    private final @Nullable ContactPolicyService contactPolicy;
     private final CampaignMessagePort messages;
     private final AuditRecorder audit;
     private final Clock clock;
 
+    /** The shape every caller used before ADR 0112: the platform's quiet hours, and no tenant contact policy. */
     public AutomationFiringService(
             JdbcAutomationRunStore runs,
             JdbcAudienceStore audiences,
@@ -71,6 +75,20 @@ public class AutomationFiringService {
             CampaignMessagePort messages,
             AuditRecorder audit,
             Clock clock) {
+        this(runs, audiences, engagement, eligibility, null, messages, audit, clock);
+    }
+
+    @Autowired
+    public AutomationFiringService(
+            JdbcAutomationRunStore runs,
+            JdbcAudienceStore audiences,
+            JdbcEngagementStore engagement,
+            MarketingEligibility eligibility,
+            @Nullable ContactPolicyService contactPolicy,
+            CampaignMessagePort messages,
+            AuditRecorder audit,
+            Clock clock) {
+        this.contactPolicy = contactPolicy;
         this.runs = runs;
         this.audiences = audiences;
         this.engagement = engagement;
@@ -114,6 +132,29 @@ public class AutomationFiringService {
         Instant now = clock.instant();
         UUID runId = Ids.newId();
 
+        // Once per order means once per order, not once per rule. The guard key below is unique
+        // per rule, customer and order, so two armed rules whose thresholds both fit one late
+        // order would each find it and each apologise; the second is stopped here with its
+        // reason on its own row, and by a partial unique index (V0581) if the two race.
+        boolean lateOrderApology =
+                AutomationTriggerType.LATE_ORDER_APOLOGY.name().equals(rule.triggerType());
+        if (lateOrderApology
+                && subjectId != null
+                && runs.subjectHeldByAnotherRule(rule.tenantId(), rule.triggerType(), subjectId, rule.id())) {
+            boolean recorded = runs.recordCancelled(
+                    runId,
+                    rule.tenantId(),
+                    rule.brandId(),
+                    rule.id(),
+                    customerAccountId,
+                    rule.triggerType(),
+                    guardKey,
+                    subjectId,
+                    "Another rule has already apologised for this order, and an order is apologised for once",
+                    now);
+            return recorded ? FireOutcome.CANCELLED : FireOutcome.ALREADY_GUARDED;
+        }
+
         boolean claimed = runs.claim(
                 runId,
                 rule.tenantId(),
@@ -135,7 +176,7 @@ public class AutomationFiringService {
         }
 
         MarketingChannel channel = MarketingChannel.valueOf(rule.channel());
-        if (!messages.isWired(channel.name())) {
+        if (!messages.isWired(rule.tenantId(), rule.brandId(), channel.name())) {
             runs.markRefused(rule.tenantId(), runId, "CHANNEL_NOT_WIRED");
             return FireOutcome.CHANNEL_NOT_WIRED;
         }
@@ -156,9 +197,30 @@ public class AutomationFiringService {
             return FireOutcome.REFUSED;
         }
 
-        boolean quiet = policy.isQuiet(now);
-        Instant deliverAt = quiet ? policy.nextOpenBoundary(now) : now;
-        String idempotencyKey = "automation:%s:%s:%s".formatted(rule.id(), customerAccountId, guardKey);
+        Instant deliverAt;
+        if (contactPolicy == null) {
+            deliverAt = policy.isQuiet(now) ? policy.nextOpenBoundary(now) : now;
+        } else {
+            // ADR 0112: the brand's own caps and quiet hours, asked as an explicit decision. A
+            // refusal says which rule and what the numbers were, on the run row, so "why did this
+            // guest not get the message" is a row and not a guess. The guard key stays claimed, as
+            // it does for every other refusal on this path: a trigger is not retried.
+            ContactPolicyService.ContactDecision decision = contactPolicy.decide(
+                    new ContactPolicyService.ContactRequest(
+                            rule.tenantId(), rule.brandId(), customerAccountId, channel, rule.consentPurpose()),
+                    now);
+            if (!decision.allowed()) {
+                RefusalReason reason =
+                        decision.reason() == null ? RefusalReason.FREQUENCY_CAP_REACHED : decision.reason();
+                runs.markRefused(rule.tenantId(), runId, reason.name(), decision.reasonText());
+                return FireOutcome.REFUSED;
+            }
+            deliverAt = decision.deliverAt() == null ? now : decision.deliverAt();
+        }
+        // A late-order apology is keyed by the order and not by the rule that found it, so the
+        // delivery path collapses a second rule's message onto the first's even if both got here.
+        String idempotencyKey = "automation:%s:%s:%s"
+                .formatted(lateOrderApology ? rule.triggerType() : rule.id().toString(), customerAccountId, guardKey);
 
         UUID notificationId = messages.enqueue(new MarketingMessage(
                 rule.tenantId(),

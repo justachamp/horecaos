@@ -126,11 +126,18 @@ export class PlanCatalog {
       parts.push(this.i18n.t('planCatalog.termsLine.trial', { days: version.terms.trialDays }));
     }
     if (version.terms.activationDeposit.amountMinor > 0) {
-      parts.push(this.i18n.t('planCatalog.termsLine.deposit', { amount: this.i18n.money(version.terms.activationDeposit) }));
+      parts.push(
+        this.i18n.t('planCatalog.termsLine.deposit', {
+          amount: this.i18n.money(version.terms.activationDeposit),
+        }),
+      );
     }
     for (const term of version.terms.termDiscounts) {
       parts.push(
-        this.i18n.t('planCatalog.termsLine.discount', { months: term.termMonths, percent: term.discountBasisPoints / 100 }),
+        this.i18n.t('planCatalog.termsLine.discount', {
+          months: term.termMonths,
+          percent: term.discountBasisPoints / 100,
+        }),
       );
     }
     return parts.join(' · ');
@@ -171,7 +178,10 @@ export class PlanCatalog {
 
   protected canRegister(): boolean {
     return (
-      !this.busy() && this.codeValid() && this.newName().trim().length > 0 && this.newReason().trim().length > 0
+      !this.busy() &&
+      this.codeValid() &&
+      this.newName().trim().length > 0 &&
+      this.newReason().trim().length > 0
     );
   }
 
@@ -211,7 +221,11 @@ export class PlanCatalog {
     this.price.set(newest ? formatAmount(newest.price) : '');
     this.billingPeriod.set(newest?.billingPeriod ?? 'MONTHLY');
     this.termsReference.set(newest?.termsReference ?? '');
-    this.trialDays.set(newest?.terms.trialDays === null || newest === undefined ? '' : String(newest.terms.trialDays));
+    this.trialDays.set(
+      newest?.terms.trialDays === null || newest === undefined
+        ? ''
+        : String(newest.terms.trialDays),
+    );
     this.deposit.set(
       newest === undefined || newest.terms.activationDeposit.amountMinor === 0
         ? ''
@@ -229,7 +243,8 @@ export class PlanCatalog {
     return {
       key,
       included: existing !== undefined,
-      limit: existing?.limit === null || existing?.limit === undefined ? '' : String(existing.limit),
+      limit:
+        existing?.limit === null || existing?.limit === undefined ? '' : String(existing.limit),
       enabled: existing?.enabled ?? true,
       mode: existing?.enforcementMode ?? key.defaultMode,
       overage:
@@ -240,7 +255,9 @@ export class PlanCatalog {
   }
 
   protected updateLine(index: number, change: Partial<DraftLine>): void {
-    this.lines.update((lines) => lines.map((line, at) => (at === index ? { ...line, ...change } : line)));
+    this.lines.update((lines) =>
+      lines.map((line, at) => (at === index ? { ...line, ...change } : line)),
+    );
   }
 
   /** The draft as the server takes it, or null while something in it cannot be read exactly. */
@@ -300,7 +317,10 @@ export class PlanCatalog {
   }
 
   /** The draft's trial, deposit and discounts as the server takes them, or null while one cannot be read. */
-  protected termsRequest(): Pick<DraftVersionRequest, 'trialDays' | 'activationDepositMinor' | 'termDiscounts'> | null {
+  protected termsRequest(): Pick<
+    DraftVersionRequest,
+    'trialDays' | 'activationDepositMinor' | 'termDiscounts'
+  > | null {
     const trial = this.trialDays().trim();
     if (trial.length > 0 && !/^([1-9]|[1-8]\d|90)$/.test(trial)) {
       return null;
@@ -389,7 +409,10 @@ export class PlanCatalog {
     await this.run(async () => {
       await this.api.activateVersion(version.planVersionId, reason);
       this.activating.set(null);
-      return this.i18n.t('planCatalog.activate.done', { code: plan.code, version: version.versionNumber });
+      return this.i18n.t('planCatalog.activate.done', {
+        code: plan.code,
+        version: version.versionNumber,
+      });
     });
   }
 

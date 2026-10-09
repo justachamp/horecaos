@@ -69,6 +69,17 @@ public enum ApprovalAction {
             "commercial.wallet.deposit-reversal", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY, Worklist.PLATFORM),
 
     /**
+     * ADR 0095: changing the bank details every invoice tells a tenant to pay into.
+     *
+     * <p>Fail-closed, and for the reason the other wallet actions are: swapping the beneficiary account
+     * on every document HorecaOS sends is the classic invoice fraud, and one person doing it on their own
+     * word is the control a finance review asks for first. V0504 seeds the policy, and the row holding
+     * real details cannot be written without a second name on it.
+     */
+    BILLING_BANK_DETAILS(
+            "commercial.billing.bank-details", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY, Worklist.PLATFORM),
+
+    /**
      * ADR 0025, Gap A of the 2026-08-30 proving run: granting or revoking a
      * {@code PLATFORM}-scope role — the highest-authority action this
      * platform's own grant model can express, since {@code PLATFORM_ADMIN}
@@ -143,7 +154,19 @@ public enum ApprovalAction {
      * deleted it should stop large promotions rather than let one person decide
      * them alone.
      */
-    PRICING_PROMOTION_ACTIVATE("pricing.promotion.activate", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY);
+    PRICING_PROMOTION_ACTIVATE("pricing.promotion.activate", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
+
+    /**
+     * ADR 0148: removing a platform administrator's second factor because the phone is lost.
+     *
+     * <p>Fail-closed, like {@link #TENANT_COUNTRY_CHANGE}, and governed from the first day by the
+     * platform-scope policy {@code V0500} seeds: a platform account can enter any tenant (ADR
+     * 0081) and change platform policy, and a reset is the one act that turns its two factors
+     * back into one. A deployment that deleted the policy should stop resets, not let one person
+     * perform them alone. A platform-scope request is HorecaOS's own decision about its own
+     * staff, so it is raised at platform scope and listed on the platform queue.
+     */
+    IAM_STAFF_MFA_RESET("iam.staff.mfa.reset", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY, Worklist.PLATFORM);
 
     /**
      * Which worklist a request for the action reaches once it is {@code PENDING}.

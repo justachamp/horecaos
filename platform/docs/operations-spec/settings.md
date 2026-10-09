@@ -51,7 +51,7 @@ A grouped left rail, not an alphabetical list. Group headings are nouns a restau
 | **Продажи / Selling** | 10.4 Sales channels · 10.5 Channel setup · 10.3 Order policy · 10.13 Delivery policy |
 | **Деньги и налоги / Money and tax** | 10.6 Payment methods · 10.7 Fiscalization · 10.14 Printing & receipts |
 | **Сообщения / Messages** | 10.9 Notifications |
-| **Подключения / Connections** | 10.8 Integrations |
+| **Подключения / Connections** | 10.8 Integrations · 10.15 Storefront apps |
 | **Справочники / Reference** | 10.10 Reference data · 10.11 Data & privacy |
 
 Numbers 10.1–10.11 are the IA's. 10.12–10.14 are added here: language/locale, delivery policy and
@@ -476,11 +476,11 @@ and versioned, but is missing two things Delever has and this screen should carr
 | Field | Type | Source |
 |---|---|---|
 | Начало и конец рабочего дня | two local times | **not built** — needs a config key; ADR 0043 depends on it (a business day that crosses midnight is an open question the matrix names) |
-| Среднее время заказа | minutes | **not built**, config key |
-| Максимальное время заказа | minutes | **not built**, config key |
-| Заказ опаздывает с | minutes | **not built**, config key. The single most-used value on the order board |
+| Среднее время заказа | minutes | stored and inherited, read by nothing (ADR 0150 decision 5); the field says «Пока не применяется» |
+| Максимальное время заказа | minutes | stored and inherited, read by nothing (ADR 0150 decision 5); the field says «Пока не применяется» |
+| Заказ без обещанного времени опаздывает через (was «Заказ опаздывает с») | minutes | **built** (ADR 0150): `ordering.late_order_threshold_minutes`, default 45 = the `ordering.lateness` platform default. The tenant-wide default for the no-promise fallback of every fulfilment mode whose document sets none of its own, when set anywhere in the chain; measured from `created_at`, and nothing for an order that carries a promise. Delever's «the single most-used value on the order board», kept where it is meaningful. The two fields above it say «Пока не применяется» |
 | Предупреждать до обещанного времени | minutes | **built** (batch 15, row `X.39`): `ordering.at_risk_before_minutes`, default 5 = the `ordering.lateness` platform default. Since wave 16 the *default* at-risk window of every fulfilment mode whose `ordering.lateness` document sets none of its own (a window a mode carries wins), when set anywhere in the chain; both boards read the result |
-| Когда заказ считается опаздывающим (доставка / самовывоз / зал) | per mode: warn-before, grace, no-promise fallback | **built** (wave 16, rows `X.39`/`10.3b`): the `ordering.lateness` policy document, edited on its own card under this table with the same `q-inherited-field` control (TENANT / BRAND / LOCATION, versioned, `expectedVersion` checked, a required reason). A blank warn-before window takes the field above, else the platform's five minutes; the grace and the fallback are the document's. No «revert to inherited» — a published version is not withdrawn. See orders.md §2.7 |
+| Когда заказ считается опаздывающим (доставка / самовывоз / зал) | per mode: warn-before, grace, no-promise fallback | **built** (wave 16, rows `X.39`/`10.3b`): the `ordering.lateness` policy document, edited on its own card under this table with the same `q-inherited-field` control (TENANT / BRAND / LOCATION, versioned, `expectedVersion` checked, a required reason). A blank warn-before window takes the at-risk field above, else the platform's five minutes; a blank no-promise fallback takes the late-order field above, else the platform's forty-five (ADR 0150); the grace is the document's. No «revert to inherited» — a published version is not withdrawn. See orders.md §2.7 |
 | Цвет индикатора опоздания | colour | **built** (batch 15, row `X.39`): `ordering.late_colour`, blank = the design-system red. `#rrggbb` validated at write and again where served; the card warns under the swatch below WCAG AA 4.5:1 against the page, a card and the late and at-risk row tints. Repaints only a `LATE` order (orders.md §2.7) |
 | Минимальная сумма заказа | money UZS | overlaps `fulfillment.service_zone_versions.min_basket_minor` — **decide once**: the zone value wins for delivery, this one applies to pickup and dine-in. Say so in the helper text |
 | Расчёт дистанции | `RADIUS` / `ROAD` | `fulfillment.delivery_tariffs.distance_mode` — **per tariff, not global.** Shown here read-only with a link to 3.7, because Delever's global toggle is the worse design and HorecaOS already decided against it (ADR 0037) |
@@ -1181,7 +1181,7 @@ who will never open any other settings screen, and because half the console's ot
 
 | Field | Type | Source |
 |---|---|---|
-| Поддерживаемые языки | multi-select from `uz-Latn, uz-Cyrl, ru, en` (+ `kk`, `ka` on the roadmap) | **not built.** There is no per-brand language list. `catalog.translations.locale` exists per entity, so today the set of languages is implied by whatever anyone happened to translate |
+| Поддерживаемые языки | multi-select over **the registry's content tier** (`GET /api/v1/operations/locales`, ADR 0149): `ru, uz-Latn, en` live; `kk`, `ka` declared and offered nowhere until a release makes them live. `uz-Cyrl` and `kaa` are not declared (the registry has room for both) | **built** (10.1's brand profile, V0242 `tenant.brand_locales`): the brand's own set and default, validated against the registry's content tier, not a list this screen keeps. A bare `uz` from an older client is read as `uz-Latn` and never stored |
 | Язык по умолчанию | single select | `platform.default_locale` (`ConfigurationKeys.DEFAULT_LOCALE`, default `"uz"`, tenant-visible) — a **real registered key today**, resolvable at every level |
 | Валюта | read-only `UZS` | `tenant.tenants.default_currency` |
 | Часовой пояс | IANA | `tenant.tenants.default_timezone`; per-location `tenant.locations.timezone` |
@@ -1189,6 +1189,22 @@ who will never open any other settings screen, and because half the console's ot
 | Формат времени | read-only 24h | same |
 | Формат телефона | **built (batch 16): a pattern, `#` per digit** — as stored, three presets or a custom one; shown on the order detail, the reports customer column and the brand and branch contact phone | `tenant.brands.phone_display_pattern` (V0441), `PUT .../brands/{brandId}/regional-formats` |
 | Денежный формат | **built (batch 16):** the unit before or after a total, thousands separated by a space, comma, dot or nothing. Still whole som, no minor units | `tenant.brands.money_symbol_placement` / `money_grouping` (V0441), the same endpoint |
+
+**Languages are a registry entry with a lifecycle per tier (ADR 0149).** A language is live in
+**content** (what a brand can author and a customer read), **messages** (what the platform writes to a
+customer: notification wordings, the bot, emails, SMS) and **staff UI** (the consoles) independently, and
+activating one in a tier is a release, never a tenant's configuration. What this screen therefore means:
+
+- the languages it offers are the registry's content tier; a declared language that is not live is not on
+  the list, and adding one needs no change here;
+- **"all of this brand's languages are required"**: a notification template version needs a wording in
+  every language *the template's brand serves* (a tenant-wide template: the union of the tenant's
+  brands) before it can be saved or activated, not in every language the platform has. A customer whose
+  language the brand does not serve is written to in the brand's default, and where that wording is
+  missing too, in the registry's fallback (`ru`); a tenant-scoped vocabulary (outcome reasons, payment
+  method names) counts the union of its brands, as `TenantLocaleSet` already decides;
+- the catalog's own `uz` (`catalog.translations`, the hashed published snapshots) is `uz-Latn`'s one named
+  `catalogCode`: the console never converts it itself, it asks the registry.
 
 **Judgement.** Currency, date and time formats are **derived from country and shown read-only**,
 not offered as choices. Every one of them is a source of subtle breakage when a tenant sets it
@@ -1489,3 +1505,27 @@ Named precisely, with the owning decision. Everything not listed here is built a
 Tenant-editable order statuses · a second brand registry under catalog · a third geometry layer ·
 a global road-vs-radius toggle · per-module v1/v2 flags · an expiring prepaid wallet · AI-generated
 ИКПУ · a receipt-template designer · kiosk hardware provisioning.
+
+---
+
+## 10.15 Storefront apps
+
+**What it is for.** A tenant's own choice of storefront (ADR 0070): which of the platform's
+registered storefront apps may show this brand's menu and take orders as it. The platform
+registers an app once (control plane IA 3.6); this screen is where a brand authorises one and
+withdraws it again. A tenant's storefront choice is data, not a deployment.
+
+**Layout.** A brand picker (shown only with more than one brand, tenant-scoped for the reason
+10.12's terms page documents), then one card per registered app that is not retired: its name and
+vendor, whether it runs in the customer's browser or on its vendor's server (said in plain words,
+and for a browser app that HorecaOS can attribute and stop it but cannot prove who is behind it),
+the conformance check's result, and the brand's standing with it: *Not authorised*, *Authorised* or
+*Revoked*.
+
+**Actions.** *Authorise* (also for an app the brand revoked earlier) and *Revoke*, each asking for a
+reason that the audit log keeps under the operator's name. Revoking sends the authorisation version
+the list was read at and takes effect on the app's next storefront request; a stale version reloads
+the list rather than overwriting. An app HorecaOS has suspended or retired cannot be authorised, and
+the card says why.
+
+**Capability.** `STOREFRONT_APP_AUTHORISE`, held by the owner and the administrator, `BRAND` scope.

@@ -24,7 +24,7 @@ class OrderLatenessDocumentTests {
     void theUnauthoredDocumentResolvesToExactlyThePlatformDefaultWhenTheDefaultWindowIsThePlatforms() {
         int platformAtRisk = OrderLatenessPolicy.platformDefault().delivery().atRiskBeforeSeconds();
 
-        assertThat(OrderLatenessDocument.platformDefault().effective(platformAtRisk))
+        assertThat(OrderLatenessDocument.platformDefault().effective(platformAtRisk, 2700))
                 .isEqualTo(OrderLatenessPolicy.platformDefault());
     }
 
@@ -33,7 +33,7 @@ class OrderLatenessDocumentTests {
         OrderLatenessDocument document = new OrderLatenessDocument(
                 new ModeThresholds(null, 60, 2700), new ModeThresholds(0, 0, 1800), new ModeThresholds(90, 5, 1200));
 
-        OrderLatenessPolicy effective = document.effective(600);
+        OrderLatenessPolicy effective = document.effective(600, 2700);
 
         assertThat(effective.delivery().atRiskBeforeSeconds())
                 .as("unset takes the default")
@@ -51,7 +51,7 @@ class OrderLatenessDocumentTests {
     void theEffectivePolicyEvaluatesEachModeAgainstItsOwnWindow() {
         OrderLatenessDocument document = new OrderLatenessDocument(
                 new ModeThresholds(600, 0, 2700), new ModeThresholds(120, 0, 2700), new ModeThresholds(null, 0, 2700));
-        OrderLatenessPolicy policy = document.effective(300);
+        OrderLatenessPolicy policy = document.effective(300, 2700);
         Instant promisedAt = NOW.plus(Duration.ofMinutes(8));
         OrderPromise promise = new OrderPromise(promisedAt, PromiseBasis.PREPARATION_BAND, 25, null);
         Instant createdAt = NOW.minus(Duration.ofMinutes(17));
@@ -87,10 +87,74 @@ class OrderLatenessDocumentTests {
 
         OrderLatenessDocument read = JSON.readValue(legacy, OrderLatenessDocument.class);
 
-        assertThat(read.effective(999).pickup().atRiskBeforeSeconds())
+        assertThat(read.effective(999, 2700).pickup().atRiskBeforeSeconds())
                 .as("a stored number is a window the mode carries, whatever the default is")
                 .isEqualTo(180);
         assertThat(read.violations()).isEmpty();
+    }
+
+    // ------------------------------------------------ ADR 0150: a blank fallback
+
+    @Test
+    void aModeWithNoFallbackOfItsOwnTakesTheDefaultAndAModeWithOneKeepsIt() {
+        OrderLatenessDocument document = new OrderLatenessDocument(
+                new ModeThresholds(null, 0, null),
+                new ModeThresholds(null, 0, 1800),
+                new ModeThresholds(null, 0, null));
+
+        OrderLatenessPolicy effective = document.effective(300, 1200);
+
+        assertThat(effective.delivery().noPromiseFallbackSeconds())
+                .as("blank means none of its own: the tenant-wide default applies")
+                .isEqualTo(1200);
+        assertThat(effective.pickup().noPromiseFallbackSeconds())
+                .as("a mode's own number wins over the default")
+                .isEqualTo(1800);
+        assertThat(effective.dineIn().noPromiseFallbackSeconds()).isEqualTo(1200);
+    }
+
+    @Test
+    void theUnauthoredDocumentLeavesTheFallbackBlankSoTheScalarCanApply() {
+        assertThat(OrderLatenessDocument.platformDefault().delivery().noPromiseFallbackSeconds())
+                .as("a platformDefault() that carried 2700 would shadow the tenant's scalar for every tenant")
+                .isNull();
+        assertThat(OrderLatenessDocument.platformDefault()
+                        .effective(300, 1200)
+                        .pickup()
+                        .noPromiseFallbackSeconds())
+                .isEqualTo(1200);
+    }
+
+    @Test
+    void aBlankFallbackSurvivesTheStoredJsonAsNullAndAMissingFieldReadsTheSame() throws Exception {
+        OrderLatenessDocument document = new OrderLatenessDocument(
+                new ModeThresholds(null, 30, null), new ModeThresholds(0, 0, 1800), new ModeThresholds(300, 0, null));
+
+        OrderLatenessDocument read = JSON.readValue(JSON.writeValueAsString(document), OrderLatenessDocument.class);
+        assertThat(read).isEqualTo(document);
+        assertThat(read.delivery().noPromiseFallbackSeconds()).isNull();
+
+        // Both generations read through the one record: a document an older writer produced has the
+        // number, one a newer writer produced may have null or leave the field out.
+        OrderLatenessDocument mixed = JSON.readValue("""
+                {"delivery":{"atRiskBeforeSeconds":300,"lateAfterSeconds":60,"noPromiseFallbackSeconds":2700},
+                 "pickup":{"atRiskBeforeSeconds":null,"lateAfterSeconds":0,"noPromiseFallbackSeconds":null},
+                 "dineIn":{"lateAfterSeconds":0}}""", OrderLatenessDocument.class);
+        assertThat(mixed.delivery().noPromiseFallbackSeconds()).isEqualTo(2700);
+        assertThat(mixed.pickup().noPromiseFallbackSeconds()).isNull();
+        assertThat(mixed.dineIn().noPromiseFallbackSeconds()).isNull();
+        assertThat(mixed.violations()).isEmpty();
+    }
+
+    @Test
+    void theOneMinuteFloorAppliesOnlyToAFallbackThatIsPresent() {
+        assertThat(new OrderLatenessDocument(
+                                new ModeThresholds(null, 0, null),
+                                new ModeThresholds(null, 0, null),
+                                new ModeThresholds(null, 0, 30))
+                        .violations())
+                .singleElement()
+                .satisfies(v -> assertThat(v).contains("DINE_IN noPromiseFallbackSeconds"));
     }
 
     // ---------------------------------------------------------------- bounds

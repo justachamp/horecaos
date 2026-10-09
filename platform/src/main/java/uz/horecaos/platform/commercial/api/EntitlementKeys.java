@@ -73,6 +73,21 @@ public final class EntitlementKeys {
             .describedAs("Notification messages included per billing period. Each carries a real per-message cost.")
             .build();
 
+    /**
+     * ADR 0145: provider geocoder calls made on a tenant's behalf (a suggest, a geocode or a
+     * reverse geocode that went to the map provider, not one answered from the response
+     * cache). Metered from the first call and priced by nothing: ADR 0145's own words are
+     * "metered from the first call as a usage counter, not priced until the licence cost is
+     * known", so no plan carries an allowance for it and the default can never refuse.
+     */
+    public static final EntitlementKey<Long> GEOCODE_REQUESTS = EntitlementKey.counted("geocode.requests", "request")
+            .resetting(ResetPeriod.BILLING_PERIOD)
+            .ownedBy("fulfillment")
+            .withDimensions("operation")
+            .describedAs(
+                    "Geocoder calls to the map provider (suggest, geocode, reverse). Metered, not priced (ADR 0145).")
+            .build();
+
     public static final EntitlementKey<Long> MEDIA_STORAGE_BYTES_INCLUDED = EntitlementKey.counted(
                     "media.storage_bytes_included", "byte")
             .ownedBy("media")
@@ -253,6 +268,54 @@ public final class EntitlementKeys {
             .describedAs("Whether an ADR 0044 campaign may launch on the TELEGRAM channel (ADR 0059 stage 4).")
             .build();
 
+    /**
+     * ADR 0069: whether the grounded assistant may answer this tenant's
+     * customers at all -- the plan tier the owner's open input names.
+     *
+     * <p>{@code safeDefault(FALSE)}, matching {@link #TELEGRAM_CONVERSATIONS_ENABLED}
+     * and not the catalogue's open-by-default features: the assistant has a
+     * per-message cost to the platform and speaks in the tenant's name, so a
+     * tenant that was never sold it must not have every brand bot start
+     * answering. The owner's default for the open input is "an add-on a plan
+     * or an override grants", which this key is: nothing in the catalogue
+     * decides which named plan carries it, because no plan catalogue exists
+     * to say.
+     *
+     * <p>Like every feature key here, it cannot refuse while the pilot runs
+     * meter-only (ADR 0021: a tenant outside its plan is counted and allowed), so
+     * until enforcement is raised the per-tenant switch {@code assistant.enabled},
+     * which also defaults off, is what keeps the assistant dark.
+     *
+     * <p>Answering needs this <em>and</em> {@link #TELEGRAM_CONVERSATIONS_ENABLED}
+     * (the assistant is a participant in ADR 0059's conversations, not a second
+     * bot) <em>and</em> the per-tenant switch {@code assistant.enabled}
+     * (ADR 0030), which also defaults off.
+     */
+    public static final EntitlementKey<Boolean> ASSISTANT_ANSWERING_ENABLED = EntitlementKey.feature(
+                    "assistant.answering.enabled")
+            .safeDefault(Boolean.FALSE)
+            .ownedBy("assistant")
+            .describedAs("Whether the grounded assistant may answer customers' questions in conversations (ADR 0069).")
+            .build();
+
+    /**
+     * ADR 0069: assistant turns that reached the model, metered per billing
+     * period so a plan can include a number of them.
+     *
+     * <p>Cache hits and refusals that never called the model are not metered:
+     * the allowance measures what cost something. This is the commercial
+     * ceiling; the per-tenant <em>spend</em> ceiling the same ADR asks for is
+     * the {@code assistant.monthly_spend_ceiling_usd_cents} configuration key,
+     * because the owner caps what the platform pays the provider and a plan
+     * caps what the tenant bought, and the two answer different questions.
+     */
+    public static final EntitlementKey<Long> ASSISTANT_TURNS_MONTHLY_INCLUDED = EntitlementKey.counted(
+                    "assistant.turns_monthly_included", "turn")
+            .resetting(ResetPeriod.BILLING_PERIOD)
+            .ownedBy("assistant")
+            .describedAs("Assistant turns answered by the language model in the plan's billing period.")
+            .build();
+
     private static final Map<String, EntitlementKey<?>> BY_CODE = index(List.of(
             BRANDS_MAX_COUNT,
             LOCATIONS_MAX_COUNT,
@@ -261,6 +324,7 @@ public final class EntitlementKeys {
             POS_INSTALLATIONS_MAX_COUNT,
             ORDERS_MONTHLY_INCLUDED,
             NOTIFICATIONS_MONTHLY_INCLUDED,
+            GEOCODE_REQUESTS,
             MEDIA_STORAGE_BYTES_INCLUDED,
             POS_INTEGRATIONS_ENABLED,
             DELIVERY_PARTNER_INTEGRATIONS_ENABLED,
@@ -271,7 +335,9 @@ public final class EntitlementKeys {
             TELEGRAM_BOT_INTERACTIVE_ENABLED,
             TELEGRAM_CUSTOMER_NOTIFICATIONS_ENABLED,
             TELEGRAM_CONVERSATIONS_ENABLED,
-            TELEGRAM_BROADCASTS_ENABLED));
+            TELEGRAM_BROADCASTS_ENABLED,
+            ASSISTANT_ANSWERING_ENABLED,
+            ASSISTANT_TURNS_MONTHLY_INCLUDED));
 
     private EntitlementKeys() {}
 

@@ -82,6 +82,22 @@ export const deliveryZonePaths = {
   zoneImportBatch(scope: BrandScope): string {
     return `${this.base(scope)}/import-batch`;
   },
+
+  /**
+   * `GET`: the live version of every zone, as outlines a map draws (rows `3.2`, `7.10`, ADR 0145).
+   * Only `ACTIVE` versions: a draft governs nothing and must not be drawn as if it did.
+   */
+  zoneOutlines(scope: BrandScope): string {
+    return `${this.base(scope)}/outlines`;
+  },
+
+  /**
+   * `GET`: one version's outline in any status (rows `3.6`, `3.6c`), so a draft can be looked at
+   * before it is activated and a stored zone can be opened in the polygon editor.
+   */
+  zoneVersionOutline(scope: BrandScope, zoneId: string, version: number): string {
+    return `${this.zoneVersions(scope, zoneId)}/${version}/outline`;
+  },
 } as const;
 
 /**
@@ -123,6 +139,14 @@ export const deliveryTariffPaths = {
   /** Every rate table this brand has registered, with its live version's headline numbers. */
   tariffs(scope: BrandScope): string {
     return this.base(scope);
+  },
+
+  /**
+   * Whether the platform's routing engine is switched on and the dataset it holds (ADR 0147).
+   * What the editor shows beside "use platform routing" before any version has priced a fee.
+   */
+  routingEngine(scope: BrandScope): string {
+    return `${this.base(scope)}/routing-engine`;
   },
 
   /** One tariff's live bands, time rules and discounts in full. */

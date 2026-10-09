@@ -27,7 +27,9 @@ import {
   PaymentMethodView,
   PaymentMethodsApi,
 } from '../settings/payment-methods/payment-methods-api';
+import { FiscalizationApi, LegalEntityView } from '../settings/fiscalization/fiscalization-api';
 import { orderStatusLabel } from '../orders/order-status';
+import { PaymentMixNote } from './payment-mix-note';
 import { ProvenanceBanner } from './provenance-banner';
 import {
   ddmm,
@@ -66,6 +68,9 @@ const BAND_A_METRICS = [
   'orders.cancelled.v1',
   'orders.late.v1',
 ] as const;
+
+/** The one metric the payment-mix card is computed under (ADR 0115). */
+const PAYMENT_MIX_METRIC = 'payment_mix.amount.v1';
 
 const CANCELLING_STATUSES = new Set(['CANCELLED', 'REJECTED', 'EXPIRED', 'PAYMENT_FAILED']);
 
@@ -160,7 +165,16 @@ type LoadState = 'loading' | 'ready' | 'denied' | 'error';
  */
 @Component({
   selector: 'q-business-overview-page',
-  imports: [TPipe, ProvenanceBanner, KpiTile, DonutChart, StackedBarChart, LineChart, FunnelChart],
+  imports: [
+    TPipe,
+    ProvenanceBanner,
+    PaymentMixNote,
+    KpiTile,
+    DonutChart,
+    StackedBarChart,
+    LineChart,
+    FunnelChart,
+  ],
   templateUrl: './business-overview-page.html',
   styleUrl: './business-overview-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -171,6 +185,7 @@ export class BusinessOverviewPage implements OnInit {
   private readonly locationsApi = inject(LocationsApi);
   private readonly channelsApi = inject(SalesChannelsApi);
   private readonly paymentMethodsApi = inject(PaymentMethodsApi);
+  private readonly fiscalizationApi = inject(FiscalizationApi);
   private readonly filters = inject(ReportsFilterState);
   private readonly i18n = inject(I18n);
   private readonly router = inject(Router);
@@ -187,6 +202,19 @@ export class BusinessOverviewPage implements OnInit {
   protected readonly fulfilmentMix = signal<readonly MixRow[]>([]);
   /** P39 (7.1c): the payment-mix card, folded across every branch in range. */
   protected readonly paymentMix = signal<readonly MixRow[]>([]);
+  /** ADR 0115: finance has not signed `payment_mix.amount.v1` — read from the payment-mix response's own provenance. */
+  protected readonly paymentMixProvisional = signal(false);
+  /** ADR 0115: the registry still carries an `openQuestion` for the metric (the provider-commission one). */
+  protected readonly paymentMixOpenQuestion = computed(
+    () => (this.metricsByCode().get(PAYMENT_MIX_METRIC)?.openQuestion ?? null) !== null,
+  );
+  /**
+   * The tender fact has no channel or fulfilment-type column (ADR 0115's grain), so a filter on
+   * either narrows every card beside this one but not this one — the card says so.
+   */
+  protected readonly paymentMixNotCutByFilter = computed(
+    () => this.filters.channelCodes().length > 0 || this.filters.fulfilmentType() !== 'ALL',
+  );
   protected readonly outcomes = signal<readonly OutcomeRow[]>([]);
   protected readonly completedCount = signal(0);
   /** Wave 8 w7-reports (7.1a): orders.late.v1 over the same period — the funnel's own «Опоздание» branch. */
@@ -802,36 +830,55 @@ export class BusinessOverviewPage implements OnInit {
 
   /**
    * P39 (7.1c): the payment-mix card. `overview` already folds every branch
-   * into one row per method (never across legal entities, ADR 0038) — this
-   * only has to attach a display name and turn the response into the same
-   * {@link MixRow} shape the channel and fulfilment cards beside it use.
+   * into one row per (legal entity, method) -- never across legal entities,
+   * ADR 0038 -- so a tenant trading as two taxpayers gets two `CASH` rows, and
+   * this must not turn them back into one slice. A slice is keyed by the pair,
+   * and once more than one taxpayer appears each slice's label names its own,
+   * the same rule the branch report's payment table follows; a single-taxpayer
+   * tenant sees no change. This attaches the display names and turns the
+   * response into the same {@link MixRow} shape the channel and fulfilment
+   * cards beside it use.
    */
   private async loadPaymentMix(scope: LocationScope): Promise<void> {
     const range = this.filters.range();
     const paymentMethodCodes = this.filters.paymentMethodCodes();
-    const [methods, mix] = await Promise.all([
+    const slice = this.sliceParams();
+    const [methods, legalEntities, mix] = await Promise.all([
       this.paymentMethodsApi.list(scope).catch(() => [] as readonly PaymentMethodView[]),
+      this.fiscalizationApi.listLegalEntities(scope).catch(() => [] as readonly LegalEntityView[]),
       this.api.paymentMix(scope.tenantId, {
         from: range.from,
         to: range.to,
-        locationId: this.sliceParams().locationId,
+        locationId: slice.locationId,
+        // ADR 0038: money is narrowed by taxpayer on the server, like every sibling read —
+        // the legal-entity chip used to narrow the tiles and leave this card on every entity.
+        legalEntityId: slice.legalEntityId,
         paymentMethodCode: paymentMethodCodes.length > 0 ? paymentMethodCodes : undefined,
       }),
     ]);
+    this.paymentMixProvisional.set(mix.provenance.provisionalMetrics.includes(PAYMENT_MIX_METRIC));
     const nameByCode = new Map(methods.map((method) => [method.code, method]));
+    const nameByEntity = new Map(
+      legalEntities.map((entity) => [entity.id, entity.shortName ?? entity.legalName]),
+    );
     const total = mix.overview.reduce((sum, row) => sum + row.amountSom, 0);
+    const namesEntities = new Set(mix.overview.map((row) => row.legalEntityId)).size > 1;
 
     const totalTenders = mix.overview.reduce((sum, row) => sum + row.tenderCount, 0);
     this.paymentMix.set(
       mix.overview
         .map((row) => {
           const method = nameByCode.get(row.paymentMethodCode);
-          const label = method
+          const methodLabel = method
             ? (method.localizedNames[this.i18n.locale()] ?? method.displayName)
             : row.paymentMethodCode;
+          const entityLabel =
+            row.legalEntityId === null
+              ? '—'
+              : (nameByEntity.get(row.legalEntityId) ?? row.legalEntityId);
           return {
-            key: row.paymentMethodCode,
-            label,
+            key: `${row.legalEntityId ?? ''}|${row.paymentMethodCode}`,
+            label: namesEntities ? `${methodLabel} · ${entityLabel}` : methodLabel,
             count: row.tenderCount,
             revenueSom: row.amountSom,
             countSharePercent: percentOf(row.tenderCount, totalTenders),

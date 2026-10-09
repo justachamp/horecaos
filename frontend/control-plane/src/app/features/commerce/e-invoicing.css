@@ -1,0 +1,93 @@
+.account,
+.statement {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: 8px;
+}
+
+.accountHeader,
+.attemptHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.needs {
+  margin: 6px 0 0;
+  padding-inline-start: 20px;
+}
+
+.actions.left {
+  justify-content: flex-start;
+}
+
+.accountForm,
+.sendForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.accountForm .field,
+.sendForm .field {
+  min-width: 220px;
+}
+
+.accountForm input[name='accountReason'],
+.accountForm input[name='classReason'],
+.sendForm input[name='sendReason'],
+.confirm input {
+  min-width: 260px;
+}
+
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.confirmBox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.attempt {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border-inline-start: 3px solid var(--q-hairline);
+}
+
+.attempt.dead {
+  color: var(--q-ink-muted);
+}
+
+.chip.provisional {
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}
+
+.failure {
+  color: var(--q-error-text);
+}
+
+.num {
+  text-align: end;
+}
+
+.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--q-link, var(--q-primary));
+  text-decoration: underline;
+  cursor: pointer;
+}

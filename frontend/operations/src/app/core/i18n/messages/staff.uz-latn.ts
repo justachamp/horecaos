@@ -12,6 +12,8 @@ export const staffUzLatn: AreaMessages<typeof staffEn> = {
   'staff.people.title': 'Xodimlar',
   'staff.people.lead':
     'Kim ishlaydi, har biri nima qila oladi va kimda boʻlmasligi kerak boʻlgan huquq bor.',
+  'staff.people.scopedLead':
+    'Bu yerda sizning filial yoki brendingiz xodimlari: ularga oʻz doirangiz ichida lavozim bera olasiz.',
   'staff.people.loading': 'Roʻyxat yuklanmoqda',
   'staff.people.denied': 'Bu boʻlimga kirish huquqi yoʻq',
   'staff.people.emptyRule':
@@ -385,4 +387,75 @@ export const staffUzLatn: AreaMessages<typeof staffEn> = {
   'staff.accessCheck.heldElsewhere.label': 'Bu lavozim shu huquqni beradi:',
   'staff.accessCheck.heldElsewhere.since': 'dan beri',
   'staff.accessCheck.heldElsewhere.none': 'Hech qanday faol tayinlash bu huquqni bermaydi.',
+  'staff.myProfile.mfa.title': 'Ikki bosqichli kirish',
+  'staff.myProfile.mfa.loading': 'Autentifikatorlaringiz oʻqilmoqda…',
+  'staff.myProfile.mfa.loadFailed':
+    'Ikki bosqichli kirish sozlamalarini oʻqib boʻlmadi. Sahifani yangilang.',
+  'staff.myProfile.mfa.on': 'Yoqilgan: kirishda autentifikator ilovasidagi kod soʻraladi.',
+  'staff.myProfile.mfa.off': 'Oʻchirilgan: kirishda faqat parol soʻraladi.',
+  'staff.myProfile.mfa.required': 'Hisobingiz uchun u majburiy.',
+  'staff.myProfile.mfa.offered': 'Platforma uni yoqishni tavsiya qiladi.',
+  'staff.myProfile.mfa.added': '{date} qoʻshilgan',
+  'staff.myProfile.mfa.unnamed': 'Autentifikator',
+  'staff.myProfile.mfa.enable': 'Yoqish',
+  'staff.myProfile.mfa.add': 'Yana bir qurilma qoʻshish',
+  'staff.myProfile.mfa.cancelSetup': 'Bekor qilish',
+  'staff.myProfile.mfa.done': 'Ikki bosqichli kirish sozlandi.',
+  'staff.myProfile.mfa.remove': 'Oʻchirish',
+  'staff.myProfile.mfa.removeBody':
+    'Tasdiqlash uchun parolingizni va autentifikator ilovasidagi joriy kodni kiriting.',
+  'staff.myProfile.mfa.removePassword': 'Joriy parolingiz',
+  'staff.myProfile.mfa.removeGroup': 'Ilovadagi kod',
+  'staff.myProfile.mfa.removeDigit': 'Raqam',
+  'staff.myProfile.mfa.removeConfirm': 'Autentifikatorni oʻchirish',
+  'staff.myProfile.mfa.removeCancel': 'Qoldirish',
+  'staff.myProfile.mfa.removed': 'Autentifikator oʻchirildi.',
+  'staff.myProfile.mfa.onlyOne':
+    'Bu sizning yagona autentifikatoringiz. Avval boshqa qurilma qoʻshing yoki administratordan uni tiklashni soʻrang.',
+  'staff.myProfile.mfa.wrongPassword': 'Bu joriy parolingiz emas.',
+  'staff.myProfile.mfa.wrongCode': 'Kod mos kelmadi, shuning uchun hech narsa oʻchirilmadi.',
+  'staff.myProfile.mfa.rateLimited':
+    'Kod kiritish urinishlari juda koʻp. Taxminan {minutes} daqiqadan keyin qayta urinib koʻring.',
+  'staff.myProfile.mfa.failed':
+    'Autentifikatorlarni oʻzgartirib boʻlmadi. Birozdan keyin qayta urinib koʻring.',
+  'staff.myProfile.mfa.lostPhone':
+    'Telefoningizni yoʻqotdingizmi? Administrator ikkinchi omilni tiklashi mumkin, keyingi kirishda uni qaytadan sozlaysiz.',
+  'staff.mfa.field': 'Kirish usuli',
+  'staff.mfa.passwordOnly': 'Login va parol',
+  'staff.mfa.passwordAndCode': 'Login, parol va kod',
+  'staff.mfa.devices': 'Autentifikatorlar: {count}',
+  'staff.mfa.requirement.REQUIRED': 'Xodim uchun majburiy',
+  'staff.mfa.requirement.OFFERED': 'Xodimga taklif qilinadi',
+  'staff.mfa.requirement.NOT_REQUIRED': 'Xodimdan talab qilinmaydi',
+  'staff.mfa.unknown': 'Hozircha nomaʻlum',
+  'staff.mfa.noAccount': 'Hisob hali yoʻq',
+  'staff.mfa.column': 'Kirish',
+  'staff.mfa.columnOn': 'Kod',
+  'staff.mfa.columnOff': 'Parol',
+  'staff.mfa.reset': 'Ikkinchi omilni tiklash',
+  'staff.mfa.resetTitle': 'Xodimning ikkinchi omilini tiklash',
+  'staff.mfa.resetBody':
+    'Barcha autentifikatorlar oʻchiriladi, barcha seanslar tugaydi va xodimga xat yuboriladi. U keyingi kirishda ikkinchi omilni qaytadan sozlaydi. Amal sizning sababingiz bilan yoziladi.',
+  'staff.mfa.resetReason': 'Sabab (harakatlar jurnalida koʻrinadi)',
+  'staff.mfa.resetConfirm': 'Tiklash',
+  'staff.mfa.resetCancel': 'Bekor qilish',
+  'staff.mfa.resetDone': 'Ikkinchi omil tiklandi.',
+  'staff.mfa.resetSelf':
+    'Hech kim oʻz ikkinchi omilini oʻzi tiklamaydi. Boshqa administratordan soʻrang.',
+  'staff.mfa.resetOwner':
+    'Egasining ikkinchi omilini platforma qoʻllab-quvvatlashi qoʻllab-quvvatlash seansi doirasida tiklaydi.',
+  'staff.mfa.resetPlatform':
+    'Bu platforma hisobi. Uning ikkinchi omili boshqaruv panelidan, ikkinchi administratorning imzosi bilan tiklanadi.',
+  'staff.mfa.resetStale':
+    'Xodim kartochkasi siz ochganingizdan keyin oʻzgardi. Yangilab, qayta urinib koʻring.',
+  'staff.mfa.resetFailed': 'Tiklash bajarilmadi. Birozdan keyin qayta urinib koʻring.',
+  'staff.mfa.policy.title': 'Ikki bosqichli kirish',
+  'staff.mfa.policy.body':
+    'Kirishda kimdan autentifikator ilovasidagi kod soʻralsin. Platforma xodimlaridan har doim soʻraladi.',
+  'staff.mfa.policy.OFF': 'Hech kimdan',
+  'staff.mfa.policy.SENSITIVE_ROLES': 'Ega, administrator, moliya va brend menejeri',
+  'staff.mfa.policy.ALL_STAFF': 'Bu yerda ishlaydigan hammadan',
+  'staff.mfa.policy.save': 'Saqlash',
+  'staff.mfa.policy.saved': 'Saqlandi. Allaqachon kirganlardan keyingi kirishda soʻraladi.',
+  'staff.mfa.policy.failed': 'Sozlamani saqlab boʻlmadi. Birozdan keyin qayta urinib koʻring.',
 };

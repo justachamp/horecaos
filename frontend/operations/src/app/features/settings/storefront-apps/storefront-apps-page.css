@@ -1,0 +1,91 @@
+:host {
+  display: block;
+  max-width: 1100px;
+}
+
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+  max-width: 720px;
+}
+
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.brand-select {
+  max-width: 320px;
+  margin: 4px 0 20px;
+}
+
+.apps {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  padding: 16px 20px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.app[data-standing='AUTHORISED'] {
+  box-shadow: inset 3px 0 0 var(--q-success-text);
+}
+
+.app[data-standing='REVOKED'] {
+  box-shadow: inset 3px 0 0 var(--q-ink-muted);
+}
+
+.app-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.app-head h2 {
+  margin: 0;
+}
+
+.chip {
+  padding: 2px 8px;
+  border: 1px solid var(--q-hairline);
+  white-space: nowrap;
+}
+
+.field {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--q-surface-2);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  box-sizing: border-box;
+  height: 40px;
+}
+
+.confirm {
+  margin-top: 12px;
+}
+
+.form__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.success {
+  color: var(--q-success-text);
+}
+
+.error {
+  color: var(--q-error-text);
+}

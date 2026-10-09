@@ -6,7 +6,10 @@ import { TenantsApi } from '../tenants/tenants-api';
 import { DualRunComparison } from './dual-run-comparison';
 import { MigrationApi, RunView, ScopeView } from './migration-api';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const SCOPE = {
   id: 'scope-1',
@@ -38,7 +41,10 @@ describe('DualRunComparison', () => {
 
   it('offers only the scope’s reconciliation runs, newest first, and reads the one chosen under the scope’s tenant', async () => {
     api = {
-      listPrograms: vi.fn().mockResolvedValue({ items: [{ id: 'program-1', name: 'Delever cutover' }], nextCursor: null }),
+      listPrograms: vi.fn().mockResolvedValue({
+        items: [{ id: 'program-1', name: 'Delever cutover' }],
+        nextCursor: null,
+      }),
       listScopes: vi.fn().mockResolvedValue({ items: [SCOPE], nextCursor: null }),
       listRuns: vi.fn().mockResolvedValue({
         items: [
@@ -56,19 +62,29 @@ describe('DualRunComparison', () => {
       providers: [
         { provide: APP_CONFIG, useValue: CONFIG },
         { provide: MigrationApi, useValue: api },
-        { provide: TenantsApi, useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) } },
+        {
+          provide: TenantsApi,
+          useValue: { listTenants: vi.fn().mockResolvedValue({ items: [], nextCursor: null }) },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(DualRunComparison);
     await settle();
 
-    const scopeSelect = fixture.nativeElement.querySelector('select[name="scope"]') as HTMLSelectElement;
+    const scopeSelect = fixture.nativeElement.querySelector(
+      'select[name="scope"]',
+    ) as HTMLSelectElement;
     scopeSelect.value = 'scope-1';
     scopeSelect.dispatchEvent(new Event('change'));
     await settle();
 
-    const runSelect = fixture.nativeElement.querySelector('select[name="run"]') as HTMLSelectElement;
-    expect(Array.from(runSelect.options).map((option) => option.value)).toEqual(['recon-2', 'recon-1']);
+    const runSelect = fixture.nativeElement.querySelector(
+      'select[name="run"]',
+    ) as HTMLSelectElement;
+    expect(Array.from(runSelect.options).map((option) => option.value)).toEqual([
+      'recon-2',
+      'recon-1',
+    ]);
 
     (fixture.nativeElement.querySelector('form.pickerForm') as HTMLFormElement).dispatchEvent(
       new Event('submit', { cancelable: true }),

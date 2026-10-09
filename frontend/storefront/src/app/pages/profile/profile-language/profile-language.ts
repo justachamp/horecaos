@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { LangService } from '../../../services/lang.service';
+import { LangService, platformTag } from '../../../services/lang.service';
 import { TranslateService } from '../../../services/translate.service';
 import { CustomerProfileService } from '../../../services/customer-profile.service';
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
@@ -58,7 +58,8 @@ export class ProfileLanguageComponent implements OnInit {
     if (!this.profile.profile()) {
       return;
     }
-    this.profile.update({ locale: id }).catch(() => {
+    // The platform's tag, not this app's catalogue id: `uz-Latn`, never a bare `uz` (ADR 0149).
+    this.profile.update({ locale: platformTag(id) }).catch(() => {
       // Reported by the error interceptor. The language is already applied.
     });
   }

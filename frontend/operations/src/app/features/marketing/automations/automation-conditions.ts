@@ -20,7 +20,7 @@ import {
  * automation rule has no author-built condition tree: it is one trigger kind and
  * one numeric threshold (`AutomationTriggerType.configKey()`), and the server
  * decides who matches by asking a fixed, per-kind question of a real customer.
- * That question *is* a single typed condition, and each of the four is closed on
+ * That question *is* a single typed condition, and each of the five is closed on
  * the server side too — so the catalogue below mirrors
  * `AutomationTriggerType` one for one, exactly as `audience-predicates.ts`
  * mirrors `PredicateType`. Nothing here is a second implementation of the
@@ -68,9 +68,17 @@ const TRIGGER_CONDITIONS: Readonly<Record<AutomationTriggerKind, TriggerConditio
     valueKind: 'MONEY_MINOR',
     operator: 'AT_LEAST',
   },
+  // `AutomationSweepService#fireLateOrderApology`: a completed order that closed at least
+  // `lateByMinutes` after the moment it was promised. The simulator answers the lateness half
+  // only; the sweep also waits 30 minutes for support and cancels an order a remedy covers.
+  LATE_ORDER_APOLOGY: {
+    labelKey: 'marketing.automations.condition.LATE_ORDER_APOLOGY',
+    valueKind: 'NUMERIC',
+    operator: 'AT_LEAST',
+  },
 };
 
-/** `q-rule-simulator`'s catalogue: the four trigger kinds this build offers. */
+/** `q-rule-simulator`'s catalogue: the five trigger kinds the server has. */
 export const AUTOMATION_CONDITION_CATALOGUE: readonly ConditionTypeDescriptor[] = (
   Object.keys(TRIGGER_CONDITIONS) as AutomationTriggerKind[]
 ).map((type) => ({

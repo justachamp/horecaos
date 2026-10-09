@@ -29,7 +29,9 @@
               <td class="q-body-sm">{{ grant.status }}</td>
               <td class="q-body-sm muted">{{ grant.grantedBy }}</td>
               <td class="q-body-sm">
-                <button type="button" (click)="revoke(grant.id)">{{ i18n.t('staff.revoke.action') }}</button>
+                <button type="button" (click)="revoke(grant.id)">
+                  {{ i18n.t('staff.revoke.action') }}
+                </button>
               </td>
             </tr>
           }
@@ -38,9 +40,27 @@
     }
 
     <form class="inlineForm" (submit)="submitGrant($event)">
-      <input class="q-body-sm" type="text" [placeholder]="i18n.t('staff.grant.principal')" [value]="principalSubject()" (input)="principalSubject.set($any($event.target).value)" />
-      <input class="q-body-sm" type="text" [placeholder]="i18n.t('staff.grant.role')" [value]="roleCode()" (input)="roleCode.set($any($event.target).value)" />
-      <input class="q-body-sm" type="text" [placeholder]="i18n.t('onboarding.reason.placeholder')" [value]="grantReason()" (input)="grantReason.set($any($event.target).value)" />
+      <input
+        class="q-body-sm"
+        type="text"
+        [placeholder]="i18n.t('staff.grant.principal')"
+        [value]="principalSubject()"
+        (input)="principalSubject.set($any($event.target).value)"
+      />
+      <input
+        class="q-body-sm"
+        type="text"
+        [placeholder]="i18n.t('staff.grant.role')"
+        [value]="roleCode()"
+        (input)="roleCode.set($any($event.target).value)"
+      />
+      <input
+        class="q-body-sm"
+        type="text"
+        [placeholder]="i18n.t('onboarding.reason.placeholder')"
+        [value]="grantReason()"
+        (input)="grantReason.set($any($event.target).value)"
+      />
       <button type="submit" [disabled]="!canSubmitGrant()">
         {{ granting() ? i18n.t('onboarding.start.submitting') : i18n.t('staff.grant.action') }}
       </button>
@@ -82,15 +102,35 @@
               <tr>
                 <td class="q-body-sm q-tnum">{{ grant.principalSubject }}</td>
                 <td class="q-body-sm">{{ grant.roleCode }}</td>
-                <td class="q-body-sm">{{ i18n.t(scopeKey(grant.scopeType)) }} {{ scopeName(grant) }}</td>
+                <td class="q-body-sm">
+                  {{ i18n.t(scopeKey(grant.scopeType)) }} {{ scopeName(grant) }}
+                </td>
                 <td class="q-body-sm muted">{{ grant.grantedBy }}</td>
                 <td class="q-body-sm actionsCell">
                   @if (revokingId() === grant.id) {
-                    <input class="q-body-sm" type="text" name="revokeReason" [placeholder]="i18n.t('staff.revokeTenant.reason')" [value]="revokeReason()" (input)="revokeReason.set($any($event.target).value)" />
-                    <button type="button" class="danger" [disabled]="revokeReason().trim().length === 0" (click)="confirmRevoke()">{{ i18n.t('staff.revokeTenant.confirm') }}</button>
-                    <button type="button" (click)="revokingId.set(null)">{{ i18n.t('tenants.create.cancel') }}</button>
+                    <input
+                      class="q-body-sm"
+                      type="text"
+                      name="revokeReason"
+                      [placeholder]="i18n.t('staff.revokeTenant.reason')"
+                      [value]="revokeReason()"
+                      (input)="revokeReason.set($any($event.target).value)"
+                    />
+                    <button
+                      type="button"
+                      class="danger"
+                      [disabled]="revokeReason().trim().length === 0"
+                      (click)="confirmRevoke()"
+                    >
+                      {{ i18n.t('staff.revokeTenant.confirm') }}
+                    </button>
+                    <button type="button" (click)="revokingId.set(null)">
+                      {{ i18n.t('tenants.create.cancel') }}
+                    </button>
                   } @else {
-                    <button type="button" (click)="askRevoke(grant.id)">{{ i18n.t('staff.revoke.action') }}</button>
+                    <button type="button" (click)="askRevoke(grant.id)">
+                      {{ i18n.t('staff.revoke.action') }}
+                    </button>
                   }
                 </td>
               </tr>
@@ -100,15 +140,38 @@
       }
 
       <form class="grantForm" (submit)="submitTenantGrant($event)">
-        <input class="q-body-sm" type="text" name="principal" [placeholder]="i18n.t('staff.grant.principal')" [value]="tenantPrincipalSubject()" (input)="tenantPrincipalSubject.set($any($event.target).value)" />
-        <select class="q-body-sm" name="role" [value]="tenantRoleCode()" (change)="tenantRoleCode.set($any($event.target).value); grantBrandId.set(''); grantLocationId.set('')">
+        <input
+          class="q-body-sm"
+          type="text"
+          name="principal"
+          [placeholder]="i18n.t('staff.grant.principal')"
+          [value]="tenantPrincipalSubject()"
+          (input)="tenantPrincipalSubject.set($any($event.target).value)"
+        />
+        <select
+          class="q-body-sm"
+          name="role"
+          [value]="tenantRoleCode()"
+          (change)="
+            tenantRoleCode.set($any($event.target).value);
+            grantBrandId.set('');
+            grantLocationId.set('')
+          "
+        >
           <option value="">{{ i18n.t('staff.grant.roleChoose') }}</option>
           @for (role of tenantRoles(); track role.code) {
-            <option [value]="role.code">{{ role.code }} — {{ i18n.t(scopeKey(role.scopeType)) }}</option>
+            <option [value]="role.code">
+              {{ role.code }} — {{ i18n.t(scopeKey(role.scopeType)) }}
+            </option>
           }
         </select>
         @if (chosenRoleScope() === 'BRAND' || chosenRoleScope() === 'LOCATION') {
-          <select class="q-body-sm" name="brand" [value]="grantBrandId()" (change)="grantBrandId.set($any($event.target).value); grantLocationId.set('')">
+          <select
+            class="q-body-sm"
+            name="brand"
+            [value]="grantBrandId()"
+            (change)="grantBrandId.set($any($event.target).value); grantLocationId.set('')"
+          >
             <option value="">{{ i18n.t('staff.grant.chooseBrand') }}</option>
             @for (brand of tenantBrands(); track brand.id) {
               <option [value]="brand.id">{{ brand.displayName }}</option>
@@ -116,16 +179,30 @@
           </select>
         }
         @if (chosenRoleScope() === 'LOCATION' && grantBrandId() !== '') {
-          <select class="q-body-sm" name="location" [value]="grantLocationId()" (change)="grantLocationId.set($any($event.target).value)">
+          <select
+            class="q-body-sm"
+            name="location"
+            [value]="grantLocationId()"
+            (change)="grantLocationId.set($any($event.target).value)"
+          >
             <option value="">{{ i18n.t('staff.grant.chooseLocation') }}</option>
             @for (location of locationsOfChosenBrand(); track location.id) {
               <option [value]="location.id">{{ location.displayName }}</option>
             }
           </select>
         }
-        <input class="q-body-sm" type="text" name="reason" [placeholder]="i18n.t('onboarding.reason.placeholder')" [value]="tenantGrantReason()" (input)="tenantGrantReason.set($any($event.target).value)" />
+        <input
+          class="q-body-sm"
+          type="text"
+          name="reason"
+          [placeholder]="i18n.t('onboarding.reason.placeholder')"
+          [value]="tenantGrantReason()"
+          (input)="tenantGrantReason.set($any($event.target).value)"
+        />
         <button type="submit" [disabled]="!canSubmitTenantGrant()">
-          {{ tenantGranting() ? i18n.t('onboarding.start.submitting') : i18n.t('staff.grant.action') }}
+          {{
+            tenantGranting() ? i18n.t('onboarding.start.submitting') : i18n.t('staff.grant.action')
+          }}
         </button>
       </form>
       @if (tenantGrantMessage(); as message) {
@@ -146,7 +223,13 @@
     } @else if (pendingError(); as message) {
       <p class="q-body-sm error">{{ message }}</p>
     } @else if (pending().length > 0) {
-      <input class="q-body-sm decideReason" type="text" [placeholder]="i18n.t('staff.approvals.decisionReason')" [value]="decideReason()" (input)="decideReason.set($any($event.target).value)" />
+      <input
+        class="q-body-sm decideReason"
+        type="text"
+        [placeholder]="i18n.t('staff.approvals.decisionReason')"
+        [value]="decideReason()"
+        (input)="decideReason.set($any($event.target).value)"
+      />
 
       <table class="table">
         <thead>
@@ -165,10 +248,18 @@
               <td class="q-body-sm q-tnum">{{ request.requestedBy }}</td>
               <td class="q-body-sm actionsCell">
                 @if (request.mayDecide) {
-                  <button type="button" [disabled]="decidingId() === request.id || decideReason().trim().length === 0" (click)="decide(request.id, 'APPROVE')">
+                  <button
+                    type="button"
+                    [disabled]="decidingId() === request.id || decideReason().trim().length === 0"
+                    (click)="decide(request.id, 'APPROVE')"
+                  >
                     {{ i18n.t('staff.approvals.approve') }}
                   </button>
-                  <button type="button" [disabled]="decidingId() === request.id || decideReason().trim().length === 0" (click)="decide(request.id, 'DECLINE')">
+                  <button
+                    type="button"
+                    [disabled]="decidingId() === request.id || decideReason().trim().length === 0"
+                    (click)="decide(request.id, 'DECLINE')"
+                  >
                     {{ i18n.t('staff.approvals.decline') }}
                   </button>
                 } @else {

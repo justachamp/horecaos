@@ -27,6 +27,7 @@ import uz.horecaos.platform.courier.application.CourierLedgerService;
 import uz.horecaos.platform.courier.application.CourierPolicyResolver;
 import uz.horecaos.platform.courier.application.CourierRateCardService;
 import uz.horecaos.platform.courier.application.port.LegalEntityResolver;
+import uz.horecaos.platform.courier.domain.CostBasis;
 import uz.horecaos.platform.courier.domain.DistanceSource;
 import uz.horecaos.platform.courier.domain.RateComponent;
 import uz.horecaos.platform.courier.domain.RateComponentType;
@@ -79,6 +80,8 @@ class DayCloseDeliveryFactTests {
     private DayCloseService close;
     private UUID branch;
     private UUID courierId;
+    /** Who the branch trades as on a given day; empty (ADR 0038 not wired) unless a test says otherwise. */
+    private LegalEntityResolver legalEntities = (tenantId, locationId, businessDate) -> Optional.empty();
 
     @BeforeAll
     static void startDatabase() {
@@ -119,6 +122,7 @@ class DayCloseDeliveryFactTests {
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
 
         Clock clock = Clock.fixed(DELIVERED_AT.plus(Duration.ofDays(1)), ZoneOffset.UTC);
+        legalEntities = (tenantId, locationId, businessDate) -> Optional.empty();
         store = new JdbcReportingStore(jdbc);
         BusinessDayService businessDays = new BusinessDayService(store);
         close = new DayCloseService(store, businessDays, new SubjectPseudonym(new NoopProtection()), clock);
@@ -146,6 +150,20 @@ class DayCloseDeliveryFactTests {
         assertThat(row.get("distance_source")).isEqualTo("ROUTING");
         assertThat(row.get("on_time_outcome")).isEqualTo("UNKNOWN"); // no promise recorded in this fixture
         assertThat(row.get("transit_seconds")).isEqualTo(1320); // 22 minutes
+    }
+
+    @Test
+    @DisplayName("ADR 0125: close stamps the brand the delivery was made for, read from the earning's shipment")
+    void closeStampsTheDeliverysBrand() {
+        close.close(TENANT, DAY);
+
+        assertThat(jdbc.sql("SELECT brand_id FROM reporting.fact_delivery WHERE tenant_id = :t AND business_date = :d")
+                        .param("t", TENANT)
+                        .param("d", DAY)
+                        .query(UUID.class)
+                        .list())
+                .as("the earning carries no brand; the shipment it names does, and so does the fact")
+                .containsExactly(BRAND);
     }
 
     @Test
@@ -217,6 +235,162 @@ class DayCloseDeliveryFactTests {
         assertThat(tenantRows.getFirst().get("courier_id")).isEqualTo(courierId);
         assertThat(otherRows).hasSize(1);
         assertThat(otherRows.getFirst().get("courier_id")).isNotEqualTo(courierId);
+        assertThat(jdbc.sql("SELECT brand_id FROM reporting.fact_delivery WHERE tenant_id = :t")
+                        .param("t", otherTenant)
+                        .query(UUID.class)
+                        .single())
+                .as("the other tenant's delivery is stamped with the other tenant's own brand")
+                .isNotEqualTo(BRAND);
+    }
+
+    @Test
+    @DisplayName("a delivery accrued after its day closed, dated on the courier's tap, is announced by the recut")
+    void aDeliveryAccruedAfterTheCloseIsADivergence() {
+        // The shape the accrual produces since it dates a delivery on the courier's own tap: the day
+        // closes, and an operator completes the order afterwards, so the earning is written for a day
+        // that is already closed. The stored fact is left alone (ADR 0043: the recut does not write),
+        // but the recut must say so -- it used to compare nothing about deliveries.
+        OtherTenancy late = seedOtherTenancy();
+        close.close(late.tenantId(), DAY);
+        seedCourierDeliveryEarning(late.tenantId(), late.brandId(), late.locationId(), "K-LATE", "312345678903");
+
+        DayCloseService.CloseResult recut = close.recut(late.tenantId(), DAY);
+
+        assertThat(recut.divergences())
+                .containsExactly(new DayCloseService.Divergence(
+                        "location=%s".formatted(late.locationId()), "delivery.count", 1, 0, 1));
+        assertThat(jdbc.sql("""
+                                SELECT metric_id, dimension_key, stored_value, recut_value
+                                  FROM reporting.aggregate_divergences WHERE tenant_id = :t
+                                """).param("t", late.tenantId()).query().listOfRows())
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.get("metric_id")).isEqualTo("delivery.count");
+                    assertThat(row.get("dimension_key")).isEqualTo("location=%s".formatted(late.locationId()));
+                    assertThat(row.get("stored_value")).isEqualTo(0L);
+                    assertThat(row.get("recut_value")).isEqualTo(1L);
+                });
+        assertThat(jdbc.sql("SELECT count(*) FROM reporting.fact_delivery WHERE tenant_id = :t")
+                        .param("t", late.tenantId())
+                        .query(Long.class)
+                        .single())
+                .as("the recut reports the drift and leaves the stored day alone")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("a recut over an unchanged day reports no delivery divergence")
+    void anUnchangedDayHasNoDeliveryDivergence() {
+        close.close(TENANT, DAY);
+
+        assertThat(close.recut(TENANT, DAY).divergences()).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "a delivery tapped on a closed day is booked on the first open day, so the closed day's cost never moves")
+    void aDeliveryAccruedAfterItsDayClosedIsBookedOnTheFirstOpenDay() {
+        OtherTenancy late = seedOtherTenancy();
+        close.close(late.tenantId(), DAY);
+        JdbcDeliveryCostStore costs = new JdbcDeliveryCostStore(jdbc);
+        assertThat(costs.totalsByPath(late.tenantId(), CostBasis.ACCRUED, DAY, DAY.plusDays(1)))
+                .as("nothing booked yet, so the closed day's cost is the figure a manager has already seen")
+                .isEmpty();
+
+        seedCourierDeliveryEarning(late.tenantId(), late.brandId(), late.locationId(), "K-LATE", "312345678903");
+
+        Map<String, Object> earning =
+                jdbc.sql("""
+                SELECT business_date, delivered_at, total_minor
+                  FROM fulfillment.courier_assignment_earnings WHERE tenant_id = :t
+                """).param("t", late.tenantId()).query().singleRow();
+        assertThat(earning.get("business_date"))
+                .as("the earning is booked on the first day that is not closed")
+                .isEqualTo(java.sql.Date.valueOf(DAY.plusDays(1)));
+        assertThat(earning.get("delivered_at"))
+                .as("the tap stays the tap: the on-time verdict and the recut both read it")
+                .isEqualTo(java.sql.Timestamp.from(DELIVERED_AT));
+        assertThat(costs.totalsByPath(late.tenantId(), CostBasis.ACCRUED, DAY, DAY))
+                .as("the closed day's delivery cost is exactly what it was when the manager read it")
+                .isEmpty();
+        assertThat(costs.totalsByPath(late.tenantId(), CostBasis.ACCRUED, DAY.plusDays(1), DAY.plusDays(1)))
+                .singleElement()
+                .satisfies(total -> assertThat(total.totalMinor()).isEqualTo(earning.get("total_minor")));
+        assertThat(jdbc.sql("""
+                                SELECT business_date FROM fulfillment.delivery_cost_lines
+                                 WHERE tenant_id = :t AND cost_basis = 'ACCRUED'
+                                """)
+                        .param("t", late.tenantId())
+                        .query(java.sql.Date.class)
+                        .single())
+                .as("the cost line is booked with its earning")
+                .isEqualTo(java.sql.Date.valueOf(DAY.plusDays(1)));
+    }
+
+    @Test
+    @DisplayName("a delivery tapped on a day that is still open keeps the tap's own date")
+    void aDeliveryOnAnOpenDayKeepsItsDate() {
+        // The negative control for the booking rule: before any close, and after the close of an
+        // earlier day, a delivery is dated on its tap exactly as it always was.
+        OtherTenancy open = seedOtherTenancy();
+        close.close(open.tenantId(), DAY.minusDays(1));
+
+        seedCourierDeliveryEarning(open.tenantId(), open.brandId(), open.locationId(), "K-OPEN", "312345678904");
+
+        assertThat(jdbc.sql("SELECT business_date FROM fulfillment.courier_assignment_earnings WHERE tenant_id = :t")
+                        .param("t", open.tenantId())
+                        .query(java.sql.Date.class)
+                        .single())
+                .isEqualTo(java.sql.Date.valueOf(DAY));
+        assertThat(jdbc.sql("SELECT business_date FROM fulfillment.courier_assignment_earnings WHERE tenant_id = :t")
+                        .param("t", TENANT)
+                        .query(java.sql.Date.class)
+                        .single())
+                .as("and so does a tenant that has never closed a day")
+                .isEqualTo(java.sql.Date.valueOf(DAY));
+    }
+
+    @Test
+    @DisplayName("a delivery tapped several closed days ago is booked on the first open day, not the day after its own")
+    void aDeliveryFromSeveralClosedDaysAgoLandsOnTheFirstOpenDay() {
+        OtherTenancy late = seedOtherTenancy();
+        close.close(late.tenantId(), DAY);
+        close.close(late.tenantId(), DAY.plusDays(1));
+        close.close(late.tenantId(), DAY.plusDays(2));
+
+        seedCourierDeliveryEarning(late.tenantId(), late.brandId(), late.locationId(), "K-LATE", "312345678903");
+
+        assertThat(jdbc.sql("SELECT business_date FROM fulfillment.courier_assignment_earnings WHERE tenant_id = :t")
+                        .param("t", late.tenantId())
+                        .query(java.sql.Date.class)
+                        .single())
+                .isEqualTo(java.sql.Date.valueOf(DAY.plusDays(3)));
+    }
+
+    @Test
+    @DisplayName(
+            "the taxpayer of a late-booked delivery is the one in force the day it was made, not the day it was booked")
+    void aLateBookedDeliveryKeepsTheTaxpayerOfTheDayItWasMade() {
+        UUID taxpayerThen = UUID.randomUUID();
+        UUID taxpayerNow = UUID.randomUUID();
+        legalEntities = (tenantId, locationId, businessDate) ->
+                Optional.of(businessDate.isAfter(DAY) ? taxpayerNow : taxpayerThen);
+        OtherTenancy late = seedOtherTenancy();
+        close.close(late.tenantId(), DAY);
+
+        seedCourierDeliveryEarning(late.tenantId(), late.brandId(), late.locationId(), "K-LATE", "312345678903");
+
+        assertThat(jdbc.sql("""
+                                SELECT business_date, legal_entity_id
+                                  FROM fulfillment.courier_assignment_earnings WHERE tenant_id = :t
+                                """).param("t", late.tenantId()).query().singleRow())
+                .containsEntry("business_date", java.sql.Date.valueOf(DAY.plusDays(1)))
+                .containsEntry("legal_entity_id", taxpayerThen);
+        assertThat(jdbc.sql("""
+                                SELECT legal_entity_id FROM fulfillment.delivery_cost_lines
+                                 WHERE tenant_id = :t AND cost_basis = 'ACCRUED'
+                                """).param("t", late.tenantId()).query(UUID.class).single())
+                .isEqualTo(taxpayerThen);
     }
 
     // --------------------------------------------------------------- fixture
@@ -254,6 +428,13 @@ class DayCloseDeliveryFactTests {
      * @return the other tenant's id
      */
     private UUID seedOtherTenantDeliveryFact() {
+        OtherTenancy other = seedOtherTenancy();
+        seedCourierDeliveryEarning(other.tenantId(), other.brandId(), other.locationId(), "K-OTHER", "312345678902");
+        return other.tenantId();
+    }
+
+    /** A second tenant with its own brand and location and no delivery yet. */
+    private OtherTenancy seedOtherTenancy() {
         UUID tenantId = UUID.randomUUID();
         UUID brandId = UUID.randomUUID();
         UUID locationId = UUID.randomUUID();
@@ -279,10 +460,10 @@ class DayCloseDeliveryFactTests {
                 .param("tenantId", tenantId)
                 .param("brandId", brandId)
                 .update();
-
-        seedCourierDeliveryEarning(tenantId, brandId, locationId, "K-OTHER", "312345678902");
-        return tenantId;
+        return new OtherTenancy(tenantId, brandId, locationId);
     }
+
+    private record OtherTenancy(UUID tenantId, UUID brandId, UUID locationId) {}
 
     /** Courier, rate card, a delivered shipment chain, and one real accrual — see the class doc for why. */
     private UUID seedCourierDeliveryEarning() {
@@ -304,7 +485,6 @@ class DayCloseDeliveryFactTests {
                 throw new UnsupportedOperationException("not exercised by this suite");
             }
         });
-        LegalEntityResolver legalEntities = (tenantId, locationId, businessDate) -> Optional.empty();
         // The rate card must be effective at or before ACCEPTED_AT — that is the
         // instant recordDelivery resolves it at, not deliveredAt.
         Clock accrualClock = Clock.fixed(ACCEPTED_AT, ZoneOffset.UTC);

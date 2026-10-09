@@ -7,15 +7,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.conversations.api.ConversationChannelRef;
 import uz.horecaos.platform.conversations.api.ConversationInboundPort;
 import uz.horecaos.platform.conversations.api.ConversationOutboundGateway;
+import uz.horecaos.platform.conversations.api.ConversationParticipant;
 import uz.horecaos.platform.conversations.api.OutboundButton;
 import uz.horecaos.platform.conversations.api.OutboundButtonKind;
 import uz.horecaos.platform.conversations.api.OutboundMessage;
@@ -62,7 +66,53 @@ class ConversationEngine implements ConversationInboundPort {
     private final FlowDocumentService flowDocuments;
     private final ConversationOutboundGateway outbound;
     private final Clock clock;
+    private final Supplier<List<ConversationParticipant>> participants;
     private final String storefrontUrl;
+
+    /** How much of the thread a participant is given as context. */
+    static final int PARTICIPANT_CONTEXT_MESSAGES = 8;
+
+    /** A build, or a test, with no participant: exactly the engine this class was before ADR 0069. */
+    ConversationEngine(
+            ConversationRepository conversations,
+            FlowRunRepository runs,
+            ConversationMessageStore messages,
+            FlowDocumentService flowDocuments,
+            ConversationOutboundGateway outbound,
+            Clock clock,
+            String storefrontUrl) {
+        this(conversations, runs, messages, flowDocuments, outbound, clock, List::of, storefrontUrl);
+    }
+
+    @Autowired
+    ConversationEngine(
+            ConversationRepository conversations,
+            FlowRunRepository runs,
+            ConversationMessageStore messages,
+            FlowDocumentService flowDocuments,
+            ConversationOutboundGateway outbound,
+            Clock clock,
+            // Resolved at the moment of use, not at construction: a participant
+            // (ADR 0069's assistant) depends on this module's api types and must
+            // never be something this bean's own creation waits on.
+            ObjectProvider<ConversationParticipant> participantBeans,
+            // ADR 0059's own named pre-work: "find how storefront URLs/deep
+            // links are configured; a placeholder config property is
+            // acceptable, documented." No storefront deep-link scheme exists
+            // yet anywhere in the codebase (checked before adding this), so
+            // this is that placeholder — a flat base URL a {{storefrontUrl}}
+            // placeholder resolves to, not a brand- or order-aware deep link.
+            @Value("${horecaos.conversations.storefront-url:https://storefront.horecaos.local}") String storefrontUrl) {
+        this(
+                conversations,
+                runs,
+                messages,
+                flowDocuments,
+                outbound,
+                clock,
+                () -> participantBeans.orderedStream().toList(),
+                storefrontUrl);
+    }
 
     ConversationEngine(
             ConversationRepository conversations,
@@ -71,25 +121,27 @@ class ConversationEngine implements ConversationInboundPort {
             FlowDocumentService flowDocuments,
             ConversationOutboundGateway outbound,
             Clock clock,
-            // ADR 0059's own named pre-work: "find how storefront URLs/deep
-            // links are configured; a placeholder config property is
-            // acceptable, documented." No storefront deep-link scheme exists
-            // yet anywhere in the codebase (checked before adding this), so
-            // this is that placeholder — a flat base URL a {{storefrontUrl}}
-            // placeholder resolves to, not a brand- or order-aware deep link.
-            @Value("${horecaos.conversations.storefront-url:https://storefront.horecaos.local}") String storefrontUrl) {
+            Supplier<List<ConversationParticipant>> participants,
+            String storefrontUrl) {
         this.conversations = conversations;
         this.runs = runs;
         this.messages = messages;
         this.flowDocuments = flowDocuments;
         this.outbound = outbound;
         this.clock = clock;
+        this.participants = participants;
         this.storefrontUrl = storefrontUrl;
     }
 
     @Override
     public boolean hasActiveFlow(UUID tenantId, UUID brandId) {
         return flowDocuments.activeRow(tenantId, brandId, WELCOME_FLOW_KEY).isPresent();
+    }
+
+    @Override
+    public boolean acceptsFreeText(UUID tenantId, UUID brandId) {
+        return hasActiveFlow(tenantId, brandId)
+                || !willingParticipants(tenantId, brandId).isEmpty();
     }
 
     @Override
@@ -146,8 +198,10 @@ class ConversationEngine implements ConversationInboundPort {
             // or one waiting on a button tap instead. ADR 0059 stage 2: the
             // engine still stays quiet (nothing sent), but the message must
             // still land in history so the inbox — not silence — is what the
-            // customer's next message actually reaches.
-            recordStrayInbound(channel, text);
+            // customer's next message actually reaches. ADR 0069: and when a
+            // participant is willing, this is exactly the long tail the flows
+            // do not model, so it is offered the turn.
+            handleUnclaimed(channel, text, null);
             return;
         }
         boolean advanced = runs.advance(
@@ -231,6 +285,14 @@ class ConversationEngine implements ConversationInboundPort {
                 targetState,
                 active.run.version() + 1,
                 active.captured);
+    }
+
+    @Override
+    public void handleSharedLocation(ConversationChannelRef channel, double latitude, double longitude) {
+        // The coordinates are held in memory for this one offer and never written:
+        // the history records only that a position was shared, because a precise
+        // location is personal data the thread has no need to keep.
+        handleUnclaimed(channel, "[location shared]", new ConversationParticipant.SharedLocation(latitude, longitude));
     }
 
     // ------------------------------------------------------- return to flow
@@ -416,6 +478,134 @@ class ConversationEngine implements ConversationInboundPort {
         Map<String, String> variables = new LinkedHashMap<>(captured);
         variables.put(STOREFRONT_URL_VARIABLE, storefrontUrl);
         return variables;
+    }
+
+    // ------------------------------------------------------------ participants
+
+    /**
+     * Inbound text no flow run consumed (ADR 0059 stage 2 recorded it; ADR 0069
+     * may now answer it). The order is deliberate: the thread as it stood is read
+     * <em>before</em> this message is recorded so the participant's context never
+     * contains the very message it is being asked about, then the message is
+     * recorded exactly as {@link #recordStrayInbound} always did, and only then
+     * is anyone asked to answer.
+     *
+     * <p>Nobody is asked in a conversation a person already holds
+     * ({@code HANDED_TO_OPERATOR}) or has closed: "the engine must stop
+     * answering" extends to every participant, and a customer writing into a
+     * closed thread reopens it for staff, not for a machine.
+     */
+    private void handleUnclaimed(
+            ConversationChannelRef channel, String body, ConversationParticipant.@Nullable SharedLocation location) {
+        List<ConversationParticipant> willing = willingParticipants(channel.tenantId(), channel.brandId());
+        Optional<ConversationRepository.Row> existing =
+                conversations.find(channel.tenantId(), channel.brandId(), channel.channel(), channel.externalChatId());
+        if (existing.isEmpty()) {
+            if (willing.isEmpty()) {
+                // A channel identity with no conversation and nobody to answer it
+                // is the silent no-op it always was.
+                return;
+            }
+            existing = Optional.of(conversations.getOrCreate(channel));
+        }
+        ConversationRepository.Row conversation = existing.get();
+
+        List<ConversationParticipant.HistoryEntry> history =
+                willing.isEmpty() ? List.of() : participantContext(channel.tenantId(), conversation.id());
+        messages.record(channel.tenantId(), conversation.id(), ConversationMessageStore.Direction.INBOUND, null, body);
+
+        if (conversation.state() == ConversationState.CLOSED) {
+            conversations.updateState(channel.tenantId(), conversation.id(), ConversationState.HANDED_TO_OPERATOR);
+            return;
+        }
+        if (willing.isEmpty() || conversation.state() == ConversationState.HANDED_TO_OPERATOR) {
+            return;
+        }
+
+        ConversationParticipant.Turn turn =
+                new ConversationParticipant.Turn(channel, conversation.id(), body, history, location);
+        for (ConversationParticipant participant : willing) {
+            if (offer(participant, channel, conversation, turn)) {
+                return;
+            }
+        }
+    }
+
+    /** @return whether this participant took the turn, so the next one is not asked as well */
+    private boolean offer(
+            ConversationParticipant participant,
+            ConversationChannelRef channel,
+            ConversationRepository.Row conversation,
+            ConversationParticipant.Turn turn) {
+        ConversationParticipant.Outcome outcome;
+        try {
+            outcome = participant.offer(turn);
+        } catch (RuntimeException failure) {
+            // The type, never the message: a failure's text can quote what the
+            // customer wrote, and this module's own rule is no customer text in a log.
+            log.warn(
+                    "A conversation participant failed on conversation {}: {}",
+                    conversation.id(),
+                    failure.getClass().getSimpleName());
+            return false;
+        }
+        return switch (outcome) {
+            case ConversationParticipant.NotParticipating ignored -> false;
+            case ConversationParticipant.Replied replied -> {
+                deliverParticipantReply(channel, conversation.id(), replied.text(), replied.turnId());
+                yield true;
+            }
+            case ConversationParticipant.HandedOff handedOff -> {
+                deliverParticipantReply(channel, conversation.id(), handedOff.text(), handedOff.turnId());
+                // A change of author, not of system: any flow run ends the way a
+                // takeover ends it, and the conversation joins the operator inbox
+                // with every message so far intact.
+                runs.findActive(channel.tenantId(), conversation.id())
+                        .ifPresent(run -> runs.end(
+                                channel.tenantId(), run.id(), run.version(), FlowRunStatus.HANDED_TO_OPERATOR));
+                conversations.updateState(channel.tenantId(), conversation.id(), ConversationState.HANDED_TO_OPERATOR);
+                yield true;
+            }
+        };
+    }
+
+    private void deliverParticipantReply(
+            ConversationChannelRef channel, UUID conversationId, String text, UUID assistantTurnId) {
+        boolean delivered = outbound.send(channel, OutboundMessage.textOnly(text));
+        messages.recordAssistantReply(channel.tenantId(), conversationId, assistantTurnId, text);
+        if (!delivered) {
+            log.warn("A participant reply on conversation {} was not delivered", conversationId);
+        }
+    }
+
+    private List<ConversationParticipant> willingParticipants(UUID tenantId, UUID brandId) {
+        List<ConversationParticipant> willing = new java.util.ArrayList<>();
+        for (ConversationParticipant participant : participants.get()) {
+            try {
+                if (participant.willingToParticipate(tenantId, brandId)) {
+                    willing.add(participant);
+                }
+            } catch (RuntimeException failure) {
+                log.warn(
+                        "A conversation participant could not say whether it is willing: {}",
+                        failure.getClass().getSimpleName());
+            }
+        }
+        return willing;
+    }
+
+    private List<ConversationParticipant.HistoryEntry> participantContext(UUID tenantId, UUID conversationId) {
+        return messages.recent(tenantId, conversationId, PARTICIPANT_CONTEXT_MESSAGES).stream()
+                .map(row -> new ConversationParticipant.HistoryEntry(
+                        switch (row.direction()) {
+                            case INBOUND -> ConversationParticipant.Author.CUSTOMER;
+                            case OUTBOUND -> ConversationParticipant.Author.FLOW;
+                            case OPERATOR -> ConversationParticipant.Author.OPERATOR;
+                            case ASSISTANT -> ConversationParticipant.Author.ASSISTANT;
+                        },
+                        row.body(),
+                        row.occurredAt()))
+                .toList();
     }
 
     /**

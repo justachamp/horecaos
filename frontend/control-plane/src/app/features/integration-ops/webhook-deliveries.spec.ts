@@ -7,13 +7,31 @@ import { ru } from '../../core/i18n/messages.ru';
 import { IntegrationOpsApi, WebhookDelivery } from './integration-ops-api';
 import { WebhookDeliveries } from './webhook-deliveries';
 
-const CONFIG: AppConfig = { apiBaseUrl: 'https://api.test.horecaos.uz', displayTimeZone: 'Asia/Tashkent' };
+const CONFIG: AppConfig = {
+  apiBaseUrl: 'https://api.test.horecaos.uz',
+  displayTimeZone: 'Asia/Tashkent',
+};
 
 const GOOD: WebhookDelivery = {
-  id: 'cb-1', tenantId: 'tenant-1', tenantName: 'Oshxona', provider: 'CLICK', kind: 'COMPLETE',
-  providerReference: 'click-778', signatureValid: true, responseCode: '0', receivedAt: '2026-09-10T08:00:00Z', matchedPayment: true,
+  id: 'cb-1',
+  tenantId: 'tenant-1',
+  tenantName: 'Oshxona',
+  provider: 'CLICK',
+  kind: 'COMPLETE',
+  providerReference: 'click-778',
+  signatureValid: true,
+  responseCode: '0',
+  receivedAt: '2026-09-10T08:00:00Z',
+  matchedPayment: true,
 };
-const BAD: WebhookDelivery = { ...GOOD, id: 'cb-2', providerReference: 'click-779', signatureValid: false, responseCode: '-1', matchedPayment: false };
+const BAD: WebhookDelivery = {
+  ...GOOD,
+  id: 'cb-2',
+  providerReference: 'click-779',
+  signatureValid: false,
+  responseCode: '-1',
+  matchedPayment: false,
+};
 
 describe('WebhookDeliveries', () => {
   let fixture: ComponentFixture<WebhookDeliveries>;

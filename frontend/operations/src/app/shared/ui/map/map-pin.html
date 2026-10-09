@@ -1,0 +1,64 @@
+<div class="q-map-pin" data-testid="q-map-pin">
+  <q-map-canvas
+    [center]="position() ?? center()"
+    [zoom]="position() ? zoom() : 12"
+    [label]="label()"
+    (ready)="onReady($event)"
+    (mapClick)="onMapClick($event)"
+  />
+
+  @if (editable()) {
+    <p class="q-map-pin__hint q-caption" data-testid="q-map-pin-hint">
+      {{ 'ui.map.pin.hint' | t }}
+    </p>
+  }
+
+  <div class="q-map-pin__fields">
+    <label class="q-map-pin__field">
+      <span class="q-caption">{{ 'ui.map.latitude' | t }}</span>
+      <input
+        type="text"
+        inputmode="decimal"
+        autocomplete="off"
+        [value]="latitudeText()"
+        [disabled]="!editable()"
+        [attr.aria-invalid]="invalid() ? 'true' : null"
+        (input)="onLatitude($any($event.target).value)"
+        data-testid="q-map-pin-latitude"
+      />
+    </label>
+    <label class="q-map-pin__field">
+      <span class="q-caption">{{ 'ui.map.longitude' | t }}</span>
+      <input
+        type="text"
+        inputmode="decimal"
+        autocomplete="off"
+        [value]="longitudeText()"
+        [disabled]="!editable()"
+        [attr.aria-invalid]="invalid() ? 'true' : null"
+        (input)="onLongitude($any($event.target).value)"
+        data-testid="q-map-pin-longitude"
+      />
+    </label>
+    @if (editable() && removable() && position()) {
+      <button
+        type="button"
+        class="q-map-pin__remove q-caption"
+        (click)="remove()"
+        data-testid="q-map-pin-remove"
+      >
+        {{ 'ui.map.pin.remove' | t }}
+      </button>
+    }
+  </div>
+
+  @if (invalid()) {
+    <p class="q-map-pin__error q-caption" role="alert" data-testid="q-map-pin-invalid">
+      {{ 'ui.map.coordinate.invalid' | t }}
+    </p>
+  }
+
+  @if (outsideRegion()) {
+    <q-inline-alert severity="warning" messageKey="ui.map.pin.outsideRegion" />
+  }
+</div>

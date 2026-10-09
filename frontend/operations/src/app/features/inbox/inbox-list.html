@@ -91,9 +91,16 @@
                      follows (ADR 0101, X.15). The state word is unchanged by it. -->
                 <q-status-pill
                   [label]="stateLabel(row.state)"
-                  [overlayLabel]="row.needsReply ? ('inbox.needsReply' | t) : null"
-                  overlayTone="danger"
+                  [overlayLabel]="overlayLabel(row)"
+                  [overlayTone]="row.needsReply ? 'danger' : 'info'"
                 />
+                @if (row.assistantInvolved && !row.assistantActive) {
+                  <span
+                    class="q-caption inbox-list__assistant-note"
+                    data-testid="conversation-assistant-note"
+                    >{{ 'inbox.assistant.involvedShort' | t }}</span
+                  >
+                }
               </td>
               <td class="q-tnum">{{ formatActivity(row) }}</td>
             </tr>

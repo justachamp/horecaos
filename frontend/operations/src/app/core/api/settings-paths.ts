@@ -804,6 +804,27 @@ export const settingsPaths = {
     return `${this.termsDocuments(tenantId, brandId)}/${version}`;
   },
 
+  // ---------------------------------------------------------- 10.15 Storefront apps (ADR 0070)
+
+  /**
+   * `OperationsStorefrontAppController` — the registered storefront apps this brand can choose, and
+   * what it has decided about each. Tenant and brand, with its own brand picker, for the reason
+   * `termsDocuments` gives: the owner holds this capability at tenant scope.
+   */
+  storefrontApps(tenantId: string, brandId: string): string {
+    return `${OPERATIONS}/tenants/${enc(tenantId)}/brands/${enc(brandId)}/storefront-apps`;
+  },
+
+  /** Authorise one app for the brand (POST). */
+  storefrontAppAuthorisations(tenantId: string, brandId: string, appId: string): string {
+    return `${this.storefrontApps(tenantId, brandId)}/${enc(appId)}/authorisations`;
+  },
+
+  /** Withdraw the brand's authorisation of one app (POST, If-Match). */
+  storefrontAppRevocations(tenantId: string, brandId: string, appId: string): string {
+    return `${this.storefrontApps(tenantId, brandId)}/${enc(appId)}/revocations`;
+  },
+
   // ---------------------------------------------------------- 1.1/1.2 Scope bar + InheritedField
 
   /**
@@ -823,6 +844,44 @@ export const settingsPaths = {
   /** `OperationsConfigurationController.setValue`. */
   configurationValues(tenantId: string, code: string): string {
     return `${this.configurationKeys(tenantId)}/${enc(code)}/values`;
+  },
+
+  // ---------------------------------------------------------- Assistant (ADR 0069)
+
+  /**
+   * `AssistantUsageController.usage` — the assistant's month so far: turns, outcomes, spend against
+   * the ceiling, and whether it is entitled, switched on and has a provider. Tenant-scoped under
+   * `assistant.read`.
+   */
+  assistantUsage(tenantId: string): string {
+    return `${OPERATIONS}/tenants/${enc(tenantId)}/assistant/usage`;
+  },
+
+  /**
+   * `AssistantKnowledgeController` — the tenant's own answers the assistant may give. The tenant-wide
+   * entries at the tenant path, one brand's (and its branches') at the brand path; the path decides
+   * the scope an entry is authored at, so the capability check and the entry cannot disagree.
+   */
+  assistantKnowledge(tenantId: string, brandId: string | null): string {
+    const tenant = `${OPERATIONS}/tenants/${enc(tenantId)}`;
+    return brandId === null
+      ? `${tenant}/assistant/knowledge`
+      : `${tenant}/brands/${enc(brandId)}/assistant/knowledge`;
+  },
+
+  /** One entry, or — under {@link assistantKnowledgeVersions}'s suffix — its versions. */
+  assistantKnowledgeEntry(tenantId: string, brandId: string | null, entryId: string): string {
+    return `${this.assistantKnowledge(tenantId, brandId)}/${enc(entryId)}`;
+  },
+
+  /** `GET` the version history; `POST` publishes the next version (`If-Match` on the version read). */
+  assistantKnowledgeVersions(tenantId: string, brandId: string | null, entryId: string): string {
+    return `${this.assistantKnowledgeEntry(tenantId, brandId, entryId)}/versions`;
+  },
+
+  /** `POST` retires the entry (`If-Match` on the version read). Its words stay readable. */
+  assistantKnowledgeRetirements(tenantId: string, brandId: string | null, entryId: string): string {
+    return `${this.assistantKnowledgeEntry(tenantId, brandId, entryId)}/retirements`;
   },
 
   // ---------------------------------------------------------- 10.0 Readiness

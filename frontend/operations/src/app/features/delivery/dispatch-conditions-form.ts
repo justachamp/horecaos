@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 
 import { I18n } from '../../core/i18n/i18n';
+import { PlatformLocales } from '../../core/i18n/platform-locales';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { DAY_OF_WEEK_KEYS } from '../../shared/ui/condition-types';
 import {
@@ -42,6 +43,7 @@ import { localisedName } from './localised-name';
 })
 export class DispatchConditionsForm {
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   readonly conditions = input.required<DispatchConditions>();
   readonly options = input<DispatchOptions | null>(null);
@@ -58,11 +60,15 @@ export class DispatchConditionsForm {
   protected readonly showBranches = computed(() => this.scopeLevel() !== 'LOCATION');
 
   protected zoneLabel(zone: DispatchOptions['zones'][number]): string {
-    return localisedName(this.i18n.locale(), {
-      displayNameRu: zone.nameRu,
-      displayNameUz: zone.nameUz,
-      displayNameEn: zone.nameEn,
-    });
+    return localisedName(
+      this.i18n.locale(),
+      {
+        displayNameRu: zone.nameRu,
+        displayNameUz: zone.nameUz,
+        displayNameEn: zone.nameEn,
+      },
+      this.registry.fallbackOrder(),
+    );
   }
 
   protected toggleSource(source: string): void {

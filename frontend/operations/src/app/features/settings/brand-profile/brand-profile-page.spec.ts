@@ -10,6 +10,8 @@ import { CurrentLocation } from '../../../core/auth/current-location';
 import { applyRegionalFormats, resetRegionalFormats } from '../../../core/format/regional-format';
 import { RegionalFormatSync } from '../../../core/format/regional-format-sync';
 import { I18n } from '../../../core/i18n/i18n';
+import { seedPlatformLocalesForTesting } from '../../../core/i18n/platform-locales';
+import { REGISTRY_FIXTURE } from '../../../../testing/platform-locales.fixture';
 import { MediaUploader } from '../../../shared/ui/media-uploader';
 import { MediaApi, MediaAssetView } from '../../catalog/media-api';
 import { LocationsApi } from '../locations/locations-api';
@@ -215,6 +217,44 @@ describe('BrandProfilePage', () => {
     );
   });
 
+  it('offers exactly the languages the registry has live in the content tier, and none that is only declared', async () => {
+    await render();
+    const profileBlock = fixture.nativeElement.querySelectorAll('.block')[1] as HTMLElement;
+    (profileBlock.querySelector('.primary') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    const offered = Array.from(
+      fixture.nativeElement.querySelectorAll('.locale-grid tbody tr') as NodeListOf<HTMLElement>,
+    ).map((row) => row.querySelector('td:nth-child(2)')?.textContent?.trim());
+
+    // Kazakh and Georgian are declared by the registry and live in no tier: no row, whatever the build holds.
+    expect(offered).toEqual(['Russian', 'Uzbek (Latin)', 'English']);
+  });
+
+  it('gains a row for a language the registry makes live, with no change to this screen', async () => {
+    seedPlatformLocalesForTesting({
+      ...REGISTRY_FIXTURE,
+      locales: REGISTRY_FIXTURE.locales.map((entry) =>
+        entry.tag === 'kk' ? { ...entry, tiers: ['CONTENT' as const] } : entry,
+      ),
+    });
+    try {
+      await render();
+      const profileBlock = fixture.nativeElement.querySelectorAll('.block')[1] as HTMLElement;
+      (profileBlock.querySelector('.primary') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      const rows = Array.from(
+        fixture.nativeElement.querySelectorAll('.locale-grid tbody tr') as NodeListOf<HTMLElement>,
+      ).map((row) => row.querySelector('td:nth-child(2)')?.textContent?.trim());
+
+      // The console has no key of its own for Kazakh, so the registry's name for it, in the console's language.
+      expect(rows).toEqual(['Russian', 'Uzbek (Latin)', 'English', 'Kazakh']);
+    } finally {
+      seedPlatformLocalesForTesting(REGISTRY_FIXTURE);
+    }
+  });
+
   it('corrects the profile: contact, media and the supported-locale set together', async () => {
     const updated: BrandView = {
       ...BRAND,
@@ -234,7 +274,7 @@ describe('BrandProfilePage', () => {
     phoneInput.value = '+998712009999';
     phoneInput.dispatchEvent(new Event('input'));
 
-    // KNOWN_LOCALES is [ru, uz-Latn, en], so English is the grid's third row.
+    // The registry's content tier is [ru, uz-Latn, en], so English is the grid's third row.
     const rows = fixture.nativeElement.querySelectorAll('.locale-grid tbody tr');
     (rows[2].querySelector('input[type="checkbox"]') as HTMLInputElement).click();
     fixture.detectChanges();

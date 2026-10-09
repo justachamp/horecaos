@@ -1,4 +1,3 @@
-import { Locale } from '../../core/i18n/i18n';
 import { LabelsByLocale, pickLabel } from '../../core/i18n/locale-labels';
 
 /**
@@ -15,16 +14,18 @@ import { LabelsByLocale, pickLabel } from '../../core/i18n/locale-labels';
  * What there is to fall back from is a blank one: the console asks for names
  * and an operator can still paste a space, and a row that renders as an empty
  * cell is worse than one that renders in the wrong language. Russian is the
- * last resort because it is the console's own default locale (ADR 0035).
+ * last resort because it is the console's own default locale (ADR 0035); `fallbackOrder` is the
+ * registry's order (`PlatformLocales.fallbackOrder()`, ADR 0149), not a list of three kept here.
  */
 export function localisedName(
-  locale: Locale,
+  locale: string,
   names: {
     readonly displayNameRu: string;
     readonly displayNameUz: string;
     readonly displayNameEn: string;
     readonly displayNames?: LabelsByLocale;
   },
+  fallbackOrder: readonly string[],
 ): string {
   const byLocale: LabelsByLocale = {
     ...(names.displayNames ?? {}),
@@ -36,7 +37,7 @@ export function localisedName(
       en: names.displayNameEn,
     }),
   };
-  return pickLabel(byLocale, locale, ['ru', 'uz-Latn', 'en']);
+  return pickLabel(byLocale, locale, fallbackOrder);
 }
 
 function nonBlank(labels: LabelsByLocale): LabelsByLocale {

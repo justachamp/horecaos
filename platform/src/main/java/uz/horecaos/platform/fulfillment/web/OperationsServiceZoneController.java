@@ -258,6 +258,43 @@ public class OperationsServiceZoneController {
         }
     }
 
+    @GetMapping("/outlines")
+    @RequiresCapability(value = Capability.DELIVERY_ZONE_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "The live outline of every zone this brand has (rows 3.2 and 7.10)",
+            description = "ADR 0145: what a map draws a zone from. Only each zone's ACTIVE version, "
+                    + "because a draft governs nothing and a map that drew one beside the live "
+                    + "zones would show a boundary the platform does not enforce; a zone with no "
+                    + "live version is absent, which is what it covers. Coordinates are named "
+                    + "latitude/longitude, never an array pair, and each ring is open (the first "
+                    + "corner is not repeated).")
+    public ResponseEntity<List<ZoneOutlineResponse>> outlines(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        return ResponseEntity.ok(zones.activeOutlines(tenantId, brandId).stream()
+                .map(ZoneOutlineResponse::of)
+                .toList());
+    }
+
+    @GetMapping("/{zoneId}/versions/{version}/outline")
+    @RequiresCapability(value = Capability.DELIVERY_ZONE_READ, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "One version's outline, in any status (rows 3.6, 3.6c)",
+            description = "ADR 0145 and ADR 0037: the geometry exactly as stored, so a draft can be "
+                    + "looked at on a map before it is activated and a stored zone can be opened in "
+                    + "the polygon editor to draft its next version. Answers not-found for a zone "
+                    + "this brand does not have -- another tenant's or another brand's zone id "
+                    + "included -- and for a version the zone never had.")
+    public ResponseEntity<ZoneOutlineResponse> outline(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID zoneId,
+            @PathVariable int version) {
+        try {
+            return ResponseEntity.ok(ZoneOutlineResponse.of(zones.versionOutline(tenantId, brandId, zoneId, version)));
+        } catch (ServiceZoneService.DeliveryResourceNotFoundException missing) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
+        }
+    }
+
     @PostMapping("/{zoneId}/versions/{version}/deactivate")
     @RequiresCapability(value = Capability.DELIVERY_ZONE_ACTIVATE, scope = ScopeType.BRAND, mutating = true)
     @Operation(
@@ -434,6 +471,51 @@ public class OperationsServiceZoneController {
                     row.createdAt(),
                     row.activatedAt(),
                     row.retiredAt());
+        }
+    }
+
+    /** A point on an outline. */
+    public record OutlinePointResponse(double latitude, double longitude) {}
+
+    /** One polygon: its outer ring, then any holes; every ring open. */
+    public record OutlinePolygonResponse(List<OutlinePointResponse> ring, List<List<OutlinePointResponse>> holes) {}
+
+    /**
+     * A zone version's geometry for a map.
+     *
+     * @param shapeKind {@code CIRCLE} or {@code POLYGON}: how it was authored, which decides whether
+     *                  the polygon editor offers it for edit as a corner list or as what it is
+     */
+    public record ZoneOutlineResponse(
+            UUID zoneId,
+            String code,
+            String role,
+            int version,
+            String status,
+            @Nullable String shapeKind,
+            List<OutlinePolygonResponse> polygons) {
+
+        static ZoneOutlineResponse of(ServiceZoneService.ZoneOutline outline) {
+            return new ZoneOutlineResponse(
+                    outline.zoneId(),
+                    outline.code(),
+                    outline.role().name(),
+                    outline.version(),
+                    outline.status(),
+                    outline.shapeKind(),
+                    outline.polygons().stream()
+                            .map(polygon -> new OutlinePolygonResponse(
+                                    points(polygon.ring()),
+                                    polygon.holes().stream()
+                                            .map(ZoneOutlineResponse::points)
+                                            .toList()))
+                            .toList());
+        }
+
+        private static List<OutlinePointResponse> points(List<ServiceZoneService.OutlinePoint> ring) {
+            return ring.stream()
+                    .map(point -> new OutlinePointResponse(point.latitude(), point.longitude()))
+                    .toList();
         }
     }
 

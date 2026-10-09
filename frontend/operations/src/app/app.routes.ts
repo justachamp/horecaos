@@ -3,6 +3,8 @@ import { Routes } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
 import { capabilityGuard } from './core/auth/capability.guard';
 import { messagesGuard } from './core/i18n/messages.guard';
+import { platformLocalesGuard } from './core/i18n/platform-locales';
+import { customersLandingGuard } from './features/customers/customers-landing.guard';
 import { NAV_ITEMS } from './shell/navigation';
 
 /**
@@ -44,6 +46,17 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/sign-in-page').then((m) => m.SignInPage),
   },
   {
+    // ADR 0148: an account the platform requires a second factor of, and that holds none,
+    // lands here from a refused sign-in. Outside the guard for the reason /login is: the
+    // platform revoked the session it had just issued, so there is none to guard on. What
+    // opens the page is the enrolment ticket held in memory (MfaTicket), and without one it
+    // says so and points back at /login.
+    path: 'enrol-second-factor',
+    canActivate: [messagesGuard('auth')],
+    loadComponent: () =>
+      import('./features/auth/enrol-second-factor-page').then((m) => m.EnrolSecondFactorPage),
+  },
+  {
     // ADR 0097: an invited owner setting up their account. Outside the guard
     // for the same reason as /login -- the visitor has no password yet.
     path: 'invite',
@@ -73,17 +86,22 @@ export const routes: Routes = [
     // for the same reason: `Shell`'s own children end in a catch-all
     // `redirectTo: 'today'` (`placeholderRoutes`'s own comment names this),
     // which would otherwise swallow this path if it were declared after.
-    // `DeviceShell` authenticates as `PlatformRole.KITCHEN_DEVICE` through
-    // its own ADR 0079 credential (`device/device-session.ts`) — never the
-    // staff Keycloak session `authGuard` checks, so this route carries none.
+    // `DeviceShell` authenticates as `PlatformRole.KITCHEN_DEVICE` (a touch
+    // KDS) or `PlatformRole.KITCHEN_VDU_DEVICE` (a wall display, ADR 0151)
+    // through its own ADR 0079 credential (`device/device-session.ts`) — never
+    // the staff Keycloak session `authGuard` checks, so this route carries none.
+    // A wall renders the shared `q-vdu-wall`, so the route loads the wallboard
+    // and kitchen message areas beside its own.
     path: 'device',
-    canActivate: [messagesGuard('device')],
+    canActivate: [messagesGuard('device', 'wallboard', 'kitchen')],
     loadComponent: () => import('./device/device-shell').then((m) => m.DeviceShell),
   },
   {
     path: '',
     loadComponent: () => import('./shell/shell').then((m) => m.Shell),
-    canActivate: [authGuard],
+    // The registry is read before anything beneath the shell draws (ADR 0149): the editors under it
+    // read the languages a brand may choose, a template needs and the catalog stores synchronously.
+    canActivate: [authGuard, platformLocalesGuard],
     canActivateChild: [capabilityGuard],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'today' },
@@ -112,7 +130,9 @@ export const routes: Routes = [
         // reason — nesting it there would put it a capability check away
         // from the person it exists for.
         path: 'my-profile',
-        canActivate: [messagesGuard('staff')],
+        // `auth` as well: the «Второй фактор» card shares its enrolment form (and its words,
+        // namespace `mfa`) with the page a refused sign-in sends an account to (ADR 0148).
+        canActivate: [messagesGuard('staff', 'auth')],
         loadComponent: () =>
           import('./features/staff/my-profile-page').then((m) => m.MyProfilePage),
       },
@@ -147,7 +167,7 @@ export const routes: Routes = [
             path: 'new',
             // The quote band reads `reports.provenance.*`, the dine-in picker and the party close read
             // `settings.locations.floorPlan.*`, and the aggregator branch reads `delivery.zones.*`.
-            canActivate: [messagesGuard('customers', 'delivery', 'reports', 'settings')],
+            canActivate: [messagesGuard('customers', 'delivery', 'reports', 'settings', 'map')],
             loadComponent: () =>
               import('./features/orders/new-order/new-order-page').then((m) => m.NewOrderPage),
           },
@@ -205,6 +225,12 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/customers/customers-shell').then((m) => m.CustomersShell),
         children: [
+          // ADR 0111: the call centre's callback queue. A literal segment, so it is declared before
+          // the empty-path `CustomersPage` child whose `:accountId` would otherwise swallow "leads".
+          {
+            path: 'leads',
+            loadComponent: () => import('./features/customers/leads-page').then((m) => m.LeadsPage),
+          },
           {
             path: 'segments',
             loadComponent: () =>
@@ -244,6 +270,8 @@ export const routes: Routes = [
           },
           {
             path: '',
+            // A brand manager holds the lead queue and not the customer list (ADR 0111): she lands on it.
+            canActivate: [customersLandingGuard],
             loadComponent: () =>
               import('./features/customers/customers-page').then((m) => m.CustomersPage),
             children: [
@@ -261,6 +289,8 @@ export const routes: Routes = [
               },
               {
                 path: ':accountId',
+                // `map` for the saved-address editor's map and search (row 5.2c, ADR 0145).
+                canActivate: [messagesGuard('map')],
                 loadComponent: () =>
                   import('./features/customers/customer-detail-pane').then(
                     (m) => m.CustomerDetailPane,
@@ -321,8 +351,9 @@ export const routes: Routes = [
             children: [
               {
                 path: ':locationId',
-                // `orders` for the floor plan's party close (`orders.party.*`, shared with the New order screen).
-                canActivate: [messagesGuard('staff', 'orders')],
+                // `orders` for the floor plan's party close (`orders.party.*`, shared with the New order screen);
+                // `map` for the branch's pin (row 10.2b, ADR 0145).
+                canActivate: [messagesGuard('staff', 'orders', 'map')],
                 loadComponent: () =>
                   import('./features/settings/locations/location-detail-pane').then(
                     (m) => m.LocationDetailPane,
@@ -425,10 +456,42 @@ export const routes: Routes = [
               ),
           },
           {
+            // ADR 0069: the chat assistant's switch, spend and first-answer wording, and (below it) the
+            // notes it answers from. Lazy, like every settings page: it is not in the initial bundle.
+            path: 'assistant',
+            children: [
+              {
+                path: '',
+                pathMatch: 'full',
+                loadComponent: () =>
+                  import('./features/settings/assistant/assistant-settings-page').then(
+                    (m) => m.AssistantSettingsPage,
+                  ),
+              },
+              {
+                // The notes the assistant answers from: written, versioned and retired here.
+                path: 'knowledge',
+                loadComponent: () =>
+                  import('./features/settings/assistant/assistant-knowledge-page').then(
+                    (m) => m.AssistantKnowledgePage,
+                  ),
+              },
+            ],
+          },
+          {
             path: 'integrations',
             loadComponent: () =>
               import('./features/settings/integrations/integrations-page').then(
                 (m) => m.IntegrationsPage,
+              ),
+          },
+          {
+            // 10.15 Storefront apps (ADR 0070): the tenant's own choice of storefront, with its
+            // own brand picker for the reason `terms` has one.
+            path: 'storefront-apps',
+            loadComponent: () =>
+              import('./features/settings/storefront-apps/storefront-apps-page').then(
+                (m) => m.StorefrontAppsPage,
               ),
           },
           {
@@ -574,6 +637,12 @@ export const routes: Routes = [
                 (m) => m.SubscriptionPage,
               ),
           },
+          {
+            // 8.6's prepaid half (ADR 0095): balances, top-up by card or invoice, the card on file.
+            path: 'wallet',
+            loadComponent: () =>
+              import('./features/finance/wallet/wallet-page').then((m) => m.WalletPage),
+          },
         ],
       },
       {
@@ -659,11 +728,11 @@ export const routes: Routes = [
               },
             ],
           },
-          // 6.5 Automations (gap-map row 6.5, ADR 0044 Triggers): unattended
-          // BIRTHDAY, INACTIVITY and CART_ABANDONMENT rules through the new
-          // `AutomationRuleController` — `q-rule-list`'s first live
-          // consumer (row `X.25`). CASHBACK_CHANGE and LATE_ORDER_APOLOGY
-          // are not offered — see `AutomationTriggerType`'s own doc.
+          // 6.5 Automations (gap-map row 6.5, ADR 0044 Triggers, ADR 0112): unattended
+          // BIRTHDAY, INACTIVITY, CART_ABANDONMENT, CASHBACK_CHANGE and
+          // LATE_ORDER_APOLOGY rules through `AutomationRuleController` —
+          // `q-rule-list`'s first live consumer (row `X.25`). See
+          // `AutomationTriggerType`'s own doc for what an apology is and is not.
           {
             path: 'automations',
             loadComponent: () =>
@@ -908,7 +977,10 @@ export const routes: Routes = [
           // heatmap and today's orders as pins) stay deferred with X.4 and
           // are named as such on the page itself, not silently absent.
           {
+            // ADR 0145: the order-density view and today's orders as pins. `delivery` holds the pins' own
+            // words and the zone names' vocabulary; `map` holds the map's.
             path: 'geography',
+            canActivate: [messagesGuard('delivery', 'map')],
             loadComponent: () =>
               import('./features/reports/geography-page').then((m) => m.GeographyPage),
           },
@@ -998,17 +1070,22 @@ export const routes: Routes = [
           { path: '', pathMatch: 'full', redirectTo: 'dispatch' },
           {
             path: 'dispatch',
-            canActivate: [messagesGuard('couriers', 'orders')],
+            // `map` for the map pane (row 3.1, ADR 0145).
+            canActivate: [messagesGuard('couriers', 'orders', 'map')],
             loadComponent: () =>
               import('./features/delivery/dispatch-board-page').then((m) => m.DispatchBoardPage),
           },
           {
+            // ADR 0145, row 3.2: the couriers on a map.
             path: 'map',
+            canActivate: [messagesGuard('map')],
             loadComponent: () =>
               import('./features/delivery/live-map-page').then((m) => m.LiveMapPage),
           },
           {
+            // ADR 0145: zones are drawn on a map and activated after a look at it.
             path: 'zones',
+            canActivate: [messagesGuard('map')],
             loadComponent: () =>
               import('./features/delivery/delivery-zones-page').then((m) => m.DeliveryZonesPage),
           },
@@ -1017,6 +1094,7 @@ export const routes: Routes = [
             // its own top-level tab (delivery-shell.ts's own doc names this
             // as sharing the 3.6 shell).
             path: 'zones/import',
+            canActivate: [messagesGuard('map')],
             loadComponent: () =>
               import('./features/delivery/geozone-batch-import-page').then(
                 (m) => m.GeozoneBatchImportPage,

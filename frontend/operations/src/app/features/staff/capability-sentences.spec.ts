@@ -16,6 +16,8 @@ import { CAPABILITY_AREAS, CAPABILITY_SENTENCES } from './capability-sentences';
 const TENANT_VISIBLE_CAPABILITY_CODES = [
   'approval.decide',
   'approval.policy.manage',
+  'assistant.knowledge.manage',
+  'assistant.read',
   'audience.export',
   'audience.read',
   'audit.read',
@@ -68,7 +70,10 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
   'dinein.session.read',
   'fiscal.document.read',
   'fiscal.document.resolve',
+  'geo.lookup',
   'iam.grant.manage',
+  'iam.staff.mfa.read',
+  'iam.staff.mfa.reset',
   'integration.binding.activate',
   'integration.failure.read',
   'integration.failure.retry',
@@ -77,6 +82,7 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
   'integration.telegram-staff-link.issue',
   'inventory.adjust',
   'inventory.read',
+  'kitchen.display.read',
   'kitchen.station.manage',
   'kitchen.ticket.advance',
   'kitchen.ticket.read',
@@ -111,6 +117,7 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
   'order.approve',
   'order.cancel',
   'order.outcome-reason.manage',
+  'order.points.reveal',
   'order.read',
   'order.state.override',
   'partner.invoice.manage',
@@ -160,6 +167,14 @@ describe('CAPABILITY_SENTENCES', () => {
     expect(CAPABILITY_SENTENCES['staff.emergency-contact.read'].ru).toContain('записывается');
   });
 
+  it('describes the two chat-assistant capabilities (ADR 0069) as what a person can do, under their own heading', () => {
+    expect(CAPABILITY_SENTENCES['assistant.read'].area).toBe('assistant');
+    expect(CAPABILITY_SENTENCES['assistant.knowledge.manage'].area).toBe('assistant');
+    expect(CAPABILITY_SENTENCES['assistant.read'].en).toContain('what an answer was based on');
+    expect(CAPABILITY_SENTENCES['assistant.knowledge.manage'].ru).toContain('заметки');
+    expect(CAPABILITY_AREAS['assistant']['uz-Latn']).toBe('Chat yordamchisi');
+  });
+
   it('has a build-time-equivalent entry for every capability a tenant-visible job can carry', () => {
     const missing = TENANT_VISIBLE_CAPABILITY_CODES.filter(
       (code) => !(code in CAPABILITY_SENTENCES),
@@ -170,7 +185,7 @@ describe('CAPABILITY_SENTENCES', () => {
   it('fills in all three locales, non-blank, for every entry', () => {
     for (const [code, sentence] of Object.entries(CAPABILITY_SENTENCES)) {
       expect(sentence.ru.trim(), `${code}.ru`).not.toBe('');
-      expect(sentence.uz.trim(), `${code}.uz`).not.toBe('');
+      expect(sentence['uz-Latn'].trim(), `${code}.uz-Latn`).not.toBe('');
       expect(sentence.en.trim(), `${code}.en`).not.toBe('');
       expect(sentence.area.trim(), `${code}.area`).not.toBe('');
     }
@@ -179,7 +194,7 @@ describe('CAPABILITY_SENTENCES', () => {
   it('never carries a dotted code as a sentence', () => {
     for (const [code, sentence] of Object.entries(CAPABILITY_SENTENCES)) {
       expect(sentence.ru, code).not.toBe(code);
-      expect(sentence.uz, code).not.toBe(code);
+      expect(sentence['uz-Latn'], code).not.toBe(code);
       expect(sentence.en, code).not.toBe(code);
     }
   });
@@ -189,7 +204,7 @@ describe('CAPABILITY_SENTENCES', () => {
       const area = CAPABILITY_AREAS[sentence.area];
       expect(area, `${code}'s area "${sentence.area}"`).toBeDefined();
       expect(area.ru.trim()).not.toBe('');
-      expect(area.uz.trim()).not.toBe('');
+      expect(area['uz-Latn'].trim()).not.toBe('');
       expect(area.en.trim()).not.toBe('');
     }
   });

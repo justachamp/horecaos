@@ -106,6 +106,9 @@ class PartnerFiscalizationBridgeTests {
         jdbc.sql("DELETE FROM payments.payment_intents").update();
         jdbc.sql("DELETE FROM integration.bindings").update();
         jdbc.sql("DELETE FROM integration.installations").update();
+        // ADR 0096: HorecaOS's own e-invoicing accounts name an approved environment too.
+        jdbc.sql("DELETE FROM commercial.statement_einvoices").update();
+        jdbc.sql("DELETE FROM commercial.einvoicing_installations").update();
         jdbc.sql("DELETE FROM integration.provider_environments").update();
         jdbc.sql("DELETE FROM ordering.orders").update();
         jdbc.sql("DELETE FROM ordering.carts").update();

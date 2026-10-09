@@ -100,6 +100,11 @@ public enum PlatformRole {
                     // people of that branch alone; the self-service capability is every job's.
                     STAFF_PROFILE_READ,
                     STAFF_PROFILE_MANAGE,
+                    // ADR 0148: whether a person holds a second factor, and removing it when
+                    // the device is lost. A tenant owner's own reset is refused here and done
+                    // by platform support inside a support session (StaffMfaService).
+                    IAM_STAFF_MFA_READ,
+                    IAM_STAFF_MFA_RESET,
                     STAFF_EMERGENCY_CONTACT_READ,
                     STAFF_SELF_MANAGE,
                     // ADR 0027: which of this tenant's actions need a second signature,
@@ -266,6 +271,7 @@ public enum PlatformRole {
                     DELIVERY_MANUAL_ASSIGN,
                     SHIPMENT_CANCEL,
                     DELIVERY_ZONE_READ,
+                    GEO_LOOKUP,
                     DELIVERY_ZONE_MANAGE,
                     DELIVERY_ZONE_ACTIVATE,
                     DELIVERY_TARIFF_READ,
@@ -288,6 +294,7 @@ public enum PlatformRole {
                     COURIER_READ,
                     KITCHEN_STATION_MANAGE,
                     KITCHEN_TICKET_READ,
+                    KITCHEN_DISPLAY_READ,
                     KITCHEN_TICKET_ADVANCE,
                     KITCHEN_TICKET_RECALL,
                     KITCHEN_TICKET_RELEASE,
@@ -308,6 +315,9 @@ public enum PlatformRole {
                     MARKETPLACE_LIVENESS_READ,
                     CUSTOMER_READ,
                     CUSTOMER_MANAGE,
+                    // ADR 0111: the call centre's callback queue, and the voice journal beside the card.
+                    CUSTOMER_LEAD_READ,
+                    CUSTOMER_LEAD_MANAGE,
                     // Row 1.3a: CUSTOMER_MANAGE already covers everything
                     // CUSTOMER_CREATE grants on its own; held explicitly here
                     // too only so CustomerController#createManually's
@@ -332,6 +342,8 @@ public enum PlatformRole {
                     INTEGRATION_FAILURE_READ,
                     INTEGRATION_FAILURE_RETRY,
                     PARTNER_API_CLIENT_MANAGE,
+                    // ADR 0070: choosing which registered storefront may serve a brand.
+                    STOREFRONT_APP_AUTHORISE,
                     POS_SYNC_READ,
                     POS_SYNC_EXECUTE,
                     POS_SYNC_APPLY,
@@ -341,6 +353,11 @@ public enum PlatformRole {
                     NOTIFICATION_TEMPLATE_AUTHOR,
                     NOTIFICATION_TEMPLATE_ACTIVATE,
                     NOTIFICATION_ROUTING_MANAGE,
+                    // ADR 0069: the answers the grounded assistant may give in the tenant's
+                    // name are tenant content like the menu (CATALOG_AUTHOR above), held by
+                    // the same roles. Reading its usage and spend rides the same pair.
+                    ASSISTANT_READ,
+                    ASSISTANT_KNOWLEDGE_MANAGE,
                     NOTIFICATION_READ,
                     NOTIFICATION_RETRY,
                     COMMERCIAL_SUBSCRIPTION_MANAGE,
@@ -353,6 +370,9 @@ public enum PlatformRole {
                     // ADR 0095: the owner's own wallet -- both balances, the ledger,
                     // live bonus grants and each statement's paid and due amounts.
                     COMMERCIAL_WALLET_READ,
+                    // ADR 0095: paying HorecaOS in advance, and the card kept for it.
+                    COMMERCIAL_WALLET_TOPUP,
+                    COMMERCIAL_CARD_MANAGE,
                     IAM_GRANT_MANAGE,
                     // ADR 0081: who from HorecaOS entered this account, and why.
                     SUPPORT_SESSION_READ,
@@ -378,6 +398,11 @@ public enum PlatformRole {
                     // people of that branch alone; the self-service capability is every job's.
                     STAFF_PROFILE_READ,
                     STAFF_PROFILE_MANAGE,
+                    // ADR 0148: whether a person holds a second factor, and removing it when
+                    // the device is lost. A tenant owner's own reset is refused here and done
+                    // by platform support inside a support session (StaffMfaService).
+                    IAM_STAFF_MFA_READ,
+                    IAM_STAFF_MFA_RESET,
                     STAFF_EMERGENCY_CONTACT_READ,
                     STAFF_SELF_MANAGE,
                     // ADR 0044: authoring campaigns and reading audiences. Export is
@@ -390,6 +415,10 @@ public enum PlatformRole {
                     // ADR 0071: a brand's own order reviews, the same class of read.
                     REVIEW_READ,
                     CAMPAIGN_AUTHOR,
+                    // ADR 0112: the offers a campaign may point at, and a quieter contact
+                    // policy. Beside authoring, because both are ways of composing one.
+                    MARKETING_OFFER_MANAGE,
+                    MARKETING_CONTACT_POLICY_MANAGE,
                     // ADR 0046: correcting a balance by hand, which support cannot do.
                     LOYALTY_READ,
                     LOYALTY_ADJUST,
@@ -476,6 +505,7 @@ public enum PlatformRole {
                     DELIVERY_MANUAL_ASSIGN,
                     SHIPMENT_CANCEL,
                     DELIVERY_ZONE_READ,
+                    GEO_LOOKUP,
                     DELIVERY_ZONE_MANAGE,
                     DELIVERY_ZONE_ACTIVATE,
                     DELIVERY_TARIFF_READ,
@@ -497,6 +527,7 @@ public enum PlatformRole {
                     COURIER_READ,
                     KITCHEN_STATION_MANAGE,
                     KITCHEN_TICKET_READ,
+                    KITCHEN_DISPLAY_READ,
                     KITCHEN_TICKET_ADVANCE,
                     KITCHEN_TICKET_RECALL,
                     KITCHEN_TICKET_RELEASE,
@@ -517,6 +548,9 @@ public enum PlatformRole {
                     MARKETPLACE_LIVENESS_READ,
                     CUSTOMER_READ,
                     CUSTOMER_MANAGE,
+                    // ADR 0111: the call centre's callback queue, and the voice journal beside the card.
+                    CUSTOMER_LEAD_READ,
+                    CUSTOMER_LEAD_MANAGE,
                     // Row 1.3a: CUSTOMER_MANAGE already covers everything
                     // CUSTOMER_CREATE grants on its own; held explicitly here
                     // too only so CustomerController#createManually's
@@ -541,6 +575,8 @@ public enum PlatformRole {
                     INTEGRATION_FAILURE_READ,
                     INTEGRATION_FAILURE_RETRY,
                     PARTNER_API_CLIENT_MANAGE,
+                    // ADR 0070: choosing which registered storefront may serve a brand.
+                    STOREFRONT_APP_AUTHORISE,
                     POS_SYNC_READ,
                     POS_SYNC_EXECUTE,
                     POS_SYNC_APPLY,
@@ -550,6 +586,11 @@ public enum PlatformRole {
                     NOTIFICATION_TEMPLATE_AUTHOR,
                     NOTIFICATION_TEMPLATE_ACTIVATE,
                     NOTIFICATION_ROUTING_MANAGE,
+                    // ADR 0069: the answers the grounded assistant may give in the tenant's
+                    // name are tenant content like the menu (CATALOG_AUTHOR above), held by
+                    // the same roles. Reading its usage and spend rides the same pair.
+                    ASSISTANT_READ,
+                    ASSISTANT_KNOWLEDGE_MANAGE,
                     NOTIFICATION_READ,
                     NOTIFICATION_RETRY,
                     COMMERCIAL_PLAN_READ,
@@ -637,6 +678,9 @@ public enum PlatformRole {
                     COMMERCIAL_ARREARS_READ,
                     // ADR 0095: finance is who answers "why is this still due".
                     COMMERCIAL_WALLET_READ,
+                    // ADR 0095: finance is also who puts money in, and who keeps the card for it.
+                    COMMERCIAL_WALLET_TOPUP,
+                    COMMERCIAL_CARD_MANAGE,
                     REPORTING_READ,
                     // ADR 0043/ADR 0029, wave P28: finance is who takes a figure out of
                     // Reports for a statement or a filing. The PII column group stays
@@ -652,6 +696,13 @@ public enum PlatformRole {
             "brand-manager",
             ScopeType.BRAND,
             EnumSet.of(
+                    // ADR 0103: the brand's own team. The same capability the owner holds, at the
+                    // brand: GrantManagementService.requireGrantable refuses a job this bundle does
+                    // not hold in full, and refuses any job broader than the brand, so a brand
+                    // manager reaches her brand's people and no other. Held on top of the routes
+                    // that name a brand in the path -- the tenant-wide grants routes still need the
+                    // capability at TENANT scope.
+                    IAM_GRANT_MANAGE,
                     // ADR 0139: a brand manager sees the people of their brand and edits none of
                     // them -- changing a person is the branch manager's and above.
                     STAFF_PROFILE_READ,
@@ -666,11 +717,17 @@ public enum PlatformRole {
                     // signal, the same class of read as the referral line above it.
                     REVIEW_READ,
                     CAMPAIGN_AUTHOR,
+                    // ADR 0112: a brand manager's own offers and contact policy.
+                    MARKETING_OFFER_MANAGE,
+                    MARKETING_CONTACT_POLICY_MANAGE,
                     // T18: minting the brand's own trackable acquisition links,
                     // beside the campaign-authoring power immediately above it.
                     MARKETING_LINK_MANAGE,
                     // ADR 0042: delivery cost is a brand's own operating number.
                     DELIVERY_COST_READ,
+                    // ADR 0111: a brand's call-centre queue -- who works it, which branch gets which lead.
+                    CUSTOMER_LEAD_READ,
+                    CUSTOMER_LEAD_MANAGE,
                     BRAND_READ,
                     LOCATION_READ,
                     CATALOG_READ,
@@ -692,6 +749,7 @@ public enum PlatformRole {
                     // person who drew a polygon is not the only one who ever reads it.
                     // The brand manager draws; the tenant decides it governs sales.
                     DELIVERY_ZONE_READ,
+                    GEO_LOOKUP,
                     DELIVERY_ZONE_MANAGE,
                     DELIVERY_TARIFF_READ,
                     DELIVERY_TARIFF_MANAGE,
@@ -708,6 +766,11 @@ public enum PlatformRole {
                     MARKETPLACE_AVAILABILITY_PUSH,
                     NOTIFICATION_TEMPLATE_AUTHOR,
                     NOTIFICATION_ROUTING_MANAGE,
+                    // ADR 0069: the answers the grounded assistant may give in the tenant's
+                    // name are tenant content like the menu (CATALOG_AUTHOR above), held by
+                    // the same roles. Reading its usage and spend rides the same pair.
+                    ASSISTANT_READ,
+                    ASSISTANT_KNOWLEDGE_MANAGE,
                     REPORTING_READ,
                     // T14/ADR 0134: which products to promote, discount or take off
                     // the menu is exactly this role's own call (CATALOG_AUTHOR,
@@ -722,6 +785,11 @@ public enum PlatformRole {
             "location-manager",
             ScopeType.LOCATION,
             EnumSet.of(
+                    // ADR 0103: "the Chilonzor manager sees Chilonzor's team" and hands one of them
+                    // a job. Held at the branch only: the grants routes that name a location in the
+                    // path authorise against it, the tenant-wide ones still need TENANT scope, and
+                    // requireGrantable bounds what she can confer to what this bundle holds in full.
+                    IAM_GRANT_MANAGE,
                     // ADR 0139: the branch's own people. The routes at LOCATION scope refuse a
                     // change to anyone with a job outside this branch, and answer "no such
                     // member" for a person of a sibling branch.
@@ -754,6 +822,7 @@ public enum PlatformRole {
                     ORDER_APPROVE,
                     ORDER_ADVANCE,
                     ORDER_PLACE,
+                    GEO_LOOKUP,
                     ORDER_AMEND,
                     ORDER_CANCEL,
                     // ADR 0039: bulk-applying ORDER_ADVANCE or ORDER_CANCEL to a
@@ -767,6 +836,7 @@ public enum PlatformRole {
                     // undoes or delays something the line has already reported.
                     KITCHEN_STATION_MANAGE,
                     KITCHEN_TICKET_READ,
+                    KITCHEN_DISPLAY_READ,
                     KITCHEN_TICKET_ADVANCE,
                     KITCHEN_TICKET_RECALL,
                     KITCHEN_TICKET_RELEASE,
@@ -795,6 +865,9 @@ public enum PlatformRole {
                     COURIER_READ,
                     COURIER_POSITION_READ,
                     COURIER_DUTY_MANAGE,
+                    // ADR 0145, row 7.10a: the day's delivery orders as points. Held beside the
+                    // live courier map and the address reveal, which this is a bulk form of.
+                    ORDER_POINTS_REVEAL,
                     CUSTOMER_READ,
                     // Row 1.3a: create-on-miss in the New order screen's
                     // customer pane 403'd for this role until this grant —
@@ -804,6 +877,10 @@ public enum PlatformRole {
                     // a caller nobody has seen before.
                     CUSTOMER_CREATE,
                     CUSTOMER_PII_REVEAL,
+                    // ADR 0111: the callbacks assigned to her branch -- and the number to ring them on,
+                    // which is why this bundle and not the floor's holds the pair.
+                    CUSTOMER_LEAD_READ,
+                    CUSTOMER_LEAD_MANAGE,
                     // ADR 0059 stage 2: the operator inbox — see
                     // Capability.CONVERSATION_INBOX_MANAGE's own doc for which roles hold
                     // this and why, including the scope caveat that applies to this role
@@ -842,6 +919,7 @@ public enum PlatformRole {
                     ORDER_APPROVE,
                     ORDER_ADVANCE,
                     ORDER_PLACE,
+                    GEO_LOOKUP,
                     // ADR 0039: taking a phone order starts with finding the caller.
                     // The New order screen's customer pane looks a returning customer
                     // up by phone before ORDER_PLACE ever creates anything, so the same
@@ -860,6 +938,7 @@ public enum PlatformRole {
                     // readiness the pass may have acted on, and a release decides when
                     // a kitchen cooks, so neither belongs on this bundle.
                     KITCHEN_TICKET_READ,
+                    KITCHEN_DISPLAY_READ,
                     KITCHEN_TICKET_ADVANCE,
                     // ADR 0047: the waiter and the host stand. Session manage stops
                     // short of closing a table that still owes money.
@@ -883,8 +962,9 @@ public enum PlatformRole {
     /**
      * ADR 0079: the whole of what a kitchen display device may do — reading
      * its branch's board and starting or readying its own lines. Not a
-     * person's bundle: no staff member is ever granted this role, and no
-     * device is ever granted any other. A strict subset of {@link
+     * person's bundle: no staff member is ever granted this role, and each
+     * device class is granted exactly one role (ADR 0151: a touch KDS this one,
+     * a wall display {@link #KITCHEN_VDU_DEVICE}), never a second. A strict subset of {@link
      * #LOCATION_STAFF}'s own two kitchen capabilities, which is deliberate —
      * a device holds nothing {@code location-staff} does not already hold,
      * and holds far less of it. Every other kitchen power ({@code
@@ -895,7 +975,23 @@ public enum PlatformRole {
      * could do what a manager can do is the exact failure ADR 0079 exists to
      * end, wearing a different name.
      */
-    KITCHEN_DEVICE("kitchen-device", ScopeType.LOCATION, EnumSet.of(KITCHEN_TICKET_READ, KITCHEN_TICKET_ADVANCE)),
+    KITCHEN_DEVICE(
+            "kitchen-device",
+            ScopeType.LOCATION,
+            EnumSet.of(KITCHEN_TICKET_READ, KITCHEN_DISPLAY_READ, KITCHEN_TICKET_ADVANCE)),
+
+    /**
+     * ADR 0151: the whole of what a kitchen wall display (a VDU) may do — read the VDU projection
+     * and nothing else. Exactly one capability, {@code kitchen.display.read}: it cannot call the
+     * touch board's read ({@code kitchen.ticket.read}), a single ticket, the station list, the
+     * lateness policy under {@code order.read} or the push stream, and it cannot advance anything,
+     * because a screen mounted above the pass is not one a passing cook or a customer should be able
+     * to act from. The lateness policy the wall colours its tickets from rides in the projection
+     * itself. Not a person's bundle and not offered by {@link TenantRoleCatalog}: only {@code
+     * KitchenDeviceService.approve} grants it, as the fixed consequence of approving an enrolment as
+     * {@code KITCHEN_VDU}, and never to a staff member.
+     */
+    KITCHEN_VDU_DEVICE("kitchen-vdu-device", ScopeType.LOCATION, EnumSet.of(KITCHEN_DISPLAY_READ)),
 
     /**
      * ADR 0081: what a HorecaOS support person may see inside one tenant during
@@ -908,6 +1004,8 @@ public enum PlatformRole {
             ScopeType.TENANT,
             EnumSet.of(
                     SUPPORT_SESSION_READ,
+                    // ADR 0148: whether a person holds a second factor.
+                    IAM_STAFF_MFA_READ,
                     TENANT_READ,
                     BRAND_READ,
                     LOCATION_READ,
@@ -918,6 +1016,7 @@ public enum PlatformRole {
                     ORDER_READ,
                     CUSTOMER_READ,
                     KITCHEN_TICKET_READ,
+                    KITCHEN_DISPLAY_READ,
                     DELIVERY_PLAN_READ,
                     FISCAL_DOCUMENT_READ,
                     POS_EXPORT_READ,
@@ -940,6 +1039,10 @@ public enum PlatformRole {
             ScopeType.TENANT,
             EnumSet.of(
                     SUPPORT_SESSION_READ,
+                    // ADR 0148: a lost phone is reset by an administrator, and a tenant
+                    // owner's own phone by platform support -- which is this session.
+                    IAM_STAFF_MFA_READ,
+                    IAM_STAFF_MFA_RESET,
                     TENANT_READ,
                     BRAND_READ,
                     LOCATION_READ,
@@ -950,6 +1053,7 @@ public enum PlatformRole {
                     ORDER_READ,
                     CUSTOMER_READ,
                     KITCHEN_TICKET_READ,
+                    KITCHEN_DISPLAY_READ,
                     DELIVERY_PLAN_READ,
                     FISCAL_DOCUMENT_READ,
                     POS_EXPORT_READ,
@@ -1004,6 +1108,9 @@ public enum PlatformRole {
                     // it a deliberate, audited grant rather than a standing one.
                     COURIER_POSITION_READ,
                     COURIER_DUTY_MANAGE,
+                    // ADR 0145, row 7.10a: where the day's delivery orders are going, beside where
+                    // the couriers are -- audited, with a purpose, and holding no customer identity.
+                    ORDER_POINTS_REVEAL,
                     // T18: the operational blast a dispatcher sends the roster it
                     // already runs -- shift change, weather, a route closure.
                     COURIER_BROADCAST_MANAGE,
@@ -1041,6 +1148,8 @@ public enum PlatformRole {
                     NOTIFICATION_RETRY,
                     CUSTOMER_READ,
                     CUSTOMER_MANAGE,
+                    // ADR 0111: support reads the queue to answer "did anyone call her back"; it never works it.
+                    CUSTOMER_LEAD_READ,
                     // Row 1.3a: see TENANT_OWNER's identical grant above for why.
                     CUSTOMER_CREATE,
                     CUSTOMER_PII_REVEAL));
@@ -1089,6 +1198,25 @@ public enum PlatformRole {
      */
     public boolean supportSessionOnly() {
         return this == SUPPORT_SESSION_VIEW || this == SUPPORT_SESSION_ASSIST;
+    }
+
+    /**
+     * ADR 0148: the roles whose holders can reveal customer data, export it and change who
+     * may -- the owner, the administrator, finance and the brand manager -- and so the roles a
+     * tenant's {@code SENSITIVE_ROLES} second-factor setting names.
+     *
+     * <p>Code-owned, like the bundles themselves: neither this flag nor the setting names a
+     * person. A cashier on a shared terminal is outside it on purpose, and so are the
+     * support-session roles, whose holders are platform staff and meet the platform rule
+     * instead.
+     */
+    public boolean mfaSensitive() {
+        return this == TENANT_OWNER || this == TENANT_ADMIN || this == TENANT_FINANCE || this == BRAND_MANAGER;
+    }
+
+    /** Whether the role with this code is {@link #mfaSensitive()}; an unknown code is not. */
+    public static boolean isMfaSensitive(String roleCode) {
+        return find(roleCode).map(PlatformRole::mfaSensitive).orElse(false);
     }
 
     public static Optional<PlatformRole> find(String code) {

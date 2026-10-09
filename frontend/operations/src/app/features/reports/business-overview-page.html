@@ -176,6 +176,11 @@
               [centerLabel]="paymentMixTotalDisplay()"
             />
           }
+          <q-payment-mix-note
+            [provisional]="paymentMixProvisional()"
+            [openQuestion]="paymentMixOpenQuestion()"
+            [notCutByChannelOrFulfilment]="paymentMixNotCutByFilter()"
+          />
         </div>
       </div>
 

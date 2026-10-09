@@ -400,6 +400,72 @@ public class JdbcServiceZoneStore {
                 .list();
     }
 
+    /**
+     * One version's stored geometry as GeoJSON, for the map (row {@code 3.6}, ADR 0145).
+     *
+     * <p>{@code ST_AsGeoJSON} writes {@code [longitude, latitude]}; the service reads it that way
+     * and hands the console named {@code latitude}/{@code longitude} fields, so no client has to
+     * know which element is which. Tenant- and brand-scoped in the statement: a zone id is a UUID
+     * a caller may have been handed anywhere, and a version number only means something beside its
+     * own zone. Seven decimals is about a centimetre, which is the precision the column was
+     * written with and more than a screen can draw.
+     */
+    public Optional<OutlineRow> outline(UUID tenantId, UUID brandId, UUID zoneId, int version) {
+        return jdbc.sql("""
+                SELECT z.id AS zone_id, z.code, z.zone_role, v.version, v.status,
+                       v.authoring_shape ->> 'kind' AS shape_kind,
+                       ST_AsGeoJSON(v.area::geometry, 7) AS geojson
+                  FROM fulfillment.service_zone_versions v
+                  JOIN fulfillment.service_zones z
+                    ON z.tenant_id = v.tenant_id AND z.id = v.zone_id
+                 WHERE v.tenant_id = :tenantId AND z.brand_id = :brandId
+                   AND v.zone_id = :zoneId AND v.version = :version
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("zoneId", zoneId)
+                .param("version", version)
+                .query(JdbcServiceZoneStore::outlineRow)
+                .optional();
+    }
+
+    /**
+     * The live version of every zone this brand has, geometry included (rows {@code 3.2} and
+     * {@code 7.10}: the outlines a courier map and a density view are drawn over).
+     *
+     * <p>Only {@code ACTIVE} versions: a draft is not governing anything, and a map that drew one
+     * beside the live zones would show an operator a boundary the platform does not enforce. A
+     * zone with no live version is simply absent, which on a map reads as "covers nothing" and is
+     * exactly what it is.
+     */
+    public List<OutlineRow> activeOutlines(UUID tenantId, UUID brandId) {
+        return jdbc.sql("""
+                SELECT z.id AS zone_id, z.code, z.zone_role, v.version, v.status,
+                       v.authoring_shape ->> 'kind' AS shape_kind,
+                       ST_AsGeoJSON(v.area::geometry, 7) AS geojson
+                  FROM fulfillment.service_zone_versions v
+                  JOIN fulfillment.service_zones z
+                    ON z.tenant_id = v.tenant_id AND z.id = v.zone_id
+                 WHERE v.tenant_id = :tenantId AND z.brand_id = :brandId AND v.status = 'ACTIVE'
+                 ORDER BY z.code
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .query(JdbcServiceZoneStore::outlineRow)
+                .list();
+    }
+
+    private static OutlineRow outlineRow(java.sql.ResultSet row, int number) throws java.sql.SQLException {
+        return new OutlineRow(
+                row.getObject("zone_id", UUID.class),
+                row.getString("code"),
+                ZoneRole.valueOf(row.getString("zone_role")),
+                row.getInt("version"),
+                row.getString("status"),
+                row.getString("shape_kind"),
+                row.getString("geojson"));
+    }
+
     private static @Nullable Instant instantOf(@Nullable OffsetDateTime value) {
         return value == null ? null : value.toInstant();
     }
@@ -730,6 +796,19 @@ public class JdbcServiceZoneStore {
             @Nullable Instant createdAt,
             @Nullable Instant activatedAt,
             @Nullable Instant retiredAt) {}
+
+    /**
+     * A stored version's geometry as PostGIS wrote it: GeoJSON, {@code [longitude, latitude]}.
+     * The service turns it into named coordinates; nothing outside this module sees the raw form.
+     */
+    public record OutlineRow(
+            UUID zoneId,
+            String code,
+            ZoneRole role,
+            int version,
+            String status,
+            @Nullable String shapeKind,
+            String geoJson) {}
 
     /**
      * A location as this module reads it.

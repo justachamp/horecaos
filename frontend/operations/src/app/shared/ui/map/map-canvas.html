@@ -1,0 +1,34 @@
+<div class="q-map" data-testid="q-map-canvas">
+  <div
+    #surface
+    class="q-map__surface"
+    role="application"
+    [attr.aria-label]="label() ?? ('ui.map.label' | t)"
+    [style.--q-map-height]="height() + 'px'"
+    [hidden]="state() !== 'ready'"
+    data-testid="q-map-surface"
+  ></div>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-map__status q-caption" role="status" data-testid="q-map-loading">
+        {{ 'ui.map.loading' | t }}
+      </p>
+    }
+    @case ('unavailable') {
+      <q-inline-alert severity="info" [messageKey]="unavailableKey()">
+        @if (canRetry()) {
+          <button
+            qInlineAlertActions
+            type="button"
+            class="q-map__retry q-caption"
+            (click)="retry()"
+            data-testid="q-map-retry"
+          >
+            {{ 'ui.map.retry' | t }}
+          </button>
+        }
+      </q-inline-alert>
+    }
+  }
+</div>

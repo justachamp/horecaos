@@ -102,6 +102,41 @@ describe('AuthService', () => {
     expect(auth.accessToken()).toBe(ACCESS_TOKEN_WITH_CLAIMS);
   });
 
+  it('sends the one-time code as otp only when there is one (ADR 0148)', async () => {
+    const without = auth.signIn('aziza', 'correct horse');
+    const first = http.expectOne(url(SIGN_IN_PATH));
+    expect(first.request.body).toEqual({ username: 'aziza', password: 'correct horse' });
+    first.flush(session());
+    await without;
+
+    const withCode = auth.signIn('aziza', 'correct horse', '482913');
+    const second = http.expectOne(url(SIGN_IN_PATH));
+    expect(second.request.body).toEqual({
+      username: 'aziza',
+      password: 'correct horse',
+      otp: '482913',
+    });
+    second.flush(session());
+    await withCode;
+  });
+
+  it('reports whether the platform offers a second factor', async () => {
+    const offered = auth.signIn('aziza', 'correct horse');
+    http.expectOne(url(SIGN_IN_PATH)).flush(session({ mfaEnrolmentOffered: true }));
+    expect(await offered).toBe(true);
+
+    const plain = auth.signIn('aziza', 'correct horse');
+    http.expectOne(url(SIGN_IN_PATH)).flush(session());
+    expect(await plain).toBe(false);
+  });
+
+  it('adopts the session an enrolment from a ticket hands back, without a second password check', () => {
+    auth.adoptSession(session());
+
+    expect(auth.status()).toBe('signed-in');
+    expect(auth.displayName()).toBe('aziza');
+  });
+
   it('reads the display name from the fresh access token, never a separate call', async () => {
     const promise = auth.signIn('aziza', 'correct horse');
     http.expectOne(url(SIGN_IN_PATH)).flush(session());
@@ -284,7 +319,9 @@ describe('AuthService bootstrap from a reload', () => {
 
     const status = auth.initialise();
     const request = http.expectOne(url(REFRESH_PATH));
-    expect(request.request.body).toEqual({ refreshToken: 'a-refresh-token-from-before-the-reload' });
+    expect(request.request.body).toEqual({
+      refreshToken: 'a-refresh-token-from-before-the-reload',
+    });
     request.flush(session());
 
     expect(await status).toBe('signed-in');

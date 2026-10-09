@@ -1010,7 +1010,11 @@ public class JdbcReportingStore {
      * uz.horecaos.platform.courier.application.DeliveryAccrualOrderCompletionTrigger}
      * now writes on every real delivery. Joined to {@code
      * fulfillment.assignment_attempts} for {@code accepted_at}, which the
-     * earning row itself does not carry (ADR 0042 never needed it).
+     * earning row itself does not carry (ADR 0042 never needed it), and to
+     * {@code fulfillment.shipments} for {@code brand_id}, which it does not
+     * carry either (ADR 0125, V0510). Both joins are inner and cannot drop a
+     * row: the earning's own foreign keys require the attempt and the shipment
+     * (V0054).
      *
      * <p>Read by an instant range against {@code delivered_at} — the same
      * choice every other {@code readSource*} here makes over {@code
@@ -1025,16 +1029,23 @@ public class JdbcReportingStore {
      * as well — rather than trusting a column written by a different module —
      * keeps this read correct even if a future write path gets the stamp
      * wrong again.
+     *
+     * <p>The earning's {@code business_date} is also not the day this read files it under, on
+     * purpose: an earning accrued after its tap's day closed is booked on the first open day
+     * (its cost line with it), while {@code delivered_at} stays the tap. This read therefore
+     * still finds it under the closed day, which is how the recut sees what that day is missing.
      */
     public List<SourceDelivery> readSourceDeliveries(UUID tenantId, Instant from, Instant to) {
         return jdbc.sql("""
                 SELECT earning.id AS earning_id, earning.courier_id, earning.location_id,
-                       earning.shipment_id, earning.assignment_attempt_id, earning.distance_meters,
-                       earning.distance_source, earning.on_time_outcome, earning.delivered_at,
-                       attempt.accepted_at
+                       shipment.brand_id, earning.shipment_id, earning.assignment_attempt_id,
+                       earning.distance_meters, earning.distance_source, earning.on_time_outcome,
+                       earning.delivered_at, attempt.accepted_at
                   FROM fulfillment.courier_assignment_earnings earning
                   JOIN fulfillment.assignment_attempts attempt
                     ON attempt.tenant_id = earning.tenant_id AND attempt.id = earning.assignment_attempt_id
+                  JOIN fulfillment.shipments shipment
+                    ON shipment.tenant_id = earning.tenant_id AND shipment.id = earning.shipment_id
                  WHERE earning.tenant_id = :tenantId
                    AND earning.delivered_at >= :from AND earning.delivered_at < :to
                 """)
@@ -1045,6 +1056,7 @@ public class JdbcReportingStore {
                         Objects.requireNonNull(row.getObject("earning_id", UUID.class)),
                         Objects.requireNonNull(row.getObject("courier_id", UUID.class)),
                         Objects.requireNonNull(row.getObject("location_id", UUID.class)),
+                        Objects.requireNonNull(row.getObject("brand_id", UUID.class)),
                         Objects.requireNonNull(row.getObject("shipment_id", UUID.class)),
                         Objects.requireNonNull(row.getObject("assignment_attempt_id", UUID.class)),
                         row.getInt("distance_meters"),
@@ -1060,6 +1072,7 @@ public class JdbcReportingStore {
             UUID earningId,
             UUID courierId,
             UUID locationId,
+            UUID brandId,
             UUID shipmentId,
             UUID assignmentAttemptId,
             int distanceMeters,
@@ -1067,6 +1080,29 @@ public class JdbcReportingStore {
             String onTimeOutcome,
             Instant acceptedAt,
             Instant deliveredAt) {}
+
+    /** One branch's stored delivery facts for a day, counted: what a recut compares against. */
+    public record DeliveryDayCount(UUID locationId, long deliveries) {}
+
+    /**
+     * The deliveries the close stored for a day, per branch. The recut's side of the comparison
+     * with {@link #readSourceDeliveries}: an earning written after its day closed (the accrual is
+     * dated on the courier's tap, an operator may complete the order after the close) is in the
+     * source and not in this count.
+     */
+    public List<DeliveryDayCount> readDeliveryDayCounts(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql("""
+                SELECT location_id, count(*) AS deliveries
+                  FROM reporting.fact_delivery
+                 WHERE tenant_id = :tenantId AND business_date = :day
+                 GROUP BY location_id
+                """)
+                .param("tenantId", tenantId)
+                .param("day", businessDate)
+                .query((ResultSet row, int number) -> new DeliveryDayCount(
+                        Objects.requireNonNull(row.getObject("location_id", UUID.class)), row.getLong("deliveries")))
+                .list();
+    }
 
     public void insertDeliveryFact(ReportingFacts.DeliveryFact fact) {
         Map<String, Object> params = new HashMap<>();
@@ -1077,6 +1113,7 @@ public class JdbcReportingStore {
         params.put("calculationVersion", fact.metricCalculationVersion());
         params.put("courierId", fact.courierId());
         params.put("locationId", fact.locationId());
+        params.put("brandId", fact.brandId());
         params.put("shipmentId", fact.shipmentId());
         params.put("assignmentAttemptId", fact.assignmentAttemptId());
         params.put("distanceMeters", fact.distanceMeters());
@@ -1089,12 +1126,12 @@ public class JdbcReportingStore {
         jdbc.sql("""
                 INSERT INTO reporting.fact_delivery (
                     tenant_id, courier_assignment_earning_id, business_date, boundary_version,
-                    metric_calculation_version, courier_id, location_id, shipment_id,
+                    metric_calculation_version, courier_id, location_id, brand_id, shipment_id,
                     assignment_attempt_id, distance_meters, distance_source, on_time_outcome,
                     accepted_at, delivered_at, transit_seconds)
                 VALUES (
                     :tenantId, :earningId, :businessDate, :boundaryVersion, :calculationVersion,
-                    :courierId, :locationId, :shipmentId, :assignmentAttemptId, :distanceMeters,
+                    :courierId, :locationId, :brandId, :shipmentId, :assignmentAttemptId, :distanceMeters,
                     :distanceSource, :onTimeOutcome, :acceptedAt, :deliveredAt, :transitSeconds)
                 """).params(params).update();
     }
@@ -1621,6 +1658,59 @@ public class JdbcReportingStore {
     public record DistanceBucketRow(String bucketCode, int deliveryCount) {}
 
     /**
+     * Row 7.10 (ADR 0145 decision 8): deliveries per delivery zone, the zone dimension the
+     * order-density view is drawn from.
+     *
+     * <p>Reads {@code reporting.fact_delivery_fee_resolution} alone (V0411) -- the closed,
+     * business-date-grain fact that already carries {@code zone_id} -- so the density view needs
+     * a zone and never a doorstep, which is exactly the split ADR 0037 made when it kept
+     * coordinates out of {@code DeliveryFeeResolved}. A resolution that fell through to the
+     * branch's own tariff names no zone, and comes back as the group whose {@code zoneId} is
+     * null: "orders no drawn zone covers" is the number that says a zone is badly cut or a
+     * catchment is missing, and dropping it would hide the one thing the view is for.
+     *
+     * <p>Counted from fee resolutions that named a tariff (the fact's own definition), so a
+     * delivery priced outside the tariff model -- a manual fee, an aggregator's own price -- is
+     * not in it; the figure is "deliveries whose fee a zone or branch tariff resolved", and the
+     * screen says so rather than calling it every order. {@code locationIds} empty means every
+     * branch, as in every other reader here. Money stays in integer minor units, grouped by
+     * currency so two currencies are never added together.
+     */
+    public List<ZoneDensityRow> readZoneDensity(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("from", from);
+        params.put("to", to);
+
+        String locationFilter = "";
+        if (!locationIds.isEmpty()) {
+            locationFilter = " AND location_id IN (:locations)";
+            params.put("locations", locationIds);
+        }
+
+        return jdbc.sql("""
+                SELECT zone_id, currency,
+                       count(*)::integer AS delivery_count,
+                       sum(final_fee_minor)::bigint AS total_fee_minor
+                  FROM reporting.fact_delivery_fee_resolution
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                """ + locationFilter + """
+                 GROUP BY zone_id, currency
+                 ORDER BY delivery_count DESC, zone_id NULLS LAST, currency
+                """)
+                .params(params)
+                .query((ResultSet row, int number) -> new ZoneDensityRow(
+                        row.getObject("zone_id", UUID.class),
+                        row.getInt("delivery_count"),
+                        row.getLong("total_fee_minor"),
+                        Objects.requireNonNull(row.getString("currency"))))
+                .list();
+    }
+
+    /** One zone's deliveries over a range; {@code zoneId} null is the deliveries no drawn zone covered. */
+    public record ZoneDensityRow(@Nullable UUID zoneId, int deliveryCount, long totalFeeMinor, String currency) {}
+
+    /**
      * T11 (7.4a): the {@code COURIER} scope of {@code agg_sla_bucket_day},
      * narrowed the way {@link #readSlaBuckets} deliberately is not — that
      * method reads every {@code scope_kind} in range for the {@code LOCATION}
@@ -1890,6 +1980,21 @@ public class JdbcReportingStore {
      */
     public List<PaymentMixRow> readPaymentMix(
             UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds, List<String> paymentMethodCodes) {
+        return readPaymentMix(tenantId, from, to, locationIds, paymentMethodCodes, List.of());
+    }
+
+    /**
+     * {@link #readPaymentMix(UUID, LocalDate, LocalDate, List, List)} narrowed to the given legal
+     * entities (ADR 0038: this is money, so a reader who answers to one taxpayer asks for that
+     * taxpayer). Empty means every entity, each still on its own rows.
+     */
+    public List<PaymentMixRow> readPaymentMix(
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            List<UUID> locationIds,
+            List<String> paymentMethodCodes,
+            List<UUID> legalEntityIds) {
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
         params.put("from", from);
@@ -1899,6 +2004,10 @@ public class JdbcReportingStore {
         if (!locationIds.isEmpty()) {
             filter.append(" AND location_id IN (:locations)");
             params.put("locations", locationIds);
+        }
+        if (!legalEntityIds.isEmpty()) {
+            filter.append(" AND legal_entity_id IN (:legalEntities)");
+            params.put("legalEntities", legalEntityIds);
         }
         if (!paymentMethodCodes.isEmpty()) {
             filter.append(" AND payment_method_code IN (:methods)");
