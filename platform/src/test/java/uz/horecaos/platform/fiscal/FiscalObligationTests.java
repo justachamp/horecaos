@@ -413,6 +413,52 @@ class FiscalObligationTests {
     }
 
     @Test
+    @DisplayName(
+            "a claim the bridge refused to send because no real lines exist is blocked with that reason, not 'the provider did not report'")
+    void aRefusalToFilePlaceholderLinesBlocksTheClaimWithTheTrueReason() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        UUID order = completedOrder("S-8", "CLICK", "PAID", NOW.minusSeconds(3600));
+        obligations.openObligations(50);
+
+        ClaimedSubmission claim = obligations.claimSubmissions(50).getFirst();
+        obligations.settle(claim, PartnerFiscalizationPort.Outcome.LINES_NOT_BUILT);
+
+        FiscalDocumentRow document = onlyDocument(order);
+        assertThat(document.state()).isEqualTo(FiscalDocumentState.BLOCKED);
+        assertThat(document.reasonCode())
+                .as("nothing was sent; an hour later the sweep would otherwise say a provider nobody "
+                        + "asked failed to answer")
+                .isEqualTo(FiscalReasonCode.LINES_NOT_BUILT);
+        assertThat(FiscalReasonCode.BLOCKING).contains(FiscalReasonCode.LINES_NOT_BUILT);
+    }
+
+    @Test
+    @DisplayName("the opener snapshots the INN of the company in force, and a later re-registration does not move it")
+    void theOpenerSnapshotsTheTaxpayer() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        UUID order = completedOrder("O-snap", "CLICK", "PAID", NOW.minusSeconds(3600));
+        obligations.openObligations(50);
+
+        String before = jdbc.sql("SELECT seller_tin || '/' || seller_snapshot_source FROM fiscal.fiscal_documents"
+                        + " WHERE order_id = :o")
+                .param("o", order)
+                .query(String.class)
+                .single();
+        jdbc.sql("UPDATE tenant.legal_entities SET tin = '999999999' WHERE id = :id")
+                .param("id", firstCompany)
+                .update();
+        String after = jdbc.sql("SELECT seller_tin || '/' || seller_snapshot_source FROM fiscal.fiscal_documents"
+                        + " WHERE order_id = :o")
+                .param("o", order)
+                .query(String.class)
+                .single();
+
+        assertThat(before).endsWith("/OPENING");
+        assertThat(after).as("a snapshot, never a join").isEqualTo(before);
+        assertThat(before).doesNotStartWith("999999999");
+    }
+
+    @Test
     @DisplayName("an issued document is left to the payments seam, which holds the evidence")
     void anIssuedOutcomeIsNotRewrittenHere() {
         assign(firstCompany, LocalDate.of(2026, 1, 1));

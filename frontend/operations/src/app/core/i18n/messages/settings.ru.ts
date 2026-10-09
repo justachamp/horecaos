@@ -1326,6 +1326,11 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
     'Пороги, выше которых акция или крупная выгрузка клиентов ждёт второй подписи.',
   'settings.fiscalization.noAccess': 'Нет доступа',
   'settings.fiscalization.responsibility': 'Кто выдаёт чек',
+  'settings.fiscalization.responsibility.lead':
+    'Читается из той же модели, что и экран «Платежи»: справочник говорит, кто отвечает за чек по способу оплаты, а мерчант-аккаунты и фискальные терминалы — можно ли это сделать сегодня. Здесь это не настраивается: настройка, расходящаяся с привязками, была бы ложным заявлением о налоговом документе.',
+  'settings.fiscalization.responsibility.state.live': 'чек выдать можно',
+  'settings.fiscalization.responsibility.state.noPath': 'нет фискального пути',
+  'settings.fiscalization.responsibility.state.notApplicable': 'чек не нужен',
   'settings.locations.pin.title': 'Точка на карте',
   'settings.locations.pin.none':
     'У филиала нет точки на карте. Пока её нет, от филиала нельзя мерить расстояния и вокруг него нельзя нарисовать зону доставки. Откройте редактирование, чтобы поставить точку.',

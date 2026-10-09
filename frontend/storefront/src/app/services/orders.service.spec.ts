@@ -299,6 +299,46 @@ describe('OrdersService.getReorderPlan (ADR 0074)', () => {
   });
 });
 
+describe('OrdersService.getReceipts (ADR 0166)', () => {
+  it('reads the per-order receipts endpoint for the caller’s own order', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({
+      receipts: [{ kind: 'SALE', url: 'https://ofd.soliq.uz/epi?t=1', registeredAt: null }],
+    });
+
+    const result = await firstValueFrom(service.getReceipts('o1'));
+
+    expect(api.get).toHaveBeenCalledWith(
+      `/storefront/tenants/${CONFIG.tenantId}/brands/${CONFIG.brandId}/orders/o1/receipts`,
+    );
+    expect(result).toEqual([
+      { kind: 'SALE', url: 'https://ofd.soliq.uz/epi?t=1', registeredAt: null },
+    ]);
+  });
+
+  it('keeps only an https link, because it is rendered as an anchor', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({
+      receipts: [
+        { kind: 'SALE', url: 'javascript:alert(1)', registeredAt: null },
+        { kind: 'SALE', url: 'http://ofd.soliq.uz/epi?t=1', registeredAt: null },
+        { kind: 'SALE', url: 'https://ofd.soliq.uz/epi?t=2', registeredAt: null },
+      ],
+    });
+
+    const result = await firstValueFrom(service.getReceipts('o1'));
+
+    expect(result.map((receipt) => receipt.url)).toEqual(['https://ofd.soliq.uz/epi?t=2']);
+  });
+
+  it('answers an empty list when the platform sends none', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({});
+
+    expect(await firstValueFrom(service.getReceipts('o1'))).toEqual([]);
+  });
+});
+
 describe('OrdersService: cancel action reflects the real state-machine guard', () => {
   // Mirrors ordering.application.OrderActionsPolicy.canCancelWithoutReason on
   // the platform: cancellable up to and including AWAITING_APPROVAL, refused

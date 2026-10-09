@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { I18n } from '../../core/i18n/i18n';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { FiscalApi, FiscalDocumentView, FiscalResolutionView } from '../finance/fiscal/fiscal-api';
+import { FiscalEvidenceApi, FiscalEvidenceView } from '../finance/fiscal/fiscal-evidence-api';
 import { OrderFiscalPanel } from './order-fiscal-panel';
 
 const TENANT = 't1';
@@ -31,9 +33,34 @@ function document_(overrides: Partial<FiscalDocumentView> = {}): FiscalDocumentV
   };
 }
 
-function configure(options: { fiscalApi?: Partial<FiscalApi> }): void {
+const NO_EVIDENCE: FiscalEvidenceView = {
+  orderId: ORDER,
+  publicOrderNumber: 'A-1001',
+  retention: { years: 7, provisional: true },
+  marks: { state: 'NOT_BUILT', required: null, captured: null },
+  revealed: false,
+  purpose: null,
+  documents: [],
+};
+
+/**
+ * The evidence block beneath the table reads its own endpoint (`GET .../fiscal-evidence`); what it draws
+ * is `fiscal-evidence.spec.ts`'s business. Here it is a stub that answers an order with no documents,
+ * so this spec is about the panel and not about a second component.
+ */
+function configure(options: {
+  fiscalApi?: Partial<FiscalApi>;
+  evidenceApi?: Partial<FiscalEvidenceApi>;
+}): void {
   TestBed.configureTestingModule({
-    providers: [{ provide: FiscalApi, useValue: options.fiscalApi ?? {} }],
+    providers: [
+      { provide: FiscalApi, useValue: options.fiscalApi ?? {} },
+      {
+        provide: FiscalEvidenceApi,
+        useValue: options.evidenceApi ?? { forOrder: vi.fn().mockResolvedValue(NO_EVIDENCE) },
+      },
+      { provide: SessionCapabilities, useValue: { has: () => false } },
+    ],
   });
   TestBed.inject(I18n).setLocale('en');
 }
@@ -134,6 +161,78 @@ describe('OrderFiscalPanel: the order-detail fiscal read (row 1.2l)', () => {
     expect(
       fixture.nativeElement.querySelector('[data-testid="order-fiscal-error"]'),
     ).not.toBeNull();
+  });
+});
+
+describe('OrderFiscalPanel: the evidence beneath the table (row X.2, ADR 0166)', () => {
+  it('reads the evidence of this order once there is a document to be about', async () => {
+    const forOrder = vi.fn().mockResolvedValue(NO_EVIDENCE);
+    configure({
+      fiscalApi: { forOrder: vi.fn().mockResolvedValue([document_({ status: 'ISSUED' })]) },
+      evidenceApi: { forOrder },
+    });
+    const fixture = await render();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="fiscal-evidence"]'),
+      'the evidence block is part of the order’s fiscal panel',
+    ).not.toBeNull();
+    expect(forOrder).toHaveBeenCalledWith(TENANT, ORDER);
+  });
+
+  it('does not say «denied» twice, nor ask for evidence the role cannot read', async () => {
+    const forOrder = vi.fn().mockResolvedValue(NO_EVIDENCE);
+    configure({
+      fiscalApi: {
+        forOrder: vi
+          .fn()
+          .mockRejectedValue(new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null)),
+      },
+      evidenceApi: { forOrder },
+    });
+    const fixture = await render();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="fiscal-evidence"]')).toBeNull();
+    expect(forOrder).not.toHaveBeenCalled();
+  });
+
+  it('reads the evidence again after a retry changed a document', async () => {
+    const evidenceRead = vi.fn().mockResolvedValue(NO_EVIDENCE);
+    const retry = vi.fn().mockResolvedValue({
+      documentId: 'doc-1',
+      outcome: 'ISSUED',
+      version: 2,
+      warning: null,
+    } satisfies FiscalResolutionView);
+    configure({
+      fiscalApi: {
+        forOrder: vi.fn().mockResolvedValue([document_({ status: 'FAILED', version: 1 })]),
+        retry,
+      },
+      evidenceApi: { forOrder: evidenceRead },
+    });
+    const fixture = await render();
+    const host: HTMLElement = fixture.nativeElement;
+    expect(evidenceRead).toHaveBeenCalledTimes(1);
+
+    (host.querySelector('[data-testid="order-fiscal-retry-toggle"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="order-fiscal-retry-reason"]') as HTMLInputElement).value =
+      'asked again';
+    host
+      .querySelector('[data-testid="order-fiscal-retry-reason"]')
+      ?.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (host.querySelector('[data-testid="order-fiscal-retry-submit"]') as HTMLButtonElement).click();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(
+      evidenceRead,
+      'the evidence is stale the moment a retry has changed a document',
+    ).toHaveBeenCalledTimes(2);
   });
 });
 

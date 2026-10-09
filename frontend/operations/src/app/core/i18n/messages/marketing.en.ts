@@ -412,9 +412,11 @@ export const marketingEn = {
   'marketing.loyalty.redemption.form.excludesFee':
     'Exclude the delivery fee from the eligible value',
 
-  'marketing.loyalty.deposit.title': 'Deposit accounts',
+  'marketing.loyalty.deposit.title': 'Deposit accounts — not offered',
   'marketing.loyalty.deposit.body':
-    'Not built, and not a gap: ADR 0046 withdrew customer-funded stored value from scope outright. HorecaOS holds no customer funds, so a prepaid deposit account raises the same question as an unlicensed payment service, and the decision is to offer points only.',
+    'HorecaOS does not hold customer money, so there is no prepaid deposit. Customers earn and spend loyalty points, which are not money; a venue that runs its own licensed prepaid programme can connect its provider as a payment method.',
+  'marketing.loyalty.deposit.revisit':
+    'A decision, not a gap (ADR 0165). It is reopened only if HorecaOS, or a company its owner controls, obtains a Central Bank authorisation that covers customer prepayments, or counsel confirms in writing that a venue’s own authorisation obliges HorecaOS to operate that venue’s ledger. A venue asking for the feature does not reopen it. This narrows ADR 0046’s “a licence exists” condition: a venue’s licence alone brings a payment-provider method, never a balance held here.',
   'marketing.loyalty.posSync.title': 'POS balance sync',
   'marketing.loyalty.posSync.body':
     'Not built. No ADR owns a point-of-sale terminal reading or writing a loyalty balance, and no provider capability declares it — see frontend-information-architecture.md §6.3.',

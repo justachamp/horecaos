@@ -361,8 +361,16 @@ class CartCheckoutAndOrderTests {
                 // own producer is covered in LoyaltyLedgerAndSplitTenderTests.
                 event -> {},
                 clock);
+        uz.horecaos.platform.support.InMemoryPlatformPolicies reasonPolicies =
+                new uz.horecaos.platform.support.InMemoryPlatformPolicies();
         loyaltyAdjustments = new uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService(
-                loyaltyStore, ALWAYS_APPROVES, new JdbcAuditRecorder(jdbc, objectMapper), clock, 100_000L);
+                loyaltyStore,
+                ALWAYS_APPROVES,
+                new JdbcAuditRecorder(jdbc, objectMapper),
+                clock,
+                new uz.horecaos.platform.loyalty.application.AdjustmentReasonPolicyService(
+                        reasonPolicies, reasonPolicies, new io.micrometer.core.instrument.simple.SimpleMeterRegistry()),
+                100_000L);
         settlementStore = new JdbcSettlementStore(jdbc);
         intentStore = new JdbcPaymentIntentStore(jdbc);
         paymentAttemptStore = new JdbcPaymentAttemptStore(jdbc);

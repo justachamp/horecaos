@@ -64,7 +64,18 @@ public interface PartnerFiscalizationPort {
         NO_PROVIDER_PATH,
 
         /** No implementation is present. Recorded, and visible on every response. */
-        NOT_WIRED
+        NOT_WIRED,
+
+        /**
+         * The real line builder does not exist, and the one-line placeholder may not be filed
+         * here (ADR 0166, Decision 6).
+         *
+         * <p>Nothing was sent. A receipt of one line, a placeholder classification, VAT 0 and
+         * possibly a zero TIN is filed with the tax authority and can only be corrected, never
+         * withdrawn, whereas a blocked document is recoverable. Allowed only where the provider
+         * environment is a sandbox and the platform has said so.
+         */
+        LINES_NOT_BUILT
     }
 
     /**

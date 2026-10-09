@@ -1330,6 +1330,11 @@ export const settingsEn = {
     'The limits above which a promotion or a large customer export waits for a second signature.',
   'settings.fiscalization.noAccess': 'No access',
   'settings.fiscalization.responsibility': 'Who issues the receipt',
+  'settings.fiscalization.responsibility.lead':
+    'Read from the same model as the Payments screen: the registry says who is responsible for a method’s receipt, and the merchant accounts and fiscal terminals say whether that can be done today. It cannot be set here — a setting that disagreed with the bindings would be a false statement about a tax document.',
+  'settings.fiscalization.responsibility.state.live': 'receipt can be issued',
+  'settings.fiscalization.responsibility.state.noPath': 'no fiscal path',
+  'settings.fiscalization.responsibility.state.notApplicable': 'nothing to receipt',
   'settings.locations.pin.title': 'Map pin',
   'settings.locations.pin.none':
     'This branch has no point on the map. It cannot be measured from, and a delivery zone cannot be drawn around it, until it has one. Edit the branch to place it.',

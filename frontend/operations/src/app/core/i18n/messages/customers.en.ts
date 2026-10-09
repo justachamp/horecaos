@@ -155,7 +155,7 @@ export const customersEn = {
   'customers.cashback.noEntries': 'No ledger entries yet.',
   'customers.cashback.empty': 'No points balance for this customer yet.',
   'customers.cashback.depositNotBuilt':
-    'Deposit balance — not built. The loyalty module deliberately holds no customer-funded balance: no deposit account, no top-up, no withdrawal.',
+    'Deposit balance — not offered. HorecaOS does not hold customer money, so there is no prepaid deposit. Customers earn and spend loyalty points, which are not money; a venue that runs its own licensed prepaid programme can connect its provider as a payment method.',
   'customers.cashback.adjust.action': 'Adjust balance',
   'customers.cashback.adjust.direction': 'Direction',
   'customers.cashback.adjust.direction.CREDIT': 'Credit (add points)',
@@ -163,6 +163,9 @@ export const customersEn = {
   'customers.cashback.adjust.amount': 'Amount',
   'customers.cashback.adjust.reasonCode': 'Reason code',
   'customers.cashback.adjust.reasonCode.placeholder': 'e.g. GOODWILL',
+  'customers.cashback.adjust.reasonCode.choose': 'Choose a reason code',
+  'customers.cashback.adjust.reasonCode.refused':
+    'That reason code is not on the list. Choose one of the listed codes.',
   'customers.cashback.adjust.reason': 'Reason',
   'customers.cashback.adjust.submit': 'Apply adjustment',
   'customers.cashback.adjust.result.applied': 'Adjustment applied.',

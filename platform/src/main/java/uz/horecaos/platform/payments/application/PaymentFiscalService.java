@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,7 @@ import uz.horecaos.platform.payments.domain.FiscalSubmission;
 import uz.horecaos.platform.payments.domain.PaymentIntent;
 import uz.horecaos.platform.payments.domain.PaymentProviderType;
 import uz.horecaos.platform.payments.domain.ProviderBinding;
+import uz.horecaos.platform.payments.domain.SentReceipt;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcFiscalDocumentStore;
 
 /**
@@ -56,17 +58,33 @@ public class PaymentFiscalService {
     private final Map<PaymentProviderType, FiscalReceiptPort> receiptPorts;
     private final ApplicationEventPublisher events;
     private final ProviderActivityRecorder activity;
+    private final SentEvidenceRecorder sentEvidence;
 
+    @Autowired
     public PaymentFiscalService(
             JdbcFiscalDocumentStore documents,
             List<FiscalReceiptPort> ports,
             ApplicationEventPublisher events,
-            ProviderActivityRecorder activity) {
+            ProviderActivityRecorder activity,
+            SentEvidenceRecorder sentEvidence) {
         this.documents = documents;
         this.receiptPorts = ports.stream()
                 .collect(java.util.stream.Collectors.toMap(FiscalReceiptPort::providerType, port -> port));
         this.events = events;
         this.activity = activity;
+        this.sentEvidence = sentEvidence;
+    }
+
+    /**
+     * Without an evidence recorder, for the callers that read documents or submit nothing worth
+     * keeping the request of (ADR 0166 added the recorder after these existed).
+     */
+    public PaymentFiscalService(
+            JdbcFiscalDocumentStore documents,
+            List<FiscalReceiptPort> ports,
+            ApplicationEventPublisher events,
+            ProviderActivityRecorder activity) {
+        this(documents, ports, events, activity, SentEvidenceRecorder.NONE);
     }
 
     /**
@@ -138,6 +156,16 @@ public class PaymentFiscalService {
      */
     @Transactional
     public FiscalStatus submit(FiscalDocument document, ProviderBinding binding, Instant now) {
+        return submit(document, binding, now, false);
+    }
+
+    /**
+     * {@link #submit(FiscalDocument, ProviderBinding, Instant)}, saying whether the lines are the
+     * bridge's one-line placeholder, so the evidence of what was filed says it was a stand-in and
+     * not a sale (ADR 0166, Decision 6).
+     */
+    @Transactional
+    public FiscalStatus submit(FiscalDocument document, ProviderBinding binding, Instant now, boolean linesSynthetic) {
         FiscalReceiptPort port = receiptPorts.get(binding.providerType());
         if (port == null || !binding.supportsPartnerFiscalization()) {
             log.warn(
@@ -149,6 +177,24 @@ public class PaymentFiscalService {
         }
 
         FiscalSubmission submission = port.submit(document, binding);
+
+        // The request that left is kept before the status moves, whatever the provider answered:
+        // an answer that was lost, or refused, is exactly when "what did we send" is asked.
+        SentReceipt wire = submission.sent();
+        if (wire != null) {
+            try {
+                sentEvidence.record(document, binding, wire, linesSynthetic);
+            } catch (RuntimeException unrecorded) {
+                // Losing the record costs the detail and not the answer. The request has left; the
+                // provider's reply is the outcome that must survive, and a failure here that rolled
+                // the transaction back would leave the document PENDING after Click had accepted
+                // it -- the exact road to a second sale receipt. No payload is logged.
+                log.warn(
+                        "The request sent for fiscal document {} could not be recorded: {}",
+                        document.id(),
+                        unrecorded.getClass().getSimpleName());
+            }
+        }
 
         switch (submission.classification()) {
             case SUCCESS -> {

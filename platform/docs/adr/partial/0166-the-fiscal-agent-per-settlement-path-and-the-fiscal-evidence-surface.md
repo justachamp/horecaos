@@ -1,40 +1,54 @@
 # ADR 0166: The fiscal agent per settlement path and the fiscal evidence surface
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Not started — the evidence exists and nothing shows it.
-  `fiscal.fiscal_documents` (V0027, moved by V0039) already holds, per settlement
-  leg, `legal_entity_id`, `provider_type`, `external_receipt_id`, `fiscal_sign`,
-  `terminal_id`, `receipt_reference`, `registered_at`, `receipt_url`,
-  `provider_status_code`, `provider_message` and the two ADR 0029 references to the
-  request and response as sent; `ClickReceiptUrl` parses Click's OFD URL into those
-  columns and `PaymeMerchantApi` writes Payme's `SetFiscalData` into them, and
-  `FiscalCustomerReceiptTrigger` already sends the customer their receipt link when a
-  document reaches `ISSUED`. No staff surface reads any of it:
-  `FiscalDocumentController` (`/api/v1/tenants/{tenantId}/fiscal/...`) answers
-  `hasEvidence` and nothing else, by its own documentation "read through the payments
-  module's authorized order-payment view, with a recorded purpose", and that view does
-  not exist; `OperationsPaymentController`'s `OrderPaymentResponse` carries no fiscal
-  field; the console's `order-fiscal-panel` and `fiscal-page` print a document's type,
-  provider, status, reason and a yes or no for evidence. Behind that, four facts the
-  surface would expose are not true yet. (1) Nothing opens a provider obligation:
-  `PaymentFiscalService.openPartnerObligation` has no caller, and
-  `PaymentFiscalService.submit` has one, the operator's retry
-  (`PartnerFiscalizationBridge.retry`), which — because `fiscal_document_lines` is not
-  built and lines are not stored — sends one synthetic line named "Order <number>"
-  with the placeholder ИКПУ `00000000000000000`, package code `0000000`, VAT 0 and, if
-  the seller cannot be resolved, TIN `000000000`. (2) No delivery-line ИКПУ or package
-  code can reach a receipt: `catalog.fiscal_classifications` carries them for the
-  `FEE` node and the real line builder that would read them does not exist. (3)
-  Marking codes have no store: ADR 0038's `fiscal.fiscal_unit_marks` is not built (ADR
-  0161 puts the store in `ordering` instead), and
-  `catalog.api.FiscalNodeFacts.requiresMarkingCapablePayment`, the check that removes
-  Payme from a cart holding a marked good, has no caller in `CartPaymentOptions` or
-  `CheckoutEligibilityGuard`. (4) A correction or void has no command:
-  `CORRECTION_REQUESTED`, `VOID_REQUESTED`, `CORRECTED` and `VOIDED` are unbuilt,
-  `ordering.order_revisions.fiscal_correction_required` (V0395) records that a
-  correction is owed and nothing reads it, and `CheckoutSettlementPlanner` registers a
-  cash tender at a location with no capable `fiscal.fiscal_terminals` row (V0247) as
-  `OPERATOR`, a responsibility ADR 0038 says nothing implements.
+- Implementation status: Partial — the evidence surface is built from the read to the screens
+  (batch 20): the backend, the console's evidence card on the order detail and the payments page,
+  the payments page's payment-types table, the fiscalization settings projection and the receipt
+  link on the storefront's order page; the real receipt line builder and the events are not, so
+  what the screens show of a filing is the Click path's lines, the INN and the identifiers, and
+  «not kept» elsewhere. Built: V0551 snapshots the
+  issuing INN and legal name onto each `fiscal.fiscal_documents` row at insert, by a trigger (so
+  the cash decision written through the payments view has one too; rows that predate it are
+  backfilled from the entity and marked `BACKFILL`; an UPDATE cannot rewrite a snapshot), widens
+  `protected_request_reference` to `text` (the compatibility view is rebuilt) and the status
+  column for `CORRECTION_REQUESTED`, `VOID_REQUESTED`, `CORRECTED` and `VOIDED`, adds
+  `lines_synthetic`, `sent_tender_split_reference` and `merchant_binding_id`, and adds
+  `fiscal.fiscal_correction_requests`. `ClickFiscalAdapter` reports what it put on the wire
+  (`SentReceipt`), `ProtectedSentEvidenceRecorder` keeps the lines and the split behind ADR
+  0029 `FINANCIAL` protection (a marking code is counted, never stored), and
+  `OperationsFiscalEvidenceController` serves `GET .../orders/{orderId}/fiscal-evidence`
+  (documents, the INN that issued each, the lines as filed, the split, marking as a count,
+  identifiers masked unless the caller holds the new `fiscal.evidence.reveal` and sends a
+  purpose: 403, 422 `PURPOSE_REQUIRED`, one `SECURITY` fact per document), `GET
+  .../fiscal/payment-types` (derived, not settable) and the correction requests (`POST
+  .../fiscal/documents/{documentId}/correction-requests` under the seeded ADR 0027 policy
+  `fiscal.correction.request`, `POST .../fiscal/correction-requests/{requestId}/attachments`,
+  `GET .../fiscal/correction-requests`). Decision 6 holds: the one-line placeholder is filed
+  only where the provider environment is a sandbox and the platform policy
+  `fiscal.synthetic_lines_allowed` says so; elsewhere `retry` answers 409 with reason code
+  `FISCAL_LINES_NOT_BUILT`, nothing is sent, and a swept claim is blocked as `LINES_NOT_BUILT`.
+  The policies `fiscal.evidence_retention_years` (seven years, provisional) and
+  `fiscal.synthetic_lines_allowed` are declared in `FiscalEvidencePolicies`. Not built: the real
+  line builder (so no delivery-line ИКПУ can be filed, and the `DELIVERY_FEE` line kind is
+  declared and written by nothing), `openPartnerObligation` driven at capture, the
+  `FiscalTerminalPort` and its fake adapter, the reader for `order_revisions.fiscal_correction_required`,
+  `FiscalCorrectionRequested.v1` and `FiscalCorrectionAttached.v1` on `fiscal.events`, the
+  `FiscalNodeFacts.requiresMarkingCapablePayment` call sites, the adapter from `OrderMarkCounts`
+  to ADR 0161's `OrderMarksPort` (until it exists the block reads «marks not built»).
+  The console (`q-fiscal-evidence`) draws the read on the order detail's fiscal panel, under the
+  tenders of the payments page, where each tender links to its document, and beneath the order
+  lookup of the finance fiscal page, which also lists the open correction requests, aged in days
+  and not alarmed; it masks identifiers until
+  a role holding `fiscal.evidence.reveal` chooses a purpose, holds an opened read for two minutes at
+  most, draws a link only for an `https` URL, names a delivery-fee line as its own row with its ИКПУ
+  and package code (nothing writes one until the line builder does), shows marking as a count, and raises correction and void requests and attaches
+  the agent's reference. The payments page's payment-types table and the fiscalization settings
+  tab's responsibility projection read `GET .../fiscal/payment-types`. `GET
+  /api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/receipts`
+  (`StorefrontFiscalReceiptController`, ownership-authorised, `Cache-Control: no-store`) gives the
+  customer the same link ADR 0058 already sends them, for the receipts still in force and nothing
+  else about them, and the storefront's order page shows it (`storefront-milliy` has no order
+  detail page to show it on).
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides

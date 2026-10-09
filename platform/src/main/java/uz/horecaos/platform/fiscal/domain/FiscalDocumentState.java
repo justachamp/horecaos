@@ -3,8 +3,7 @@ package uz.horecaos.platform.fiscal.domain;
 /**
  * Where an order's fiscal obligation has got to (ADR 0038).
  *
- * <p>This repeats the five values {@code payments.domain.FiscalStatus} carries
- * and adds the sixth. The repetition is deliberate rather than accidental:
+ * <p>This repeats the values {@code payments.domain.FiscalStatus} carries. The repetition is deliberate rather than accidental:
  * {@code payments.domain} is module-internal, and a module reaching into another
  * module's internals to borrow an enum is the dependency Spring Modulith exists
  * to refuse. The vocabulary is a database vocabulary — the values are the ones
@@ -65,16 +64,47 @@ public enum FiscalDocumentState {
      * difference matters because an order sitting unreceipted behind a generic
      * failure is how a tenant finds out at month end.
      */
-    BLOCKED;
+    BLOCKED,
+
+    /**
+     * An issued receipt that the tenant's own fiscal agent has been asked to correct (ADR 0166,
+     * Decision 8).
+     *
+     * <p>HorecaOS records the request and never issues the correction: the agent does, on the
+     * path the sale used, and the operator attaches the agent's new reference. The original
+     * receipt still exists and still carries its evidence while this stands.
+     */
+    CORRECTION_REQUESTED,
+
+    /** As {@link #CORRECTION_REQUESTED}, for a receipt the agent is asked to void. */
+    VOID_REQUESTED,
+
+    /** The agent issued a correction and its reference is attached as a linked {@code CORRECTION} document. */
+    CORRECTED,
+
+    /** The agent voided the receipt and its reference is attached as a linked {@code REFUND} document. */
+    VOIDED;
 
     /** Whether a receipt is still owed and has not been evidenced either way. */
     public boolean owesAReceipt() {
         return this == PENDING || this == SUBMITTED || this == FAILED || this == BLOCKED;
     }
 
+    /**
+     * Whether a receipt was issued and its identifiers are on the row: {@link #ISSUED}, and the four
+     * states a receipt moves to after it (ADR 0166). Evidence in all five is never rewritten.
+     */
+    public boolean holdsAReceipt() {
+        return this == ISSUED
+                || this == CORRECTION_REQUESTED
+                || this == VOID_REQUESTED
+                || this == CORRECTED
+                || this == VOIDED;
+    }
+
     /** Whether the obligation has been resolved, one way or the other. */
     public boolean resolved() {
-        return this == ISSUED || this == NOT_APPLICABLE;
+        return holdsAReceipt() || this == NOT_APPLICABLE;
     }
 
     public static FiscalDocumentState require(String value) {

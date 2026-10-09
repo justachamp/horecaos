@@ -266,6 +266,13 @@ public class FiscalDocumentService {
 
         PartnerFiscalizationPort.Outcome outcome = partner.retry(tenantId, documentId, idempotencyKey);
 
+        if (outcome == PartnerFiscalizationPort.Outcome.LINES_NOT_BUILT) {
+            // ADR 0166, Decision 6. Nothing was sent, so the attempt claimed above must not stand:
+            // the exception rolls this transaction back, the document keeps the state and reason it
+            // had, and the operator is told why in a code a client can branch on.
+            throw new LinesNotBuiltException(documentId);
+        }
+
         audit.record(AuditFact.of("fiscal.document.retry", AuditClass.BUSINESS)
                 .by(actor)
                 .at(ResourceScope.tenant(tenantId))
@@ -394,6 +401,18 @@ public class FiscalDocumentService {
             super(("Fiscal document %s names no legal entity. A receipt is issued under the "
                             + "selling company's own merchant account, so this needs an ADR 0038 fiscal "
                             + "assignment for the branch before it can be sent.")
+                    .formatted(documentId));
+        }
+    }
+
+    /**
+     * The real receipt line builder does not exist and the one-line placeholder may not be filed
+     * here (ADR 0166, Decision 6): refused before anything is sent.
+     */
+    public static class LinesNotBuiltException extends RuntimeException {
+        public LinesNotBuiltException(UUID documentId) {
+            super(("Fiscal document %s cannot be sent: the receipt line builder does not exist yet, "
+                            + "and a placeholder receipt may only be filed in a sandbox.")
                     .formatted(documentId));
         }
     }

@@ -422,6 +422,10 @@ export const staffUzLatn: AreaMessages<typeof staffEn> = {
   'staff.approvals.action.pricingPromotionActivate': 'Aksiyani ishga tushirish',
 
   // end: Promotion activation approval (ADR 0140)
+
+  // Fiscal receipt correction approval (ADR 0166)
+  'staff.approvals.action.fiscalCorrectionRequest': 'Fiskal chekni tuzatish yoki bekor qilish',
+  // end: Fiscal receipt correction approval (ADR 0166)
   'staff.approvals.tab.pending': 'Kutilmoqda',
   'staff.approvals.tab.decided': 'Hal qilingan',
   'staff.approvals.column.status': 'Qaror',

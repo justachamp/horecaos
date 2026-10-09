@@ -106,6 +106,7 @@ public class LoyaltyAdjustmentService {
     private final ApprovalService approvals;
     private final AuditRecorder audit;
     private final Clock clock;
+    private final AdjustmentReasonPolicyService reasons;
     private final long approvalThresholdMinor;
 
     public LoyaltyAdjustmentService(
@@ -113,11 +114,13 @@ public class LoyaltyAdjustmentService {
             ApprovalService approvals,
             AuditRecorder audit,
             Clock clock,
+            AdjustmentReasonPolicyService reasons,
             @Value("${horecaos.loyalty.adjustment-approval-threshold-minor:100000}") long approvalThresholdMinor) {
         this.store = store;
         this.approvals = approvals;
         this.audit = audit;
         this.clock = clock;
+        this.reasons = reasons;
         this.approvalThresholdMinor = approvalThresholdMinor;
     }
 
@@ -160,6 +163,11 @@ public class LoyaltyAdjustmentService {
         if (command.amountMinor() == 0) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "An adjustment moves a non-zero amount");
         }
+        // ADR 0165: the operator's reason code is applied to the platform's closed list before
+        // anything else happens, so a refused code costs no approval request and no row. In
+        // report-only mode it is counted and goes through; the policy that permitted it is
+        // what the audit fact below records.
+        AdjustmentReasonPolicyService.Effective permittedBy = reasons.admit(command.reasonCode());
         Instant now = clock.instant();
 
         ResourceScope scope = ResourceScope.brand(command.tenantId(), command.brandId());
@@ -181,15 +189,20 @@ public class LoyaltyAdjustmentService {
             // approval lapsed and a 500 000-point goodwill credit was as many
             // 500 000-point credits as the maker cared to submit.
             outcome.consume();
-            apply(command, scope, approvalIdOf(outcome), now);
+            apply(command, scope, approvalIdOf(outcome), permittedBy, now);
             return outcome;
         }
 
-        apply(command, scope, null, now);
+        apply(command, scope, null, permittedBy, now);
         return new ApprovalOutcome.NotRequired();
     }
 
-    private void apply(AdjustmentCommand command, ResourceScope scope, @Nullable UUID approvalId, Instant now) {
+    private void apply(
+            AdjustmentCommand command,
+            ResourceScope scope,
+            @Nullable UUID approvalId,
+            AdjustmentReasonPolicyService.Effective permittedBy,
+            Instant now) {
 
         AccountRow account = store.openAccount(
                 UUID.randomUUID(),
@@ -255,6 +268,21 @@ public class LoyaltyAdjustmentService {
             store.destroyBalance(command.tenantId(), account.id(), -command.amountMinor(), now);
         }
 
+        // No contact point, no name, no order history. ADR 0029 keeps the change document to the
+        // movement itself. ADR 0030 asks a durable decision to persist the policy it was made
+        // under, and ADR 0165 puts the reason-code list's id and version here, because the
+        // loyalty.entries row is fixed by V0042 and the application role may only insert it.
+        // Absent both when the built-in default applied, so "no stored policy" is not mistaken
+        // for version zero of one.
+        Map<String, Object> change = new java.util.LinkedHashMap<>();
+        change.put("amountMinor", command.amountMinor());
+        change.put("reasonCode", command.reasonCode());
+        change.put("balanceAfterMinor", balanceAfter);
+        if (permittedBy.policyId() != null) {
+            change.put("policyId", permittedBy.policyId().toString());
+            change.put("policyVersion", permittedBy.policyVersion());
+        }
+
         audit.record(new AuditFact(
                 UUID.randomUUID(),
                 AuditClass.BUSINESS,
@@ -266,15 +294,7 @@ public class LoyaltyAdjustmentService {
                 (long) account.version(),
                 AuditFact.Outcome.SUCCEEDED,
                 command.reason(),
-                // No contact point, no name, no order history. ADR 0029 keeps the
-                // change document to the movement itself.
-                Map.of(
-                        "amountMinor",
-                        command.amountMinor(),
-                        "reasonCode",
-                        command.reasonCode(),
-                        "balanceAfterMinor",
-                        balanceAfter),
+                change,
                 null,
                 "loyalty.adjust",
                 approvalId,

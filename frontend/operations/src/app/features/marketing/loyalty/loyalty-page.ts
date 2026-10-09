@@ -39,12 +39,14 @@ type ScopeType = 'BRAND' | 'LOCATION' | 'CHANNEL';
  * scope in the same transaction — so a rate change is never silently doubled
  * up with the one it replaces.
  *
- * **Honestly not built, in this same screen rather than a separate route.**
+ * **Honestly not offered, in this same screen rather than a separate route.**
  * Deposit accounts (Депозит): ADR 0046 withdrew customer-funded stored value
- * from scope outright — "Loyalty is points only" — because nobody has a
- * Central Bank of Uzbekistan authorisation to hold customer funds. That is a
- * closed decision, not a gap to fill. POS balance sync: no ADR, no capability,
- * no adapter — the IA row names it and nothing beneath it exists yet.
+ * from scope, and ADR 0165 closes the rows that waited on it as a decline:
+ * HorecaOS holds no customer funds. The panel says so in the one sentence
+ * ADR 0165 gives (Decision 8) and says what would reopen it (Decision 6, which
+ * narrows ADR 0046's "a licence exists" condition). Not a gap to fill. POS
+ * balance sync: no ADR, no capability, no adapter — the IA row names it and
+ * nothing beneath it exists yet, which is the only panel here that is "not built".
  *
  * **Reduced relative to the spec.** The location and channel pickers below
  * list every branch/channel this brand has, but a rule's own `scopeId` is

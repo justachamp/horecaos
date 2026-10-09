@@ -7,6 +7,7 @@ import {
   OrdersService,
   type ApiOrderDetail,
   type OrderLineCatchweight,
+  type OrderReceipt,
   type ReorderPlanResponse,
 } from '../../services/orders.service';
 import { NotificationService } from '../../services/notification.service';
@@ -87,6 +88,15 @@ export class OrderDetailComponent implements OnInit {
    * too.
    */
   reorderPlan = signal<ReorderPlanResponse | null>(null);
+
+  /**
+   * The links to the receipts filed for this order (ADR 0166), once the platform has answered.
+   *
+   * Empty while the read is in flight, when it failed, and when no receipt has been filed -- an order
+   * paid in cash has none from a payment provider -- and all three render nothing: a receipt section
+   * with nothing in it would only ask the customer a question the page cannot answer.
+   */
+  receipts = signal<readonly OrderReceipt[]>([]);
   repeating = signal(false);
   repeatError = signal<string | null>(null);
 
@@ -146,6 +156,35 @@ export class OrderDetailComponent implements OnInit {
       },
     });
     this.loadReorderPlan(id);
+    this.loadReceipts(id);
+  }
+
+  /**
+   * Asks which receipts have been filed for this order.
+   *
+   * Independent of the order's own load, like the reorder plan: the order renders as soon as it
+   * arrives and the receipt links appear a moment later. A failure leaves the list empty, which the
+   * template reads as «show nothing»: the customer was sent the same link when the receipt was issued,
+   * so a read that fails costs them a convenience and never the receipt.
+   */
+  private loadReceipts(id: string): void {
+    this.receipts.set([]);
+    this.ordersService.getReceipts(id).subscribe({
+      next: (receipts) => this.receipts.set(receipts),
+      error: () => this.receipts.set([]),
+    });
+  }
+
+  /** The words on a receipt link: a refund or a correction says so, anything else is the receipt. */
+  receiptLabelKey(kind: string): string {
+    switch (kind) {
+      case 'REFUND':
+        return 'orders.receipt.openRefund';
+      case 'CORRECTION':
+        return 'orders.receipt.openCorrection';
+      default:
+        return 'orders.receipt.open';
+    }
   }
 
   /**

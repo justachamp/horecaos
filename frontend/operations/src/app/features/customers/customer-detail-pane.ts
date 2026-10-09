@@ -45,11 +45,25 @@ import {
   LoyaltyAdjustmentResult,
   LoyaltyBalance,
   LoyaltyEntry,
+  LoyaltyReasonCodes,
   PromoRedemption,
   RevealedBlacklistEntry,
   RevealedContact,
   RevealedCustomerAddress,
 } from './customers-api';
+
+/**
+ * ADR 0165: an enforced reason-code list answers a code off it with 400 `VALIDATION_FAILED` and one
+ * `errors[]` entry for `reasonCode`. That is a mistake in one field the operator can fix by picking
+ * a listed code, not a failure of the adjustment form.
+ */
+function isReasonCodeRefusal(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 400 &&
+    error.fieldErrors.some((entry) => entry.field === 'reasonCode')
+  );
+}
 
 type Tab =
   | 'profile'
@@ -138,8 +152,8 @@ const REVEAL_PURPOSE = {
  * tab's own note on what "cashback" maps to here. Three things named in the
  * frontend information architecture are honestly not built, each named where
  * it would otherwise appear rather than silently omitted: a customer-funded
- * deposit balance (`loyalty`'s own package doc: "no deposit account… and
- * none is deferred" — an architectural exclusion, not a gap), promo code
+ * deposit balance (not offered: ADR 0165, HorecaOS holds no customer funds —
+ * an architectural exclusion and a recorded decision, not a gap), promo code
  * redemptions (the pricing module has no redemption ledger at all), and
  * reviews left — the review entity now exists (ADR 0071, wave 59) and answers
  * this exact question filtered by customer (`reviews.order_reviews
@@ -1064,6 +1078,14 @@ export class CustomerDetailPane {
   protected readonly adjustDirection = signal<'CREDIT' | 'DEBIT'>('CREDIT');
   protected readonly adjustAmountMinor = signal(0);
   protected readonly adjustReasonCode = signal('');
+  /**
+   * The platform's list of reason codes (ADR 0165), read when the form opens. Null until it
+   * answers, and again if the read fails: the field then stays free text, which is what the
+   * server accepts in `REPORT_ONLY` mode and refuses in `ENFORCE` with a field error the
+   * operator sees. A copy of the list in this file would be a second source of truth.
+   */
+  protected readonly reasonCodePolicy = signal<LoyaltyReasonCodes | null>(null);
+  protected readonly reasonCodeRefused = signal(false);
   protected readonly adjustReason = signal('');
   protected readonly adjustSaving = signal(false);
   protected readonly adjustResult = signal<LoyaltyAdjustmentResult | null>(null);
@@ -1079,7 +1101,28 @@ export class CustomerDetailPane {
     this.adjustReasonCode.set('');
     this.adjustReason.set('');
     this.adjustResult.set(null);
+    this.reasonCodeRefused.set(false);
     this.adjustingBalanceId.set(balance.accountId);
+    void this.loadReasonCodes();
+  }
+
+  /** Whether the reason code is a closed choice (`ENFORCE`) rather than free text with suggestions. */
+  protected reasonCodeIsClosed(): boolean {
+    return this.reasonCodePolicy()?.mode === 'ENFORCE';
+  }
+
+  private async loadReasonCodes(): Promise<void> {
+    const scope = this.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      this.reasonCodePolicy.set(await this.api.adjustmentReasonCodes(scope));
+    } catch {
+      // Not fatal and not hidden: the field stays free text, and the server's answer to a code off
+      // its list is a field error this form shows.
+      this.reasonCodePolicy.set(null);
+    }
   }
 
   protected cancelAdjusting(): void {
@@ -1117,7 +1160,14 @@ export class CustomerDetailPane {
       }
       this.adjustingBalanceId.set(null);
     } catch (error) {
-      this.noticeFrom(error);
+      if (isReasonCodeRefusal(error)) {
+        // ADR 0165, ENFORCE: a field error on `reasonCode`, not a failure of the form. The operator
+        // picks one of the listed codes; the list is re-read in case it changed under the form.
+        this.reasonCodeRefused.set(true);
+        void this.loadReasonCodes();
+      } else {
+        this.noticeFrom(error);
+      }
     } finally {
       this.adjustSaving.set(false);
     }

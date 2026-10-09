@@ -157,7 +157,7 @@ export const customersRu: AreaMessages<typeof customersEn> = {
   'customers.cashback.noEntries': 'Записей пока нет.',
   'customers.cashback.empty': 'У этого клиента пока нет баланса баллов.',
   'customers.cashback.depositNotBuilt':
-    'Депозитный баланс — не построено. Модуль лояльности намеренно не хранит средства клиента: нет депозитного счёта, пополнения или вывода.',
+    'Депозитный баланс — не предлагается. HorecaOS не хранит деньги клиентов, поэтому предоплаченного депозита нет. Клиенты зарабатывают и тратят баллы лояльности — это не деньги; заведение со своей лицензированной программой предоплаты может подключить своего провайдера как способ оплаты.',
   'customers.cashback.adjust.action': 'Скорректировать баланс',
   'customers.cashback.adjust.direction': 'Направление',
   'customers.cashback.adjust.direction.CREDIT': 'Начислить баллы',
@@ -165,6 +165,9 @@ export const customersRu: AreaMessages<typeof customersEn> = {
   'customers.cashback.adjust.amount': 'Сумма',
   'customers.cashback.adjust.reasonCode': 'Код причины',
   'customers.cashback.adjust.reasonCode.placeholder': 'например, GOODWILL',
+  'customers.cashback.adjust.reasonCode.choose': 'Выберите код причины',
+  'customers.cashback.adjust.reasonCode.refused':
+    'Этого кода причины нет в списке. Выберите один из перечисленных кодов.',
   'customers.cashback.adjust.reason': 'Причина',
   'customers.cashback.adjust.submit': 'Применить корректировку',
   'customers.cashback.adjust.result.applied': 'Корректировка применена.',

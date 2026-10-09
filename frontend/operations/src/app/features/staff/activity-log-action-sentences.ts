@@ -1005,6 +1005,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Фискальный терминал зарегистрировано',
       'uz-Latn': 'Fiskal terminal roʻyxatdan oʻtkazildi',
     },
+    'fiscal.correction.attached': {
+      en: 'Fiscal agent’s correction reference attached',
+      ru: 'Приложена ссылка фискального агента на коррекцию чека',
+      'uz-Latn': 'Fiskal agentning tuzatish havolasi biriktirildi',
+    },
+    'fiscal.correction.requested': {
+      en: 'Fiscal receipt correction or void requested',
+      ru: 'Запрошена коррекция или аннулирование чека',
+      'uz-Latn': 'Chekni tuzatish yoki bekor qilish soʻraldi',
+    },
     'fiscal.document.retry': {
       en: 'Fiscal document retry',
       ru: 'Фискальный документ повтор',
@@ -1014,6 +1024,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Fiscal document unblock',
       ru: 'Фискальный документ разблокировка',
       'uz-Latn': 'Fiskal hujjat blokdan chiqarish',
+    },
+    'fiscal.evidence.revealed': {
+      en: 'Fiscal receipt identifiers opened in full',
+      ru: 'Идентификаторы фискального чека открыты целиком',
+      'uz-Latn': 'Fiskal chek identifikatorlari toʻliq ochildi',
     },
     'fulfillment.delivery.cost-subsidy': {
       en: 'Fulfillment delivery cost subsidy',

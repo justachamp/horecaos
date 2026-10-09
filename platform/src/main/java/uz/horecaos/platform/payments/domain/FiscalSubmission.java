@@ -19,6 +19,8 @@ import org.jspecify.annotations.Nullable;
  *                {@code SetFiscalData} and may never arrive at all
  * @param providerStatusCode the provider's own code, kept verbatim. A non-zero one
  *                           is the evidence that there is <em>no</em> receipt
+ * @param sent    what was put on the wire, when something was (ADR 0166); null when the adapter
+ *                answered without sending, which is not the same as a request that went and failed
  */
 public record FiscalSubmission(
         ProviderOutcome.Classification classification,
@@ -26,7 +28,8 @@ public record FiscalSubmission(
         FiscalDocument.@Nullable FiscalEvidence evidence,
         @Nullable String providerStatusCode,
         @Nullable String providerMessage,
-        Instant submittedAt) {
+        Instant submittedAt,
+        @Nullable SentReceipt sent) {
 
     public FiscalSubmission {
         Objects.requireNonNull(classification, "A classification is required");
@@ -36,26 +39,32 @@ public record FiscalSubmission(
 
     public static FiscalSubmission issued(FiscalDocument.FiscalEvidence evidence, Instant at) {
         return new FiscalSubmission(
-                ProviderOutcome.Classification.SUCCESS, FiscalStatus.ISSUED, evidence, null, null, at);
+                ProviderOutcome.Classification.SUCCESS, FiscalStatus.ISSUED, evidence, null, null, at, null);
     }
 
     /** Payme: accepted, with the outcome to arrive later and asynchronously. */
     public static FiscalSubmission accepted(Instant at) {
         return new FiscalSubmission(
-                ProviderOutcome.Classification.SUCCESS, FiscalStatus.SUBMITTED, null, null, null, at);
+                ProviderOutcome.Classification.SUCCESS, FiscalStatus.SUBMITTED, null, null, null, at, null);
     }
 
     public static FiscalSubmission rejected(String statusCode, String message, Instant at) {
         return new FiscalSubmission(
-                ProviderOutcome.Classification.REJECTED, FiscalStatus.FAILED, null, statusCode, message, at);
+                ProviderOutcome.Classification.REJECTED, FiscalStatus.FAILED, null, statusCode, message, at, null);
     }
 
     public static FiscalSubmission uncertain(String detail, Instant at) {
         return new FiscalSubmission(
-                ProviderOutcome.Classification.UNCERTAIN, FiscalStatus.SUBMITTED, null, null, detail, at);
+                ProviderOutcome.Classification.UNCERTAIN, FiscalStatus.SUBMITTED, null, null, detail, at, null);
     }
 
     public Optional<FiscalDocument.FiscalEvidence> fiscalEvidence() {
         return Optional.ofNullable(evidence);
+    }
+
+    /** The same answer, recording that the request it answers went out (ADR 0166). */
+    public FiscalSubmission withSent(SentReceipt wire) {
+        return new FiscalSubmission(
+                classification, status, evidence, providerStatusCode, providerMessage, submittedAt, wire);
     }
 }

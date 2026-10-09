@@ -217,7 +217,8 @@ public class JdbcFiscalLifecycleStore {
                     version = version + 1,
                     updated_at = :now
                 WHERE tenant_id = :tenantId AND id = :id AND version = :expectedVersion
-                  AND status <> 'ISSUED' AND status <> 'NOT_APPLICABLE'
+                  AND status NOT IN ('ISSUED', 'NOT_APPLICABLE', 'CORRECTION_REQUESTED',
+                                     'VOID_REQUESTED', 'CORRECTED', 'VOIDED')
                 """)
                         .param("tenantId", tenantId)
                         .param("id", documentId)
@@ -578,7 +579,8 @@ public class JdbcFiscalLifecycleStore {
         return jdbc.sql("""
                 SELECT
                   count(*) AS total,
-                  count(*) FILTER (WHERE status = 'ISSUED') AS issued,
+                  count(*) FILTER (WHERE status IN ('ISSUED', 'CORRECTION_REQUESTED', 'VOID_REQUESTED',
+                                                    'CORRECTED', 'VOIDED')) AS issued,
                   count(*) FILTER (WHERE status = 'NOT_APPLICABLE') AS not_applicable,
                   count(*) FILTER (WHERE status = 'NOT_APPLICABLE'
                                      AND reason_code = :cashReason) AS cash,

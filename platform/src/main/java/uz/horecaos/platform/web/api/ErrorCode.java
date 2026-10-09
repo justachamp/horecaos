@@ -217,6 +217,17 @@ public enum ErrorCode {
     /** ADR 0155: an activation code that is unknown, spent, expired or burned, or a PIN refused by the entry rules. */
     TERMINAL_ACTIVATION_REFUSED(HttpStatus.UNPROCESSABLE_ENTITY, "Activation refused"),
 
+    /**
+     * ADR 0166, ADR 0029: opening protected evidence in full needs a declared purpose, one of a
+     * closed set, and the caller sent none or one this deployment does not know.
+     *
+     * <p>422 and not {@link #VALIDATION_FAILED}: the request is well-formed and the caller holds the
+     * capability; what is missing is the reason the platform requires on the record before it
+     * answers, and the remedy is to state it, not to repair a field. Distinct from
+     * {@link #INSUFFICIENT_CAPABILITY}, which says the caller may not look at all.
+     */
+    PURPOSE_REQUIRED(HttpStatus.UNPROCESSABLE_ENTITY, "A declared purpose is required"),
+
     RATE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "Rate limit exceeded"),
 
     /**

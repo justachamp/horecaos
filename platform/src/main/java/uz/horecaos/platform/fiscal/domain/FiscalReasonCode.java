@@ -67,11 +67,23 @@ public final class FiscalReasonCode {
     public static final String TERMINAL_OFFLINE = "TERMINAL_OFFLINE";
 
     /**
+     * The real receipt line builder does not exist yet, and a one-line placeholder may not be
+     * filed in this environment (ADR 0166, Decision 6). A document the sweeper claimed lands here
+     * rather than going out as a sale with a placeholder classification.
+     */
+    public static final String LINES_NOT_BUILT = "LINES_NOT_BUILT";
+
+    /**
      * The blocking reasons, so a worklist filter and an operator's unblock command
      * are validated against one list rather than two that drift.
      */
-    public static final Set<String> BLOCKING =
-            Set.of(PROVIDER_REPORT_OVERDUE, CLASSIFICATION_MISSING, MARKS_INCOMPLETE, NO_FISCAL_PATH, TERMINAL_OFFLINE);
+    public static final Set<String> BLOCKING = Set.of(
+            PROVIDER_REPORT_OVERDUE,
+            CLASSIFICATION_MISSING,
+            MARKS_INCOMPLETE,
+            NO_FISCAL_PATH,
+            TERMINAL_OFFLINE,
+            LINES_NOT_BUILT);
 
     private FiscalReasonCode() {}
 }

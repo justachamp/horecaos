@@ -790,6 +790,16 @@ export interface PutLineRequest {
   variantId: string;
 }
 
+export interface ReceiptResponse {
+  kind?: string;
+  registeredAt?: string;
+  url?: string;
+}
+
+export interface ReceiptsResponse {
+  receipts?: Array<ReceiptResponse>;
+}
+
 export interface RedeemRequest {
   code: string;
 }
@@ -1095,6 +1105,7 @@ export interface Operations {
   "readOrder": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } } }; responses: { "200": OrderResponse } };
   "cancel": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/cancellations"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } }; body: StorefrontOrderingControllerCancelRequest }; responses: { "200": OrderStateResponse } };
   "openPaymentSession": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/payment-sessions"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; orderId: string; tenantId: string } }; body: PaymentSessionRequest }; responses: { "200": StorefrontPaymentControllerPaymentSessionResponse } };
+  "receipts": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/receipts"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } } }; responses: { "200": ReceiptsResponse } };
   "reorderPlan": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/reorder"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } } }; responses: { "200": ReorderPlanResponse } };
   "submit": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/review"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } }; body: SubmitReviewRequest }; responses: { "200": StorefrontReviewControllerReviewResponse } };
   "poll_1": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/presented-offers"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { surface?: string } } }; responses: { "200": Array<Banner> } };

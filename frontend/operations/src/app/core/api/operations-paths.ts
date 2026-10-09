@@ -1177,6 +1177,16 @@ export const operationsPaths = {
   },
 
   /**
+   * The reason codes a manual adjustment may carry (ADR 0165) — the platform's closed list and
+   * whether it is enforced yet (`LoyaltyOperationsController.adjustmentReasonCodes`,
+   * `LOYALTY_ADJUST`, tenant-scoped). The dialog reads it when it opens, so the console never
+   * keeps a copy of the list in its own source.
+   */
+  loyaltyAdjustmentReasonCodes(scope: LocationScope): string {
+    return `${OPERATIONS}${tenant(scope)}/loyalty/adjustment-reason-codes`;
+  },
+
+  /**
    * Row 5.2g: every coupon-gated discount this customer has ever held,
    * tenant-wide (`CustomerDiscountHistoryController`, ADR 0072, row 7.9a) —
    * `pricing.coupon_redemptions`' own `ix_redemptions_customer` index, read

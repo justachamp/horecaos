@@ -6,6 +6,7 @@ import { OrderDetailComponent } from './order-detail.component';
 import {
   OrdersService,
   type ApiOrderDetail,
+  type OrderReceipt,
   type ReorderLineResponse,
   type ReorderPlanResponse,
   type ReorderVerdict,
@@ -94,11 +95,13 @@ function setUp(
   detail: ApiOrderDetail,
   reorderPlan$: Observable<ReorderPlanResponse> = of(plan('READY')),
   locationProfile: LocationProfile | null = null,
+  receipts$: Observable<readonly OrderReceipt[]> = of([]),
 ) {
   const cartAdd = vi.fn(async () => {});
   const ordersService = {
     getOrderDetail: vi.fn(() => of(detail)),
     getReorderPlan: vi.fn(() => reorderPlan$),
+    getReceipts: vi.fn(() => receipts$),
   };
   const locationProfileService = {
     profile: vi.fn(() => Promise.resolve(locationProfile)),
@@ -725,5 +728,72 @@ describe('OrderDetailComponent: portions and weighed lines (ADR 0137)', () => {
 
     expect(host.querySelector('[data-testid="order-line-weight"]')).toBeNull();
     expect(host.querySelector('[data-testid="order-final-weight-notice"]')).toBeNull();
+  });
+});
+
+describe('OrderDetailComponent: the receipt link (ADR 0166)', () => {
+  const SALE: OrderReceipt = {
+    kind: 'SALE',
+    url: 'https://ofd.soliq.uz/epi?t=TERM-0042&r=R-5551234',
+    registeredAt: '2026-10-08T09:00:00Z',
+  };
+
+  async function open(receipts$: Observable<readonly OrderReceipt[]>) {
+    const harness = setUp('o1', apiOrderDetail(), of(plan('UNAVAILABLE')), null, receipts$);
+    harness.fixture.detectChanges();
+    await harness.fixture.whenStable();
+    harness.fixture.detectChanges();
+    return { ...harness, host: harness.fixture.nativeElement as HTMLElement };
+  }
+
+  it('asks for the receipts of this order and no other', async () => {
+    const { ordersService } = await open(of([SALE]));
+
+    expect(ordersService.getReceipts).toHaveBeenCalledWith('o1');
+  });
+
+  it('shows the link to the receipt where the customer looks for everything else about the order', async () => {
+    const { host } = await open(of([SALE]));
+
+    const link = host.querySelector('[data-testid="order-receipt-link"]') as HTMLAnchorElement;
+    expect(link).not.toBeNull();
+    expect(link.getAttribute('href')).toBe(SALE.url);
+    expect(link.textContent?.trim()).toBe('orders.receipt.open');
+  });
+
+  it('opens it in a new tab without handing the tax authority’s page this one', async () => {
+    const { host } = await open(of([SALE]));
+
+    const link = host.querySelector('[data-testid="order-receipt-link"]') as HTMLAnchorElement;
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
+  it('says a refund receipt is a refund receipt, beside the first', async () => {
+    const { host } = await open(
+      of([SALE, { kind: 'REFUND', url: 'https://ofd.soliq.uz/epi?t=REFUND', registeredAt: null }]),
+    );
+
+    const links = Array.from(
+      host.querySelectorAll('[data-testid="order-receipt-link"]'),
+    ) as HTMLAnchorElement[];
+    expect(links.map((link) => link.textContent?.trim())).toEqual([
+      'orders.receipt.open',
+      'orders.receipt.openRefund',
+    ]);
+  });
+
+  it('shows no receipt section at all for an order with no receipt, such as one paid in cash', async () => {
+    const { host } = await open(of([]));
+
+    expect(host.querySelector('[data-testid="order-receipts"]')).toBeNull();
+  });
+
+  it('shows the order and no receipt section when the receipts cannot be read', async () => {
+    const { host, comp } = await open(throwError(() => new Error('down')));
+
+    expect(comp.order()).not.toBeNull();
+    expect(host.querySelector('[data-testid="order-receipts"]')).toBeNull();
+    expect(host.querySelector('[data-testid="order-receipt-link"]')).toBeNull();
   });
 });

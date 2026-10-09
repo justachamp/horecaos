@@ -1343,6 +1343,11 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
     'Aksiya yoki yirik mijozlar eksporti ikkinchi imzoni kutadigan chegaralar.',
   'settings.fiscalization.noAccess': 'Ruxsat yoʻq',
   'settings.fiscalization.responsibility': 'Chekni kim beradi',
+  'settings.fiscalization.responsibility.lead':
+    '“Toʻlovlar” ekrani bilan bir xil modeldan oʻqiladi: roʻyxat toʻlov usuli cheki uchun kim javobgarligini, merchant hisoblari va fiskal terminallar esa buni bugun bajarish mumkinligini aytadi. Bu yerda sozlanmaydi: bogʻlamalardan farq qiladigan sozlama soliq hujjati haqida yolgʻon maʻlumot boʻlar edi.',
+  'settings.fiscalization.responsibility.state.live': 'chek berish mumkin',
+  'settings.fiscalization.responsibility.state.noPath': 'fiskal yoʻl yoʻq',
+  'settings.fiscalization.responsibility.state.notApplicable': 'chek kerak emas',
   'settings.locations.pin.title': 'Xaritadagi nuqta',
   'settings.locations.pin.none':
     'Filialning xaritada nuqtasi yoʻq. U boʻlmaguncha filialdan masofa oʻlchab boʻlmaydi va uning atrofida yetkazib berish zonasi chizib boʻlmaydi. Nuqtani qoʻyish uchun tahrirlashni oching.',

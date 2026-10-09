@@ -189,6 +189,29 @@
     }
   </div>
 
+  <!-- The receipt (ADR 0166): the link the customer was sent when it was issued, where they look for
+       everything else about the order. Absent until a receipt exists, and for a cash order. -->
+  @if (receipts().length > 0) {
+    <section
+      class="mx-4 mt-4 rounded-xl bg-surface-raised p-4"
+      [attr.aria-label]="'orders.receipt.title' | t"
+      data-testid="order-receipts"
+    >
+      <h2 class="text-sm font-semibold text-text-primary">{{ 'orders.receipt.title' | t }}</h2>
+      @for (receipt of receipts(); track receipt.url) {
+        <a
+          [href]="receipt.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="mt-2 block text-sm font-medium text-brand-accent underline"
+          data-testid="order-receipt-link"
+          >{{ receiptLabelKey(receipt.kind) | t }}</a
+        >
+      }
+      <p class="mt-2 text-xs text-zinc-400">{{ 'orders.receipt.hint' | t }}</p>
+    </section>
+  }
+
   @if (canRepeat()) {
     <div class="mt-6 px-4 pb-6">
       <button

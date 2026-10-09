@@ -419,9 +419,11 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.loyalty.redemption.form.excludesFee':
     'Yetkazib berish narxini sarflash bazasidan chiqarib tashlash',
 
-  'marketing.loyalty.deposit.title': 'Depozit hisoblar',
+  'marketing.loyalty.deposit.title': 'Depozit hisoblar — taklif qilinmaydi',
   'marketing.loyalty.deposit.body':
-    'Qurilmagan, va bu boʻshliq emas: ADR 0046 mijoz mablagʻi bilan toʻldiriladigan hisobni butunlay doiradan chiqarib tashladi. HorecaOS mijozlarning pulini saqlamaydi, shuning uchun depozit hisob litsenziyasiz toʻlov xizmati bilan bir xil savolni tugʻdiradi — qaror faqat ballarni taklif qilishdir.',
+    'HorecaOS mijozlarning pulini saqlamaydi, shuning uchun oldindan toʻlanadigan depozit yoʻq. Mijozlar sodiqlik ballarini yigʻadi va sarflaydi — bular pul emas; oʻzining litsenziyalangan oldindan toʻlov dasturiga ega restoran oʻz provayderini toʻlov usuli sifatida ulashi mumkin.',
+  'marketing.loyalty.deposit.revisit':
+    'Qaror, boʻshliq emas (ADR 0165). U faqat HorecaOS yoki egasi nazorat qiladigan kompaniya mijozlarning oldindan toʻlovini qamrab oluvchi Markaziy bank ruxsatini olsa, yoki huquqshunos restoranning oʻz ruxsati HorecaOS platformasini uning hisobini yuritishga majbur qilishini yozma tasdiqlasa qayta koʻriladi. Restoranning shuni soʻrashi uni qayta ochmaydi. Bu ADR 0046dagi “litsenziya mavjud” shartini toraytiradi: restoran litsenziyasi faqat provayder orqali toʻlov usulini beradi, bizda saqlanadigan balansni hech qachon.',
   'marketing.loyalty.posSync.title': 'POS bilan balans sinxronizatsiyasi',
   'marketing.loyalty.posSync.body':
     'Qurilmagan. Hech qanday ADR POS terminali sodiqlik balansini oʻqishi yoki yozishini belgilamaydi, va provayder imkoniyati sifatida ham eʻlon qilinmagan — qarang: frontend-information-architecture.md §6.3.',

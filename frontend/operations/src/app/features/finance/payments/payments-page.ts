@@ -4,12 +4,24 @@ import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { OrderLookupApi, OrderNumberMatchView } from '../../../core/api/order-lookup-api';
 import { formatMoney } from '../../../core/format/money';
 import { I18n } from '../../../core/i18n/i18n';
+import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { ApiError } from '../../../core/api/problem-details';
 import { describeApiError } from '../../orders/order-errors';
 import { orderStatusLabel } from '../../orders/order-status';
 import { describeReissueRefusal } from '../finance-errors';
 import { QQrCode } from '../../../shared/ui/qr-code';
+import {
+  FiscalEvidence,
+  evidenceDocumentAnchor,
+  documentOfTender,
+} from '../fiscal/fiscal-evidence';
+import {
+  FiscalEvidenceApi,
+  FiscalEvidenceDocumentView,
+  FiscalPaymentTypeView,
+} from '../fiscal/fiscal-evidence-api';
+import { FISCAL_DOCUMENT_STATUS_KEYS, isFiscalDocumentStatus } from '../finance-labels';
 import {
   ENTITLEMENT_BENEFIT_KEYS,
   ENTITLEMENT_SCOPE_KEYS,
@@ -40,6 +52,31 @@ import {
   VerificationState,
 } from './payments-api';
 
+/** `FiscalPathKind` (Java `paymentType.path`) as words. */
+const PATH_KEYS: Readonly<Record<string, MessageKey>> = {
+  PARTNER_ACCOUNT: 'finance.fiscalEvidence.paymentTypes.path.PARTNER_ACCOUNT',
+  TERMINAL: 'finance.fiscalEvidence.paymentTypes.path.TERMINAL',
+  AGGREGATOR: 'finance.fiscalEvidence.paymentTypes.path.AGGREGATOR',
+  NOT_A_FISCAL_PATH: 'finance.fiscalEvidence.paymentTypes.path.NOT_A_FISCAL_PATH',
+  NONE: 'finance.fiscalEvidence.paymentTypes.path.NONE',
+};
+
+/** The stable code the server gives for why a method has no path, when the reason code alone does not say it. */
+const PATH_NOTE_KEYS: Readonly<Record<string, MessageKey>> = {
+  AGGREGATOR_CONTRACT_NOT_RECORDED:
+    'finance.fiscalEvidence.paymentTypes.note.AGGREGATOR_CONTRACT_NOT_RECORDED',
+  BALANCE_IS_A_LINE_DISCOUNT: 'finance.fiscalEvidence.paymentTypes.note.BALANCE_IS_A_LINE_DISCOUNT',
+  OPERATOR_RESPONSIBILITY_UNIMPLEMENTED:
+    'finance.fiscalEvidence.paymentTypes.note.OPERATOR_RESPONSIBILITY_UNIMPLEMENTED',
+};
+
+const RESPONSIBILITY_KEYS: Readonly<Record<string, MessageKey>> = {
+  PARTNER: 'finance.fiscalEvidence.responsibility.PARTNER',
+  TERMINAL: 'finance.fiscalEvidence.responsibility.TERMINAL',
+  MARKETPLACE: 'finance.fiscalEvidence.responsibility.MARKETPLACE',
+  OPERATOR: 'finance.fiscalEvidence.responsibility.OPERATOR',
+};
+
 type RemedyKind = RemedyType;
 type ReissueKind = 'PAYMENT_LINK' | 'INVOICE_PUSH';
 
@@ -65,7 +102,7 @@ type ReissueKind = 'PAYMENT_LINK' | 'INVOICE_PUSH';
  */
 @Component({
   selector: 'q-payments-page',
-  imports: [TPipe, QQrCode],
+  imports: [TPipe, QQrCode, FiscalEvidence],
   templateUrl: './payments-page.html',
   styleUrl: './payments-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -74,7 +111,11 @@ export class PaymentsPage {
   private readonly tenant = inject(CurrentTenant);
   private readonly api = inject(PaymentsApi);
   private readonly orderLookup = inject(OrderLookupApi);
+  private readonly evidenceApi = inject(FiscalEvidenceApi);
   protected readonly i18n = inject(I18n);
+
+  /** The tenant whose order is on screen; the fiscal evidence block below the tenders reads for it. */
+  protected readonly tenantId = this.tenant.tenantId;
 
   protected readonly reasonCodes = REFUND_REASON_CODES;
   protected readonly entitlementScopes: readonly EntitlementScope[] = [
@@ -140,6 +181,16 @@ export class PaymentsPage {
   protected readonly verifySubmitting = signal(false);
   protected readonly verifyError = signal<string | null>(null);
 
+  // -------------------------------------------------------------- fiscal evidence (ADR 0166)
+  /** The order's fiscal documents as the evidence block read them, so a tender can link to its own. */
+  protected readonly fiscalDocuments = signal<readonly FiscalEvidenceDocumentView[]>([]);
+
+  /** Which payment types are fiscalized: derived by the server, never set here. */
+  protected readonly typesLoading = signal(true);
+  protected readonly typesDenied = signal(false);
+  protected readonly typesError = signal(false);
+  protected readonly paymentTypes = signal<readonly FiscalPaymentTypeView[]>([]);
+
   // -------------------------------------------------------------- remedy totals
   protected readonly totalsLoading = signal(false);
   protected readonly totalsError = signal<string | null>(null);
@@ -159,7 +210,47 @@ export class PaymentsPage {
       this.unverifiedDenied.set(this.tenant.denied());
       return;
     }
-    await Promise.all([this.loadUnverified(tenantId), this.loadTotals(tenantId)]);
+    await Promise.all([
+      this.loadUnverified(tenantId),
+      this.loadTotals(tenantId),
+      this.loadPaymentTypes(tenantId),
+    ]);
+  }
+
+  // -------------------------------------------------------------- fiscal evidence
+
+  private async loadPaymentTypes(tenantId: string): Promise<void> {
+    this.typesLoading.set(true);
+    this.typesError.set(false);
+    try {
+      this.paymentTypes.set(await this.evidenceApi.paymentTypes(tenantId));
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 403) {
+        this.typesDenied.set(true);
+      } else {
+        this.typesError.set(true);
+      }
+    } finally {
+      this.typesLoading.set(false);
+    }
+  }
+
+  /** The fiscal document a tender's receipt is, once the evidence block has read the order. */
+  protected fiscalDocumentOf(tenderId: string): FiscalEvidenceDocumentView | null {
+    return documentOfTender(this.fiscalDocuments(), tenderId);
+  }
+
+  protected fiscalStatusLabel(status: string): string {
+    return isFiscalDocumentStatus(status)
+      ? this.i18n.t(FISCAL_DOCUMENT_STATUS_KEYS[status])
+      : status;
+  }
+
+  /** Takes the operator to the document's evidence card on this page, and puts the focus on it. */
+  protected showFiscalDocument(documentId: string): void {
+    const card = document.getElementById(evidenceDocumentAnchor(documentId));
+    card?.scrollIntoView?.({ block: 'start' });
+    card?.focus();
   }
 
   // -------------------------------------------------------------- order lookup by number
@@ -221,6 +312,7 @@ export class PaymentsPage {
     this.orderError.set(null);
     this.payment.set(null);
     this.remedies.set([]);
+    this.fiscalDocuments.set([]);
     this.resetReissueForm();
     this.resetRemedyForm();
     try {
@@ -503,6 +595,35 @@ export class PaymentsPage {
     } finally {
       this.totalsLoading.set(false);
     }
+  }
+
+  protected pathLabel(type: FiscalPaymentTypeView): string {
+    const key = PATH_KEYS[type.path];
+    return key ? this.i18n.t(key) : type.path;
+  }
+
+  protected typeResponsibilityLabel(type: FiscalPaymentTypeView): string {
+    const key = RESPONSIBILITY_KEYS[type.responsibility];
+    return key ? this.i18n.t(key) : type.responsibility;
+  }
+
+  /** What «today» means for a method: a receipt can be issued, nothing is owed, or nobody can issue one. */
+  protected typeStateLabel(type: FiscalPaymentTypeView): string {
+    if (type.live) {
+      return this.i18n.t('finance.fiscalEvidence.paymentTypes.live');
+    }
+    return type.path === 'NOT_A_FISCAL_PATH'
+      ? this.i18n.t('finance.fiscalEvidence.paymentTypes.notApplicable')
+      : this.i18n.t('finance.fiscalEvidence.paymentTypes.noPath');
+  }
+
+  protected typeNote(type: FiscalPaymentTypeView): string | null {
+    const key = type.note ? PATH_NOTE_KEYS[type.note] : undefined;
+    return key ? this.i18n.t(key) : null;
+  }
+
+  protected terminalsLabel(count: number): string {
+    return this.i18n.t('finance.fiscalEvidence.paymentTypes.terminals', { count });
   }
 
   // -------------------------------------------------------------- formatting

@@ -221,6 +221,29 @@ BEGIN
        AND merchant_account_reference = 'local-fixture-service-1'
        AND (merchant_user_reference IS NULL OR merchant_id_reference IS NULL);
 END \$\$;
+
+-- 5. ADR 0166, Decision 6. The receipt line builder does not exist yet, so the only receipt that
+--    can be filed is the bridge's one-line placeholder, and that is filed only where the provider
+--    environment is a sandbox AND the platform has said so. Step 2 made the environment a sandbox
+--    pointed at FakeClickHttpProvider; this is the platform saying so, for this database only. Without
+--    it the fiscal sweeper blocks every captured order as LINES_NOT_BUILT and a manual retry answers
+--    409 FISCAL_LINES_NOT_BUILT, which is the right behaviour anywhere that is not a developer's laptop.
+INSERT INTO tenant.policies
+    (id, key_code, scope_type, version, status, document, document_hash, valid_from, created_by, approved_by)
+SELECT '20000000-0000-0000-0000-000000000551'::uuid, 'fiscal.synthetic_lines_allowed', 'PLATFORM', 1,
+       'ACTIVE', '{"allowed":true}'::jsonb,
+       'af0da34c17b64921ff8e70fffbc89b6fa7a9445ef03cf8407b99d913231acb00',
+       now(), 'tools/seed-payments', 'tools/seed-payments'
+ WHERE NOT EXISTS (
+     SELECT 1 FROM tenant.policies
+      WHERE key_code = 'fiscal.synthetic_lines_allowed' AND scope_type = 'PLATFORM');
+INSERT INTO tenant.policy_current (key_code, scope_type, policy_id, policy_version, activated_by)
+SELECT p.key_code, p.scope_type, p.id, p.version, 'tools/seed-payments'
+  FROM tenant.policies p
+ WHERE p.key_code = 'fiscal.synthetic_lines_allowed' AND p.scope_type = 'PLATFORM' AND p.status = 'ACTIVE'
+   AND NOT EXISTS (
+       SELECT 1 FROM tenant.policy_current c
+        WHERE c.key_code = p.key_code AND c.scope_type = 'PLATFORM');
 SQL
 echo "    done"
 

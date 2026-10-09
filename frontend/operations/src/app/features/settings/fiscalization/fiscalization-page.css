@@ -248,6 +248,15 @@
   border-radius: var(--q-radius);
 }
 
+.method .state {
+  margin-inline-start: 6px;
+  color: var(--q-ink-muted);
+}
+
+.method .state--warning {
+  color: var(--q-warning-text);
+}
+
 .method--off {
   color: var(--q-ink-subtle);
   text-decoration: line-through;
