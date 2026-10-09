@@ -1,0 +1,102 @@
+<div class="min-h-screen bg-surface-base pb-24 text-text-primary">
+  <div class="mx-auto max-w-[420px] px-4 py-6">
+    <header class="flex shrink-0 flex-col gap-2 pb-6">
+      <button
+        type="button"
+        appBack="/home"
+        class="app-back flex items-center gap-2 text-sm transition-opacity hover:opacity-90"
+      >
+        <svg
+          class="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M15 19l-7-7 7-7"
+          />
+        </svg>
+        {{ 'common.back' | t }}
+      </button>
+      <h1 class="text-center text-base font-semibold text-text-primary">{{ titleKey() | t }}</h1>
+    </header>
+
+    @switch (state()) {
+      @case ('loading') {
+        <div class="flex justify-center py-10" data-testid="loading">
+          <span
+            class="h-6 w-6 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
+          ></span>
+        </div>
+      }
+      @case ('unavailable') {
+        <div class="space-y-3 py-10 text-center">
+          <p class="text-sm text-zinc-400">{{ 'content.unavailable' | t }}</p>
+          <a routerLink="/home" class="inline-block text-sm text-brand-accent underline">{{
+            'home.goHome' | t
+          }}</a>
+        </div>
+      }
+      @case ('ready') {
+        @if (items().length === 0) {
+          <p class="py-10 text-center text-sm text-zinc-400">{{ 'content.empty' | t }}</p>
+        } @else {
+          <ul class="space-y-3">
+            @for (item of items(); track item.slug) {
+              <li>
+                <a
+                  [routerLink]="['/', kind, item.slug]"
+                  class="flex gap-3 rounded-2xl bg-surface-raised p-3 transition-opacity hover:opacity-95"
+                >
+                  @if (item.cover && !coverFailed().has(item.slug)) {
+                    <div class="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-surface-raised-2">
+                      <app-content-media
+                        [media]="item.cover"
+                        [posterOnly]="true"
+                        sizes="80px"
+                        (failed)="markCoverFailed(item.slug)"
+                      />
+                    </div>
+                  }
+                  <div class="min-w-0 flex-1 space-y-1" [attr.lang]="item.textLocale || null">
+                    <h2 class="text-[15px] font-bold leading-snug text-text-primary">
+                      {{ item.title }}
+                    </h2>
+                    @if (item.summary) {
+                      <p class="line-clamp-3 text-[13px] leading-relaxed text-zinc-400">
+                        {{ item.summary }}
+                      </p>
+                    }
+                    <p class="text-xs text-zinc-500">
+                      <time [attr.datetime]="item.publishedAt">{{
+                        dateLabel(item.publishedAt)
+                      }}</time>
+                      @if (employmentKey(item); as key) {
+                        <span> · {{ key | t }}</span>
+                      }
+                    </p>
+                  </div>
+                </a>
+              </li>
+            }
+          </ul>
+          @if (nextCursor()) {
+            <button
+              type="button"
+              data-testid="load-more"
+              class="mt-4 w-full rounded-full border border-zinc-700 px-4 py-3 text-sm font-semibold text-zinc-300 transition-colors hover:border-brand-accent disabled:opacity-50"
+              [disabled]="loadingMore()"
+              (click)="loadMore()"
+            >
+              {{ 'content.loadMore' | t }}
+            </button>
+          }
+        }
+      }
+    }
+  </div>
+</div>

@@ -1,6 +1,32 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './guards/auth.guard';
 import { HomeComponent } from './pages/home/home.component';
+import type { EditorialKind } from './types/editorial.types';
+
+/**
+ * The editorial pages of ADR 0157 (Decisions 6 and 7; Release 5): one list and one document
+ * page per kind, the kind carried in the route's `data`. Public, like the menu, and lazy, so none
+ * of it is in the initial chunk. A kind the brand has not turned on answers 404 and renders the
+ * plain "not available" page.
+ */
+function editorialRoutes(kind: EditorialKind): Routes {
+  return [
+    {
+      path: kind,
+      loadComponent: () =>
+        import('./pages/content-list/content-list.component').then((m) => m.ContentListComponent),
+      data: { kind },
+    },
+    {
+      path: `${kind}/:slug`,
+      loadComponent: () =>
+        import('./pages/content-detail/content-detail.component').then(
+          (m) => m.ContentDetailComponent,
+        ),
+      data: { kind },
+    },
+  ];
+}
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'home' },
@@ -183,5 +209,9 @@ export const routes: Routes = [
         (m) => m.DineInScanComponent,
       ),
   },
+  ...editorialRoutes('news'),
+  ...editorialRoutes('gallery'),
+  ...editorialRoutes('recipes'),
+  ...editorialRoutes('careers'),
   { path: '**', redirectTo: 'home' },
 ];

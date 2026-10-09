@@ -5,6 +5,7 @@ import {
   ApiClient,
   ANONYMOUS,
   PLATFORM_API_REQUEST,
+  QUIET_FAILURE,
   versionFromETag,
   weakETag,
 } from './api-client';
@@ -227,5 +228,70 @@ describe('ApiClient.get', () => {
     expect(req.request.params.get('present')).toBe('x');
     req.flush({});
     await promise;
+  });
+});
+
+describe('ApiClient.get: quiet reads', () => {
+  afterEach(() => {
+    TestBed.inject(HttpTestingController).verify();
+  });
+
+  it('marks the request QUIET_FAILURE only when the caller asks for it', async () => {
+    const { client, httpMock } = setUp();
+
+    const loud = client.get('/thing');
+    const loudReq = httpMock.expectOne('/api/v1/thing');
+    expect(loudReq.request.context.get(QUIET_FAILURE)).toBe(false);
+    loudReq.flush({});
+    await loud;
+
+    const quiet = client.get('/thing', { quiet: true });
+    const quietReq = httpMock.expectOne('/api/v1/thing');
+    expect(quietReq.request.context.get(QUIET_FAILURE)).toBe(true);
+    quietReq.flush({});
+    await quiet;
+  });
+});
+
+describe('ApiClient.report: an anonymous counter', () => {
+  afterEach(() => {
+    TestBed.inject(HttpTestingController).verify();
+  });
+
+  it('POSTs the body with no Idempotency-Key: a counter is not an effect worth replaying', async () => {
+    const { client, httpMock } = setUp();
+
+    const promise = client.report('/storefront/x/content/events', { events: [] });
+    const req = httpMock.expectOne('/api/v1/storefront/x/content/events');
+
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ events: [] });
+    expect(req.request.headers.has('Idempotency-Key')).toBe(false);
+    req.flush({});
+    await promise;
+  });
+
+  it('is a platform call that is anonymous and quiet', async () => {
+    const { client, httpMock } = setUp();
+
+    const promise = client.report('/storefront/x/content/events', {});
+    const req = httpMock.expectOne('/api/v1/storefront/x/content/events');
+
+    expect(req.request.context.get(PLATFORM_API_REQUEST)).toBe(true);
+    expect(req.request.context.get(ANONYMOUS)).toBe(true);
+    expect(req.request.context.get(QUIET_FAILURE)).toBe(true);
+    req.flush({});
+    await promise;
+  });
+
+  it('hands the rejection to the caller, who decides to swallow it', async () => {
+    const { client, httpMock } = setUp();
+
+    const promise = client.report('/storefront/x/content/events', {});
+    httpMock
+      .expectOne('/api/v1/storefront/x/content/events')
+      .flush('boom', { status: 500, statusText: 'Server Error' });
+
+    await expect(promise).rejects.toBeTruthy();
   });
 });

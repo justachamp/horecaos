@@ -3,7 +3,7 @@ import { inject } from '@angular/core';
 import { catchError, throwError } from 'rxjs';
 import { NotificationService } from '../services/notification.service';
 import { TranslateService } from '../services/translate.service';
-import { PLATFORM_API_REQUEST } from '../core/api/api-client';
+import { PLATFORM_API_REQUEST, QUIET_FAILURE } from '../core/api/api-client';
 import { HorecaOSApiError, messageKeyFor } from '../core/api/problem-details';
 
 const FALLBACK_MESSAGE = 'An error occurred';
@@ -38,6 +38,12 @@ function formatLegacyNotification(err: HttpErrorResponse): string {
  * `problemDetailsInterceptor` produces further down.
  */
 export const errorNotificationInterceptor: HttpInterceptorFn = (req, next) => {
+  // A read the customer did not ask for, whose failure is meant to change nothing on the page (the
+  // home content document, the anonymous counters): the caller gets the rejection, the customer
+  // gets no toast about a problem the screen does not have.
+  if (req.context.get(QUIET_FAILURE)) {
+    return next(req);
+  }
   const notification = inject(NotificationService);
   const translate = inject(TranslateService);
   const isPlatform = req.context.get(PLATFORM_API_REQUEST);
