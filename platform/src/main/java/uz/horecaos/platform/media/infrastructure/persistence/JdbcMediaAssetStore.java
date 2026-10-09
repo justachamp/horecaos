@@ -8,6 +8,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import uz.horecaos.platform.media.api.MediaAssetId;
@@ -31,11 +32,12 @@ public class JdbcMediaAssetStore {
                 INSERT INTO media.assets (
                     asset_id, tenant_id, owner_scope, owner_id, object_key, bucket,
                     status, visibility, declared_content_type, declared_size_bytes,
-                    declared_checksum_sha256, original_filename, created_by, created_at)
+                    declared_checksum_sha256, original_filename, created_by, created_at,
+                    rendition_profile)
                 VALUES (
                     :assetId, :tenantId, :ownerScope, :ownerId, :objectKey, :bucket,
                     :status, :visibility, :contentType, :sizeBytes,
-                    :checksum, :filename, :createdBy, :createdAt)
+                    :checksum, :filename, :createdBy, :createdAt, :renditionProfile)
                 """)
                 .param("assetId", asset.assetId().value())
                 .param("tenantId", asset.tenantId())
@@ -51,7 +53,28 @@ public class JdbcMediaAssetStore {
                 .param("filename", asset.originalFilename())
                 .param("createdBy", asset.createdBy())
                 .param("createdAt", OffsetDateTime.ofInstant(asset.createdAt(), ZoneOffset.UTC))
+                .param("renditionProfile", asset.renditionProfile())
                 .update();
+    }
+
+    /**
+     * Several assets of one tenant at once, for a caller that has a document to check (ADR 0157).
+     *
+     * <p>The tenant is in the query, so an id that is another tenant's is simply absent from the
+     * answer, exactly like one that does not exist. Deleted assets are absent too.
+     */
+    public List<MediaAsset> findAllOwned(UUID tenantId, java.util.Collection<UUID> assetIds) {
+        if (assetIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("""
+                SELECT * FROM media.assets
+                WHERE tenant_id = :tenantId AND asset_id = ANY(:assetIds) AND status <> 'DELETED'
+                """)
+                .param("tenantId", tenantId)
+                .param("assetIds", assetIds.toArray(UUID[]::new))
+                .query(JdbcMediaAssetStore::mapAsset)
+                .list();
     }
 
     /**
@@ -109,6 +132,22 @@ public class JdbcMediaAssetStore {
             int widthPx,
             int heightPx,
             Instant now) {
+        markAvailable(assetId, contentType, sizeBytes, checksum, widthPx, heightPx, null, now);
+    }
+
+    /**
+     * {@link #markAvailable(MediaAssetId, String, long, String, int, int, Instant)} for a video, which also
+     * has a playing time (ADR 0157). Null for an image.
+     */
+    public void markAvailable(
+            MediaAssetId assetId,
+            String contentType,
+            long sizeBytes,
+            String checksum,
+            int widthPx,
+            int heightPx,
+            @Nullable Integer durationMs,
+            Instant now) {
         jdbc.sql("""
                 UPDATE media.assets
                 SET status = 'AVAILABLE',
@@ -117,6 +156,7 @@ public class JdbcMediaAssetStore {
                     verified_checksum_sha256 = :checksum,
                     width_px = :widthPx,
                     height_px = :heightPx,
+                    duration_ms = :durationMs,
                     finalized_at = COALESCE(finalized_at, :now),
                     available_at = :now,
                     rejection_code = NULL,
@@ -129,6 +169,7 @@ public class JdbcMediaAssetStore {
                 .param("checksum", checksum)
                 .param("widthPx", widthPx)
                 .param("heightPx", heightPx)
+                .param("durationMs", durationMs, java.sql.Types.INTEGER)
                 .param("now", OffsetDateTime.ofInstant(now, ZoneOffset.UTC))
                 .update();
     }
@@ -167,6 +208,45 @@ public class JdbcMediaAssetStore {
                 WHERE tenant_id = :tenantId AND asset_id = :assetId
                   AND owner_scope = 'TENANT' AND owner_id = :tenantId
                   AND visibility = 'PRIVATE'
+                  AND status IN ('UPLOADED', 'AVAILABLE', 'REJECTED')
+                """)
+                        .param("tenantId", tenantId)
+                        .param("assetId", assetId.value())
+                        .update()
+                == 1;
+    }
+
+    /**
+     * Whether {@link #requestRelease} would move this asset: a {@code PUBLIC} asset owned at {@code BRAND}
+     * scope that has not already been asked to go (ADR 0157).
+     */
+    public boolean isReleasable(UUID tenantId, MediaAssetId assetId) {
+        return jdbc.sql("""
+                SELECT EXISTS (
+                    SELECT 1 FROM media.assets
+                    WHERE tenant_id = :tenantId AND asset_id = :assetId
+                      AND owner_scope = 'BRAND' AND visibility = 'PUBLIC'
+                      AND status IN ('UPLOADED', 'AVAILABLE', 'REJECTED'))
+                """)
+                .param("tenantId", tenantId)
+                .param("assetId", assetId.value())
+                .query(Boolean.class)
+                .single();
+    }
+
+    /**
+     * Asks for a brand-owned public asset to be deleted: the content module's retirement of a superseded
+     * revision's picture or video (ADR 0157). The guard is in the statement, as in {@link #requestDeletion},
+     * so this cannot reach a private asset whatever id it is handed.
+     *
+     * @return true when this call moved the row
+     */
+    public boolean requestRelease(UUID tenantId, MediaAssetId assetId) {
+        return jdbc.sql("""
+                UPDATE media.assets
+                SET status = 'DELETION_REQUESTED'
+                WHERE tenant_id = :tenantId AND asset_id = :assetId
+                  AND owner_scope = 'BRAND' AND visibility = 'PUBLIC'
                   AND status IN ('UPLOADED', 'AVAILABLE', 'REJECTED')
                 """)
                         .param("tenantId", tenantId)
@@ -238,6 +318,8 @@ public class JdbcMediaAssetStore {
                 java.util.Optional.ofNullable(row.getObject("uploaded_at", OffsetDateTime.class))
                         .map(OffsetDateTime::toInstant)
                         .orElse(null),
-                row.getObject("created_at", OffsetDateTime.class).toInstant());
+                row.getObject("created_at", OffsetDateTime.class).toInstant(),
+                row.getString("rendition_profile"),
+                (Integer) row.getObject("duration_ms"));
     }
 }

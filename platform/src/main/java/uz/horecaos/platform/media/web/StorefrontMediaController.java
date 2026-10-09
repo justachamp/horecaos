@@ -5,15 +5,18 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.net.URI;
 import java.time.Duration;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.application.MediaAssetService;
+import uz.horecaos.platform.media.domain.DerivativeVariant;
 import uz.horecaos.platform.media.domain.MediaVisibility;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -84,9 +87,23 @@ public class StorefrontMediaController {
             summary = "Redirect to a published image",
             description = "302 to a short-lived signed URL. Only a PUBLIC, displayable asset "
                     + "resolves; anything else is not found, and private, missing and "
-                    + "unverified are one answer so an id cannot be probed.")
-    public ResponseEntity<Void> image(@PathVariable UUID tenantId, @PathVariable UUID assetId) {
+                    + "unverified are one answer so an id cannot be probed. `variant` (thumb, "
+                    + "w400, w800, w1600) asks for a rendition instead of the original (ADR "
+                    + "0157): the closed set the platform renders, never an arbitrary width. A "
+                    + "rendition that has not rendered, or that this asset is not owed, is not "
+                    + "found, like any other asset that cannot be served.")
+    public ResponseEntity<Void> image(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID assetId,
+            @RequestParam(required = false) @Nullable String variant) {
         MediaAssetId id = new MediaAssetId(assetId);
+        DerivativeVariant rendition = null;
+        if (variant != null && !variant.isBlank()) {
+            rendition = DerivativeVariant.byCode(variant.strip())
+                    .orElseThrow(() -> new ApiException(
+                            ErrorCode.VALIDATION_FAILED, "variant must be one of thumb, w400, w800, w1600"));
+        }
+        final DerivativeVariant requested = rendition;
 
         boolean servable = media.find(tenantId, id)
                 .filter(asset -> asset.visibility() == MediaVisibility.PUBLIC)
@@ -97,7 +114,7 @@ public class StorefrontMediaController {
         // verified yet". Telling them apart is how an asset id becomes something
         // to enumerate with.
         URI target = servable
-                ? media.downloadUrl(tenantId, id).orElseThrow(StorefrontMediaController::notFound)
+                ? media.downloadUrl(tenantId, id, requested).orElseThrow(StorefrontMediaController::notFound)
                 : notFoundThrow();
 
         return ResponseEntity.status(HttpStatus.FOUND)

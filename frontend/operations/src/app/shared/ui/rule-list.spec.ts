@@ -19,6 +19,7 @@ const ITEMS: readonly RuleListItem[] = [
       [items]="items()"
       [selectable]="selectable()"
       [selectedId]="selectedId()"
+      [showToggle]="showToggle()"
       (selected)="lastSelected = $event"
       (reorder)="lastReorder = $event"
       (enabledChange)="onEnabledChange($event)"
@@ -29,6 +30,7 @@ class RuleListHost {
   readonly items = signal<readonly RuleListItem[]>(ITEMS);
   readonly selectable = signal(false);
   readonly selectedId = signal<string | null>(null);
+  readonly showToggle = signal(true);
   lastSelected: string | null = null;
   lastReorder: RuleReorder | null = null;
   lastEnabledChange: RuleEnabledChange | null = null;
@@ -187,6 +189,58 @@ describe('RuleList', () => {
       body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       expect(fixture.componentInstance.lastSelected).toBe('r1');
     });
+  });
+});
+
+describe('RuleList without its enable switch (ADR 0157: the content placement order)', () => {
+  @Component({
+    selector: 'q-rule-list-no-toggle-host',
+    imports: [RuleList],
+    template: `
+      <q-rule-list
+        [items]="items"
+        [showToggle]="showToggle()"
+        (reorder)="lastReorder = $event"
+        (enabledChange)="switched = true"
+      />
+    `,
+  })
+  class NoToggleHost {
+    readonly items: readonly RuleListItem[] = ITEMS;
+    readonly showToggle = signal(false);
+    lastReorder: RuleReorder | null = null;
+    switched = false;
+  }
+
+  function render(): ReturnType<typeof TestBed.createComponent<NoToggleHost>> {
+    TestBed.configureTestingModule({});
+    TestBed.inject(I18n).setLocale('en');
+    const fixture = TestBed.createComponent(NoToggleHost);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  it('renders no enable switch when the host turns it off, and still orders', () => {
+    const fixture = render();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelectorAll('.rule-list__row')).toHaveLength(3);
+    expect(host.querySelectorAll('.rule-list__toggle')).toHaveLength(0);
+    expect(host.querySelectorAll('input[type="checkbox"]')).toHaveLength(0);
+
+    host.querySelectorAll<HTMLButtonElement>('.rule-list__move')[3].click();
+    expect(fixture.componentInstance.lastReorder).toEqual(['r2', 'r1', 'r3']);
+    expect(fixture.componentInstance.switched).toBe(false);
+  });
+
+  it('brings the switch back when the host turns it on', () => {
+    const fixture = render();
+    fixture.componentInstance.showToggle.set(true);
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.rule-list__toggle'),
+    ).toHaveLength(3);
   });
 });
 

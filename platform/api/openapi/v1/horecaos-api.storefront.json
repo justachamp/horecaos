@@ -45,6 +45,19 @@
         },
         "type" : "object"
       },
+      "AcceptedResponse" : {
+        "properties" : {
+          "accepted" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rejected" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "AddRoundRequest" : {
         "properties" : {
           "orderId" : {
@@ -145,6 +158,17 @@
         },
         "type" : "object"
       },
+      "AlbumImage" : {
+        "properties" : {
+          "caption" : {
+            "type" : "string"
+          },
+          "media" : {
+            "$ref" : "#/components/schemas/Media"
+          }
+        },
+        "type" : "object"
+      },
       "AnalyticsConfigResponse" : {
         "properties" : {
           "ga4MeasurementId" : {
@@ -181,6 +205,17 @@
             "type" : "string"
           },
           "source" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "Apply" : {
+        "properties" : {
+          "type" : {
+            "type" : "string"
+          },
+          "value" : {
             "type" : "string"
           }
         },
@@ -249,6 +284,24 @@
         },
         "type" : "object"
       },
+      "Branch" : {
+        "properties" : {
+          "addressLine" : {
+            "type" : "string"
+          },
+          "city" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "CallbackRequestResponse" : {
         "properties" : {
           "leadId" : {
@@ -257,6 +310,52 @@
           }
         },
         "required" : [ "leadId" ],
+        "type" : "object"
+      },
+      "Cap" : {
+        "properties" : {
+          "mode" : {
+            "type" : "string"
+          },
+          "n" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CarouselItem" : {
+        "properties" : {
+          "ctaLabel" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "link" : {
+            "$ref" : "#/components/schemas/Link"
+          },
+          "media" : {
+            "$ref" : "#/components/schemas/Media"
+          },
+          "revisionNo" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "subtitle" : {
+            "type" : "string"
+          },
+          "textLocale" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "CartLineResponse" : {
@@ -608,6 +707,24 @@
         },
         "type" : "object"
       },
+      "Daily" : {
+        "properties" : {
+          "daysOfWeek" : {
+            "items" : {
+              "format" : "int32",
+              "type" : "integer"
+            },
+            "type" : "array"
+          },
+          "from" : {
+            "type" : "string"
+          },
+          "until" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "DeliveryChargeResponse" : {
         "properties" : {
           "feeMinor" : {
@@ -700,6 +817,131 @@
         },
         "type" : "object"
       },
+      "EntryDetail" : {
+        "properties" : {
+          "blocks" : {
+            "items" : {
+              "additionalProperties" : { },
+              "type" : "object"
+            },
+            "type" : "array"
+          },
+          "bodyLocale" : {
+            "type" : "string"
+          },
+          "cover" : {
+            "$ref" : "#/components/schemas/Media"
+          },
+          "images" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AlbumImage"
+            },
+            "type" : "array"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "publishedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "slug" : {
+            "type" : "string"
+          },
+          "summary" : {
+            "type" : "string"
+          },
+          "textLocale" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "vacancy" : {
+            "$ref" : "#/components/schemas/Vacancy"
+          }
+        },
+        "type" : "object"
+      },
+      "EntryPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/EntrySummary"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "EntrySummary" : {
+        "properties" : {
+          "cover" : {
+            "$ref" : "#/components/schemas/Media"
+          },
+          "employmentType" : {
+            "type" : "string"
+          },
+          "publishedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "slug" : {
+            "type" : "string"
+          },
+          "summary" : {
+            "type" : "string"
+          },
+          "textLocale" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "EventEntry" : {
+        "properties" : {
+          "event" : {
+            "pattern" : "IMPRESSION|CLICK|DISMISSAL|COMPLETION",
+            "type" : "string"
+          },
+          "itemId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "revisionNo" : {
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "event", "itemId", "revisionNo" ],
+        "type" : "object"
+      },
+      "EventsRequest" : {
+        "properties" : {
+          "channel" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "events" : {
+            "items" : {
+              "$ref" : "#/components/schemas/EventEntry"
+            },
+            "maxItems" : 20,
+            "minItems" : 1,
+            "type" : "array"
+          }
+        },
+        "required" : [ "channel", "events" ],
+        "type" : "object"
+      },
       "ExchangeRequest" : {
         "properties" : {
           "tableToken" : {
@@ -758,6 +1000,23 @@
               "type" : "string"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "Features" : {
+        "properties" : {
+          "gallery" : {
+            "type" : "boolean"
+          },
+          "news" : {
+            "type" : "boolean"
+          },
+          "recipes" : {
+            "type" : "boolean"
+          },
+          "vacancies" : {
+            "type" : "boolean"
           }
         },
         "type" : "object"
@@ -833,6 +1092,43 @@
             "type" : "string"
           },
           "grant" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "Group" : {
+        "properties" : {
+          "categoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "limit" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "order" : {
+            "type" : "string"
+          },
+          "productIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "revisionNo" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "textLocale" : {
+            "type" : "string"
+          },
+          "title" : {
             "type" : "string"
           }
         },
@@ -937,6 +1233,41 @@
         },
         "type" : "object"
       },
+      "HomeDocument" : {
+        "properties" : {
+          "carousel" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CarouselItem"
+            },
+            "type" : "array"
+          },
+          "groups" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Group"
+            },
+            "type" : "array"
+          },
+          "locale" : {
+            "type" : "string"
+          },
+          "popup" : {
+            "$ref" : "#/components/schemas/Popup"
+          },
+          "promoGrid" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CarouselItem"
+            },
+            "type" : "array"
+          },
+          "stories" : {
+            "items" : {
+              "$ref" : "#/components/schemas/StoryGroup"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "HostnameLookupView" : {
         "properties" : {
           "channelId" : {
@@ -949,6 +1280,21 @@
           },
           "verified" : {
             "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "Link" : {
+        "properties" : {
+          "targetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -1011,6 +1357,41 @@
           },
           "type" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "Media" : {
+        "properties" : {
+          "alt" : {
+            "type" : "string"
+          },
+          "durationMs" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "heightPx" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "posterUrl" : {
+            "type" : "string"
+          },
+          "renditions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Rendition"
+            },
+            "type" : "array"
+          },
+          "url" : {
+            "type" : "string"
+          },
+          "widthPx" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -1823,6 +2204,50 @@
         },
         "type" : "object"
       },
+      "Popup" : {
+        "properties" : {
+          "body" : {
+            "type" : "string"
+          },
+          "cap" : {
+            "$ref" : "#/components/schemas/Cap"
+          },
+          "ctaLabel" : {
+            "type" : "string"
+          },
+          "daily" : {
+            "$ref" : "#/components/schemas/Daily"
+          },
+          "dismiss" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "link" : {
+            "$ref" : "#/components/schemas/Link"
+          },
+          "media" : {
+            "$ref" : "#/components/schemas/Media"
+          },
+          "revisionNo" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "showAfterSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "textLocale" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PricedCartResponse" : {
         "properties" : {
           "appliedPromotions" : {
@@ -2049,6 +2474,18 @@
         },
         "type" : "object"
       },
+      "Rendition" : {
+        "properties" : {
+          "url" : {
+            "type" : "string"
+          },
+          "widthPx" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "ReorderLineResponse" : {
         "properties" : {
           "comboPicks" : {
@@ -2268,6 +2705,24 @@
           }
         },
         "required" : [ "grant" ],
+        "type" : "object"
+      },
+      "Slide" : {
+        "properties" : {
+          "caption" : {
+            "type" : "string"
+          },
+          "durationSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "link" : {
+            "$ref" : "#/components/schemas/Link"
+          },
+          "media" : {
+            "$ref" : "#/components/schemas/Media"
+          }
+        },
         "type" : "object"
       },
       "SocialLinkResponse" : {
@@ -2592,6 +3047,34 @@
         },
         "type" : "object"
       },
+      "StoryGroup" : {
+        "properties" : {
+          "avatar" : {
+            "$ref" : "#/components/schemas/Media"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "revisionNo" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "slides" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Slide"
+            },
+            "type" : "array"
+          },
+          "textLocale" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "SubmitCodeRequest" : {
         "properties" : {
           "code" : {
@@ -2633,6 +3116,20 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "Vacancy" : {
+        "properties" : {
+          "apply" : {
+            "$ref" : "#/components/schemas/Apply"
+          },
+          "branch" : {
+            "$ref" : "#/components/schemas/Branch"
+          },
+          "employmentType" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -3787,6 +4284,641 @@
         "summary" : "Turn a priced cart into an order",
         "tags" : [ "Storefront ordering" ],
         "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/careers" : {
+      "get" : {
+        "description" : "A listing only. A vacancy carries one outbound contact the tenant chose to publish (a phone number, an e-mail address, a Telegram or web address) and nothing of a candidate: the platform has no application form and stores no applicant data.",
+        "operationId" : "listVacancies",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A brand's published vacancies, newest first",
+        "tags" : [ "Storefront editorial" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/careers/{slug}" : {
+      "get" : {
+        "operationId" : "getVacancy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One vacancy, with its branch and its one contact",
+        "tags" : [ "Storefront editorial" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/events" : {
+      "post" : {
+        "description" : "A batch of at most 20 {itemId, revisionNo, event}, event one of IMPRESSION, CLICK, DISMISSAL (a pop-up) and COMPLETION (a story). Counted per item, revision, tenant day and channel; no identifier of any kind is stored. Client-reported and labelled so: anyone can inflate them, and they are not a metric the reporting layer consumes. An event naming an item or revision the brand does not have, or one that makes no sense for the kind, is rejected and counted and the rest of the batch is kept.",
+        "operationId" : "recordContentEvents",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/EventsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AcceptedResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Report anonymous view counts",
+        "tags" : [ "Storefront content" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/features" : {
+      "get" : {
+        "description" : "News, gallery, recipes and vacancies, each true only while the tenant's plan includes the editorial tier and the brand has turned the kind on. All false when it has not; an unknown brand is a 404.",
+        "operationId" : "editorialFeatures",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Features"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Which editorial kinds a brand runs",
+        "tags" : [ "Storefront editorial" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/gallery" : {
+      "get" : {
+        "operationId" : "listGallery",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A brand's published gallery albums, newest first",
+        "tags" : [ "Storefront editorial" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/gallery/{slug}" : {
+      "get" : {
+        "operationId" : "getGalleryAlbum",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One gallery album with its images",
+        "tags" : [ "Storefront editorial" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/home" : {
+      "get" : {
+        "description" : "Banners and promo cards in the carousel, product groups, and from later releases stories, a promo grid and a pop-up, in order, with ready-made image rendition URLs. `channel` is the tenant's channel code, as the menu read takes it; `locale` is a BCP 47 tag, a bare `uz` read as `uz-Latn`. A text the visitor's language lacks is served in the brand's default and `textLocale` says which. The same for every visitor; an unknown brand, a brand of another tenant and an unknown channel are one 404.",
+        "operationId" : "contentHome",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HomeDocument"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The home content of a brand on a channel",
+        "tags" : [ "Storefront content" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/news" : {
+      "get" : {
+        "operationId" : "listNews",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A brand's published news, newest first",
+        "tags" : [ "Storefront editorial" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/news/{slug}" : {
+      "get" : {
+        "operationId" : "getNews",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One news article, its body as typed blocks",
+        "tags" : [ "Storefront editorial" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/recipes" : {
+      "get" : {
+        "operationId" : "listRecipes",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A brand's published recipes, newest first",
+        "tags" : [ "Storefront editorial" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/recipes/{slug}" : {
+      "get" : {
+        "operationId" : "getRecipe",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One recipe, its body as typed blocks",
+        "tags" : [ "Storefront editorial" ],
+        "x-horecaos-surface" : "internal"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/registrations" : {
@@ -6058,7 +7190,7 @@
     },
     "/api/v1/storefront/tenants/{tenantId}/media/{assetId}" : {
       "get" : {
-        "description" : "302 to a short-lived signed URL. Only a PUBLIC, displayable asset resolves; anything else is not found, and private, missing and unverified are one answer so an id cannot be probed.",
+        "description" : "302 to a short-lived signed URL. Only a PUBLIC, displayable asset resolves; anything else is not found, and private, missing and unverified are one answer so an id cannot be probed. `variant` (thumb, w400, w800, w1600) asks for a rendition instead of the original (ADR 0157): the closed set the platform renders, never an arbitrary width. A rendition that has not rendered, or that this asset is not owed, is not found, like any other asset that cannot be served.",
         "operationId" : "image",
         "parameters" : [ {
           "in" : "path",
@@ -6074,6 +7206,13 @@
           "required" : true,
           "schema" : {
             "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "variant",
+          "required" : false,
+          "schema" : {
             "type" : "string"
           }
         } ],
@@ -6096,20 +7235,11 @@
     "url" : "http://localhost"
   } ],
   "tags" : [ {
-    "description" : "Requesting a one-time code, proving a phone number, and becoming a customer",
-    "name" : "Customer identity"
-  }, {
-    "description" : "Continue with Telegram: mint a sign-in code and poll it into a session (ADR 0063)",
-    "name" : "Telegram sign-in"
-  }, {
     "description" : "A customer's own profile, their own saved addresses, and the products they marked",
     "name" : "Customer self-service"
   }, {
-    "description" : "Public, non-secret analytics identifiers for a brand",
-    "name" : "Storefront analytics"
-  }, {
-    "description" : "What delivery costs here, and the evidence for it",
-    "name" : "Delivery fee"
+    "description" : "The home content a brand has published",
+    "name" : "Storefront content"
   }, {
     "description" : "Opening a payment attempt and getting the checkout surface for it",
     "name" : "Storefront payments"
@@ -6119,9 +7249,6 @@
   }, {
     "description" : "Pictures on the published menu",
     "name" : "Storefront media"
-  }, {
-    "description" : "Scanning a table code, and the bill it leads to",
-    "name" : "QR dine-in"
   }, {
     "description" : "Row 10.5: resolve a Host header to a tenant and channel",
     "name" : "Storefront channel hostname lookup"
@@ -6138,12 +7265,6 @@
     "description" : "In-app offers a scenario has made a guest eligible to see (ADR 0112)",
     "name" : "Presented offers"
   }, {
-    "description" : "A customer's own referral code, and redeeming a friend's",
-    "name" : "Referrals"
-  }, {
-    "description" : "The tenant's own document, or the platform default (ADR 0068)",
-    "name" : "Storefront terms of service"
-  }, {
     "description" : "Availability and remaining quantity a customer can see",
     "name" : "Storefront inventory"
   }, {
@@ -6156,16 +7277,40 @@
     "description" : "The published menu a customer sees",
     "name" : "Storefront catalog"
   }, {
-    "description" : "A customer's points balance and its movements",
-    "name" : "Loyalty"
-  }, {
     "description" : "A customer's own 1:1 chat with the brand's bot (ADR 0058 stage 2)",
     "name" : "Customer Telegram linking"
   }, {
-    "description" : "Whether a location serves this channel and mode now",
-    "name" : "Serviceability"
-  }, {
     "description" : "A brand's FAQ and its social links",
     "name" : "Storefront support"
+  }, {
+    "description" : "Requesting a one-time code, proving a phone number, and becoming a customer",
+    "name" : "Customer identity"
+  }, {
+    "description" : "News, gallery, recipes and vacancies a brand has published",
+    "name" : "Storefront editorial"
+  }, {
+    "description" : "Continue with Telegram: mint a sign-in code and poll it into a session (ADR 0063)",
+    "name" : "Telegram sign-in"
+  }, {
+    "description" : "Public, non-secret analytics identifiers for a brand",
+    "name" : "Storefront analytics"
+  }, {
+    "description" : "What delivery costs here, and the evidence for it",
+    "name" : "Delivery fee"
+  }, {
+    "description" : "Scanning a table code, and the bill it leads to",
+    "name" : "QR dine-in"
+  }, {
+    "description" : "A customer's own referral code, and redeeming a friend's",
+    "name" : "Referrals"
+  }, {
+    "description" : "The tenant's own document, or the platform default (ADR 0068)",
+    "name" : "Storefront terms of service"
+  }, {
+    "description" : "A customer's points balance and its movements",
+    "name" : "Loyalty"
+  }, {
+    "description" : "Whether a location serves this channel and mode now",
+    "name" : "Serviceability"
   } ]
 }

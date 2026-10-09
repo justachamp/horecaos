@@ -2049,6 +2049,38 @@ public enum Capability {
     ASSISTANT_KNOWLEDGE_MANAGE("assistant.knowledge.manage", "assistant-knowledge", "manage"),
 
     /**
+     * ADR 0157: reading a brand's storefront content -- its banners, promo cards, product groups,
+     * stories, pop-ups and (when switched on) editorial entries -- with their drafts, immutable
+     * revisions, health and preview. Brand scope: content belongs to a brand, never to a location.
+     */
+    CONTENT_READ("content.read", "content", "read"),
+
+    /**
+     * ADR 0157: writing a draft -- creating an item, replacing or discarding its draft, cloning an
+     * older revision into the draft. A draft is {@code INTERNAL} and in front of nobody; what
+     * reaches customers is {@link #CONTENT_PUBLISH}.
+     */
+    CONTENT_AUTHOR("content.author", "content", "author"),
+
+    /**
+     * ADR 0157: putting a draft in front of customers, taking it down, archiving it, and ordering a
+     * placement. Held by the same roles as {@link #CONTENT_AUTHOR}: there is no four-eyes step
+     * (the {@code content.publishing} policy carries no approval field in Release 1) because nothing
+     * a banner does spends money or sends a message. A platform administrator holds it too, which is
+     * how a takedown of any item is possible; there is no moderation queue and no automatic review.
+     */
+    CONTENT_PUBLISH("content.publish", "content", "publish"),
+
+    /**
+     * ADR 0157: the external-link allowlist -- adding and removing a host an {@code EXTERNAL} link
+     * or a block {@code href} may point at -- and the brand's {@code content.publishing} and
+     * {@code content.editorial} policies. The allowlist is the open-redirect control, so each change
+     * is an audited security fact; and it is held by the tenant owner and administrator only, not by
+     * the brand manager who authors and publishes.
+     */
+    CONTENT_MANAGE("content.manage", "content", "manage"),
+
+    /**
      * ADR 0068: reading a brand's authored terms-of-service versions, their
      * history, and which one is currently in force.
      */

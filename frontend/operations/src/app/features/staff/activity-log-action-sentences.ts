@@ -610,6 +610,36 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Коммерция кошелёк перевод зафиксировано',
       'uz-Latn': 'Tijorat hamyon oʻtkazma qayd etildi',
     },
+    'content.host.allowed': {
+      en: 'A link address was allowed in storefront content',
+      ru: 'Разрешён адрес для ссылок в контенте витрины',
+      'uz-Latn': 'Vitrina kontentida havolalar uchun manzil ruxsat etildi',
+    },
+    'content.host.removed': {
+      en: 'A link address was removed from storefront content',
+      ru: 'Адрес для ссылок убран из контента витрины',
+      'uz-Latn': 'Vitrina kontentidagi havolalar manzili olib tashlandi',
+    },
+    'content.item.archived': {
+      en: 'Storefront content archived',
+      ru: 'Контент витрины перенесён в архив',
+      'uz-Latn': 'Vitrina kontenti arxivlandi',
+    },
+    'content.item.published': {
+      en: 'Storefront content published',
+      ru: 'Контент витрины опубликован',
+      'uz-Latn': 'Vitrina kontenti eʼlon qilindi',
+    },
+    'content.item.withdrawn': {
+      en: 'Storefront content taken down',
+      ru: 'Контент витрины снят с публикации',
+      'uz-Latn': 'Vitrina kontenti eʼlondan olindi',
+    },
+    'content.placement.reordered': {
+      en: 'Storefront content reordered',
+      ru: 'Изменён порядок контента витрины',
+      'uz-Latn': 'Vitrina kontenti tartibi oʻzgartirildi',
+    },
     'conversation.closed': {
       en: 'Conversation closed',
       ru: 'Переписка закрыто',
@@ -1259,6 +1289,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Media asset ingested',
       ru: 'Медиа файл загружено',
       'uz-Latn': 'Media fayl yuklandi',
+    },
+    'media.asset.released': {
+      en: 'Media asset released',
+      ru: 'Медиа файл освобождён',
+      'uz-Latn': 'Media fayl boʻshatildi',
     },
     'notification.template.created': {
       en: 'Notification template created',

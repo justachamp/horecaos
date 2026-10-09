@@ -77,6 +77,12 @@
   inbox fold behind the projection, and the legacy `ratings` migration. The quiet
   hours and cap values still need counsel's confirmation before a first production
   send.
+  **Merchandising slots moved (2026-10-08):** [ADR 0157](../partial/0157-content-and-merchandising-slots.md)
+  owns banners, promo cards, product groups, stories and pop-ups in a `content` module,
+  and its backend is built; the `marketing.slot_items` and `marketing.slot_item_locales`
+  sketched under "Merchandising slots" below will not be created in `marketing`. This
+  module's descriptor is unchanged: it holds audiences, campaigns, suppression and the
+  customer metric projection.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-23
 - Deciders: Ayubkhon Abbosov (platform architecture), product, finance, legal
@@ -803,7 +809,10 @@ payments, for the same reason.
       serves the redirect or deep link), merchandising slots with the
       link-target allowlist, referral edges, and reviews. All remain
       independent of the send path and can ship in parallel, as the rollout
-      section says.
+      section says. **Merchandising slots moved to
+      [ADR 0157](../partial/0157-content-and-merchandising-slots.md)** (2026-10-08), whose
+      `content` module builds them with an external-link allowlist checked at publish and
+      on every read; they are no longer owed by this record.
 - [~] Implement the retention jobs and the ADR 0029 erasure path that preserves
       campaign aggregates. Snapshot-membership retention is now scheduled
       (`MarketingRetentionSweeper`, wave 68): the header, its counts, and the

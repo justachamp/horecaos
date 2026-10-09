@@ -1,5 +1,9 @@
 package uz.horecaos.platform.media.domain;
 
+import java.util.List;
+import java.util.Optional;
+import org.jspecify.annotations.Nullable;
+
 /**
  * The fixed set of renditions the platform produces (ADR 0010).
  *
@@ -23,7 +27,18 @@ public enum DerivativeVariant {
     CARD("w400", 400),
 
     /** A dish detail view, and the same file at 2x on a phone card. */
-    DETAIL("w800", 800);
+    DETAIL("w800", 800),
+
+    /**
+     * A 3:1 banner on a desktop channel (ADR 0157), which needs more than {@link #DETAIL}'s 800 px.
+     *
+     * <p>Rendered <strong>only</strong> for an asset allocated with the {@code CREATIVE} rendition
+     * profile, which the console's content upload sets ({@link #standard()} is what every other
+     * asset gets). A bare enum member that every asset rendered would be a fourth JPEG per
+     * catalogue photograph on the one 8 vCPU machine (ADR 0073). Like every variant it is never
+     * an upscale: a source narrower than 1600 px yields a HERO as wide as the source.
+     */
+    HERO("w1600", 1600);
 
     private final String code;
     private final int targetWidthPx;
@@ -31,6 +46,32 @@ public enum DerivativeVariant {
     DerivativeVariant(String code, int targetWidthPx) {
         this.code = code;
         this.targetWidthPx = targetWidthPx;
+    }
+
+    /** The renditions every asset gets: the three that predate {@link #HERO}. */
+    public static List<DerivativeVariant> standard() {
+        return List.of(THUMBNAIL, CARD, DETAIL);
+    }
+
+    /**
+     * The renditions owed to an asset of this profile: the standard set, plus {@link #HERO} for a
+     * creative (ADR 0157).
+     */
+    public static List<DerivativeVariant> owedTo(boolean creative) {
+        return creative ? List.of(THUMBNAIL, CARD, DETAIL, HERO) : standard();
+    }
+
+    /** The variant whose public code ({@code thumb}, {@code w400}, {@code w800}, {@code w1600}) this is. */
+    public static Optional<DerivativeVariant> byCode(@Nullable String code) {
+        if (code == null) {
+            return Optional.empty();
+        }
+        for (DerivativeVariant variant : values()) {
+            if (variant.code.equals(code)) {
+                return Optional.of(variant);
+            }
+        }
+        return Optional.empty();
     }
 
     /** Stable and part of the object key, so it never changes once written. */

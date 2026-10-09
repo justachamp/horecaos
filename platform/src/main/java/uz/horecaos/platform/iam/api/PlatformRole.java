@@ -376,6 +376,14 @@ public enum PlatformRole {
                     // the same roles. Reading its usage and spend rides the same pair.
                     ASSISTANT_READ,
                     ASSISTANT_KNOWLEDGE_MANAGE,
+                    // ADR 0157: the brand's storefront content. Authoring, publishing and the
+                    // content.publishing / content.editorial policies and link allowlist
+                    // (CONTENT_MANAGE) are the owner's and the administrator's; the brand
+                    // manager below authors and publishes but does not touch the allowlist.
+                    CONTENT_READ,
+                    CONTENT_AUTHOR,
+                    CONTENT_PUBLISH,
+                    CONTENT_MANAGE,
                     NOTIFICATION_READ,
                     NOTIFICATION_RETRY,
                     COMMERCIAL_SUBSCRIPTION_MANAGE,
@@ -625,6 +633,14 @@ public enum PlatformRole {
                     // the same roles. Reading its usage and spend rides the same pair.
                     ASSISTANT_READ,
                     ASSISTANT_KNOWLEDGE_MANAGE,
+                    // ADR 0157: the brand's storefront content. Authoring, publishing and the
+                    // content.publishing / content.editorial policies and link allowlist
+                    // (CONTENT_MANAGE) are the owner's and the administrator's; the brand
+                    // manager below authors and publishes but does not touch the allowlist.
+                    CONTENT_READ,
+                    CONTENT_AUTHOR,
+                    CONTENT_PUBLISH,
+                    CONTENT_MANAGE,
                     NOTIFICATION_READ,
                     NOTIFICATION_RETRY,
                     COMMERCIAL_PLAN_READ,
@@ -818,6 +834,12 @@ public enum PlatformRole {
                     // the same roles. Reading its usage and spend rides the same pair.
                     ASSISTANT_READ,
                     ASSISTANT_KNOWLEDGE_MANAGE,
+                    // ADR 0157: authors and publishes the brand's storefront content; the
+                    // link allowlist and the content policies (CONTENT_MANAGE) stay with the
+                    // owner and administrator.
+                    CONTENT_READ,
+                    CONTENT_AUTHOR,
+                    CONTENT_PUBLISH,
                     REPORTING_READ,
                     // ADR 0154: a brand manager sees its branches' printing and reprints; changing a printer is the
                     // branch manager's and a brand's receipt profile is the tenant administrator's.

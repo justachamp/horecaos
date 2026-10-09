@@ -1,47 +1,34 @@
 # ADR 0157: Content and merchandising slots
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Not started — nothing authors, stores or serves
-  brand-written content today, and every fact below was read from the tree on
-  2026-10-07. *No tables:* there is no `content` module, schema or table; the only
-  trace of a slot is the sketch of `marketing.slot_items` and
-  `marketing.slot_item_locales` inside ADR 0044's "Merchandising slots" section,
-  which was never migrated, and the `marketing` module's own descriptor says it
-  holds "Audiences, campaigns, suppression, and the customer metric projection".
-  *No screens:* the operations routes `/marketing/content` (row `6.7`) and
-  `/marketing/storefront` (row `6.8`) in `frontend/operations/src/app/app.routes.ts`
-  render `NotBuiltPage`. *Nothing served:* both storefronts' `MenuService` return
-  `offer: null`, `populars: []`, `populars_count: 0` and say in a comment that
-  "nothing on the platform produces either"; `frontend/storefront`'s home template
-  still carries a block guarded by `offerData()` (`CustomerUiResponse.offer`, the
-  `OfferItem` / `CustomerUiOffer` wire type ADR 0112 says it will back) with a
-  hard-coded `/assets/home-promo.jpg` tile that therefore never renders;
-  `frontend/storefront-milliy`'s home has no content area at all. *Media is
-  image-only:* `media.assets` (V0015) admits owner scopes `TENANT`, `BRAND` and
-  `LOCATION`; `MediaAssetService` allows only `image/jpeg`, `image/png`,
-  `image/webp` and `image/avif` up to 10 MiB (`MAX_IMAGE_BYTES`) and excludes SVG
-  deliberately; `ImageProbe` reads a header from the first 128 KiB and never
-  decodes; the rendition set is the closed `DerivativeVariant` enum (`THUMBNAIL`
-  w200, `CARD` w400, `DETAIL` w800, all JPEG); `StorefrontMediaController` answers a
-  public asset with a 302 to a five-minute presigned URL and takes no `variant`;
-  `MalwareScanner` is a port with no adapter; the `media.storage_bytes_included`
-  entitlement is metered by `MediaUsageMeterTrigger`. `tenant.brand_media` (V0243)
-  holds a brand's logo and its aggregator/QR banner, which is not a home-screen
-  banner. *Neighbouring text stores:* `tenant.channel_pages` (V0404) holds four
-  fixed slugs (`about`, `contacts`, `delivery-terms`, `privacy-offer`) as
-  insert-only, versioned, plain-text bodies the storefront escapes. *Console
-  primitives, per the gap map:* `q-localized-field-group` (`X.5`, BUILT),
-  `q-tree-view` with drag-reorder (`X.23`, BUILT), `q-rule-list` (`X.25`, BUILT: a flat
-  priority list with move-up and move-down and native drag, and an enable switch on every
-  row), `q-rich-text` with its
-  sanitizer (`X.31`, BUILT; it emits an HTML string), `q-phone-frame`, and
-  `q-media-uploader` (`X.12`, PARTIAL: it exports JPEG at a 960 px long edge and
-  refuses a video with `videoNotSupported` before any network call). *Languages:*
-  `tenant.brand_locales` (V0242) and `BrandLocaleLookup` exist; ADR 0149 (decided
-  2026-10-07) is itself Not started. *Pricing:* `pricing.promotions` (V0093) and
-  `PromotionActivated` / `PromotionSuspended` on `pricing.events` exist with no
-  consumer. The legacy `ui_elements`, `ui_element_items` and `ui_offers` tables are
-  an unresolved `DECIDE` row in `docs/domains/legacy-mapping.md`.
+- Implementation status: Partial — the backend of Releases 1, 2, 3 and 5 is built
+  (2026-10-08, wave 20 step 1 of 2) and nothing an operator or a customer can see is.
+  *Built:* the `content` module (V0534, V0535) with `item_revisions` and `revision_media`
+  insert-only by grant; the typed documents with strict decoding and the block model that
+  is its own sanitizer; the publication gates and `content_hash`; the staff API under
+  `/api/v1/tenants/{tenantId}/brands/{brandId}/content`; the storefront reads
+  `GET .../content/home` and, behind the `content.editorial.enabled` grant and the brand's
+  `content.editorial` policy, `features`, `news`, `gallery`, `recipes` and `careers`, with a
+  body-digest `ETag` and the external-link allowlist re-checked on every read; anonymous
+  per-day counters at `POST .../content/events`; the `HERO` rendition, `variant` on the
+  storefront media redirect and `MediaCreativeLookup` (V0533); MP4 admission (`VideoProbe`:
+  H.264 with at most one AAC track, `moov` first, at most 20 s and 12 MiB, no transcoding),
+  a 30-minute signature for a video, `MediaRelease` with a `MediaUsageProbe` in each of
+  `content`, `catalog`, `tenancy` and `helpcenter`, and `ContentRevisionMediaSweeper`; the
+  `content.events` topic; the capabilities and the OpenAPI baselines. Covered by
+  `ContentEndpointTests`, `ContentStorefrontEndpointTests`,
+  `ContentStoriesPopupsAndCountersEndpointTests`, `ContentEditorialEndpointTests`,
+  `ContentMediaRetentionTests`, `ContentSchemaTests`, `ContentEntitlementGateTests`,
+  `VideoProbeTests`, `MediaLifecycleTests` and `MediaAssetReferenceCatalogTests`.
+  *Not built:* the operations screens `/marketing/content` and `/marketing/storefront`
+  (rows `6.7`, `6.8`) still render `NotBuiltPage`, so an operator can author only through
+  the API; neither storefront reads `GET .../content/home` and `offer` stays null;
+  `q-media-uploader` still refuses a video before any request and `q-rich-text` has no
+  block mode; Release 4 (the brand switcher and the marketplace layout) is deferred until
+  a tenant asks, as this record decides; the legacy `ui_elements` import is a later
+  programme step; the real malware scanner, the CDN egress tripwire and machine
+  translation are not built; the media of an archived or withdrawn item's last revision
+  is kept, not released; `content` is not yet enrolled in row-level security (ADR 0056).
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
@@ -1175,34 +1162,35 @@ before it is run.
 
 ## Implementation checklist
 
-- [ ] Owner answers (or accepts the defaults for) the open inputs above.
-- [ ] Release 1: `content` module declaration; migration for `items`, `item_drafts`,
+- [x] Owner answers (or accepts the defaults for) the open inputs above.
+- [x] Release 1: `content` module declaration; migration for `items`, `item_drafts`,
       `item_revisions`, `revision_media`, `allowed_hosts` with grants and the
       tenant-scoped foreign keys; `ModularArchitectureTests` and
       `TenantScopedReferenceCatalogTests` green.
-- [ ] `content.api` ports (`ContentTargetLookup`, `PromotionLiveLookup`) with their
+- [x] `content.api` ports (`ContentTargetLookup`, `PromotionLiveLookup`) with their
       `catalog` and `pricing` implementations; `media.api` `MediaCreativeLookup` (status,
       visibility, pixel size, existing renditions).
-- [ ] Capabilities `content.read`, `content.author`, `content.publish`, `content.manage`
+- [x] Capabilities `content.read`, `content.author`, `content.publish`, `content.manage`
       in `Capability` and the role bundles; `EndpointCapabilityDeclarationTests`.
-- [ ] Authoring, publication, reorder, preview and health services and controllers;
+- [x] Authoring, publication, reorder, preview and health services and controllers;
       the publish gates and their error codes; `content_hash` and its canonical
       serialisation; the typed documents with strict decoding and the omitted-optional-flag
       test.
-- [ ] The assembler (one implementation, two sources) and the storefront read; the
+- [~] The assembler (one implementation, two sources) and the storefront read; the
       `variant` parameter on the storefront media redirect; the `HERO` rendition and the
       migration that widens `ck_media_derivative_variant` and adds
       `media.assets.rendition_profile`, with `MediaDerivativeService` rendering `HERO`
       only for `CREATIVE` assets; the console allocating creatives `PUBLIC`; the
-      host re-check on read.
-- [ ] `SecurityConfiguration.apiSecurity` permits `GET .../content/home` (the Release 5
+      host re-check on read. *Backend built 2026-10-08; the console's allocation as a
+      public `CREATIVE` is the operations screen's (step 2).*
+- [x] `SecurityConfiguration.apiSecurity` permits `GET .../content/home` (the Release 5
       reads when they land) and a test proves an anonymous `200`; `EntitlementKeys`
       declares `content.video.enabled` and `content.editorial.enabled` (`safeDefault`
       false, owned by `content`) and the two refusals use `ENTITLEMENT_REQUIRED`.
-- [ ] `content.events` topic, two event types, schemas, catalogue and
+- [x] `content.events` topic, two event types, schemas, catalogue and
       `docs/domains/events.md` rows; audit facts; entitlement and policy keys declared in
       both registries with the drift test.
-- [ ] Both Caddyfiles' `@storefront_browse` list; `check_storefront_api_routing` passes;
+- [x] Both Caddyfiles' `@storefront_browse` list; `check_storefront_api_routing` passes;
       the OpenAPI baseline and generated clients refreshed and reviewed.
 - [ ] Operations `/marketing/content` and `/marketing/storefront`; `q-media-uploader`
       export-edge input; `q-rule-list` `showToggle` input; ru, uz-Latn and en strings;
@@ -1210,22 +1198,26 @@ before it is run.
 - [ ] Both storefronts: `ContentService`, carousel, groups, failure isolation; the
       hard-coded promo tile removed; `CustomerUiResponse.offer`, `offerData` and the block
       they guard kept for ADR 0112 (it renders nothing while `offer` is null).
-- [ ] Release 2: story and pop-up documents, the device-local cap, counters and the
+- [~] Release 2: story and pop-up documents, the device-local cap, counters and the
       events endpoint (with its two named exemptions in `EndpointCapabilityDeclarationTests`
-      and its `SecurityConfiguration` entry), the stats view.
-- [ ] Release 3: `VideoProbe` and its fixtures, `video/mp4` in `MediaAssetService`,
+      and its `SecurityConfiguration` entry), the stats view. *Built 2026-10-08, except
+      that the device-local cap is enforced by the storefront apps (step 2).*
+- [~] Release 3: `VideoProbe` and its fixtures, `video/mp4` in `MediaAssetService`,
       `duration_ms`, the derivative job skip, the presign window, poster capture,
       `content.video.enabled`, the sweeper with `MediaRelease`, the three
       `MediaUsageProbe` implementations and the catalog test that every media-asset-id
-      column has a probe or a recorded exemption.
+      column has a probe or a recorded exemption. *Built 2026-10-08 with four probes
+      (`content`, `catalog`, `tenancy`, `helpcenter`) where this list said three; poster
+      capture and the uploader's video mode are the operations screen's (step 2).*
 - [ ] Release 4 (on request): switcher entries, the home of the layout choice,
       `storefront_sort_order`.
-- [ ] Release 5 (on request): the block document and its renderer test corpus,
+- [~] Release 5 (on request): the block document and its renderer test corpus,
       `q-rich-text` block mode, the four kinds, the storefront routes, `content.editorial`.
+      *The backend, the routes and the policy built 2026-10-08; the block editor is step 2.*
 - [ ] Update `docs/operations-gap-map.md` rows `6.7`, `6.7a`, `6.8` and `X.12` against the
       code as each release lands (never from a wave report), the IA's struck-through `6.7`
       sub-features, and the `ui_elements` row of `docs/domains/legacy-mapping.md`.
-- [ ] The Release 1 commit annotates ADR 0044's status line, its checklist item and the
+- [x] The Release 1 commit annotates ADR 0044's status line, its checklist item and the
       `marketing` module descriptor note: slots moved here (Supersedes).
 - [ ] Add `content` to ADR 0056's RLS enrolment list when that rollout reaches it.
 

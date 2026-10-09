@@ -49,6 +49,7 @@ changing retention is an approved operational migration with a rollback plan.
 | `inventory.events` | 6 | 1 | `PT168H` | `delete` |
 | `pricing.events` | 3 | 1 | `PT168H` | `delete` |
 | `marketing.events` | 3 | 1 | `PT168H` | `delete` |
+| `content.events` | 3 | 1 | `PT168H` | `delete` |
 | `customers.events` | 3 | 1 | `PT168H` | `delete` |
 | `integration.events` | 3 | 1 | `PT168H` | `delete` |
 | `pos.commands` | 3 | 1 | `PT24H` | `delete` |
@@ -207,7 +208,7 @@ synchronous paths (an operator's own withdrawal, and the TTL check inside
 
 | Event | Version | Key | Schema | Version-1 payload |
 |---|---|---|---|---|
-| `MediaAssetAvailable` | 1 | `assetId` | [`MediaAssetAvailable.v1`](../../src/main/resources/events/media.events/MediaAssetAvailable.v1.schema.json) | `assetId`, owner scope/id, visibility, verified content type, size, `widthPx`, `heightPx` |
+| `MediaAssetAvailable` | 1 | `assetId` | [`MediaAssetAvailable.v1`](../../src/main/resources/events/media.events/MediaAssetAvailable.v1.schema.json) | `assetId`, owner scope/id, visibility, verified content type (an image type, or `video/mp4` since ADR 0157), size, `widthPx`, `heightPx` |
 
 The payload deliberately carries **no object key, no signed URL, and no original
 filename**. A topic is read by consumers with no authorization to the bytes, so a
@@ -468,6 +469,28 @@ high-volume per-request facts whose payload shape and retention deserve their
 own decision rather than riding along with a once-a-day control-plane
 activation — the same restraint `inventory.events` states for its own six
 unpublished siblings.
+
+## `content.events`
+
+- Producing module: `content`
+- Retention class: business fact
+- Classification: `INTERNAL` — no personal data, and no text, on this topic
+- Key: `itemId`
+
+| Event | Version | Key | Schema | Version-1 payload |
+|---|---|---|---|---|
+| `ContentItemPublished` | 1 | `itemId` | [`ContentItemPublished.v1`](../../src/main/resources/events/content.events/ContentItemPublished.v1.schema.json) | `itemId`, `brandId`, `kind`, `placement`, `revisionNo`, `startsAt`, `endsAt`, `channelCodes` |
+| `ContentItemWithdrawn` | 1 | `itemId` | [`ContentItemWithdrawn.v1`](../../src/main/resources/events/content.events/ContentItemWithdrawn.v1.schema.json) | `itemId`, `brandId`, `kind`, `placement`, `reason` (`WITHDRAWN`, `ARCHIVED`) |
+
+ADR 0157's brand-authored storefront content. A publication, a withdrawal and an archiving of a
+live item are each appended in the same `BEFORE_COMMIT` transaction as the change and its audit
+fact (`ContentOutboxEventListener`), so neither commits without the other. Ids, kinds,
+placements and instants only: what a banner said is in its revision (`content.item_revisions`),
+which a consumer reads through the authorized content API, and a URL never rides a shared topic.
+No consumer is specified (the same restraint `PromotionActivated` carries): the storefront read
+model is computed when it is asked for, not event-fed, and `PromotionActivated` and
+`PromotionSuspended` are deliberately not consumed, because the liveness of the promotion a card
+is bound to is one indexed query (`ix_promotions_active`) answered when the response is built.
 
 ## `marketing.events`
 

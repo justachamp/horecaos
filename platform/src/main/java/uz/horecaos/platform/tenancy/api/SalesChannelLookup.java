@@ -82,4 +82,13 @@ public interface SalesChannelLookup {
     default Optional<UUID> hallChannelId(UUID tenantId) {
         return Optional.empty();
     }
+
+    /**
+     * Every channel of the tenant that is not archived, by code (ADR 0157): what "every
+     * content-capable channel" means for an item that names none. Defaulted to empty so the test
+     * doubles of this port that predate the need are untouched.
+     */
+    default java.util.List<SalesChannel> activeChannels(UUID tenantId) {
+        return java.util.List.of();
+    }
 }

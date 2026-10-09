@@ -457,6 +457,30 @@ public final class ConfigurationKeys {
     }
 
     /**
+     * ADR 0157: the content module's two keys, declared identically in {@code
+     * content.api.ContentConfigurationKeys}, where they are consumed, for the reason recorded on
+     * {@link #COMMERCIAL_ENFORCEMENT_CEILING}. {@code ContentConfigurationKeysTests} holds the two
+     * together.
+     */
+    public static final ConfigurationKey<Integer> CONTENT_REVISION_MEDIA_RETENTION_DAYS = ConfigurationKey.of(
+                    "content.revision_media_retention_days", Integer.class)
+            .defaultValue(90)
+            .ownedBy("content")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Days after a content revision is superseded before the media only it uses is "
+                    + "released (ADR 0157). Revisions themselves are kept indefinitely.")
+            .build();
+
+    public static final ConfigurationKey<Integer> CONTENT_VIDEO_MAX_LIVE_PER_BRAND = ConfigurationKey.of(
+                    "content.video.max_live_per_brand", Integer.class)
+            .defaultValue(5)
+            .ownedBy("content")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Videos a brand may have live in its storefront content at once (ADR 0157). "
+                    + "Publishing a sixth is refused with CONTENT_VIDEO_LIMIT.")
+            .build();
+
+    /**
      * ADR 0082: whether a tenant's operations app shows its administrators the
      * HorecaOS support visits to their account (ADR 0081), and lets them end
      * one. Off until turned on: the page is new, and the first tenants to see
@@ -1083,6 +1107,8 @@ public final class ConfigurationKeys {
             ASSISTANT_DISCLOSURE_TEXT_EN,
             ASSISTANT_DISCLOSURE_TEXT_RU,
             ASSISTANT_DISCLOSURE_TEXT_UZ,
+            CONTENT_REVISION_MEDIA_RETENTION_DAYS,
+            CONTENT_VIDEO_MAX_LIVE_PER_BRAND,
             FEATURE_SUPPORT_VISITS,
             FEATURE_KIOSK_DEVICES,
             TERMINAL_PIN_LENGTH,

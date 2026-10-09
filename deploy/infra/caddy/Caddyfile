@@ -87,6 +87,16 @@
 		method GET
 		path /api/v1/storefront/pickup-locations
 		path /api/v1/storefront/tenants/*/brands/*/locations/*/menu
+		path /api/v1/storefront/tenants/*/brands/*/content/home
+		path /api/v1/storefront/tenants/*/brands/*/content/features
+		path /api/v1/storefront/tenants/*/brands/*/content/news
+		path /api/v1/storefront/tenants/*/brands/*/content/news/*
+		path /api/v1/storefront/tenants/*/brands/*/content/gallery
+		path /api/v1/storefront/tenants/*/brands/*/content/gallery/*
+		path /api/v1/storefront/tenants/*/brands/*/content/recipes
+		path /api/v1/storefront/tenants/*/brands/*/content/recipes/*
+		path /api/v1/storefront/tenants/*/brands/*/content/careers
+		path /api/v1/storefront/tenants/*/brands/*/content/careers/*
 		path /api/v1/storefront/tenants/*/media/*
 		path /api/v1/storefront/tenants/*/brands/*/support/faq
 		path /api/v1/storefront/tenants/*/brands/*/support/social-links
@@ -100,6 +110,29 @@
 			zone storefront_browse_by_ip {
 				key {client_ip}
 				events 120
+				window 1m
+			}
+		}
+
+		import platform_app_upstream
+	}
+
+	# ADR 0157, Release 2: the storefront's anonymous content counters
+	# (impressions, clicks, dismissals, story completions), a batch of at most
+	# twenty per call. A POST with no principal, so it cannot ride the GET-only
+	# browse group above; client-reported and inflatable by anyone, which is why
+	# the control is a per-IP budget here and the batch cap of twenty in the
+	# service rather than anything the platform could verify.
+	@storefront_content_events {
+		method POST
+		path /api/v1/storefront/tenants/*/brands/*/content/events
+	}
+
+	handle @storefront_content_events {
+		rate_limit {
+			zone storefront_content_events_by_ip {
+				key {client_ip}
+				events 60
 				window 1m
 			}
 		}

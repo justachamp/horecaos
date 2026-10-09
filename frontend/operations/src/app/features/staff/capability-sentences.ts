@@ -36,6 +36,7 @@ export interface CapabilitySentence extends Localized {
 export const CAPABILITY_AREAS: Readonly<Record<string, Localized>> = {
   tenant: { ru: 'Компания', 'uz-Latn': 'Kompaniya', en: 'Company' },
   brand: { ru: 'Бренды', 'uz-Latn': 'Brendlar', en: 'Brands' },
+  content: { ru: 'Контент витрины', 'uz-Latn': 'Vitrina kontenti', en: 'Storefront content' },
   location: { ru: 'Филиалы', 'uz-Latn': 'Filiallar', en: 'Locations' },
   'legal-entity': { ru: 'Юрлица', 'uz-Latn': 'Yuridik shaxslar', en: 'Legal entities' },
   channel: { ru: 'Каналы продаж', 'uz-Latn': 'Savdo kanallari', en: 'Sales channels' },
@@ -209,6 +210,31 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     ru: 'Загружать медиафайлы',
     'uz-Latn': 'Media fayl yuklash',
     en: 'Upload media',
+  },
+
+  'content.read': {
+    area: 'content',
+    ru: 'Просматривать контент витрины',
+    'uz-Latn': 'Vitrina kontentini koʻrish',
+    en: 'View storefront content',
+  },
+  'content.author': {
+    area: 'content',
+    ru: 'Готовить контент витрины',
+    'uz-Latn': 'Vitrina kontentini tayyorlash',
+    en: 'Draft storefront content',
+  },
+  'content.publish': {
+    area: 'content',
+    ru: 'Публиковать контент витрины',
+    'uz-Latn': 'Vitrina kontentini eʼlon qilish',
+    en: 'Publish storefront content',
+  },
+  'content.manage': {
+    area: 'content',
+    ru: 'Управлять ссылками и правилами контента витрины',
+    'uz-Latn': 'Vitrina kontenti havolalari va qoidalarini boshqarish',
+    en: 'Manage storefront content links and rules',
   },
 
   'inventory.read': {

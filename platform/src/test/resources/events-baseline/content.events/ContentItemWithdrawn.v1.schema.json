@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/content.events/ContentItemWithdrawn.v1.schema.json",
+  "title": "ContentItemWithdrawn v1 payload",
+  "description": "An item of storefront content was taken out of front of customers (ADR 0157), by a withdrawal or by archiving it while live. Ids, the kind, the placement and the reason code; every revision is kept.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["itemId", "brandId", "kind", "reason"],
+  "properties": {
+    "itemId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": "string", "format": "uuid" },
+    "kind": {
+      "type": "string",
+      "enum": ["BANNER", "PROMO_CARD", "PRODUCT_GROUP", "STORY_GROUP", "POPUP", "NEWS", "GALLERY_ALBUM", "RECIPE", "VACANCY"]
+    },
+    "placement": {
+      "type": ["string", "null"],
+      "enum": ["HOME_CAROUSEL", "HOME_GROUPS", "STORY_RAIL", "PROMO_GRID", "ENTRY_MODAL", null]
+    },
+    "reason": { "type": "string", "enum": ["WITHDRAWN", "ARCHIVED"] }
+  }
+}
