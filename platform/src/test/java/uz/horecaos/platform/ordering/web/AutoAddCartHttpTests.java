@@ -507,6 +507,56 @@ class AutoAddCartHttpTests {
                 .isEqualByComparingTo("6");
     }
 
+    @Test
+    @DisplayName("ADR 0169 with ADR 0158: an amendment can neither remove nor lower a line a mandatory rule added, "
+            + "while a line the customer could decline can go")
+    void anAmendmentCannotTakeAMandatoryLineOff() throws Exception {
+        mandatoryAllowed(true);
+        UUID packaging = activeRule(mandatory(triggeredRule("bag-per-burger", bag, "[\"PICKUP\"]", burger, null, 1)));
+        UUID spoons = activeRule(plainRule("cutlery", cutlery, "[\"PICKUP\"]"));
+        publish("STOREFRONT");
+        gate(true, false);
+        set(OrderingConfigurationKeys.AMENDMENT_LINE_REMOVAL_ENABLED, ResourceScope.brand(TENANT, BRAND), true);
+        UUID cart = openCart("STOREFRONT", "PICKUP");
+        JsonNode view = putLine(cart, 1, "burger", burger, "3");
+        UUID orderId = checkout(cart, price(cart, view.get("version").asInt()));
+        UUID bagLine = orderLineOfRule(orderId, packaging);
+        UUID cutleryLine = orderLineOfRule(orderId, spoons);
+        assertThat(jdbc.sql("SELECT quantity FROM ordering.order_lines WHERE id = :id")
+                        .param("id", bagLine)
+                        .query(BigDecimal.class)
+                        .single())
+                .as("one bag per burger, three burgers")
+                .isEqualByComparingTo("3");
+        String reason = removalReason();
+
+        assertThat(amendRefusal(
+                        orderId,
+                        "am-mandatory-1",
+                        "{\"type\":\"REMOVE_LINES\",\"orderLineIds\":[\"" + bagLine + "\"],\"removalReasonId\":\""
+                                + reason + "\"}"))
+                .as("the customer could not have declined this line, so neither can the operator")
+                .isEqualTo("AUTO_ADD_LINE_MANDATORY");
+        assertThat(amendRefusal(
+                        orderId,
+                        "am-mandatory-2",
+                        "{\"type\":\"CHANGE_LINE_QUANTITY\",\"orderLineId\":\"" + bagLine
+                                + "\",\"quantity\":2,\"removalReasonId\":\"" + reason + "\"}"))
+                .as("lowering it is the same removal in part")
+                .isEqualTo("AUTO_ADD_LINE_MANDATORY");
+        assertThat(count("ordering.order_amendments")).isZero();
+
+        MvcResult removable = amendRaw(
+                orderId,
+                "am-mandatory-3",
+                "{\"type\":\"REMOVE_LINES\",\"orderLineIds\":[\"" + cutleryLine + "\"],\"removalReasonId\":\"" + reason
+                        + "\"}");
+        assertThat(removable.getResponse().getStatus())
+                .as(removable.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(count("ordering.order_amendments")).isEqualTo(1);
+    }
+
     // ---------------------------------------------------------------------- skips and races
 
     @Test
@@ -981,6 +1031,65 @@ class AutoAddCartHttpTests {
         assertThat(moved.getResponse().getStatus())
                 .as("-> " + target + ": " + moved.getResponse().getContentAsString())
                 .isEqualTo(200);
+    }
+
+    private UUID orderLineOfRule(UUID orderId, UUID ruleId) {
+        return jdbc.sql("SELECT id FROM ordering.order_lines WHERE order_id = :o AND auto_add_rule_id = :r "
+                        + "AND revision_to IS NULL")
+                .param("o", orderId)
+                .param("r", ruleId)
+                .query(UUID.class)
+                .single();
+    }
+
+    /** A removal reason authored over the endpoint the settings screen uses. */
+    private String removalReason() throws Exception {
+        MvcResult created = mvc.perform(post("/api/v1/control-plane/tenants/" + TENANT + "/order-outcome-reasons")
+                        .with(operator())
+                        .header(IDEMPOTENCY_HEADER, "reason-" + requests++)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"kind":"LINE_REMOVAL","systemCategory":"CUSTOMER_CHANGED_MIND",\
+                                "internalName":"Customer changed their mind","stockDisposition":"RETURN_TO_STOCK",\
+                                "liabilityParty":"CUSTOMER",\
+                                "customerTexts":{"ru":"Блюдо убрано","uz-Latn":"Taom olib tashlandi","en":"Removed"}}"""))
+                .andReturn();
+        assertThat(created.getResponse().getStatus())
+                .as(created.getResponse().getContentAsString())
+                .isEqualTo(200);
+        return JSON.readTree(created.getResponse().getContentAsString())
+                .get("id")
+                .asText();
+    }
+
+    private MvcResult amendRaw(UUID orderId, String key, String command) throws Exception {
+        String path =
+                "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION + "/orders/" + orderId;
+        int version = JSON.readTree(mvc.perform(get(path).with(operator()))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString())
+                .get("summary")
+                .get("version")
+                .asInt();
+        return mvc.perform(post(path + "/amendments")
+                        .with(operator())
+                        .header(IDEMPOTENCY_HEADER, key)
+                        .header("If-Match", "\"" + version + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"commands\":[" + command + "],\"applyImmediately\":false,"
+                                + "\"reasonCode\":\"OPERATOR_EDIT\"}"))
+                .andReturn();
+    }
+
+    private String amendRefusal(UUID orderId, String key, String command) throws Exception {
+        MvcResult refused = amendRaw(orderId, key, command);
+        assertThat(refused.getResponse().getStatus())
+                .as(refused.getResponse().getContentAsString())
+                .isEqualTo(409);
+        return JSON.readTree(refused.getResponse().getContentAsString())
+                .path("reasonCode")
+                .asText();
     }
 
     private static List<String> lineKeys(JsonNode cart) {
