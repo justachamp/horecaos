@@ -1056,9 +1056,16 @@ public class CatalogAuthoringService {
             FiscalClassification before;
             FiscalClassification after;
             BulkClassifyStatus status = BulkClassifyStatus.CLASSIFIED;
-            if (mode == BulkClassifyMode.MERGE) {
-                JdbcCatalogStore.FiscalMerge merge =
-                        store.mergeFiscalClassification(tenantId, brandId, item.node(), fiscal, "MANUAL", actorId);
+            if (mode == BulkClassifyMode.MERGE || mode == BulkClassifyMode.SUCCESSOR) {
+                JdbcCatalogStore.FiscalMerge merge = mode == BulkClassifyMode.SUCCESSOR
+                        ? store.replaceWithdrawnMxik(
+                                tenantId,
+                                brandId,
+                                item.node(),
+                                Objects.requireNonNull(fiscal.mxikCode()),
+                                java.time.LocalDate.now(clock),
+                                actorId)
+                        : store.mergeFiscalClassification(tenantId, brandId, item.node(), fiscal, "MANUAL", actorId);
                 if (merge.conflict()) {
                     status = BulkClassifyStatus.CONFLICT;
                 } else if (!merge.changed()) {
@@ -1122,7 +1129,13 @@ public class CatalogAuthoringService {
          * A field the item supplies fills a gap; a field it omits keeps the stored one, and a
          * supplied value that differs from a stored one is a {@link BulkClassifyStatus#CONFLICT}.
          */
-        MERGE
+        MERGE,
+        /**
+         * The item's {@code mxikCode} is the successor the national list names for the node's withdrawn
+         * code (ADR 0173): the stored code is replaced when, and only when, the list says so, and
+         * nothing else on the node changes; any other pairing is a {@link BulkClassifyStatus#CONFLICT}.
+         */
+        SUCCESSOR
     }
 
     /** One node's outcome within a {@link #bulkClassify} batch. */

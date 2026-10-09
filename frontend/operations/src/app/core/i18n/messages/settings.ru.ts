@@ -670,6 +670,22 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.classification.nodeType.VARIANT': 'Блюдо',
   'settings.fiscalization.classification.nodeType.MODIFIER_OPTION': 'Модификатор',
   'settings.fiscalization.classification.nodeType.FEE': 'Сбор',
+  'settings.fiscalization.classification.withdrawn.title':
+    'Коды, выведенные из национального справочника: {count}',
+  'settings.fiscalization.classification.withdrawn.lead':
+    'Эти позиции по-прежнему классифицированы и продаются. Если справочник называет преемника, их можно перевести на него одним щелчком; автоматически ничего не заменяется, а уже выданный чек сохраняет код, с которым был отправлен.',
+  'settings.fiscalization.classification.withdrawn.code': 'ИКПУ / MXIK',
+  'settings.fiscalization.classification.withdrawn.on': 'Выведен',
+  'settings.fiscalization.classification.withdrawn.successor': 'Указанный преемник',
+  'settings.fiscalization.classification.withdrawn.noSuccessor': 'не указан',
+  'settings.fiscalization.classification.withdrawn.replace': 'Заменить на {code}',
+  'settings.fiscalization.classification.withdrawn.replaceAll':
+    'Заменить {count} на указанных преемников',
+  'settings.fiscalization.classification.withdrawn.confirm':
+    'Заменить ИКПУ у позиций ({count}) на преемника из национального справочника? Меняется только ИКПУ.',
+  'settings.fiscalization.classification.withdrawn.confirmYes': 'Заменить',
+  'settings.fiscalization.classification.withdrawn.outcome':
+    'Заменено: {replaced}. Осталось как было: {left}.',
   'settings.fiscalization.classification.deliveryFee.name': 'Доставка',
   'settings.fiscalization.classification.deliveryFee.warning':
     'Стоимость доставки не классифицирована фискально — это как раз то, что обычно забывают. Бренд не может взимать плату за доставку через фискализирующий канал без этого.',

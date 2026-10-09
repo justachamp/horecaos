@@ -671,6 +671,22 @@ export const settingsEn = {
   'settings.fiscalization.classification.nodeType.VARIANT': 'Dish',
   'settings.fiscalization.classification.nodeType.MODIFIER_OPTION': 'Modifier',
   'settings.fiscalization.classification.nodeType.FEE': 'Fee',
+  'settings.fiscalization.classification.withdrawn.title':
+    'Codes the national list has withdrawn: {count}',
+  'settings.fiscalization.classification.withdrawn.lead':
+    'These items are still classified and still sell. Where the list names a successor you can move them to it with one click; nothing is replaced automatically, and a receipt already issued keeps the code it was sent with.',
+  'settings.fiscalization.classification.withdrawn.code': 'ИКПУ / MXIK',
+  'settings.fiscalization.classification.withdrawn.on': 'Withdrawn on',
+  'settings.fiscalization.classification.withdrawn.successor': 'Named successor',
+  'settings.fiscalization.classification.withdrawn.noSuccessor': 'none named',
+  'settings.fiscalization.classification.withdrawn.replace': 'Replace with {code}',
+  'settings.fiscalization.classification.withdrawn.replaceAll':
+    'Replace {count} with their named successors',
+  'settings.fiscalization.classification.withdrawn.confirm':
+    'Replace the ИКПУ on {count} item(s) with the successor the national list names? Only the ИКПУ changes.',
+  'settings.fiscalization.classification.withdrawn.confirmYes': 'Replace',
+  'settings.fiscalization.classification.withdrawn.outcome':
+    'Replaced: {replaced}. Left as they were: {left}.',
   'settings.fiscalization.classification.deliveryFee.name': 'Delivery fee',
   'settings.fiscalization.classification.deliveryFee.warning':
     'The delivery fee has no fiscal classification — the one item people forget. A brand cannot charge delivery through a channel that fiscalizes without it.',

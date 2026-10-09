@@ -772,6 +772,25 @@ public class CatalogAuthoringController {
                                         + "the node's own classification");
                     });
         }
+        if (mode == CatalogAuthoringService.BulkClassifyMode.SUCCESSOR) {
+            // ADR 0173: a SUCCESSOR batch names only the replacement code; the platform checks it against
+            // what the national list says, and nothing else on a node is touched.
+            request.items().stream()
+                    .filter(item -> item.fiscal() == null
+                            || item.fiscal().mxikCode() == null
+                            || item.fiscal().mxikCode().isBlank()
+                            || item.fiscal().packageCode() != null
+                            || item.fiscal().fiscalUnitCode() != null
+                            || item.fiscal().fiscalName() != null
+                            || item.fiscal().barcode() != null
+                            || item.fiscal().setsAConstraint())
+                    .findFirst()
+                    .ifPresent(item -> {
+                        throw new ApiException(
+                                ErrorCode.VALIDATION_FAILED,
+                                "A SUCCESSOR batch carries the replacement mxikCode and nothing else");
+                    });
+        }
         List<CatalogAuthoringService.BulkClassifyItem> items = request.items().stream()
                 .map(item -> new CatalogAuthoringService.BulkClassifyItem(item.node(), item.classification()))
                 .toList();

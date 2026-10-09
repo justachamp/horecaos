@@ -306,7 +306,6 @@ describe('CartService.price (ADR 0158)', () => {
       discountMinor: 0,
       totalMinor: 100,
       expiresAt: '2026-10-08T12:00:00Z',
-      delivery: null,
       ...overrides,
     };
   }

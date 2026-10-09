@@ -3066,7 +3066,9 @@ describe('NewOrderPage', () => {
       const quote = vi
         .fn()
         .mockResolvedValue(
-          quoteOf({ autoAdded: [autoAddedLine({ mandatory: true, ruleCode: 'kit', ruleId: 'r-kit' })] }),
+          quoteOf({
+            autoAdded: [autoAddedLine({ mandatory: true, ruleCode: 'kit', ruleId: 'r-kit' })],
+          }),
         );
       await render({ quote });
       await startBasket();
