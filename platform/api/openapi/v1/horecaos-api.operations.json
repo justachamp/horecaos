@@ -2919,6 +2919,9 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "ruleId" : {
+            "type" : "string"
+          },
           "shipmentId" : {
             "format" : "uuid",
             "type" : "string"
@@ -10289,18 +10292,6 @@
         "required" : [ "appliesTo", "benefit", "idempotencyKey", "reason", "reasonCode" ],
         "type" : "object"
       },
-      "GeneratedFrom" : {
-        "properties" : {
-          "calculationVersion" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "metricId" : {
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "GeoPoint" : {
         "properties" : {
           "latitude" : {
@@ -10492,6 +10483,162 @@
               "$ref" : "#/components/schemas/GroupedCandidateView"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "HeadcountGeneratedFrom" : {
+        "properties" : {
+          "calculationVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "metricId" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "HeadcountPeakView" : {
+        "properties" : {
+          "cooksAtPeakOfBand" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "cooksExpected" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "hour" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "HeadcountPlanResponse" : {
+        "properties" : {
+          "businessDayStartMinutes" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "generatedFrom" : {
+            "$ref" : "#/components/schemas/HeadcountGeneratedFrom"
+          },
+          "history" : {
+            "items" : {
+              "$ref" : "#/components/schemas/HeadcountRawCellView"
+            },
+            "type" : "array"
+          },
+          "peak" : {
+            "$ref" : "#/components/schemas/HeadcountPeakView"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/HeadcountRowView"
+            },
+            "type" : "array"
+          },
+          "sampleDates" : {
+            "items" : {
+              "format" : "date",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "stationsWithoutFigure" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "status" : {
+            "enum" : [ "OK", "NO_POLICY", "TOO_FEW_DATES" ],
+            "type" : "string"
+          },
+          "targetDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "weekday" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "HeadcountRawCellView" : {
+        "properties" : {
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "hour" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "portions" : {
+            "type" : "number"
+          },
+          "stationCode" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "HeadcountRowView" : {
+        "properties" : {
+          "cooksAtPeakOfBand" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "cooksExpected" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "expectedPortions" : {
+            "type" : "number"
+          },
+          "highPortions" : {
+            "type" : "number"
+          },
+          "hour" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lowPortions" : {
+            "type" : "number"
+          },
+          "plantLimited" : {
+            "type" : "boolean"
+          },
+          "portionsPerCookHour" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "sampleSize" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "stationCeiling" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "stationCode" : {
+            "type" : "string"
+          },
+          "stationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "stationRole" : {
+            "enum" : [ "HOT", "COLD", "GRILL", "BAR", "BAKERY", "PACKING", "EXPO" ],
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "OK", "NO_POLICY", "TOO_FEW_DATES" ],
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -11463,54 +11610,6 @@
           },
           "ticketStatus" : {
             "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
-      "KitchenHeadcountControllerPlanResponse" : {
-        "properties" : {
-          "generatedFrom" : {
-            "$ref" : "#/components/schemas/GeneratedFrom"
-          },
-          "history" : {
-            "items" : {
-              "$ref" : "#/components/schemas/RawCellView"
-            },
-            "type" : "array"
-          },
-          "peak" : {
-            "$ref" : "#/components/schemas/PeakView"
-          },
-          "rows" : {
-            "items" : {
-              "$ref" : "#/components/schemas/RowView"
-            },
-            "type" : "array"
-          },
-          "sampleDates" : {
-            "items" : {
-              "format" : "date",
-              "type" : "string"
-            },
-            "type" : "array"
-          },
-          "stationsWithoutFigure" : {
-            "items" : {
-              "type" : "string"
-            },
-            "type" : "array"
-          },
-          "status" : {
-            "enum" : [ "OK", "NO_POLICY", "TOO_FEW_DATES" ],
-            "type" : "string"
-          },
-          "targetDate" : {
-            "format" : "date",
-            "type" : "string"
-          },
-          "weekday" : {
-            "format" : "int32",
-            "type" : "integer"
           }
         },
         "type" : "object"
@@ -13043,28 +13142,6 @@
         },
         "type" : "object"
       },
-      "MediaControllerUploadTicketResponse" : {
-        "properties" : {
-          "assetId" : {
-            "type" : "string"
-          },
-          "expiresAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "requiredHeaders" : {
-            "additionalProperties" : {
-              "type" : "string"
-            },
-            "type" : "object"
-          },
-          "uploadUrl" : {
-            "format" : "uri",
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "MedianResponse" : {
         "properties" : {
           "medianSeconds" : {
@@ -14396,34 +14473,6 @@
         "required" : [ "id", "then" ],
         "type" : "object"
       },
-      "OperationsDispatchRulesControllerSimulationRequest" : {
-        "properties" : {
-          "brandId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "draft" : {
-            "$ref" : "#/components/schemas/DraftBody"
-          },
-          "locationId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "planId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "scenario" : {
-            "$ref" : "#/components/schemas/ScenarioBody"
-          },
-          "scopeType" : {
-            "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
-            "type" : "string"
-          }
-        },
-        "required" : [ "brandId", "locationId" ],
-        "type" : "object"
-      },
       "OperationsDispatchRulesControllerSimulationResponse" : {
         "properties" : {
           "decision" : {
@@ -14937,41 +14986,6 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
-          }
-        },
-        "type" : "object"
-      },
-      "OperationsOrderControllerOutcomeResponse" : {
-        "properties" : {
-          "customerRefund" : {
-            "type" : "string"
-          },
-          "kind" : {
-            "type" : "string"
-          },
-          "liabilityParty" : {
-            "type" : "string"
-          },
-          "occurredAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "reasonId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "reasonVersion" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "reservationCommitted" : {
-            "type" : "boolean"
-          },
-          "stockDisposition" : {
-            "type" : "string"
-          },
-          "systemCategory" : {
-            "type" : "string"
           }
         },
         "type" : "object"
@@ -15783,7 +15797,7 @@
             "type" : "array"
           },
           "outcome" : {
-            "$ref" : "#/components/schemas/OperationsOrderControllerOutcomeResponse"
+            "$ref" : "#/components/schemas/OutcomeResponse"
           },
           "subtotalMinor" : {
             "format" : "int64",
@@ -16408,6 +16422,41 @@
         },
         "type" : "object"
       },
+      "OutcomeResponse" : {
+        "properties" : {
+          "customerRefund" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "liabilityParty" : {
+            "type" : "string"
+          },
+          "occurredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "reasonId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reasonVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "reservationCommitted" : {
+            "type" : "boolean"
+          },
+          "stockDisposition" : {
+            "type" : "string"
+          },
+          "systemCategory" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "OutcomeRowResponse" : {
         "properties" : {
           "cancellationReasonCode" : {
@@ -16904,11 +16953,11 @@
         },
         "type" : "object"
       },
-      "PageStaffMemberResponse" : {
+      "PageRunResponse" : {
         "properties" : {
           "items" : {
             "items" : {
-              "$ref" : "#/components/schemas/StaffMemberResponse"
+              "$ref" : "#/components/schemas/RunResponse"
             },
             "type" : "array"
           },
@@ -16918,11 +16967,11 @@
         },
         "type" : "object"
       },
-      "PageStopMaterialisationControllerRunResponse" : {
+      "PageStaffMemberResponse" : {
         "properties" : {
           "items" : {
             "items" : {
-              "$ref" : "#/components/schemas/StopMaterialisationControllerRunResponse"
+              "$ref" : "#/components/schemas/StaffMemberResponse"
             },
             "type" : "array"
           },
@@ -17559,23 +17608,6 @@
           "payoutId" : {
             "format" : "uuid",
             "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
-      "PeakView" : {
-        "properties" : {
-          "cooksAtPeakOfBand" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "cooksExpected" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "hour" : {
-            "format" : "int32",
-            "type" : "integer"
           }
         },
         "type" : "object"
@@ -20527,25 +20559,6 @@
           "priority" : {
             "format" : "int32",
             "type" : "integer"
-          }
-        },
-        "type" : "object"
-      },
-      "RawCellView" : {
-        "properties" : {
-          "date" : {
-            "format" : "date",
-            "type" : "string"
-          },
-          "hour" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "portions" : {
-            "type" : "number"
-          },
-          "stationCode" : {
-            "type" : "string"
           }
         },
         "type" : "object"
@@ -23922,62 +23935,6 @@
         },
         "type" : "object"
       },
-      "RowView" : {
-        "properties" : {
-          "cooksAtPeakOfBand" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "cooksExpected" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "expectedPortions" : {
-            "type" : "number"
-          },
-          "highPortions" : {
-            "type" : "number"
-          },
-          "hour" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "lowPortions" : {
-            "type" : "number"
-          },
-          "plantLimited" : {
-            "type" : "boolean"
-          },
-          "portionsPerCookHour" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "sampleSize" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "stationCeiling" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "stationCode" : {
-            "type" : "string"
-          },
-          "stationId" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "stationRole" : {
-            "enum" : [ "HOT", "COLD", "GRILL", "BAR", "BAKERY", "PACKING", "EXPO" ],
-            "type" : "string"
-          },
-          "status" : {
-            "enum" : [ "OK", "NO_POLICY", "TOO_FEW_DATES" ],
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "Rule" : {
         "properties" : {
           "enabled" : {
@@ -24041,6 +23998,9 @@
             },
             "type" : "array"
           },
+          "runPayDecided" : {
+            "type" : "boolean"
+          },
           "schema" : {
             "format" : "int32",
             "type" : "integer"
@@ -24074,6 +24034,57 @@
           }
         },
         "required" : [ "default", "reason", "rules" ],
+        "type" : "object"
+      },
+      "RunResponse" : {
+        "properties" : {
+          "acknowledged" : {
+            "type" : "boolean"
+          },
+          "acknowledgedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "completedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "failedStops" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "notCarried" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "positionsAlreadyUnavailable" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "positionsWritten" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "startedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "stopsSeen" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
         "type" : "object"
       },
       "SaveOwnPreferenceRequest" : {
@@ -25293,6 +25304,34 @@
         "required" : [ "lineId", "variantId" ],
         "type" : "object"
       },
+      "SimulationRequest" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "draft" : {
+            "$ref" : "#/components/schemas/DraftBody"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "planId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "scenario" : {
+            "$ref" : "#/components/schemas/ScenarioBody"
+          },
+          "scopeType" : {
+            "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "brandId", "locationId" ],
+        "type" : "object"
+      },
       "Skip" : {
         "properties" : {
           "installationId" : {
@@ -26426,57 +26465,6 @@
           "variantId" : {
             "format" : "uuid",
             "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
-      "StopMaterialisationControllerRunResponse" : {
-        "properties" : {
-          "acknowledged" : {
-            "type" : "boolean"
-          },
-          "acknowledgedAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "completedAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "failedStops" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "id" : {
-            "format" : "uuid",
-            "type" : "string"
-          },
-          "notCarried" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "positionsAlreadyUnavailable" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "positionsWritten" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "startedAt" : {
-            "format" : "date-time",
-            "type" : "string"
-          },
-          "status" : {
-            "type" : "string"
-          },
-          "stopsSeen" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "version" : {
-            "format" : "int32",
-            "type" : "integer"
           }
         },
         "type" : "object"
@@ -29203,6 +29191,28 @@
           }
         },
         "required" : [ "contentType", "ownerId", "ownerScope", "visibility" ],
+        "type" : "object"
+      },
+      "UploadTicketResponse" : {
+        "properties" : {
+          "assetId" : {
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "requiredHeaders" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "uploadUrl" : {
+            "format" : "uri",
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "VariableCatalogueEntry" : {
@@ -43692,7 +43702,7 @@
         "tags" : [ "Dispatch rules" ]
       },
       "put" : {
-        "description" : "Whole-document replace: every rule and the default are sent, because ADR 0030 versions the document as one unit and rule order is part of its meaning. Refused with VALIDATION_FAILED, naming each reason, when a rule names an installation that is not this company's active delivery installation, a zone that is not a delivery zone, or a source outside the closed set; when a rule can never match because one above it takes every order it would; when its dispatch start leaves a partner no time; when it enables grouping (not available until the pay treatment for a run is decided) or asks for a hold. Requires If-Match carrying the version the GET at this same scope returned, or the write is refused with STALE_VERSION naming both versions. The version this replaces is never touched: a plan keeps the document version it was created under.",
+        "description" : "Whole-document replace: every rule and the default are sent, because ADR 0030 versions the document as one unit and rule order is part of its meaning. Refused with VALIDATION_FAILED, naming each reason, when a rule names an installation that is not this company's active delivery installation, a zone that is not a delivery zone, or a source outside the closed set; when a rule can never match because one above it takes every order it would; when its dispatch start leaves a partner no time; when it enables grouping (RUN_PAY_MODE_UNDECIDED until the courier pay for a run is decided in the courier policy; GROUPING_WAIT_NOT_AVAILABLE for any wait above zero) or asks for a hold. Requires If-Match carrying the version the GET at this same scope returned, or the write is refused with STALE_VERSION naming both versions. The version this replaces is never touched: a plan keeps the document version it was created under.",
         "operationId" : "writeRules",
         "parameters" : [ {
           "in" : "path",
@@ -43807,7 +43817,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/OperationsDispatchRulesControllerSimulationRequest"
+                "$ref" : "#/components/schemas/SimulationRequest"
               }
             }
           },
@@ -51521,7 +51531,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/PageStopMaterialisationControllerRunResponse"
+                  "$ref" : "#/components/schemas/PageRunResponse"
                 }
               }
             },
@@ -51556,7 +51566,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/StopMaterialisationControllerRunResponse"
+                  "$ref" : "#/components/schemas/RunResponse"
                 }
               }
             },
@@ -51600,7 +51610,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/StopMaterialisationControllerRunResponse"
+                  "$ref" : "#/components/schemas/RunResponse"
                 }
               }
             },
@@ -51645,7 +51655,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/StopMaterialisationControllerRunResponse"
+                  "$ref" : "#/components/schemas/RunResponse"
                 }
               }
             },
@@ -55403,7 +55413,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/KitchenHeadcountControllerPlanResponse"
+                  "$ref" : "#/components/schemas/HeadcountPlanResponse"
                 }
               }
             },
@@ -68235,7 +68245,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/MediaControllerUploadTicketResponse"
+                  "$ref" : "#/components/schemas/UploadTicketResponse"
                 }
               }
             },

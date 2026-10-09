@@ -906,6 +906,7 @@ export interface BulkActionItemResponse {
   orderId?: string;
   planId?: string;
   resultingOrderVersion?: number;
+  ruleId?: string;
   shipmentId?: string;
 }
 
@@ -3234,11 +3235,6 @@ export interface FutureDiscountRequest {
   validForDays?: number;
 }
 
-export interface GeneratedFrom {
-  calculationVersion?: number;
-  metricId?: string;
-}
-
 export interface GeoPoint {
   latitude?: number;
   longitude?: number;
@@ -3301,6 +3297,54 @@ export interface GroupingBody {
 export interface GroupingFeedView {
   candidates?: number;
   measured?: Array<GroupedCandidateView>;
+}
+
+export interface HeadcountGeneratedFrom {
+  calculationVersion?: number;
+  metricId?: string;
+}
+
+export interface HeadcountPeakView {
+  cooksAtPeakOfBand?: number;
+  cooksExpected?: number;
+  hour?: number;
+}
+
+export interface HeadcountPlanResponse {
+  businessDayStartMinutes?: number;
+  generatedFrom?: HeadcountGeneratedFrom;
+  history?: Array<HeadcountRawCellView>;
+  peak?: HeadcountPeakView;
+  rows?: Array<HeadcountRowView>;
+  sampleDates?: Array<string>;
+  stationsWithoutFigure?: Array<string>;
+  status?: "OK" | "NO_POLICY" | "TOO_FEW_DATES";
+  targetDate?: string;
+  weekday?: number;
+}
+
+export interface HeadcountRawCellView {
+  date?: string;
+  hour?: number;
+  portions?: number;
+  stationCode?: string;
+}
+
+export interface HeadcountRowView {
+  cooksAtPeakOfBand?: number;
+  cooksExpected?: number;
+  expectedPortions?: number;
+  highPortions?: number;
+  hour?: number;
+  lowPortions?: number;
+  plantLimited?: boolean;
+  portionsPerCookHour?: number;
+  sampleSize?: number;
+  stationCeiling?: number;
+  stationCode?: string;
+  stationId?: string;
+  stationRole?: "HOT" | "COLD" | "GRILL" | "BAR" | "BAKERY" | "PACKING" | "EXPO";
+  status?: "OK" | "NO_POLICY" | "TOO_FEW_DATES";
 }
 
 export interface HealthCheckRequest {
@@ -3625,18 +3669,6 @@ export interface KitchenEventsResponse {
   events?: Array<KitchenEventResponse>;
   ticketId?: string;
   ticketStatus?: string;
-}
-
-export interface KitchenHeadcountControllerPlanResponse {
-  generatedFrom?: GeneratedFrom;
-  history?: Array<RawCellView>;
-  peak?: PeakView;
-  rows?: Array<RowView>;
-  sampleDates?: Array<string>;
-  stationsWithoutFigure?: Array<string>;
-  status?: "OK" | "NO_POLICY" | "TOO_FEW_DATES";
-  targetDate?: string;
-  weekday?: number;
 }
 
 export interface KnowledgeVersionResponse {
@@ -4144,13 +4176,6 @@ export interface Media {
   widthPx?: number;
 }
 
-export interface MediaControllerUploadTicketResponse {
-  assetId?: string;
-  expiresAt?: string;
-  requiredHeaders?: { [key: string]: string };
-  uploadUrl?: string;
-}
-
 export interface MedianResponse {
   medianSeconds?: number;
   provenance?: ProvenanceResponse;
@@ -4565,15 +4590,6 @@ export interface OperationsDispatchRulesControllerRuleBody {
   when?: ConditionsBody;
 }
 
-export interface OperationsDispatchRulesControllerSimulationRequest {
-  brandId: string;
-  draft?: DraftBody;
-  locationId: string;
-  planId?: string;
-  scenario?: ScenarioBody;
-  scopeType?: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION";
-}
-
 export interface OperationsDispatchRulesControllerSimulationResponse {
   decision?: DecisionView;
   documentSource?: string;
@@ -4731,18 +4747,6 @@ export interface OperationsOrderControllerOrderSummaryResponse {
   table?: OrderTable;
   totalMinor?: number;
   version?: number;
-}
-
-export interface OperationsOrderControllerOutcomeResponse {
-  customerRefund?: string;
-  kind?: string;
-  liabilityParty?: string;
-  occurredAt?: string;
-  reasonId?: string;
-  reasonVersion?: number;
-  reservationCommitted?: boolean;
-  stockDisposition?: string;
-  systemCategory?: string;
 }
 
 export interface OperationsOrderControllerStateActionRequest {
@@ -4994,7 +4998,7 @@ export interface OrderDetailResponse {
   kitchenNote?: string;
   lineRemovalEnabled?: boolean;
   lines?: Array<OperationsOrderControllerLineResponse>;
-  outcome?: OperationsOrderControllerOutcomeResponse;
+  outcome?: OutcomeResponse;
   subtotalMinor?: number;
   summary?: OperationsOrderControllerOrderSummaryResponse;
   taxMinor?: number;
@@ -5184,6 +5188,18 @@ export interface OutcomeListResponse {
   rows?: Array<OutcomeRowResponse>;
 }
 
+export interface OutcomeResponse {
+  customerRefund?: string;
+  kind?: string;
+  liabilityParty?: string;
+  occurredAt?: string;
+  reasonId?: string;
+  reasonVersion?: number;
+  reservationCommitted?: boolean;
+  stockDisposition?: string;
+  systemCategory?: string;
+}
+
 export interface OutcomeRowResponse {
   cancellationReasonCode?: string;
   count?: number;
@@ -5353,13 +5369,13 @@ export interface PageReportLineResponse {
   nextCursor?: string;
 }
 
-export interface PageStaffMemberResponse {
-  items?: Array<StaffMemberResponse>;
+export interface PageRunResponse {
+  items?: Array<RunResponse>;
   nextCursor?: string;
 }
 
-export interface PageStopMaterialisationControllerRunResponse {
-  items?: Array<StopMaterialisationControllerRunResponse>;
+export interface PageStaffMemberResponse {
+  items?: Array<StaffMemberResponse>;
   nextCursor?: string;
 }
 
@@ -5571,12 +5587,6 @@ export interface PayoutResponse {
   approvalRequestId?: string;
   authorised?: boolean;
   payoutId?: string;
-}
-
-export interface PeakView {
-  cooksAtPeakOfBand?: number;
-  cooksExpected?: number;
-  hour?: number;
 }
 
 export interface PendingApprovalResponse {
@@ -6500,13 +6510,6 @@ export interface RateComponentResponse {
   componentType?: string;
   minimumPaidSeconds?: number;
   priority?: number;
-}
-
-export interface RawCellView {
-  date?: string;
-  hour?: number;
-  portions?: number;
-  stationCode?: string;
 }
 
 export interface RePresentationRequest {
@@ -7565,23 +7568,6 @@ export interface RowResponse {
   values?: { [key: string]: number };
 }
 
-export interface RowView {
-  cooksAtPeakOfBand?: number;
-  cooksExpected?: number;
-  expectedPortions?: number;
-  highPortions?: number;
-  hour?: number;
-  lowPortions?: number;
-  plantLimited?: boolean;
-  portionsPerCookHour?: number;
-  sampleSize?: number;
-  stationCeiling?: number;
-  stationCode?: string;
-  stationId?: string;
-  stationRole?: "HOT" | "COLD" | "GRILL" | "BAR" | "BAKERY" | "PACKING" | "EXPO";
-  status?: "OK" | "NO_POLICY" | "TOO_FEW_DATES";
-}
-
 export interface Rule {
   enabled?: boolean;
   id?: string;
@@ -7603,6 +7589,7 @@ export interface RulesResponse {
   policyId?: string;
   policyVersion?: number;
   rules?: Array<Rule>;
+  runPayDecided?: boolean;
   schema?: number;
   versionAtScope?: number;
   winningScope?: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION";
@@ -7612,6 +7599,21 @@ export interface RulesWriteRequest {
   default: ActionBody;
   reason: string;
   rules: Array<OperationsDispatchRulesControllerRuleBody>;
+}
+
+export interface RunResponse {
+  acknowledged?: boolean;
+  acknowledgedAt?: string;
+  completedAt?: string;
+  failedStops?: number;
+  id?: string;
+  notCarried?: number;
+  positionsAlreadyUnavailable?: number;
+  positionsWritten?: number;
+  startedAt?: string;
+  status?: string;
+  stopsSeen?: number;
+  version?: number;
 }
 
 export interface SaveOwnPreferenceRequest {
@@ -7984,6 +7986,15 @@ export interface SimulationLineBody {
   variantId: string;
 }
 
+export interface SimulationRequest {
+  brandId: string;
+  draft?: DraftBody;
+  locationId: string;
+  planId?: string;
+  scenario?: ScenarioBody;
+  scopeType?: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION";
+}
+
 export interface Skip {
   installationId?: string;
   reason?: string;
@@ -8354,21 +8365,6 @@ export interface StopItemOutcome {
   status?: string;
   stopId?: string;
   variantId?: string;
-}
-
-export interface StopMaterialisationControllerRunResponse {
-  acknowledged?: boolean;
-  acknowledgedAt?: string;
-  completedAt?: string;
-  failedStops?: number;
-  id?: string;
-  notCarried?: number;
-  positionsAlreadyUnavailable?: number;
-  positionsWritten?: number;
-  startedAt?: string;
-  status?: string;
-  stopsSeen?: number;
-  version?: number;
 }
 
 export interface StopResponse {
@@ -9242,6 +9238,13 @@ export interface UploadRequest {
   visibility: "PUBLIC" | "PRIVATE";
 }
 
+export interface UploadTicketResponse {
+  assetId?: string;
+  expiresAt?: string;
+  requiredHeaders?: { [key: string]: string };
+  uploadUrl?: string;
+}
+
 export interface VariableCatalogueEntry {
   notificationClass?: string;
   variables?: Array<VariableCatalogueVariable>;
@@ -9761,7 +9764,7 @@ export interface Operations {
   "readRules": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/dispatch-rules"; request: { parameters: { path: { tenantId: string }; query: { brandId?: string; locationId?: string } } }; responses: { "200": RulesResponse } };
   "writeRules": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/dispatch-rules"; request: { parameters: { path: { tenantId: string }; query: { brandId?: string; locationId?: string } }; body: RulesWriteRequest }; responses: { "200": RulesResponse } };
   "readOptions": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/dispatch-rules/options"; request: { parameters: { path: { tenantId: string }; query: { brandId?: string; locationId?: string } } }; responses: { "200": OptionsResponse } };
-  "simulate": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/dispatch-rules/simulations"; request: { parameters: { path: { tenantId: string } }; body: OperationsDispatchRulesControllerSimulationRequest }; responses: { "200": OperationsDispatchRulesControllerSimulationResponse } };
+  "simulate": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/dispatch-rules/simulations"; request: { parameters: { path: { tenantId: string } }; body: SimulationRequest }; responses: { "200": OperationsDispatchRulesControllerSimulationResponse } };
   "readUsage": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/dispatch-rules/usage"; request: { parameters: { path: { tenantId: string }; query: { brandId?: string; days?: number; locationId?: string } } }; responses: { "200": OperationsDispatchRulesControllerUsageResponse } };
   "forTenant": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/feature-flags"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": { [key: string]: boolean } } };
   "readPromptPolicy": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/feedback/prompt-policy"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": PromptPolicyResponse } };
@@ -9942,10 +9945,10 @@ export interface Operations {
   "listOrders_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/customers/{accountId}/orders"; request: { parameters: { path: { accountId: string; brandId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PageCustomerOrderHistoryControllerOrderSummaryResponse } };
   "reorderPlan_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/customers/{accountId}/orders/{orderId}/reorder"; request: { parameters: { path: { accountId: string; brandId: string; orderId: string; tenantId: string } } }; responses: { "200": ReorderPlanResponse } };
   "issue_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/integrations/telegram/link-codes"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { locationId?: string } } }; responses: { "200": {  } } };
-  "list_13": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/inventory/stop-materialisation-runs"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { limit?: number } } }; responses: { "200": PageStopMaterialisationControllerRunResponse } };
-  "run_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/inventory/stop-materialisation-runs"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": StopMaterialisationControllerRunResponse } };
-  "get_4": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/inventory/stop-materialisation-runs/{runId}"; request: { parameters: { path: { brandId: string; runId: string; tenantId: string } } }; responses: { "200": StopMaterialisationControllerRunResponse } };
-  "acknowledge": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/inventory/stop-materialisation-runs/{runId}/acknowledgement"; request: { parameters: { path: { brandId: string; runId: string; tenantId: string } } }; responses: { "200": StopMaterialisationControllerRunResponse } };
+  "list_13": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/inventory/stop-materialisation-runs"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { limit?: number } } }; responses: { "200": PageRunResponse } };
+  "run_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/inventory/stop-materialisation-runs"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": RunResponse } };
+  "get_4": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/inventory/stop-materialisation-runs/{runId}"; request: { parameters: { path: { brandId: string; runId: string; tenantId: string } } }; responses: { "200": RunResponse } };
+  "acknowledge": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/inventory/stop-materialisation-runs/{runId}/acknowledgement"; request: { parameters: { path: { brandId: string; runId: string; tenantId: string } } }; responses: { "200": RunResponse } };
   "report": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/inventory/stop-materialisation-runs/{runId}/report"; request: { parameters: { path: { brandId: string; runId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PageReportLineResponse } };
   "listAtBrand": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/inventory/stops"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { activeOnly?: boolean; cursor?: string; limit?: number; scope?: "LOCATION" | "BRAND" | "MENU" | "CHANNEL" | "TERMINAL"; source?: "OPERATOR" | "BOT" | "POS" | "KITCHEN_DEVICE" | "RULE"; variantId?: string } } }; responses: { "200": PageStopResponse } };
   "stopAtBrand": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/inventory/stops"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateStopRequest }; responses: { "200": StopGestureResponse } };
@@ -10011,7 +10014,7 @@ export interface Operations {
   "approve_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices/enrolments/{userCode}/approve"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string; userCode: string } }; body: ApproveRequest }; responses: { "200": DeviceResponse } };
   "configureDisplay": { method: "PUT"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices/{deviceId}/display"; request: { parameters: { path: { brandId: string; deviceId: string; locationId: string; tenantId: string } }; body: ConfigureDisplayRequest }; responses: { "200": DisplayResponse } };
   "revoke_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/devices/{deviceId}/revoke"; request: { parameters: { path: { brandId: string; deviceId: string; locationId: string; tenantId: string } }; body: RevokeRequest }; responses: { "200": RevokeResponse } };
-  "plan": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/headcount-plan"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { holidayMode?: "INCLUDE" | "EXCLUDE" | "WEIGHT"; sampleSize?: number; weekday: number } } }; responses: { "200": KitchenHeadcountControllerPlanResponse } };
+  "plan": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/headcount-plan"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { holidayMode?: "INCLUDE" | "EXCLUDE" | "WEIGHT"; sampleSize?: number; weekday: number } } }; responses: { "200": HeadcountPlanResponse } };
   "eventsForOrder": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/orders/{orderId}/events"; request: { parameters: { path: { brandId: string; locationId: string; orderId: string; tenantId: string } } }; responses: { "200": KitchenEventsResponse } };
   "routingRuleFor": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/routing-rules"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { categoryId?: string; productId?: string; variantId?: string } } }; responses: { "200": RoutingRuleDetailResponse } };
   "route": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/kitchen/routing-rules"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: RoutingRuleRequest }; responses: { "200": RoutingRuleResponse } };
@@ -10268,7 +10271,7 @@ export interface Operations {
   "retry_1": { method: "POST"; path: "/api/v1/tenants/{tenantId}/fiscal/documents/{documentId}/retries"; request: { parameters: { path: { documentId: string; tenantId: string } }; body: FiscalDocumentControllerResolutionRequest }; responses: { "200": ResolutionResponse } };
   "unblock": { method: "POST"; path: "/api/v1/tenants/{tenantId}/fiscal/documents/{documentId}/unblocks"; request: { parameters: { path: { documentId: string; tenantId: string } }; body: FiscalDocumentControllerResolutionRequest }; responses: { "200": ResolutionResponse } };
   "forOrder_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/fiscal/orders/{orderId}/documents"; request: { parameters: { path: { orderId: string; tenantId: string } } }; responses: { "200": Array<BlockedDocumentResponse> } };
-  "requestUpload": { method: "POST"; path: "/api/v1/tenants/{tenantId}/media/assets/upload-requests"; request: { parameters: { path: { tenantId: string } }; body: UploadRequest }; responses: { "200": MediaControllerUploadTicketResponse } };
+  "requestUpload": { method: "POST"; path: "/api/v1/tenants/{tenantId}/media/assets/upload-requests"; request: { parameters: { path: { tenantId: string } }; body: UploadRequest }; responses: { "200": UploadTicketResponse } };
   "get_2": { method: "GET"; path: "/api/v1/tenants/{tenantId}/media/assets/{assetId}"; request: { parameters: { path: { assetId: string; tenantId: string } } }; responses: { "200": AssetResponse } };
   "downloadUrl": { method: "GET"; path: "/api/v1/tenants/{tenantId}/media/assets/{assetId}/download-url"; request: { parameters: { path: { assetId: string; tenantId: string }; query: { variant?: "THUMBNAIL" | "CARD" | "DETAIL" | "HERO" } } }; responses: { "200": DownloadResponse } };
   "finalizeUpload": { method: "POST"; path: "/api/v1/tenants/{tenantId}/media/assets/{assetId}/finalize"; request: { parameters: { path: { assetId: string; tenantId: string } } }; responses: { "200": AssetResponse } };
