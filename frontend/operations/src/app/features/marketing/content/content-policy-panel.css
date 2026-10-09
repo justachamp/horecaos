@@ -1,0 +1,44 @@
+.policies {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 720px;
+}
+
+.policies h2 {
+  margin: 0;
+}
+
+.policies__group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.policies__switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.policies__note {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+.policies__error {
+  margin: 0;
+  color: var(--q-error-text);
+}
+
+.policies__ok {
+  margin: 0;
+}
+
+.policies__fact {
+  margin: 0;
+}

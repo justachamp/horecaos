@@ -1,0 +1,136 @@
+<div class="workbench" data-testid="content-workbench">
+  @if (denied()) {
+    <q-denied-state capability="content.read" />
+  } @else {
+    <div class="workbench__list">
+      <div class="workbench__toolbar">
+        @if (placementLabel(); as label) {
+          <h2 class="q-subhead workbench__title">{{ label | t }}</h2>
+        }
+        @if (limit(); as max) {
+          <span class="q-caption workbench__limit" data-testid="content-limit">
+            {{ 'marketing.content.list.limit' | t: { live: live(), max: max } }}
+          </span>
+        }
+        <span class="workbench__spacer"></span>
+        <button
+          type="button"
+          class="workbench__link"
+          (click)="toggleArchived()"
+          data-testid="content-toggle-archived"
+        >
+          {{
+            (showArchived()
+              ? 'marketing.content.list.hideArchived'
+              : 'marketing.content.list.showArchived'
+            ) | t
+          }}
+        </button>
+      </div>
+
+      @if (canCreate() && !showArchived()) {
+        <div class="workbench__create">
+          @for (kind of kinds(); track kind) {
+            <button
+              type="button"
+              class="workbench__button"
+              (click)="create(kind)"
+              [attr.data-testid]="'content-new-' + kind"
+            >
+              + {{ 'marketing.content.list.new' | t: { kind: kindLabel(kind) | t } }}
+            </button>
+          }
+        </div>
+      }
+
+      @if (error(); as message) {
+        <p class="q-body-sm workbench__error" role="alert" data-testid="content-list-error">
+          {{ message }}
+        </p>
+      }
+
+      @if (loading()) {
+        <p class="q-caption" role="status">{{ 'marketing.content.list.loading' | t }}</p>
+      } @else if (items().length === 0) {
+        <p class="q-body-sm workbench__empty" data-testid="content-empty">
+          {{ 'marketing.content.list.empty' | t }}
+        </p>
+      } @else if (ordered() && !showArchived()) {
+        <p class="q-caption workbench__hint">{{ 'marketing.content.list.orderHint' | t }}</p>
+        <q-rule-list
+          [items]="rows()"
+          [showToggle]="false"
+          [selectable]="true"
+          [selectedId]="selectedId()"
+          (selected)="choose($event)"
+          (reorder)="reorder($event)"
+        />
+      } @else {
+        <ul class="workbench__entries">
+          @for (item of items(); track item.id) {
+            <li>
+              <button
+                type="button"
+                class="workbench__entry"
+                [class.workbench__entry--selected]="item.id === selectedId()"
+                [attr.aria-pressed]="item.id === selectedId()"
+                (click)="choose(item.id)"
+                data-testid="content-entry"
+              >
+                <span class="q-body-sm workbench__entry-title">{{
+                  item.displayTitle || item.internalName
+                }}</span>
+                <q-status-pill [label]="pill(item).label | t" [tone]="pill(item).tone" />
+                @if (item.slug) {
+                  <code class="q-caption">{{ item.slug }}</code>
+                }
+                @if (item.problems.length > 0) {
+                  <span class="q-caption workbench__problems">
+                    {{ 'marketing.content.problemsCount' | t: { count: item.problems.length } }}
+                  </span>
+                }
+              </button>
+            </li>
+          }
+        </ul>
+        @if (nextCursor() !== null) {
+          <button
+            type="button"
+            class="workbench__button"
+            (click)="more()"
+            data-testid="content-more"
+          >
+            {{ 'marketing.content.list.more' | t }}
+          </button>
+        }
+      }
+    </div>
+
+    @if (editorOpen()) {
+      <div class="workbench__editor" data-testid="content-editor-pane">
+        <q-content-editor
+          [item]="selected()"
+          [newKind]="creatingKind()"
+          [newPlacement]="placement()"
+          [videoEntitled]="videoEntitled()"
+          (saved)="onSaved($event)"
+          (closed)="requestClose()"
+          (reloadRequested)="onReload()"
+          (dirtyChange)="editorDirty.set($event)"
+        />
+      </div>
+    }
+  }
+
+  @if (discardOpen()) {
+    <q-confirm-dialog
+      [title]="'marketing.content.list.discard.title' | t"
+      [body]="'marketing.content.list.discard.body' | t"
+      [confirmLabel]="'marketing.content.list.discard.confirm' | t"
+      [cancelLabel]="'marketing.content.list.discard.keep' | t"
+      tone="destructive"
+      (confirm)="confirmDiscard()"
+      (cancel)="keepEditing()"
+    />
+  }
+</div>

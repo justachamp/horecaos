@@ -1215,4 +1215,92 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.content.editor.confirm.discard.title': 'Отбросить черновик?',
   'marketing.content.editor.confirm.discard.body':
     'Опубликованная версия останется как есть; неопубликованные изменения будут потеряны.',
+
+  'marketing.content.list.from': 'с {day}',
+  'marketing.content.list.limit': 'Показывается: {live} из {max} возможных',
+  'marketing.content.list.showArchived': 'Показать архив',
+  'marketing.content.list.hideArchived': 'Назад к списку',
+  'marketing.content.list.new': 'Создать: {kind}',
+  'marketing.content.list.loading': 'Загрузка…',
+  'marketing.content.list.empty': 'Здесь пока ничего нет.',
+  'marketing.content.list.orderHint':
+    'Перетащите, чтобы изменить порядок, или используйте стрелки. Порядок меняется сразу и не создаёт новой версии.',
+  'marketing.content.list.orderMoved':
+    'Пока вы перетаскивали, порядок изменил кто-то другой. Список прочитан заново.',
+  'marketing.content.list.more': 'Показать ещё',
+  'marketing.content.list.discard.title': 'Уйти без сохранения?',
+  'marketing.content.list.discard.body': 'Есть несохранённые изменения. Они будут потеряны.',
+  'marketing.content.list.discard.confirm': 'Уйти',
+  'marketing.content.list.discard.keep': 'Продолжить правку',
+
+  'marketing.content.hosts.title': 'Разрешённые ссылки',
+  'marketing.content.hosts.intro':
+    'Баннер, история или окно могут вести на веб-адрес, только если его сайт есть в этом списке. Подтверждённые адреса ваших каналов в нём всегда; остальное — только после добавления.',
+  'marketing.content.hosts.host': 'Сайт (например, shop.example.uz)',
+  'marketing.content.hosts.reason': 'Зачем (необязательно)',
+  'marketing.content.hosts.add': 'Разрешить этот сайт',
+  'marketing.content.hosts.invalid':
+    'Введите только имя сайта: строчные буквы, цифры, точки и дефисы — без https://, без порта, без *.',
+  'marketing.content.hosts.audited':
+    'Добавление и удаление сайта записывается в журнал аудита как событие безопасности. Ссылка на удалённый из списка сайт перестаёт работать в течение минуты; сам элемент остаётся опубликованным.',
+  'marketing.content.hosts.empty': 'Сайтов пока нет.',
+  'marketing.content.hosts.addedBy': 'добавил(а) {who}',
+  'marketing.content.hosts.fromChannel': 'подтверждённый адрес одного из ваших каналов',
+  'marketing.content.hosts.remove': 'Убрать',
+  'marketing.content.hosts.removeTitle': 'Больше не разрешать {host}?',
+  'marketing.content.hosts.removeBody':
+    'Ссылки на этот сайт перестанут работать в течение минуты. Баннеры, истории и окна с такими ссылками останутся опубликованными, но без ссылки.',
+
+  'marketing.content.policy.title': 'Настройки',
+  'marketing.content.policy.saved': 'Сохранено.',
+  'marketing.content.policy.publishing': 'Публикация',
+  'marketing.content.policy.requireAll': 'Требовать текст на всех языках бренда перед публикацией',
+  'marketing.content.policy.requireAllHint':
+    'По умолчанию обязателен только язык бренда по умолчанию; остальные берут его текст. Эта настройка может только ужесточать публикацию.',
+  'marketing.content.policy.editorial': 'Редакционный контент',
+  'marketing.content.policy.editorialNotEntitled':
+    'Ваш тариф не включает новости, фотоальбомы, рецепты и вакансии. Включает это владелец платформы для арендатора.',
+  'marketing.content.policy.kind.news': 'Новости',
+  'marketing.content.policy.kind.gallery': 'Фотоальбомы',
+  'marketing.content.policy.kind.recipes': 'Рецепты',
+  'marketing.content.policy.kind.vacancies': 'Вакансии',
+  'marketing.content.policy.vacancyNote':
+    'Вакансия — это объявление с одним контактом, который вы решили опубликовать. У платформы нет формы отклика, и данные о кандидатах она не хранит.',
+  'marketing.content.policy.videoOn':
+    'Видео: ваш тариф разрешает видео MP4 в баннерах, карточках, окнах и историях.',
+  'marketing.content.policy.videoOff':
+    'Видео: не входит в ваш тариф. Включает его владелец платформы для арендатора.',
+
+  'marketing.content.health.title': 'Требует внимания',
+  'marketing.content.health.intro':
+    'То, что видят клиенты, но с неполадкой. Приложение уже тихо справилось с каждой: сломанная ссылка стала «никуда», карточка остановленной акции скрыта — ошибок никто не видит, но и задуманного тоже.',
+  'marketing.content.health.ok': 'Всё, что видят клиенты, выглядит так, как вы задумали.',
+  'marketing.content.health.failed': 'Не удалось проверить состояние контента.',
+
+  'marketing.content.page.title': 'Контент',
+  'marketing.content.page.intro':
+    'То, что бренд показывает клиентам рядом с меню: баннеры, промо-карточки, истории и окно при входе на главном экране — а также, если позволяют тариф и настройки, новости, фотоальбомы, рецепты и вакансии. Клиенты ничего не увидят, пока вы не опубликуете.',
+  'marketing.content.page.needsAttention': 'Требуют внимания: {count}',
+  'marketing.content.page.views': 'Списки',
+  'marketing.content.page.tab.items': 'Контент',
+  'marketing.content.page.tab.links': 'Ссылки',
+  'marketing.content.page.tab.settings': 'Настройки',
+  'marketing.content.page.tab.health': 'Состояние',
+
+  'marketing.storefront.title': 'Витрина',
+  'marketing.storefront.intro':
+    'Что показывает главный экран ваших витрин и в каком порядке: группы блюд, карусель и предпросмотр всего экрана. Клиенты ничего не увидят, пока вы не опубликуете.',
+  'marketing.storefront.tab.groups': 'Группы на главной',
+  'marketing.storefront.tab.carousel': 'Карусель предложений',
+  'marketing.storefront.tab.preview': 'Предпросмотр',
+  'marketing.storefront.tab.switcher': 'Переключатель брендов',
+  'marketing.storefront.groups.hint':
+    'Именованные ленты блюд на главном экране: выбранные вручную или целая категория. Порядок здесь — это порядок на экране.',
+  'marketing.storefront.carousel.hint':
+    'Карусель вверху главного экрана общая для баннеров и промо-карточек. Порядок задаётся здесь; писать и публиковать их нужно в разделе «Контент». Она одинакова для всех клиентов — персональное предложение для одного гостя — это отдельное.',
+  'marketing.storefront.carousel.link': 'Открыть «Контент»',
+  'marketing.storefront.switcher.title':
+    'Переключатель брендов и раскладка маркетплейса — не созданы',
+  'marketing.storefront.switcher.body':
+    'Они ждут, пока арендатор не начнёт вести два бренда на одной витрине и не попросит об этом (ADR 0157, релиз 4). До тех пор настраивать нечего, и под это не зарезервировано ни одной настройки.',
 };

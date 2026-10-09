@@ -1212,4 +1212,92 @@ export const marketingEn = {
   'marketing.content.editor.confirm.discard.title': 'Discard the draft?',
   'marketing.content.editor.confirm.discard.body':
     'The live version stays as it is; the changes you have not published are lost.',
+
+  'marketing.content.list.from': 'from {day}',
+  'marketing.content.list.limit': 'Live: {live} of at most {max}',
+  'marketing.content.list.showArchived': 'Show archived',
+  'marketing.content.list.hideArchived': 'Back to the list',
+  'marketing.content.list.new': 'New {kind}',
+  'marketing.content.list.loading': 'Loading…',
+  'marketing.content.list.empty': 'Nothing here yet.',
+  'marketing.content.list.orderHint':
+    'Drag to reorder, or use the arrows. The order takes effect at once and is not a new version.',
+  'marketing.content.list.orderMoved':
+    'Someone changed the order while you were dragging. The list has been read again.',
+  'marketing.content.list.more': 'Show more',
+  'marketing.content.list.discard.title': 'Leave without saving?',
+  'marketing.content.list.discard.body': 'You have changes that are not saved. They will be lost.',
+  'marketing.content.list.discard.confirm': 'Leave',
+  'marketing.content.list.discard.keep': 'Keep editing',
+
+  'marketing.content.hosts.title': 'Allowed links',
+  'marketing.content.hosts.intro':
+    'A banner, story or pop-up can link to a web address only if its site is on this list. Your channels’ own verified addresses are always on it; nothing else is until you add it.',
+  'marketing.content.hosts.host': 'Site (for example shop.example.uz)',
+  'marketing.content.hosts.reason': 'Why (optional)',
+  'marketing.content.hosts.add': 'Allow this site',
+  'marketing.content.hosts.invalid':
+    'Type just the site’s name: lower-case letters, digits, dots and hyphens — no https://, no port, no *.',
+  'marketing.content.hosts.audited':
+    'Adding or removing a site is recorded in the audit history as a security fact. A link to a site that leaves the list stops working within a minute; the item itself stays live.',
+  'marketing.content.hosts.empty': 'No sites yet.',
+  'marketing.content.hosts.addedBy': 'added by {who}',
+  'marketing.content.hosts.fromChannel': 'a verified address of one of your channels',
+  'marketing.content.hosts.remove': 'Remove',
+  'marketing.content.hosts.removeTitle': 'Stop allowing {host}?',
+  'marketing.content.hosts.removeBody':
+    'Links to this site stop working within a minute. The banners, stories and pop-ups that use them stay live, without the link.',
+
+  'marketing.content.policy.title': 'Settings',
+  'marketing.content.policy.saved': 'Saved.',
+  'marketing.content.policy.publishing': 'Publishing',
+  'marketing.content.policy.requireAll':
+    'Require text in every language of the brand before publishing',
+  'marketing.content.policy.requireAllHint':
+    'By default only the brand’s default language is required; the others fall back to it. This can only make publishing stricter.',
+  'marketing.content.policy.editorial': 'Editorial content',
+  'marketing.content.policy.editorialNotEntitled':
+    'Your plan does not include news, photo albums, recipes or vacancies. The platform owner switches this on for a tenant.',
+  'marketing.content.policy.kind.news': 'News',
+  'marketing.content.policy.kind.gallery': 'Photo albums',
+  'marketing.content.policy.kind.recipes': 'Recipes',
+  'marketing.content.policy.kind.vacancies': 'Vacancies',
+  'marketing.content.policy.vacancyNote':
+    'A vacancy is a listing with one contact you choose to publish. The platform has no application form and keeps nothing about candidates.',
+  'marketing.content.policy.videoOn':
+    'Video: your plan allows MP4 video in banners, cards, pop-ups and stories.',
+  'marketing.content.policy.videoOff':
+    'Video: not part of your plan. The platform owner switches it on for a tenant.',
+
+  'marketing.content.health.title': 'Needs attention',
+  'marketing.content.health.intro':
+    'Things customers are being shown that are not quite right. The app has already dealt with each quietly — a broken link becomes “nowhere”, a card tied to a stopped promotion is hidden — so nobody sees an error, but nobody sees what you meant either.',
+  'marketing.content.health.ok': 'Everything customers are being shown is as you made it.',
+  'marketing.content.health.failed': 'Could not read the health of the content.',
+
+  'marketing.content.page.title': 'Content',
+  'marketing.content.page.intro':
+    'What your brand puts in front of customers beside the menu: banners, promo cards, stories and an entry pop-up on the home screen — and, when your plan and your settings allow, news, photo albums, recipes and vacancies. Nothing reaches customers until you publish it.',
+  'marketing.content.page.needsAttention': '{count} need attention',
+  'marketing.content.page.views': 'Lists',
+  'marketing.content.page.tab.items': 'Content',
+  'marketing.content.page.tab.links': 'Links',
+  'marketing.content.page.tab.settings': 'Settings',
+  'marketing.content.page.tab.health': 'Health',
+
+  'marketing.storefront.title': 'Storefront',
+  'marketing.storefront.intro':
+    'What the home screen of your storefronts shows, and in what order: groups of dishes, the carousel, and a preview of the whole screen. Nothing reaches customers until it is published.',
+  'marketing.storefront.tab.groups': 'Home groups',
+  'marketing.storefront.tab.carousel': 'Offer carousel',
+  'marketing.storefront.tab.preview': 'Preview',
+  'marketing.storefront.tab.switcher': 'Brand switcher',
+  'marketing.storefront.groups.hint':
+    'Titled rails of dishes on the home screen: hand-picked, or a whole category. Their order here is their order on the screen.',
+  'marketing.storefront.carousel.hint':
+    'The carousel at the top of the home screen is shared by banners and promo cards. Order it here; write and publish them under Content. It is the same for every customer — a personal offer for one guest is a separate thing.',
+  'marketing.storefront.carousel.link': 'Open Content',
+  'marketing.storefront.switcher.title': 'Brand switcher and marketplace layout — not built',
+  'marketing.storefront.switcher.body':
+    'These wait until a tenant runs two brands on one storefront and asks for them (ADR 0157, Release 4). Until then there is nothing to configure, and no setting is reserved for it.',
 } as const;

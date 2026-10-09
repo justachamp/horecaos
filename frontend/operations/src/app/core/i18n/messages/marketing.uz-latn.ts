@@ -986,7 +986,7 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
     'Kartochka bogʻlangan aksiya amalda emas, shuning uchun kartochka yashirilgan',
   'marketing.content.problem.CONTENT_MEDIA_NOT_RENDERED':
     'Rasm hali qayta ishlanmoqda, shuning uchun element hali koʻrsatilmayapti',
-  'marketing.content.problem.other': 'Eʼtibor kerak: {detail}',
+  'marketing.content.problem.other': 'Eʻtibor kerak: {detail}',
 
   'marketing.content.media.none': 'Hozircha rasm yoʻq.',
   'marketing.content.media.shapeHint': 'Nisbat {ratio}, kamida {width} px kenglikda.',
@@ -1124,9 +1124,9 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.content.vacancy.apply.TELEGRAM': 'Telegram manzili (t.me/…)',
   'marketing.content.vacancy.apply.URL': 'Veb-manzil (https)',
   'marketing.content.vacancy.apply.EMAIL': 'Elektron pochta manzili',
-  'marketing.content.vacancy.applyValue': 'Eʼlon qilinadigan aloqa',
+  'marketing.content.vacancy.applyValue': 'Eʻlon qilinadigan aloqa',
   'marketing.content.vacancy.noApplicants':
-    'Bu faqat eʼlon: platformada ariza shakli yoʻq va nomzodlar haqida maʼlumot saqlanmaydi. Nomzodlar siz bilan yuqoridagi aloqa orqali bogʻlanadi.',
+    'Bu faqat eʻlon: platformada ariza shakli yoʻq va nomzodlar haqida maʻlumot saqlanmaydi. Nomzodlar siz bilan yuqoridagi aloqa orqali bogʻlanadi.',
   'marketing.content.album.images': 'Suratlar: {count} / {max}',
   'marketing.content.album.imageLabel': '{n}-surat',
   'marketing.content.album.add': 'Surat qoʻshish',
@@ -1235,4 +1235,93 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.content.editor.confirm.discard.title': 'Qoralama bekor qilinsinmi?',
   'marketing.content.editor.confirm.discard.body':
     'Chop etilgan versiya oʻzgarishsiz qoladi; chop etilmagan oʻzgarishlar yoʻqoladi.',
+
+  'marketing.content.list.from': '{day} dan',
+  'marketing.content.list.limit': 'Koʻrsatilmoqda: {live} / {max} gacha',
+  'marketing.content.list.showArchived': 'Arxivni koʻrsatish',
+  'marketing.content.list.hideArchived': 'Roʻyxatga qaytish',
+  'marketing.content.list.new': 'Yangi: {kind}',
+  'marketing.content.list.loading': 'Yuklanmoqda…',
+  'marketing.content.list.empty': 'Bu yerda hozircha hech narsa yoʻq.',
+  'marketing.content.list.orderHint':
+    'Tartibni oʻzgartirish uchun torting yoki strelkalardan foydalaning. Tartib darhol kuchga kiradi va yangi versiya hisoblanmaydi.',
+  'marketing.content.list.orderMoved':
+    'Siz sudrab turganingizda tartibni boshqa kishi oʻzgartirdi. Roʻyxat qayta oʻqildi.',
+  'marketing.content.list.more': 'Yana koʻrsatish',
+  'marketing.content.list.discard.title': 'Saqlamasdan chiqilsinmi?',
+  'marketing.content.list.discard.body': 'Saqlanmagan oʻzgarishlar bor. Ular yoʻqoladi.',
+  'marketing.content.list.discard.confirm': 'Chiqish',
+  'marketing.content.list.discard.keep': 'Tahrirlashni davom ettirish',
+
+  'marketing.content.hosts.title': 'Ruxsat etilgan havolalar',
+  'marketing.content.hosts.intro':
+    'Banner, hikoya yoki oyna veb-manzilga faqat shu sayt ushbu roʻyxatda boʻlsa olib borishi mumkin. Kanallaringizning tasdiqlangan manzillari doim shu yerda; qolganlari faqat qoʻshganingizdan keyin.',
+  'marketing.content.hosts.host': 'Sayt (masalan, shop.example.uz)',
+  'marketing.content.hosts.reason': 'Nima uchun (ixtiyoriy)',
+  'marketing.content.hosts.add': 'Bu saytga ruxsat berish',
+  'marketing.content.hosts.invalid':
+    'Faqat sayt nomini yozing: kichik harflar, raqamlar, nuqta va defis — https://, port va * siz.',
+  'marketing.content.hosts.audited':
+    'Saytni qoʻshish yoki olib tashlash audit tarixiga xavfsizlik hodisasi sifatida yoziladi. Roʻyxatdan chiqarilgan saytga havola bir daqiqa ichida ishlamay qoladi; elementning oʻzi koʻrsatilishda qoladi.',
+  'marketing.content.hosts.empty': 'Hozircha saytlar yoʻq.',
+  'marketing.content.hosts.addedBy': '{who} qoʻshgan',
+  'marketing.content.hosts.fromChannel': 'kanallaringizdan birining tasdiqlangan manzili',
+  'marketing.content.hosts.remove': 'Olib tashlash',
+  'marketing.content.hosts.removeTitle': '{host} ga ruxsat bekor qilinsinmi?',
+  'marketing.content.hosts.removeBody':
+    'Bu saytga havolalar bir daqiqa ichida ishlamay qoladi. Ular ishlatilgan banner, hikoya va oynalar havolasiz holda koʻrsatilishda qoladi.',
+
+  'marketing.content.policy.title': 'Sozlamalar',
+  'marketing.content.policy.saved': 'Saqlandi.',
+  'marketing.content.policy.publishing': 'Chop etish',
+  'marketing.content.policy.requireAll':
+    'Chop etishdan oldin brendning barcha tillarida matn talab qilinsin',
+  'marketing.content.policy.requireAllHint':
+    'Odatda faqat brendning asosiy tili majburiy; boshqalari uning matnini oladi. Bu sozlama chop etishni faqat qattiqlashtirishi mumkin.',
+  'marketing.content.policy.editorial': 'Tahririy kontent',
+  'marketing.content.policy.editorialNotEntitled':
+    'Tarifingizga yangiliklar, foto albomlar, retseptlar va vakansiyalar kirmaydi. Buni platforma egasi ijarachi uchun yoqadi.',
+  'marketing.content.policy.kind.news': 'Yangiliklar',
+  'marketing.content.policy.kind.gallery': 'Foto albomlar',
+  'marketing.content.policy.kind.recipes': 'Retseptlar',
+  'marketing.content.policy.kind.vacancies': 'Vakansiyalar',
+  'marketing.content.policy.vacancyNote':
+    'Vakansiya — siz eʻlon qilishni tanlagan bitta aloqali eʻlon. Platformada ariza shakli yoʻq va nomzodlar haqida maʻlumot saqlanmaydi.',
+  'marketing.content.policy.videoOn':
+    'Video: tarifingiz banner, kartochka, oyna va hikoyalarda MP4 videoga ruxsat beradi.',
+  'marketing.content.policy.videoOff':
+    'Video: tarifingizga kirmaydi. Uni platforma egasi ijarachi uchun yoqadi.',
+
+  'marketing.content.health.title': 'Eʻtibor talab qiladi',
+  'marketing.content.health.intro':
+    'Mijozlar koʻrayotgan, ammo nosoz narsalar. Ilova ularning har birini jimgina hal qilgan: buzilgan havola «hech qayerga» boʻlgan, toʻxtatilgan aksiya kartochkasi yashirilgan — hech kim xato koʻrmaydi, lekin siz xohlagan narsani ham koʻrmaydi.',
+  'marketing.content.health.ok': 'Mijozlar koʻrayotgan hamma narsa siz yaratgandek.',
+  'marketing.content.health.failed': 'Kontent holatini tekshirib boʻlmadi.',
+
+  'marketing.content.page.title': 'Kontent',
+  'marketing.content.page.intro':
+    'Brendingiz menyudan tashqari mijozlarga koʻrsatadigan narsalar: bosh ekrandagi banner, promo-kartochkalar, hikoyalar va kirishdagi oyna — tarifingiz va sozlamalaringiz ruxsat bersa, yangiliklar, foto albomlar, retseptlar va vakansiyalar ham. Siz chop etmaguningizcha mijozlar hech narsa koʻrmaydi.',
+  'marketing.content.page.needsAttention': 'Eʻtibor talab qiladi: {count}',
+  'marketing.content.page.views': 'Roʻyxatlar',
+  'marketing.content.page.tab.items': 'Kontent',
+  'marketing.content.page.tab.links': 'Havolalar',
+  'marketing.content.page.tab.settings': 'Sozlamalar',
+  'marketing.content.page.tab.health': 'Holat',
+
+  'marketing.storefront.title': 'Vitrina',
+  'marketing.storefront.intro':
+    'Vitrinalaringizning bosh ekrani nimani va qanday tartibda koʻrsatadi: taomlar guruhlari, karusel va butun ekranni koʻrib chiqish. Chop etilmaguncha mijozlar hech narsa koʻrmaydi.',
+  'marketing.storefront.tab.groups': 'Bosh sahifa guruhlari',
+  'marketing.storefront.tab.carousel': 'Takliflar karuseli',
+  'marketing.storefront.tab.preview': 'Koʻrib chiqish',
+  'marketing.storefront.tab.switcher': 'Brend almashtirgich',
+  'marketing.storefront.groups.hint':
+    'Bosh ekrandagi nomli taomlar lentalari: qoʻlda tanlangan yoki butun toifa. Bu yerdagi tartib ekrandagi tartibdir.',
+  'marketing.storefront.carousel.hint':
+    'Bosh ekran tepasidagi karusel banner va promo-kartochkalar uchun umumiy. Tartibni shu yerda belgilang; ularni «Kontent» boʻlimida yozing va chop eting. U barcha mijozlar uchun bir xil — bitta mehmonga shaxsiy taklif esa boshqa narsa.',
+  'marketing.storefront.carousel.link': '«Kontent»ni ochish',
+  'marketing.storefront.switcher.title':
+    'Brend almashtirgich va marketpleys joylashuvi — yaratilmagan',
+  'marketing.storefront.switcher.body':
+    'Ular ijarachi bitta vitrinada ikki brend yuritib, ularni soʻramaguncha kutadi (ADR 0157, 4-reliz). Shu paytgacha sozlanadigan narsa yoʻq va buning uchun hech qanday sozlama zaxiralanmagan.',
 };

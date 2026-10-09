@@ -49,11 +49,13 @@ import { TPipe } from '../../core/i18n/t.pipe';
  * LATE_ORDER_APOLOGY triggers — see `AutomationsPage`'s own doc for what an
  * apology is and is not. 6.4 Campaigns also carries ADR 0112's scenario editor,
  * versioned offers and contact policy as tabs and a full-width editor inside
- * its own page (`CampaignsPage`), not as routes of their own. The other two tabs
- * route to the shared `NotBuiltPage`, each naming its own IA subsection —
- * 6.7/6.8's merchandising slots have neither schema nor service. Each is a
- * subsystem in its own right, not a small gap a couple of reserved
- * migrations could close honestly — see wave 44's final report.
+ * its own page (`CampaignsPage`), not as routes of their own. 6.7 Content and 6.8 Storefront
+ * (ADR 0157, wave 20): `ContentPage` is a list with an editor beside it for banners, promo cards,
+ * stories and the entry pop-up and -- when the plan and the brand switch them on -- news, photo
+ * albums, recipes and vacancy listings, with the sites a link may point at, the two content policies
+ * and the health read; `StorefrontPage` is the home groups, the order of the offer carousel and a
+ * preview of the whole home screen. The brand switcher and the marketplace layout are Release 4 and
+ * wait for a tenant that asks, which the page says.
  */
 @Component({
   selector: 'q-marketing-shell',

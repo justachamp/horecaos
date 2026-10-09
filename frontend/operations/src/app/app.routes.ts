@@ -644,16 +644,14 @@ export const routes: Routes = [
       },
       {
         // Marketing (wave 37, frontend-information-architecture.md §6): a
-        // sub-nav shell over six tier-2 tabs, the same shape `finance`'s and
-        // `delivery`'s own shells use. Only `campaigns` (§6.4) has a real
-        // backend to render — ADR 0044's audiences, campaign lifecycle, and
-        // suppression machinery — with audience targeting and suppression
-        // management folded into it rather than routed separately, since
-        // neither is its own IA row. The other five route to the shared
-        // `NotBuiltPage`: §6.1/6.2 have a schema (V0093) and no authoring
-        // service or controller above it; §6.5/6.7/6.8 have neither schema
-        // nor service. See `marketing-shell.ts`'s own doc. (6.1 and 6.2 have
-        // both since: ADR 0140 and ADR 0072.)
+        // sub-nav shell over its tier-2 tabs, the same shape `finance`'s and
+        // `delivery`'s own shells use. Every tab now has a real screen: the
+        // campaigns (§6.4, ADR 0044's audiences, campaign lifecycle and
+        // suppression, with audience targeting and suppression folded into it
+        // rather than routed separately), promotions and promo codes (ADR 0140,
+        // ADR 0072), loyalty, referrals, automations, and -- since ADR 0157 --
+        // Content (§6.7, §6.7a) and Storefront merchandising (§6.8). See
+        // `marketing-shell.ts`'s own doc.
         path: 'marketing',
         canActivate: [messagesGuard('marketing')],
         loadComponent: () =>
@@ -737,17 +735,24 @@ export const routes: Routes = [
                 (m) => m.AutomationsPage,
               ),
           },
+          // 6.7 / 6.7a Content (ADR 0157): banners, promo cards, stories, the entry pop-up and, when the
+          // plan and the brand allow it, news, photo albums, recipes and vacancy listings -- each a list
+          // with an editor, previewed from drafts and published as an immutable revision. Lazy, so
+          // nothing here joins the initial chunk.
           {
             path: 'content',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'frontend-information-architecture.md §6.7 (Content)' },
+              import('./features/marketing/content/content-page').then((m) => m.ContentPage),
           },
+          // 6.8 Storefront merchandising (ADR 0157, Decisions 5 and 12): the home groups, the order of
+          // the offer carousel and a preview of the whole home screen. The brand switcher and the
+          // marketplace layout are Release 4 and wait for a tenant that asks (the page says so).
           {
             path: 'storefront',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'frontend-information-architecture.md §6.8 (Storefront merchandising)' },
+              import('./features/marketing/storefront/storefront-page').then(
+                (m) => m.StorefrontPage,
+              ),
           },
         ],
       },
