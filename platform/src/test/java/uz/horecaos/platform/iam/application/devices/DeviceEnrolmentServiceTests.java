@@ -573,7 +573,8 @@ class DeviceEnrolmentServiceTests {
                     .as("%s must not share a role with another class", deviceClass)
                     .isTrue();
         }
-        assertThat(roles).containsExactlyInAnyOrder("kitchen-device", "kitchen-vdu-device", "kiosk-device");
+        assertThat(roles)
+                .containsExactlyInAnyOrder("kitchen-device", "kitchen-vdu-device", "print-agent", "kiosk-device");
     }
 
     @Test

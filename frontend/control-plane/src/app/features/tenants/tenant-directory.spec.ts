@@ -123,7 +123,13 @@ describe('TenantDirectory', () => {
           displayName: 'Tenant B',
           consoleProfileNote: 'DELIVERIES_CONSOLE_WITHOUT_COURIER_SERVICE',
         },
-        { ...TENANT_A, id: 'tenant-c', slug: 'tenant-c', displayName: 'Tenant C', consoleProfileNote: null },
+        {
+          ...TENANT_A,
+          id: 'tenant-c',
+          slug: 'tenant-c',
+          displayName: 'Tenant C',
+          consoleProfileNote: null,
+        },
       ],
       nextCursor: null,
     });
@@ -135,7 +141,8 @@ describe('TenantDirectory', () => {
     fixture.detectChanges();
 
     const notes = [...fixture.nativeElement.querySelectorAll('tbody tr')].map(
-      (row: HTMLElement) => row.querySelector('[data-testid="console-profile-note"]')?.textContent?.trim() ?? null,
+      (row: HTMLElement) =>
+        row.querySelector('[data-testid="console-profile-note"]')?.textContent?.trim() ?? null,
     );
     expect(notes[0]).toContain('без консоли доставок');
     expect(notes[1]).toContain('не курьерская служба');
