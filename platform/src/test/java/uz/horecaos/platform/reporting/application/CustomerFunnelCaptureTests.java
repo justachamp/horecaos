@@ -361,8 +361,7 @@ class CustomerFunnelCaptureTests {
     void theBackfillMarksDaysPastRetentionAsNotRecorded() {
         UUID cart = insertCart(webChannel, ACCOUNT_SELF, null, "CONVERTED", tashkent(DAY, 12, 0));
         insertOrder("ANCIENT", cart, webChannel, "WEB", ACCOUNT_SELF, tashkent(DAY, 12, 10));
-        new DayCloseService(store, businessDays, new SubjectPseudonym(new StubProtection()), clock)
-                .close(TENANT, DAY);
+        new DayCloseService(store, businessDays, new SubjectPseudonym(new StubProtection()), clock).close(TENANT, DAY);
 
         clock.advance(Duration.ofDays(200));
         new FunnelBackfillService(funnelStore, capture, businessDays, clock).backfill(TENANT);
@@ -381,8 +380,7 @@ class CustomerFunnelCaptureTests {
     void theHealthProbeFlagsAClosedDayWithOrdersAndNoFunnelRow() {
         UUID cart = insertCart(webChannel, ACCOUNT_SELF, null, "CONVERTED", tashkent(DAY, 12, 0));
         insertOrder("PROBE", cart, webChannel, "WEB", ACCOUNT_SELF, tashkent(DAY, 12, 10));
-        new DayCloseService(store, businessDays, new SubjectPseudonym(new StubProtection()), clock)
-                .close(TENANT, DAY);
+        new DayCloseService(store, businessDays, new SubjectPseudonym(new StubProtection()), clock).close(TENANT, DAY);
         clock.advance(Duration.ofDays(10));
         FunnelHealthProbe probe = new FunnelHealthProbe(
                 funnelStore, clock, new io.micrometer.core.instrument.simple.SimpleMeterRegistry());

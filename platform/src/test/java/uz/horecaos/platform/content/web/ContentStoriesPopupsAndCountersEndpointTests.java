@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -397,8 +398,12 @@ class ContentStoriesPopupsAndCountersEndpointTests {
         JsonNode story = publish(created(story(avatar(), slideImage(), slideImage(), "Сториз")));
         UUID storyId = UUID.fromString(story.get("id").stringValue());
 
-        // 23:30 in Tashkent (UTC+5) on 8 October.
-        clock.set(Instant.parse("2026-10-08T18:30:00Z"));
+        // 23:30 in Tashkent (UTC+5) on a day ahead of today. Ahead, never a calendar date written into the
+        // test: the grants the fixture wrote are effective from "now", and a clock moved behind them makes
+        // every staff read after it a 403 -- which is how this test began failing the day after it was written.
+        LocalDate day = LocalDate.now(ZoneOffset.UTC).plusDays(10);
+        String window = "from=" + day.minusDays(2) + "&to=" + day.plusDays(2);
+        clock.set(day.atTime(18, 30).toInstant(ZoneOffset.UTC));
         MvcResult first = report(events(
                 ContentFixture.STOREFRONT,
                 event(item, 1, "IMPRESSION"),
@@ -413,31 +418,34 @@ class ContentStoriesPopupsAndCountersEndpointTests {
         assertThat(body(first).get("accepted").intValue()).isEqualTo(6);
         assertThat(body(first).get("rejected").intValue()).isZero();
 
-        // Half past midnight there: the next day, though still 8 October in UTC.
-        clock.set(Instant.parse("2026-10-08T19:30:00Z"));
+        // Half past midnight there: the next day, though still the same day in UTC.
+        clock.set(day.atTime(19, 30).toInstant(ZoneOffset.UTC));
         assertThat(status(report(
                         events(ContentFixture.STOREFRONT, event(item, 1, "IMPRESSION"), event(item, 1, "IMPRESSION")))))
                 .isEqualTo(202);
 
-        JsonNode stats =
-                body(send(get(CONTENT + "/items/" + item + "/stats?from=2026-10-01&to=2026-10-31"), OWNER, null, null));
-        assertThat(stats.get("clientReported").booleanValue()).isTrue();
+        MvcResult statsResult =
+                send(get(CONTENT + "/items/" + item + "/stats?" + window), OWNER, null, null);
+        JsonNode stats = body(statsResult);
+        assertThat(stats.path("clientReported").asBoolean(false))
+                .as("status %s, body %s", status(statsResult), stats)
+                .isTrue();
         assertThat(stats.get("rows")).hasSize(2);
         JsonNode newest = stats.get("rows").get(0);
-        assertThat(newest.get("day").stringValue()).isEqualTo("2026-10-09");
+        assertThat(newest.get("day").stringValue()).isEqualTo(day.plusDays(1).toString());
         assertThat(newest.get("impressions").intValue()).isEqualTo(2);
         JsonNode oldest = stats.get("rows").get(1);
-        assertThat(oldest.get("day").stringValue()).isEqualTo("2026-10-08");
+        assertThat(oldest.get("day").stringValue()).isEqualTo(day.toString());
         assertThat(oldest.get("impressions").intValue()).isEqualTo(3);
         assertThat(oldest.get("clicks").intValue()).isEqualTo(1);
         assertThat(oldest.get("channelCode").stringValue()).isEqualTo("STOREFRONT");
         assertThat(oldest.get("revisionNo").intValue()).isEqualTo(1);
 
         JsonNode popupStats = body(
-                send(get(CONTENT + "/items/" + popupId + "/stats?from=2026-10-01&to=2026-10-31"), OWNER, null, null));
+                send(get(CONTENT + "/items/" + popupId + "/stats?" + window), OWNER, null, null));
         assertThat(popupStats.get("rows").get(0).get("dismissals").intValue()).isEqualTo(1);
         JsonNode storyStats = body(
-                send(get(CONTENT + "/items/" + storyId + "/stats?from=2026-10-01&to=2026-10-31"), OWNER, null, null));
+                send(get(CONTENT + "/items/" + storyId + "/stats?" + window), OWNER, null, null));
         assertThat(storyStats.get("rows").get(0).get("completions").intValue()).isEqualTo(1);
 
         assertThat(status(send(get(CONTENT + "/items/" + item + "/stats"), LOCATION_MANAGER, null, null)))

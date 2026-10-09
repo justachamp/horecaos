@@ -362,7 +362,8 @@ class OperationsDispatchRulesEndpointTests {
     }
 
     @Test
-    @DisplayName("a start that leaves a partner no time, a hold, and grouping are each refused with their own sentence")
+    @DisplayName("a start that leaves a partner no time, a hold, and grouping are each refused with their own sentence"
+            + " (grouping with no wait, which is the only grouping ADR 0170 offers, until the run pay is decided)")
     void reservedAndImpossibleOptionsAreRefused() throws Exception {
         String lateStart = rulesJson("""
                 { "id": "late", "name": "Late", "then": { "mode": "PARTNER_FIRST", "dispatchAt": { "basis": "READY", "offsetSeconds": 900 } } }
@@ -371,7 +372,7 @@ class OperationsDispatchRulesEndpointTests {
                 { "id": "hold", "name": "Hold", "then": { "mode": "PARTNER_FIRST", "holdBeforeConfirm": true } }
                 """);
         String grouped = rulesJson("""
-                { "id": "grouped", "name": "Grouped", "then": { "mode": "FLEET_FIRST", "grouping": { "mergeRadiusMeters": 700, "maxOrdersPerRun": 3, "maxWaitSeconds": 120 } } }
+                { "id": "grouped", "name": "Grouped", "then": { "mode": "FLEET_FIRST", "grouping": { "mergeRadiusMeters": 700, "maxOrdersPerRun": 3, "maxWaitSeconds": 0 } } }
                 """);
 
         assertThat(json(put(MANAGER, "late", 0, lateStart)).path("detail").asText())
@@ -379,7 +380,13 @@ class OperationsDispatchRulesEndpointTests {
         assertThat(json(put(MANAGER, "hold", 0, hold)).path("detail").asText())
                 .contains("holding a partner booking before confirming it is not available");
         assertThat(json(put(MANAGER, "grouped", 0, grouped)).path("detail").asText())
-                .contains("how a courier is paid for one run of several orders has to be decided first");
+                .contains("grouping needs the courier pay for a run to be decided first");
+        String waiting = rulesJson("""
+                { "id": "waiting", "name": "Waiting", "then": { "mode": "FLEET_FIRST", "grouping": { "mergeRadiusMeters": 700, "maxOrdersPerRun": 3, "maxWaitSeconds": 120 } } }
+                """);
+        assertThat(json(put(MANAGER, "waiting", 0, waiting)).path("detail").asText())
+                .as("a wait for a grouped courier is refused before the pay question is reached")
+                .contains("grouping is a ranking bias only");
         assertThat(published()).isZero();
     }
 

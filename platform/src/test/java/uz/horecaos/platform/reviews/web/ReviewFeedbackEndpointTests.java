@@ -724,11 +724,22 @@ class ReviewFeedbackEndpointTests {
         // fast the machine answers. Asserting a fixed number refused out of a fixed number sent would be
         // asserting the machine's speed; what is stable is that a refusal arrives, after at least the
         // burst the policy allows, carries the ADR 0031 code, and tells the caller when to come back.
+        //
+        // The bucket is the caller's, and the caller here is the address the request arrives from. Every
+        // other test in this class reads the public endpoints from the mock server's default address, so a
+        // bucket shared with them starts short by however many they read just before -- which is what made
+        // the burst below arrive as 115 or 117 instead of 120 depending on test order. This test asks from
+        // an address of its own, a documentation range, and so from a full bucket.
+        RequestPostProcessor ownAddress = request -> {
+            request.setRemoteAddr("198.51.100.231");
+            return request;
+        };
         int allowed = 0;
         @Nullable MvcResult refused = null;
         for (int call = 0; call < 600 && refused == null; call++) {
-            MvcResult result =
-                    mvc.perform(get(storefront() + "/reviews/public/summary")).andReturn();
+            MvcResult result = mvc.perform(get(storefront() + "/reviews/public/summary")
+                            .with(ownAddress))
+                    .andReturn();
             if (result.getResponse().getStatus() == 429) {
                 refused = result;
             } else {
