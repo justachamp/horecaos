@@ -52,6 +52,9 @@ public interface CourierAssignmentPort {
      *                    {@code ALREADY_ASSIGNED}, {@code ALREADY_BEING_SOURCED},
      *                    {@code PARTNER_ATTEMPT_UNRECONCILED},
      *                    {@code COURIER_NOT_ELIGIBLE}, {@code COURIER_AT_CAPACITY}
+     * @param ruleId      the dispatch rule the plan's stored decision matched ({@code DEFAULT} when the
+     *                    document's own default decided), recorded and never evaluated: a person's choice
+     *                    overrides a rule, and the item says which. Null before the plan was read
      * @param notes       non-fatal annotations on an applied assignment
      *                    ({@code OVERRODE_DISPATCH_RULE}, {@code OUTSIDE_DISTANCE_BAND},
      *                    {@code NO_OPEN_SHIFT}); on a {@code COURIER_NOT_ELIGIBLE}
@@ -61,10 +64,17 @@ public interface CourierAssignmentPort {
             @Nullable UUID planId,
             @Nullable UUID shipmentId,
             @Nullable String problemCode,
-            List<String> notes) {
+            List<String> notes,
+            @Nullable String ruleId) {
 
         public Outcome {
             notes = List.copyOf(notes);
+        }
+
+        /** An outcome that names no rule: a refusal before the plan's stored decision was read. */
+        public Outcome(
+                @Nullable UUID planId, @Nullable UUID shipmentId, @Nullable String problemCode, List<String> notes) {
+            this(planId, shipmentId, problemCode, notes, null);
         }
 
         public boolean applied() {
@@ -72,11 +82,20 @@ public interface CourierAssignmentPort {
         }
 
         public static Outcome applied(UUID planId, UUID shipmentId, List<String> notes) {
-            return new Outcome(planId, shipmentId, null, notes);
+            return new Outcome(planId, shipmentId, null, notes, null);
+        }
+
+        public static Outcome applied(UUID planId, UUID shipmentId, List<String> notes, @Nullable String ruleId) {
+            return new Outcome(planId, shipmentId, null, notes, ruleId);
         }
 
         public static Outcome refused(@Nullable UUID planId, String problemCode, List<String> notes) {
-            return new Outcome(planId, null, problemCode, notes);
+            return new Outcome(planId, null, problemCode, notes, null);
+        }
+
+        public static Outcome refused(
+                @Nullable UUID planId, String problemCode, List<String> notes, @Nullable String ruleId) {
+            return new Outcome(planId, null, problemCode, notes, ruleId);
         }
     }
 }

@@ -85,6 +85,9 @@ public class CourierAssignmentService implements CourierAssignmentPort {
             return Outcome.refused(null, "NO_DELIVERY_PLAN", List.of());
         }
         DeliveryPlan plan = found.get();
+        // ADR 0172 Decision 6: the rule the plan matched is recorded on the item whatever the item's fate.
+        // Read from the stored decision, never re-evaluated.
+        String ruleId = plan.dispatch().ruleId();
 
         // A retried item whose first run already won: the attempt under this key is
         // ACCEPTED and its shipment is the courier's. Report the same assignment, not
@@ -94,32 +97,35 @@ public class CourierAssignmentService implements CourierAssignmentPort {
                 && own.get().status() == AttemptStatus.ACCEPTED
                 && courierId.equals(own.get().courierId())
                 && own.get().shipmentId() != null) {
-            return Outcome.applied(plan.id(), own.get().shipmentId(), List.of());
+            return Outcome.applied(plan.id(), own.get().shipmentId(), List.of(), ruleId);
         }
 
         PlanAssignability assignability = PlanAssignability.of(plan.status());
         if (assignability == PlanAssignability.NOT_OPEN) {
-            return Outcome.refused(plan.id(), "PLAN_NOT_OPEN", List.of());
+            return Outcome.refused(plan.id(), "PLAN_NOT_OPEN", List.of(), ruleId);
         }
         var carried = assignments.findShipment(tenantId, plan.id());
         if (assignability == PlanAssignability.CARRIED || carried.isPresent()) {
             boolean thisCourier =
                     carried.isPresent() && courierId.equals(carried.get().courierId());
             return Outcome.refused(
-                    plan.id(), thisCourier ? "ALREADY_ASSIGNED_TO_THIS_COURIER" : "ALREADY_ASSIGNED", List.of());
+                    plan.id(),
+                    thisCourier ? "ALREADY_ASSIGNED_TO_THIS_COURIER" : "ALREADY_ASSIGNED",
+                    List.of(),
+                    ruleId);
         }
         if (assignability == PlanAssignability.BEING_SOURCED
                 || assignments.hasLiveAttemptOtherThan(tenantId, plan.id(), attemptKey)) {
-            return Outcome.refused(plan.id(), "ALREADY_BEING_SOURCED", List.of());
+            return Outcome.refused(plan.id(), "ALREADY_BEING_SOURCED", List.of(), ruleId);
         }
         if (assignments.hasUncertainAttempt(tenantId, plan.id())) {
-            return Outcome.refused(plan.id(), "PARTNER_ATTEMPT_UNRECONCILED", List.of());
+            return Outcome.refused(plan.id(), "PARTNER_ATTEMPT_UNRECONCILED", List.of(), ruleId);
         }
 
         CourierAssessmentPort.Assessment assessed = assessment.assess(
                 tenantId, brandId, locationId, courierId, plan.distanceMeters() == null ? 0 : plan.distanceMeters());
         if (!assessed.eligible()) {
-            return Outcome.refused(plan.id(), "COURIER_NOT_ELIGIBLE", assessed.refusals());
+            return Outcome.refused(plan.id(), "COURIER_NOT_ELIGIBLE", assessed.refusals(), ruleId);
         }
 
         // The ceiling. Locked and counted inside this item's transaction: two bulks
@@ -127,7 +133,7 @@ public class CourierAssignmentService implements CourierAssignmentPort {
         // the count is of committed state and the items run in the order sent.
         int carriedByCourier = assignments.lockCourierAndCountCarried(tenantId, courierId);
         if (carriedByCourier >= assessed.concurrencyCeiling()) {
-            return Outcome.refused(plan.id(), "COURIER_AT_CAPACITY", List.of());
+            return Outcome.refused(plan.id(), "COURIER_AT_CAPACITY", List.of(), ruleId);
         }
 
         List<String> notes = new ArrayList<>(assessed.notes());
@@ -149,9 +155,23 @@ public class CourierAssignmentService implements CourierAssignmentPort {
                 new ManualDispatchService.AssignmentContext(plan.id().toString(), bulkOperationId, notes));
 
         if (result.applied()) {
-            return Outcome.applied(plan.id(), Objects.requireNonNull(result.shipmentId()), notes);
+            return Outcome.applied(plan.id(), Objects.requireNonNull(result.shipmentId()), notes, ruleId);
         }
         String reason = result.reason() == null ? "UNEXPECTED_FAILURE" : result.reason();
-        return Outcome.refused(plan.id(), reason, List.of());
+        if ("STALE_VERSION".equals(reason)) {
+            // The plan's version moved between this item reading it and acting on it. When what moved it was
+            // somebody else's assignment of this very order -- the second of two bulks sent together over one
+            // order -- the honest answer is the conflict that happened, not a version the caller never held.
+            var carriedNow = assignments.findShipment(tenantId, plan.id());
+            if (carriedNow.isPresent()) {
+                boolean thisCourier = courierId.equals(carriedNow.get().courierId());
+                return Outcome.refused(
+                        plan.id(),
+                        thisCourier ? "ALREADY_ASSIGNED_TO_THIS_COURIER" : "ALREADY_ASSIGNED",
+                        List.of(),
+                        ruleId);
+            }
+        }
+        return Outcome.refused(plan.id(), reason, List.of(), ruleId);
     }
 }

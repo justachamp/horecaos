@@ -17,6 +17,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -38,8 +43,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
+import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.configuration.Ids;
+import uz.horecaos.platform.fulfillment.api.CourierAssignmentPort;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
+import uz.horecaos.platform.ordering.domain.BulkActionType;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcBulkOperationStore;
 import uz.horecaos.platform.support.StubJwtIssuer;
 import uz.horecaos.platform.support.TestDatabase;
 
@@ -114,6 +124,14 @@ class OperationsOrderBulkCourierAssignmentHttpTests {
     @Autowired
     @SuppressWarnings("NullAway")
     private CacheManager cacheManager;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private CourierAssignmentPort courierAssignment;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private JdbcBulkOperationStore bulkStore;
 
     private UUID channelId;
     private UUID publicationId;
@@ -454,6 +472,332 @@ class OperationsOrderBulkCourierAssignmentHttpTests {
         assertThat(bulk("assign-auth-4", BULK_ONLY, advance).status()).isEqualTo(202);
     }
 
+    // ------------------------------------------------------------------ the rule, the run and the crash
+
+    @Test
+    @DisplayName("an item names the rule the plan matched, a bulk makes no run and pays DIRECT, and the plan's stored"
+            + " decision and every rule document are left exactly as they were")
+    void anItemNamesTheRuleAndAnAssignmentByAPersonMakesNoRunAndTouchesNoRule() throws Exception {
+        UUID courier = seedCourier("K-150", 5, "ACTIVE", "VALID");
+        Order decided =
+                seedOrder("DELIVERY", "WAITING_TO_SOURCE", "{\"ruleId\":\"FAR-ZONE\",\"mode\":\"PARTNER_ONLY\"}");
+        Order byDefault = seedOrder("DELIVERY", "WAITING_TO_SOURCE", null);
+        String decisionBefore = storedDecision(decided);
+        long policiesBefore = dispatchRuleDocuments();
+
+        JsonNode body = bulk("assign-rule", MANAGER, assignRequest(courier, decided, byDefault))
+                .json();
+
+        assertThat(item(body, decided).path("ruleId").asText()).isEqualTo("FAR-ZONE");
+        assertThat(item(body, decided).path("note").asText()).contains("OVERRODE_DISPATCH_RULE");
+        assertThat(item(body, byDefault).path("ruleId").asText())
+                .as("the document's own default decided this one")
+                .isEqualTo("DEFAULT");
+        assertThat(jdbc.sql("""
+                                SELECT rule_id FROM ordering.bulk_operation_items
+                                 WHERE bulk_operation_id = :b AND order_id = :o
+                                """)
+                        .param("b", UUID.fromString(body.path("bulkOperationId").asText()))
+                        .param("o", decided.orderId())
+                        .query(String.class)
+                        .single())
+                .as("recorded on the item, not only returned")
+                .isEqualTo("FAR-ZONE");
+
+        // Replayed from the stored items, the rule is still there.
+        jdbc.sql("TRUNCATE TABLE platform.idempotency_records").update();
+        assertThat(item(
+                                bulk("assign-rule", MANAGER, assignRequest(courier, decided, byDefault))
+                                        .json(),
+                                decided)
+                        .path("ruleId")
+                        .asText())
+                .isEqualTo("FAR-ZONE");
+
+        assertThat(storedDecision(decided))
+                .as("the plan's decision is read, never re-evaluated or rewritten")
+                .isEqualTo(decisionBefore);
+        assertThat(dispatchRuleDocuments()).isEqualTo(policiesBefore);
+        assertThat(jdbc.sql("""
+                                SELECT string_agg(DISTINCT pay_basis, ',') FROM fulfillment.assignment_attempts
+                                 WHERE tenant_id = :t
+                                """).param("t", TENANT).query(String.class).single())
+                .as(
+                        "a person's assignment never creates a run (ADR 0170): the operator pays three full cards by design")
+                .isEqualTo("DIRECT");
+        assertThat(jdbc.sql("SELECT count(*) FROM fulfillment.shipments WHERE run_key IS NOT NULL")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("a bulk that died after an item's assignment committed is finished by the same key: the shipment is"
+            + " reported, no second attempt is opened, and an item that never ran is applied")
+    void aReplayUnderTheSameKeyFinishesACrashedBulk() throws Exception {
+        UUID courier = seedCourier("K-160", 5, "ACTIVE", "VALID");
+        Order committed = seedOrder("DELIVERY", "WAITING_TO_SOURCE", null);
+        Order neverRan = seedOrder("DELIVERY", "WAITING_TO_SOURCE", null);
+        String key = "assign-crash";
+
+        // What the first request left behind: the claim on both orders, one assignment committed, no
+        // result written for it, and the operation never completed.
+        UUID bulkId = Ids.newId();
+        bulkStore.insert(new JdbcBulkOperationStore.NewBulkOperation(
+                bulkId,
+                TENANT,
+                BRAND,
+                LOCATION_A,
+                BulkActionType.ASSIGN_COURIER,
+                2,
+                key,
+                "USER",
+                MANAGER,
+                Instant.now(),
+                courier,
+                "OPERATIONS_BULK_ASSIGN"));
+        bulkStore.insertPendingItem(TENANT, bulkId, committed.orderId());
+        bulkStore.insertPendingItem(TENANT, bulkId, neverRan.orderId());
+        CourierAssignmentPort.Outcome first = courierAssignment.assignForOrder(
+                TENANT,
+                BRAND,
+                LOCATION_A,
+                committed.orderId(),
+                courier,
+                "OPERATIONS_BULK_ASSIGN",
+                attemptKeyOf(key, committed.orderId()),
+                bulkId,
+                ActorRef.user(MANAGER, null));
+        assertThat(first.applied()).isTrue();
+        assertThat(attemptCount(committed)).isEqualTo(1);
+
+        JsonNode body =
+                bulk(key, MANAGER, assignRequest(courier, committed, neverRan)).json();
+
+        assertThat(body.path("replayed").asBoolean()).isTrue();
+        assertThat(body.path("bulkOperationId").asText()).isEqualTo(bulkId.toString());
+        assertThat(body.path("appliedCount").asInt()).isEqualTo(2);
+        assertThat(body.path("failedCount").asInt()).isZero();
+        assertThat(item(body, committed).path("shipmentId").asText())
+                .as("the shipment the crashed run committed is the one reported")
+                .isEqualTo(Objects.requireNonNull(first.shipmentId()).toString());
+        assertThat(attemptCount(committed))
+                .as("the retry reached the same attempt")
+                .isEqualTo(1);
+        assertThat(attemptCount(neverRan)).isEqualTo(1);
+        assertThat(shipmentCourier(neverRan)).isEqualTo(courier);
+        assertThat(openShipments(courier)).isEqualTo(2);
+        assertThat(jdbc.sql("SELECT completed_at IS NOT NULL FROM ordering.bulk_operations WHERE id = :b")
+                        .param("b", bulkId)
+                        .query(Boolean.class)
+                        .single())
+                .isTrue();
+        assertThat(auditCount("ordering.order.bulk-action.assign_courier", bulkId.toString()))
+                .as("the summary is written once, when the operation completes")
+                .isEqualTo(1);
+        assertThat(auditCount("ordering.order.bulk-action-item.assign_courier", bulkId.toString()))
+                .isEqualTo(2);
+
+        // And a further replay changes nothing at all.
+        jdbc.sql("TRUNCATE TABLE platform.idempotency_records").update();
+        JsonNode again =
+                bulk(key, MANAGER, assignRequest(courier, committed, neverRan)).json();
+        assertThat(again.path("appliedCount").asInt()).isEqualTo(2);
+        assertThat(openShipments(courier)).isEqualTo(2);
+        assertThat(auditCount("ordering.order.bulk-action.assign_courier", bulkId.toString()))
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("two bulks with distinct keys over one order produce one winner and one shipment, even sent together")
+    void twoBulksOverOneOrderHaveOneWinner() throws Exception {
+        UUID courier = seedCourier("K-170", 5, "ACTIVE", "VALID");
+        Order contested = seedOrder("DELIVERY", "WAITING_TO_SOURCE", null);
+
+        List<JsonNode> answers = together(
+                () -> bulk("assign-race-1", MANAGER, assignRequest(courier, contested))
+                        .json(),
+                () -> bulk("assign-race-2", MANAGER, assignRequest(courier, contested))
+                        .json());
+
+        long applied = answers.stream()
+                .map(answer -> item(answer, contested).path("itemStatus").asText())
+                .filter("APPLIED"::equals)
+                .count();
+        assertThat(applied).as("exactly one request won the order").isEqualTo(1);
+        assertThat(answers.stream()
+                        .map(answer ->
+                                item(answer, contested).path("itemProblemCode").asText())
+                        .filter(code -> !"null".equals(code) && !code.isEmpty()))
+                .singleElement()
+                .isIn("ALREADY_ASSIGNED_TO_THIS_COURIER", "ALREADY_BEING_SOURCED", "ALREADY_ASSIGNED");
+        assertThat(jdbc.sql("SELECT count(*) FROM fulfillment.shipments WHERE order_id = :o AND status <> 'CANCELLED'")
+                        .param("o", contested.orderId())
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("two bulks sent together to one courier together never exceed the courier type's ceiling")
+    void twoSimultaneousBulksNeverExceedTheCeiling() throws Exception {
+        UUID courier = seedCourier("K-180", 3, "ACTIVE", "VALID");
+        Order[] first = {
+            seedOrder("DELIVERY", "WAITING_TO_SOURCE", null),
+            seedOrder("DELIVERY", "WAITING_TO_SOURCE", null),
+            seedOrder("DELIVERY", "WAITING_TO_SOURCE", null)
+        };
+        Order[] second = {
+            seedOrder("DELIVERY", "WAITING_TO_SOURCE", null),
+            seedOrder("DELIVERY", "WAITING_TO_SOURCE", null),
+            seedOrder("DELIVERY", "WAITING_TO_SOURCE", null)
+        };
+
+        List<JsonNode> answers = together(
+                () -> bulk("assign-cap-1", MANAGER, assignRequest(courier, first))
+                        .json(),
+                () -> bulk("assign-cap-2", MANAGER, assignRequest(courier, second))
+                        .json());
+
+        assertThat(answers.stream()
+                        .mapToInt(answer -> answer.path("appliedCount").asInt())
+                        .sum())
+                .as("six orders, a ceiling of three: three apply across both requests")
+                .isEqualTo(3);
+        assertThat(answers.stream()
+                        .mapToInt(answer -> answer.path("failedCount").asInt())
+                        .sum())
+                .isEqualTo(3);
+        assertThat(openShipments(courier)).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("the single assignment from the board is not held to the ceiling the bulk honours: it is unchanged")
+    void theSingleAssignmentIsUnchangedByTheCeiling() throws Exception {
+        UUID courier = seedCourier("K-190", 1, "ACTIVE", "VALID");
+        Order carried = seedOrder("DELIVERY", "WAITING_TO_SOURCE", null);
+        Order extra = seedOrder("DELIVERY", "WAITING_TO_SOURCE", null);
+        insertShipment(carried, courier);
+
+        assertThat(code(
+                        bulk("assign-single-1", MANAGER, assignRequest(courier, extra))
+                                .json(),
+                        extra))
+                .as("the bulk refuses at the ceiling")
+                .isEqualTo("COURIER_AT_CAPACITY");
+
+        MvcResult single = mvc.perform(post("/api/v1/operations/tenants/" + TENANT + "/brands/" + BRAND + "/locations/"
+                                + LOCATION_A + "/dispatch/plans/" + extra.plan() + "/assign")
+                        .with(tokenFor(MANAGER))
+                        .header("Idempotency-Key", "single-assign-over-ceiling")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(JSON.writeValueAsString(
+                                Map.of("courierId", courier, "expectedVersion", 1, "reasonCode", "BOARD_ASSIGN"))))
+                .andReturn();
+        assertThat(single.getResponse().getStatus())
+                .as(single.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(openShipments(courier))
+                .as("the dispatcher's own click is a person's decision and is not capped here")
+                .isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("a refused item is audited like an applied one, with its code")
+    void aFailedItemIsAuditedToo() throws Exception {
+        UUID courier = seedCourier("K-200", 5, "ACTIVE", "VALID");
+        UUID other = seedCourier("K-201", 5, "ACTIVE", "VALID");
+        Order theirs = seedOrder("DELIVERY", "WAITING_TO_SOURCE", null);
+        insertShipment(theirs, other);
+
+        JsonNode body = bulk("assign-audit-failed", MANAGER, assignRequest(courier, theirs))
+                .json();
+
+        UUID bulkId = UUID.fromString(body.path("bulkOperationId").asText());
+        assertThat(code(body, theirs)).isEqualTo("ALREADY_ASSIGNED");
+        assertThat(jdbc.sql("""
+                                SELECT outcome || ':' || (change_document -> 'problemCode' ->> 'after')
+                                  FROM audit.audit_events
+                                 WHERE action_code = 'ordering.order.bulk-action-item.assign_courier'
+                                   AND correlation_id = :c
+                                """)
+                        .param("c", bulkId.toString())
+                        .query(String.class)
+                        .single())
+                .isEqualTo("FAILED:ALREADY_ASSIGNED");
+        assertThat(jdbc.sql("""
+                                SELECT outcome FROM audit.audit_events
+                                 WHERE action_code = 'ordering.order.bulk-action.assign_courier'
+                                   AND correlation_id = :c
+                                """)
+                        .param("c", bulkId.toString())
+                        .query(String.class)
+                        .single())
+                .as("a summary with a failure is not reported as a success")
+                .isEqualTo("FAILED");
+    }
+
+    @Test
+    @DisplayName(
+            "a courier with no engagement, or one on a break, is not eligible and the gate's reason rides in the note")
+    void aCourierWithNoEngagementOrOnABreakIsNotEligible() throws Exception {
+        UUID unengaged = seedCourierWithoutEngagement("K-210");
+        UUID onBreak = seedCourier("K-211", 5, "ACTIVE", "VALID");
+        openShift(onBreak, "ON_BREAK");
+        Order first = seedOrder("DELIVERY", "WAITING_TO_SOURCE", null);
+        Order second = seedOrder("DELIVERY", "WAITING_TO_SOURCE", null);
+
+        JsonNode noEngagement =
+                bulk("assign-elig-1", MANAGER, assignRequest(unengaged, first)).json();
+        JsonNode breaking =
+                bulk("assign-elig-2", MANAGER, assignRequest(onBreak, second)).json();
+
+        assertThat(code(noEngagement, first)).isEqualTo("COURIER_NOT_ELIGIBLE");
+        assertThat(item(noEngagement, first).path("note").asText()).contains("ENGAGEMENT_NOT_ACTIVE");
+        assertThat(code(breaking, second)).isEqualTo("COURIER_NOT_ELIGIBLE");
+        assertThat(item(breaking, second).path("note").asText()).contains("DUTY_STATE_ON_BREAK");
+        assertThat(openShipments(unengaged) + openShipments(onBreak)).isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "an exception inside an item becomes UNEXPECTED_FAILURE, without its message, and the other items still run")
+    void anExceptionInAnItemIsReportedWithoutItsMessage() throws Exception {
+        UUID courier = seedCourier("K-220", 5, "ACTIVE", "VALID");
+        // A stored decision the planner's own reader cannot parse: the item throws before it can name a code.
+        Order unreadable = seedOrder("DELIVERY", "WAITING_TO_SOURCE", "{\"ruleId\":\"X\",\"mode\":\"NOT_A_MODE\"}");
+        Order fine = seedOrder("DELIVERY", "WAITING_TO_SOURCE", null);
+
+        Response response = bulk("assign-boom", MANAGER, assignRequest(courier, unreadable, fine));
+        JsonNode body = response.json();
+
+        assertThat(code(body, unreadable)).isEqualTo("UNEXPECTED_FAILURE");
+        assertThat(response.raw())
+                .as("no stack, no class name, no row content in what the client is told")
+                .doesNotContain("NOT_A_MODE")
+                .doesNotContain("Exception");
+        assertThat(item(body, fine).path("itemStatus").asText()).isEqualTo("APPLIED");
+    }
+
+    @Test
+    @DisplayName("naming a real courier of another tenant is a 400 before any item runs, and assigns nothing there")
+    void anotherTenantsRealCourierIsRefused() throws Exception {
+        UUID foreign = seedForeignCourier();
+        Order order = seedOrder("DELIVERY", "WAITING_TO_SOURCE", null);
+
+        Response refused = bulk("assign-foreign", MANAGER, assignRequest(foreign, order));
+
+        assertThat(refused.status()).isEqualTo(400);
+        assertThat(jdbc.sql("SELECT count(*) FROM fulfillment.shipments")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.bulk_operations")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private record Order(UUID orderId, @Nullable UUID planId) {
@@ -490,6 +834,115 @@ class OperationsOrderBulkCourierAssignmentHttpTests {
             refs.add(ref(order, 1));
         }
         return request("ASSIGN_COURIER", courier, refs);
+    }
+
+    /** Runs the calls together, released by one latch, and returns their answers in the order given. */
+    @SafeVarargs
+    private static List<JsonNode> together(Callable<JsonNode>... calls) throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(calls.length);
+        try {
+            CountDownLatch go = new CountDownLatch(1);
+            List<Future<JsonNode>> pending = new ArrayList<>();
+            for (Callable<JsonNode> call : calls) {
+                pending.add(pool.submit(() -> {
+                    go.await();
+                    return call.call();
+                }));
+            }
+            go.countDown();
+            List<JsonNode> answers = new ArrayList<>();
+            for (Future<JsonNode> future : pending) {
+                answers.add(future.get());
+            }
+            return answers;
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /** The key the bulk derives for one order's attempt (ADR 0172 Decision 8), restated so a test can leave the crash behind. */
+    private static String attemptKeyOf(String bulkKey, UUID orderId) throws Exception {
+        byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(bulkKey.getBytes(UTF_8));
+        return "bulk:" + java.util.HexFormat.of().formatHex(digest, 0, 8) + ":" + orderId;
+    }
+
+    private String storedDecision(Order order) {
+        return jdbc.sql("SELECT dispatch_decision::text FROM fulfillment.delivery_plans WHERE id = :p")
+                .param("p", order.plan())
+                .query(String.class)
+                .single();
+    }
+
+    private long dispatchRuleDocuments() {
+        return jdbc.sql("SELECT count(*) FROM tenant.policies WHERE key_code = 'fulfillment.dispatch_rules'")
+                .query(Long.class)
+                .single();
+    }
+
+    private void openShift(UUID courier, String dutyState) {
+        UUID engagement = jdbc.sql("SELECT id FROM fulfillment.courier_engagements WHERE courier_id = :c")
+                .param("c", courier)
+                .query(UUID.class)
+                .single();
+        jdbc.sql("""
+                INSERT INTO fulfillment.courier_shifts (id, tenant_id, brand_id, location_id, courier_id,
+                    engagement_id, status, duty_state, opened_at, enforcement_mode)
+                VALUES (gen_random_uuid(), :t, :b, :loc, :c, :e, 'OPEN', :duty, now(), 'ADVISORY')
+                """)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("loc", LOCATION_A)
+                .param("c", courier)
+                .param("e", engagement)
+                .param("duty", dutyState)
+                .update();
+    }
+
+    private UUID seedCourierWithoutEngagement(String reference) {
+        UUID typeId = UUID.randomUUID();
+        UUID courierId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO fulfillment.courier_types (id, tenant_id, code, display_name,
+                    vehicle_class, max_concurrent_assignments, offer_ttl_seconds, status)
+                VALUES (:id, :t, :code, 'Scooter', 'SCOOTER', 5, 60, 'ACTIVE')
+                """)
+                .param("id", typeId)
+                .param("t", TENANT)
+                .param("code", "T-" + reference)
+                .update();
+        jdbc.sql("""
+                INSERT INTO fulfillment.couriers (id, tenant_id, courier_type_id,
+                    principal_subject, display_reference, protected_full_name, status, version)
+                VALUES (:id, :t, :typeId, :subject, :ref, 'protected', 'ACTIVE', 1)
+                """)
+                .param("id", courierId)
+                .param("t", TENANT)
+                .param("typeId", typeId)
+                .param("subject", "keycloak-" + reference)
+                .param("ref", reference)
+                .update();
+        return courierId;
+    }
+
+    /** A real courier of the other tenant, so «not this tenant's» is tested with a row that exists. */
+    private UUID seedForeignCourier() {
+        UUID typeId = UUID.randomUUID();
+        UUID courierId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO fulfillment.courier_types (id, tenant_id, code, display_name,
+                    vehicle_class, max_concurrent_assignments, offer_ttl_seconds, status)
+                VALUES (:id, :t, 'T-FOREIGN', 'Scooter', 'SCOOTER', 5, 60, 'ACTIVE')
+                """).param("id", typeId).param("t", OTHER_TENANT).update();
+        jdbc.sql("""
+                INSERT INTO fulfillment.couriers (id, tenant_id, courier_type_id,
+                    principal_subject, display_reference, protected_full_name, status, version)
+                VALUES (:id, :t, :typeId, 'keycloak-foreign', 'K-FOREIGN', 'protected', 'ACTIVE', 1)
+                """)
+                .param("id", courierId)
+                .param("t", OTHER_TENANT)
+                .param("typeId", typeId)
+                .update();
+        return courierId;
     }
 
     private static Map<String, Object> request(String type, UUID courier, List<Map<String, Object>> orders) {

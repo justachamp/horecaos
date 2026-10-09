@@ -909,6 +909,52 @@ class OrderAmendmentAndOutcomeTests {
     }
 
     @Test
+    @DisplayName("ADR 0172: ASSIGN_COURIER is refused where the deployment has not switched it on, and records nothing")
+    void assignCourierIsRefusedByDefault() {
+        // This suite wires the service with the switch off, as an unconfigured deployment is.
+        assertThatThrownBy(() -> bulkActions.apply(
+                        TENANT,
+                        BRAND,
+                        LOCATION,
+                        new OrderBulkActionService.BulkActionCommand(
+                                BulkActionType.ASSIGN_COURIER,
+                                List.of(new OrderBulkActionService.BulkOrderRef(UUID.randomUUID(), 1)),
+                                null,
+                                "OPERATIONS_BULK_ASSIGN",
+                                null,
+                                null,
+                                "bulk-assign-off-1",
+                                "USER",
+                                "sharif",
+                                UUID.randomUUID())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not enabled");
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.bulk_operations WHERE idempotency_key = :k")
+                        .param("k", "bulk-assign-off-1")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("ADR 0172: the switch is off when nothing configures it -- the property's own default is false")
+    void theAssignSwitchDefaultsToOff() throws Exception {
+        var constructor = java.util.Arrays.stream(OrderBulkActionService.class.getConstructors())
+                .filter(candidate ->
+                        candidate.isAnnotationPresent(org.springframework.beans.factory.annotation.Autowired.class))
+                .findFirst()
+                .orElseThrow();
+        String expression = java.util.Arrays.stream(constructor.getParameters())
+                .map(parameter -> parameter.getAnnotation(org.springframework.beans.factory.annotation.Value.class))
+                .filter(java.util.Objects::nonNull)
+                .map(org.springframework.beans.factory.annotation.Value::value)
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(expression).isEqualTo("${horecaos.ordering.bulk.assign-courier.enabled:false}");
+    }
+
+    @Test
     @DisplayName("a bulk action names at most 200 orders, refused before any lookup")
     void aBulkActionIsCappedAtTwoHundredOrders() {
         List<OrderBulkActionService.BulkOrderRef> tooMany = java.util.stream.IntStream.range(0, 201)
