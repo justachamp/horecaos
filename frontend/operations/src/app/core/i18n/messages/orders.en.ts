@@ -592,6 +592,10 @@ export const ordersEn = {
   'orders.queue.bulk.assignDialog.reasonInvalid':
     'Use 1 to 48 capital letters, digits or underscores',
   'orders.queue.bulk.assignDialog.confirm': 'Assign',
+  'orders.queue.bulk.assignDialog.retryLead':
+    '{count} orders could not be assigned. Pick a courier for them.',
+  'orders.queue.bulk.assignDialog.tried': 'tried',
+  'orders.queue.bulk.result.rule': 'rule {rule}',
   'orders.queue.bulk.problem.NOT_A_DELIVERY_ORDER': 'Not a delivery order',
   'orders.queue.bulk.problem.NO_DELIVERY_PLAN': 'No delivery has been planned yet',
   'orders.queue.bulk.problem.PLAN_NOT_OPEN': 'The delivery is already over',

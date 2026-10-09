@@ -503,7 +503,9 @@
   @if (bulkAssignDialogOpen()) {
     <q-order-bulk-assign-dialog
       [couriers]="bulkAssignRoster()"
-      [count]="selectionCount()"
+      [count]="bulkAssignRetryOrders()?.length ?? selectionCount()"
+      [retry]="bulkAssignRetryOrders() !== null"
+      [triedCourierId]="bulkAssignTriedCourierId()"
       [busy]="bulkBusy()"
       (confirmed)="onBulkAssignConfirm($event)"
       (dismissed)="onBulkAssignDismiss()"

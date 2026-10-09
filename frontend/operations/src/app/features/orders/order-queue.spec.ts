@@ -1863,7 +1863,7 @@ describe('OrderQueue: selection and bulk actions (orders.md §2.10, wave P07)', 
     ).toBe('0001 — overrode the dispatch rule');
   });
 
-  it('translates the new problem codes and retries only the refused orders under a new submission', async () => {
+  it('translates the new problem codes and, for the refused orders, asks who should take them instead (ADR 0172)', async () => {
     const bulkSubmit = vi
       .fn()
       .mockReturnValueOnce(
@@ -1901,6 +1901,17 @@ describe('OrderQueue: selection and bulk actions (orders.md §2.10, wave P07)', 
             concurrencyCeiling: 1,
             engagementStatus: 'ACTIVE',
           },
+          {
+            courierId: 'courier-2',
+            displayReference: 'K-002',
+            status: 'ACTIVE',
+            courierTypeId: 't',
+            courierTypeName: 'Scooter',
+            vehicleClass: 'SCOOTER',
+            activeAssignments: 0,
+            concurrencyCeiling: 3,
+            engagementStatus: 'ACTIVE',
+          },
         ],
       },
     );
@@ -1912,7 +1923,7 @@ describe('OrderQueue: selection and bulk actions (orders.md §2.10, wave P07)', 
     await flushMicrotasks();
     (host.querySelector('[data-testid="order-queue-bulk-assign"]') as HTMLButtonElement).click();
     await flushMicrotasks();
-    (host.querySelector('[data-testid="order-bulk-assign-courier"]') as HTMLInputElement).click();
+    (host.querySelectorAll('[data-testid="order-bulk-assign-courier"]')[0] as HTMLInputElement).click();
     await flushMicrotasks();
     (host.querySelector('[data-testid="order-bulk-assign-confirm"]') as HTMLButtonElement).click();
     await flushMicrotasks();
@@ -1924,14 +1935,85 @@ describe('OrderQueue: selection and bulk actions (orders.md §2.10, wave P07)', 
         .trim(),
     ).toBe('0002 — The courier is carrying as many as they can');
 
+    // Pressing retry sends nothing: sending the same orders to the same courier would be refused the
+    // same way. It reopens the picker for the refused orders, marking the courier already tried.
     (host.querySelector('[data-testid="order-queue-bulk-retry"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    expect(bulkSubmit).toHaveBeenCalledTimes(1);
+    expect(
+      host.querySelector('[data-testid="order-bulk-assign-retry-lead"]')?.textContent,
+    ).toContain('1 orders could not be assigned');
+    expect(host.querySelectorAll('[data-testid="order-bulk-assign-tried"]')).toHaveLength(1);
+
+    (host.querySelectorAll('[data-testid="order-bulk-assign-courier"]')[1] as HTMLInputElement).click();
+    await flushMicrotasks();
+    (host.querySelector('[data-testid="order-bulk-assign-confirm"]') as HTMLButtonElement).click();
     await flushMicrotasks();
 
     expect(bulkSubmit).toHaveBeenCalledTimes(2);
     const retry = bulkSubmit.mock.calls[1][1];
     expect(retry.actionType).toBe('ASSIGN_COURIER');
-    expect(retry.courierId).toBe('courier-1');
+    expect(retry.courierId).toBe('courier-2');
     expect(retry.orders.map((ref: { orderId: string }) => ref.orderId)).toEqual(['b']);
+  });
+
+  it('dismissing the retry picker sends nothing and forgets the refused orders', async () => {
+    const bulkSubmit = vi.fn().mockReturnValueOnce(
+      of({
+        bulkOperationId: 'bulk-assign-3',
+        actionType: 'ASSIGN_COURIER',
+        requestedCount: 1,
+        appliedCount: 0,
+        failedCount: 1,
+        replayed: false,
+        items: [{ orderId: 'a', itemStatus: 'FAILED', itemProblemCode: 'COURIER_AT_CAPACITY' }],
+      }),
+    );
+    configureForBulk(
+      ordersResponse([
+        order({ orderId: 'a', publicOrderNumber: '0001', actions: [{ action: 'ASSIGN_COURIER' }] }),
+      ]),
+      {
+        bulkSubmit,
+        capabilities: ['ORDER_BULK_ACTION', 'DELIVERY_MANUAL_ASSIGN'],
+        roster: [
+          {
+            courierId: 'courier-1',
+            displayReference: 'K-001',
+            status: 'ACTIVE',
+            courierTypeId: 't',
+            courierTypeName: 'Scooter',
+            vehicleClass: 'SCOOTER',
+            activeAssignments: 0,
+            concurrencyCeiling: 1,
+            engagementStatus: 'ACTIVE',
+          },
+        ],
+      },
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+    (host.querySelector('[data-testid="order-queue-select-page"]') as HTMLInputElement).click();
+    await flushMicrotasks();
+    (host.querySelector('[data-testid="order-queue-bulk-assign"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (host.querySelector('[data-testid="order-bulk-assign-courier"]') as HTMLInputElement).click();
+    await flushMicrotasks();
+    (host.querySelector('[data-testid="order-bulk-assign-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    (host.querySelector('[data-testid="order-queue-bulk-retry"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (host.querySelector('[data-testid="order-bulk-assign-dismiss"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(host.querySelector('[data-testid="order-bulk-assign-dialog"]')).toBeNull();
+    expect(bulkSubmit).toHaveBeenCalledTimes(1);
+    // A fresh pick from the selection is a fresh pick, not a retry.
+    (host.querySelector('[data-testid="order-queue-bulk-assign"]') as HTMLButtonElement)?.click();
+    await flushMicrotasks();
+    expect(host.querySelector('[data-testid="order-bulk-assign-retry-lead"]')).toBeNull();
   });
 
   it('offers Отменить only when every selected order can be cancelled, with a reason when it cannot', async () => {

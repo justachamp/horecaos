@@ -9,6 +9,12 @@
       {{ 'orders.queue.bulk.assignDialog.title' | t: { count: count() } }}
     </h2>
 
+    @if (retry()) {
+      <p class="q-body-sm" data-testid="order-bulk-assign-retry-lead">
+        {{ 'orders.queue.bulk.assignDialog.retryLead' | t: { count: count() } }}
+      </p>
+    }
+
     @if (couriers().length === 0) {
       <p class="q-body-sm" data-testid="order-bulk-assign-empty">
         {{ 'orders.queue.bulk.assignDialog.empty' | t }}
@@ -35,6 +41,11 @@
                 'orders.queue.bulk.assignDialog.load'
                   | t: { active: courier.activeAssignments, ceiling: courier.concurrencyCeiling }
               }}</span>
+              @if (courier.courierId === triedCourierId()) {
+                <span class="q-caption" data-testid="order-bulk-assign-tried">{{
+                  'orders.queue.bulk.assignDialog.tried' | t
+                }}</span>
+              }
               @if (!isPickable(courier)) {
                 <span
                   class="q-caption assign-dialog__off"

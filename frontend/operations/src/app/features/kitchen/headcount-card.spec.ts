@@ -166,6 +166,22 @@ describe('HeadcountCard', () => {
     expect(byId('headcount-no-policy')).toBeNull();
   });
 
+  it('prints wall-clock hours when the business day does not start at midnight: operating hour 19 of a 09:00 day is 04:00', async () => {
+    await render(() => Promise.resolve(plan({ businessDayStartMinutes: 9 * 60 })));
+
+    expect(byId('headcount-peak')?.textContent).toContain('04:00');
+    expect(byId('headcount-peak')?.textContent).not.toContain('19:00');
+    const grid = byId('headcount-grid')?.textContent ?? '';
+    expect(grid).toContain('21:00'); // operating hour 12
+    expect(grid).toContain('04:00'); // operating hour 19
+  });
+
+  it('keeps midnight as the origin for a plan that does not say when the business day starts', async () => {
+    await render(() => Promise.resolve(plan()));
+
+    expect(byId('headcount-peak')?.textContent).toContain('19:00');
+  });
+
   it('puts the expected portions and the band in each cell’s tooltip, not a bare number', async () => {
     await render(() => Promise.resolve(plan()));
 

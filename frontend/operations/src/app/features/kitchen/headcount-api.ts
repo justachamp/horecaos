@@ -60,6 +60,11 @@ export interface HeadcountPlan {
   readonly stationsWithoutFigure: readonly string[];
   /** The raw per-date portions, only when the sample was too thin to plan from. */
   readonly history: readonly HeadcountRawCell[];
+  /**
+   * Minutes after local midnight at which the tenant's business day starts. An operating hour is counted from
+   * it, so the wall-clock hour is `(businessDayStartMinutes / 60 + hour) mod 24`. Absent reads as midnight.
+   */
+  readonly businessDayStartMinutes?: number;
 }
 
 export type PolicyScope = 'TENANT' | 'BRAND' | 'LOCATION';

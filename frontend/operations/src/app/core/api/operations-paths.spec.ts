@@ -238,4 +238,13 @@ describe('operationsPaths kitchen headcount (ADR 0163)', () => {
       '/api/v1/operations/tenants/a%2Fb/kitchen-productivity',
     );
   });
+
+  it('builds the paid-hold policy on the operations surface, keyed by tenant', () => {
+    expect(operationsPaths.kitchenPaidHold('t1')).toBe(
+      '/api/v1/operations/tenants/t1/kitchen-paid-hold',
+    );
+    expect(operationsPaths.kitchenPaidHold('a/b')).toBe(
+      '/api/v1/operations/tenants/a%2Fb/kitchen-paid-hold',
+    );
+  });
 });

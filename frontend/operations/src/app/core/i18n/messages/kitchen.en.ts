@@ -241,7 +241,7 @@ export const kitchenEn = {
   'kitchen.headcount.column.date': 'Date',
   'kitchen.headcount.column.portions': 'Portions',
   'kitchen.headcount.hoursNote':
-    'Hours count from the start of the business day. The small number is the cooks needed at the top of the forecast band.',
+    'Times are wall-clock, counted from the start of the business day (a day that starts at 09:00 runs past midnight). The small number is the cooks needed at the top of the forecast band.',
   'kitchen.headcount.cell.detail':
     '{portions} portions expected ({low}–{high}); {bandCooks} cooks at the top of the band',
   'kitchen.headcount.cell.noPolicy': 'no pace',
@@ -337,4 +337,30 @@ export const kitchenEn = {
   'kitchen.stopList.why.cutoff': 'Remaining is at or below the channel’s cut-off',
   'kitchen.stopList.why.off': 'Stops are switched off',
   'kitchen.stopList.why.close': 'Close',
+  'kitchen.paidHold.title': 'Hold for payment',
+  'kitchen.paidHold.lead':
+    'Whether a ticket in the buffer waits for money its order requires and has not received. A person with the right can still fire a held ticket, naming a reason.',
+  'kitchen.paidHold.field': 'Hold policy',
+  'kitchen.paidHold.summary': '{mode} · stuck after {minutes} min',
+  'kitchen.paidHold.trial':
+    'In trial: the kitchen counts the tickets it would have held and holds none.',
+  'kitchen.paidHold.mode': 'Mode',
+  'kitchen.paidHold.mode.SHADOW': 'Trial (count only)',
+  'kitchen.paidHold.mode.HOLD_UNTIL_PAID': 'Hold until paid',
+  'kitchen.paidHold.mode.OFF': 'Off',
+  'kitchen.paidHold.overdue': 'Treated as stuck after (minutes past the fire time)',
+  'kitchen.paidHold.scope': 'Applies to',
+  'kitchen.paidHold.scope.location': 'This branch',
+  'kitchen.paidHold.scope.brand': 'This brand',
+  'kitchen.paidHold.scope.tenant': 'The whole company',
+  'kitchen.paidHold.replaces': 'A policy at this level replaces the one above it as a whole.',
+  'kitchen.paidHold.reason': 'Why are you changing it?',
+  'kitchen.paidHold.invalid':
+    'Minutes are a whole number from 1 to 1440, and a reason is required.',
+  'kitchen.paidHold.stale':
+    'Someone changed this policy while you were editing it. Cancel and open it again.',
+  'kitchen.paidHold.save': 'Save',
+  'kitchen.paidHold.saving': 'Saving…',
+  'kitchen.paidHold.cancel': 'Cancel',
+  'kitchen.paidHold.saved': 'Hold policy saved',
 } as const;

@@ -50,6 +50,12 @@ export interface BulkActionItemResponse {
    * `NO_OPEN_SHIFT`), or a refused one's named reasons, comma separated. Codes only, never prose.
    */
   readonly note?: string | null;
+  /**
+   * ADR 0172 Decision 6: the dispatch rule the plan matched (`DEFAULT` when the document's own default
+   * decided). An id, never the rule's content; with `OVERRODE_DISPATCH_RULE` it is the rule this courier
+   * was put ahead of.
+   */
+  readonly ruleId?: string | null;
 }
 
 /** Mirrors `OperationsOrderController.BulkActionResponse`. */

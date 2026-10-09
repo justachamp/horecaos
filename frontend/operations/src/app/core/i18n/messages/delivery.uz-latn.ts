@@ -707,7 +707,7 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.policy.runPayMode.FIRST_FULL_THEN_INCREMENT':
     'Birinchisi toʻliq, qolganlari qoʻshimcha masofa boʻyicha',
   'delivery.policy.runPayMode.acknowledge':
-    'Tasdiqlayman: kuryerlar bilan shartlarimiz reysga bogʻliq toʻlovga ruxsat beradi. HorecaOS shartnomalarimiz haqida hech narsa daʼvo qilmaydi.',
+    'Tasdiqlayman: kuryerlar bilan shartlarimiz reysga bogʻliq toʻlovga ruxsat beradi. HorecaOS shartnomalarimiz haqida hech narsa daʻvo qilmaydi.',
   'delivery.policy.runPayMode.pendingApproval':
     'Ikkinchi imzo uchun yuborildi (soʻrov {request}). Tasdiqlanmaguncha hech narsa oʻzgarmaydi; tasdiqdan keyin xuddi shu hujjatni qayta eʻlon qiling.',
   'delivery.policy.consequence.runPayMode':

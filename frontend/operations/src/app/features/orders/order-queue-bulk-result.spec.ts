@@ -123,6 +123,25 @@ describe('OrderQueueBulkResult: bulk courier assignment notes (ADR 0172)', () =>
     expect(notes).toEqual(['#a — note:OVERRODE_DISPATCH_RULE']);
   });
 
+  it('names the rule an assignment overrode, and only when the note says it was overridden (ADR 0172)', () => {
+    const host = renderWithNotes(
+      response({
+        appliedCount: 3,
+        failedCount: 0,
+        items: [
+          { orderId: 'a', itemStatus: 'APPLIED', note: 'OVERRODE_DISPATCH_RULE', ruleId: 'FAR-ZONE' },
+          { orderId: 'b', itemStatus: 'APPLIED', note: 'NO_OPEN_SHIFT', ruleId: 'FAR-ZONE' },
+          { orderId: 'c', itemStatus: 'APPLIED', note: 'NO_OPEN_SHIFT,OVERRODE_DISPATCH_RULE', ruleId: 'DEFAULT' },
+        ],
+      } as Partial<BulkActionResponse>),
+    );
+
+    const rules = [...host.querySelectorAll('[data-testid="order-queue-bulk-result-applied-note"]')].map(
+      (row) => row.querySelector('[data-testid="order-queue-bulk-result-rule"]')?.textContent?.trim() ?? null,
+    );
+    expect(rules).toEqual(['rule FAR-ZONE', null, 'rule DEFAULT']);
+  });
+
   it('shows no notes list at all when no applied item has one', () => {
     const host = renderWithNotes(
       response({

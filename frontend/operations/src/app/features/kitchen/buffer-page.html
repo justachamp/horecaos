@@ -216,4 +216,8 @@
       </table>
     }
   </div>
+
+  @if (locationScope(); as scope) {
+    <q-paid-hold-card [scope]="scope" [canManage]="canManagePaidHold()" />
+  }
 </div>
