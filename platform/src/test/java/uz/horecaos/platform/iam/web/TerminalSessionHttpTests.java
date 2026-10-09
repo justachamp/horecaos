@@ -331,9 +331,10 @@ class TerminalSessionHttpTests extends TerminalsFixture {
                 .as("start, ready, recall, release, release-schedule and hand-over each record who acted")
                 .isGreaterThanOrEqualTo(6);
         assertThat(deviceReads)
-                .as("the only two places the board still asks who the DEVICE is are authorization questions: "
-                        + "which wall is calling, and whether the caller may override a release")
-                .isEqualTo(2);
+                .as("the only three places the board still asks who the DEVICE is are authorization questions: "
+                        + "which wall is calling, and whether the caller may override a release schedule or a "
+                        + "release of a ticket held for payment (ADR 0168)")
+                .isEqualTo(3);
     }
 
     // ------------------------------------------------------------------------------- one live session

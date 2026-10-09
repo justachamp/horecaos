@@ -384,6 +384,8 @@ class JdbcAuthorizationServiceTests {
                 Capability.DELIVERY_DISPATCH_RULES_READ,
                 Capability.COURIER_POSITION_READ,
                 Capability.KITCHEN_TICKET_READ,
+                // ADR 0163: one branch's cook headcount plan, a forecast a manager reads; it takes nothing out.
+                Capability.KITCHEN_HEADCOUNT_READ,
                 // ADR 0151: the wall's one capability. It reads the same tickets KITCHEN_TICKET_READ
                 // reads, through the same projection, so a suspended tenant's wall keeps showing the
                 // kitchen exactly as its staff's board does; it takes nothing out.
@@ -398,6 +400,9 @@ class JdbcAuthorizationServiceTests {
                 // ADR 0155: the terminals registry and the tenant's terminal policy -- device names, states
                 // and last-seen times. No credential, PIN or session token is ever in a read.
                 Capability.TERMINAL_READ,
+                // ADR 0157: a brand's storefront content with its drafts, revisions and health; looking at what
+                // a page would show takes nothing out, so a suspended tenant can still read why it went dark.
+                Capability.CONTENT_READ,
                 Capability.RESERVATION_READ,
                 Capability.DINEIN_SESSION_READ,
                 Capability.MARKETPLACE_LIVENESS_READ,

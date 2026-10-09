@@ -276,6 +276,7 @@ class EndpointCapabilityDeclarationTests {
                     || isAttributionLinkClickEndpoint(handler)
                     || isDispatchRuleSimulationEndpoint(handler)
                     || isPromotionSimulationEndpoint(handler)
+                    || isAutoAddSimulationEndpoint(handler)
                     || isGeocodeLookupEndpoint(handler)
                     || isPrintPreviewEndpoint(handler)) {
                 continue;
@@ -961,6 +962,19 @@ class EndpointCapabilityDeclarationTests {
      */
     private static boolean isPromotionSimulationEndpoint(Method handler) {
         return pathOf(handler).equals("/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promotions/simulate");
+    }
+
+    /**
+     * Whether this endpoint is the auto-add rule simulator (ADR 0158): a POST only because its input is a
+     * hypothetical basket, not a query string.
+     *
+     * <p>It evaluates the rules the cart runs and writes nothing -- no cart, no rule and no counter -- so
+     * there is no effect for a replay key to guard, for the reason the promotion simulator gives. It is not
+     * exempt from authorization: it still declares {@code CATALOG_READ} at brand scope.
+     */
+    private static boolean isAutoAddSimulationEndpoint(Method handler) {
+        return pathOf(handler)
+                .equals("/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/auto-add-rules/simulations");
     }
 
     /**

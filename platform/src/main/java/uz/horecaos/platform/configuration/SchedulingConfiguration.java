@@ -256,14 +256,17 @@ public class SchedulingConfiguration {
      * branches that could not see each other: the scenario runner's scheduler (ADR
      * 0112), the SMS delivery-receipt sweeper (ADR 0146), the card top-up settlement
      * sweeper (ADR 0095) and the e-invoice state sweeper (ADR 0096). Batch 20 added
-     * three so far: {@code StaffSignInSweeper.sweepOnce} (ADR 0176), which ends the
-     * records of sessions Keycloak no longer lists and deletes sign-in history past
-     * its retention, {@code RosterMissedSweeper.sweepOnce} (ADR 0156), which marks
-     * a published roster entry whose shift ended without anyone clocking in, and the
-     * service-recovery SLA sweeper ({@code RecoverySlaSweeper}, ADR 0159). The
+     * thirteen across its eleven waves: the print queue's maintenance and reconciler ticks (ADR 0154),
+     * the terminal credential purge and unseen-device watch (ADR 0155), {@code
+     * RosterMissedSweeper.sweepOnce} (ADR 0156), which marks a published roster entry whose shift ended
+     * without anyone clocking in, {@code ContentRevisionMediaSweeper} (ADR 0157), the service-recovery SLA
+     * sweeper (ADR 0159), {@code StaffSignInSweeper.sweepOnce} (ADR 0176), which ends the records of
+     * sessions Keycloak no longer lists and deletes sign-in history past its retention, the IKPU/MXIK list's
+     * freshness check (ADR 0173), the customer funnel's backfill, health probe and retention sweeper (ADR
+     * 0167) and the till-balance sync tick (ADR 0171). The
      * pool-size test counts them.
      */
-    static final int DEFAULT_POOL_SIZE = 83;
+    static final int DEFAULT_POOL_SIZE = 93;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.
