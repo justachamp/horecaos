@@ -125,9 +125,10 @@ public class InternalFleetAdapter implements InternalFleetPort {
      * shipment it was measured to, never a coordinate. What this module adds is the pay treatment, because pay
      * is its own: a measured courier is paid on the run basis only when the resolved {@code courier.compensation}
      * says first-full-then-increment <em>and</em> a rate card resolves for them, since a quote the courier is
-     * shown before accepting needs a card to compute it. A courier with no card who is groupable is still ranked
-     * first (grouping saves the road) but is never offered a run price: {@code runIncrementPay} stays false and
-     * the order is paid {@code DIRECT}; the miss is counted as {@code no_card}.
+     * shown before accepting needs a card to compute it. Where the pay is first-full-then-increment, a courier
+     * with no resolvable card is therefore not offered a grouped order at all (Decision 5): they stay a plain
+     * candidate, unmeasured, and the miss is counted as {@code no_card}. Where the pay is {@code PER_ORDER},
+     * a measured courier is ranked first and the order is paid {@code DIRECT}, so no quote depends on a card.
      */
     @Override
     public List<FleetCandidate> candidates(
@@ -160,7 +161,11 @@ public class InternalFleetAdapter implements InternalFleetPort {
             }
             boolean runPay = incrementPolicy && hasCard(tenantId, brandId, locationId, candidate.courierId());
             if (incrementPolicy && !runPay) {
+                // Decision 5: a quote is shown before accepting and needs a card to compute it, so a courier
+                // with none is not offered a grouped order. They stay an ordinary candidate.
                 count("no_card");
+                measured.add(candidate);
+                continue;
             }
             measured.add(candidate.withGroupableTo(near.distanceMeters(), near.leadShipmentId(), runPay));
         }

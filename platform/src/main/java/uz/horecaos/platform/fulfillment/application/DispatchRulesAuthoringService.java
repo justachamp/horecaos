@@ -215,7 +215,12 @@ public class DispatchRulesAuthoringService {
         }
     }
 
-    private boolean runPayModeDecided(ResourceScope scope) {
+    /**
+     * Whether the {@code courier.compensation} resolved at {@code scope} has decided how a run of several orders is
+     * paid (ADR 0170 Decision 6). The editor shows it beside the grouping switch so an operator sees why a rule
+     * that groups would be refused before they try to publish it.
+     */
+    public boolean runPayModeDecided(ResourceScope scope) {
         return payTerms == null
                 || payTerms.runPayTerms(tenantOf(scope), scope.brandId(), scope.locationId())
                         .decided();
