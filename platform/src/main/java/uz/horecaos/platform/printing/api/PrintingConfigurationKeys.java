@@ -3,6 +3,8 @@ package uz.horecaos.platform.printing.api;
 import java.util.List;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 
 /**
  * The printing module's ADR 0030 configuration keys and its ADR 0082 flag.
@@ -27,11 +29,11 @@ public final class PrintingConfigurationKeys {
     public static final String LATE_MARKER_MINUTES_CODE = "printing.late_marker_minutes";
 
     /**
-     * The languages a document can print in: the three the platform's content tier serves (ADR 0149).
-     * A fourth is a catalogue and a glyph audit of the bundled face first (ADR 0154, Decision 3), so
-     * the registry's own rule restates this list rather than reading the language registry.
+     * The languages a document can print in: the ones the language registry has live for messages (ADR
+     * 0149). A language the registry activates is a catalogue and a glyph audit of the bundled face for
+     * printing as well (ADR 0154, Decision 3), which {@code PrintLabels} refuses to start without.
      */
-    public static final List<String> DOCUMENT_LOCALES = List.of("ru", "uz-Latn", "en");
+    public static final List<String> DOCUMENT_LOCALES = PlatformLocales.activeTags(Tier.MESSAGES);
 
     /**
      * ADR 0154, ADR 0082: whether a tenant's branches print. Off until turned on by hand, per tenant

@@ -10,6 +10,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 
 /**
  * The words on paper, in one language (ADR 0154, Open inputs: «one language per document, the
@@ -21,8 +23,13 @@ import java.util.Properties;
  */
 public final class PrintLabels {
 
-    /** The languages a document can print in. A fourth is a catalogue and a glyph audit first. */
-    public static final List<String> LOCALES = List.of("ru", "uz-Latn", "en");
+    /**
+     * The languages a document can print in: the ones the language registry has live for messages (ADR
+     * 0149), which is the registry's list and not this module's. A language the registry activates needs
+     * a catalogue here and a glyph audit of the bundled face first; until it has one, loading fails at
+     * start-up naming it, never at a customer's receipt.
+     */
+    public static final List<String> LOCALES = PlatformLocales.activeTags(Tier.MESSAGES);
 
     private static final Map<String, PrintLabels> CATALOGUES = loadAll();
 

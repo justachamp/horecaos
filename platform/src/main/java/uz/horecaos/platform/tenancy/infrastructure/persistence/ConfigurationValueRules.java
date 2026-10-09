@@ -6,6 +6,8 @@ import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.iam.api.mfa.MfaRequirementMode;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -43,11 +45,11 @@ public final class ConfigurationValueRules {
     static final int DISCLOSURE_TEXT_MAXIMUM_CHARACTERS = 500;
 
     /**
-     * The languages a printed document can be written in (ADR 0154). Restated from {@code
-     * printing.api.PrintingConfigurationKeys#DOCUMENT_LOCALES}, which this module may not import;
-     * {@code PrintingConfigurationKeyTests} holds the two lists together.
+     * The languages a printed document can be written in (ADR 0154): the ones the language registry has
+     * live for messages (ADR 0149), the same list {@code printing.api.PrintingConfigurationKeys} reads;
+     * {@code PrintingConfigurationKeyTests} holds the two together.
      */
-    static final java.util.List<String> PRINT_DOCUMENT_LOCALES = java.util.List.of("ru", "uz-Latn", "en");
+    static final java.util.List<String> PRINT_DOCUMENT_LOCALES = PlatformLocales.activeTags(Tier.MESSAGES);
 
     private static final Map<String, Consumer<Object>> RULES = Map.ofEntries(
             Map.entry("ordering.late_colour", ConfigurationValueRules::requireBlankOrHexColour),
