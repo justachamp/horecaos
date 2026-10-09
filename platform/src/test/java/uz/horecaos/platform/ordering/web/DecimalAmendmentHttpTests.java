@@ -508,7 +508,9 @@ class DecimalAmendmentHttpTests {
                 .hasSize(1);
         assertThat(consequence.get(0).get("orderLineId").asText()).isEqualTo(soda.toString());
         assertThat(consequence.get(0).get("quantityAfter").decimalValue()).isEqualByComparingTo("0");
-        assertThat(consequence.get(0).get("kitchenState").asText()).isEqualTo("UNKNOWN");
+        assertThat(consequence.get(0).get("kitchenState").asText())
+                .as("the confirmed order opened a kitchen ticket whose item is still queued")
+                .isEqualTo("NOT_STARTED");
         assertThat(consequence.get(0).get("declaredDisposition").asText()).isEqualTo("RETURN_TO_STOCK");
         assertThat(preview.get("actions").toString())
                 .as("a removal waits for the customer's agreement even though the total only fell")
