@@ -770,6 +770,55 @@ class AutoAddCartHttpTests {
         assertThat(without.get("totalMinor").asLong()).as("burger only").isEqualTo(40_000L);
     }
 
+    // ------------------------------------------------------------------------------- a republish
+
+    @Test
+    @DisplayName("price() after a republish re-evaluates the cart: an edited rule changes the injected quantity, an "
+            + "archived one takes the line away, and each advances the cart's version")
+    void aRepublishChangesTheInjectedSetAtPricing() throws Exception {
+        UUID rule = activeRule(plainRule("cutlery", cutlery, "[\"PICKUP\"]"));
+        publish("STOREFRONT");
+        gate(true, false);
+        UUID cart = openCart("STOREFRONT", "PICKUP");
+        JsonNode view = putLine(cart, 1, "burger", burger, "1");
+        int version = view.get("version").asInt();
+        assertThat(lineOf(view, "aa:" + rule).get("quantity").decimalValue()).isEqualByComparingTo("1");
+
+        // The author doubles the quantity and republishes; the customer has not touched the cart since.
+        replaceRule(rule, 2, plainRule("cutlery", cutlery, "[\"PICKUP\"]").replace("\"quantity\":1", "\"quantity\":2"));
+        publish("STOREFRONT");
+        JsonNode doubled = price(cart, version);
+
+        assertThat(doubled.get("changedByPricing").asBoolean())
+                .as("the cart the customer saw is not the cart that was priced")
+                .isTrue();
+        assertThat(doubled.get("cartVersion").asInt()).isGreaterThan(version);
+        assertThat(doubled.get("totalMinor").asLong())
+                .as("burger 40,000 + two sets of cutlery at 2,000")
+                .isEqualTo(44_000L);
+        Map<String, Object> stored = jdbc.sql("SELECT quantity, auto_add_rule_version FROM ordering.cart_lines "
+                        + "WHERE cart_id = :c AND line_key = :k")
+                .param("c", cart)
+                .param("k", "aa:" + rule)
+                .query()
+                .singleRow();
+        assertThat((BigDecimal) stored.get("quantity")).isEqualByComparingTo("2");
+        assertThat(stored.get("auto_add_rule_version"))
+                .as("the line names the version of the rule that now puts it there")
+                .isEqualTo(3);
+
+        // The author then archives the rule and republishes: the line goes.
+        archiveRule(rule, 3);
+        publish("STOREFRONT");
+        JsonNode gone = price(cart, doubled.get("cartVersion").asInt());
+
+        assertThat(gone.get("changedByPricing").asBoolean()).isTrue();
+        assertThat(gone.get("cartVersion").asInt())
+                .isGreaterThan(doubled.get("cartVersion").asInt());
+        assertThat(gone.get("totalMinor").asLong()).isEqualTo(40_000L);
+        assertThat(count("ordering.cart_lines WHERE origin = 'AUTO_ADD'")).isZero();
+    }
+
     // ---------------------------------------------------------------------- a moved cart
 
     @Test
@@ -1045,6 +1094,34 @@ class AutoAddCartHttpTests {
                 .as(activated.getResponse().getContentAsString())
                 .isEqualTo(200);
         return ruleId;
+    }
+
+    private void replaceRule(UUID ruleId, int version, String createBody) throws Exception {
+        ObjectNode replace = (ObjectNode) JSON.readTree(createBody);
+        replace.remove("code");
+        replace.remove("kind");
+        replace.put("status", "ACTIVE");
+        MvcResult replaced = mvc.perform(put(rulesPath() + "/" + ruleId)
+                        .with(operator())
+                        .header(IDEMPOTENCY_HEADER, "rule-" + requests++)
+                        .header("If-Match", String.valueOf(version))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(JSON.writeValueAsString(replace)))
+                .andReturn();
+        assertThat(replaced.getResponse().getStatus())
+                .as(replaced.getResponse().getContentAsString())
+                .isEqualTo(200);
+    }
+
+    private void archiveRule(UUID ruleId, int version) throws Exception {
+        MvcResult archived = mvc.perform(post(rulesPath() + "/" + ruleId + "/archive")
+                        .with(operator())
+                        .header(IDEMPOTENCY_HEADER, "rule-" + requests++)
+                        .header("If-Match", String.valueOf(version)))
+                .andReturn();
+        assertThat(archived.getResponse().getStatus())
+                .as(archived.getResponse().getContentAsString())
+                .isEqualTo(200);
     }
 
     private void publish(String channel) {

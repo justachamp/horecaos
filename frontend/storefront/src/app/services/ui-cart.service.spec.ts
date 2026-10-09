@@ -518,7 +518,7 @@ describe('UiCartService project(): lines a rule added (ADR 0158)', () => {
     expect(item?.origin).toBe('AUTO_ADD');
     expect(item?.autoAdd).toEqual({
       ruleCode: 'BOX',
-      text: 'Packaging',
+      text: 'Qadoq',
       mandatory: true,
       removable: false,
       minimumQuantity: 2,

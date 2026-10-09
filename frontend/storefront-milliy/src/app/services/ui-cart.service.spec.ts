@@ -288,7 +288,6 @@ describe('UiCartService project(): lines a rule added (ADR 0158)', () => {
             },
           ],
           modifierGroupIds: [],
-          commentPresets: [],
         },
       ],
     });
@@ -302,7 +301,6 @@ describe('UiCartService project(): lines a rule added (ADR 0158)', () => {
           lineKey: 'v-box',
           variantId: 'v-box',
           quantity: 2,
-          commentPresetCodes: [],
           hasCustomerNote: false,
           origin: 'AUTO_ADD',
           autoAdd: {
@@ -326,7 +324,7 @@ describe('UiCartService project(): lines a rule added (ADR 0158)', () => {
     expect(item?.origin).toBe('AUTO_ADD');
     expect(item?.autoAdd).toEqual({
       ruleCode: 'BOX',
-      text: 'Packaging',
+      text: 'Qadoq',
       mandatory: true,
       removable: false,
       minimumQuantity: 2,
@@ -342,7 +340,6 @@ describe('UiCartService project(): lines a rule added (ADR 0158)', () => {
           lineKey: 'v-box',
           variantId: 'v-box',
           quantity: 1,
-          commentPresetCodes: [],
           hasCustomerNote: false,
           origin: 'AUTO_ADD',
           autoAdd: {
@@ -358,7 +355,6 @@ describe('UiCartService project(): lines a rule added (ADR 0158)', () => {
           lineKey: 'v-own',
           variantId: 'v-own',
           quantity: 1,
-          commentPresetCodes: [],
           hasCustomerNote: false,
           origin: 'CUSTOMER',
         },
