@@ -424,8 +424,7 @@ class ContentStoriesPopupsAndCountersEndpointTests {
                         events(ContentFixture.STOREFRONT, event(item, 1, "IMPRESSION"), event(item, 1, "IMPRESSION")))))
                 .isEqualTo(202);
 
-        MvcResult statsResult =
-                send(get(CONTENT + "/items/" + item + "/stats?" + window), OWNER, null, null);
+        MvcResult statsResult = send(get(CONTENT + "/items/" + item + "/stats?" + window), OWNER, null, null);
         JsonNode stats = body(statsResult);
         assertThat(stats.path("clientReported").asBoolean(false))
                 .as("status %s, body %s", status(statsResult), stats)
@@ -441,11 +440,9 @@ class ContentStoriesPopupsAndCountersEndpointTests {
         assertThat(oldest.get("channelCode").stringValue()).isEqualTo("STOREFRONT");
         assertThat(oldest.get("revisionNo").intValue()).isEqualTo(1);
 
-        JsonNode popupStats = body(
-                send(get(CONTENT + "/items/" + popupId + "/stats?" + window), OWNER, null, null));
+        JsonNode popupStats = body(send(get(CONTENT + "/items/" + popupId + "/stats?" + window), OWNER, null, null));
         assertThat(popupStats.get("rows").get(0).get("dismissals").intValue()).isEqualTo(1);
-        JsonNode storyStats = body(
-                send(get(CONTENT + "/items/" + storyId + "/stats?" + window), OWNER, null, null));
+        JsonNode storyStats = body(send(get(CONTENT + "/items/" + storyId + "/stats?" + window), OWNER, null, null));
         assertThat(storyStats.get("rows").get(0).get("completions").intValue()).isEqualTo(1);
 
         assertThat(status(send(get(CONTENT + "/items/" + item + "/stats"), LOCATION_MANAGER, null, null)))

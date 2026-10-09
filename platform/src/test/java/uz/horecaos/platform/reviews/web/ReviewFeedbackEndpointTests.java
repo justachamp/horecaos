@@ -737,8 +737,8 @@ class ReviewFeedbackEndpointTests {
         int allowed = 0;
         @Nullable MvcResult refused = null;
         for (int call = 0; call < 600 && refused == null; call++) {
-            MvcResult result = mvc.perform(get(storefront() + "/reviews/public/summary")
-                            .with(ownAddress))
+            MvcResult result = mvc.perform(
+                            get(storefront() + "/reviews/public/summary").with(ownAddress))
                     .andReturn();
             if (result.getResponse().getStatus() == 429) {
                 refused = result;
