@@ -1,38 +1,37 @@
 # ADR 0154: Printing and receipts
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Not started — nothing prints from HorecaOS. No module,
-  table, endpoint or screen exists for a printer, a print job, a route or a receipt
-  layout. A word search of `platform/src/main/java` finds «print» as a verb or noun only
-  in comments (a record's `toString` that would print a secret, a printed table card,
-  "the short number a receipt prints") and in the Apache CSV printers of
-  `ReportExportService` and `CatalogImportParser`, never as code that prints, and
-  `PosCapability` has no print constant (its ten are `CATALOG_READ`,
-  `AVAILABILITY_READ`, `ORDER_APPROVAL`, `ORDER_EXPORT`, `ORDER_CANCELLATION`,
-  `PREPARATION_STATUS`, `RECEIPT_READ`, `FISCAL_IDENTIFIER_WRITE_BACK`,
-  `FULFILLMENT_STATUS_WRITE` and `CUSTOMER_UPSERT`). What prints today is whatever a
-  till does. `PosOrderExportService` exports a confirmed order and the POS produces its
-  own kitchen ticket as a side effect the platform cannot see: V0036's comments call a
-  repeated post "a second kitchen ticket". orders.md §4.8 specifies «Печать в POS» as
-  that same push (`OrderPosExportController#push`, `POS_EXPORT_RESOLVE`, offered only
-  where the binding declares `ORDER_EXPORT`), and the order detail's own label for it is
-  «Экспорт в кассу» (`orders.detail.section.posExport`). The only paper the console
-  itself can produce is the table QR card
-  (`frontend/operations/src/app/shared/ui/table-print-card`, which has an
-  `@media print` rule and no code that calls `print()`; the operator uses the browser's
-  own menu). A customer's fiscal receipt is a link:
-  `payments.notifications.FiscalCustomerReceiptTrigger` sends the OFD URL by message
-  when `FiscalDocumentIssued` fires, and nothing puts it on paper. Every fact a paper
-  receipt would carry already exists: `fiscal.fiscal_documents` (V0027, moved to the
-  `fiscal` schema by V0039) holds `fiscal_sign`, `receipt_reference`, `terminal_id`,
-  `registered_at` and `receipt_url`, and `fiscal_document_lines` the lines;
-  `LegalEntityDirectory#sellerFor` (ADR 0038, V0053) answers the legal name and TIN
-  for a location and a business date, and `tenant.legal_entities` holds the registered
-  address and phone that `FiscalSeller` does not carry; `ordering.orders.public_order_number`
-  (V0022) is "the short number a receipt and a kitchen ticket both print" (V0326's own
-  words); `kitchen.tickets.sequence_label` copies it (V0030); `tenant.brand_media`
-  (V0243) names a brand's logo. Settings §10.14 and gap-map row `10.14` exist as three
-  cards whose own text says what is not built.
+- Implementation status: Partial — 2026-10-08 (operations batch 20, wave w1-printing,
+  backend only; the screens are the next step). The `printing` module exists and is dark
+  behind `feature.printing`. Built: V0520–V0523 (the `printing` schema with printers,
+  routes, receipt profiles, jobs and the agents' advertised printers, all under
+  row-level security; `PRINT_AGENT` in both device-class CHECKs; `PRINTER_OFFLINE` and
+  `PRINT_JOB_DEAD` in the Telegram CHECK; `kitchen.tickets.amendment_revision`); the
+  capabilities `print.read`, `print.manage`, `print.reprint`, `print.job.claim` and
+  `print.job.report` and the `print-agent` role; the document model, the 12-dot cell
+  layout, the raster renderer with the vendored Fira Code (OFL) and ESC/POS framing, ZXing
+  core 3.5.4 for the receipt QR; builders for `KITCHEN_TICKET`, `ORDER_SLIP`,
+  `FISCAL_RECEIPT` and `TEST_PAGE` over the new `OrderPrintSource`,
+  `KitchenTicketPrintSource`, `FiscalReceiptSource`, `BrandLogoLookup` and
+  `MediaAssetContent` ports (no module imports `printing`; `ModularArchitectureTests`
+  says so); AFTER_COMMIT triggers on `OrderConfirmed`, `KitchenTicketReleased`,
+  `KitchenTicketAmended` and `FiscalDocumentIssued` with the one-minute reconciling
+  sweeper; the leased queue (60-second lease, six attempts at +5 s, +15 s, +45 s, +2 min,
+  +5 min, kitchen-ticket expiry), maintenance, envelope-encrypted documents erased 7 days
+  after a terminal state and 30 after a dead job; the agent's claim, artifact and result
+  endpoints; the console endpoints (printers, routes, receipt profile, queue, reprint,
+  test page, preview, agent approval and revocation) with ADR 0027 facts; and a runbook
+  (`platform/docs/runbooks/print-agent-and-printers.md`). Tested over HTTP against a fake
+  printer on a loopback socket and a fake agent holding a real device principal; the
+  receipt QR is decoded back from the bytes the printer received. Not built: the
+  Settings → Printing and receipts screens and the order «Печать» action;
+  `tools/print-agent` and the `make up` fake-printer service; a render in CI inside the
+  production image (the runtime image already carries `fontconfig` and `freetype`, and one
+  render was run by hand in it on 2026-10-08, with the same layout and a 0.04% difference
+  in dots from the developer's macOS rasteriser); the pilot's printer model (nothing has
+  been printed on paper); the legal wording a printed receipt must carry, which gates
+  `FISCAL_RECEIPT` `auto_print` and nothing else; and a font with a native U+02BB (the
+  letter is drawn as U+2018, which looks the same at 24 dots).
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides

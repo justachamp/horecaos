@@ -26,6 +26,7 @@ import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.application.GrantAuditListener;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
+import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.api.devices.DeviceEnrolmentPort;
 import uz.horecaos.platform.iam.api.devices.DeviceEnrolmentPort.BeginEnrolment;
 import uz.horecaos.platform.iam.api.devices.DeviceEnrolmentPort.DevicePrincipalView;
@@ -191,7 +192,18 @@ class KitchenDeviceDisplayServiceTests {
     void eachClassHasItsOwnRole() {
         Set<String> roles = new java.util.HashSet<>();
         for (DevicePrincipalClass deviceClass : DevicePrincipalClass.values()) {
-            assertThat(roles.add(KitchenDeviceService.roleOf(deviceClass).code()))
+            PlatformRole role;
+            if (deviceClass == DevicePrincipalClass.PRINT_AGENT) {
+                // ADR 0154: not a kitchen class. The kitchen's approval refuses it outright, and the Printing
+                // screen grants it its own role, which must still be one no other class holds.
+                assertThatThrownBy(() -> KitchenDeviceService.roleOf(deviceClass))
+                        .as("the kitchen cannot approve a print agent")
+                        .isInstanceOf(ApiException.class);
+                role = PlatformRole.PRINT_AGENT;
+            } else {
+                role = KitchenDeviceService.roleOf(deviceClass);
+            }
+            assertThat(roles.add(role.code()))
                     .as("%s must not share a role with another class", deviceClass)
                     .isTrue();
         }
