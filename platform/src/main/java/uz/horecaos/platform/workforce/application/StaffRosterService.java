@@ -16,7 +16,6 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -154,14 +153,14 @@ public class StaffRosterService {
         } catch (DataIntegrityViolationException failure) {
             throw conflict(failure);
         }
-        audit.record(
+        audit.recordCreated(
                 "workforce.roster.drafted",
                 branch,
                 actor,
                 "workforce_roster_entry",
                 entry.id(),
                 "A roster entry was drafted",
-                ChangeDocuments.created(entryDocument(person.displayReference(), entry)),
+                entryDocument(person.displayReference(), entry),
                 "staff.shift.manage",
                 correlationId,
                 now);
@@ -203,14 +202,15 @@ public class StaffRosterService {
             throw stale(expectedVersion, before.version());
         }
         Instant now = clock.instant();
-        audit.record(
+        audit.recordChange(
                 "workforce.roster.revised",
                 branch,
                 actor,
                 "workforce_roster_entry",
                 entryId,
                 "A roster entry's window was changed",
-                ChangeDocuments.diff(window(before), window(command)),
+                window(before),
+                window(command),
                 "staff.shift.manage",
                 correlationId,
                 now);
@@ -240,14 +240,15 @@ public class StaffRosterService {
         beforeDoc.put("status", before.status().name());
         Map<String, Object> afterDoc = new LinkedHashMap<>(reference);
         afterDoc.put("status", RosterStatus.CANCELLED.name());
-        audit.record(
+        audit.recordChange(
                 "workforce.roster.cancelled",
                 branch,
                 actor,
                 "workforce_roster_entry",
                 entryId,
                 reason.name(),
-                ChangeDocuments.diff(beforeDoc, afterDoc),
+                beforeDoc,
+                afterDoc,
                 "staff.shift.manage",
                 correlationId,
                 clock.instant());
@@ -282,14 +283,15 @@ public class StaffRosterService {
             after.put("people", references);
             after.put("from", from.toString());
             after.put("to", to.toString());
-            audit.record(
+            audit.recordChange(
                     "workforce.roster.published",
                     branch,
                     actor,
                     "workforce_roster",
                     branch.locationId(),
                     "A range of the rota was published",
-                    ChangeDocuments.diff(Map.of("status", RosterStatus.DRAFT.name()), after),
+                    Map.of("status", RosterStatus.DRAFT.name()),
+                    after,
                     "staff.shift.manage",
                     correlationId,
                     now);
@@ -363,14 +365,14 @@ public class StaffRosterService {
             document.put("entryCount", created);
             document.put("from", fromWeek.toString());
             document.put("to", toWeek.toString());
-            audit.record(
+            audit.recordCreated(
                     "workforce.roster.drafted",
                     branch,
                     actor,
                     "workforce_roster",
                     branch.locationId(),
                     "A week of the rota was copied as drafts",
-                    ChangeDocuments.created(document),
+                    document,
                     "staff.shift.manage",
                     correlationId,
                     now);

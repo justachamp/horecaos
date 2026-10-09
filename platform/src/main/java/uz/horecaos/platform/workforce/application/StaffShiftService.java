@@ -12,7 +12,6 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
@@ -112,14 +111,14 @@ public class StaffShiftService {
         requireReasonWhenPast(startedAt, now, reason);
         requireWithinEditWindow(branch, startedAt, actor);
         ShiftRow opened = open(branch, memberId, startedAt, ShiftSource.CONSOLE_MANAGER, actor, actor, reason, now);
-        audit.record(
+        audit.recordCreated(
                 "workforce.shift.opened",
                 branch,
                 actor,
                 "workforce_staff_shift",
                 opened.id(),
                 reason == null ? "A manager recorded a shift start" : reason.name(),
-                ChangeDocuments.created(openedDocument(person, opened)),
+                openedDocument(person, opened),
                 "staff.shift.manage",
                 correlationId,
                 now);
@@ -212,15 +211,15 @@ public class StaffShiftService {
         // The hours changed, so any earlier approval of the old hours no longer stands.
         next = withoutApproval(next);
         save(next, expectedVersion, before);
-        audit.record(
+        audit.recordChange(
                 "workforce.shift.corrected",
                 branch,
                 actor,
                 "workforce_staff_shift",
                 shiftId,
                 reason.name(),
-                ChangeDocuments.diff(
-                        timesDocument(person(branch, before), before), timesDocument(person(branch, next), next)),
+                timesDocument(person(branch, before), before),
+                timesDocument(person(branch, next), next),
                 "staff.shift.manage",
                 correlationId,
                 now);
@@ -287,14 +286,15 @@ public class StaffShiftService {
         Map<String, Object> afterDoc = new LinkedHashMap<>();
         afterDoc.put("status", ShiftStatus.VOIDED.name());
         afterDoc.put("staffRef", reference(branch, before));
-        audit.record(
+        audit.recordChange(
                 "workforce.shift.voided",
                 branch,
                 actor,
                 "workforce_staff_shift",
                 shiftId,
                 reason.name(),
-                ChangeDocuments.diff(beforeDoc, afterDoc),
+                beforeDoc,
+                afterDoc,
                 "staff.shift.manage",
                 correlationId,
                 now);
@@ -365,14 +365,15 @@ public class StaffShiftService {
         afterDoc.put("paidSeconds", before.paidSeconds());
         // Both people: the approver is the fact's actor; the last editor is named by reference only.
         afterDoc.put("lastEditedBySelf", actor.equals(before.lastEditedBy()));
-        audit.record(
+        audit.recordChange(
                 "workforce.shift.approved",
                 branch,
                 actor,
                 "workforce_staff_shift",
                 shiftId,
                 reason.name(),
-                ChangeDocuments.diff(beforeDoc, afterDoc),
+                beforeDoc,
+                afterDoc,
                 "staff.shift.approve",
                 correlationId,
                 now);
@@ -393,14 +394,14 @@ public class StaffShiftService {
         Person person = people.eligibleAt(branch, memberId, false).orElseThrow(StaffShiftService::noSuchBranch);
         Instant now = clock.instant();
         ShiftRow opened = open(branch, memberId, now, ShiftSource.CONSOLE_SELF, subject, null, null, now);
-        audit.record(
+        audit.recordCreated(
                 "workforce.shift.opened",
                 branch,
                 subject,
                 "workforce_staff_shift",
                 opened.id(),
                 "The person clocked in",
-                ChangeDocuments.created(openedDocument(person, opened)),
+                openedDocument(person, opened),
                 "staff.shift.clock",
                 correlationId,
                 now);
@@ -717,14 +718,15 @@ public class StaffShiftService {
         afterDoc.put("workedSeconds", next.workedSeconds());
         afterDoc.put("paidSeconds", next.paidSeconds());
         afterDoc.put("varianceSeconds", next.varianceSeconds());
-        audit.record(
+        audit.recordChange(
                 "workforce.shift.closed",
                 branch,
                 actor,
                 "workforce_staff_shift",
                 next.id(),
                 because,
-                ChangeDocuments.diff(beforeDoc, afterDoc),
+                beforeDoc,
+                afterDoc,
                 next.closeSource() == ShiftSource.CONSOLE_SELF ? "staff.shift.clock" : "staff.shift.manage",
                 correlationId,
                 now);
