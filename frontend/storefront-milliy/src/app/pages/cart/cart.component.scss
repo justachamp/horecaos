@@ -5,18 +5,22 @@
   padding: 14px 24px 0;
 }
 
-.head__back {
+.head__back,
+.qty__btn {
   width: 44px;
   height: 44px;
-  flex-shrink: 0;
   border: 0;
   border-radius: var(--radius-sm);
   background: var(--surface-accent-wash);
   color: var(--brand-accent-deep);
+  cursor: pointer;
+}
+
+.head__back {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
 }
 
 .head__chevron {
@@ -160,14 +164,7 @@
 }
 
 .qty__btn {
-  width: 44px;
-  height: 44px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: var(--surface-accent-wash);
-  color: var(--brand-accent-deep);
   font: 700 19px/1 var(--font-display);
-  cursor: pointer;
 
   &--add {
     background: var(--brand-accent);
@@ -178,11 +175,6 @@
     opacity: 0.4;
     cursor: default;
   }
-}
-
-/* ADR 0158: the wording beside a line a rule added. */
-.line__auto {
-  color: var(--brand-accent-deep);
 }
 
 .qty__value {

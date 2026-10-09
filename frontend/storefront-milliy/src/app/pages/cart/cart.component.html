@@ -44,7 +44,7 @@
             <div class="line__body">
               <span class="line__name">{{ item.name }}</span>
               @if (item.autoAdd; as auto) {
-                <span class="line__addons line__auto" data-testid="cart-line-auto-add">{{
+                <span class="line__addons" data-testid="cart-line-auto-add">{{
                   auto.text ?? ('cart.autoAdded' | t)
                 }}</span>
               }
