@@ -6,6 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 
 import { ConfigurationResolutionView, EditableScopeType } from '../../core/api/configuration';
 import { LocationScope } from '../../core/api/operations-paths';
@@ -247,6 +248,8 @@ export class CourierPolicyPage implements OnInit {
   private readonly api = inject(CouriersApi);
   private readonly configApi = inject(ConfigurationApi);
   private readonly location = inject(CurrentLocation);
+  /** Optional: a spec without a router still renders the page; only the dispatch-rules hint link carries a query. */
+  private readonly route = inject(ActivatedRoute, { optional: true });
   protected readonly i18n = inject(I18n);
 
   protected readonly scopeLevels: readonly PolicyResolutionScope[] = [
@@ -361,6 +364,27 @@ export class CourierPolicyPage implements OnInit {
     await Promise.all([this.resolve(), this.resolveOutOfZone()]);
   }
 
+  /**
+   * ADR 0170: the dispatch-rules editor sends an operator here, with `?prefill=FIRST_FULL_THEN_INCREMENT`, when a
+   * rule cannot group because the pay for a run is undecided. The editor opens with that mode chosen, so the one
+   * thing left to do is state the engagement terms and say why. Once, and only while nothing is decided: it never
+   * replaces a decision an operator already made.
+   */
+  private applyPrefill(policy: CourierPolicyView): void {
+    if (this.prefilled || policy.runPayMode) {
+      return;
+    }
+    this.prefilled = true;
+    const requested = this.route?.snapshot.queryParamMap.get('prefill');
+    if (requested !== 'FIRST_FULL_THEN_INCREMENT') {
+      return;
+    }
+    this.startEditing();
+    this.draftRunPayMode.set('FIRST_FULL_THEN_INCREMENT');
+  }
+
+  private prefilled = false;
+
   /** The scope-selector click handler — re-resolves at the newly chosen level. */
   protected selectScope(level: PolicyResolutionScope): void {
     if (level === this.resolutionScope()) {
@@ -385,6 +409,7 @@ export class CourierPolicyPage implements OnInit {
       this.policy.set(policy);
       this.parentPolicy.set(parent);
       this.denied.set(false);
+      this.applyPrefill(policy);
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
         this.denied.set(true);

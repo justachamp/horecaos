@@ -1,6 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { describe, expect, it } from 'vitest';
 
+import { provideRouter } from '@angular/router';
+
 import { I18n } from '../../core/i18n/i18n';
 import { DispatchActionForm } from './dispatch-action-form';
 import { DISPATCH_OPTIONS } from './dispatch-fixtures.testing';
@@ -13,14 +15,19 @@ interface Rendered {
   readonly emitted: DispatchAction[];
 }
 
-function render(action: DispatchAction = builtInAction(), groupingAllowed = false): Rendered {
+function render(
+  action: DispatchAction = builtInAction(),
+  groupingAllowed = false,
+  runPayDecided = true,
+): Rendered {
   TestBed.resetTestingModule();
-  TestBed.configureTestingModule({});
+  TestBed.configureTestingModule({ providers: [provideRouter([])] });
   TestBed.inject(I18n).setLocale('en');
   const fixture = TestBed.createComponent(DispatchActionForm);
   fixture.componentRef.setInput('action', action);
   fixture.componentRef.setInput('options', DISPATCH_OPTIONS);
   fixture.componentRef.setInput('groupingAllowed', groupingAllowed);
+  fixture.componentRef.setInput('runPayDecided', runPayDecided);
   fixture.componentRef.setInput('idPrefix', 'a');
   const emitted: DispatchAction[] = [];
   fixture.componentInstance.actionChange.subscribe((next) => emitted.push(next));
@@ -192,11 +199,34 @@ describe('DispatchActionForm (ADR 0142: the "then" half of a rule)', () => {
   });
 
   describe('grouping', () => {
-    it('is shown locked, with the reason, until the pay treatment for a run is decided', () => {
+    it('is shown locked, with the reason, where the installation has switched it off', () => {
       const { host } = render();
 
-      expect(find(host, 'a-grouping-locked')?.textContent).toContain('is still to be decided');
+      expect(find(host, 'a-grouping-locked')?.textContent).toContain('Switched off');
       expect(find(host, 'a-grouping')).toBeNull();
+    });
+
+    it('stays off, and sends the operator to decide the pay for a run, until it is decided (ADR 0170)', () => {
+      const { host, emitted } = render(builtInAction(), true, false);
+
+      const toggle = control<HTMLInputElement>(host, 'a-grouping');
+      expect(toggle.disabled).toBe(true);
+      expect(find(host, 'a-grouping-pay-undecided')?.textContent).toContain(
+        'first decide how a run of several orders is paid',
+      );
+      const link = control<HTMLAnchorElement>(host, 'a-grouping-decide-pay');
+      expect(link.getAttribute('href')).toBe(
+        '/delivery/courier-policy?prefill=FIRST_FULL_THEN_INCREMENT',
+      );
+      toggle.click();
+      expect(emitted).toEqual([]);
+    });
+
+    it('offers the switch and no reminder once the pay for a run is decided', () => {
+      const { host } = render(builtInAction(), true, true);
+
+      expect(control<HTMLInputElement>(host, 'a-grouping').disabled).toBe(false);
+      expect(find(host, 'a-grouping-pay-undecided')).toBeNull();
     });
 
     it('can be switched on once allowed, starting from a sensible run, and off again', () => {
@@ -206,9 +236,22 @@ describe('DispatchActionForm (ADR 0142: the "then" half of a rule)', () => {
       expect(emitted.at(-1)?.grouping).toEqual({
         mergeRadiusMeters: 700,
         maxOrdersPerRun: 3,
-        maxWaitSeconds: 120,
+        maxWaitSeconds: 0,
       });
       expect(find(host, 'a-grouping-locked')).toBeNull();
+    });
+
+    it('offers no wait: waiting is not available, so the field is shown fixed at zero with the reason', () => {
+      const { host } = render(
+        {
+          ...builtInAction(),
+          grouping: { mergeRadiusMeters: 700, maxOrdersPerRun: 3, maxWaitSeconds: 0 },
+        },
+        true,
+      );
+
+      expect(control<HTMLInputElement>(host, 'a-grouping-wait').disabled).toBe(true);
+      expect(find(host, 'a-grouping-wait-note')?.textContent).toContain('is not available');
     });
 
     it('is cleared when the mode no longer asks the fleet, because the server refuses grouping without one', () => {

@@ -100,12 +100,16 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
   'delivery.rules.start.READY': 'Когда блюда готовы',
   'delivery.rules.start.offset': 'Сдвиг (минуты)',
   'delivery.rules.grouping': 'Объединять заказы в один рейс',
-  'delivery.rules.grouping.locked':
-    'Пока недоступно: оплата курьера за рейс с несколькими заказами ещё не решена.',
+  'delivery.rules.grouping.locked': 'Отключено в этой установке.',
+  'delivery.rules.grouping.payUndecided':
+    'Объединение меняет то, сколько курьер зарабатывает за те же километры, поэтому сначала решите, как оплачивается рейс из нескольких заказов.',
+  'delivery.rules.grouping.payUndecided.link': 'Решить оплату рейса',
   'delivery.rules.grouping.enable': 'Предпочитать курьера, который уже едет в ту сторону',
   'delivery.rules.grouping.radius': 'Радиус объединения (метры)',
   'delivery.rules.grouping.orders': 'Заказов в рейсе',
   'delivery.rules.grouping.wait': 'Максимальное ожидание (секунды)',
+  'delivery.rules.grouping.waitNotAvailable':
+    'Ожидание курьера, который едет в ту сторону, недоступно: объединение только ранжирует курьеров, ожидание остаётся нулевым.',
   'delivery.rules.reason': 'Почему вы меняете правила?',
   'delivery.rules.reasonRequired': 'Укажите причину изменения правил.',
   'delivery.rules.publish': 'Опубликовать',
@@ -167,6 +171,18 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
     'Нет доступных партнёров: заказ могут взять только свои курьеры.',
   'delivery.rules.sim.note.WINNER_DECIDED_BY_QUOTES':
     'Победителя определят цены, названные при заказе.',
+  'delivery.rules.sim.note.GROUPING_CEILING_BELOW_RUN':
+    'Ни один тип курьеров этой компании не может везти столько заказов, сколько объединяет это правило, поэтому рейс не сложится.',
+  'delivery.rules.sim.note.GROUPING_NEEDS_A_PLAN_TO_MEASURE':
+    'Выберите недавний заказ, чтобы увидеть, каких курьеров измерят: у набранного вручную сценария нет адреса.',
+  'delivery.rules.sim.note.FLEET_NOT_MEASURABLE': 'Курьеров здесь измерить не удалось.',
+  'delivery.rules.sim.grouping.heading': 'Курьеры, измеренные для объединения',
+  'delivery.rules.sim.grouping.empty': 'Нет курьеров на смене, которых можно измерить.',
+  'delivery.rules.sim.grouping.carrying': 'везёт {n} из {max}',
+  'delivery.rules.sim.grouping.metres': '{metres} м до адреса, который он везёт',
+  'delivery.rules.sim.grouping.notGroupable': 'не подходит для объединения',
+  'delivery.rules.sim.grouping.basis.DIRECT': 'получит заказ по своей оплате',
+  'delivery.rules.sim.grouping.basis.RUN_INCREMENT': 'получит его с оплатой за дополнительный путь',
   'delivery.rules.sim.note.NO_ZONE_EVIDENCE':
     'У заказа нет зоны, поэтому правила по зоне ему не подходят.',
   'delivery.rules.sim.violations': 'Этот черновик нельзя опубликовать в таком виде:',

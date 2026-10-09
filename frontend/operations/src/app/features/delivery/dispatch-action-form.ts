@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
@@ -37,11 +38,15 @@ const START_LABELS: Readonly<Record<StartBasis, MessageKey>> = {
 const START_BASES: readonly StartBasis[] = ['LEAD', 'CONFIRMATION', 'READY'];
 const SELECTIONS: readonly PartnerSelection[] = ['LADDER', 'CHEAPEST'];
 
-/** The default grouping a rule starts with when an operator switches it on. */
+/**
+ * The default grouping a rule starts with when an operator switches it on. No wait: ADR 0170 defers waiting for a
+ * groupable courier until a month of ranking-only offers shows how often one existed, and the server refuses a
+ * wait above zero (`GROUPING_WAIT_NOT_AVAILABLE`).
+ */
 const DEFAULT_GROUPING = {
   mergeRadiusMeters: 700,
   maxOrdersPerRun: 3,
-  maxWaitSeconds: 120,
+  maxWaitSeconds: 0,
 } as const;
 
 /**
@@ -59,7 +64,7 @@ const DEFAULT_GROUPING = {
  */
 @Component({
   selector: 'q-dispatch-action-form',
-  imports: [TPipe],
+  imports: [TPipe, RouterLink],
   templateUrl: './dispatch-action-form.html',
   styleUrl: './dispatch-action-form.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -71,6 +76,11 @@ export class DispatchActionForm {
   readonly options = input<DispatchOptions | null>(null);
   /** Whether this deployment lets a rule enable grouping. */
   readonly groupingAllowed = input(false);
+  /**
+   * ADR 0170: whether the courier pay for a run of several orders is decided at this scope. Grouping changes what
+   * a courier earns for the same kilometres, so the switch stays off, and says where to decide it, until it is.
+   */
+  readonly runPayDecided = input(true);
   readonly idPrefix = input('action');
 
   readonly actionChange = output<DispatchAction>();
@@ -81,6 +91,11 @@ export class DispatchActionForm {
 
   protected readonly asksPartners = computed(() => usesPartners(this.action().mode));
   protected readonly asksFleet = computed(() => usesFleet(this.action().mode));
+
+  /** Grouping may be switched on only where this deployment allows it and the pay for a run is decided. */
+  protected readonly canSwitchGroupingOn = computed(
+    () => this.groupingAllowed() && this.runPayDecided(),
+  );
 
   protected readonly installations = computed(() => this.options()?.installations ?? []);
 

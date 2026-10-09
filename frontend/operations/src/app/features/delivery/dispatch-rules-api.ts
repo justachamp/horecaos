@@ -129,6 +129,11 @@ export interface DispatchRulesView extends DispatchRulesDocument {
   readonly versionAtScope: number;
   readonly levels: readonly LadderLevel[];
   readonly groupingAllowed: boolean;
+  /**
+   * ADR 0170: whether the courier pay for a run of several orders is decided at this scope. A rule that
+   * groups is refused with `RUN_PAY_MODE_UNDECIDED` while it is not.
+   */
+  readonly runPayDecided: boolean;
 }
 
 export interface InstallationOption {
@@ -275,6 +280,23 @@ export interface SimulationResult {
   readonly violations: readonly string[];
   /** Always false: a simulation calls nobody. */
   readonly providerCalled: boolean;
+  /** ADR 0170: for a recent plan under a rule that groups, what the fleet measured; absent otherwise. */
+  readonly grouping?: SimulationGrouping | null;
+}
+
+/** Mirrors `OperationsDispatchRulesController.GroupingFeedView`. Courier ids and numbers only. */
+export interface SimulationGrouping {
+  readonly candidates: number;
+  readonly measured: readonly SimulationGroupedCandidate[];
+}
+
+export interface SimulationGroupedCandidate {
+  readonly courierId: string;
+  readonly activeAssignments: number;
+  readonly concurrencyCeiling: number;
+  /** Straight-line metres to the nearest carried drop-off, or null when the courier is not groupable. */
+  readonly groupableWithMetres: number | null;
+  readonly payBasis: 'DIRECT' | 'RUN_INCREMENT';
 }
 
 /** Mirrors `OperationsDispatchRulesController.TimingResponse` / `TimingWriteRequest`. */

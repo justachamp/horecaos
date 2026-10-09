@@ -1,4 +1,5 @@
-import { signal } from '@angular/core';
+import { Provider, signal } from '@angular/core';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -60,6 +61,7 @@ describe('CourierPolicyPage', () => {
     configApi: Partial<ConfigurationApi> = {
       resolution: () => Promise.resolve(OUT_OF_ZONE_RESOLUTION),
     },
+    extraProviders: Provider[] = [],
   ): Promise<HTMLElement> {
     await TestBed.configureTestingModule({
       imports: [CourierPolicyPage],
@@ -74,6 +76,7 @@ describe('CourierPolicyPage', () => {
         },
         { provide: CouriersApi, useValue: api },
         { provide: ConfigurationApi, useValue: configApi },
+        ...extraProviders,
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -415,6 +418,45 @@ describe('CourierPolicyPage', () => {
       element.dispatchEvent(new Event(event));
       fixture.detectChanges();
     }
+
+    const routeWith = (query: Record<string, string>): Provider => ({
+      provide: ActivatedRoute,
+      useValue: { snapshot: { queryParamMap: convertToParamMap(query) } },
+    });
+    const noExtraConfig: Partial<ConfigurationApi> = {
+      resolution: () => Promise.resolve(OUT_OF_ZONE_RESOLUTION),
+    };
+
+    it('opens the editor with first-full-then-increment chosen when the dispatch rules send the operator here to decide', async () => {
+      const host = await render(
+        { policy: () => Promise.resolve(POLICY) },
+        noExtraConfig,
+        [routeWith({ prefill: 'FIRST_FULL_THEN_INCREMENT' })],
+      );
+
+      expect(host.querySelector('[data-testid="policy-publish"]')).not.toBeNull();
+      expect(
+        host.querySelector<HTMLSelectElement>('[data-testid="policy-input-runPayMode"]')!.value,
+      ).toBe('FIRST_FULL_THEN_INCREMENT');
+      expect(
+        host.querySelector('[data-testid="policy-input-acknowledgeEngagementTerms"]'),
+      ).not.toBeNull();
+    });
+
+    it('never overrides a decision already made, and does nothing without the hint', async () => {
+      const decided = await render(
+        { policy: () => Promise.resolve({ ...POLICY, runPayMode: 'PER_ORDER' }) },
+        noExtraConfig,
+        [routeWith({ prefill: 'FIRST_FULL_THEN_INCREMENT' })],
+      );
+      expect(decided.querySelector('[data-testid="policy-publish"]')).toBeNull();
+
+      TestBed.resetTestingModule();
+      const plain = await render({ policy: () => Promise.resolve(POLICY) }, noExtraConfig, [
+        routeWith({}),
+      ]);
+      expect(plain.querySelector('[data-testid="policy-publish"]')).toBeNull();
+    });
 
     it('shows an undecided pay mode as what it is: every order paid in full', async () => {
       const host = await render({ policy: () => Promise.resolve(POLICY) });
