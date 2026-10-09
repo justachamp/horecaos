@@ -8,7 +8,14 @@ import { mediaPaths } from '../../core/api/operations-paths';
 
 export type MediaOwnerScope = 'TENANT' | 'BRAND' | 'LOCATION';
 export type MediaVisibility = 'PUBLIC' | 'PRIVATE';
-export type MediaAssetStatus = 'PENDING' | 'AVAILABLE' | 'REJECTED';
+/** `UPLOADED` is what finalize answers: verification is asynchronous, so `AVAILABLE` or `REJECTED` follows. */
+export type MediaAssetStatus = 'PENDING' | 'PENDING_UPLOAD' | 'UPLOADED' | 'AVAILABLE' | 'REJECTED';
+
+/**
+ * `CREATIVE` asks for the extra `HERO` rendition (1600 px) a home-screen banner needs (ADR 0157); it
+ * is set only by the content editor's upload, so a product photo is never rendered a fourth time.
+ */
+export type MediaRenditionProfile = 'CREATIVE';
 
 export interface UploadRequestResult {
   readonly assetId: string;
@@ -51,6 +58,7 @@ export class MediaApi {
     ownerId: string,
     visibility: MediaVisibility,
     file: File,
+    renditionProfile?: MediaRenditionProfile,
   ): Observable<UploadRequestResult> {
     return this.api.post<
       {
@@ -60,6 +68,7 @@ export class MediaApi {
         contentType: string;
         sizeBytes: number;
         filename: string;
+        renditionProfile?: MediaRenditionProfile;
       },
       UploadRequestResult
     >(
@@ -71,6 +80,7 @@ export class MediaApi {
         contentType: file.type || 'application/octet-stream',
         sizeBytes: file.size,
         filename: file.name,
+        ...(renditionProfile ? { renditionProfile } : {}),
       }),
     );
   }
@@ -94,8 +104,16 @@ export class MediaApi {
     ownerId: string,
     visibility: MediaVisibility,
     file: File,
+    renditionProfile?: MediaRenditionProfile,
   ): Observable<MediaAssetView> {
-    return this.requestUpload(tenantId, ownerScope, ownerId, visibility, file).pipe(
+    return this.requestUpload(
+      tenantId,
+      ownerScope,
+      ownerId,
+      visibility,
+      file,
+      renditionProfile,
+    ).pipe(
       switchMap((requested) => this.putBytes(requested, file).pipe(map(() => requested))),
       switchMap((requested) => this.finalize(tenantId, requested.assetId)),
     );
