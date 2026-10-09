@@ -416,7 +416,9 @@ HORECAOS_HANDOVER_PEPPER_REF=horecaos:production:data_encryption:platform:handov
 
 # ADR 0155. The key staff PINs are digested under. Same reasoning, same refusal to
 # start without it, and the same OpenBao shelf: see "the terminal PIN pepper" below
-# and terminals-and-kiosks.md for the rotation.
+# and terminals-and-kiosks.md for the rotation. compose.production.yml builds the
+# default path from HORECAOS_ENVIRONMENT, so this line is needed only to point the
+# application at a different secret (a rotation); seed the secret either way.
 HORECAOS_TERMINAL_PIN_PEPPER_REF=horecaos:production:data_encryption:platform:terminal-pin-pepper
 
 # ADR 0034. The bucket outside this building. The nightly backup refuses to run
