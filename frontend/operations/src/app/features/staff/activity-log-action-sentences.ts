@@ -1280,6 +1280,26 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Правило начисления баллов выведено из действия',
       'uz-Latn': 'Ballar hisoblash qoidasi bekor qilindi',
     },
+    'loyalty.pos_sync.held': {
+      en: 'Loyalty points earned at the till held for review',
+      ru: 'Баллы, начисленные на кассе, задержаны до проверки',
+      'uz-Latn': 'Kassada hisoblangan ballar tekshiruvgacha ushlab qolindi',
+    },
+    'loyalty.pos_sync.imported': {
+      en: 'Loyalty movements from the till imported',
+      ru: 'Движения баллов с кассы загружены',
+      'uz-Latn': 'Kassadagi ballar harakatlari yuklandi',
+    },
+    'loyalty.pos_sync.matched': {
+      en: 'Till customer matched to a loyalty account',
+      ru: 'Клиент кассы сопоставлен со счётом баллов',
+      'uz-Latn': 'Kassadagi mijoz ball hisobiga bogʻlandi',
+    },
+    'loyalty.pos_sync.resolved': {
+      en: 'Difference between the till and the loyalty ledger settled',
+      ru: 'Расхождение между кассой и счётом баллов урегулировано',
+      'uz-Latn': 'Kassa va ball hisobi orasidagi farq hal qilindi',
+    },
     'loyalty.redemption_policy.activated': {
       en: 'Loyalty redemption policy activated',
       ru: 'Активированы правила списания баллов',

@@ -435,6 +435,39 @@ export const reportsRu: AreaMessages<typeof reportsEn> = {
   'reports.customers.rfm.frequency.F2_FEW': '2–3 заказа',
   'reports.customers.rfm.frequency.F3_FREQUENT': '4+ заказов',
 
+  // ---------------------------------------------------------------- reports 7.6c customer funnel and acquisition source (ADR 0167)
+  'reports.customers.funnel.title': 'Воронка клиентов',
+  'reports.customers.funnel.intro':
+    'Ежедневные счётчики, которые платформа берёт из регистраций, корзин, оформлений и заказов. Это число различных событий за каждый день, а не когорта: отношение двух этапов — это интенсивность активности, а не вероятность того, что один человек дойдёт до конца.',
+  'reports.customers.funnel.stage.VISITS': 'Посещения',
+  'reports.customers.funnel.stage.REGISTERED': 'Зарегистрировались',
+  'reports.customers.funnel.stage.BASKET_STARTED': 'Начали корзину',
+  'reports.customers.funnel.stage.CHECKOUT_STARTED': 'Дошли до оформления',
+  'reports.customers.funnel.stage.ORDERED': 'Заказали',
+  'reports.customers.funnel.visits.notMeasured':
+    'Посещения: не измеряются. Для этого отчёта ничего не собирается ни из браузера, ни из приложения, ни из бота, поэтому посещения не показаны нулём и не оценены. Ресторан, которому нужны посещения, может прочитать их в собственной Google Analytics.',
+  'reports.customers.funnel.reason.NOT_BY_CHANNEL':
+    'У регистраций нет канала продаж, поэтому срез по каналу их не включает.',
+  'reports.customers.funnel.unrecorded':
+    '{stage}: дней без данных — {days}. Их корзины к моменту подсчёта уже были удалены, поэтому итог неполный.',
+  'reports.customers.funnel.empty': 'За этот период счётчики воронки ещё не записаны.',
+  'reports.customers.funnel.error': 'Не удалось загрузить воронку.',
+  'reports.customers.acquisition.title': 'Источник привлечения',
+  'reports.customers.acquisition.intro':
+    'Регистрации по способу создания аккаунта, переходы по ссылкам привлечения этого ресторана и заказы по каналам продаж — рядом друг с другом.',
+  'reports.customers.acquisition.noAttribution':
+    'Это не приписывает клиента или заказ ссылке: сколько человек открыло ссылку и сколько зарегистрировалось показано рядом, но не связано.',
+  'reports.customers.acquisition.registrations': 'Регистрации по происхождению',
+  'reports.customers.acquisition.clicks': 'Переходы по ссылкам привлечения',
+  'reports.customers.acquisition.orders': 'Заказы по каналам продаж',
+  'reports.customers.acquisition.empty': 'За этот период нечего показать.',
+  'reports.customers.acquisition.archivedLink': '{label} (в архиве)',
+  'reports.customers.acquisition.origin.SELF_SERVICE': 'Зарегистрировались сами',
+  'reports.customers.acquisition.origin.OPERATOR': 'Создал сотрудник',
+  'reports.customers.acquisition.origin.IMPORT': 'Импорт',
+  'reports.customers.acquisition.origin.AGGREGATOR': 'Маркетплейс',
+  'reports.customers.acquisition.origin.MIGRATION': 'Перенос',
+
   // ---------------------------------------------------------------- reports 7.5/7.5a/7.5b staff (T12)
   'reports.staff.title': 'Отчёты по персоналу',
   'reports.staff.loading': 'Загрузка…',

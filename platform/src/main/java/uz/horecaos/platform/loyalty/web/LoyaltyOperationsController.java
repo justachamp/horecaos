@@ -250,14 +250,20 @@ public class LoyaltyOperationsController {
         }
     }
 
-    public record LiabilityResponse(UUID brandId, ApiMoney outstanding, ApiMoney held, long accountCount) {
+    /**
+     * @param tillAbsorbed what till spends took beyond a balance (ADR 0171): points spent at a terminal that the
+     *                     ledger could not cover, carried by the brand. Beside the outstanding figure and never in it
+     */
+    public record LiabilityResponse(
+            UUID brandId, ApiMoney outstanding, ApiMoney held, long accountCount, ApiMoney tillAbsorbed) {
 
         static LiabilityResponse of(LiabilityRow row) {
             return new LiabilityResponse(
                     row.brandId(),
                     ApiMoney.of(row.outstandingMinor(), row.currency()),
                     ApiMoney.of(row.heldMinor(), row.currency()),
-                    row.accountCount());
+                    row.accountCount(),
+                    ApiMoney.of(row.tillAbsorbedMinor(), row.currency()));
         }
     }
 }

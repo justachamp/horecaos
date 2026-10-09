@@ -264,6 +264,9 @@ public class PosMappingService {
             case OPERATOR ->
                 notSourced("No provider in this build discovers a till-operator list; add the mapping by typing "
                         + "the till's own operator id.");
+            case LOYALTY_CUSTOMER ->
+                notSourced("Till customers are matched to points accounts by the loyalty sync, by the phone the "
+                        + "till returns; they are never typed.");
         };
     }
 
@@ -311,6 +314,8 @@ public class PosMappingService {
             case VARIANT -> mappings.unmappedVariants(tenantId, binding.bindingId(), binding.brandId(), "uz-UZ");
             case MODIFIER -> mappings.unmappedModifierOptions(tenantId, binding.bindingId(), binding.brandId());
             case OPERATOR -> unmappedOperators(tenantId, binding.bindingId());
+            // Matched by the sync and reported in its reconciliation report; there is nothing to pair by hand.
+            case LOYALTY_CUSTOMER -> List.of();
         };
     }
 

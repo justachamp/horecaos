@@ -31,6 +31,7 @@ import uz.horecaos.platform.web.api.ErrorCode;
 @RestControllerAdvice(
         assignableTypes = {
             ReportingController.class,
+            CustomerFunnelController.class,
             MetricSignatureController.class,
             ProductClassificationController.class
         })

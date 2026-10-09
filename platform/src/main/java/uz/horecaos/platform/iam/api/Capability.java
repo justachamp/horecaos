@@ -1569,6 +1569,20 @@ public enum Capability {
     LOYALTY_POLICY_MANAGE("loyalty.policy.manage", "loyalty", "policy.manage"),
 
     /**
+     * ADR 0171: resolving a difference between the platform's loyalty ledger and a till's bonus balance
+     * (accepting the till's number, pushing the platform's again, absorbing a loss, or suspending a
+     * customer's link), and asking for a reconciliation now.
+     *
+     * <p>Separate from {@link #LOYALTY_ADJUST} and {@link #LOYALTY_POLICY_MANAGE} because a resolution can
+     * credit points: accepting a till's higher number writes an order-free adjustment, and a brand's
+     * outstanding points are its legal entity's liability (the argument ADR 0046 makes for
+     * {@code loyalty.policy.manage}). Granted at {@code BRAND} scope to the tenant owner and to finance,
+     * and not to a location manager, who can read the report and cannot change what it says. A resolution
+     * that credits above the manual-adjustment threshold also needs an ADR 0027 approval by a second person.
+     */
+    LOYALTY_SYNC_MANAGE("loyalty.sync.manage", "loyalty", "sync.manage"),
+
+    /**
      * A new ADR (referral program): reading a brand's referral program, its
      * customer codes, and its redemptions — "referrals actually happening" for
      * a marketer, and a support agent answering "why did my friend's code not

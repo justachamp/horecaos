@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -75,6 +76,249 @@ public final class FakePosAdapter implements PosAdapter {
             List.of(new PosAdapter.ExternalReference("fake-happy-hour", "Happy hour"));
 
     private @Nullable ProviderOutcome nextDiscountsOutcome;
+
+    // ------------------------------------------------------------------
+    // The customer wallet (ADR 0171, PosCapability#LOYALTY_BALANCE_SYNC)
+    //
+    // An in-memory till wallet that keeps customers by the till's own id, a balance in som, and the
+    // movements that happened at the terminal -- with every failure mode a real till has injectable: a reply
+    // lost after a write has been applied, a page of movements delivered twice, a spend at the terminal during a
+    // push, a balance in another currency, a movement feed or a customer list that cannot be read.
+    // ------------------------------------------------------------------
+
+    private final Map<String, Wallet> wallets = new LinkedHashMap<>();
+    private final Set<String> appliedBalanceWrites = ConcurrentHashMap.newKeySet();
+    private final AtomicInteger balanceWrites = new AtomicInteger();
+    private final AtomicInteger movementSequence = new AtomicInteger();
+    private int walletPageSize = 100;
+    private boolean loseNextBalanceWriteReply;
+    private boolean duplicateNextMovementPage;
+    private boolean movementFeedUnreadable;
+    private boolean customerListUnreadable;
+    private @Nullable String balanceCurrency;
+    private @Nullable Runnable atNextBalanceWrite;
+
+    private static final class Wallet {
+        final String externalId;
+
+        @Nullable
+        String phone;
+
+        long balanceMinor;
+        final List<PosAdapter.TillMovement> movements = new ArrayList<>();
+
+        Wallet(String externalId, @Nullable String phone, long balanceMinor) {
+            this.externalId = externalId;
+            this.phone = phone;
+            this.balanceMinor = balanceMinor;
+        }
+    }
+
+    /** Back to an empty till with no failure armed, for a suite that shares one fake across its tests. */
+    public synchronized FakePosAdapter resetWallet() {
+        wallets.clear();
+        appliedBalanceWrites.clear();
+        balanceWrites.set(0);
+        movementSequence.set(0);
+        walletPageSize = 100;
+        loseNextBalanceWriteReply = false;
+        duplicateNextMovementPage = false;
+        movementFeedUnreadable = false;
+        customerListUnreadable = false;
+        balanceCurrency = null;
+        atNextBalanceWrite = null;
+        return this;
+    }
+
+    /** A till customer with an opening balance that came from before the sync: no movement explains it. */
+    public synchronized FakePosAdapter tillCustomer(
+            String externalId, @Nullable String phone, long openingBalanceMinor) {
+        wallets.put(externalId, new Wallet(externalId, phone, openingBalanceMinor));
+        return this;
+    }
+
+    public synchronized FakePosAdapter removeTillCustomer(String externalId) {
+        wallets.remove(externalId);
+        return this;
+    }
+
+    /** Points earned at the terminal: the balance rises and the movement joins the feed. */
+    public synchronized String tillEarn(String externalId, long amountMinor) {
+        return tillMove(externalId, PosAdapter.TillMovementKind.EARN, amountMinor);
+    }
+
+    /** Points spent at the terminal: the balance falls (never below zero) and the movement joins the feed. */
+    public synchronized String tillSpend(String externalId, long amountMinor) {
+        return tillMove(externalId, PosAdapter.TillMovementKind.SPEND, amountMinor);
+    }
+
+    private String tillMove(String externalId, PosAdapter.TillMovementKind kind, long amountMinor) {
+        Wallet wallet = wallets.get(externalId);
+        if (wallet == null) {
+            throw new IllegalArgumentException("No till customer " + externalId);
+        }
+        String id = "M-" + movementSequence.incrementAndGet();
+        wallet.movements.add(new PosAdapter.TillMovement(id, externalId, kind, amountMinor, Instant.EPOCH));
+        wallet.balanceMinor = kind == PosAdapter.TillMovementKind.EARN
+                ? wallet.balanceMinor + amountMinor
+                : Math.max(0, wallet.balanceMinor - amountMinor);
+        return id;
+    }
+
+    /** Sets the till's number directly, as a clerk or a tampered database would: no movement explains it. */
+    public synchronized FakePosAdapter corruptTillBalance(String externalId, long balanceMinor) {
+        wallet(externalId).balanceMinor = balanceMinor;
+        return this;
+    }
+
+    public synchronized long tillBalance(String externalId) {
+        return wallet(externalId).balanceMinor;
+    }
+
+    private Wallet wallet(String externalId) {
+        Wallet wallet = wallets.get(externalId);
+        if (wallet == null) {
+            throw new IllegalArgumentException("No till customer " + externalId);
+        }
+        return wallet;
+    }
+
+    /** How many balance writes the fake actually applied or was asked to apply, counting a repeat. */
+    public int balanceWriteCount() {
+        return balanceWrites.get();
+    }
+
+    public FakePosAdapter walletPageSize(int size) {
+        this.walletPageSize = size;
+        return this;
+    }
+
+    /** The next balance write is applied, and its reply is lost: the caller sees UNCERTAIN. */
+    public FakePosAdapter loseNextBalanceWriteReply() {
+        this.loseNextBalanceWriteReply = true;
+        return this;
+    }
+
+    /** The next page of movements repeats every movement it carries. */
+    public FakePosAdapter duplicateNextMovementPage() {
+        this.duplicateNextMovementPage = true;
+        return this;
+    }
+
+    public FakePosAdapter movementFeedUnreadable(boolean unreadable) {
+        this.movementFeedUnreadable = unreadable;
+        return this;
+    }
+
+    public FakePosAdapter customerListUnreadable(boolean unreadable) {
+        this.customerListUnreadable = unreadable;
+        return this;
+    }
+
+    /** Every balance read answers in this currency instead of the account's. */
+    public FakePosAdapter balanceInCurrency(@Nullable String currency) {
+        this.balanceCurrency = currency;
+        return this;
+    }
+
+    /** Runs once, inside the next balance write, before it lands: a spend at the terminal during a push. */
+    public FakePosAdapter duringNextBalanceWrite(Runnable action) {
+        this.atNextBalanceWrite = action;
+        return this;
+    }
+
+    @Override
+    public synchronized TillCustomersRead listTillCustomers(PosContext context, @Nullable String cursor) {
+        if (customerListUnreadable) {
+            return new TillCustomersRead(
+                    ProviderOutcome.retryable("FAKE_DOWN", "customer list unreadable", null), List.of(), null);
+        }
+        int from = cursor == null ? 0 : Integer.parseInt(cursor);
+        List<Wallet> all = new ArrayList<>(wallets.values());
+        int to = Math.min(all.size(), from + walletPageSize);
+        List<TillCustomer> page = new ArrayList<>();
+        for (int i = from; i < to; i++) {
+            page.add(new TillCustomer(all.get(i).externalId, all.get(i).phone));
+        }
+        return new TillCustomersRead(
+                ProviderOutcome.success(Map.of(), null), page, to < all.size() ? Integer.toString(to) : null);
+    }
+
+    @Override
+    public synchronized TillBalanceRead readBalance(PosContext context, String externalCustomerId) {
+        Wallet wallet = wallets.get(externalCustomerId);
+        if (wallet == null) {
+            return new TillBalanceRead(
+                    ProviderOutcome.rejected("NOT_FOUND", "no such till customer"), null, null, null);
+        }
+        return new TillBalanceRead(
+                ProviderOutcome.success(Map.of(), externalCustomerId),
+                wallet.balanceMinor,
+                balanceCurrency == null ? "UZS" : balanceCurrency,
+                Instant.EPOCH);
+    }
+
+    @Override
+    public synchronized TillMovementsRead readMovements(
+            PosContext context, @Nullable String externalCustomerId, @Nullable String cursor) {
+        if (movementFeedUnreadable) {
+            return new TillMovementsRead(
+                    ProviderOutcome.retryable("FAKE_DOWN", "movement feed unreadable", null), List.of(), null);
+        }
+        List<PosAdapter.TillMovement> feed = new ArrayList<>();
+        if (externalCustomerId != null) {
+            Wallet wallet = wallets.get(externalCustomerId);
+            if (wallet != null) {
+                feed.addAll(wallet.movements);
+            }
+        } else {
+            wallets.values().forEach(wallet -> feed.addAll(wallet.movements));
+        }
+        int from = cursor == null ? 0 : Integer.parseInt(cursor);
+        int to = Math.min(feed.size(), from + walletPageSize);
+        List<PosAdapter.TillMovement> page = new ArrayList<>(feed.subList(Math.min(from, feed.size()), to));
+        if (duplicateNextMovementPage && !page.isEmpty()) {
+            duplicateNextMovementPage = false;
+            page.addAll(new ArrayList<>(page));
+        }
+        // The cursor is "how many movements have been read", so a caller that stores it and returns resumes at
+        // the next one; at the end of the feed it stays where it is rather than going null, which is how a real
+        // feed's "nothing new since this" cursor behaves.
+        return new TillMovementsRead(ProviderOutcome.success(Map.of(), null), page, Integer.toString(to));
+    }
+
+    @Override
+    public ProviderOutcome writeBalance(
+            PosContext context,
+            String externalCustomerId,
+            long balanceMinor,
+            long ledgerVersion,
+            String idempotencyKey) {
+        Runnable during = null;
+        synchronized (this) {
+            during = atNextBalanceWrite;
+            atNextBalanceWrite = null;
+        }
+        if (during != null) {
+            during.run();
+        }
+        synchronized (this) {
+            balanceWrites.incrementAndGet();
+            Wallet wallet = wallets.get(externalCustomerId);
+            if (wallet == null) {
+                return ProviderOutcome.rejected("NOT_FOUND", "no such till customer");
+            }
+            // KEYED: a repeat of an applied write under the same key changes nothing.
+            if (appliedBalanceWrites.add(idempotencyKey)) {
+                wallet.balanceMinor = balanceMinor;
+            }
+            if (loseNextBalanceWriteReply) {
+                loseNextBalanceWriteReply = false;
+                return ProviderOutcome.uncertain("FAKE_TIMEOUT", "the reply was lost after the write was applied");
+            }
+            return ProviderOutcome.success(Map.of(), externalCustomerId);
+        }
+    }
 
     /** How many orders the fake actually created, as opposed to was asked to. */
     public int sideEffectCount() {

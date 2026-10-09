@@ -174,6 +174,10 @@ public enum PlatformRole {
                     // ADR 0046: what a point is worth, and how long it lasts. A currency
                     // decision rather than an operational one.
                     LOYALTY_POLICY_MANAGE,
+                    // ADR 0171: settling a difference between the ledger and a till's balance can
+                    // credit points, which is a liability of the brand's legal entity; held by the
+                    // owner and by finance, and by no location manager.
+                    LOYALTY_SYNC_MANAGE,
                     // ADR 0067: what a referral pays, to whom, and up to what cap.
                     // The same class of decision as the loyalty policy above it --
                     // it commits the tenant to giving value away -- so it sits with
@@ -691,6 +695,11 @@ public enum PlatformRole {
                     // nowhere else: it still holds neither staff.profile.read nor .manage.
                     STAFF_SHIFT_READ,
                     STAFF_SHIFT_EXPORT,
+                    // ADR 0171: the reconciliation report between the points ledger and a till's
+                    // balance is read by, and its differences settled by, the person who answers
+                    // for the brand's outstanding points -- finance, beside the owner.
+                    LOYALTY_READ,
+                    LOYALTY_SYNC_MANAGE,
                     // ADR 0042: what delivery cost, what is owed to each courier, and
                     // closing a settlement period. Authorising the payout is the owner's,
                     // so closing and releasing are never the same pair of hands.

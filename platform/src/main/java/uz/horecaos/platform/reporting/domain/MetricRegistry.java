@@ -97,6 +97,8 @@ public final class MetricRegistry {
      * {@code fact_review}, {@code fact_review_tag} and {@code fact_recovery_case} at day close.
      */
     private static final LocalDate W20_REVIEWS_AND_RECOVERY = LocalDate.of(2026, 10, 8);
+    /** ADR 0167 (7.6c): when the funnel and registration counts started being captured at day close. */
+    private static final LocalDate ADR0167_FUNNEL_CAPTURE = LocalDate.of(2026, 10, 8);
 
     private static final Map<String, MetricDefinition> BY_CODE = index(List.of(
             new MetricDefinition(
@@ -1089,7 +1091,69 @@ public final class MetricRegistry {
                             + "legal-entity grain. The per-case figure is in fact_recovery_case and the "
                             + "recovery report returns it per currency; every surface naming this "
                             + "metric must render it unbuilt rather than zero.",
-                    null)));
+                    null),
+            // ADR 0167 (7.6c): the customer funnel. Counts of distinct events on a business day,
+            // captured at day close from the live tables before the cart sweeper deletes them. Not a
+            // cohort and not a conversion rate -- see the definition's own last sentence. Visits are
+            // not a stage of this metric: nothing is collected from a browser (Decision 1), and the
+            // screen says "not measured" with the reason instead of a zero.
+            new MetricDefinition(
+                    new MetricId("funnel.stage", 1),
+                    Grain.DAY_BRAND_CHANNEL,
+                    "reporting.fact_registration_day (registered), reporting.fact_funnel_day "
+                            + "(basket_started, checkout_started, ordered)",
+                    true,
+                    Aggregation.DISTRIBUTION,
+                    "DISTINCT_EVENTS_ON_BUSINESS_DATE",
+                    CurrencyRule.NONE,
+                    "Whole counts",
+                    MetricUnit.COUNT,
+                    "Per business day, brand and sales channel: the number of people who registered "
+                            + "(new brand profiles), of baskets started (distinct carts whose first line "
+                            + "was added that day), of carts that reached checkout (distinct carts with a "
+                            + "checkout attempt that day) and of orders placed. Counts of distinct events on "
+                            + "that day and not a cohort: a ratio between two stages is a rate of activity "
+                            + "and not the probability that one person converts.",
+                    "A registration is a new brand profile of any origin, shown by origin elsewhere. A "
+                            + "guest cart and an account cart both count as a basket. An order of any "
+                            + "terminal status counts as placed.",
+                    "Visits and page views: nothing is collected from a browser, an app or a bot for this "
+                            + "purpose (ADR 0167 Decision 1), so the stage renders as \"not measured\" and "
+                            + "no ratio is drawn against it. A registration is not split by channel, "
+                            + "because an account has none; it is reported at brand grain.",
+                    "A refund does not change how many orders were placed; this metric is a count of "
+                            + "activity and never revenue.",
+                    "A basket or checkout count is NULL (not recorded, drawn as a gap and never as zero) "
+                            + "for a day whose carts the retention sweeper had already deleted when the "
+                            + "capture ran. A cart converted the next morning is a basket on day 1 and an "
+                            + "order on day 2.",
+                    ADR0167_FUNNEL_CAPTURE),
+            // ADR 0167 (7.6c) tier 1: acquisition source, three counts side by side. The chart says it
+            // does not attribute a customer to a link: that is tier 2, specified and not built until
+            // counsel answers (Decision 4).
+            new MetricDefinition(
+                    new MetricId("acquisition.source", 1),
+                    Grain.DAY_BRAND_ORIGIN,
+                    "reporting.fact_registration_day, reporting.fact_funnel_day.ordered, "
+                            + "marketing.attribution_link_clicks_day via AttributionClickSeries",
+                    true,
+                    Aggregation.DISTRIBUTION,
+                    "DISTINCT_EVENTS_ON_BUSINESS_DATE",
+                    CurrencyRule.NONE,
+                    "Whole counts",
+                    MetricUnit.COUNT,
+                    "For a brand and a period: registrations by account origin, clicks by attribution "
+                            + "link, and orders by sales channel, shown beside one another. The three are "
+                            + "not joined: this does not say which link brought which customer or order.",
+                    "Every brand profile created in the period, by the origin of its account; every "
+                            + "counted click on a link of this brand, active or archived; every order placed.",
+                    "Per-customer attribution (first touch on the account, last touch on the order): "
+                            + "specified by ADR 0167 Decision 4 tier 2 and not built until counsel "
+                            + "confirms a basis. A click from a link of another brand.",
+                    "A refund does not change a registration, a click or the number of orders placed.",
+                    "A click is counted at the public link endpoint and is rate limited, so a refreshed "
+                            + "page can count more than once and a rate-limited one counts none.",
+                    ADR0167_FUNNEL_CAPTURE)));
 
     private MetricRegistry() {}
 

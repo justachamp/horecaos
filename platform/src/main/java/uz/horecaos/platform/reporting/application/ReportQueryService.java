@@ -81,10 +81,7 @@ public class ReportQueryService {
                 // the endpoint that actually answers it (P39).
                 case DISTRIBUTION ->
                     throw new ReportingRefusals.NonScalarMetricException(
-                            metric.id().code(),
-                            metric.id().code().startsWith("payment_mix")
-                                    ? "GET .../reporting/payment-mix"
-                                    : "GET .../reporting/sla-buckets");
+                            metric.id().code(), distributionEndpoint(metric.id().code()));
                 // Wave 9 w4-reports-distance-crm (7.1): delivery_distance.average.v1
                 // is sourced from fact_order directly, the same physical-read
                 // reasoning MEDIAN's own case above already gives.
@@ -140,6 +137,20 @@ public class ReportQueryService {
         resultRows.sort(Comparator.comparing(row -> row.slice().sortKey()));
 
         return new ReportResult(resultRows, provenance(query.tenantId(), metrics, boundary));
+    }
+
+    /** Which endpoint answers a DISTRIBUTION metric, since {@code /queries} cannot. */
+    private static String distributionEndpoint(String metricCode) {
+        if (metricCode.startsWith("payment_mix")) {
+            return "GET .../reporting/payment-mix";
+        }
+        if (metricCode.startsWith("funnel.stage")) {
+            return "GET .../reporting/customer-funnel";
+        }
+        if (metricCode.startsWith("acquisition.source")) {
+            return "GET .../reporting/acquisition-sources";
+        }
+        return "GET .../reporting/sla-buckets";
     }
 
     /**
@@ -1480,7 +1491,7 @@ public class ReportQueryService {
 
     // ------------------------------------------------------------- refusals
 
-    private void refuseMixedBoundaryRegime(UUID tenantId, LocalDate from, LocalDate to) {
+    void refuseMixedBoundaryRegime(UUID tenantId, LocalDate from, LocalDate to) {
         Optional<LocalDate> recutThrough = businessDays.recutCompletedThrough(tenantId);
         if (recutThrough.isEmpty()) {
             return;
@@ -1494,7 +1505,7 @@ public class ReportQueryService {
     }
 
     /** Same bound {@link ReportQuery} already enforces, for the two order-grain reads below it. */
-    private static void validateRange(LocalDate from, LocalDate to) {
+    static void validateRange(LocalDate from, LocalDate to) {
         if (to.isBefore(from)) {
             throw new IllegalArgumentException("The range ends before it starts");
         }
@@ -1551,7 +1562,7 @@ public class ReportQueryService {
                         : null);
     }
 
-    private Provenance provenance(UUID tenantId, List<MetricDefinition> metrics, BusinessDayBoundary boundary) {
+    Provenance provenance(UUID tenantId, List<MetricDefinition> metrics, BusinessDayBoundary boundary) {
 
         Set<String> versions = new LinkedHashSet<>();
         List<String> provisional = new ArrayList<>();

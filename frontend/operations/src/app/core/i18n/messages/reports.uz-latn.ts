@@ -434,6 +434,39 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.customers.rfm.frequency.F2_FEW': '2–3 ta buyurtma',
   'reports.customers.rfm.frequency.F3_FREQUENT': '4+ buyurtma',
 
+  // ---------------------------------------------------------------- reports 7.6c customer funnel and acquisition source (ADR 0167)
+  'reports.customers.funnel.title': 'Mijozlar voronkasi',
+  'reports.customers.funnel.intro':
+    'Platforma roʻyxatdan oʻtishlar, savatlar, rasmiylashtirishlar va buyurtmalardan oladigan kundalik hisoblar. Bu har kuni boʻlgan alohida hodisalar soni, kogorta emas: ikki bosqich nisbati faollik tezligi, bitta odam oxirigacha yetib borish ehtimoli emas.',
+  'reports.customers.funnel.stage.VISITS': 'Tashriflar',
+  'reports.customers.funnel.stage.REGISTERED': 'Roʻyxatdan oʻtdi',
+  'reports.customers.funnel.stage.BASKET_STARTED': 'Savat boshladi',
+  'reports.customers.funnel.stage.CHECKOUT_STARTED': 'Rasmiylashtirishga yetdi',
+  'reports.customers.funnel.stage.ORDERED': 'Buyurtma berdi',
+  'reports.customers.funnel.visits.notMeasured':
+    'Tashriflar: oʻlchanmaydi. Bu hisobot uchun brauzerdan, ilovadan yoki botdan hech narsa yigʻilmaydi, shuning uchun tashriflar nol deb koʻrsatilmaydi va taxmin qilinmaydi. Tashriflarni xohlagan restoran ularni oʻzining Google Analytics orqali oʻqiy oladi.',
+  'reports.customers.funnel.reason.NOT_BY_CHANNEL':
+    'Roʻyxatdan oʻtishlarning savdo kanali yoʻq, shuning uchun kanal kesimi ularni qamramaydi.',
+  'reports.customers.funnel.unrecorded':
+    '{stage}: yozilmagan kunlar — {days}. Hisob olinganda ularning savatlari allaqachon oʻchirilgan edi, shuning uchun jami toʻliq emas.',
+  'reports.customers.funnel.empty': 'Bu davr uchun voronka hisoblari hali yozilmagan.',
+  'reports.customers.funnel.error': 'Voronkani yuklab boʻlmadi.',
+  'reports.customers.acquisition.title': 'Jalb qilish manbasi',
+  'reports.customers.acquisition.intro':
+    'Akkaunt qanday yaratilganiga koʻra roʻyxatdan oʻtishlar, shu restoranning jalb qilish havolalari boʻyicha oʻtishlar va savdo kanallari boʻyicha buyurtmalar — yonma-yon.',
+  'reports.customers.acquisition.noAttribution':
+    'Bu mijozni yoki buyurtmani havolaga bogʻlamaydi: havolani necha kishi ochgani va necha kishi roʻyxatdan oʻtgani yonma-yon koʻrsatiladi, ammo bir-biriga bogʻlanmagan.',
+  'reports.customers.acquisition.registrations': 'Kelib chiqishi boʻyicha roʻyxatdan oʻtishlar',
+  'reports.customers.acquisition.clicks': 'Jalb qilish havolalari boʻyicha oʻtishlar',
+  'reports.customers.acquisition.orders': 'Savdo kanallari boʻyicha buyurtmalar',
+  'reports.customers.acquisition.empty': 'Bu davrda koʻrsatadigan narsa yoʻq.',
+  'reports.customers.acquisition.archivedLink': '{label} (arxivda)',
+  'reports.customers.acquisition.origin.SELF_SERVICE': 'Oʻzlari roʻyxatdan oʻtgan',
+  'reports.customers.acquisition.origin.OPERATOR': 'Xodim yaratgan',
+  'reports.customers.acquisition.origin.IMPORT': 'Import qilingan',
+  'reports.customers.acquisition.origin.AGGREGATOR': 'Marketpleys',
+  'reports.customers.acquisition.origin.MIGRATION': 'Koʻchirilgan',
+
   // ---------------------------------------------------------------- reports 7.5/7.5a/7.5b staff (T12)
   'reports.staff.title': 'Xodimlar boʻyicha hisobotlar',
   'reports.staff.loading': 'Yuklanmoqda…',

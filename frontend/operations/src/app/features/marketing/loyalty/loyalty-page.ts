@@ -14,6 +14,7 @@ import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
+import { PosSyncPanel } from './pos-sync-panel';
 import { LocationView, LocationsApi } from '../../settings/locations/locations-api';
 import { ChannelView, SalesChannelsApi } from '../../settings/sales-channels/sales-channels-api';
 import {
@@ -44,9 +45,13 @@ type ScopeType = 'BRAND' | 'LOCATION' | 'CHANNEL';
  * from scope, and ADR 0165 closes the rows that waited on it as a decline:
  * HorecaOS holds no customer funds. The panel says so in the one sentence
  * ADR 0165 gives (Decision 8) and says what would reopen it (Decision 6, which
- * narrows ADR 0046's "a licence exists" condition). Not a gap to fill. POS
- * balance sync: no ADR, no capability, no adapter — the IA row names it and
- * nothing beneath it exists yet, which is the only panel here that is "not built".
+ * narrows ADR 0046's "a licence exists" condition). Not a gap to fill.
+ *
+ * **The till tab (ADR 0171, row 6.3b).** The platform is the one ledger and a
+ * till's balance is a mirror of it; `PosSyncPanel` shows, per POS binding, whether
+ * its vendor can mirror a balance at all (Clopos is not yet assessed and says so),
+ * runs a reconciliation that changes nothing, lists the differences and settles
+ * them one at a time.
  *
  * **Reduced relative to the spec.** The location and channel pickers below
  * list every branch/channel this brand has, but a rule's own `scopeId` is
@@ -59,7 +64,7 @@ type ScopeType = 'BRAND' | 'LOCATION' | 'CHANNEL';
  */
 @Component({
   selector: 'q-loyalty-page',
-  imports: [TPipe],
+  imports: [TPipe, PosSyncPanel],
   templateUrl: './loyalty-page.html',
   styleUrl: './loyalty-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -70,6 +75,9 @@ export class LoyaltyPage implements OnInit {
   private readonly channelsApi = inject(SalesChannelsApi);
   private readonly brand = inject(CurrentBrand);
   protected readonly i18n = inject(I18n);
+
+  /** ADR 0171: the programme's own numbers, or the till-balance sync's report. */
+  protected readonly tab = signal<'programme' | 'posSync'>('programme');
 
   protected readonly loading = signal(true);
   protected readonly denied = signal(false);

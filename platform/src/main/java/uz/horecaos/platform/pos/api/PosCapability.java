@@ -14,10 +14,11 @@ package uz.horecaos.platform.pos.api;
  * purpose: a second spelling in the database is how a capability comes to be
  * enabled under one name and assessed under another.
  *
- * <p>The first six are ADR 0011's original ports. The last four were found while
+ * <p>The first six are ADR 0011's original ports. The next four were found while
  * reading a real POS API and are declared here rather than left as provider
  * quirks, because each one is something a domain module will eventually want and
- * none of them is Clopos-specific in principle.
+ * none of them is Clopos-specific in principle. The eleventh, {@link #LOYALTY_BALANCE_SYNC},
+ * is ADR 0171's.
  */
 public enum PosCapability {
 
@@ -86,7 +87,24 @@ public enum PosCapability {
      * customer's phone and address to a third-party system needs a consent basis,
      * and having an endpoint for it is not one.
      */
-    CUSTOMER_UPSERT;
+    CUSTOMER_UPSERT,
+
+    /**
+     * Keep a till's customer bonus balance equal to the platform's loyalty ledger (ADR 0171, row 6.3b).
+     *
+     * <p>The platform's append-only ledger is the one authority for every balance it issues; the
+     * till's number is a mirror. This capability is what lets an adapter list the till's customers
+     * (so each can be found by the phone the till returns, and nothing about the customer is sent to
+     * the till), read a balance, list the movements that happened at the till since a cursor, and
+     * write the platform's balance to the till's own customer id under an idempotency key. Its
+     * sub-properties are recorded as data on the ceiling row (<em>limits</em>): a vendor that can write
+     * a balance and cannot read movements is PARTIAL, and the rationale names the missing half.
+     *
+     * <p>Every vendor starts unassessed, and an unassessed capability cannot be enabled on a binding
+     * (the trigger refuses it). That includes Clopos, whose notes record no balance field, iiko and
+     * R-Keeper, about which nothing in this repository says what either exposes for a wallet.
+     */
+    LOYALTY_BALANCE_SYNC;
 
     /** The string stored in the database. Identical to the constant name by design. */
     public String code() {

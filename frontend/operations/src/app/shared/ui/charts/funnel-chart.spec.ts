@@ -105,4 +105,45 @@ describe('FunnelChart', () => {
     expect(bars.length).toBe(3);
     expect(fixture.nativeElement.querySelectorAll('.q-funnel__drop-table-row').length).toBe(0);
   });
+
+  describe('without shares (a funnel of independent daily counts)', () => {
+    const COUNTS: readonly FunnelStage[] = [
+      { key: 'REGISTERED', label: 'Registered', value: 4 },
+      { key: 'BASKET', label: 'Basket', value: 20 },
+      { key: 'ORDERED', label: 'Ordered', value: 12 },
+    ];
+
+    function renderWithoutShares() {
+      TestBed.configureTestingModule({ imports: [FunnelChart] });
+      TestBed.inject(I18n).setLocale('en');
+      const fixture = TestBed.createComponent(FunnelChart);
+      fixture.componentRef.setInput('stages', COUNTS);
+      fixture.componentRef.setInput('ariaLabel', 'Customer funnel');
+      fixture.componentRef.setInput('showShare', false);
+      fixture.detectChanges();
+      return fixture;
+    }
+
+    it('prints no percentage anywhere, in the chart or in the accessible table', () => {
+      const fixture = renderWithoutShares();
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.textContent).not.toContain('%');
+      const table = host.querySelector('[data-testid="q-funnel-chart-table"]') as HTMLElement;
+      expect(table.querySelectorAll('th[scope="col"]').length).toBe(2);
+    });
+
+    it('keeps every bar inside its track when a later stage is larger than the first', () => {
+      const fixture = renderWithoutShares();
+      const widths = Array.from(
+        fixture.nativeElement.querySelectorAll('.q-funnel__bar') as NodeListOf<SVGRectElement>,
+      ).map((bar) => Number(bar.getAttribute('width')));
+      const x = Array.from(
+        fixture.nativeElement.querySelectorAll('.q-funnel__bar') as NodeListOf<SVGRectElement>,
+      ).map((bar) => Number(bar.getAttribute('x')));
+      expect(Math.max(...widths)).toBe(widths[1]);
+      // The widest bar starts where the track starts, so none can spill into the label column.
+      expect(Math.min(...x)).toBe(x[1]);
+      expect(widths[0]).toBeLessThan(widths[2]);
+    });
+  });
 });

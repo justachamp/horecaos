@@ -1,32 +1,28 @@
 # ADR 0167: Behavioural telemetry: lawful basis and the funnel
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Not started — nothing behavioural is collected, and the part
-  of the funnel that does not need collecting is not assembled. ADR 0043 decided that
-  behavioural telemetry "ships from day one, on its own topic, pseudonymous"
-  (`analytics.events`: `session_started`, `customer_registered`, `cart_item_added`,
-  `checkout_started`, `order_placed`, durable copy `reporting.fact_behaviour`); neither
-  exists, there is no topic, no emitter in the storefronts, the bot or the app, and no
-  migration. What does exist is every server-side fact the funnel's last three stages
-  could be counted from. `customer.customer_accounts` has `created_at` and, since V0295,
-  `origin` (`SELF_SERVICE`, `OPERATOR`, `IMPORT`, `AGGREGATOR`, `MIGRATION`);
-  `customer.brand_profiles` has `created_at` per brand; `ordering.carts` and
-  `ordering.cart_lines` carry `created_at`, an owner (an account, or `guest_reference_hash`,
-  a keyed hash and never the reference), and are deleted by `CartRetentionSweeper` 90 days
-  after they were last touched (ADR 0092); `ordering.checkout_attempts` (V0022) records
-  each checkout with its outcome; `reporting.fact_order` carries `customer_subject_hash`,
-  `is_first_order` and `channel_code`. Attribution has a half: `marketing.attribution_links`
-  (V0309, `AttributionLinkService`, `AttributionLinkController`) mints `?ref=` and
-  Telegram deep links with an anonymous `click_count`, but its click endpoint needs the
-  staff capability `marketing-link.manage` and no surface that serves a link calls it, and
-  neither `customer.customer_accounts` nor `ordering.orders` has a column for which link
-  brought the customer or the order (V0309's own header says so; `marketing.customer_metrics`
-  has `acquisition_channel` and `acquisition_link_id` columns that nothing writes). The
-  console's customer analytics page (`customer-analytics-page.ts`) names the funnel and
-  the acquisition chart as row `7.6c` and does not attempt them. Two things sharing words
-  with this record are not it: the `telemetry` module is courier GPS (ADR 0045), and the
-  storefront's `view_item` and `add_to_cart` events (ADR 0106, row `10.8e`) go into the
-  *tenant's own* Google dataLayer under the tenant's own basis, never to HorecaOS.
+- Implementation status: Partial — the funnel's last three stages and the acquisition-source
+  chart are built over facts the platform already held, and nothing is collected from a
+  browser, an app or a bot. V0554 adds `reporting.fact_funnel_day`,
+  `reporting.fact_registration_day`, `reporting.funnel_backfill_state` and
+  `marketing.attribution_link_clicks_day`: counts only, no account, guest hash, session or
+  address, and `BehaviouralFunnelStructureTests` reads the columns back from the catalogue
+  and fails on any name that could identify a person. `DayCloseService` captures the day's
+  baskets started, checkouts started and orders inside the close transaction (a NULL count
+  is "not recorded", never 0, and an upsert never lets NULL overwrite a recorded count),
+  `FunnelBackfillScheduler` walks a tenant's already-closed days once, and
+  `FunnelRetentionSweeper` reports what is past `reporting.funnel_retention_days`
+  (report-only, ADR 0029). `CustomerFunnelController` serves the funnel and the
+  acquisition source under `/api/v1/operations/tenants/{tenantId}/...`, and the console's
+  customer analytics page draws the funnel with the visits stage labelled "not measured".
+  The anonymous click endpoint on an attribution link replaces the staff-only one (a count
+  per link per day, answered 202 for every token, rate limited before the lookup), and both
+  storefronts post one click for a `?ref=` landing. Not built: the visits stage and every
+  client-side event (waiting for counsel's answer on a lawful basis, Decision 1); tier 2,
+  the per-person `acquisition_link_id` and `attribution_link_id` columns and the consent
+  purpose they need (Decision 4); the bot's landing call for a Telegram deep link; and the
+  startup guard that refuses a provisional retention value once counsel answers. ADR 0043's
+  `analytics.events` topic and `reporting.fact_behaviour` stay unbuilt by decision.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides

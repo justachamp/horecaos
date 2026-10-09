@@ -1750,9 +1750,18 @@ public class JdbcLoyaltyStore {
      *
      * @param outstandingMinor what the tenant would owe if every point were spent
      * @param heldMinor        the part currently held by an unsettled tender
+     * @param tillAbsorbedMinor what till spends took beyond a balance (ADR 0171 Decision 4): points the customer spent
+     *                         at the terminal that the platform's ledger could not cover, so the brand carries them. A
+     *                         running total of a cost, not a balance, which is why it sits beside the outstanding
+     *                         figure and not inside it
      */
     public record LiabilityRow(
-            UUID brandId, String currency, long outstandingMinor, long heldMinor, long accountCount) {}
+            UUID brandId,
+            String currency,
+            long outstandingMinor,
+            long heldMinor,
+            long accountCount,
+            long tillAbsorbedMinor) {}
 
     /**
      * What the brand owes, per brand and never pooled.
@@ -1764,14 +1773,17 @@ public class JdbcLoyaltyStore {
      */
     public List<LiabilityRow> liability(UUID tenantId) {
         return jdbc.sql("""
-                SELECT brand_id, currency,
-                       COALESCE(SUM(balance_minor), 0) AS outstanding_minor,
-                       COALESCE(SUM(reserved_minor), 0) AS held_minor,
-                       COUNT(*) AS account_count
-                  FROM loyalty.accounts
-                 WHERE tenant_id = :tenantId AND status <> 'CLOSED'
-                 GROUP BY brand_id, currency
-                 ORDER BY brand_id
+                SELECT a.brand_id, a.currency,
+                       COALESCE(SUM(a.balance_minor), 0) AS outstanding_minor,
+                       COALESCE(SUM(a.reserved_minor), 0) AS held_minor,
+                       COUNT(*) AS account_count,
+                       COALESCE((SELECT SUM(m.absorbed_minor)
+                                   FROM loyalty.pos_sync_movements m
+                                  WHERE m.tenant_id = :tenantId AND m.brand_id = a.brand_id), 0) AS till_absorbed_minor
+                  FROM loyalty.accounts a
+                 WHERE a.tenant_id = :tenantId AND a.status <> 'CLOSED'
+                 GROUP BY a.brand_id, a.currency
+                 ORDER BY a.brand_id
                 """)
                 .param("tenantId", tenantId)
                 .query((row, number) -> new LiabilityRow(
@@ -1779,7 +1791,8 @@ public class JdbcLoyaltyStore {
                         row.getString("currency"),
                         row.getLong("outstanding_minor"),
                         row.getLong("held_minor"),
-                        row.getLong("account_count")))
+                        row.getLong("account_count"),
+                        row.getLong("till_absorbed_minor")))
                 .list();
     }
 

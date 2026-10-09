@@ -53,7 +53,9 @@ import uz.horecaos.platform.workforce.api.StaffShiftFactSource;
  *
  * <p>{@link #recut} re-derives the same day after the settle window and
  * <em>compares</em>. It writes divergence rows and touches neither the facts nor
- * the aggregates. That is the ADR's rule and it is worth being explicit about why
+ * the aggregates. (The one thing it repeats is the customer funnel's count capture, ADR 0167:
+ * a count of activity and not a financial snapshot, idempotent, and unable to replace a recorded
+ * count with "not recorded".) That is the ADR's rule and it is worth being explicit about why
  * a self-correcting projection is the wrong design here: the correction hides the
  * bug that caused the drift, and — the operational half of the same argument —
  * somebody has already acted on the earlier figure. A manager who ordered stock
@@ -72,10 +74,11 @@ public class DayCloseService {
     private final @Nullable StaffShiftFactSource staffShifts;
     private final @Nullable ReviewFactSource reviewFacts;
     private final @Nullable RecoveryFactSource recoveryFacts;
+    private final @Nullable FunnelCaptureService funnelCapture;
 
     public DayCloseService(
             JdbcReportingStore store, BusinessDayService businessDays, SubjectPseudonym pseudonym, Clock clock) {
-        this(store, businessDays, pseudonym, clock, null, null, null, null);
+        this(store, businessDays, pseudonym, clock, null, null, null, null, null);
     }
 
     public DayCloseService(
@@ -84,10 +87,10 @@ public class DayCloseService {
             SubjectPseudonym pseudonym,
             Clock clock,
             @Nullable PromotionRedemptionSource promotionRedemptions) {
-        this(store, businessDays, pseudonym, clock, promotionRedemptions, null, null, null);
+        this(store, businessDays, pseudonym, clock, promotionRedemptions, null, null, null, null);
     }
 
-    /** The close with the promotion and the workforce sources wired and no review or recovery source. */
+    /** The close with the promotion and the workforce sources wired and no review, recovery or funnel source. */
     public DayCloseService(
             JdbcReportingStore store,
             BusinessDayService businessDays,
@@ -95,7 +98,18 @@ public class DayCloseService {
             Clock clock,
             @Nullable PromotionRedemptionSource promotionRedemptions,
             @Nullable StaffShiftFactSource staffShifts) {
-        this(store, businessDays, pseudonym, clock, promotionRedemptions, staffShifts, null, null);
+        this(store, businessDays, pseudonym, clock, promotionRedemptions, staffShifts, null, null, null);
+    }
+
+    /** The close with the promotion source and the customer funnel wired and nothing else. */
+    public DayCloseService(
+            JdbcReportingStore store,
+            BusinessDayService businessDays,
+            SubjectPseudonym pseudonym,
+            Clock clock,
+            @Nullable PromotionRedemptionSource promotionRedemptions,
+            @Nullable FunnelCaptureService funnelCapture) {
+        this(store, businessDays, pseudonym, clock, promotionRedemptions, null, null, null, funnelCapture);
     }
 
     /** The close with the promotion and the review and recovery sources wired and no workforce source. */
@@ -107,7 +121,7 @@ public class DayCloseService {
             @Nullable PromotionRedemptionSource promotionRedemptions,
             @Nullable ReviewFactSource reviewFacts,
             @Nullable RecoveryFactSource recoveryFacts) {
-        this(store, businessDays, pseudonym, clock, promotionRedemptions, null, reviewFacts, recoveryFacts);
+        this(store, businessDays, pseudonym, clock, promotionRedemptions, null, reviewFacts, recoveryFacts, null);
     }
 
     /**
@@ -121,6 +135,8 @@ public class DayCloseService {
      *        {@code reviews.api} port; null builds none
      * @param recoveryFacts ADR 0159: where the service-recovery case fact comes from, through the
      *        same module's other port; null builds none
+     * @param funnelCapture ADR 0167 (7.6c): the customer funnel's daily counts, captured inside the
+     *        close's own transaction; null captures none, which is what a close with no funnel wired does
      */
     @Autowired
     public DayCloseService(
@@ -131,7 +147,8 @@ public class DayCloseService {
             @Nullable PromotionRedemptionSource promotionRedemptions,
             @Nullable StaffShiftFactSource staffShifts,
             @Nullable ReviewFactSource reviewFacts,
-            @Nullable RecoveryFactSource recoveryFacts) {
+            @Nullable RecoveryFactSource recoveryFacts,
+            @Nullable FunnelCaptureService funnelCapture) {
         this.store = store;
         this.businessDays = businessDays;
         this.pseudonym = pseudonym;
@@ -140,6 +157,7 @@ public class DayCloseService {
         this.staffShifts = staffShifts;
         this.reviewFacts = reviewFacts;
         this.recoveryFacts = recoveryFacts;
+        this.funnelCapture = funnelCapture;
     }
 
     /**
@@ -232,6 +250,12 @@ public class DayCloseService {
         // day is written whole or not at all" reason. This extends the close job's one stated exception
         // ("reads ordering and payments") by one source, kitchen, exactly as ADR 0115 did for tenders.
         derived.stationLoads().forEach(store::insertStationLoadFact);
+        // ADR 0167 (7.6c): the customer funnel's daily counts, in the same transaction for the same
+        // "a day is written whole or not at all" reason -- and read from the live carts here because
+        // the retention sweeper deletes them, so this is the one moment the basket count can be had.
+        if (funnelCapture != null) {
+            funnelCapture.capture(tenantId, businessDate, boundary, derived.orders());
+        }
 
         store.completeRun(runId, derived.orders().size(), derived.lines().size(), 0, clock.instant());
 
@@ -337,6 +361,13 @@ public class DayCloseService {
         compareRecoveryFacts(divergences, tenantId, businessDate, derived.recoveryCases());
         comparePaymentMix(divergences, tenantId, businessDate, derived.tenders());
         compareStationLoad(divergences, tenantId, businessDate, derived.stationLoads());
+
+        // ADR 0167: the funnel is a count of activity and not a financial snapshot, so the recut
+        // repeats its capture rather than reporting a divergence from it. Idempotent, and it leaves a
+        // count already recorded alone for a day whose carts the sweeper has since deleted.
+        if (funnelCapture != null) {
+            funnelCapture.capture(tenantId, businessDate, boundary, derived.orders());
+        }
 
         for (Divergence divergence : divergences) {
             store.insertDivergence(

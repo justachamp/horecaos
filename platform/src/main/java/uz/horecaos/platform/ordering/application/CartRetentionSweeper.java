@@ -87,7 +87,7 @@ public class CartRetentionSweeper {
      * has no single tenant scope to resolve against, since one pass covers
      * every tenant's carts.
      */
-    int effectiveRetentionDays() {
+    public int effectiveRetentionDays() {
         Long longest = jdbc.sql("""
                         SELECT max(integer_value) FROM tenant.configuration_values
                          WHERE key_code = :keyCode AND is_explicit_null = false

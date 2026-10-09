@@ -739,9 +739,10 @@ export const routes: Routes = [
           // 6.3 Loyalty (ADR 0046, wave 44): the last tier-3 Marketing row
           // this wave built, alongside 6.4 Campaigns' own real backend.
           // Accrual-rule and redemption-policy authoring through the new
-          // `LoyaltyPolicyController`; deposit accounts and POS balance sync
-          // render as honest not-built panels inside `LoyaltyPage` itself,
-          // not a separate route — see that component's own doc.
+          // `LoyaltyPolicyController`; deposit accounts render as an honest
+          // not-built panel inside `LoyaltyPage` itself, not a separate route.
+          // The till tab (ADR 0171, row 6.3b) is the other half of that page:
+          // the reconciliation of a POS balance against the platform's ledger.
           {
             path: 'loyalty',
             loadComponent: () =>
@@ -988,8 +989,9 @@ export const routes: Routes = [
           // new CUSTOMER_TYPE dimension), and cohorts/RFM are two new
           // bespoke reads (`.../customer-cohorts`, `.../customer-rfm`) — see
           // `customer-analytics-page.ts`'s own doc for what is scoped down.
-          // 7.6c (acquisition source, the pre-order funnel) stays blocked on
-          // ADR 0043's open legal input for behavioural telemetry.
+          // 7.6c (acquisition source, the pre-order funnel) is drawn from
+          // server-side facts only (ADR 0167); its visits stage is labelled
+          // "not measured" until counsel answers the telemetry question.
           {
             path: 'customers',
             loadComponent: () =>

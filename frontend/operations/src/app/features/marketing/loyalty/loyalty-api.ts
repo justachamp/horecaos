@@ -14,6 +14,11 @@ export interface LoyaltyLiabilityView {
   readonly outstanding: Money;
   readonly held: Money;
   readonly accountCount: number;
+  /**
+   * ADR 0171: points customers spent at a till that the ledger could not cover, carried by the brand. Beside the
+   * outstanding figure and never in it. Absent from a server that predates the sync.
+   */
+  readonly tillAbsorbed?: Money;
 }
 
 /** Mirrors `LoyaltyPolicyController.AccrualRuleResponse`. */

@@ -32,12 +32,13 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * Telegram {@code startapp} deep link for a campaign or an influencer.
  *
  * <p>What this class does not do, on purpose: it never records which account
- * or order a link brought. That half of the mechanism needs columns on a
- * customer account and an order — other modules' tables, per V0309's own
- * doc — and is follow-on integration work for whichever surface actually
- * serves a {@code ?ref=} redirect or a Telegram deep link. What exists here
- * is the half marketing owns outright: mint the link, and count the clicks
- * it actually receives.
+ * or order a link brought. ADR 0167 Decision 4 builds acquisition in two tiers and
+ * this is tier 1: the link, and an anonymous click series counted by {@link
+ * AttributionLinkClickService} from a public, tokenised, rate-limited endpoint.
+ * Per-person attribution (a first-touch column on the account, a last-touch one on
+ * the order) is specified and waits for counsel to confirm a basis; there is no staff
+ * method here to bump a counter by hand, because a person incrementing a count is a way
+ * to make the chart wrong.
  */
 @Service
 public class AttributionLinkService {
@@ -168,14 +169,6 @@ public class AttributionLinkService {
                 .correlatedBy(correlationId())
                 .occurredAt(now)
                 .build());
-    }
-
-    @Transactional
-    public void recordClick(UUID tenantId, UUID id) {
-        if (!store.recordClick(tenantId, id, clock.instant())) {
-            throw new ApiException(
-                    ErrorCode.RESOURCE_NOT_FOUND, "No attribution link %s belongs to this tenant".formatted(id));
-        }
     }
 
     @Transactional(readOnly = true)

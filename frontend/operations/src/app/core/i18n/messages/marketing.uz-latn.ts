@@ -424,9 +424,115 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
     'HorecaOS mijozlarning pulini saqlamaydi, shuning uchun oldindan toʻlanadigan depozit yoʻq. Mijozlar sodiqlik ballarini yigʻadi va sarflaydi — bular pul emas; oʻzining litsenziyalangan oldindan toʻlov dasturiga ega restoran oʻz provayderini toʻlov usuli sifatida ulashi mumkin.',
   'marketing.loyalty.deposit.revisit':
     'Qaror, boʻshliq emas (ADR 0165). U faqat HorecaOS yoki egasi nazorat qiladigan kompaniya mijozlarning oldindan toʻlovini qamrab oluvchi Markaziy bank ruxsatini olsa, yoki huquqshunos restoranning oʻz ruxsati HorecaOS platformasini uning hisobini yuritishga majbur qilishini yozma tasdiqlasa qayta koʻriladi. Restoranning shuni soʻrashi uni qayta ochmaydi. Bu ADR 0046dagi “litsenziya mavjud” shartini toraytiradi: restoran litsenziyasi faqat provayder orqali toʻlov usulini beradi, bizda saqlanadigan balansni hech qachon.',
+
+  // ---------------------------------------------------------------- loyalty 6.3b POS balance sync (ADR 0171)
+  'marketing.loyalty.tab.programme': 'Dastur',
+  'marketing.loyalty.tab.posSync': 'POS bilan balans sinxronizatsiyasi',
   'marketing.loyalty.posSync.title': 'POS bilan balans sinxronizatsiyasi',
   'marketing.loyalty.posSync.body':
-    'Qurilmagan. Hech qanday ADR POS terminali sodiqlik balansini oʻqishi yoki yozishini belgilamaydi, va provayder imkoniyati sifatida ham eʻlon qilinmagan — qarang: frontend-information-architecture.md §6.3.',
+    'Ballar jurnali mijozda nima borligining yagona yozuvi. Oʻz bonus balansini yuritadigan kassa u bilan solishtiriladi va unga tenglashtiriladi; kassaning raqami hech qachon jurnal ustidan koʻchirilmaydi, farq esa jimgina tuzatilmaydi — uni inson hal qiladi.',
+  'marketing.loyalty.posSync.lag':
+    'Bu yerdagi va kassadagi balans besh daqiqagacha farq qilishi mumkin.',
+  'marketing.loyalty.posSync.notice':
+    'Bu brendning kassasi oʻz bonus balansini yuritadi, HorecaOS uni koʻrmaydi va oʻzgartira olmaydi. Mijozning bu yerdagi va kassadagi balansi farq qilishi mumkin.',
+  'marketing.loyalty.posSync.error': 'POS sinxronizatsiyasini yuklab boʻlmadi.',
+  'marketing.loyalty.posSync.bindings.title': 'Ulangan terminallar',
+  'marketing.loyalty.posSync.bindings.empty': 'Bu brendga birorta POS terminali ulanmagan.',
+  'marketing.loyalty.posSync.binding.mode': 'Rejim',
+  'marketing.loyalty.posSync.binding.matched': 'Moslashtirilgan mijozlar',
+  'marketing.loyalty.posSync.binding.open': 'Ochiq farqlar',
+  'marketing.loyalty.posSync.binding.lastPass': 'Oxirgi oʻtish',
+  'marketing.loyalty.posSync.binding.never': 'Hali boʻlmagan',
+  'marketing.loyalty.posSync.capability.SUPPORTED': 'Sinxronlay oladi',
+  'marketing.loyalty.posSync.capability.PARTIAL': 'Qisman sinxronlay oladi',
+  'marketing.loyalty.posSync.capability.UNSUPPORTED': 'Sinxronlay olmaydi',
+  'marketing.loyalty.posSync.capability.UNASSESSED': 'Baholanmagan',
+  'marketing.loyalty.posSync.capability.PARTIAL.note':
+    'Bu yetkazib beruvchi sinxronizatsiyaning bir qismini bajara oladi; yetishmayotgan yarmi uning bahosida nomlangan.',
+  'marketing.loyalty.posSync.capability.UNSUPPORTED.note':
+    'Bu yetkazib beruvchining tizimida oʻqish yoki yozish mumkin boʻlgan mijoz bonus balansi yoʻq, shuning uchun uning balanslari bu yerda aks ettirilmaydi.',
+  'marketing.loyalty.posSync.capability.UNASSESSED.note':
+    'Bu yetkazib beruvchi mijoz hamyoni boʻyicha nimani ochishini hech kim baholamagan, shuning uchun unga bu imkoniyatni berib boʻlmaydi va uning balanslari bu yerda aks ettirilmaydi.',
+  'marketing.loyalty.posSync.mode.REPORT_ONLY':
+    'Faqat hisobot: solishtiradi, hech narsa qoʻllamaydi va yubormaydi',
+  'marketing.loyalty.posSync.mode.PULL': 'Kassada boʻlgan narsani yuklaydi',
+  'marketing.loyalty.posSync.mode.PULL_AND_PUSH': 'Yuklaydi va jurnal balansini yuboradi',
+  'marketing.loyalty.posSync.reconcile.action': 'Hozir solishtirish',
+  'marketing.loyalty.posSync.reconcile.running': 'Solishtirilmoqda…',
+  'marketing.loyalty.posSync.runs.title': 'Solishtirish hisobotlari',
+  'marketing.loyalty.posSync.runs.empty': 'Hali birorta oʻtish boʻlmagan.',
+  'marketing.loyalty.posSync.runs.close': 'Yopish',
+  'marketing.loyalty.posSync.runs.noDifferences': 'Bu oʻtishda farq topilmadi.',
+  'marketing.loyalty.posSync.runs.column.pass': 'Oʻtish',
+  'marketing.loyalty.posSync.runs.column.compared': 'Solishtirildi',
+  'marketing.loyalty.posSync.runs.column.matched': 'Teng',
+  'marketing.loyalty.posSync.runs.column.tillHigher': 'Kassa koʻp',
+  'marketing.loyalty.posSync.runs.column.tillLower': 'Kassa kam',
+  'marketing.loyalty.posSync.runs.column.tillOnly': 'Faqat kassada',
+  'marketing.loyalty.posSync.runs.column.platformOnly': 'Faqat jurnalda',
+  'marketing.loyalty.posSync.runs.column.ambiguous': 'Noaniq',
+  'marketing.loyalty.posSync.runs.column.imported': 'Yuklandi',
+  'marketing.loyalty.posSync.runs.column.held': 'Ushlab qolindi',
+  'marketing.loyalty.posSync.runs.column.unverifiable': 'Tekshirilmadi',
+  'marketing.loyalty.posSync.runs.column.pushed': 'Yuborildi',
+  'marketing.loyalty.posSync.run.kind.PULL': 'Yuklash',
+  'marketing.loyalty.posSync.run.kind.PUSH': 'Yuborish',
+  'marketing.loyalty.posSync.run.kind.RECONCILE': 'Solishtirish',
+  'marketing.loyalty.posSync.run.status.RUNNING': 'Bajarilmoqda',
+  'marketing.loyalty.posSync.run.status.SUCCEEDED': 'Tayyor',
+  'marketing.loyalty.posSync.run.status.FAILED': 'Xato',
+  'marketing.loyalty.posSync.discrepancies.title': 'Hal qilinadigan farqlar',
+  'marketing.loyalty.posSync.discrepancies.empty': 'Ochiq farqlar yoʻq.',
+  'marketing.loyalty.posSync.discrepancies.platform': 'Jurnal',
+  'marketing.loyalty.posSync.discrepancies.till': 'Kassa',
+  'marketing.loyalty.posSync.discrepancies.delta': 'Farq',
+  'marketing.loyalty.posSync.discrepancies.reason': 'Qarorning sababi',
+  'marketing.loyalty.posSync.discrepancies.pending':
+    'Ikkinchi odamning imzosi kutilmoqda. Hozircha hech narsa hisoblanmadi.',
+  'marketing.loyalty.posSync.kind.TILL_HIGHER': 'Kassada jurnaldagidan koʻp',
+  'marketing.loyalty.posSync.kind.TILL_HIGHER.note':
+    'Kassa jurnaldagidan koʻp ball koʻrsatmoqda. Hech bir tomonda hech narsa oʻzgartirilmagan.',
+  'marketing.loyalty.posSync.kind.TILL_LOWER': 'Kassada jurnaldagidan kam',
+  'marketing.loyalty.posSync.kind.TILL_LOWER.note':
+    'Kassa jurnaldagidan kam ball koʻrsatmoqda. Hech bir tomonda hech narsa oʻzgartirilmagan.',
+  'marketing.loyalty.posSync.kind.TILL_ONLY': 'Ball hisobi yoʻq kassa mijozi',
+  'marketing.loyalty.posSync.kind.TILL_ONLY.note':
+    'Kassadagi mijoz bu brendning birorta ball hisobiga mos kelmaydi. Kassa yozuvidan hisob yaratilmaydi.',
+  'marketing.loyalty.posSync.kind.PLATFORM_ONLY': 'Kassa endi tanimaydigan jurnal mijozi',
+  'marketing.loyalty.posSync.kind.PLATFORM_ONLY.note':
+    'Moslashtirilgan mijoz kassada endi topilmayapti.',
+  'marketing.loyalty.posSync.kind.AMBIGUOUS_MATCH': 'Bir nechta mumkin boʻlgan moslik',
+  'marketing.loyalty.posSync.kind.AMBIGUOUS_MATCH.note':
+    'Kassadagi telefon bir nechta hisobga toʻgʻri keladi. Bu haqida xabar beriladi, moslik taxmin qilinmaydi.',
+  'marketing.loyalty.posSync.kind.SPEND_EXCEEDS_BALANCE': 'Kassada balansdan ortiq sarflangan',
+  'marketing.loyalty.posSync.kind.SPEND_EXCEEDS_BALANCE.note':
+    'Mijoz kassada jurnalda borligidan koʻp sarfladi. Balans bir qismini qopladi; qolganini brend koʻtaradi, bu majburiyatlar hisobotida koʻrinadi.',
+  'marketing.loyalty.posSync.kind.CREDIT_HELD':
+    'Kassadan hisoblash tekshirish uchun ushlab qolindi',
+  'marketing.loyalty.posSync.kind.CREDIT_HELD.note':
+    'Kassadan hisoblash kunlik chegaradan yuqori. Kimdir qaror qilmaguncha hech narsa hisoblanmaydi.',
+  'marketing.loyalty.posSync.kind.RATIO_MISMATCH': 'Dastur «bir ball — bir soʻm» emas',
+  'marketing.loyalty.posSync.kind.RATIO_MISMATCH.note':
+    'Faqat «birga bir» dasturni sinxronlash mumkin, shuning uchun bu terminal bogʻlanmaydi.',
+  'marketing.loyalty.posSync.kind.NOT_CONSENTED': 'Mijoz sinxronizatsiyaga rozilik bermagan',
+  'marketing.loyalty.posSync.kind.NOT_CONSENTED.note':
+    'Mijoz rozi boʻlmaguncha sinxronizatsiyadan chetda qoladi.',
+  'marketing.loyalty.posSync.kind.UNVERIFIABLE': 'Tekshirib boʻlmadi',
+  'marketing.loyalty.posSync.kind.UNVERIFIABLE.note':
+    'Kassa javob bermadi yoki boshqa valyutada javob berdi. Bu farq bilan bir narsa emas.',
+  'marketing.loyalty.posSync.resolution.ACCEPT_TILL': 'Kassaning raqamini qabul qilish',
+  'marketing.loyalty.posSync.resolution.ACCEPT_TILL.hint':
+    'Farqni jurnalga tuzatish sifatida qoʻllash. Qoʻlda tuzatish chegarasidan yuqorida ikkinchi odamning imzosi kerak.',
+  'marketing.loyalty.posSync.resolution.ACCEPT_PLATFORM': 'Jurnalning raqamini qoldirish',
+  'marketing.loyalty.posSync.resolution.ACCEPT_PLATFORM.hint':
+    'Jurnal balansini kassaga yana yuborish.',
+  'marketing.loyalty.posSync.resolution.ABSORB': 'Brend oʻz zimmasiga oladi',
+  'marketing.loyalty.posSync.resolution.ABSORB.hint':
+    'Bu koʻrilgani va brend buni qabul qilishini yozib qoʻyish. Hech narsa koʻchmaydi.',
+  'marketing.loyalty.posSync.resolution.SUSPEND': 'Bu mijozni sinxronlamaslik',
+  'marketing.loyalty.posSync.resolution.SUSPEND.hint':
+    'Bu mijozni bundan buyon sinxronizatsiyadan chiqarish.',
+  'marketing.loyalty.liability.tillAbsorbed': 'Kassadagi sarflardan zimmaga olingan: {amount}',
 
   // -------------------------------------------------------------- referrals 6.6 (a new ADR, wave 47)
   'marketing.referrals.title': 'Referallar',

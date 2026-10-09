@@ -255,6 +255,16 @@ public class SecurityConfiguration {
                         .requestMatchers(
                                 HttpMethod.POST, "/api/v1/storefront/tenants/*/brands/*/locations/*/delivery-fee")
                         .permitAll()
+                        // ADR 0167 Decision 4/5: a ?ref= landing counts one click on the link its token
+                        // names. Nobody to authorise and nothing to protect behind a token -- it can only
+                        // add one to a counter, answers every token alike (so it cannot be used to probe
+                        // which exist), records no address, agent or cookie, and is rate limited per token
+                        // and visitor in the ADR 0033 limiter. Exactly this path, as every exemption here.
+                        // EndpointCapabilityDeclarationTests names it for the same reason it names the
+                        // delivery-fee preview above.
+                        .requestMatchers(
+                                HttpMethod.POST, "/api/v1/storefront/tenants/*/brands/*/attribution-links/*/clicks")
+                        .permitAll()
                         // ADR 0023: the on-box probe evaluates every alert
                         // threshold from this scrape, and it cannot hold a bearer
                         // token — minting one needs Keycloak, and an alert path

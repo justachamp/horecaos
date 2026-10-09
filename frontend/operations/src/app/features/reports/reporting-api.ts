@@ -759,6 +759,86 @@ export interface CohortListResponse {
   readonly provenance: ProvenanceResponse;
 }
 
+/** The funnel's stages, in order; `VISITS` is never measured (ADR 0167 Decision 1). */
+export type FunnelStageCode =
+  'VISITS' | 'REGISTERED' | 'BASKET_STARTED' | 'CHECKOUT_STARTED' | 'ORDERED';
+
+/**
+ * One stage of the customer funnel over the requested range (ADR 0167, 7.6c). Mirrors
+ * `CustomerFunnelController.StageResponse`.
+ *
+ * `count` is null exactly when `measured` is false. `unrecordedDays` is how many business dates
+ * inside the range have no recorded count for this stage; the count is the sum of what was recorded
+ * and is partial when it is above zero.
+ */
+export interface FunnelStageResponse {
+  readonly stage: FunnelStageCode;
+  readonly measured: boolean;
+  readonly reason: string | null;
+  readonly count: number | null;
+  readonly unrecordedDays: number;
+}
+
+/** A null count is "not recorded" and is never zero. */
+export interface FunnelDayResponse {
+  readonly businessDate: string;
+  readonly brandId: string;
+  readonly channelCode: string;
+  readonly basketStarted: number | null;
+  readonly checkoutStarted: number | null;
+  readonly ordered: number | null;
+}
+
+export interface FunnelRegistrationDayResponse {
+  readonly businessDate: string;
+  readonly brandId: string;
+  readonly origin: string;
+  readonly registered: number;
+}
+
+/** `GET .../reporting/customer-funnel` (ADR 0167). */
+export interface CustomerFunnelResponse {
+  readonly from: string;
+  readonly to: string;
+  readonly stages: readonly FunnelStageResponse[];
+  readonly days: readonly FunnelDayResponse[];
+  readonly registrations: readonly FunnelRegistrationDayResponse[];
+  readonly provenance: ProvenanceResponse;
+}
+
+export interface AcquisitionOriginResponse {
+  readonly origin: string;
+  readonly registered: number;
+}
+
+export interface AcquisitionLinkResponse {
+  readonly linkId: string;
+  readonly brandId: string;
+  readonly label: string;
+  readonly channel: string;
+  readonly status: string;
+  readonly clicks: number;
+}
+
+export interface AcquisitionChannelResponse {
+  readonly channelCode: string;
+  readonly ordered: number;
+}
+
+/**
+ * `GET .../reporting/acquisition-sources` (ADR 0167). Three counts side by side. `attributesCustomerToLink`
+ * is false in this build: nothing here says which customer or order a link brought.
+ */
+export interface AcquisitionSourcesResponse {
+  readonly from: string;
+  readonly to: string;
+  readonly registrationsByOrigin: readonly AcquisitionOriginResponse[];
+  readonly clicksByLink: readonly AcquisitionLinkResponse[];
+  readonly ordersByChannel: readonly AcquisitionChannelResponse[];
+  readonly attributesCustomerToLink: boolean;
+  readonly provenance: ProvenanceResponse;
+}
+
 /** T13 (7.6b): platform-fixed Frequency bands — never tenant-configurable. */
 export type FrequencyBand = 'F1_SINGLE' | 'F2_FEW' | 'F3_FREQUENT';
 
@@ -1313,6 +1393,42 @@ export class ReportingApi {
           locationId: params.locationId,
           legalEntityId: params.legalEntityId,
         },
+      }),
+    );
+    return result.value;
+  }
+
+  /** ADR 0167 (7.6c): the daily customer funnel. Visits come back as `measured: false` with a reason. */
+  async customerFunnel(
+    tenantId: string,
+    params: {
+      readonly from: string;
+      readonly to: string;
+      readonly brandId?: string;
+      readonly channel?: string;
+    },
+  ): Promise<CustomerFunnelResponse> {
+    const result = await firstValueFrom(
+      this.api.get<CustomerFunnelResponse>(reportsPaths.customerFunnel(tenantId), {
+        params: {
+          from: params.from,
+          to: params.to,
+          brandId: params.brandId,
+          channel: params.channel,
+        },
+      }),
+    );
+    return result.value;
+  }
+
+  /** ADR 0167 (7.6c): registrations by origin, clicks by attribution link, orders by channel. */
+  async acquisitionSources(
+    tenantId: string,
+    params: { readonly from: string; readonly to: string; readonly brandId?: string },
+  ): Promise<AcquisitionSourcesResponse> {
+    const result = await firstValueFrom(
+      this.api.get<AcquisitionSourcesResponse>(reportsPaths.acquisitionSources(tenantId), {
+        params: { from: params.from, to: params.to, brandId: params.brandId },
       }),
     );
     return result.value;

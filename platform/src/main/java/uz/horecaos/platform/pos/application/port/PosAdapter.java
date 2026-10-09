@@ -129,6 +129,107 @@ public interface PosAdapter {
      */
     ApprovalRead readApprovalStatus(PosContext context, String externalOrderId);
 
+    // ------------------------------------------------------------------
+    // Loyalty balance sync (ADR 0171, PosCapability#LOYALTY_BALANCE_SYNC)
+    // ------------------------------------------------------------------
+    //
+    // Four optional methods, defaulted to "not supported" so an adapter whose vendor has no customer
+    // wallet -- Clopos today -- compiles and behaves exactly as it did. A default that answered an
+    // empty success would be the failure this capability exists to prevent: a vendor reported as
+    // working when it has never been asked.
+
+    /**
+     * Lists the till's customers, a page at a time. Reading only: nothing about a platform customer is sent
+     * to the till, and the phone each entry carries is used once by the caller to find an account and then
+     * discarded.
+     */
+    default TillCustomersRead listTillCustomers(PosContext context, @Nullable String cursor) {
+        return new TillCustomersRead(notSupported("listTillCustomers"), List.of(), null);
+    }
+
+    /** Reads one till customer's bonus balance. A balance in a currency other than the account's is refused by the caller. */
+    default TillBalanceRead readBalance(PosContext context, String externalCustomerId) {
+        return new TillBalanceRead(notSupported("readBalance"), null, null, null);
+    }
+
+    /**
+     * Lists the movements that happened at the till since {@code cursor}, for one customer or (null) for all
+     * of them, in the order the till reports them. At-least-once: a page may repeat movements the caller has
+     * already imported, which the caller deduplicates on {@link TillMovement#externalMovementId}.
+     */
+    default TillMovementsRead readMovements(
+            PosContext context, @Nullable String externalCustomerId, @Nullable String cursor) {
+        return new TillMovementsRead(notSupported("readMovements"), List.of(), null);
+    }
+
+    /**
+     * Sets the till customer's balance to {@code balanceMinor}, the platform's number at ledger version
+     * {@code ledgerVersion}, under {@code idempotencyKey}. The key is built from the version, so a repeat of
+     * the same push is the same push. An {@code UNCERTAIN} outcome is resolved by a read, never by a second
+     * write.
+     */
+    default ProviderOutcome writeBalance(
+            PosContext context,
+            String externalCustomerId,
+            long balanceMinor,
+            long ledgerVersion,
+            String idempotencyKey) {
+        return notSupported("writeBalance");
+    }
+
+    private static ProviderOutcome notSupported(String operation) {
+        return ProviderOutcome.rejected("NOT_SUPPORTED", "This point of sale does not support " + operation);
+    }
+
+    /** A till customer, as listed. The phone is never stored, logged or shown. */
+    record TillCustomer(String externalCustomerId, @Nullable String phone) {
+
+        @Override
+        public String toString() {
+            return "TillCustomer[external=" + externalCustomerId + "]";
+        }
+    }
+
+    record TillCustomersRead(
+            ProviderOutcome outcome,
+            List<TillCustomer> customers,
+            @Nullable String nextCursor) {
+
+        public TillCustomersRead {
+            customers = List.copyOf(customers == null ? List.of() : customers);
+        }
+    }
+
+    /** @param currency the till's own currency for the balance; null when the vendor states none (asserted from configuration then) */
+    record TillBalanceRead(
+            ProviderOutcome outcome,
+            @Nullable Long balanceMinor,
+            @Nullable String currency,
+            @Nullable Instant observedAt) {}
+
+    /** What a till movement was, from the customer's side: points earned at the till, or spent there. */
+    enum TillMovementKind {
+        EARN,
+        SPEND
+    }
+
+    record TillMovement(
+            String externalMovementId,
+            String externalCustomerId,
+            TillMovementKind kind,
+            long amountMinor,
+            @Nullable Instant occurredAt) {}
+
+    record TillMovementsRead(
+            ProviderOutcome outcome,
+            List<TillMovement> movements,
+            @Nullable String nextCursor) {
+
+        public TillMovementsRead {
+            movements = List.copyOf(movements == null ? List.of() : movements);
+        }
+    }
+
     /**
      * Everything an adapter needs that is not the business request.
      *
