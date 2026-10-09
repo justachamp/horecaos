@@ -99,7 +99,8 @@ public class KitchenHeadcountController {
             List<RowView> rows,
             @Nullable PeakView peak,
             List<String> stationsWithoutFigure,
-            List<RawCellView> history) {
+            List<RawCellView> history,
+            int businessDayStartMinutes) {
 
         static PlanResponse of(PlanResult result) {
             Plan plan = result.plan();
@@ -119,7 +120,8 @@ public class KitchenHeadcountController {
                     plan.stationsWithoutFigure(),
                     plan.history().stream()
                             .map(cell -> new RawCellView(cell.date(), cell.stationCode(), cell.hour(), cell.portions()))
-                            .toList());
+                            .toList(),
+                    result.businessDayStartMinutes());
         }
     }
 

@@ -186,6 +186,10 @@ class KitchenHeadcountHttpTests {
                 .as("grill 4 + hot 2")
                 .isEqualTo(6);
         assertThat(plan.path("stationsWithoutFigure")).isEmpty();
+        assertThat(plan.path("businessDayStartMinutes").asInt())
+                .as(
+                        "a screen adds this to an operating hour to print the wall clock; the tenant's day starts at midnight")
+                .isZero();
     }
 
     @Test

@@ -99,8 +99,15 @@ public class HeadcountPlanService {
 
         meters.counter("kitchen.headcount.plan", "status", plan.status().name()).increment();
         timer.stop(meters.timer("kitchen.headcount.plan.latency"));
-        return new PlanResult(plan, loads.calculationVersion());
+        return new PlanResult(
+                plan,
+                loads.calculationVersion(),
+                businessDay.start().getHour() * 60 + businessDay.start().getMinute());
     }
 
-    public record PlanResult(Plan plan, int calculationVersion) {}
+    /**
+     * @param businessDayStartMinutes minutes after local midnight at which the tenant's business day starts: an
+     *                                operating hour is counted from it, so a screen shows wall-clock hours by adding it
+     */
+    public record PlanResult(Plan plan, int calculationVersion, int businessDayStartMinutes) {}
 }
