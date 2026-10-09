@@ -267,3 +267,10 @@
     grid-template-columns: 1fr;
   }
 }
+
+.withdrawn {
+  margin: 16px 0 24px;
+  padding: 12px 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}

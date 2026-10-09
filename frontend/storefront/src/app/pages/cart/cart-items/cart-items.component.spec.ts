@@ -279,3 +279,68 @@ describe('CartItemsComponent: free gifts and the promo-code entry (ADR 0140, ADR
     expect(host.querySelector('[data-testid="gift-offers"]')).toBeNull();
   });
 });
+
+describe('CartItemsComponent: lines a rule added (ADR 0158)', () => {
+  const auto = (over: Partial<NonNullable<CartResponseItem['autoAdd']>> = {}) => ({
+    ruleCode: 'BOX',
+    text: null,
+    mandatory: false,
+    removable: true,
+    minimumQuantity: 0,
+    maximumQuantity: 5,
+    ...over,
+  });
+
+  it('says a line was added automatically, with the rule’s own wording when it has some', () => {
+    const { host } = open([
+      line({ item_id: 'a', name: 'Plov' }),
+      line({ item_id: 'b', name: 'Cutlery', origin: 'AUTO_ADD', autoAdd: auto() }),
+      line({
+        item_id: 'c',
+        name: 'Box',
+        origin: 'AUTO_ADD',
+        autoAdd: auto({ text: 'Packaging for delivery' }),
+      }),
+    ]);
+
+    const labels = Array.from(host.querySelectorAll('[data-testid="cart-line-auto-add"]')).map(
+      (node) => node.textContent?.trim(),
+    );
+    expect(labels).toEqual(['cart.autoAdded', 'Packaging for delivery']);
+  });
+
+  it('draws no label for a line the customer chose', () => {
+    const { host } = open([line({ name: 'Plov' })]);
+
+    expect(host.querySelector('[data-testid="cart-line-auto-add"]')).toBeNull();
+  });
+
+  it('stops a mandatory line at its computed quantity, and a line at its ceiling', () => {
+    const { host } = open([
+      line({
+        item_id: 'box',
+        quantity: 2,
+        origin: 'AUTO_ADD',
+        autoAdd: auto({
+          mandatory: true,
+          removable: false,
+          minimumQuantity: 2,
+          maximumQuantity: 2,
+        }),
+      }),
+    ]);
+
+    const buttons = host.querySelectorAll<HTMLButtonElement>('article button');
+    expect(buttons[0].disabled).toBe(true);
+    expect(buttons[1].disabled).toBe(true);
+  });
+
+  it('lets a removable line be taken down', () => {
+    const { host } = open([
+      line({ item_id: 'cutlery', quantity: 1, origin: 'AUTO_ADD', autoAdd: auto() }),
+    ]);
+
+    const buttons = host.querySelectorAll<HTMLButtonElement>('article button');
+    expect(buttons[0].disabled).toBe(false);
+  });
+});

@@ -27,7 +27,7 @@ import java.util.UUID;
  * docs/domains/events.md}'s own note on {@code MediaAssetAvailable}'s five
  * unpublished siblings for the same restraint applied there first.
  */
-public sealed interface InventoryEvent permits ItemAvailabilityChanged, InventoryStopChanged {
+public sealed interface InventoryEvent permits ItemAvailabilityChanged, InventoryStopChanged, InventoryStockDisposed {
 
     UUID eventId();
 

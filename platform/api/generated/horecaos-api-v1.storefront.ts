@@ -534,6 +534,12 @@ export interface MenuComboGroup {
   sortOrder?: number;
 }
 
+export interface MenuIngredient {
+  code?: string;
+  ingredientId?: string;
+  name?: string;
+}
+
 export interface MenuModifierGroup {
   allowSameOptionMultipleTimes?: boolean;
   code?: string;
@@ -567,12 +573,24 @@ export interface MenuProduct {
   commentPresets?: Array<CommentPresetOption>;
   description?: string;
   imageUrls?: Array<string>;
+  ingredients?: Array<MenuIngredient>;
   mediaAssetIds?: Array<string>;
   modifierGroupIds?: Array<string>;
   modifierGroupPolicies?: Array<MenuModifierGroupPolicy>;
   name?: string;
   productId?: string;
+  tags?: Array<MenuTag>;
   variants?: Array<MenuVariant>;
+}
+
+export interface MenuTag {
+  code?: string;
+  icon?: string;
+  name?: string;
+  showAsBadge?: boolean;
+  showAsFilter?: boolean;
+  sortOrder?: number;
+  tagId?: string;
 }
 
 export interface MenuVariant {
@@ -580,6 +598,7 @@ export interface MenuVariant {
   isDefault?: boolean;
   modifierGroupIds?: Array<string>;
   modifierGroupPolicies?: Array<MenuModifierGroupPolicy>;
+  name?: string;
   onSaleNow?: boolean;
   orderable?: boolean;
   physical?: PhysicalFacts;

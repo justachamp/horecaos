@@ -253,6 +253,49 @@ class AggregatorOrderIntakeServiceTests {
     }
 
     @Test
+    @DisplayName("ADR 0158: an aggregator order holds exactly the lines the partner sent; no rule adds one, "
+            + "because the intake never goes through the cart")
+    void noAutoAddRuleReachesAnAggregatorOrder() {
+        var command = new AggregatorOrderIntakeService.Command(
+                TENANT,
+                BRAND,
+                LOCATION,
+                "UZUM-TEZKOR",
+                "YE-2291-06",
+                List.of(new AggregatorOrderIntakeService.Line(variantId, "Osh", 2, 25_000, "sku-osh")),
+                "UZS",
+                50_000,
+                0,
+                0,
+                50_000,
+                "idem-aggregator-no-rules",
+                "operator-subject-7",
+                null,
+                null,
+                null);
+
+        var result = service.create(command);
+
+        assertThat(jdbc.sql("SELECT origin FROM ordering.order_lines WHERE order_id = :id")
+                        .param("id", result.orderId())
+                        .query(String.class)
+                        .list())
+                .as("one line, and it is the partner's")
+                .containsExactly("CUSTOMER");
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.order_lines "
+                                + "WHERE order_id = :id AND (auto_add_rule_id IS NOT NULL OR auto_add_mandatory)")
+                        .param("id", result.orderId())
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(java.util.Arrays.stream(AggregatorOrderIntakeService.class.getDeclaredConstructors())
+                        .flatMap(constructor -> java.util.Arrays.stream(constructor.getParameterTypes()))
+                        .map(Class::getSimpleName))
+                .as("an externally priced total is never run back through the cart or its reconciler")
+                .doesNotContain("CartService", "AutoAddReconciler", "CartAutoAddRules");
+    }
+
+    @Test
     @DisplayName("resubmitting the same Idempotency-Key replays the original order rather than writing a second one")
     void resubmissionReplays() {
         var command = new AggregatorOrderIntakeService.Command(

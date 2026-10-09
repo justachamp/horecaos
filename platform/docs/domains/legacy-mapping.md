@@ -94,11 +94,11 @@ and payloads can seed mappings only after provider/location reconciliation.
 |---|---|
 | `categories` | Transform translations/status/order into same-brand catalog categories and preserve the legacy ID mapping. |
 | `products` | Legacy rows are location-owned. Resolve their brand product identity, content, schedule, kitchen, discount, stock, and media fields into their true module owners; do not copy the row shape. |
-| `variants` | Transform into brand product variants plus location offering, price/tax/preparation, inventory, SPIC/unit/VAT, and packaging facts under approved rules. Packaging relations require exact quantities and cycle checks. |
-| `kitchens` | `DECIDE`: model as location preparation stations/routing if operationally used, or map only approved preparation metadata and archive the rest. |
+| `variants` | Transform into brand product variants plus location offering, price/tax/preparation, inventory, SPIC/unit/VAT, and packaging facts under approved rules. Packaging relations require exact quantities and cycle checks; ADR 0158 (decided 2026-10-07) carries a variant's `package_id`/`package_volume` over as one `PRODUCT_TRIGGERED`, `INJECT`, removable auto-add rule (the sold variant is the single trigger, `package_volume` the threshold, quantity 1, repeating), once the legacy `get_packages_count` rounding has been read. |
+| `kitchens` | `MAP` (ADR 0174, decided 2026-10-07): an operator maps each of the two seeded rows to an ADR 0041 station role at migration; no catalog table and no `products.kitchen_id`. |
 | `stocks` plus product/variant stock fields | Reconcile competing sources and create one target opening inventory movement per stock item. Never add or overwrite them without evidence. |
-| `tags`, `product_tags` | `DECIDE`: transform into brand-owned taxonomy/merchandising assignments with translations or retire. |
-| `recommended_products` | `DECIDE`: transform into scoped curated recommendations/projection input after product/variant mapping, or rebuild/retire. |
+| `tags`, `product_tags` | `RETIRE` (ADR 0174, decided 2026-10-07): zero references and no writer in the profile, and a table with no tenant key. HorecaOS tags are new tenant registries, not a carry-over. |
+| `recommended_products` | `RETIRE` (ADR 0174, decided 2026-10-07), for the same evidence as `tags`; recommendations are authored fresh in the product editor (`catalog.product_recommendations`). |
 | `ui_elements`, `ui_element_items`, `ui_offers` | `DECIDE`: map each observed element/JSON type to versioned storefront content/merchandising or explicitly retire during the target journey redesign. |
 | `faq_categories`, `faqs`, `social_medias` | `DECIDE`: migrate to tenant/brand-scoped published content or an approved CMS, or archive/retire with product signoff. |
 
@@ -115,7 +115,7 @@ owns positions/reservations/movements; integration owns external mappings.
 | `offer_orders` | Preserve historical association as immutable applied-promotion evidence on the order plus a source mapping. |
 | `offer_users`, `offer_users_used` | Reconcile eligibility and usage into coupon/promotion reservation/redemption facts. Do not trust denormalized counters without comparing associations/orders. |
 | `orders` | Transform into immutable order snapshots plus separate payment, preparation, POS, fulfillment, recovery, and status history. Preserve public/legacy IDs and raw evidence. Map `planned_time` only after timezone semantics; map courier bonus/policy-group fields into an approved compensation/dispatch model or archive them. |
-| `order_line_items` | Transform name/price/quantity/package fields into immutable line/modifier/packaging snapshots; retain a source variant link only when valid. |
+| `order_line_items` | Transform name/price/quantity/package fields into immutable line/modifier/packaging snapshots; retain a source variant link only when valid. An `is_package` line imports as an ordinary order line with `origin = 'AUTO_ADD'` and no rule id (ADR 0158); no migrated order is restated. |
 | `incidents` | Transform sufficiently classified records into service-recovery cases; archive ambiguous records without inventing remedies or financial actions. |
 | `ratings` | `DECIDE`: transform into immutable order feedback with moderation/privacy and aggregate-rebuild rules, or archive/retire. |
 

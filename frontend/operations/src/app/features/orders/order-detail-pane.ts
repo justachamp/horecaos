@@ -58,6 +58,7 @@ import {
 import {
   AmendmentResponse,
   BuiltAmendmentCommandType,
+  StockConsequenceLine,
   amendmentCommandLabel,
 } from './order-amendments';
 import { AmendmentAddLine, OrderAmendmentsApi } from './order-amendments-api';
@@ -66,6 +67,7 @@ import { AddressSubmission, OrderChangeAddressDialog } from './order-change-addr
 import { ContactSubmission, OrderChangeContactDialog } from './order-change-contact-dialog';
 import { OrderChangePaymentMethodDialog } from './order-change-payment-method-dialog';
 import { QuantitySubmission, OrderChangeQuantityDialog } from './order-change-quantity-dialog';
+import { OrderRemoveLinesDialog, RemoveLinesSubmission } from './order-remove-lines-dialog';
 import { OrderChangeTimeDialog } from './order-change-time-dialog';
 import {
   OrderAddressReveal,
@@ -166,6 +168,7 @@ type DialogKind =
   // ---------------------------------------------------- wave 10 financial commands
   | 'addLines'
   | 'changeQuantity'
+  | 'removeLines'
   | 'changePaymentMethod'
   | 'changeAddress'
   | 'changeTime'
@@ -226,6 +229,7 @@ type DialogKind =
     // ---------------------------------------------------- wave 10 financial commands
     OrderAddLinesDialog,
     OrderChangeQuantityDialog,
+    OrderRemoveLinesDialog,
     OrderChangePaymentMethodDialog,
     OrderChangeAddressDialog,
     OrderChangeTimeDialog,
@@ -489,7 +493,17 @@ export class OrderDetailPane {
     readonly amendmentVersion: number;
     readonly deltaMinor: number;
     readonly requiresApproval: boolean;
+    /** ADR 0169: what the stock does for each line this amendment takes off; non-empty means a removal. */
+    readonly stockConsequence: readonly StockConsequenceLine[];
   } | null>(null);
+
+  /** ADR 0169: the tenant's active `LINE_REMOVAL` reasons, fetched when a dialog that needs one opens. */
+  protected readonly removalReasons = signal<readonly ReasonResponse[]>([]);
+
+  /** ADR 0169: whether this order's brand has the removal path on, so the console offers only what the server will do. */
+  protected readonly lineRemovalEnabled = computed(
+    () => this.order()?.value.lineRemovalEnabled === true,
+  );
 
   protected readonly revealedPhone = signal<string | null>(null);
   protected readonly revealingPhone = signal(false);
@@ -1111,7 +1125,10 @@ export class OrderDetailPane {
         this.openAddLinesDialog();
         return;
       case 'CHANGE_LINE_QUANTITY':
-        this.dialog.set('changeQuantity');
+        void this.openChangeQuantityDialog();
+        return;
+      case 'REMOVE_LINES':
+        void this.openRemoveLinesDialog();
         return;
       case 'CHANGE_PAYMENT_METHOD':
         void this.openChangePaymentMethodDialog();
@@ -1355,7 +1372,61 @@ export class OrderDetailPane {
     );
   }
 
-  /** `CHANGE_LINE_QUANTITY` — increase only. Reprices, so this always goes through {@link submitRepricingAmendment}. */
+  /**
+   * The quantity dialog may lower a quantity only where the brand has the removal path on (ADR 0169), and a
+   * lowered quantity names a removal reason, so the tenant's reasons are read before it opens. A read that
+   * fails opens the dialog all the same with none: the dialog then says why it cannot lower, and an increase
+   * still works.
+   */
+  private async openChangeQuantityDialog(): Promise<void> {
+    if (this.lineRemovalEnabled()) {
+      await this.loadRemovalReasons();
+    }
+    this.dialog.set('changeQuantity');
+  }
+
+  /** `REMOVE_LINES` (ADR 0169): the tenant's removal reasons are read first; the dialog says so when it has none. */
+  private async openRemoveLinesDialog(): Promise<void> {
+    await this.loadRemovalReasons();
+    this.dialog.set('removeLines');
+  }
+
+  private async loadRemovalReasons(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      this.removalReasons.set(await this.referenceDataApi.list(scope, 'LINE_REMOVAL'));
+    } catch (error) {
+      if (error instanceof ApiError) {
+        this.removalReasons.set([]);
+        this.notice.set(this.errorMessage(error));
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  /** `REMOVE_LINES` (ADR 0169). Reprices and needs the customer's agreement, so it goes through {@link submitRepricingAmendment}. */
+  protected onRemoveLinesConfirm(submission: RemoveLinesSubmission): void {
+    const detail = this.order();
+    const scope = this.location.scope();
+    if (!detail || !scope) {
+      return;
+    }
+    void this.submitRepricingAmendment(
+      this.amendmentsApi.removeLines(
+        scope,
+        detail.value.summary.orderId,
+        detail.value.summary.version ?? 0,
+        submission.orderLineIds,
+        submission.removalReasonId,
+      ),
+    );
+  }
+
+  /** `CHANGE_LINE_QUANTITY`. Reprices, so this always goes through {@link submitRepricingAmendment}. */
   protected onChangeQuantityConfirm(submission: QuantitySubmission): void {
     const detail = this.order();
     const scope = this.location.scope();
@@ -1369,6 +1440,7 @@ export class OrderDetailPane {
         detail.value.summary.version ?? 0,
         submission.orderLineId,
         submission.quantity,
+        submission.removalReasonId,
       ),
     );
   }
@@ -1598,6 +1670,7 @@ export class OrderDetailPane {
       amendmentVersion: amendment.amendmentVersion,
       deltaMinor: amendment.deltaTotalMinor,
       requiresApproval: amendment.requiresApproval,
+      stockConsequence: amendment.stockConsequence ?? [],
     });
     this.dialog.set('amendConfirm');
   }

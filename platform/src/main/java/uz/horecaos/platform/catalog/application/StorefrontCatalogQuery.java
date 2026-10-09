@@ -150,7 +150,9 @@ public class StorefrontCatalogQuery {
                 store.publicationItems(publication, EntityType.PRODUCT),
                 store.publicationItems(publication, EntityType.MODIFIER_GROUP),
                 store.publicationItems(publication, EntityType.COMBO_GROUP),
-                false));
+                false,
+                store.publicationItems(publication, EntityType.TAG),
+                store.publicationItems(publication, EntityType.INGREDIENT)));
         return Optional.of(new StorefrontMenu(
                 publication,
                 locale,
@@ -231,10 +233,34 @@ public class StorefrontCatalogQuery {
                         .collect(Collectors.toUnmodifiableSet()));
         List<String> presetPreference = presetPreference(locale, brandDefault);
 
+        // ADR 0174: the publication's tags and ingredients, resolved once into the customer's language.
+        Map<UUID, MenuTag> tagById = new java.util.HashMap<>();
+        for (PublicationItem tag : input.tagItems()) {
+            tagById.put(
+                    tag.entityId(),
+                    new MenuTag(
+                            tag.entityId(),
+                            code(tag.content()),
+                            string(tag.content(), "icon"),
+                            Boolean.TRUE.equals(tag.content().get("showAsBadge")),
+                            Boolean.TRUE.equals(tag.content().get("showAsFilter")),
+                            intOf(tag.content(), "sortOrder"),
+                            name(tag.content(), namePreference)));
+        }
+        Map<UUID, MenuIngredient> ingredientById = new java.util.HashMap<>();
+        for (PublicationItem ingredient : input.ingredientItems()) {
+            ingredientById.put(
+                    ingredient.entityId(),
+                    new MenuIngredient(
+                            ingredient.entityId(),
+                            code(ingredient.content()),
+                            name(ingredient.content(), namePreference)));
+        }
+
         List<MenuProduct> products = new ArrayList<>();
         for (PublicationItem item : productItems) {
-            List<MenuVariant> variants =
-                    variantsOf(item, offeringByVariant, channelExcludedVariantIds, outOfWindowVariantIds);
+            List<MenuVariant> variants = variantsOf(
+                    item, offeringByVariant, channelExcludedVariantIds, outOfWindowVariantIds, namePreference);
             if (variants.isEmpty()) {
                 // Not offered at this location at all. Absent rather than shown
                 // as unavailable: the location genuinely does not sell it.
@@ -258,7 +284,15 @@ public class StorefrontCatalogQuery {
                             presetTranslations,
                             presetPreference),
                     idList(item.content(), "comboGroupIds"),
-                    policiesOf(item.content())));
+                    policiesOf(item.content()),
+                    idList(item.content(), "tagIds").stream()
+                            .map(tagById::get)
+                            .filter(java.util.Objects::nonNull)
+                            .toList(),
+                    idList(item.content(), "ingredientIds").stream()
+                            .map(ingredientById::get)
+                            .filter(java.util.Objects::nonNull)
+                            .toList()));
         }
 
         // A product the location does not offer was dropped above. Its id must
@@ -518,7 +552,8 @@ public class StorefrontCatalogQuery {
             PublicationItem item,
             Map<UUID, OfferingStatus> offeringByVariant,
             Set<UUID> channelExcludedVariantIds,
-            Set<UUID> outOfWindowVariantIds) {
+            Set<UUID> outOfWindowVariantIds,
+            List<String> namePreference) {
 
         Object raw = item.content().get("variants");
         if (!(raw instanceof List<?> list)) {
@@ -568,7 +603,11 @@ public class StorefrontCatalogQuery {
                     // ADR 0136: the groups this variant carries of its own and the rules it holds
                     // the customer to, both empty on a publication that predates them.
                     idList(variant, "modifierGroupIds"),
-                    policiesOf(variant)));
+                    policiesOf(variant),
+                    // ADR 0174: the name the author gave this size or form, in the customer's language,
+                    // else the brand's default. Null on a variant nobody named, and on a publication that
+                    // predates names: the client falls back to the unit code, as it always did.
+                    nameIn(variant.get("names"), namePreference)));
         }
         return variants;
     }
@@ -820,7 +859,39 @@ public class StorefrontCatalogQuery {
             List<PublicationItem> productItems,
             List<PublicationItem> groupItems,
             List<PublicationItem> comboItems,
-            boolean externallyPriced) {}
+            boolean externallyPriced,
+            // ADR 0174: the publication's TAG and INGREDIENT items. Empty on a publication that predates
+            // them, and on a marketplace preview, which does not carry them (they are a storefront's).
+            List<PublicationItem> tagItems,
+            List<PublicationItem> ingredientItems) {
+
+        /** An input with no tags or ingredients: a preview, and every caller that predates them. */
+        public AssemblyInput(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                String locale,
+                String channelCode,
+                List<PublicationItem> categoryItems,
+                List<PublicationItem> productItems,
+                List<PublicationItem> groupItems,
+                List<PublicationItem> comboItems,
+                boolean externallyPriced) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    locale,
+                    channelCode,
+                    categoryItems,
+                    productItems,
+                    groupItems,
+                    comboItems,
+                    externallyPriced,
+                    List.of(),
+                    List.of());
+        }
+    }
 
     /** A menu as {@link #assemble} leaves it: {@link StorefrontMenu} without the publication it came from. */
     public record AssembledMenu(
@@ -985,7 +1056,44 @@ public class StorefrontCatalogQuery {
             List<UUID> comboGroupIds,
             // ADR 0136: this product's own min/max/required for a group it attaches, for the
             // groups where it overrides the shared one.
-            List<MenuModifierGroupPolicy> modifierGroupPolicies) {
+            List<MenuModifierGroupPolicy> modifierGroupPolicies,
+            // ADR 0174: the badges and filter options this product carries, in the author's order, with
+            // their wording resolved for the requested language then the brand default. Empty on a
+            // product that carries none. A filter chip is a tag whose showAsFilter is true; selected
+            // chips combine as AND, which is the client's rule.
+            List<MenuTag> tags,
+            // ADR 0174: the composition labels shown on the product page, in the author's order. A
+            // label only: not priced, stocked, ordered or counted, and no allergen meaning.
+            List<MenuIngredient> ingredients) {
+
+        /** A product with no tags or ingredients: every product that predates them. */
+        public MenuProduct(
+                UUID productId,
+                String code,
+                String name,
+                @Nullable String description,
+                List<String> mediaAssetIds,
+                List<String> imageUrls,
+                List<MenuVariant> variants,
+                List<UUID> modifierGroupIds,
+                List<CommentPresetOption> commentPresets,
+                List<UUID> comboGroupIds,
+                List<MenuModifierGroupPolicy> modifierGroupPolicies) {
+            this(
+                    productId,
+                    code,
+                    name,
+                    description,
+                    mediaAssetIds,
+                    imageUrls,
+                    variants,
+                    modifierGroupIds,
+                    commentPresets,
+                    comboGroupIds,
+                    modifierGroupPolicies,
+                    List.of(),
+                    List.of());
+        }
 
         MenuProduct withPrices(Map<UUID, Long> variantPrices) {
             return new MenuProduct(
@@ -1001,7 +1109,9 @@ public class StorefrontCatalogQuery {
                     modifierGroupIds,
                     commentPresets,
                     comboGroupIds,
-                    modifierGroupPolicies);
+                    modifierGroupPolicies,
+                    tags,
+                    ingredients);
         }
 
         /** A combo whose group can no longer be filled is shown, as sold out, never hidden. */
@@ -1021,7 +1131,9 @@ public class StorefrontCatalogQuery {
                     modifierGroupIds,
                     commentPresets,
                     comboGroupIds,
-                    modifierGroupPolicies);
+                    modifierGroupPolicies,
+                    tags,
+                    ingredients);
         }
 
         /**
@@ -1049,9 +1161,31 @@ public class StorefrontCatalogQuery {
                     modifierGroupIds,
                     commentPresets,
                     comboGroupIds,
-                    modifierGroupPolicies);
+                    modifierGroupPolicies,
+                    tags,
+                    ingredients);
         }
     }
+
+    /**
+     * A badge and/or filter option on a product (ADR 0174).
+     *
+     * @param icon a key into the shared UI library's closed pictogram list, or null for a text-only badge
+     * @param showAsBadge drawn on the product card
+     * @param showAsFilter offered as a filter chip; the menu shows the products that carry every chip selected
+     * @param name the wording for the requested language, else the brand default, else whichever exists
+     */
+    public record MenuTag(
+            UUID tagId,
+            String code,
+            @Nullable String icon,
+            boolean showAsBadge,
+            boolean showAsFilter,
+            int sortOrder,
+            String name) {}
+
+    /** A composition label on a product page (ADR 0174). Never priced, stocked, ordered or counted. */
+    public record MenuIngredient(UUID ingredientId, String code, String name) {}
 
     /**
      * One preset a product offers on a line, every locale so the storefront renders its own.
@@ -1101,7 +1235,39 @@ public class StorefrontCatalogQuery {
             List<UUID> modifierGroupIds,
             // ADR 0136: the rules this variant holds the customer to for each of those groups.
             // A variant's row for a group replaces its product's row for the same group whole.
-            List<MenuModifierGroupPolicy> modifierGroupPolicies) {
+            List<MenuModifierGroupPolicy> modifierGroupPolicies,
+            // ADR 0174: the name the author gave this size or form, resolved for the requested
+            // language then the brand default; null when it has none (the client shows the unit
+            // code). A product with a single orderable variant shows no picker and no label.
+            @Nullable String name) {
+
+        /** A variant with no published name: every variant that predates them. */
+        public MenuVariant(
+                UUID variantId,
+                @Nullable String sku,
+                @Nullable String unitCode,
+                boolean isDefault,
+                boolean orderable,
+                boolean onSaleNow,
+                @Nullable Long amountMinor,
+                @Nullable BigDecimal remainingQuantity,
+                @Nullable PhysicalFacts physical,
+                List<UUID> modifierGroupIds,
+                List<MenuModifierGroupPolicy> modifierGroupPolicies) {
+            this(
+                    variantId,
+                    sku,
+                    unitCode,
+                    isDefault,
+                    orderable,
+                    onSaleNow,
+                    amountMinor,
+                    remainingQuantity,
+                    physical,
+                    modifierGroupIds,
+                    modifierGroupPolicies,
+                    null);
+        }
 
         /** A variant with no physical attributes: a fixed unit sold whole. */
         public MenuVariant(
@@ -1139,7 +1305,8 @@ public class StorefrontCatalogQuery {
                     remainingQuantity,
                     physical,
                     modifierGroupIds,
-                    modifierGroupPolicies);
+                    modifierGroupPolicies,
+                    name);
         }
 
         /**
@@ -1160,7 +1327,8 @@ public class StorefrontCatalogQuery {
                     remainingQuantity,
                     physical,
                     modifierGroupIds,
-                    modifierGroupPolicies);
+                    modifierGroupPolicies,
+                    name);
         }
     }
 

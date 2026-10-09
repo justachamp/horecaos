@@ -1,28 +1,31 @@
 # ADR 0174: Reference data disposition
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Not started — of the six vocabularies the row names, four are
-  already built under other records and two have no table. Built elsewhere: product comment
-  presets (`catalog.comment_presets` and `catalog.product_comment_presets`, V0378, wording per
-  locale in V0430, `pos_modifier_code` for the POS round trip, console route
-  `/settings/comment-presets`, row `2.1b`); recommended products
-  (`catalog.product_recommendations`, V0302, a tab in the product editor, row `4.2h`, BUILT);
-  kitchen departments (ADR 0041: `kitchen.stations` with a closed `role` set, `HOT`, `COLD`,
-  `GRILL`, `BAR`, `BAKERY`, `PACKING`, `EXPO`, and `kitchen.brand_routing_rules` /
-  `location_routing_rules`, V0030, with a department picker in the product editor that writes
-  a brand-layer rule, row `4.2g`); and brands, which are `tenant.brands`. Not built: tags,
-  ingredients and attributes have no table, no endpoint and no screen. The console's
-  `/catalog/reference-data` route (`app.routes.ts`) is the honest not-built page, listed in
-  `catalog-shell.html`; a different `reference-data` page under settings (row `10.10`) holds
-  cancellation and completion reasons, the business calendar, branch tags
-  (`tenant.branch_tags`, V0256) and the SLA buckets, and is not this. The published menu carries
-  none of the three: `CatalogSnapshotLoader` writes a product's variants with `sku`, `unitCode`,
-  classification, physical facts, groups, `isDefault`, `sortOrder` and `status`, and no `names`
-  for a variant, so a size name an author types into the variants tab
-  (`catalog.translations`, entity `VARIANT`, `CatalogAuthoringService`) is dropped at
-  publication and the storefront prints the unit code instead (`menu.service.ts`: "No variant
-  name"). ADR 0016's input "disposition of legacy tags, recommendations, storefront/FAQ content,
-  and kitchens" is still open on its status line.
+- Implementation status: Partial — built in operations batch 20 (2026-10-09). Decision
+  1: `CatalogSnapshotLoader` puts `names` on each published variant,
+  `StorefrontCatalogQuery` carries `MenuVariant.name` (requested language, then the
+  brand default), both storefronts label the variant picker with it and keep the
+  unit-code fallback for a menu published before this change, and `VARIANT_NAME_MISSING`
+  is a warning. Decisions 3, 4, 7 and 8: V0539 creates `catalog.tags`,
+  `catalog.tag_translations`, `catalog.product_tags`, `catalog.ingredients`,
+  `catalog.ingredient_translations` and `catalog.product_ingredients` with explicit
+  grants; `VocabularyService` with `TagController` and `IngredientController` (and the
+  two product assignment endpoints) enforces the code format, the two-switch rule, the
+  closed icon list, the bounds (twelve tags and forty ingredients per product, 200 and
+  1,000 per tenant) and writes the audit facts; `TAG` and `INGREDIENT` publication items
+  and a product's `tagIds`/`ingredientIds` are published only for what a brand's own
+  products use; `TAG_NAME_MISSING` and `INGREDIENT_NAME_MISSING` block publication. The
+  console's `/catalog/reference-data` is the vocabulary screen (tags and ingredients
+  editable, the other four linked out with where each is authored), the product editor
+  assigns tags and ingredients, and both storefronts draw the badges, the filter chips
+  (selected tags combine as AND), the ingredient line and the variant names. Decisions
+  2, 5, 6 and 9 are recorded in the catalog spec and the legacy mapping register
+  (attributes retired, kitchen departments are the ADR 0041 station roles, presets,
+  recommendations and brands stay where they are, legacy `tags`, `product_tags` and
+  `recommended_products` retire). Proved by `VocabularyPublicationTests`,
+  `VocabularyEndpointTests` and the console and storefront
+  specs. Not built: the pointer from ADR 0016's status line to this record, and nothing
+  that was decided for the later migration program.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides

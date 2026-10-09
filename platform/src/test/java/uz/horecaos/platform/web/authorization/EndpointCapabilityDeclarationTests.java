@@ -968,9 +968,10 @@ class EndpointCapabilityDeclarationTests {
      * Whether this endpoint is the auto-add rule simulator (ADR 0158): a POST only because its input is a
      * hypothetical basket, not a query string.
      *
-     * <p>It evaluates the rules the cart runs and writes nothing -- no cart, no rule and no counter -- so
-     * there is no effect for a replay key to guard, for the reason the promotion simulator gives. It is not
-     * exempt from authorization: it still declares {@code CATALOG_READ} at brand scope.
+     * <p>It evaluates the brand's rules over that basket and writes nothing -- no cart, no line, no decline, no
+     * counter -- so there is no effect for a replay key to guard. It is not exempt from authorization: it still
+     * declares {@code CATALOG_READ} at brand scope, which {@link #everyMutatingEndpointDeclaresHowItIsAuthorized}
+     * checks. Matched on the exact path, as every exemption here is.
      */
     private static boolean isAutoAddSimulationEndpoint(Method handler) {
         return pathOf(handler)

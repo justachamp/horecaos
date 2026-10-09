@@ -174,7 +174,8 @@
       "choose": "Sovg'angizni tanlang",
       "add": "Sovg'ani qo'shish: {{name}}",
       "addMany": "Sovg'ani qo'shish: {{name}} ×{{count}}"
-    }
+    },
+    "autoAdded": "Avtomatik qoʻshildi"
   },
   "checkout": {
     "title": "To'lov",
@@ -468,7 +469,8 @@
     "loadError": "Taomni yuklab bo‘lmadi",
     "increase": "Ko‘paytirish",
     "decrease": "Kamaytirish",
-    "lowStock": "Faqat {{count}} ta qoldi"
+    "lowStock": "Faqat {{count}} ta qoldi",
+    "ingredients": "Tarkibi"
   },
   "referral": {
     "title": "Referal",
@@ -600,6 +602,13 @@
       "count": "{{count}} ta baho",
       "distribution": "Baholar taqsimoti",
       "more": "Yana ko'rsatish"
+    }
+  },
+  "menu": {
+    "filter": {
+      "title": "Teglar boʻyicha filtr",
+      "clear": "Tozalash",
+      "empty": "Tanlangan teglarning hammasiga ega taom yoʻq."
     }
   }
 }

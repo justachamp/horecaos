@@ -1,0 +1,25 @@
+.removal-reason__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.removal-reason__select {
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+}
+
+.removal-reason__empty {
+  margin: 8px 0 0;
+  color: var(--q-error-text);
+}
+
+.removal-reason__link {
+  color: var(--q-primary);
+  text-decoration: underline;
+}

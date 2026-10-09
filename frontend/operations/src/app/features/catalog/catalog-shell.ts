@@ -8,8 +8,8 @@ import { TPipe } from '../../core/i18n/t.pipe';
  *
  * IA §4's P-tier screens (Products, Product editor, Categories, Menus,
  * Catalog sync & import) and wave 38's tier-2 additions — 4.6 Publication &
- * channel readiness, 4.7 Reference data (honest not-built), 4.8 Price list,
- * 4.9 Auto-add rules (honest not-built, zero backend) — share this shell.
+ * channel readiness, 4.7 Reference data (tags and ingredients, ADR 0174), 4.8
+ * Price list, 4.9 Auto-add rules (ADR 0158) — share this shell.
  * There is no existing precedent in this app for a multi-screen section, so
  * this is a plain sub-nav rather than a reuse of the order board's docking
  * pattern: these screens are siblings an author moves between, not a list

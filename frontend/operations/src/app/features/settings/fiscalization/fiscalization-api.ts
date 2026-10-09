@@ -108,6 +108,10 @@ export interface FiscalCoverageNode {
   readonly mxikCode?: string | null;
   /** What the node already holds for its package code (batch 16). */
   readonly packageCode?: string | null;
+  /** ADR 0173: the day the national list withdrew the code the node holds; present only on a withdrawn node. */
+  readonly mxikWithdrawnOn?: string | null;
+  /** ADR 0173: the successor the list itself names for that withdrawn code; a suggestion for a person to click. */
+  readonly mxikReplacedBy?: string | null;
 }
 
 /**
@@ -133,6 +137,10 @@ export interface FiscalCoverageSummary {
   readonly nodes: readonly FiscalCoverageNode[];
   /** Absent on an older server, which then offers no «copy category default». */
   readonly categoryDefaults?: readonly FiscalCategoryDefault[];
+  /** ADR 0173: how many classified nodes hold a code the national list has withdrawn. Absent on an older server. */
+  readonly withdrawnCount?: number;
+  /** ADR 0173: those nodes, with the date and the successor the list names. Nothing here blocks a sale. */
+  readonly withdrawnNodes?: readonly FiscalCoverageNode[];
 }
 
 /** One row of a backfill batch: the dish or modifier option, and only the codes to write. */
@@ -156,12 +164,19 @@ export interface FiscalBackfillOutcome {
 }
 
 interface BulkClassifyRequest {
-  readonly mode: 'MERGE';
+  readonly mode: 'MERGE' | 'SUCCESSOR';
   readonly items: readonly {
-    readonly nodeType: 'VARIANT' | 'MODIFIER_OPTION';
+    readonly nodeType: 'VARIANT' | 'MODIFIER_OPTION' | 'FEE';
     readonly nodeId: string;
     readonly fiscal: { readonly mxikCode?: string; readonly packageCode?: string };
   }[];
+}
+
+/** One withdrawn code and the successor the national list names for it (ADR 0173). */
+export interface FiscalSuccessorItem {
+  readonly nodeType: 'VARIANT' | 'MODIFIER_OPTION' | 'FEE';
+  readonly nodeId: string;
+  readonly successorCode: string;
 }
 
 interface BulkClassifyResponse {
@@ -441,6 +456,32 @@ export class FiscalizationApi {
               ...(item.mxikCode ? { mxikCode: item.mxikCode } : {}),
               ...(item.packageCode ? { packageCode: item.packageCode } : {}),
             },
+          })),
+        }),
+      ),
+    );
+    return result.outcomes;
+  }
+
+  /**
+   * ADR 0173: moves each node from the code the national list has withdrawn to the successor the list names
+   * for it, in one `SUCCESSOR` batch. The platform replaces a stored code only when the list says exactly
+   * this, so a stale screen or a hand-typed code comes back `CONFLICT` with nothing written; only the ИКПУ
+   * changes, and a receipt already issued keeps the code it was sent with.
+   */
+  async replaceWithdrawnCodes(
+    scope: LocationScope,
+    items: readonly FiscalSuccessorItem[],
+  ): Promise<readonly FiscalBackfillOutcome[]> {
+    const result = await firstValueFrom(
+      this.api.put<BulkClassifyRequest, BulkClassifyResponse>(
+        settingsPaths.catalogBulkFiscalClassification(scope),
+        command({
+          mode: 'SUCCESSOR',
+          items: items.map((item) => ({
+            nodeType: item.nodeType,
+            nodeId: item.nodeId,
+            fiscal: { mxikCode: item.successorCode },
           })),
         }),
       ),

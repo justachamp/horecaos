@@ -184,7 +184,8 @@
       "choose": "Sovg'angizni tanlang",
       "add": "Sovg'ani qo'shish: {{name}}",
       "addMany": "Sovg'ani qo'shish: {{name}} ×{{count}}"
-    }
+    },
+    "autoAdded": "Avtomatik qoʻshildi"
   },
   "orders": {
     "title": "Buyurtmalar",
@@ -350,7 +351,8 @@
     "pickAtLeast": "Kamida {{min}} ta tanlang",
     "pickAny": "Istaganingizni tanlang",
     "variantGroupsTitle": "«{{variant}}» uchun tanlov",
-    "fromPrice": "{{price}} dan"
+    "fromPrice": "{{price}} dan",
+    "ingredients": "Tarkibi"
   },
   "terms": {
     "agreementTitle": "Ommaviy oferta bo'yicha shartnoma",
@@ -526,5 +528,12 @@
     "count": "{{count}} ta baho",
     "distribution": "Baholar taqsimoti",
     "more": "Yana ko'rsatish"
+  },
+  "menu": {
+    "filter": {
+      "title": "Teglar boʻyicha filtr",
+      "clear": "Tozalash",
+      "empty": "Tanlangan teglarning hammasiga ega taom yoʻq."
+    }
   }
 }

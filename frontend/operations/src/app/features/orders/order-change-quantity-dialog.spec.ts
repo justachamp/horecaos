@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { I18n } from '../../core/i18n/i18n';
@@ -30,7 +31,7 @@ function render(lines: readonly OrderLine[]): {
 
 describe('OrderChangeQuantityDialog', () => {
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    TestBed.configureTestingModule({ providers: [provideRouter([])] });
     TestBed.inject(I18n).setLocale('en');
   });
 
@@ -320,5 +321,137 @@ describe('OrderChangeQuantityDialog', () => {
         expect(host.querySelector('[data-testid="order-change-quantity-dialog-step"]')).toBeNull();
       });
     });
+  });
+
+  // ------------------------------------------------------------ ADR 0169: lowering a quantity
+
+  const reason = {
+    id: 'reason-1',
+    kind: 'LINE_REMOVAL',
+    systemCategory: 'CUSTOMER_CHANGED_MIND',
+    internalName: 'Customer changed their mind',
+    stockDisposition: 'RETURN_TO_STOCK',
+    liabilityParty: 'CUSTOMER',
+    customerRefund: null,
+    allowedFulfillmentModes: null,
+    customerTexts: {},
+    status: 'ACTIVE',
+    version: 1,
+    updatedAt: '2026-10-08T00:00:00Z',
+  } as const;
+
+  function renderWithRemoval(lines: readonly OrderLine[], reasons = [reason]) {
+    const fixture = TestBed.createComponent(OrderChangeQuantityDialog);
+    fixture.componentRef.setInput('lines', lines);
+    fixture.componentRef.setInput('lineRemovalEnabled', true);
+    fixture.componentRef.setInput('reasons', reasons);
+    fixture.detectChanges();
+    return { fixture, host: fixture.nativeElement as HTMLElement };
+  }
+
+  function type(host: HTMLElement, fixture: { detectChanges(): void }, value: string): void {
+    const input = host.querySelector(
+      '[data-testid="order-change-quantity-dialog-quantity"]',
+    ) as HTMLInputElement;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  }
+
+  it('refuses a lower quantity while the brand has the removal path off', () => {
+    const { fixture } = render([line({ lineId: 'line-1', quantity: 3 })]);
+    const host: HTMLElement = fixture.nativeElement;
+
+    type(host, fixture, '1');
+
+    expect(
+      (
+        host.querySelector(
+          '[data-testid="order-change-quantity-dialog-confirm"]',
+        ) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    expect(host.querySelector('[data-testid="order-change-quantity-dialog-lowering"]')).toBeNull();
+  });
+
+  it('lets the quantity go down when the removal path is on, and then asks for the reason', () => {
+    const { fixture, host } = renderWithRemoval([line({ lineId: 'line-1', quantity: 3 })]);
+
+    type(host, fixture, '1');
+
+    expect(
+      host.querySelector('[data-testid="order-change-quantity-dialog-lowering"]'),
+    ).not.toBeNull();
+    expect(host.querySelector('[data-testid="removal-reason-select"]')).not.toBeNull();
+    expect(
+      (
+        host.querySelector(
+          '[data-testid="order-change-quantity-dialog-confirm"]',
+        ) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+  });
+
+  it('sends the reason with a lowered quantity, and none with an increase', () => {
+    const { fixture, host } = renderWithRemoval([line({ lineId: 'line-1', quantity: 3 })]);
+    const emitted: QuantitySubmission[] = [];
+    fixture.componentInstance.confirm.subscribe((submission) => emitted.push(submission));
+
+    type(host, fixture, '1');
+    const select = host.querySelector('[data-testid="removal-reason-select"]') as HTMLSelectElement;
+    select.value = 'reason-1';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    (
+      host.querySelector(
+        '[data-testid="order-change-quantity-dialog-confirm"]',
+      ) as HTMLButtonElement
+    ).click();
+
+    type(host, fixture, '4');
+    (
+      host.querySelector(
+        '[data-testid="order-change-quantity-dialog-confirm"]',
+      ) as HTMLButtonElement
+    ).click();
+
+    expect(emitted).toEqual([
+      { orderLineId: 'line-1', quantity: 1, removalReasonId: 'reason-1' },
+      { orderLineId: 'line-1', quantity: 4 },
+    ]);
+  });
+
+  it('says so when the tenant has no removal reason, and does not let a lowered quantity through', () => {
+    const { fixture, host } = renderWithRemoval([line({ lineId: 'line-1', quantity: 3 })], []);
+
+    type(host, fixture, '1');
+
+    expect(host.querySelector('[data-testid="removal-reason-empty"]')).not.toBeNull();
+    expect(
+      (
+        host.querySelector(
+          '[data-testid="order-change-quantity-dialog-confirm"]',
+        ) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+  });
+
+  it('does not offer a line a rule added that the customer could not decline', () => {
+    const { host } = renderWithRemoval([
+      line({ lineId: 'line-1', productName: 'Burger', quantity: 3 }),
+      line({
+        lineId: 'line-2',
+        productName: 'Delivery box',
+        quantity: 1,
+        origin: 'AUTO_ADD',
+        autoAddMandatory: true,
+      }),
+    ]);
+
+    const options = Array.from(
+      host.querySelectorAll('[data-testid="order-change-quantity-dialog-line"] option'),
+    ).map((option) => option.textContent?.trim());
+    expect(options).toHaveLength(1);
+    expect(options[0]).toContain('Burger');
   });
 });

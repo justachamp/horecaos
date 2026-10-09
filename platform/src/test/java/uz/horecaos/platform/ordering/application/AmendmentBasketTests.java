@@ -367,6 +367,152 @@ class AmendmentBasketTests {
                 null);
     }
 
+    // ------------------------------------------- ADR 0169: taking units off the order
+
+    @Test
+    @DisplayName(
+            "a lowered quantity is a decrease to carry out where the removal path is on, and the old refusal where it is off")
+    void aLoweredQuantityFollowsTheRemovalGate() {
+        OrderLineRow burger = plain(1, PLAIN_VARIANT, 3);
+        List<AmendmentBasket.Unit> units = AmendmentBasket.units(List.of(burger));
+        Map<UUID, BigDecimal> lowered = Map.of(burger.lineId(), BigDecimal.ONE);
+
+        PricingCommand.Item item = AmendmentBasket.pricingItems(units, lowered, Map.of(), Set.of(), true)
+                .get(0);
+        assertThat(item.quantity()).isEqualByComparingTo("1");
+
+        Throwable refused =
+                catchThrowable(() -> AmendmentBasket.pricingItems(units, lowered, Map.of(), Set.of(), false));
+        assertThat(refused).isInstanceOf(AmendmentRefusedException.class);
+        assertThat(((AmendmentRefusedException) refused).code()).isEqualTo("QUANTITY_DECREASE_NOT_SUPPORTED");
+
+        Map<UUID, BigDecimal> same = Map.of(burger.lineId(), BigDecimal.valueOf(3));
+        assertThat(((AmendmentRefusedException) catchThrowable(
+                                () -> AmendmentBasket.pricingItems(units, same, Map.of(), Set.of(), true)))
+                        .code())
+                .as("the same quantity is not a change, and says so once the gate is on")
+                .isEqualTo("QUANTITY_UNCHANGED");
+        assertThat(((AmendmentRefusedException) catchThrowable(
+                                () -> AmendmentBasket.pricingItems(units, same, Map.of(), Set.of(), false)))
+                        .code())
+                .as("and keeps its old answer while the gate is off")
+                .isEqualTo("QUANTITY_DECREASE_NOT_SUPPORTED");
+    }
+
+    @Test
+    @DisplayName("a removed unit is left out of what is priced, and the rest is priced as it was")
+    void aRemovedUnitIsLeftOutOfPricing() {
+        OrderLineRow kept = plain(1, PLAIN_VARIANT, 1);
+        OrderLineRow removed = plain(2, UUID.randomUUID(), 2);
+
+        List<PricingCommand.Item> items = AmendmentBasket.pricingItems(
+                AmendmentBasket.units(List.of(kept, removed)), Map.of(), Map.of(), Set.of(removed.lineId()), true);
+
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).lineKey()).isEqualTo(kept.lineId().toString());
+    }
+
+    @Test
+    @DisplayName(
+            "what a decrease gives back is the difference of the two whole-unit ceilings, the way an increase counts")
+    void decreasesCountWholeUnitsByTheDifferenceOfCeilings() {
+        OrderLineRow three = plain(1, PLAIN_VARIANT, 3);
+        OrderLineRow oneAndAHalf = plain(2, PLAIN_VARIANT, new BigDecimal("1.5"));
+        OrderLineRow one = plain(3, PLAIN_VARIANT, 1);
+        List<AmendmentBasket.Unit> units = AmendmentBasket.units(List.of(three, oneAndAHalf, one));
+
+        assertThat(AmendmentBasket.decreases(
+                        quote(plainQuoted(three.lineId().toString(), PLAIN_VARIANT, 1)),
+                        units,
+                        Set.of(),
+                        Set.of(three.lineId())))
+                .singleElement()
+                .satisfies(decrease -> {
+                    assertThat(decrease.stockUnits()).isEqualTo(2);
+                    assertThat(decrease.quantityAfter()).isEqualByComparingTo("1");
+                    assertThat(decrease.removal()).isFalse();
+                });
+        assertThat(AmendmentBasket.decreases(
+                                quote(plainQuoted(oneAndAHalf.lineId().toString(), PLAIN_VARIANT, 1)),
+                                units,
+                                Set.of(),
+                                Set.of(oneAndAHalf.lineId()))
+                        .get(0)
+                        .stockUnits())
+                .as("1.5 portions lowered to 1 gives back one plate")
+                .isEqualTo(1);
+        assertThat(AmendmentBasket.decreases(
+                                quote(plainQuoted(one.lineId().toString(), PLAIN_VARIANT, new BigDecimal("0.5"))),
+                                units,
+                                Set.of(),
+                                Set.of(one.lineId()))
+                        .get(0)
+                        .stockUnits())
+                .as("1 lowered to 0.5 gives back none: a half plate still holds a whole one")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("a removed line is all of its units, and a line that is only increased is not a decrease")
+    void aRemovalIsEveryUnitAndAnIncreaseIsNone() {
+        OrderLineRow portions = plain(1, PLAIN_VARIANT, new BigDecimal("1.5"));
+        OrderLineRow grown = plain(2, UUID.randomUUID(), 1);
+        List<AmendmentBasket.Unit> units = AmendmentBasket.units(List.of(portions, grown));
+
+        var decreases = AmendmentBasket.decreases(
+                quote(plainQuoted(grown.lineId().toString(), grown.sourceVariantId(), 3)),
+                units,
+                Set.of(portions.lineId()),
+                Set.of(grown.lineId()));
+
+        assertThat(decreases).singleElement().satisfies(decrease -> {
+            assertThat(decrease.line()).isEqualTo(portions);
+            assertThat(decrease.removal()).isTrue();
+            assertThat(decrease.stockUnits()).as("1.5 portions hold two plates").isEqualTo(2);
+        });
+    }
+
+    @Test
+    @DisplayName("a combo lowered by a whole combo takes a unit off each of its component lines")
+    void aLoweredComboDecreasesEveryComponent() {
+        OrderLineRow burger = component(1, BURGER, BURGER_IN_LUNCH, 2, 1, 2);
+        OrderLineRow cola = component(2, COLA, COLA_IN_LUNCH, 2, 1, 2);
+        List<AmendmentBasket.Unit> units = AmendmentBasket.units(List.of(burger, cola));
+
+        var decreases = AmendmentBasket.decreases(
+                quote(
+                        priced(SELECTION.toString(), BURGER, 1, BURGER_IN_LUNCH, 1, 1),
+                        priced(SELECTION.toString(), COLA, 1, COLA_IN_LUNCH, 1, 1)),
+                units,
+                Set.of(),
+                Set.of(burger.lineId()));
+
+        assertThat(decreases).hasSize(2);
+        assertThat(decreases)
+                .allSatisfy(decrease -> assertThat(decrease.stockUnits()).isEqualTo(1));
+        assertThat(decreases.stream().map(decrease -> decrease.line().sourceVariantId()))
+                .containsExactlyInAnyOrder(BURGER, COLA);
+    }
+
+    @Test
+    @DisplayName("a combo is removed whole: naming some of its lines and not the rest is named, not rounded")
+    void aComboIsRemovedWholeOrNotAtAll() {
+        OrderLineRow burger = component(1, BURGER, BURGER_IN_LUNCH, 2, 1, 2);
+        OrderLineRow cola = component(2, COLA, COLA_IN_LUNCH, 2, 1, 2);
+        OrderLineRow plain = plain(3, PLAIN_VARIANT, 1);
+        List<AmendmentBasket.Unit> units = AmendmentBasket.units(List.of(burger, cola, plain));
+
+        assertThat(AmendmentBasket.requireWholeCombos(units, Set.of(burger.lineId())))
+                .as("one component named")
+                .isEqualTo(burger.lineId());
+        assertThat(AmendmentBasket.requireWholeCombos(units, Set.of(burger.lineId(), cola.lineId())))
+                .as("every component named")
+                .isNull();
+        assertThat(AmendmentBasket.requireWholeCombos(units, Set.of(plain.lineId())))
+                .as("an ordinary line has no components")
+                .isNull();
+    }
+
     private static OrderLineRow plain(int number, UUID variant, int quantity) {
         return plain(number, variant, BigDecimal.valueOf(quantity));
     }

@@ -2,9 +2,13 @@ package uz.horecaos.platform.ordering.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -47,6 +51,7 @@ import uz.horecaos.platform.pricing.api.PromoCodeRedemptionPort;
 import uz.horecaos.platform.tenancy.api.LocationCapacityPort;
 import uz.horecaos.platform.tenancy.api.LocationCapacityPort.CapacityOutcome;
 import uz.horecaos.platform.tenancy.api.TenantId;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * Everything that moves an order after checkout (ADR 0002, ADR 0019).
@@ -1460,6 +1465,47 @@ public class OrderStateService {
         return order.confirmedAt() != null;
     }
 
+    /** Whether the order may hold sold stock: confirmed, or carrying an amendment that committed an increase. */
+    private static boolean returnsStockByDisposal(OrderRow order, OrderOutcome outcome) {
+        return outcome.reservationCommitted() || order.currentRevision() > 1;
+    }
+
+    /**
+     * What the order still holds, as one instruction for the inventory process (ADR 0169): the whole units of
+     * each variant across its live lines, the quotes that own its reservations, and the outcome's disposition.
+     * A release is the only answer for a hold and is made by the verb itself, so {@code RELEASE} here means
+     * "put back" for the units that were sold.
+     */
+    private OrderInventoryProcess.DisposeInstruction disposalOf(OrderRow order, OrderOutcome outcome) {
+        Map<UUID, Integer> units = new LinkedHashMap<>();
+        for (JdbcOrderStore.OrderLineRow line : orders.lines(order.tenantId(), order.orderId())) {
+            units.merge(line.sourceVariantId(), Quantities.wholeUnitsCeiling(line.quantity()), Integer::sum);
+        }
+        Set<UUID> quoteIds = new LinkedHashSet<>();
+        orders.revisions(order.tenantId(), order.orderId()).stream()
+                .map(JdbcOrderStore.RevisionRow::pricingQuoteId)
+                .filter(Objects::nonNull)
+                .forEach(quoteIds::add);
+        quoteIds.add(order.pricingQuoteId());
+        String disposition =
+                switch (outcome.disposition()) {
+                    case RELEASE, RETURN_TO_STOCK -> "RETURN_TO_STOCK";
+                    case WRITE_OFF -> "WRITE_OFF";
+                    case NO_EFFECT -> "NO_EFFECT";
+                };
+        return new OrderInventoryProcess.DisposeInstruction(
+                order.brandId(),
+                order.locationId(),
+                List.copyOf(quoteIds),
+                disposition,
+                outcome.systemCategory().name(),
+                units.entrySet().stream()
+                        .filter(entry -> entry.getValue() > 0)
+                        .map(entry ->
+                                new OrderInventoryProcess.DisposeInstruction.Line(entry.getKey(), entry.getValue()))
+                        .toList());
+    }
+
     /**
      * Everything that follows from a status change, in the same transaction.
      *
@@ -1511,15 +1557,19 @@ public class OrderStateService {
                     now);
         }
 
-        // ADR 0017, and the reason the disposition is recorded rather than acted
-        // on here: a cancellation never reopens a committed reservation. The
-        // release below only runs for a hold that was never committed, and the two
-        // movements a committed disposition names — a return and a waste — need a
-        // fourth verb on the ADR 0017 port that inventory owns and does not yet
-        // expose. Until it does, the outcome row is the record and the movement is
-        // an open item on ADR 0039's checklist rather than a silent no-op.
+        // ADR 0017 and ADR 0169. A cancellation never reopens a committed reservation; what it does with the
+        // stock the order holds is the fourth verb, inventory's dispose, which reads the reservations itself
+        // and releases what is still a hold and applies the outcome's disposition to what was sold. An order
+        // that was confirmed (its commit may have run, or be queued) or amended (an increase commits at once,
+        // under a quote of its own) takes that path. An order that never reached either has one hold that was
+        // never a sale, and goes back as it always did.
         if (target.releasesInventory()) {
-            inventoryProcess.enqueueRelease(order.orderId(), order.tenantId(), order.pricingQuoteId(), now);
+            if (outcome != null && returnsStockByDisposal(order, outcome)) {
+                inventoryProcess.enqueueDispose(
+                        order.orderId(), order.tenantId(), order.pricingQuoteId(), disposalOf(order, outcome), now);
+            } else {
+                inventoryProcess.enqueueRelease(order.orderId(), order.tenantId(), order.pricingQuoteId(), now);
+            }
             // ADR 0072: an order that ends REJECTED, EXPIRED, CANCELLED or
             // PAYMENT_FAILED never completed, so any coupon redemption its
             // checkout took must go back the same way the inventory hold and

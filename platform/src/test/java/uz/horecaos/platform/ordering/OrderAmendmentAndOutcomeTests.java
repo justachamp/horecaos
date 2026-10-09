@@ -51,11 +51,13 @@ import uz.horecaos.platform.ordering.api.OrderCallbackRequested;
 import uz.horecaos.platform.ordering.api.OrderCallbackResolved;
 import uz.horecaos.platform.ordering.api.OrderCancelled;
 import uz.horecaos.platform.ordering.api.OrderDecisionPort;
+import uz.horecaos.platform.ordering.api.OrderLineProductionPort;
 import uz.horecaos.platform.ordering.api.OrderRevisionCreated;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
+import uz.horecaos.platform.ordering.application.LineRemovalCoordinator;
 import uz.horecaos.platform.ordering.application.OrderAcceptancePolicyService;
 import uz.horecaos.platform.ordering.application.OrderAmendmentService;
 import uz.horecaos.platform.ordering.application.OrderBoardReadModels;
@@ -147,6 +149,22 @@ class OrderAmendmentAndOutcomeTests {
     private uz.horecaos.platform.payments.settlement.CheckoutSettlementPlanner settlementPlanner;
     private OrderQueryService orderQuery;
     private OrderAmendmentService amendments;
+    /** ADR 0169: the same service with {@code ordering.amendment_line_removal_enabled} on. */
+    private OrderAmendmentService removalAmendments;
+    /** ADR 0169: what the kitchen says about each order line; empty means it has no record (UNKNOWN). */
+    private final Map<UUID, OrderLineProductionPort.State> kitchenState =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private final OrderLineProductionPort lineProduction = (tenantId, orderId, lineIds) -> {
+        Map<UUID, OrderLineProductionPort.State> answer = new java.util.HashMap<>();
+        for (UUID lineId : lineIds) {
+            OrderLineProductionPort.State state = kitchenState.get(lineId);
+            if (state != null) {
+                answer.put(lineId, state);
+            }
+        }
+        return answer;
+    };
     private OrderBulkActionService bulkActions;
     private OrderOutcomeService outcomes;
     private OrderOutcomeReasonService reasons;
@@ -231,7 +249,21 @@ class OrderAmendmentAndOutcomeTests {
         var channelStore = new JdbcSalesChannelStore(jdbc);
         serviceabilityStore = new JdbcServiceabilityStore(jdbc);
 
-        inventory = new InventoryService(inventoryStore, event -> {}, clock);
+        // catalog.use_stock_logic on, as the tenants that count stock have it: the BINARY burger every other
+        // test uses is unaffected, and a removal has a real QUANTITY position to move (ADR 0169).
+        inventory = new InventoryService(
+                inventoryStore,
+                event -> {},
+                clock,
+                fact -> {},
+                new uz.horecaos.platform.configuration.rls.TenantRlsSession() {
+                    @Override
+                    public void bindTenant(UUID tenantId) {}
+
+                    @Override
+                    public void bindPlatform() {}
+                },
+                new FakeConfigurationResolver(Map.of("catalog.use_stock_logic", true)));
         var deliveryFees = new uz.horecaos.platform.fulfillment.application.DeliveryFeeResolver(
                 new uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore(jdbc),
                 new uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryTariffStore(jdbc),
@@ -358,7 +390,8 @@ class OrderAmendmentAndOutcomeTests {
         // The real adapter, against the same database: the export guard is only
         // meaningful if it reads the table the export actually writes, and a stub
         // here would reproduce exactly the failure this port was built to end.
-        amendments = new OrderAmendmentService(
+        java.util.function.Function<uz.horecaos.platform.tenancy.api.ConfigurationResolver, OrderAmendmentService>
+                amendmentService = configuration -> new OrderAmendmentService(
                 orderStore,
                 amendmentStore,
                 auditRecorder,
@@ -374,7 +407,7 @@ class OrderAmendmentAndOutcomeTests {
                         jdbc, auditRecorder, clock, new SimpleMeterRegistry(), objectMapper),
                 UNWIRED_PAYMENTS,
                 protection,
-                new FakeConfigurationResolver(),
+                configuration,
                 new PromoCodeRedemptionService(promoCodeStore, clock),
                 catalogSnapshot,
                 new uz.horecaos.platform.pricing.application.PromotionRedemptionService(
@@ -383,7 +416,20 @@ class OrderAmendmentAndOutcomeTests {
                 new uz.horecaos.platform.pricing.application.PromotionRedemptionService(
                         new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromotionStore(
                                 jdbc, objectMapper)),
-                new uz.horecaos.platform.ordering.infrastructure.catalog.JdbcCartMenuRules(jdbc, objectMapper));
+                new uz.horecaos.platform.ordering.infrastructure.catalog.JdbcCartMenuRules(jdbc, objectMapper),
+                // ADR 0169: the real inventory, the real settlement planner, and a kitchen the test can set.
+                new LineRemovalCoordinator(
+                        configuration,
+                        reasons,
+                        lineProduction,
+                        inventory,
+                        settlementPlanner,
+                        orderStore,
+                        objectMapper));
+        amendments = amendmentService.apply(new FakeConfigurationResolver());
+        // The same service with the brand's removal gate on, for the tests that take a line off an order.
+        removalAmendments = amendmentService.apply(
+                new FakeConfigurationResolver(Map.of("ordering.amendment_line_removal_enabled", true)));
         bulkActions = new OrderBulkActionService(
                 orderStore,
                 new JdbcBulkOperationStore(jdbc),
@@ -1114,16 +1160,13 @@ class OrderAmendmentAndOutcomeTests {
     // --------------------------------------------------------------- commands
 
     @Test
-    @DisplayName("an unbuilt command is refused by name and writes nothing")
-    void anUnbuiltCommandIsRefused() {
+    @DisplayName("a command behind a brand's rollout gate is refused by name while the gate is off, and writes nothing")
+    void aGatedCommandIsRefusedByNameWhileTheGateIsOff() {
         UUID orderId = orderIdOf(placeOrder("idem-1"));
         int version = orderStore.find(TENANT, orderId).orElseThrow().version();
 
-        // REMOVE_LINES (wave 10, gap map rows 1.2c/2.1d): the last of the
-        // twelve commands still declared and refused — every other financial
-        // command is built now, and this is the one whose consequence
-        // (releasing or writing off already-committed stock) needs a fourth
-        // ADR 0017 primitive the inventory port does not expose yet.
+        // REMOVE_LINES is built (ADR 0169) behind ordering.amendment_line_removal_enabled, which is off
+        // for a brand that has not switched it on: the command is refused by name, as it was before it existed.
         assertThatThrownBy(() -> tx(() -> amendments.propose(
                         TENANT,
                         orderId,
@@ -1638,7 +1681,8 @@ class OrderAmendmentAndOutcomeTests {
     }
 
     @Test
-    @DisplayName("CHANGE_LINE_QUANTITY refuses a decrease: no ADR 0017 return/waste primitive exists yet")
+    @DisplayName(
+            "CHANGE_LINE_QUANTITY refuses a decrease while the brand has not switched the removal path on (ADR 0169)")
     void changeLineQuantityDecreaseIsRefused() {
         UUID orderId = orderIdOf(placeOrder("idem-qty-dec"));
         UUID lineId = orderStore.lines(TENANT, orderId).getFirst().lineId();
@@ -1655,6 +1699,627 @@ class OrderAmendmentAndOutcomeTests {
                 .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
                         .isEqualTo("QUANTITY_DECREASE_NOT_SUPPORTED"));
         assertThat(orderQuery.revisions(TENANT, orderId)).hasSize(1);
+    }
+
+    // ============================================================ ADR 0169: taking a line off a confirmed order
+    //
+    // The ledger is read as the ledger and not as the position it explains: SUM(movements) == on_hand is the
+    // assertion a wrong write-off breaks, where "on_hand is 8" is true either way.
+
+    /** A tenant-authored removal reason (kind LINE_REMOVAL): the operator picks it and never a disposition. */
+    private UUID removalReason(
+            String name, OutcomeSystemCategory category, StockDisposition disposition, LiabilityParty party) {
+        return tx(() -> reasons.create(
+                TENANT,
+                REASON_AUTHOR,
+                new OrderOutcomeReasonService.CreateReason(
+                        OutcomeReasonKind.LINE_REMOVAL,
+                        category,
+                        name,
+                        disposition,
+                        party,
+                        null,
+                        null,
+                        texts("Блюдо убрано из заказа"))));
+    }
+
+    private UUID returnReason() {
+        return removalReason(
+                "Customer changed their mind (test)",
+                OutcomeSystemCategory.CUSTOMER_CHANGED_MIND,
+                StockDisposition.RETURN_TO_STOCK,
+                LiabilityParty.CUSTOMER);
+    }
+
+    /** The burger counted on a real shelf, so a removal has a position to move. */
+    private void burgerOnShelf(int onHand) {
+        jdbc.sql("""
+                TRUNCATE TABLE inventory.reservation_lines, inventory.reservations,
+                    inventory.movements, inventory.positions, inventory.stock_items CASCADE
+                """).update();
+        tx(() -> inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, burgerVariant, TrackingMode.QUANTITY));
+        tx(() -> inventory.setOnHandQuantity(
+                TENANT, LOCATION, burgerVariant, BigDecimal.valueOf(onHand), "INITIAL_COUNT", "op-1"));
+    }
+
+    /** Two burgers ordered and sold: the checkout hold has been committed, as it is a few seconds after confirmation. */
+    private UUID confirmedOrderOnShelf(String key, int onHand) {
+        burgerOnShelf(onHand);
+        UUID orderId = orderIdOf(placeOrder(key));
+        inventoryProcess.runOnce(10);
+        assertThat(burgerOnHand()).as("two burgers were sold").isEqualByComparingTo(BigDecimal.valueOf(onHand - 2L));
+        return orderId;
+    }
+
+    private BigDecimal burgerOnHand() {
+        return jdbc.sql("""
+                SELECT p.on_hand_quantity FROM inventory.positions p
+                  JOIN inventory.stock_items i ON i.id = p.stock_item_id
+                 WHERE i.variant_id = :v
+                """).param("v", burgerVariant).query(BigDecimal.class).single();
+    }
+
+    private BigDecimal burgerReserved() {
+        return jdbc.sql("""
+                SELECT p.reserved_quantity FROM inventory.positions p
+                  JOIN inventory.stock_items i ON i.id = p.stock_item_id
+                 WHERE i.variant_id = :v
+                """).param("v", burgerVariant).query(BigDecimal.class).single();
+    }
+
+    private BigDecimal burgerLedgerSum() {
+        return jdbc.sql("""
+                SELECT COALESCE(SUM(m.quantity_delta), 0) FROM inventory.movements m
+                  JOIN inventory.stock_items i ON i.id = m.stock_item_id
+                 WHERE i.variant_id = :v
+                """).param("v", burgerVariant).query(BigDecimal.class).single();
+    }
+
+    private List<BigDecimal> burgerMovements(String type) {
+        return jdbc.sql("""
+                SELECT m.quantity_delta FROM inventory.movements m
+                  JOIN inventory.stock_items i ON i.id = m.stock_item_id
+                 WHERE i.variant_id = :v AND m.movement_type = :t ORDER BY m.sequence_number
+                """)
+                .param("v", burgerVariant)
+                .param("t", type)
+                .query(BigDecimal.class)
+                .list();
+    }
+
+    private OrderAmendmentService.AmendmentResult proposeRemoval(
+            UUID orderId, String key, OrderAmendmentService.AmendmentCommand command) {
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+        return tx(() -> removalAmendments.propose(
+                TENANT,
+                orderId,
+                new OrderAmendmentService.ProposeCommand(
+                        version, List.of(command), false, key, "OPERATOR_EDIT", "USER", "sharif", null)));
+    }
+
+    private OrderAmendmentService.AmendmentResult attestAndApplyRemoval(UUID orderId, UUID amendmentId) {
+        int amendmentVersion =
+                amendmentStore.find(TENANT, amendmentId).orElseThrow().version();
+        tx(() -> removalAmendments.attestConfirmation(TENANT, amendmentId, amendmentVersion, "sharif", "PHONE"));
+        int orderVersion = orderStore.find(TENANT, orderId).orElseThrow().version();
+        return tx(() -> removalAmendments.apply(
+                TENANT, orderId, amendmentId, orderVersion, "USER", "sharif", "confirmed", null));
+    }
+
+    private List<Map<String, Object>> removalRows(UUID orderId) {
+        return jdbc.sql("SELECT * FROM ordering.order_line_removals WHERE order_id = :id ORDER BY occurred_at")
+                .param("id", orderId)
+                .query()
+                .listOfRows();
+    }
+
+    private long settlementTotal(UUID orderId) {
+        return jdbc.sql("SELECT total_due_minor FROM payments.order_settlements WHERE order_id = :id")
+                .param("id", orderId)
+                .query(Long.class)
+                .single();
+    }
+
+    private long moneyTenderAmount(UUID orderId) {
+        return jdbc.sql("""
+                SELECT t.amount_minor FROM payments.tenders t
+                  JOIN payments.order_settlements s ON s.id = t.settlement_id
+                 WHERE s.order_id = :id AND NOT t.settles_from_balance
+                """).param("id", orderId).query(Long.class).single();
+    }
+
+    private static String refusalCode(Throwable thrown) {
+        assertThat(thrown).isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class);
+        return ((OrderAmendmentService.AmendmentRefusedException) thrown).code();
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0169: lowering a quantity gives the unit back to the shelf, restates the cash due, and writes the evidence")
+    void aLoweredQuantityReturnsTheUnitAndRestatesTheCash() {
+        UUID orderId = confirmedOrderOnShelf("idem-rm-1", 10);
+        UUID reasonId = returnReason();
+        UUID lineId = orderStore.lines(TENANT, orderId).getFirst().lineId();
+        long totalBefore = orderStore.find(TENANT, orderId).orElseThrow().totalMinor();
+        assertThat(settlementTotal(orderId)).isEqualTo(totalBefore);
+
+        var proposed = proposeRemoval(
+                orderId,
+                "k-rm-1",
+                OrderAmendmentService.AmendmentCommand.changeLineQuantity(lineId, BigDecimal.ONE, reasonId));
+
+        assertThat(proposed.amendment().status()).isEqualTo(AmendmentStatus.PRICED);
+        assertThat(proposed.amendment().removesStock()).isTrue();
+        assertThat(proposed.amendment().deltaTotalMinor())
+                .as("one burger fewer")
+                .isNegative();
+        assertThat(proposed.stockConsequence()).hasSize(1);
+        var preview = proposed.stockConsequence().getFirst();
+        assertThat(preview.stockUnits()).isEqualTo(1);
+        assertThat(preview.kitchenState())
+                .as("no kitchen record: the reason decides")
+                .isEqualTo("UNKNOWN");
+        assertThat(preview.declaredDisposition()).isEqualTo("RETURN_TO_STOCK");
+        assertThat(preview.effectiveDisposition()).isEqualTo("RETURN_TO_STOCK");
+        assertThat(preview.returnedUnits())
+                .as("the preview says which before anything is applied")
+                .isEqualTo(1);
+        assertThat(burgerOnHand()).as("a preview moves nothing").isEqualByComparingTo("8");
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().totalMinor()).isEqualTo(totalBefore);
+
+        var applied = attestAndApplyRemoval(orderId, proposed.amendment().id());
+
+        assertThat(applied.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+        var live = orderStore.lines(TENANT, orderId);
+        assertThat(live).hasSize(1);
+        assertThat(live.getFirst().quantity()).isEqualByComparingTo("1");
+        assertThat(jdbc.sql("SELECT revision_to FROM ordering.order_lines WHERE id = :id")
+                        .param("id", lineId)
+                        .query(Integer.class)
+                        .single())
+                .as("the old line is closed by the revision, never edited")
+                .isEqualTo(2);
+        long totalAfter = orderStore.find(TENANT, orderId).orElseThrow().totalMinor();
+        assertThat(totalAfter).isLessThan(totalBefore);
+
+        assertThat(burgerOnHand()).as("the unit is back on the shelf").isEqualByComparingTo("9");
+        assertThat(burgerMovements("RETURN")).containsExactly(new BigDecimal("1.000"));
+        assertThat(burgerLedgerSum()).as("and the ledger reconciles").isEqualByComparingTo(burgerOnHand());
+
+        assertThat(settlementTotal(orderId))
+                .as("the cash the courier is told to collect follows the amended total")
+                .isEqualTo(totalAfter);
+        assertThat(moneyTenderAmount(orderId)).isEqualTo(totalAfter);
+
+        var rows = removalRows(orderId);
+        assertThat(rows).hasSize(1);
+        var row = rows.getFirst();
+        assertThat((BigDecimal) row.get("quantity_before")).isEqualByComparingTo("2");
+        assertThat((BigDecimal) row.get("quantity_after")).isEqualByComparingTo("1");
+        assertThat(row.get("stock_units")).isEqualTo(1);
+        assertThat(row.get("returned_units")).isEqualTo(1);
+        assertThat(row.get("reason_category")).isEqualTo("CUSTOMER_CHANGED_MIND");
+        assertThat(row.get("kitchen_state")).isEqualTo("UNKNOWN");
+        assertThat(row.get("disposition_effective")).isEqualTo("RETURN_TO_STOCK");
+        assertThat(row.get("liability_party")).isEqualTo("CUSTOMER");
+        assertThat(row.get("revision")).isEqualTo(2);
+
+        assertThat(auditActionCount("ordering.order.line-removed", orderId))
+                .as("the removal is audited with the change")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("ADR 0169: a removal applied twice moves the stock once")
+    void aRemovalAppliedTwiceMovesTheStockOnce() {
+        UUID orderId = confirmedOrderOnShelf("idem-rm-twice", 10);
+        UUID lineId = orderStore.lines(TENANT, orderId).getFirst().lineId();
+        var proposed = proposeRemoval(
+                orderId,
+                "k-rm-twice",
+                OrderAmendmentService.AmendmentCommand.changeLineQuantity(lineId, BigDecimal.ONE, returnReason()));
+        attestAndApplyRemoval(orderId, proposed.amendment().id());
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        var again = tx(() -> removalAmendments.apply(
+                TENANT, orderId, proposed.amendment().id(), version, "USER", "sharif", "confirmed", null));
+
+        assertThat(again.replayed()).isTrue();
+        assertThat(burgerOnHand()).isEqualByComparingTo("9");
+        assertThat(burgerMovements("RETURN")).hasSize(1);
+        assertThat(removalRows(orderId)).hasSize(1);
+        assertThat(orderQuery.revisions(TENANT, orderId)).hasSize(2);
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0169: REMOVE_LINES takes a whole line off, closes it without a replacement, and returns its stock")
+    void removeLinesTakesTheWholeLineOff() {
+        UUID orderId = confirmedOrderOnShelf("idem-rm-lines", 10);
+        var added = proposeOnly(
+                orderId,
+                "k-rm-add",
+                OrderAmendmentService.AmendmentCommand.addLines(
+                        List.of(new OrderAmendmentService.AmendmentCommand.LineRequest(burgerVariant, 1, List.of()))));
+        confirmAndApply(orderId, added.amendment().id());
+        assertThat(burgerOnHand()).as("the added burger was sold at once").isEqualByComparingTo("7");
+        var lines = orderStore.lines(TENANT, orderId);
+        assertThat(lines).hasSize(2);
+        UUID addedLine = lines.get(1).lineId();
+        long totalWithBoth = orderStore.find(TENANT, orderId).orElseThrow().totalMinor();
+        assertThat(moneyTenderAmount(orderId))
+                .as("ADD_LINES restates the cash plan too: it did not before this record")
+                .isEqualTo(totalWithBoth);
+
+        var proposed = proposeRemoval(
+                orderId,
+                "k-rm-lines",
+                OrderAmendmentService.AmendmentCommand.removeLines(List.of(addedLine), returnReason()));
+        assertThat(proposed.amendment().removesStock()).isTrue();
+        var applied = attestAndApplyRemoval(orderId, proposed.amendment().id());
+
+        assertThat(applied.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+        var live = orderStore.lines(TENANT, orderId);
+        assertThat(live).hasSize(1);
+        assertThat(live.getFirst().lineId()).isEqualTo(lines.getFirst().lineId());
+        assertThat(burgerOnHand()).isEqualByComparingTo("8");
+        assertThat(burgerLedgerSum()).isEqualByComparingTo(burgerOnHand());
+        long totalAfter = orderStore.find(TENANT, orderId).orElseThrow().totalMinor();
+        assertThat(totalAfter).isLessThan(totalWithBoth);
+        assertThat(moneyTenderAmount(orderId)).isEqualTo(totalAfter);
+        var row = removalRows(orderId).getFirst();
+        assertThat((BigDecimal) row.get("quantity_after")).isEqualByComparingTo("0");
+        assertThat(row.get("stock_units")).isEqualTo(1);
+        assertThat(orderQuery.revisions(TENANT, orderId))
+                .filteredOn(revision -> revision.revision() == 3)
+                .singleElement()
+                .satisfies(revision -> {
+                    assertThat(revision.fiscalCorrectionRequired())
+                            .as("a removal leaves the marker the sweep reads: ADR 0169 decision 7, ADR 0039's matrix")
+                            .isTrue();
+                    assertThat(revision.deltaTotalMinor()).isNegative();
+                });
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0169: a line the kitchen has started is written off whatever the reason says, and the preview says so first")
+    void aStartedLineIsWrittenOffWhateverTheReasonSays() {
+        UUID orderId = confirmedOrderOnShelf("idem-rm-started", 10);
+        UUID lineId = orderStore.lines(TENANT, orderId).getFirst().lineId();
+        kitchenState.put(lineId, OrderLineProductionPort.State.STARTED);
+
+        var proposed = proposeRemoval(
+                orderId,
+                "k-rm-started",
+                OrderAmendmentService.AmendmentCommand.changeLineQuantity(lineId, BigDecimal.ONE, returnReason()));
+
+        var preview = proposed.stockConsequence().getFirst();
+        assertThat(preview.kitchenState()).isEqualTo("STARTED");
+        assertThat(preview.declaredDisposition()).as("the reason says return").isEqualTo("RETURN_TO_STOCK");
+        assertThat(preview.effectiveDisposition())
+                .as("the kitchen's record wins")
+                .isEqualTo("WRITE_OFF");
+        assertThat(preview.writtenOffUnits()).isEqualTo(1);
+        assertThat(preview.returnedUnits()).isZero();
+
+        attestAndApplyRemoval(orderId, proposed.amendment().id());
+
+        assertThat(burgerMovements("RETURN")).containsExactly(new BigDecimal("1.000"));
+        assertThat(burgerMovements("WASTE")).containsExactly(new BigDecimal("-1.000"));
+        assertThat(burgerOnHand())
+                .as("a made dish does not go back on the shelf")
+                .isEqualByComparingTo("8");
+        assertThat(burgerLedgerSum()).isEqualByComparingTo(burgerOnHand());
+        var row = removalRows(orderId).getFirst();
+        assertThat(row.get("disposition_declared")).isEqualTo("RETURN_TO_STOCK");
+        assertThat(row.get("disposition_effective")).isEqualTo("WRITE_OFF");
+        assertThat(row.get("kitchen_state")).isEqualTo("STARTED");
+        assertThat(row.get("written_off_units")).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("ADR 0169: a reason that writes off writes off an untouched line too")
+    void aWriteOffReasonWritesOffAnUntouchedLine() {
+        UUID orderId = confirmedOrderOnShelf("idem-rm-wo", 10);
+        UUID lineId = orderStore.lines(TENANT, orderId).getFirst().lineId();
+        UUID kitchenError = removalReason(
+                "Kitchen error (test)",
+                OutcomeSystemCategory.KITCHEN_ERROR,
+                StockDisposition.WRITE_OFF,
+                LiabilityParty.TENANT);
+        kitchenState.put(lineId, OrderLineProductionPort.State.NOT_STARTED);
+
+        var proposed = proposeRemoval(
+                orderId,
+                "k-rm-wo",
+                OrderAmendmentService.AmendmentCommand.changeLineQuantity(lineId, BigDecimal.ONE, kitchenError));
+        attestAndApplyRemoval(orderId, proposed.amendment().id());
+
+        assertThat(burgerMovements("WASTE")).containsExactly(new BigDecimal("-1.000"));
+        assertThat(burgerOnHand()).isEqualByComparingTo("8");
+        assertThat(removalRows(orderId).getFirst().get("kitchen_state")).isEqualTo("NOT_STARTED");
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0169: the removal gate is off by default: REMOVE_LINES is refused by name and a lowered quantity keeps its old refusal")
+    void theRemovalGateIsOffByDefault() {
+        UUID orderId = confirmedOrderOnShelf("idem-rm-gate", 10);
+        UUID lineId = orderStore.lines(TENANT, orderId).getFirst().lineId();
+        UUID reasonId = returnReason();
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+        JdbcOrderStore.OrderRow order = orderStore.find(TENANT, orderId).orElseThrow();
+
+        assertThat(amendments.lineRemovalEnabled(order)).isFalse();
+        assertThat(removalAmendments.lineRemovalEnabled(order)).isTrue();
+        assertThatThrownBy(() -> tx(() -> amendments.propose(
+                        TENANT,
+                        orderId,
+                        propose(
+                                "k-gate-1",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.removeLines(List.of(lineId), reasonId)))))
+                .isInstanceOf(OrderAmendmentService.AmendmentNotPermittedException.class)
+                .hasMessageContaining("REMOVE_LINES");
+        assertThatThrownBy(() -> tx(() -> amendments.propose(
+                        TENANT,
+                        orderId,
+                        propose(
+                                "k-gate-2",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.changeLineQuantity(
+                                        lineId, BigDecimal.ONE, reasonId)))))
+                .satisfies(thrown -> assertThat(refusalCode(thrown)).isEqualTo("QUANTITY_DECREASE_NOT_SUPPORTED"));
+        assertThat(amendments.forOrder(TENANT, orderId)).isEmpty();
+        assertThat(burgerOnHand()).isEqualByComparingTo("8");
+    }
+
+    @Test
+    @DisplayName("ADR 0169: a removal names a reason the tenant authored, active, of the removal kind")
+    void aRemovalNeedsAUsableReason() {
+        UUID orderId = confirmedOrderOnShelf("idem-rm-reason", 10);
+        UUID lineId = orderStore.lines(TENANT, orderId).getFirst().lineId();
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        assertThatThrownBy(() -> tx(() -> removalAmendments.propose(
+                        TENANT,
+                        orderId,
+                        propose(
+                                "k-reason-1",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.changeLineQuantity(lineId, BigDecimal.ONE)))))
+                .satisfies(thrown -> assertThat(refusalCode(thrown)).isEqualTo("REMOVAL_REASON_REQUIRED"));
+
+        assertThatThrownBy(() -> tx(() -> removalAmendments.propose(
+                        TENANT,
+                        orderId,
+                        propose(
+                                "k-reason-2",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.changeLineQuantity(
+                                        lineId, BigDecimal.ONE, UUID.randomUUID())))))
+                .satisfies(thrown -> assertThat(refusalCode(thrown)).isEqualTo("REMOVAL_REASON_NOT_FOUND"));
+
+        UUID cancellationReason = writeOffReason();
+        assertThatThrownBy(() -> tx(() -> removalAmendments.propose(
+                        TENANT,
+                        orderId,
+                        propose(
+                                "k-reason-3",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.changeLineQuantity(
+                                        lineId, BigDecimal.ONE, cancellationReason)))))
+                .as("a cancellation reason is not a removal reason")
+                .satisfies(thrown -> assertThat(refusalCode(thrown)).isEqualTo("REMOVAL_REASON_NOT_FOUND"));
+
+        UUID retired = returnReason();
+        tx(() -> reasons.archive(TENANT, REASON_AUTHOR, retired, 1));
+        assertThatThrownBy(() -> tx(() -> removalAmendments.propose(
+                        TENANT,
+                        orderId,
+                        propose(
+                                "k-reason-4",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.changeLineQuantity(
+                                        lineId, BigDecimal.ONE, retired)))))
+                .satisfies(thrown -> assertThat(refusalCode(thrown)).isEqualTo("REMOVAL_REASON_ARCHIVED"));
+
+        assertThat(amendments.forOrder(TENANT, orderId)).isEmpty();
+        assertThat(burgerOnHand()).isEqualByComparingTo("8");
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0169: a removal needs the customer's recorded agreement whatever it does to the total, in the service and in the database")
+    void aRemovalNeedsTheCustomersAgreement() {
+        UUID orderId = confirmedOrderOnShelf("idem-rm-agree", 10);
+        UUID lineId = orderStore.lines(TENANT, orderId).getFirst().lineId();
+        var proposed = proposeRemoval(
+                orderId,
+                "k-rm-agree",
+                OrderAmendmentService.AmendmentCommand.changeLineQuantity(lineId, BigDecimal.ONE, returnReason()));
+        assertThat(proposed.amendment().deltaTotalMinor()).isNegative();
+        int orderVersion = orderStore.find(TENANT, orderId).orElseThrow().version();
+
+        assertThatThrownBy(() -> tx(() -> removalAmendments.apply(
+                        TENANT, orderId, proposed.amendment().id(), orderVersion, "USER", "sharif", "x", null)))
+                .as("a decrease normally needs nobody's agreement; a removal does")
+                .isInstanceOf(OrderAmendmentService.CustomerConfirmationRequiredException.class);
+        assertThat(burgerOnHand()).isEqualByComparingTo("8");
+
+        assertThatThrownBy(() ->
+                        jdbc.sql("""
+                                UPDATE ordering.order_amendments
+                                   SET status = 'APPLIED', applied_revision = 2, settled_at = now()
+                                 WHERE id = :id
+                                """).param("id", proposed.amendment().id()).update())
+                .as("the same guard stated where the next call path cannot walk around it")
+                .hasMessageContaining("ck_amendment_removal_confirmed");
+
+        int amendmentVersion = amendmentStore
+                .find(TENANT, proposed.amendment().id())
+                .orElseThrow()
+                .version();
+        tx(() -> removalAmendments.attestConfirmation(
+                TENANT, proposed.amendment().id(), amendmentVersion, "sharif", "PHONE"));
+        var stored = amendmentStore.find(TENANT, proposed.amendment().id()).orElseThrow();
+        assertThat(stored.confirmationAttestedBy())
+                .as("unlike a plain decrease, a removal records who spoke to the customer")
+                .isEqualTo("sharif");
+        assertThat(stored.confirmationChannel()).isEqualTo("PHONE");
+    }
+
+    @Test
+    @DisplayName("ADR 0169: the last line cannot be removed: that is a cancellation")
+    void theLastLineCannotBeRemoved() {
+        UUID orderId = confirmedOrderOnShelf("idem-rm-empty", 10);
+        UUID lineId = orderStore.lines(TENANT, orderId).getFirst().lineId();
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+        UUID reasonId = returnReason();
+
+        assertThatThrownBy(() -> tx(() -> removalAmendments.propose(
+                        TENANT,
+                        orderId,
+                        propose(
+                                "k-empty",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.removeLines(List.of(lineId), reasonId)))))
+                .satisfies(thrown -> assertThat(refusalCode(thrown)).isEqualTo("WOULD_EMPTY_ORDER"));
+        assertThat(amendments.forOrder(TENANT, orderId)).isEmpty();
+        assertThat(burgerOnHand()).isEqualByComparingTo("8");
+    }
+
+    @Test
+    @DisplayName("ADR 0169: a line that is not on the order is refused by name")
+    void aLineThatIsNotLiveIsRefused() {
+        UUID orderId = confirmedOrderOnShelf("idem-rm-notlive", 10);
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+        UUID reasonId = returnReason();
+
+        assertThatThrownBy(() -> tx(() -> removalAmendments.propose(
+                        TENANT,
+                        orderId,
+                        propose(
+                                "k-notlive",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.removeLines(
+                                        List.of(UUID.randomUUID()), reasonId)))))
+                .satisfies(thrown -> assertThat(refusalCode(thrown)).isEqualTo("LINE_NOT_LIVE"));
+    }
+
+    @Test
+    @DisplayName("ADR 0169: an order the customer paid through a provider cannot lose a line, and nothing moves")
+    void aProviderPaidOrderCannotLoseALine() {
+        UUID orderId = confirmedOrderOnShelf("idem-rm-paid", 10);
+        // The provider's capture, as the payment process records it: the order is no longer paid at the door.
+        jdbc.sql("UPDATE ordering.orders SET payment_status_projection = 'CAPTURED' WHERE id = :id")
+                .param("id", orderId)
+                .update();
+        UUID lineId = orderStore.lines(TENANT, orderId).getFirst().lineId();
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().paymentStatusProjection())
+                .as("the fixture order really is provider-paid")
+                .isNotEqualTo("NOT_REQUIRED");
+        UUID reasonId = returnReason();
+
+        assertThatThrownBy(() -> tx(() -> removalAmendments.propose(
+                        TENANT,
+                        orderId,
+                        propose(
+                                "k-paid",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.changeLineQuantity(
+                                        lineId, BigDecimal.ONE, reasonId)))))
+                .satisfies(thrown -> assertThat(refusalCode(thrown)).isEqualTo("PAID_ORDER_DECREASE_NOT_SUPPORTED"));
+        assertThat(amendments.forOrder(TENANT, orderId)).isEmpty();
+        assertThat(burgerMovements("RETURN")).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0169: cancelling after a removal gives each remaining unit back once, and the outcome names the movement")
+    void cancellingAfterARemovalReturnsEachUnitOnce() {
+        UUID orderId = confirmedOrderOnShelf("idem-rm-cancel", 10);
+        UUID lineId = orderStore.lines(TENANT, orderId).getFirst().lineId();
+        var proposed = proposeRemoval(
+                orderId,
+                "k-rm-cancel",
+                OrderAmendmentService.AmendmentCommand.changeLineQuantity(lineId, BigDecimal.ONE, returnReason()));
+        attestAndApplyRemoval(orderId, proposed.amendment().id());
+        assertThat(burgerOnHand()).isEqualByComparingTo("9");
+
+        UUID cancelReason = tx(() -> reasons.create(
+                TENANT,
+                REASON_AUTHOR,
+                new OrderOutcomeReasonService.CreateReason(
+                        OutcomeReasonKind.CANCELLATION,
+                        OutcomeSystemCategory.CUSTOMER_CANCELLED,
+                        "Customer cancelled (test)",
+                        StockDisposition.RETURN_TO_STOCK,
+                        LiabilityParty.CUSTOMER,
+                        CustomerRefund.FULL,
+                        null,
+                        texts("Заказ отменён по вашей просьбе"))));
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+        tx(() -> outcomes.cancel(
+                TENANT,
+                orderId,
+                version,
+                new OrderOutcomeService.CancelCommand(cancelReason, null, "USER", "sharif", null)));
+        assertThat(orderQuery.outcome(TENANT, orderId).orElseThrow().inventoryMovementId())
+                .as("recorded when the consequence is carried out, not when the outcome is written")
+                .isNull();
+
+        inventoryProcess.runOnce(10);
+
+        assertThat(burgerOnHand())
+                .as("the two burgers that were sold are back once each: the removal's and the cancellation's")
+                .isEqualByComparingTo("10");
+        assertThat(burgerMovements("RETURN")).containsExactly(new BigDecimal("1.000"), new BigDecimal("1.000"));
+        assertThat(burgerLedgerSum()).isEqualByComparingTo(burgerOnHand());
+        var outcome = orderQuery.outcome(TENANT, orderId).orElseThrow();
+        assertThat(outcome.inventoryMovementId())
+                .as("the cancellation's movement, finally recorded on the outcome")
+                .isNotNull();
+        inventoryProcess.runOnce(10);
+        assertThat(burgerMovements("RETURN"))
+                .as("and a second run adds nothing")
+                .hasSize(2);
+    }
+
+    @Test
+    @DisplayName("ADR 0169: cancelling a confirmed order writes off what its reason declares, as a RETURN and a WASTE")
+    void cancellingAConfirmedOrderWritesOffByItsReason() {
+        UUID orderId = confirmedOrderOnShelf("idem-rm-cancel-wo", 10);
+        UUID writeOff = tx(() -> reasons.create(
+                TENANT,
+                REASON_AUTHOR,
+                new OrderOutcomeReasonService.CreateReason(
+                        OutcomeReasonKind.CANCELLATION,
+                        OutcomeSystemCategory.KITCHEN_CAPACITY,
+                        "Kitchen could not cook it (test)",
+                        StockDisposition.WRITE_OFF,
+                        LiabilityParty.TENANT,
+                        CustomerRefund.FULL,
+                        null,
+                        texts("Извините, мы не смогли приготовить"))));
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+        tx(() -> outcomes.cancel(
+                TENANT,
+                orderId,
+                version,
+                new OrderOutcomeService.CancelCommand(writeOff, null, "USER", "sharif", null)));
+
+        inventoryProcess.runOnce(10);
+
+        assertThat(burgerMovements("WASTE")).containsExactly(new BigDecimal("-2.000"));
+        assertThat(burgerOnHand())
+                .as("two lost burgers, net unchanged on the shelf")
+                .isEqualByComparingTo("8");
+        assertThat(burgerLedgerSum()).isEqualByComparingTo(burgerOnHand());
+        assertThat(orderQuery.outcome(TENANT, orderId).orElseThrow().inventoryMovementId())
+                .isNotNull();
     }
 
     @Test
@@ -2592,14 +3257,21 @@ class OrderAmendmentAndOutcomeTests {
         assertThat(outcome.stockDisposition()).isEqualTo(StockDisposition.WRITE_OFF.name());
         assertThat(outcome.liabilityParty()).isEqualTo(LiabilityParty.TENANT.name());
         assertThat(outcome.customerRefund()).isEqualTo(CustomerRefund.FULL.name());
-        // The movement itself is not written: the ADR 0017 port ordering holds is
-        // hold, commit and release, and a return or waste movement needs a fourth
-        // verb inventory owns. The outcome is the record until it exists, which is
-        // why inventory_movement_id is null rather than the movement being faked.
+        // The consequence is carried out afterwards by the inventory process (ADR 0169), through the fourth
+        // ADR 0017 verb, so the outcome is written first and its movement is recorded when the process has run.
         assertThat(outcome.inventoryMovementId()).isNull();
+        inventoryProcess.runOnce(10);
         assertThat(movementCount())
-                .as("a cancellation never reopens a committed reservation")
+                .as("this fixture's burger is a BINARY item: nothing is counted, so there is no movement to write "
+                        + "(a QUANTITY item's write-off is cancellingAConfirmedOrderWritesOffByItsReason)")
                 .isEqualTo(movementsBefore);
+        assertThat(jdbc.sql(
+                                "SELECT status FROM ordering.order_process_states WHERE order_id = :id AND process_name = 'ORDER_INVENTORY'")
+                        .param("id", orderId)
+                        .query(String.class)
+                        .single())
+                .as("and the process settled the disposal rather than leaving it queued")
+                .isEqualTo("COMPLETED");
     }
 
     // -------------------------------- compensating override (ADR 0019 amendment, ADR 0110, wave P41)

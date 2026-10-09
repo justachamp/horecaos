@@ -22,6 +22,7 @@ import {
   NewOrderApi,
   OrderQuote,
   PlaceOrderResult,
+  QuotedAutoAddLine,
   StorefrontMenu,
 } from './new-order-api';
 import { NewOrderPage } from './new-order-page';
@@ -3055,6 +3056,89 @@ describe('NewOrderPage', () => {
       await afterTheDebounce();
 
       expect(text('new-order-quote-delivery-notice')).toMatch(/Not available/);
+    });
+
+    // ------------------------------------------------ ADR 0158: the lines a rule added to the basket
+
+    function autoAddedLine(overrides: Partial<QuotedAutoAddLine> = {}): QuotedAutoAddLine {
+      return {
+        ruleId: 'rule-bag',
+        ruleCode: 'bag',
+        customerText: { en: 'Paper bag', ru: 'Бумажный пакет' },
+        mandatory: false,
+        variantId: 'v-bag',
+        quantity: 1,
+        baseAmountMinor: 500,
+        finalAmountMinor: 500,
+        taxAmountMinor: 0,
+        ...overrides,
+      };
+    }
+
+    function declineButton(ruleCode: string): HTMLButtonElement | null {
+      return (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+        `[data-testid="new-order-auto-add-decline-${ruleCode}"]`,
+      );
+    }
+
+    it('shows the line a rule added, flagged as added automatically, with a remove control', async () => {
+      const quote = vi.fn().mockResolvedValue(quoteOf({ autoAdded: [autoAddedLine()] }));
+      await render({ quote });
+      await startBasket();
+      await afterTheDebounce();
+
+      expect(text('new-order-auto-add-bag')).toMatch(/Paper bag × 1/);
+      expect(text('new-order-auto-add-bag')).toMatch(/added automatically/);
+      expect(declineButton('bag'), 'a removable rule offers its remove control').not.toBeNull();
+    });
+
+    it('gives a mandatory rule’s line no remove control, and says it cannot be removed', async () => {
+      const quote = vi
+        .fn()
+        .mockResolvedValue(
+          quoteOf({
+            autoAdded: [autoAddedLine({ mandatory: true, ruleCode: 'kit', ruleId: 'r-kit' })],
+          }),
+        );
+      await render({ quote });
+      await startBasket();
+      await afterTheDebounce();
+
+      expect(declineButton('kit')).toBeNull();
+      expect(text('new-order-auto-add-kit')).toMatch(/cannot be removed/);
+    });
+
+    it('sends a removed rule back as declined on the next quote, and lists it so it can be put back', async () => {
+      const quote = vi
+        .fn()
+        .mockResolvedValueOnce(quoteOf({ autoAdded: [autoAddedLine()] }))
+        .mockResolvedValue(quoteOf({ autoAdded: [] }));
+      await render({ quote });
+      await startBasket();
+      await afterTheDebounce();
+      expect(quote.mock.calls[0][1].declinedAutoAddRuleIds).toBeUndefined();
+
+      declineButton('bag')!.click();
+      fixture.detectChanges();
+      await afterTheDebounce();
+
+      expect(quote).toHaveBeenCalledTimes(2);
+      expect(quote.mock.calls[1][1].declinedAutoAddRuleIds).toEqual(['rule-bag']);
+      expect(text('new-order-auto-add-declined-bag')).toMatch(/Paper bag removed from this order/);
+
+      (
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="new-order-auto-add-declined-bag"] button',
+        ) as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+      await afterTheDebounce();
+
+      expect(quote).toHaveBeenCalledTimes(3);
+      expect(
+        quote.mock.calls[2][1].declinedAutoAddRuleIds,
+        'putting it back stops declining it',
+      ).toBeUndefined();
     });
   });
 });

@@ -5,6 +5,7 @@ import { Locale } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { Modal } from '../../shared/ui/modal';
+import { StockConsequenceLine } from './order-amendments';
 
 /** The channels an operator can attest a customer's agreement through — free text server-side (`ConfirmAmendmentRequest.channel`, `@Size(max = 24)`), a fixed set here so the audit log reads consistently. */
 export const AMENDMENT_CONFIRMATION_CHANNELS = ['PHONE', 'IN_PERSON', 'SMS'] as const;
@@ -38,13 +39,16 @@ const CHANNEL_LABEL_KEYS: Readonly<Record<AmendmentConfirmationChannel, MessageK
  * exists to move a `PRICED` amendment forward (the approval decision itself
  * is out of this screen's scope — see the wave's own report).
  *
- * <p>ADR 0039 §3.11 ties the customer's recorded agreement to an increase
- * only, so the channel picker below only renders for `deltaMinor() > 0` — a
+ * <p>ADR 0039 §3.11 ties the customer's recorded agreement to an increase,
+ * so the channel picker below renders for `deltaMinor() > 0` — a
  * decrease-only (or zero-delta) confirm still hits the same endpoint, but
  * never asks the operator how a customer they were never meant to consult
- * "agreed". The server side of this gate is
- * `OrderAmendmentService#attestConfirmation`, which likewise only persists
- * `confirmation_attested_by`/`_at`/`_channel` for a positive delta.
+ * "agreed". ADR 0169 adds the one other case: an amendment that takes a line
+ * off the order (it has a {@link stockConsequence}) needs the agreement
+ * whatever it does to the total, because the customer ordered the item. The
+ * server side of this gate is `OrderAmendmentService#attestConfirmation`,
+ * which persists `confirmation_attested_by`/`_at`/`_channel` for a positive
+ * delta or a removal, and the database refuses to apply a removal without it.
  */
 @Component({
   selector: 'q-order-amendment-confirm-dialog',
@@ -58,11 +62,22 @@ export class OrderAmendmentConfirmDialog {
   readonly deltaMinor = input.required<number>();
   readonly currency = input.required<string>();
   readonly requiresApproval = input(false);
+  /**
+   * ADR 0169: what the stock does for each line this amendment takes off the order, shown before anything is
+   * applied. Non-empty means the amendment removes something, and then the customer's agreement is recorded
+   * whatever the amendment does to the total.
+   */
+  readonly stockConsequence = input<readonly StockConsequenceLine[]>([]);
   readonly busy = input(false);
   readonly locale = input.required<Locale>();
 
   readonly confirm = output<AmendmentConfirmationChannel>();
   readonly dismiss = output<void>();
+
+  protected readonly removesStock = computed(() => this.stockConsequence().length > 0);
+
+  /** The customer's agreement is for an increase, and, ADR 0169, for anything that takes a line off the order. */
+  protected readonly needsAgreement = computed(() => this.deltaMinor() > 0 || this.removesStock());
 
   protected readonly channels = AMENDMENT_CONFIRMATION_CHANNELS;
   protected readonly channel = signal<AmendmentConfirmationChannel>('PHONE');

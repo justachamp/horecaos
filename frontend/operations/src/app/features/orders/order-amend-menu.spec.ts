@@ -2,24 +2,17 @@ import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { I18n } from '../../core/i18n/i18n';
-import {
-  AMENDMENT_COMMAND_TYPES,
-  BUILT_AMENDMENT_COMMAND_TYPES,
-  BuiltAmendmentCommandType,
-} from './order-amendments';
+import { BUILT_AMENDMENT_COMMAND_TYPES, BuiltAmendmentCommandType } from './order-amendments';
 import { OrderAmendMenu } from './order-amend-menu';
 
-function render(): { fixture: ReturnType<typeof TestBed.createComponent<OrderAmendMenu>> } {
+function render(lineRemovalEnabled = false): {
+  fixture: ReturnType<typeof TestBed.createComponent<OrderAmendMenu>>;
+} {
   const fixture = TestBed.createComponent(OrderAmendMenu);
+  fixture.componentRef.setInput('lineRemovalEnabled', lineRemovalEnabled);
   fixture.detectChanges();
   return { fixture };
 }
-
-/** `AmendmentCommandType.built() == false` — the one command this client must never offer. See the class doc. */
-const NOT_BUILT_COMMAND_TYPES = AMENDMENT_COMMAND_TYPES.filter(
-  (type): type is Exclude<(typeof AMENDMENT_COMMAND_TYPES)[number], BuiltAmendmentCommandType> =>
-    !(BUILT_AMENDMENT_COMMAND_TYPES as readonly string[]).includes(type),
-);
 
 describe('OrderAmendMenu', () => {
   beforeEach(() => {
@@ -27,17 +20,24 @@ describe('OrderAmendMenu', () => {
     TestBed.inject(I18n).setLocale('en');
   });
 
-  it('renders exactly the eleven built commands, never REMOVE_LINES', () => {
-    const { fixture } = render();
+  it('offers the eleven ungated commands and not REMOVE_LINES while the brand has the removal path off', () => {
+    const { fixture } = render(false);
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelectorAll('[data-testid^="order-amend-menu-"]')).toHaveLength(
+      BUILT_AMENDMENT_COMMAND_TYPES.length - 1,
+    );
+    expect(host.querySelector('[data-testid="order-amend-menu-REMOVE_LINES"]')).toBeNull();
+  });
+
+  it('offers all twelve once the brand has switched the removal path on (ADR 0169)', () => {
+    const { fixture } = render(true);
     const host: HTMLElement = fixture.nativeElement;
 
     expect(host.querySelectorAll('[data-testid^="order-amend-menu-"]')).toHaveLength(
       BUILT_AMENDMENT_COMMAND_TYPES.length,
     );
-    expect(NOT_BUILT_COMMAND_TYPES).toEqual(['REMOVE_LINES']);
-    for (const notBuilt of NOT_BUILT_COMMAND_TYPES) {
-      expect(host.querySelector(`[data-testid="order-amend-menu-${notBuilt}"]`)).toBeNull();
-    }
+    expect(host.querySelector('[data-testid="order-amend-menu-REMOVE_LINES"]')).not.toBeNull();
   });
 
   it('renders each of the six wave-10 financial commands', () => {

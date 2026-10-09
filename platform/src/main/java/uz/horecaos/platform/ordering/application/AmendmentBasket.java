@@ -125,7 +125,25 @@ final class AmendmentBasket {
             List<Unit> units,
             Map<UUID, BigDecimal> changedQuantities,
             Map<UUID, List<OrderModifierRow>> modifiersByLine) {
-        return pricingItems(units, changedQuantities, modifiersByLine, Map.of());
+        return pricingItems(units, changedQuantities, modifiersByLine, Map.of(), Set.of(), false);
+    }
+
+    /**
+     * The same request for an amendment that may also take lines off the order or lower a quantity (ADR 0169).
+     *
+     * @param removedLineIds the order lines taken off. A unit any of whose lines is named is left out of the
+     *        request altogether, so the quote prices what remains; whether a combo may be removed by naming only
+     *        some of its component lines is the service's decision ({@link #requireWholeCombos}), not this one's
+     * @param allowDecrease whether a changed quantity below the live one is a decrease to carry out (the
+     *        removal gate is on) or a refusal by the old code
+     */
+    static List<PricingCommand.Item> pricingItems(
+            List<Unit> units,
+            Map<UUID, BigDecimal> changedQuantities,
+            Map<UUID, List<OrderModifierRow>> modifiersByLine,
+            Set<UUID> removedLineIds,
+            boolean allowDecrease) {
+        return pricingItems(units, changedQuantities, modifiersByLine, Map.of(), removedLineIds, allowDecrease);
     }
 
     /**
@@ -142,7 +160,7 @@ final class AmendmentBasket {
      */
     static List<PricingCommand.Item> pricingItemsWeighing(
             List<Unit> units, Map<UUID, List<OrderModifierRow>> modifiersByLine, UUID weighedLineId, int weighedGrams) {
-        return pricingItems(units, Map.of(), modifiersByLine, Map.of(weighedLineId, weighedGrams));
+        return pricingItems(units, Map.of(), modifiersByLine, Map.of(weighedLineId, weighedGrams), Set.of(), false);
     }
 
     /**
@@ -160,13 +178,18 @@ final class AmendmentBasket {
             List<Unit> units,
             Map<UUID, BigDecimal> changedQuantities,
             Map<UUID, List<OrderModifierRow>> modifiersByLine,
-            Map<UUID, Integer> capturedWeights) {
+            Map<UUID, Integer> capturedWeights,
+            Set<UUID> removedLineIds,
+            boolean allowDecrease) {
         List<PricingCommand.Item> items = new ArrayList<>();
         for (Unit unit : units) {
+            if (unit.lines().stream().anyMatch(line -> removedLineIds.contains(line.lineId()))) {
+                continue;
+            }
             items.add(
                     unit.combo()
-                            ? comboItem(unit, changedQuantities)
-                            : plainItem(unit, changedQuantities, modifiersByLine, capturedWeights));
+                            ? comboItem(unit, changedQuantities, allowDecrease)
+                            : plainItem(unit, changedQuantities, modifiersByLine, capturedWeights, allowDecrease));
         }
         return items;
     }
@@ -175,13 +198,14 @@ final class AmendmentBasket {
             Unit unit,
             Map<UUID, BigDecimal> changedQuantities,
             Map<UUID, List<OrderModifierRow>> modifiersByLine,
-            Map<UUID, Integer> capturedWeights) {
+            Map<UUID, Integer> capturedWeights,
+            boolean allowDecrease) {
         OrderLineRow line = unit.first();
         BigDecimal changedTo = changedQuantities.get(line.lineId());
         boolean changed = changedTo != null;
         BigDecimal quantity = changedTo != null ? Quantities.normalise(changedTo) : line.quantity();
-        if (changed && quantity.compareTo(line.quantity()) <= 0) {
-            throw decreaseRefused(line.lineId());
+        if (changed) {
+            requireMovement(line.lineId(), quantity.compareTo(line.quantity()), allowDecrease);
         }
         List<OrderModifierRow> rows = modifiersByLine.getOrDefault(line.lineId(), List.of());
 
@@ -211,7 +235,8 @@ final class AmendmentBasket {
                 line.lineId().toString(), line.sourceVariantId(), quantity, chosen, List.of(), nested, weight);
     }
 
-    private static PricingCommand.Item comboItem(Unit unit, Map<UUID, BigDecimal> changedQuantities) {
+    private static PricingCommand.Item comboItem(
+            Unit unit, Map<UUID, BigDecimal> changedQuantities, boolean allowDecrease) {
         OrderLineRow first = unit.first();
         int combos = requireInt(first.comboQuantity());
 
@@ -245,9 +270,7 @@ final class AmendmentBasket {
             requested = wanted;
         }
         if (requested != null) {
-            if (requested <= combos) {
-                throw decreaseRefused(first.lineId());
-            }
+            requireMovement(first.lineId(), Integer.compare(requested, combos), allowDecrease);
             combos = requested;
         }
 
@@ -301,6 +324,96 @@ final class AmendmentBasket {
             }
         }
         return increaseByVariant;
+    }
+
+    /**
+     * Refuses a change that does not move the quantity, and, while the removal gate is off, one that lowers it
+     * (ADR 0169): the old answer, by the old code, so a brand that has not enabled removal sees no change.
+     */
+    private static void requireMovement(UUID lineId, int comparedWithLive, boolean allowDecrease) {
+        if (comparedWithLive <= 0 && !allowDecrease) {
+            // The old answer for a quantity that is not larger: unchanged or lower, both "decrease".
+            throw decreaseRefused(lineId);
+        }
+        if (comparedWithLive == 0) {
+            throw new AmendmentRefusedException(
+                    "QUANTITY_UNCHANGED", "Line %s already has that quantity".formatted(lineId));
+        }
+    }
+
+    /**
+     * One live line an amendment takes units off, and what the stock consequence has to be told (ADR 0169).
+     *
+     * @param quantityAfter zero for a removal; the lowered quantity for a decrease
+     * @param stockUnits whole units the order no longer needs of {@code line}'s variant: the difference of the
+     *        two ceilings, the way an increase counts them, so 1.5 portions lowered to 1 gives back one plate
+     *        and 1 lowered to 0.5 gives back none
+     */
+    record LineDecrease(OrderLineRow line, BigDecimal quantityAfter, int stockUnits) {
+
+        boolean removal() {
+            return quantityAfter.signum() == 0;
+        }
+    }
+
+    /**
+     * Everything an amendment takes off the order, line by line: every line of a unit that is removed, and every
+     * line a quoted unit now holds fewer of. Read from the quote for a lowered unit, as {@link #increases} is,
+     * because a combo lowered by a whole combo changes several component lines the request never names.
+     */
+    static List<LineDecrease> decreases(
+            QuoteSnapshot quote, List<Unit> units, Set<UUID> removedLineIds, Set<UUID> changedLineIds) {
+        Map<String, List<QuoteSnapshot.Line>> quotedByKey = quote.lines().stream()
+                .collect(Collectors.groupingBy(
+                        QuoteSnapshot.Line::cartLineKey, LinkedHashMap::new, Collectors.toList()));
+        List<LineDecrease> decreases = new ArrayList<>();
+        for (Unit unit : units) {
+            if (unit.lines().stream().anyMatch(line -> removedLineIds.contains(line.lineId()))) {
+                for (OrderLineRow line : unit.lines()) {
+                    decreases.add(
+                            new LineDecrease(line, BigDecimal.ZERO, Quantities.wholeUnitsCeiling(line.quantity())));
+                }
+                continue;
+            }
+            if (unit.lines().stream().noneMatch(line -> changedLineIds.contains(line.lineId()))) {
+                continue;
+            }
+            for (QuoteSnapshot.Line quoted : quotedByKey.getOrDefault(unit.key(), List.of())) {
+                OrderLineRow live = unit.replacedBy(quoted);
+                if (quoted.quantity().compareTo(live.quantity()) < 0) {
+                    int units2 = Quantities.wholeUnitsCeiling(live.quantity())
+                            - Quantities.wholeUnitsCeiling(quoted.quantity());
+                    decreases.add(new LineDecrease(live, Quantities.normalise(quoted.quantity()), Math.max(units2, 0)));
+                }
+            }
+        }
+        return decreases;
+    }
+
+    /**
+     * A combo goes as a whole combo (ADR 0169, ADR 0136): naming some of a combo purchase's component lines for
+     * removal and not the others is refused, because a single component cannot be removed.
+     *
+     * @return the id of a line of the first combo purchase that is only partly named, or null when every named
+     *         combo is named whole
+     */
+    static @Nullable UUID requireWholeCombos(List<Unit> units, Set<UUID> removedLineIds) {
+        for (Unit unit : units) {
+            if (!unit.combo()) {
+                continue;
+            }
+            long named = unit.lines().stream()
+                    .filter(line -> removedLineIds.contains(line.lineId()))
+                    .count();
+            if (named > 0 && named < unit.lines().size()) {
+                return unit.lines().stream()
+                        .filter(line -> removedLineIds.contains(line.lineId()))
+                        .findFirst()
+                        .orElseThrow()
+                        .lineId();
+            }
+        }
+        return null;
     }
 
     private static AmendmentRefusedException decreaseRefused(UUID lineId) {

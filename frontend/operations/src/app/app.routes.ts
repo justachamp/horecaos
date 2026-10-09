@@ -906,26 +906,21 @@ export const routes: Routes = [
                 (m) => m.PriceBookMatrixPage,
               ),
           },
-          // catalog.md §4.13: every vocabulary on this screen is honestly
-          // "not built — ADR 0016" except Бренды, which already belongs to
-          // tenancy and is not duplicated here — the spec's own instruction
-          // is that nothing on this screen should be built before its
-          // disposition is decided.
+          // catalog.md §4.13 / ADR 0174 (gap-map row 4.7): tags and ingredients are authored here;
+          // comment presets, kitchen departments, recommended products and brands were built under
+          // other records and are linked out. Attributes are retired as a vocabulary (the variant's own
+          // published name is the axis label).
           {
             path: 'reference-data',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'operations-spec/catalog.md §4.13 (Reference data)' },
+              import('./features/catalog/reference-data-page').then((m) => m.ReferenceDataPage),
           },
-          // catalog.md's own parity table: "Unowned; closest ADR 0018/0019.
-          // Needs a decision before design." Zero backend anywhere.
+          // ADR 0158 (gap-map row 4.9): the rules that put packaging, cutlery and gift lines in a cart,
+          // and the simulator that previews them. Lazy, like every catalog page.
           {
             path: 'auto-add',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: {
-              spec: 'frontend-information-architecture.md §4.9 (Auto-add rules) — no backend',
-            },
+              import('./features/catalog/auto-add-page').then((m) => m.AutoAddPage),
           },
         ],
       },

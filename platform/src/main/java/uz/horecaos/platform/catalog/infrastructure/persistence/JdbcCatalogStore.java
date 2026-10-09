@@ -551,6 +551,9 @@ public class JdbcCatalogStore {
                     // ADR 0136: a pairing is named by the variant it offers; it has no
                     // translations of its own to write against.
                     case COMBO_COMPONENT -> null;
+                    // ADR 0174: the registries are tenant-wide and keep their wording in their own
+                    // translation tables, so nothing is written against them in catalog.translations.
+                    case TAG, INGREDIENT -> null;
                     // ADR 0038: a fee reaches a receipt as a line without being a catalog
                     // item. It has no row anywhere, and no translations, so there is
                     // nothing to resolve and nothing that may be written against it.
@@ -1004,6 +1007,62 @@ public class JdbcCatalogStore {
             conflict = current != null && holdsADifferentValue(current, incoming);
         }
         return new FiscalMerge(before, after, conflict);
+    }
+
+    /**
+     * Moves a node from a code the national list has withdrawn to the successor the list itself names (ADR 0173,
+     * Decision 7): the one place a stored ИКПУ is replaced behind a person's click.
+     *
+     * <p>Nothing is guessed. The node's stored code must be withdrawn on {@code today}, the list must name {@code
+     * successor} as that code's replacement, and the successor must itself be valid on {@code today}; any other
+     * pairing is a {@link FiscalMerge#conflict() conflict} and writes nothing, so a stale screen or a typed code
+     * cannot rewrite a legal classification. The row is locked first and only {@code mxik_code} changes: the
+     * package code, unit, fiscal name and the constraint columns stay as the tenant set them. A node already on
+     * the successor writes nothing.
+     */
+    public FiscalMerge replaceWithdrawnMxik(
+            UUID tenantId,
+            UUID brandId,
+            PriceableNode node,
+            String successor,
+            java.time.LocalDate today,
+            @Nullable UUID actorId) {
+        FiscalClassification locked = classificationOf(tenantId, brandId, node, true);
+        if (locked == null || locked.mxikCode() == null) {
+            return new FiscalMerge(FiscalClassification.unclassified(), null, true);
+        }
+        if (successor.equals(locked.mxikCode())) {
+            return new FiscalMerge(locked, null, false);
+        }
+        Map<String, MxikFacts> facts = mxikFacts(Set.of(locked.mxikCode(), successor));
+        MxikFacts stored = facts.get(locked.mxikCode());
+        MxikFacts next = facts.get(successor);
+        if (stored == null
+                || !stored.withdrawnOn(today)
+                || !successor.equals(stored.replacedByCode())
+                || next == null
+                || !next.validOn(today)) {
+            return new FiscalMerge(locked, null, true);
+        }
+        FiscalClassification after = jdbc.sql("""
+                UPDATE catalog.fiscal_classifications
+                   SET mxik_code = :successor, source = 'MANUAL', classified_by = :actor,
+                       classified_at = now(), version = version + 1, updated_at = now()
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId
+                   AND priceable_type = :priceableType AND priceable_id = :priceableId
+                RETURNING mxik_code, package_code, fiscal_unit_code, fiscal_name,
+                          barcode, marking_required, marking_scheme, excisable,
+                          alcohol_by_volume_bp, age_restriction_years
+                """)
+                .param("successor", successor)
+                .param("actor", actorId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("priceableType", node.type().name())
+                .param("priceableId", node.id())
+                .query((row, number) -> mapClassification(row))
+                .single();
+        return new FiscalMerge(locked, after, false);
     }
 
     /** One node's classification, or {@code null} when it has no row; {@code lock} takes the row {@code FOR UPDATE}. */

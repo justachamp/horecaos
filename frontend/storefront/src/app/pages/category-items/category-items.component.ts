@@ -3,6 +3,7 @@ import {
   Component,
   OnDestroy,
   OnInit,
+  computed,
   inject,
   signal,
 } from '@angular/core';
@@ -15,6 +16,7 @@ import { MenuService } from '../../services/menu.service';
 import { LangService } from '../../services/lang.service';
 import { TranslateService } from '../../services/translate.service';
 import type { MenuItem } from '../../types/home.types';
+import { filterOptionsOf, matchesAllTags } from '../../utils/menu-tags';
 
 @Component({
   selector: 'app-category-items',
@@ -34,6 +36,14 @@ export class CategoryItemsComponent implements OnInit, OnDestroy {
   readonly error = signal<string | null>(null);
   readonly categoryTitle = signal('');
   readonly items = signal<MenuItem[]>([]);
+
+  /** ADR 0174: the filter chips this category's products offer, and the ones the customer has selected. */
+  readonly filterOptions = computed(() => filterOptionsOf(this.items()));
+  readonly selectedTags = signal<ReadonlySet<string>>(new Set());
+  /** Products carrying every selected tag (AND); all of them when none is selected. */
+  readonly visibleItems = computed(() =>
+    this.items().filter((item) => matchesAllTags(item, this.selectedTags())),
+  );
 
   ngOnInit(): void {
     const stored = sessionStorage.getItem('mar_selected_cat');
@@ -71,6 +81,20 @@ export class CategoryItemsComponent implements OnInit, OnDestroy {
   }
   ngOnDestroy(): void {
     sessionStorage.removeItem('mar_selected_cat');
+  }
+
+  toggleTag(tagId: string): void {
+    this.selectedTags.update((current) => {
+      const next = new Set(current);
+      if (!next.delete(tagId)) {
+        next.add(tagId);
+      }
+      return next;
+    });
+  }
+
+  clearTags(): void {
+    this.selectedTags.set(new Set());
   }
 
   goBack(): void {

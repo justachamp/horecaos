@@ -174,7 +174,8 @@
       "choose": "Choose your free gift",
       "add": "Add your free {{name}}",
       "addMany": "Add your free {{name}} ×{{count}}"
-    }
+    },
+    "autoAdded": "Added automatically"
   },
   "checkout": {
     "title": "Checkout",
@@ -468,7 +469,8 @@
     "loadError": "The dish could not be loaded",
     "increase": "Increase",
     "decrease": "Decrease",
-    "lowStock": "Only {{count}} left"
+    "lowStock": "Only {{count}} left",
+    "ingredients": "Ingredients"
   },
   "referral": {
     "title": "Referral",
@@ -600,6 +602,13 @@
       "count": "{{count}} ratings",
       "distribution": "How the ratings split",
       "more": "Show more"
+    }
+  },
+  "menu": {
+    "filter": {
+      "title": "Filter by tag",
+      "clear": "Clear",
+      "empty": "No dish carries all of the selected tags."
     }
   }
 }

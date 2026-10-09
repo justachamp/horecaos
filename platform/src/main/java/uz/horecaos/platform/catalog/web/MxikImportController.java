@@ -74,9 +74,9 @@ public class MxikImportController {
                     + "object store directly: PUT the file to the returned URL with the required headers, then "
                     + "post the import naming the returned objectKey. The key is single-purpose and the URL "
                     + "expires; the file is read back once, bounded by catalog.mxik_import_max_bytes.")
-    public UploadTicketResponse requestUpload() {
+    public MxikUploadTicketResponse requestUpload() {
         UploadTicket ticket = imports.requestUpload();
-        return new UploadTicketResponse(
+        return new MxikUploadTicketResponse(
                 ticket.objectKey(),
                 ticket.upload().url().toString(),
                 ticket.upload().requiredHeaders(),
@@ -97,7 +97,7 @@ public class MxikImportController {
                     + "catalog.mxik_import_withdrawal_threshold_percent of the valid rows answers "
                     + "HELD_FOR_REVIEW. 422 with findingCode UNKNOWN_HEADER, DUPLICATE_HEADER, MISSING_COLUMN, "
                     + "FILE_EMPTY, FILE_TOO_LARGE or RAW_FILE_NOT_STORED when the file cannot be used.")
-    public ResponseEntity<RunResponse> upload(@Valid @RequestBody ImportRequest request) {
+    public ResponseEntity<MxikImportRunResponse> upload(@Valid @RequestBody MxikImportRequest request) {
         String inline = request.contentBase64();
         String objectKey = request.objectKey();
         if ((inline == null) == (objectKey == null)) {
@@ -120,23 +120,23 @@ public class MxikImportController {
         return respond(
                 result.run(),
                 result.sampleErrors().stream()
-                        .map(error -> new SampleError(error.row(), error.code(), error.detailCode()))
+                        .map(error -> new MxikImportSampleError(error.row(), error.code(), error.detailCode()))
                         .toList());
     }
 
     @GetMapping
     @RequiresCapability(value = Capability.PLATFORM_ADMIN, scope = ScopeType.PLATFORM)
     @Operation(summary = "The most recent import runs")
-    public List<RunResponse> recent(@RequestParam(required = false) @Nullable Integer limit) {
+    public List<MxikImportRunResponse> recent(@RequestParam(required = false) @Nullable Integer limit) {
         return imports.recentRuns(limit == null ? 20 : limit).stream()
-                .map(run -> RunResponse.of(run, objectMapper, List.of()))
+                .map(run -> MxikImportRunResponse.of(run, objectMapper, List.of()))
                 .toList();
     }
 
     @GetMapping("/{runId}")
     @RequiresCapability(value = Capability.PLATFORM_ADMIN, scope = ScopeType.PLATFORM)
     @Operation(summary = "One import run: its counts, its distribution of code lengths and where it stands")
-    public ResponseEntity<RunResponse> read(@PathVariable UUID runId) {
+    public ResponseEntity<MxikImportRunResponse> read(@PathVariable UUID runId) {
         return respond(imports.run(runId), List.of());
     }
 
@@ -147,7 +147,7 @@ public class MxikImportController {
             description = "Row errors, the codes a full snapshot would withdraw, the codes it would reinstate "
                     + "and the codes whose package defaults change. Capped at 5,000 per run. Cursor-paged: pass "
                     + "the previous page's nextCursor as after. The detail never repeats a row's content.")
-    public Page<FindingResponse> findings(
+    public Page<MxikImportFindingResponse> findings(
             @PathVariable UUID runId,
             @RequestParam(required = false) @Nullable String after,
             @RequestParam(required = false) @Nullable Integer limit) {
@@ -166,7 +166,8 @@ public class MxikImportController {
                 : null;
         return new Page<>(
                 found.stream()
-                        .map(finding -> new FindingResponse(finding.kind(), finding.code(), finding.detailCode()))
+                        .map(finding ->
+                                new MxikImportFindingResponse(finding.kind(), finding.code(), finding.detailCode()))
                         .toList(),
                 next);
     }
@@ -181,9 +182,9 @@ public class MxikImportController {
                     + "applies only when acknowledgedWithdrawals repeats the exact count it would withdraw "
                     + "(422 WITHDRAWAL_ACKNOWLEDGEMENT_REQUIRED otherwise). 422 RUN_IS_STALE when the list "
                     + "changed after the run was validated; upload the file again.")
-    public ResponseEntity<RunResponse> apply(
+    public ResponseEntity<MxikImportRunResponse> apply(
             @PathVariable UUID runId,
-            @Valid @RequestBody(required = false) @Nullable ApplyRequest request,
+            @Valid @RequestBody(required = false) @Nullable MxikImportApplyRequest request,
             HttpServletRequest httpRequest) {
         int expected = Math.toIntExact(AggregateVersion.requireIfMatch(httpRequest));
         Integer acknowledged = request == null ? null : request.acknowledgedWithdrawals();
@@ -196,7 +197,7 @@ public class MxikImportController {
             summary = "Reject a validated run",
             description = "Requires If-Match. The run is kept as a record; its staged rows are cleared and the "
                     + "list is untouched.")
-    public ResponseEntity<RunResponse> reject(@PathVariable UUID runId, HttpServletRequest httpRequest) {
+    public ResponseEntity<MxikImportRunResponse> reject(@PathVariable UUID runId, HttpServletRequest httpRequest) {
         int expected = Math.toIntExact(AggregateVersion.requireIfMatch(httpRequest));
         return respond(imports.reject(runId, expected, subject()), List.of());
     }
@@ -205,10 +206,10 @@ public class MxikImportController {
         return currentActor.get().subject();
     }
 
-    private ResponseEntity<RunResponse> respond(RunRow run, List<SampleError> sample) {
+    private ResponseEntity<MxikImportRunResponse> respond(RunRow run, List<MxikImportSampleError> sample) {
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, AggregateVersion.toETag(run.version()))
-                .body(RunResponse.of(run, objectMapper, sample));
+                .body(MxikImportRunResponse.of(run, objectMapper, sample));
     }
 
     // -------------------------------------------------------------------------- shapes
@@ -220,7 +221,7 @@ public class MxikImportController {
      * @param sourcePublishedOn the date the authority published the file, if the administrator knows it; the
      *                        date a full snapshot dates its withdrawals with
      */
-    public record ImportRequest(
+    public record MxikImportRequest(
             @NotBlank @Size(max = 255) String fileName,
             @Nullable String contentBase64,
             @Nullable @Size(max = 255) String objectKey,
@@ -228,17 +229,18 @@ public class MxikImportController {
             @Nullable LocalDate sourcePublishedOn) {}
 
     /** @param acknowledgedWithdrawals the exact count a held run would withdraw, to release it */
-    public record ApplyRequest(@Nullable Integer acknowledgedWithdrawals) {}
+    public record MxikImportApplyRequest(@Nullable Integer acknowledgedWithdrawals) {}
 
-    public record UploadTicketResponse(
+    public record MxikUploadTicketResponse(
             String objectKey, String url, Map<String, String> requiredHeaders, Instant expiresAt, long maxBytes) {}
 
-    public record SampleError(int row, @Nullable String code, String detailCode) {}
+    public record MxikImportSampleError(int row, @Nullable String code, String detailCode) {}
 
-    public record FindingResponse(String kind, @Nullable String code, String detailCode) {}
+    public record MxikImportFindingResponse(
+            String kind, @Nullable String code, String detailCode) {}
 
     /** A run, without the file or any row of it. */
-    public record RunResponse(
+    public record MxikImportRunResponse(
             UUID runId,
             String status,
             String mode,
@@ -264,16 +266,16 @@ public class MxikImportController {
             @Nullable Integer datasetVersion,
             @Nullable String failureReason,
             int version,
-            List<SampleError> sampleErrors) {
+            List<MxikImportSampleError> sampleErrors) {
 
-        static RunResponse of(RunRow run, ObjectMapper objectMapper, List<SampleError> sample) {
+        static MxikImportRunResponse of(RunRow run, ObjectMapper objectMapper, List<MxikImportSampleError> sample) {
             Map<String, Integer> histogram = new LinkedHashMap<>();
             objectMapper
                     .readTree(run.codeLengthHistogram())
                     .properties()
                     .forEach(entry ->
                             histogram.put(entry.getKey(), entry.getValue().asInt()));
-            return new RunResponse(
+            return new MxikImportRunResponse(
                     run.id(),
                     run.status(),
                     run.mode(),

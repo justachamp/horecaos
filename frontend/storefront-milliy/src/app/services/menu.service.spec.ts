@@ -762,3 +762,124 @@ describe("MenuService: a portion's own groups and the choices an option opens (A
     ).toBe(true);
   });
 });
+
+describe('MenuService: variant names, tags and ingredients (ADR 0174)', () => {
+  function productWith(extra: Record<string, unknown>) {
+    return {
+      productId: 'p1',
+      code: 'PIZZA',
+      name: 'Pizza',
+      description: null,
+      mediaAssetIds: [],
+      imageUrls: [],
+      modifierGroupIds: [],
+      commentPresets: [],
+      variants: [
+        {
+          variantId: 'v-small',
+          sku: 'SKU-S',
+          unitCode: 'PIECE',
+          name: 'Kichik',
+          isDefault: true,
+          orderable: true,
+          amountMinor: 50000,
+          onSaleNow: true,
+          remainingQuantity: null,
+        },
+        {
+          variantId: 'v-large',
+          sku: 'SKU-L',
+          unitCode: 'PIECE',
+          isDefault: false,
+          orderable: true,
+          amountMinor: 80000,
+          onSaleNow: true,
+          remainingQuantity: null,
+        },
+      ],
+      ...extra,
+    };
+  }
+
+  it('labels a size by the name its author gave it, and falls back to the unit code, never the SKU', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({
+      ...emptyMenu(),
+      products: [productWith({})],
+    } as unknown as PublishedMenu);
+
+    const item = await service.item('p1', 'uz');
+
+    expect(item?.variants.map((variant) => variant.name)).toEqual(['Kichik', 'PIECE']);
+  });
+
+  it('projects a product’s tags and ingredients in the author’s order, with the wording the platform resolved', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({
+      ...emptyMenu(),
+      products: [
+        productWith({
+          tags: [
+            {
+              tagId: 't1',
+              code: 'spicy',
+              icon: 'FLAME',
+              showAsBadge: true,
+              showAsFilter: true,
+              sortOrder: 0,
+              name: 'Achchiq',
+            },
+            {
+              tagId: 't2',
+              code: 'vegan',
+              icon: null,
+              showAsBadge: false,
+              showAsFilter: true,
+              sortOrder: 1,
+              name: 'Vegan',
+            },
+          ],
+          ingredients: [
+            { ingredientId: 'i1', code: 'rice', name: 'Guruch' },
+            { ingredientId: 'i2', code: 'carrot', name: 'Sabzi' },
+          ],
+        }),
+      ],
+    } as unknown as PublishedMenu);
+
+    const item = await service.item('p1', 'uz');
+
+    expect(item?.tags).toEqual([
+      {
+        id: 't1',
+        code: 'spicy',
+        icon: 'FLAME',
+        showAsBadge: true,
+        showAsFilter: true,
+        name: 'Achchiq',
+      },
+      {
+        id: 't2',
+        code: 'vegan',
+        icon: null,
+        showAsBadge: false,
+        showAsFilter: true,
+        name: 'Vegan',
+      },
+    ]);
+    expect(item?.ingredients?.map((ingredient) => ingredient.name)).toEqual(['Guruch', 'Sabzi']);
+  });
+
+  it('reads a menu published before any of it as having no tags and no ingredients', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({
+      ...emptyMenu(),
+      products: [productWith({})],
+    } as unknown as PublishedMenu);
+
+    const item = await service.item('p1', 'uz');
+
+    expect(item?.tags).toEqual([]);
+    expect(item?.ingredients).toEqual([]);
+  });
+});

@@ -52,8 +52,10 @@ public class AutoAddSimulationController {
                     + "whether it would INJECT a line, OFFER one, or be SKIPPED, with the variant and the quantity. "
                     + "Nothing is written. The only check run on a rule's variant is that it is active: stock, sale "
                     + "windows and prices belong to a real cart at a real branch.")
-    public SimulationResponse simulate(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody SimulationRequest request) {
+    public AutoAddSimulationResponse simulate(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @Valid @RequestBody AutoAddSimulationRequest request) {
         var result = simulations.simulate(
                 tenantId,
                 brandId,
@@ -68,11 +70,11 @@ public class AutoAddSimulationController {
                         request.declinedRuleIds() == null
                                 ? java.util.Set.of()
                                 : new LinkedHashSet<>(request.declinedRuleIds())));
-        return new SimulationResponse(
+        return new AutoAddSimulationResponse(
                 result.units(),
                 result.portions(),
                 result.outcomes().stream()
-                        .map(outcome -> new OutcomeResponse(
+                        .map(outcome -> new AutoAddOutcomeResponse(
                                 outcome.ruleId(),
                                 outcome.ruleCode(),
                                 outcome.ruleStatus(),
@@ -83,13 +85,13 @@ public class AutoAddSimulationController {
                         .toList());
     }
 
-    public record SimulatedLineBody(
+    public record AutoAddSimulatedLineBody(
             @NotNull UUID variantId,
 
             @NotNull @DecimalMin(value = "0", inclusive = false) @DecimalMax("999")
             BigDecimal quantity) {}
 
-    public record SimulationRequest(
+    public record AutoAddSimulationRequest(
             @NotBlank @Pattern(regexp = "DELIVERY|PICKUP|DINE_IN")
             String fulfillmentMode,
 
@@ -97,10 +99,10 @@ public class AutoAddSimulationController {
             String channelSystemType,
 
             @Nullable UUID locationId,
-            @NotEmpty @Size(max = 100) List<@Valid SimulatedLineBody> lines,
+            @NotEmpty @Size(max = 100) List<@Valid AutoAddSimulatedLineBody> lines,
             @Nullable @Size(max = 50) List<UUID> declinedRuleIds) {}
 
-    public record OutcomeResponse(
+    public record AutoAddOutcomeResponse(
             UUID ruleId,
             String ruleCode,
             String ruleStatus,
@@ -109,5 +111,6 @@ public class AutoAddSimulationController {
             @Nullable BigDecimal quantity,
             @Nullable String reason) {}
 
-    public record SimulationResponse(BigDecimal units, BigDecimal portions, List<OutcomeResponse> outcomes) {}
+    public record AutoAddSimulationResponse(
+            BigDecimal units, BigDecimal portions, List<AutoAddOutcomeResponse> outcomes) {}
 }

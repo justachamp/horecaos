@@ -11,7 +11,8 @@ import {
   SlaBucketSetView,
 } from '../../../core/api/sla-bucket-set-api';
 
-export type OutcomeReasonKind = 'CANCELLATION' | 'COMPLETION';
+/** `LINE_REMOVAL` (ADR 0169): why a line was taken off a confirmed order; carries a stock disposition and a liable party, and no refund posture. */
+export type OutcomeReasonKind = 'CANCELLATION' | 'COMPLETION' | 'LINE_REMOVAL';
 export type StockDisposition = 'RELEASE' | 'RETURN_TO_STOCK' | 'WRITE_OFF' | 'NO_EFFECT';
 export type LiabilityParty = 'TENANT' | 'CUSTOMER' | 'COURIER_PARTNER' | 'PLATFORM';
 export type CustomerRefund = 'FULL' | 'NONE' | 'DISCRETIONARY';

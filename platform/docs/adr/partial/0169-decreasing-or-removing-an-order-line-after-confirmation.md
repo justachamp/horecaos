@@ -1,36 +1,35 @@
 # ADR 0169: Decreasing or removing an order line after confirmation
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Not started — the amendment that removes or reduces a line is
-  declared and refused by name, and the inventory verb it needs does not exist.
-  `AmendmentCommandType.REMOVE_LINES` is `built() == false`;
-  `OperationsOrderController.AmendmentCommandRequest#toCommand` refuses it before
-  anything is written; `AmendmentBasket#decreaseRefused` throws
-  `QUANTITY_DECREASE_NOT_SUPPORTED` for a plain line lowered and for a combo count
-  lowered, and `OrderAmendmentService#reserveIncrease` reserves and commits the
-  increase of a quantity and has no counterpart. `InventoryReservationPort` is
-  "deliberately three verbs" (`reserveForQuote`, `commit`, `release`) and its
-  `release` can only act on a `HELD` reservation: `JdbcInventoryStore#transitionReservation`
-  carries `WHERE status = 'HELD'`. The ledger is ready for the movements and nothing
-  writes them: `inventory.movements.ck_movement_type` already admits `RETURN` and
-  `WASTE` (V0019), the table is append-only for the application role, and
-  `source_type`, `reason_code` and an idempotency key are in place. The order side is
-  ready too and says so: `ordering.order_outcomes.inventory_movement_id` and `refund_id`
-  exist (V0029) and are always null, with a comment that the port "is deliberately three
-  verbs ... and writing a return or waste movement needs a fourth that belongs to
-  inventory"; `ordering.domain.StockDisposition` names `RETURN_TO_STOCK`, `WRITE_OFF`
-  and `NO_EFFECT`, and `OrderStateService` records the disposition of a cancellation
-  after commitment without acting on it ("an open item on ADR 0039's checklist rather
-  than a silent no-op"). A decrease has the other half of its machinery: ADR 0027
-  four-eyes approval above `ordering.amendment_decrease_approval_threshold_minor`
-  (`ApprovalAction.ORDERING_AMENDMENT_DECREASE`, wired in `requiresDecreaseApproval`),
-  the cut point `ordering.amendment_cut_point_status` (default `READY`), the revision
-  append with `order_lines.revision_to`, and `order_revisions.fiscal_correction_required`
-  (V0395). `KitchenTicketService#syncAmendedLines` already strikes a `QUEUED` or `STARTED`
-  ticket item whose order line stopped being live and remembers a `READY` one as made.
-  Nothing restates the money plan after an amendment: only `kitchen` listens to
-  `OrderAmendmentApplied`, and `OrderSettlementPort#restateTotal` has one caller,
-  `CatchweightReconciliationService`.
+- Implementation status: Partial — built in operations batch 20 (2026-10-09), behind
+  `ordering.amendment_line_removal_enabled`, which is off by default. V0541 widens
+  `ordering.order_outcome_reasons` with the `LINE_REMOVAL` kind and seeds three starter
+  reasons per tenant (new tenants get them from `StarterRemovalReasonsTrigger`), creates
+  the append-only `ordering.order_line_removals`, and adds `inventory.stock_disposals`
+  so a replay moves nothing; V0542 adds the customer's recorded agreement for a removal
+  and grants the one column `order_outcomes.inventory_movement_id`.
+  `InventoryReservationPort#dispose` (and a preview that writes nothing) releases what
+  is still held, returns or writes off what was sold as `RETURN` and `RETURN` plus
+  `WASTE`, takes the branch from the reservation under the position lock, and publishes
+  `InventoryStockDisposed` through the outbox with an audit fact.
+  `OrderLineProductionPort`, implemented in `kitchen.infrastructure.ordering`, lets a
+  started or made unit only make the disposition more conservative. `REMOVE_LINES` is
+  built and `CHANGE_LINE_QUANTITY` may lower a quantity: both take a `removalReasonId`,
+  reprice through the ordinary path, append a revision with the fiscal correction
+  marker, refuse `WOULD_EMPTY_ORDER`, `COMBO_COMPONENT_NOT_REMOVABLE`, `LINE_NOT_LIVE`,
+  `REMOVAL_REASON_*`, a mandatory auto-added line (`AUTO_ADD_LINE_MANDATORY`) and a
+  provider-paid order (`PAID_ORDER_DECREASE_NOT_SUPPORTED`), preview the stock
+  consequence, and restate the cash due on a `NOT_REQUIRED` order, which now also
+  happens for `ADD_LINES`. A cancellation after commitment disposes of the remaining
+  units through the same verb and fills `inventory_movement_id`. The console has the
+  Remove line dialog with its reason picker and preview, a quantity dialog that can
+  lower, and the third reason kind in Settings. Proved by `StockDisposalTests`,
+  `OrderAmendmentAndOutcomeTests`, `AmendmentBasketTests`, `DecimalAmendmentHttpTests`,
+  `OperationsOrderControllerAmendmentsHttpTests`, `ComboOrderFlowEndToEndTests` and
+  `AutoAddCartHttpTests`. Not built: the write-off report in units and a reporting
+  consumer of `InventoryStockDisposed` (reporting has no fact for a removal; it needs a
+  migration number this batch did not reserve), a fiscal document for a removal (the ADR
+  decides only the marker), and the pointers from ADR 0017 and ADR 0039 to this record.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides

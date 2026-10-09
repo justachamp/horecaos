@@ -678,6 +678,22 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.classification.nodeType.VARIANT': 'Taom',
   'settings.fiscalization.classification.nodeType.MODIFIER_OPTION': 'Modifikator',
   'settings.fiscalization.classification.nodeType.FEE': 'Toʻlov',
+  'settings.fiscalization.classification.withdrawn.title':
+    'Milliy maʻlumotnomadan chiqarilgan kodlar: {count}',
+  'settings.fiscalization.classification.withdrawn.lead':
+    'Bu pozitsiyalar hali ham tasniflangan va sotilmoqda. Maʻlumotnoma vorisni koʻrsatgan boʻlsa, ularni bir bosishda oʻtkazish mumkin; hech narsa avtomatik almashtirilmaydi, berilgan chek esa yuborilgan kodini saqlaydi.',
+  'settings.fiscalization.classification.withdrawn.code': 'IKPU / MXIK',
+  'settings.fiscalization.classification.withdrawn.on': 'Chiqarilgan sana',
+  'settings.fiscalization.classification.withdrawn.successor': 'Koʻrsatilgan voris',
+  'settings.fiscalization.classification.withdrawn.noSuccessor': 'koʻrsatilmagan',
+  'settings.fiscalization.classification.withdrawn.replace': '{code} ga almashtirish',
+  'settings.fiscalization.classification.withdrawn.replaceAll':
+    '{count} tasini koʻrsatilgan vorislarga almashtirish',
+  'settings.fiscalization.classification.withdrawn.confirm':
+    '{count} ta pozitsiyaning IKPU kodini milliy maʻlumotnomadagi voris bilan almashtiraymi? Faqat IKPU oʻzgaradi.',
+  'settings.fiscalization.classification.withdrawn.confirmYes': 'Almashtirish',
+  'settings.fiscalization.classification.withdrawn.outcome':
+    'Almashtirildi: {replaced}. Oʻzgarishsiz qoldi: {left}.',
   'settings.fiscalization.classification.deliveryFee.name': 'Yetkazib berish',
   'settings.fiscalization.classification.deliveryFee.warning':
     'Yetkazib berish toʻlovi fiskal tasniflanmagan — bu koʻpincha unutiladigan narsa. Brend fiskallashtiradigan kanal orqali shuni hal qilmasdan yetkazib berish uchun haq ola olmaydi.',
@@ -831,6 +847,12 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.referenceData.cancellation.add': 'Bekor qilish sababini qoʻshish',
   'settings.referenceData.completion.title': 'Yakunlash sabablari',
   'settings.referenceData.completion.add': 'Yakunlash sababini qoʻshish',
+  'settings.referenceData.removal.title': 'Taomni olib tashlash sabablari',
+  'settings.referenceData.removal.add': 'Olib tashlash sababini qoʻshish',
+  'settings.referenceData.removal.lead':
+    'Tasdiqlangan buyurtmadan taom nega olib tashlandi. Sabab qoldiq taqdirini belgilaydi; operator sababni tanlaydi, farmoyishni emas.',
+  'settings.referenceData.removal.unavailableCannotReturn':
+    '«Mavjud emas» sababi mahsulotni omborga qaytara olmaydi: u u yerda boʻlmagan.',
   'settings.referenceData.add': 'Qoʻshish',
   'settings.referenceData.disable': 'Oʻchirish',
   'settings.referenceData.empty': 'Hali yoʻq.',

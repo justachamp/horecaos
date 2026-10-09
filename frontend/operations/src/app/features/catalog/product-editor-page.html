@@ -190,10 +190,27 @@
                     }
                   </dd>
                 </dl>
+                @if (brandScope(); as vocabularyScope) {
+                  <q-product-vocabulary
+                    [scope]="vocabularyScope"
+                    [productId]="product.productId"
+                    kind="TAG"
+                    data-testid="editor-tags"
+                  />
+                  <q-product-vocabulary
+                    [scope]="vocabularyScope"
+                    [productId]="product.productId"
+                    kind="INGREDIENT"
+                    data-testid="editor-ingredients"
+                  />
+                }
               </div>
             }
             @case ('VARIANTS') {
               <div class="editor__section">
+                <p class="q-caption" data-testid="editor-variant-name-hint">
+                  {{ 'catalog.editor.vocabulary.variantNameHint' | t }}
+                </p>
                 <table class="editor__table">
                   <thead>
                     <tr>

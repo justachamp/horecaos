@@ -431,6 +431,166 @@ class DecimalAmendmentHttpTests {
         }
     }
 
+    // ------------------------------------------------- ADR 0169: taking a line off a confirmed order
+
+    private void switchRemovalOn() {
+        jdbc.sql("""
+                INSERT INTO tenant.configuration_values
+                    (id, key_code, scope_type, tenant_id, brand_id, value_type, boolean_value, set_by)
+                VALUES (:id, 'ordering.amendment_line_removal_enabled', 'BRAND', :tenant, :brand, 'BOOLEAN',
+                    true, 'a-test')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenant", TENANT)
+                .param("brand", BRAND)
+                .update();
+    }
+
+    /** A removal reason authored over the same endpoint the settings screen uses. */
+    private String createRemovalReason(String name, String category, String disposition) throws Exception {
+        MvcResult created = mvc.perform(post("/api/v1/control-plane/tenants/" + TENANT + "/order-outcome-reasons")
+                        .with(tokenFor(OPERATOR))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "reason-" + UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"kind":"LINE_REMOVAL","systemCategory":"%s","internalName":"%s",\
+                                "stockDisposition":"%s","liabilityParty":"CUSTOMER",\
+                                "customerTexts":{"ru":"Блюдо убрано","uz-Latn":"Taom olib tashlandi","en":"Removed"}}""".formatted(category, name, disposition)))
+                .andReturn();
+        assertThat(created.getResponse().getStatus())
+                .as(created.getResponse().getContentAsString())
+                .isEqualTo(200);
+        return JSON.readTree(created.getResponse().getContentAsString())
+                .get("id")
+                .asText();
+    }
+
+    private static String removeLines(UUID lineId, @org.jspecify.annotations.Nullable String reasonId) {
+        return """
+                {"type":"REMOVE_LINES","orderLineIds":["%s"]%s}""".formatted(lineId, reasonId == null ? "" : ",\"removalReasonId\":\"" + reasonId + "\"");
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0169: a brand that has not switched the removal path on is told so, and the order read says it is off")
+    void removalIsOffUntilTheBrandSwitchesItOn() throws Exception {
+        UUID orderId = placeOrder(Map.of("plov", plovVariant, "soda", sodaVariant), "rm-off-order");
+        UUID soda = lineIdOf(orderId, sodaVariant);
+
+        assertThat(orderDetail(orderId).path("lineRemovalEnabled").asBoolean(true))
+                .as("the console offers «remove» only where the server will carry it out")
+                .isFalse();
+        JsonNode refused =
+                amend(orderId, "rm-off-1", removeLines(soda, UUID.randomUUID().toString()), 409);
+        assertThat(refused.toString()).contains("REMOVE_LINES").contains("not switched on");
+        assertThat(amendmentCount(orderId)).isZero();
+    }
+
+    @Test
+    @DisplayName("ADR 0169: REMOVE_LINES over HTTP is previewed with what happens to the stock, needs the customer's "
+            + "agreement, and then takes the line off with its evidence")
+    void aLineIsRemovedOverHttp() throws Exception {
+        switchRemovalOn();
+        String reason = createRemovalReason("Customer changed their mind", "CUSTOMER_CHANGED_MIND", "RETURN_TO_STOCK");
+        UUID orderId = placeOrder(Map.of("plov", plovVariant, "soda", sodaVariant), "rm-on-order");
+        UUID soda = lineIdOf(orderId, sodaVariant);
+        long before = totalOf(orderId);
+        assertThat(orderDetail(orderId).path("lineRemovalEnabled").asBoolean(false))
+                .isTrue();
+
+        JsonNode preview = amend(orderId, "rm-on-1", removeLines(soda, reason), 200);
+
+        assertThat(preview.get("status").asText()).isEqualTo("PRICED");
+        assertThat(preview.get("deltaTotalMinor").asLong()).as("a can fewer").isNegative();
+        JsonNode consequence = preview.get("stockConsequence");
+        assertThat(consequence)
+                .as("the preview says what the stock will do before anything is applied")
+                .hasSize(1);
+        assertThat(consequence.get(0).get("orderLineId").asText()).isEqualTo(soda.toString());
+        assertThat(consequence.get(0).get("quantityAfter").decimalValue()).isEqualByComparingTo("0");
+        assertThat(consequence.get(0).get("kitchenState").asText())
+                .as("the confirmed order opened a kitchen ticket whose item is still queued")
+                .isEqualTo("NOT_STARTED");
+        assertThat(consequence.get(0).get("declaredDisposition").asText()).isEqualTo("RETURN_TO_STOCK");
+        assertThat(preview.get("actions").toString())
+                .as("a removal waits for the customer's agreement even though the total only fell")
+                .contains("RESOLVE");
+        assertThat(totalOf(orderId)).as("a preview changes nothing").isEqualTo(before);
+
+        confirm(orderId, preview);
+
+        assertThat(totalOf(orderId)).isLessThan(before);
+        assertThat(orderDetail(orderId).get("lines")).hasSize(1);
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.order_line_removals WHERE order_id = :id")
+                        .param("id", orderId)
+                        .query(Integer.class)
+                        .single())
+                .isEqualTo(1);
+        JsonNode history = JSON.readTree(
+                mvc.perform(get(orderPath(orderId) + "/amendments").with(tokenFor(OPERATOR)))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString());
+        assertThat(history.get(0).get("stockConsequence"))
+                .as("the history keeps what the amendment was going to do to the stock")
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("ADR 0169: the refusals are stable codes: no reason, the last line, and a body that names no line")
+    void removalRefusalsHaveStableCodes() throws Exception {
+        switchRemovalOn();
+        String reason = createRemovalReason("Order entry error", "ORDER_ENTRY_ERROR", "RETURN_TO_STOCK");
+        UUID orderId = placeOrder(Map.of("plov", plovVariant, "soda", sodaVariant), "rm-codes-order");
+        UUID soda = lineIdOf(orderId, sodaVariant);
+        UUID plov = lineIdOf(orderId, plovVariant);
+
+        assertThat(refusalCode(orderId, "rm-codes-1", removeLines(soda, null))).isEqualTo("REMOVAL_REASON_REQUIRED");
+        assertThat(refusalCode(orderId, "rm-codes-2", """
+                        {"type":"REMOVE_LINES","orderLineIds":["%s","%s"],"removalReasonId":"%s"}""".formatted(soda, plov, reason)))
+                .as("nothing the customer chose would be left: that is a cancellation")
+                .isEqualTo("WOULD_EMPTY_ORDER");
+        amend(orderId, "rm-codes-3", """
+                {"type":"REMOVE_LINES"}""", 400);
+        assertThat(amendmentCount(orderId)).isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0169: the starter removal reasons exist for a tenant and an ITEM_UNAVAILABLE reason cannot return to stock")
+    void theRegistryAcceptsTheThirdKindAndRefusesTheImpossibleOne() throws Exception {
+        createRemovalReason("Kitchen error", "KITCHEN_ERROR", "WRITE_OFF");
+
+        MvcResult impossible = mvc.perform(post("/api/v1/control-plane/tenants/" + TENANT + "/order-outcome-reasons")
+                        .with(tokenFor(OPERATOR))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "reason-" + UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"kind":"LINE_REMOVAL","systemCategory":"ITEM_UNAVAILABLE","internalName":"Sold out",\
+                                "stockDisposition":"RETURN_TO_STOCK","liabilityParty":"TENANT",\
+                                "customerTexts":{"ru":"Закончилось","uz-Latn":"Tugadi","en":"Sold out"}}"""))
+                .andReturn();
+        assertThat(impossible.getResponse().getStatus())
+                .as("the stock is by definition not there: "
+                        + impossible.getResponse().getContentAsString())
+                .isBetween(400, 422);
+
+        MvcResult listed = mvc.perform(get("/api/v1/control-plane/tenants/" + TENANT
+                                + "/order-outcome-reasons?kind=LINE_REMOVAL&activeOnly=true")
+                        .with(tokenFor(OPERATOR)))
+                .andReturn();
+        assertThat(JSON.readTree(listed.getResponse().getContentAsString()).findValuesAsString("internalName"))
+                .contains("Kitchen error");
+        MvcResult categories = mvc.perform(get("/api/v1/control-plane/tenants/" + TENANT
+                                + "/order-outcome-reasons/categories?kind=LINE_REMOVAL")
+                        .with(tokenFor(OPERATOR)))
+                .andReturn();
+        assertThat(categories.getResponse().getContentAsString())
+                .contains("CUSTOMER_CHANGED_MIND")
+                .contains("KITCHEN_ERROR")
+                .doesNotContain("CUSTOMER_UNREACHABLE");
+    }
+
     // -------------------------------------------------------------- the console's call
 
     private JsonNode amend(UUID orderId, String key, String command, int expectedStatus) throws Exception {

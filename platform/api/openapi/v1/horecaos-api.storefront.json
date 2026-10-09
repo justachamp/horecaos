@@ -1566,6 +1566,21 @@
         },
         "type" : "object"
       },
+      "MenuIngredient" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "ingredientId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "MenuModifierGroup" : {
         "properties" : {
           "allowSameOptionMultipleTimes" : {
@@ -1677,6 +1692,12 @@
             },
             "type" : "array"
           },
+          "ingredients" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuIngredient"
+            },
+            "type" : "array"
+          },
           "mediaAssetIds" : {
             "items" : {
               "type" : "string"
@@ -1703,11 +1724,45 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "tags" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuTag"
+            },
+            "type" : "array"
+          },
           "variants" : {
             "items" : {
               "$ref" : "#/components/schemas/MenuVariant"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "MenuTag" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "icon" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "showAsBadge" : {
+            "type" : "boolean"
+          },
+          "showAsFilter" : {
+            "type" : "boolean"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "tagId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -1733,6 +1788,9 @@
               "$ref" : "#/components/schemas/MenuModifierGroupPolicy"
             },
             "type" : "array"
+          },
+          "name" : {
+            "type" : "string"
           },
           "onSaleNow" : {
             "type" : "boolean"

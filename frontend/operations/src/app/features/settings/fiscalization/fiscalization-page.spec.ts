@@ -153,6 +153,7 @@ describe('FiscalizationPage', () => {
     fiscalCoverage: ReturnType<typeof vi.fn>;
     classifyDeliveryFee: ReturnType<typeof vi.fn>;
     backfillCodes: ReturnType<typeof vi.fn>;
+    replaceWithdrawnCodes: ReturnType<typeof vi.fn>;
   };
   let taxProfiles: ReturnType<typeof vi.fn>;
   let paymentTypes: ReturnType<typeof vi.fn>;
@@ -184,6 +185,15 @@ describe('FiscalizationPage', () => {
           status: 'CLASSIFIED',
         })),
       ),
+      replaceWithdrawnCodes: vi
+        .fn()
+        .mockImplementation(async (_scope, items: { nodeId: string }[]) =>
+          items.map((item) => ({
+            nodeType: 'VARIANT',
+            nodeId: item.nodeId,
+            status: 'CLASSIFIED',
+          })),
+        ),
     };
 
     taxProfiles = vi.fn(() => of([VAT_PROFILE]));
@@ -552,6 +562,154 @@ describe('FiscalizationPage', () => {
           packageCode: '1500316',
         },
       ]);
+    });
+  });
+
+  // ------------------------------------------- ADR 0173: codes the national list has withdrawn
+
+  describe('the withdrawn codes on Tab 3 (ADR 0173)', () => {
+    const WITHDRAWN_COVERAGE: FiscalCoverageSummary = {
+      totalNodes: 3,
+      unclassifiedCount: 0,
+      nodes: [],
+      categoryDefaults: [],
+      withdrawnCount: 2,
+      withdrawnNodes: [
+        {
+          nodeType: 'VARIANT',
+          nodeId: 'plov',
+          name: 'Plov',
+          categoryName: 'Mains',
+          locationCount: 2,
+          mxikCode: '10706001001000007',
+          packageCode: '1500316',
+          mxikWithdrawnOn: '2026-10-01',
+          mxikReplacedBy: '10706001001000008',
+        },
+        {
+          nodeType: 'VARIANT',
+          nodeId: 'samsa',
+          name: 'Samsa',
+          categoryName: 'Snacks',
+          locationCount: 1,
+          mxikCode: '10706001001000011',
+          packageCode: '1500316',
+          mxikWithdrawnOn: '2026-10-01',
+          mxikReplacedBy: null,
+        },
+      ],
+    };
+
+    async function openClassification(coverage: FiscalCoverageSummary): Promise<void> {
+      api.fiscalCoverage.mockResolvedValue(coverage);
+      selectTab(2);
+      await flushMicrotasks();
+      fixture.detectChanges();
+    }
+
+    function textOf(testId: string): string {
+      return (
+        fixture.nativeElement.querySelector(`[data-testid="${testId}"]`)?.textContent ?? ''
+      ).replace(/\s+/g, ' ');
+    }
+
+    function click(testId: string): void {
+      (
+        fixture.nativeElement.querySelector(`[data-testid="${testId}"]`) as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+    }
+
+    it('lists a classified node whose code was withdrawn, with the date and the successor the list names', async () => {
+      await openClassification(WITHDRAWN_COVERAGE);
+
+      const plov = fixture.nativeElement.querySelector('[data-testid="fiscal-withdrawn-plov"]');
+      expect(plov.textContent).toContain('10706001001000007');
+      expect(plov.textContent).toContain('2026-10-01');
+      expect(plov.textContent).toContain('10706001001000008');
+      const samsa = fixture.nativeElement.querySelector('[data-testid="fiscal-withdrawn-samsa"]');
+      expect(samsa.textContent).toContain('none named');
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="fiscal-withdrawn-replace-samsa"]'),
+        'a node the list names no successor for has nothing to click',
+      ).toBeNull();
+    });
+
+    it('draws nothing when no classified node holds a withdrawn code', async () => {
+      await openClassification({ ...COVERAGE, withdrawnCount: 0, withdrawnNodes: [] });
+
+      expect(fixture.nativeElement.querySelector('[data-testid="fiscal-withdrawn"]')).toBeNull();
+    });
+
+    it('replaces one code with its successor only after a second, confirming click', async () => {
+      await openClassification(WITHDRAWN_COVERAGE);
+
+      click('fiscal-withdrawn-replace-plov');
+      expect(api.replaceWithdrawnCodes, 'the first click only asks').not.toHaveBeenCalled();
+      expect(text()).toContain('Replace the ИКПУ on 1 item(s)');
+
+      api.fiscalCoverage.mockResolvedValue({
+        ...WITHDRAWN_COVERAGE,
+        withdrawnCount: 1,
+        withdrawnNodes: [WITHDRAWN_COVERAGE.withdrawnNodes![1]],
+      });
+      click('fiscal-withdrawn-confirm-yes');
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(api.replaceWithdrawnCodes).toHaveBeenCalledWith(SCOPE, [
+        { nodeType: 'VARIANT', nodeId: 'plov', successorCode: '10706001001000008' },
+      ]);
+      expect(
+        api.fiscalCoverage,
+        'the coverage is read again so the list follows',
+      ).toHaveBeenCalledTimes(2);
+      expect(textOf('fiscal-withdrawn-outcome')).toContain('Replaced: 1. Left as they were: 0.');
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="fiscal-withdrawn-plov"]'),
+      ).toBeNull();
+    });
+
+    it('offers no bulk action while only one node has a named successor', async () => {
+      await openClassification(WITHDRAWN_COVERAGE);
+
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="fiscal-withdrawn-replace-all"]'),
+      ).toBeNull();
+    });
+
+    it('offers the bulk action when several have one, and cancelling writes nothing', async () => {
+      await openClassification({
+        ...WITHDRAWN_COVERAGE,
+        withdrawnNodes: WITHDRAWN_COVERAGE.withdrawnNodes!.map((node) => ({
+          ...node,
+          mxikReplacedBy: node.mxikReplacedBy ?? '10706001001000012',
+        })),
+      });
+
+      click('fiscal-withdrawn-replace-all');
+      expect(text()).toContain('Replace the ИКПУ on 2 item(s)');
+      findButton('Cancel').click();
+      fixture.detectChanges();
+
+      expect(api.replaceWithdrawnCodes).not.toHaveBeenCalled();
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="fiscal-withdrawn-confirm"]'),
+      ).toBeNull();
+    });
+
+    it('says how many the platform refused when the list no longer agrees with the screen', async () => {
+      api.replaceWithdrawnCodes.mockResolvedValue([
+        { nodeType: 'VARIANT', nodeId: 'plov', status: 'CONFLICT' },
+      ]);
+      await openClassification(WITHDRAWN_COVERAGE);
+
+      click('fiscal-withdrawn-replace-plov');
+      click('fiscal-withdrawn-confirm-yes');
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(textOf('fiscal-withdrawn-outcome')).toContain('Replaced: 0. Left as they were: 1.');
     });
   });
 

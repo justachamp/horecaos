@@ -184,7 +184,8 @@
       "choose": "Choose your free gift",
       "add": "Add your free {{name}}",
       "addMany": "Add your free {{name}} ×{{count}}"
-    }
+    },
+    "autoAdded": "Added automatically"
   },
   "orders": {
     "title": "Orders",
@@ -350,7 +351,8 @@
     "pickAtLeast": "Choose at least {{min}}",
     "pickAny": "Choose any",
     "variantGroupsTitle": "Choices for {{variant}}",
-    "fromPrice": "from {{price}}"
+    "fromPrice": "from {{price}}",
+    "ingredients": "Ingredients"
   },
   "terms": {
     "agreementTitle": "Public offer agreement",
@@ -526,5 +528,12 @@
     "count": "{{count}} ratings",
     "distribution": "How the ratings split",
     "more": "Show more"
+  },
+  "menu": {
+    "filter": {
+      "title": "Filter by tag",
+      "clear": "Clear",
+      "empty": "No dish carries all of the selected tags."
+    }
   }
 }

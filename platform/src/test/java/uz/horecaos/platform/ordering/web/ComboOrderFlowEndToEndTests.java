@@ -1427,6 +1427,87 @@ class ComboOrderFlowEndToEndTests {
     }
 
     @Test
+    @DisplayName("ADR 0169: a combo is taken off an order whole; one component alone is refused by name")
+    void aComboIsRemovedWholeAndNeverByOneComponent() throws Exception {
+        UUID cart = openCart(FulfillmentMode.PICKUP);
+        put(cart, "lunch", lunchVariant, 1, List.of(pick(burgerInLunch, 1), pick(colaInLunch, 1)));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+        UUID orderId = checkOut(cart);
+        amend(orderId, "amend-add-salad-to-remove", """
+                {"type":"ADD_LINES","lines":[{"variantId":"%s","quantity":1}]}""".formatted(saladVariant));
+        jdbc.sql("""
+                INSERT INTO tenant.configuration_values
+                    (id, key_code, scope_type, tenant_id, brand_id, value_type, boolean_value, set_by)
+                VALUES (:id, 'ordering.amendment_line_removal_enabled', 'BRAND', :tenant, :brand, 'BOOLEAN',
+                    true, 'a-test')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenant", TENANT)
+                .param("brand", BRAND)
+                .update();
+        MvcResult reasonCreated = mvc.perform(post("/api/v1/control-plane/tenants/" + TENANT + "/order-outcome-reasons")
+                        .with(tokenFor(OPERATOR))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "combo-removal-reason")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"kind":"LINE_REMOVAL","systemCategory":"CUSTOMER_CHANGED_MIND",\
+                                "internalName":"Customer changed their mind","stockDisposition":"RETURN_TO_STOCK",\
+                                "liabilityParty":"CUSTOMER",\
+                                "customerTexts":{"ru":"Блюдо убрано","uz-Latn":"Taom olib tashlandi","en":"Removed"}}"""))
+                .andReturn();
+        assertThat(reasonCreated.getResponse().getStatus())
+                .as(reasonCreated.getResponse().getContentAsString())
+                .isEqualTo(200);
+        String reason = JSON.readTree(reasonCreated.getResponse().getContentAsString())
+                .get("id")
+                .asText();
+        List<OrderLine> comboLines = orderLines(orderId).stream()
+                .filter(line -> line.selectionId() != null)
+                .toList();
+        assertThat(comboLines).hasSize(2);
+        UUID burgerLine = comboLines.get(0).lineId();
+        UUID colaLine = comboLines.get(1).lineId();
+        long before = totalOf(orderId);
+
+        MvcResult alone = mvc.perform(post(orderPath(orderId) + "/amendments")
+                        .with(tokenFor(OPERATOR))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "combo-remove-one")
+                        .header(
+                                "If-Match",
+                                "\""
+                                        + orderDetail(orderId)
+                                                .get("summary")
+                                                .get("version")
+                                                .asInt() + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"commands\":[{\"type\":\"REMOVE_LINES\",\"orderLineIds\":[\"" + burgerLine
+                                + "\"],\"removalReasonId\":\"" + reason + "\"}],\"applyImmediately\":false,"
+                                + "\"reasonCode\":\"OPERATOR_EDIT\"}"))
+                .andReturn();
+        assertThat(alone.getResponse().getStatus())
+                .as(alone.getResponse().getContentAsString())
+                .isEqualTo(409);
+        assertThat(alone.getResponse().getContentAsString()).contains("COMBO_COMPONENT_NOT_REMOVABLE");
+        assertThat(totalOf(orderId)).as("the refusal changed nothing").isEqualTo(before);
+
+        JsonNode applied = amend(orderId, "combo-remove-whole", """
+                {"type":"REMOVE_LINES","orderLineIds":["%s","%s"],"removalReasonId":"%s"}""".formatted(burgerLine, colaLine, reason));
+
+        assertThat(applied.get("status").asText()).isEqualTo("APPLIED");
+        assertThat(orderLines(orderId))
+                .as("only the salad is left on the order")
+                .hasSize(1);
+        assertThat(totalOf(orderId)).isEqualTo(SALAD);
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.order_line_removals WHERE order_id = :id")
+                        .param("id", orderId)
+                        .query(Integer.class)
+                        .single())
+                .as("one removal fact per line the amendment took off, both components of the one combo")
+                .isEqualTo(2);
+        assertThat(reconciles(orderId)).isTrue();
+    }
+
+    @Test
     @DisplayName("an amended combo is sent to the till as its live component lines, not also as the rows it closed")
     void anAmendedComboIsExportedAsItsLiveLines() throws Exception {
         UUID cart = openCart(FulfillmentMode.PICKUP);

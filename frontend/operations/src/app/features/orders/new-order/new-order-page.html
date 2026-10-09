@@ -761,6 +761,50 @@
             </p>
           }
         }
+        @if (autoAddedLines().length > 0 || declinedAutoAdd().size > 0) {
+          <!-- ADR 0158: the lines a rule put in the basket, which are not lines the operator added. Each can be
+               taken off unless its rule cannot be declined; a line taken off can be put back. -->
+          <ul class="new-order__auto-add" data-testid="new-order-auto-add">
+            @for (line of autoAddedLines(); track line.ruleId) {
+              <li class="q-caption new-order__order-row" [attr.data-testid]="'new-order-auto-add-' + line.ruleCode">
+                <span>
+                  {{ autoAddLabel(line) }} × {{ line.quantity }}
+                  <em>· {{ 'orders.newOrder.autoAdd.added' | t }}</em>
+                </span>
+                <span>
+                  {{ formattedQuoteAmount(line.finalAmountMinor) }}
+                  @if (line.mandatory) {
+                    <em>· {{ 'orders.newOrder.autoAdd.mandatory' | t }}</em>
+                  } @else {
+                    <button
+                      type="button"
+                      class="new-order__link"
+                      [attr.data-testid]="'new-order-auto-add-decline-' + line.ruleCode"
+                      (click)="declineAutoAdd(line)"
+                    >
+                      {{ 'orders.newOrder.autoAdd.decline' | t }}
+                    </button>
+                  }
+                </span>
+              </li>
+            }
+            @for (declined of declinedAutoAddList(); track declined.ruleId) {
+              <li
+                class="q-caption new-order__order-row"
+                [attr.data-testid]="'new-order-auto-add-declined-' + declined.ruleCode"
+              >
+                <span>{{ 'orders.newOrder.autoAdd.declined' | t: { name: autoAddLabel(declined) } }}</span>
+                <button
+                  type="button"
+                  class="new-order__link"
+                  (click)="restoreAutoAdd(declined.ruleId)"
+                >
+                  {{ 'orders.newOrder.autoAdd.restore' | t }}
+                </button>
+              </li>
+            }
+          </ul>
+        }
         <div class="new-order__total-row">
           <span class="q-body-sm">{{ 'orders.newOrder.order.total' | t }}</span>
           <span class="q-body new-order__total-amount" data-testid="new-order-total">{{

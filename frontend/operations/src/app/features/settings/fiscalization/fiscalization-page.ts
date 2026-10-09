@@ -19,6 +19,7 @@ import {
 import { FiscalBackfillEditor, isMissingCodes } from './fiscal-backfill-editor';
 import {
   ClassifyDeliveryFeeRequest,
+  FiscalBackfillOutcome,
   FiscalCoverageNode,
   FiscalCoverageSummary,
   FiscalizationApi,
@@ -579,6 +580,78 @@ export class FiscalizationPage {
    */
   protected listedNodes(nodes: readonly FiscalCoverageNode[]): readonly FiscalCoverageNode[] {
     return nodes.filter((node) => !isMissingCodes(node));
+  }
+
+  // ADR 0173: the codes the national list has withdrawn, and the click that moves them to the named successor.
+
+  /** The classified nodes whose code the list has withdrawn; nothing here stops a sale or a publication. */
+  protected readonly withdrawnNodes = computed(() => this.coverage()?.withdrawnNodes ?? []);
+
+  /** The ones the list names a successor for: only these can be moved by a click. */
+  protected readonly replaceableNodes = computed(() =>
+    this.withdrawnNodes().filter((node) => !!node.mxikReplacedBy),
+  );
+
+  /** Which replacement waits for a second click: `all`, one node's id, or none. */
+  protected readonly pendingReplacement = signal<string | null>(null);
+  protected readonly replacing = signal(false);
+  protected readonly replacementOutcome = signal<{ replaced: number; left: number } | null>(null);
+  protected readonly replacementError = signal<string | null>(null);
+
+  protected askToReplace(target: 'all' | string): void {
+    this.replacementOutcome.set(null);
+    this.replacementError.set(null);
+    this.pendingReplacement.set(target);
+  }
+
+  protected cancelReplacement(): void {
+    this.pendingReplacement.set(null);
+  }
+
+  /** How many nodes the pending replacement would touch. */
+  protected pendingReplacementCount(): number {
+    const pending = this.pendingReplacement();
+    if (pending === null) {
+      return 0;
+    }
+    return pending === 'all'
+      ? this.replaceableNodes().length
+      : this.replaceableNodes().filter((node) => node.nodeId === pending).length;
+  }
+
+  protected async confirmReplacement(): Promise<void> {
+    const scope = this.location.scope();
+    const pending = this.pendingReplacement();
+    if (!scope || pending === null || this.replacing()) {
+      return;
+    }
+    const targets = this.replaceableNodes().filter(
+      (node) => pending === 'all' || node.nodeId === pending,
+    );
+    if (targets.length === 0) {
+      this.pendingReplacement.set(null);
+      return;
+    }
+    this.replacing.set(true);
+    this.replacementError.set(null);
+    try {
+      const outcomes: readonly FiscalBackfillOutcome[] = await this.api.replaceWithdrawnCodes(
+        scope,
+        targets.map((node) => ({
+          nodeType: node.nodeType,
+          nodeId: node.nodeId,
+          successorCode: node.mxikReplacedBy as string,
+        })),
+      );
+      const replaced = outcomes.filter((outcome) => outcome.status === 'CLASSIFIED').length;
+      this.replacementOutcome.set({ replaced, left: outcomes.length - replaced });
+      this.pendingReplacement.set(null);
+      await this.reloadCoverage(scope);
+    } catch (error) {
+      this.replacementError.set(this.describe(error));
+    } finally {
+      this.replacing.set(false);
+    }
   }
 
   /** The backfill applied at least one row: reload, so the headline and both lists follow it. */

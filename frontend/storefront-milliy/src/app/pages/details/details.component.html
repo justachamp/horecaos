@@ -32,6 +32,13 @@
         @if (product.description) {
           <p class="desc">{{ product.description }}</p>
         }
+        <app-tag-badges [tags]="product.tags ?? []" />
+        @if ((product.ingredients ?? []).length > 0) {
+          <p class="ingredients" data-testid="product-ingredients">
+            <strong>{{ 'details.ingredients' | t }}:</strong>
+            {{ ingredientLine() }}
+          </p>
+        }
 
         @if (product.variants.length > 1) {
           <h2 class="section">{{ 'details.portion' | t }}</h2>

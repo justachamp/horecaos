@@ -59,11 +59,17 @@ describe('activity log action-code dictionary coverage', () => {
     '../../../../../../platform/src/main/java',
   );
 
+  // The three vocabulary and reference-import producers below write their concrete codes into
+  // `activity-log-action-sentences.ts` by name (catalog.tag.*, catalog.ingredient.*,
+  // catalog.product.tags-set, catalog.product.ingredients-set, catalog.mxikReference.import-*).
   const CONCATENATED_PREFIXES = new Set([
     'approval.',
     'catalog.mxikReference.',
     'dinein.reservation.',
     'fulfillment.dispatch.',
+    'catalog.',
+    'catalog.product.',
+    'catalog.mxikReference.',
   ]);
 
   function literalActionCodesFromJavaSources(): readonly string[] {

@@ -47,6 +47,13 @@ type AmendmentCommandRequest =
       readonly type: 'CHANGE_LINE_QUANTITY';
       readonly orderLineId: string;
       readonly quantity: number;
+      /** ADR 0169: required by the server when the quantity is lowered; ignored for an increase. */
+      readonly removalReasonId?: string;
+    }
+  | {
+      readonly type: 'REMOVE_LINES';
+      readonly orderLineIds: readonly string[];
+      readonly removalReasonId: string;
     }
   | { readonly type: 'CHANGE_PAYMENT_METHOD'; readonly paymentMethodCode: string }
   | {
@@ -195,20 +202,53 @@ export class OrderAmendmentsApi {
     );
   }
 
-  /** `CHANGE_LINE_QUANTITY` — increase only, same not-applied-yet shape as {@link addLines}. */
+  /**
+   * `CHANGE_LINE_QUANTITY` — same not-applied-yet shape as {@link addLines}. A lowered quantity (ADR 0169)
+   * names the removal reason whose disposition decides what happens to the stock; the response carries
+   * `stockConsequence`, the preview the confirmation step shows before anything is applied.
+   */
   changeLineQuantity(
     scope: LocationScope,
     orderId: string,
     expectedVersion: number,
     orderLineId: string,
     quantity: number,
+    removalReasonId?: string,
   ): Observable<AmendmentResponse> {
     return this.propose(
       scope,
       orderId,
       expectedVersion,
       'CHANGE_LINE_QUANTITY',
-      { type: 'CHANGE_LINE_QUANTITY', orderLineId, quantity },
+      {
+        type: 'CHANGE_LINE_QUANTITY',
+        orderLineId,
+        quantity,
+        ...(removalReasonId ? { removalReasonId } : {}),
+      },
+      false,
+    );
+  }
+
+  /**
+   * `REMOVE_LINES` (ADR 0169) — takes whole lines off a confirmed order (a combo goes whole, by all its
+   * lines) for a removal reason the tenant authored. Never applied in the same call: it needs the customer's
+   * recorded agreement whatever it does to the total, and the preview of what happens to the stock is shown
+   * first, so `order-detail-pane.ts` always follows this with the confirmation step.
+   */
+  removeLines(
+    scope: LocationScope,
+    orderId: string,
+    expectedVersion: number,
+    orderLineIds: readonly string[],
+    removalReasonId: string,
+  ): Observable<AmendmentResponse> {
+    return this.propose(
+      scope,
+      orderId,
+      expectedVersion,
+      'REMOVE_LINES',
+      { type: 'REMOVE_LINES', orderLineIds, removalReasonId },
       false,
     );
   }

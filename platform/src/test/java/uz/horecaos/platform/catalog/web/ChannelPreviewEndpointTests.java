@@ -206,6 +206,13 @@ class ChannelPreviewEndpointTests {
         assertThat(shape(preview.path("items"), "productId", true))
                 .as("the same products, with the same names, images, prices and orderability")
                 .isEqualTo(shape(live.path("products"), "productId", true));
+        assertThat(live.path("products").get(0).has("tags"))
+                .as("the live menu carries the product's tags (ADR 0174) ...")
+                .isTrue();
+        assertThat(preview.path("items"))
+                .as("... and the projection does not: no tag or ingredient reaches a channel's menu")
+                .allSatisfy(item ->
+                        assertThat(item.has("tags") || item.has("ingredients")).isFalse());
         assertThat(shape(preview.path("categories"), "categoryId", false))
                 .as("the same shelves, holding only what this branch serves")
                 .isEqualTo(shape(live.path("categories"), "categoryId", false));
@@ -1529,9 +1536,12 @@ class ChannelPreviewEndpointTests {
      *     categories do not, and the preview adds some)
      */
     private static Map<String, JsonNode> shape(JsonNode entries, String key, boolean withImages) {
+        // ADR 0174: a product's tags and ingredients are a storefront's badges, filters and composition line, and
+        // the default it decided is that none of them reaches a marketplace, so the projection does not carry
+        // them (ADR 0138 decides it per channel); like the comment presets, they are the live menu's own.
         Set<String> skipped = withImages
-                ? Set.of("mediaSource", "commentPresets")
-                : Set.of("mediaSource", "commentPresets", "mediaAssetIds", "imageUrls");
+                ? Set.of("mediaSource", "commentPresets", "tags", "ingredients")
+                : Set.of("mediaSource", "commentPresets", "tags", "ingredients", "mediaAssetIds", "imageUrls");
         Map<String, JsonNode> shaped = new java.util.TreeMap<>();
         for (JsonNode entry : entries) {
             ObjectNode node = JSON.createObjectNode();

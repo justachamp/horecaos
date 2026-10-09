@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
 import com.jayway.jsonpath.JsonPath;
 import java.io.IOException;
@@ -43,13 +44,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
-import uz.horecaos.platform.catalog.application.MxikReferenceImportService;
 import uz.horecaos.platform.catalog.domain.MxikValidity;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMxikImportStore;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.media.api.ObjectStorage;
+import uz.horecaos.platform.notifications.application.FiscalReferenceAlerts;
 import uz.horecaos.platform.support.StubJwtIssuer;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
@@ -114,7 +115,7 @@ class MxikImportHttpTests {
     private InMemoryObjectStore store;
 
     @Autowired
-    private MxikReferenceImportService imports;
+    private FiscalReferenceAlerts alerts;
 
     @Autowired
     private JdbcCatalogStore catalogStore;
@@ -691,12 +692,61 @@ class MxikImportHttpTests {
     }
 
     @Test
+    @DisplayName("a withdrawn code is replaced only by the successor the list itself names, on a person's batch, and "
+            + "nothing else on the node moves")
+    void aWithdrawnCodeIsReplacedOnlyBySuccessorTheListNames() throws Exception {
+        apply(upload("all.csv", bigList(100, Set.of()), "FULL_SNAPSHOT", "2026-09-01"), "{}");
+        apply(upload("less.csv", bigList(100, Set.of(7)), "FULL_SNAPSHOT", "2026-10-01"), "{}");
+        insertVariantClassified(VARIANT, code(7));
+
+        assertThat(successor(code(8)))
+                .as("the list names no successor for the withdrawn code, so the batch is not honoured")
+                .isEqualTo("CONFLICT");
+        assertThat(storedMxik()).isEqualTo(code(7));
+
+        jdbc.sql("UPDATE catalog.mxik_reference SET replaced_by_code = :next WHERE code = :old")
+                .param("next", code(8))
+                .param("old", code(7))
+                .update();
+        assertThat(successor(code(9)))
+                .as("a code the list does not name for it is refused too, however valid it is")
+                .isEqualTo("CONFLICT");
+        assertThat(storedMxik()).isEqualTo(code(7));
+
+        assertThat(successor(code(8))).isEqualTo("CLASSIFIED");
+        assertThat(storedMxik()).isEqualTo(code(8));
+        assertThat(jdbc.sql("SELECT package_code || '/' || fiscal_unit_code || '/' || fiscal_name "
+                                + "FROM catalog.fiscal_classifications WHERE variant_id = :v")
+                        .param("v", VARIANT)
+                        .query(String.class)
+                        .single())
+                .as("only the ИКПУ moves; the package code, the unit and the fiscal name stay the tenant's")
+                .isEqualTo("1001/166/Dish");
+        assertThat(count("audit.audit_events WHERE action_code = 'catalog.fiscalClassification.bulkSet'"))
+                .as("one audited fact for the batch")
+                .isEqualTo(1);
+        assertThat(successor(code(8)))
+                .as("the same batch again changes nothing")
+                .isEqualTo("UNCHANGED");
+
+        MvcResult mixed = mvc.perform(put(BULK)
+                        .with(tokenFor(TENANT_OWNER))
+                        .header(IDEMPOTENCY_HEADER, "successor-" + requests++)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mode\":\"SUCCESSOR\",\"items\":[{\"nodeType\":\"VARIANT\",\"nodeId\":\""
+                                + VARIANT + "\",\"fiscal\":{\"mxikCode\":\"" + code(8)
+                                + "\",\"packageCode\":\"2002\"}}]}"))
+                .andReturn();
+        assertThat(mixed.getResponse().getStatus())
+                .as("a SUCCESSOR batch carries the replacement code and nothing else")
+                .isEqualTo(400);
+    }
+
+    @Test
     @DisplayName(
             "an absent list raises one incident per class while a tenant holds a classified node, and an import resolves it")
     void anAbsentOrStaleListRaisesOneIncidentAndAnImportResolvesIt() throws Exception {
-        assertThat(imports.checkFreshness(false))
-                .as("nothing classified, nothing to protect")
-                .isEmpty();
+        assertThat(alerts.check()).as("nothing classified, nothing to protect").isEmpty();
         assertThat(count("notifications.control_plane_alerts")).isZero();
 
         assertThat(importStore.anyTenantHasClassifiedNode()).isFalse();
@@ -704,8 +754,8 @@ class MxikImportHttpTests {
         assertThat(importStore.anyTenantHasClassifiedNode())
                 .as("the sweeper asks this before it raises")
                 .isTrue();
-        assertThat(imports.checkFreshness(true)).contains("FISCAL_REFERENCE_NOT_LOADED");
-        assertThat(imports.checkFreshness(true)).contains("FISCAL_REFERENCE_NOT_LOADED");
+        assertThat(alerts.check()).contains("FISCAL_REFERENCE_NOT_LOADED");
+        assertThat(alerts.check()).contains("FISCAL_REFERENCE_NOT_LOADED");
         assertThat(count("notifications.control_plane_alerts WHERE status = 'OPEN'"))
                 .as("raised once per class and subject; the second sweep counts an occurrence")
                 .isEqualTo(1);
@@ -724,11 +774,11 @@ class MxikImportHttpTests {
         assertThat(count("notifications.control_plane_alerts WHERE status = 'RESOLVED'"))
                 .as("a successful import ends 'not loaded'")
                 .isEqualTo(1);
-        assertThat(imports.checkFreshness(true)).isEmpty();
+        assertThat(alerts.check()).isEmpty();
 
         jdbc.sql("UPDATE catalog.mxik_reference_state SET imported_at = now() - interval '60 days'")
                 .update();
-        assertThat(imports.checkFreshness(true)).contains("FISCAL_REFERENCE_STALE");
+        assertThat(alerts.check()).contains("FISCAL_REFERENCE_STALE");
         assertThat(JsonPath.<Boolean>read(read(STATUS), "$.stale")).isTrue();
         assertThat(JsonPath.<Integer>read(read(STATUS), "$.maxAgeDays")).isEqualTo(45);
 
@@ -755,6 +805,31 @@ class MxikImportHttpTests {
     }
 
     // ---------------------------------------------------------------------------- helpers
+
+    private static final String BULK =
+            "/api/v1/control-plane/tenants/" + TENANT + "/brands/" + BRAND + "/catalog/fiscal-classifications/bulk";
+
+    /** Sends the batch the console's "replace with" button sends for the one dish; returns its outcome. */
+    private String successor(String mxikCode) throws Exception {
+        MvcResult result = mvc.perform(put(BULK)
+                        .with(tokenFor(TENANT_OWNER))
+                        .header(IDEMPOTENCY_HEADER, "successor-" + requests++)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mode\":\"SUCCESSOR\",\"items\":[{\"nodeType\":\"VARIANT\",\"nodeId\":\"" + VARIANT
+                                + "\",\"fiscal\":{\"mxikCode\":\"" + mxikCode + "\"}}]}"))
+                .andReturn();
+        assertThat(result.getResponse().getStatus())
+                .as(result.getResponse().getContentAsString())
+                .isEqualTo(200);
+        return JsonPath.read(result.getResponse().getContentAsString(), "$.outcomes[0].status");
+    }
+
+    private String storedMxik() {
+        return jdbc.sql("SELECT mxik_code FROM catalog.fiscal_classifications WHERE variant_id = :v")
+                .param("v", VARIANT)
+                .query(String.class)
+                .single();
+    }
 
     private MvcResult upload(String fileName, byte[] content, String mode, @Nullable String publishedOn)
             throws Exception {

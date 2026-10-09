@@ -500,3 +500,71 @@ describe('CartComponent: free gifts (ADR 0140)', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="gift-offers"]')).toBeNull();
   });
 });
+
+describe('CartComponent: lines a rule added (ADR 0158)', () => {
+  const auto = (over: Partial<NonNullable<CartResponseItem['autoAdd']>> = {}) => ({
+    ruleCode: 'BOX',
+    text: null,
+    mandatory: false,
+    removable: true,
+    minimumQuantity: 0,
+    maximumQuantity: 5,
+    ...over,
+  });
+
+  async function open(items: CartResponseItem[]) {
+    const fake = new FakeUiCartService();
+    fake.items.set(items);
+    const { fixture } = await setUp(fake);
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  it('says a line was added automatically, in the rule’s own words when it has some', async () => {
+    const host = await open([
+      line({ item_id: 'a', name: 'Osh' }),
+      line({ item_id: 'b', name: 'Cutlery', origin: 'AUTO_ADD', autoAdd: auto() }),
+      line({
+        item_id: 'c',
+        name: 'Box',
+        origin: 'AUTO_ADD',
+        autoAdd: auto({ text: 'Packaging for delivery' }),
+      }),
+    ]);
+
+    const labels = Array.from(host.querySelectorAll('[data-testid="cart-line-auto-add"]')).map(
+      (node) => node.textContent?.trim(),
+    );
+    expect(labels).toEqual(['cart.autoAdded', 'Packaging for delivery']);
+  });
+
+  it('stops a mandatory line at its computed quantity and at its ceiling', async () => {
+    const host = await open([
+      line({
+        item_id: 'box',
+        quantity: 2,
+        origin: 'AUTO_ADD',
+        autoAdd: auto({
+          mandatory: true,
+          removable: false,
+          minimumQuantity: 2,
+          maximumQuantity: 2,
+        }),
+      }),
+    ]);
+
+    const buttons = host.querySelectorAll<HTMLButtonElement>('.qty__btn');
+    expect(buttons[0].disabled).toBe(true);
+    expect(buttons[1].disabled).toBe(true);
+  });
+
+  it('leaves a line the customer chose, and a removable rule line, free to move', async () => {
+    const host = await open([
+      line({ item_id: 'own', quantity: 2 }),
+      line({ item_id: 'cutlery', quantity: 1, origin: 'AUTO_ADD', autoAdd: auto() }),
+    ]);
+
+    for (const button of Array.from(host.querySelectorAll<HTMLButtonElement>('.qty__btn'))) {
+      expect(button.disabled).toBe(false);
+    }
+  });
+});

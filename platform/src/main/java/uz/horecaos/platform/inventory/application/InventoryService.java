@@ -35,10 +35,14 @@ import uz.horecaos.platform.inventory.api.AvailabilityDecision.Unavailable;
 import uz.horecaos.platform.inventory.api.BusinessDayWindows;
 import uz.horecaos.platform.inventory.api.ChannelAvailabilityPort;
 import uz.horecaos.platform.inventory.api.ChannelContext;
+import uz.horecaos.platform.inventory.api.DisposalRefusedException;
 import uz.horecaos.platform.inventory.api.InventoryConfigurationKeys;
 import uz.horecaos.platform.inventory.api.InventoryReservationPort;
+import uz.horecaos.platform.inventory.api.InventoryStockDisposed;
 import uz.horecaos.platform.inventory.api.ItemAvailabilityChanged;
 import uz.horecaos.platform.inventory.api.ReservationResult;
+import uz.horecaos.platform.inventory.api.StockDisposal;
+import uz.horecaos.platform.inventory.api.StockDisposalCommand;
 import uz.horecaos.platform.inventory.api.StopSource;
 import uz.horecaos.platform.inventory.api.TrackingMode;
 import uz.horecaos.platform.inventory.domain.ReservationExpiry;
@@ -1036,6 +1040,356 @@ public class InventoryService implements InventoryReservationPort, ChannelAvaila
             applyQuantityRelease(tenantId, reservation.get().id());
         }
         return transitioned;
+    }
+
+    /**
+     * Gives back or writes off the stock an order no longer needs (ADR 0169).
+     *
+     * <p>The branch for each unit is taken from the reservations themselves, read under the position row lock in
+     * this transaction, and never from the order's status: an order is {@code CONFIRMED} for a few seconds before
+     * its commit runs, during which its hold is still {@code HELD}. A unit still on a held line is released (the
+     * line and {@code reserved_quantity} come down, no movement), exactly as {@link #release} would for a whole
+     * hold. A unit already sold takes the declared disposition: {@code RETURN_TO_STOCK} appends a {@code RETURN}
+     * movement and raises {@code on_hand_quantity}; {@code WRITE_OFF} appends the {@code RETURN} and then a
+     * {@code WASTE} in the same transaction, so the ledger reads "sale reversed, goods lost" and {@code
+     * on_hand_quantity} is net unchanged; {@code NO_EFFECT} writes nothing. A unit the kitchen has started or made
+     * is written off whatever the declared disposition says. Only a {@code QUANTITY} item has a position to move.
+     *
+     * <p>Idempotent on the command's key: the first answer is stored with the disposal, and a replay returns it
+     * and moves nothing. The units of earlier disposals of the same order are not counted a second time, so a
+     * removal followed by a cancellation returns each unit once.
+     */
+    @Override
+    @Transactional
+    public StockDisposal dispose(StockDisposalCommand command) {
+        UUID tenantId = command.tenantId();
+        rls.bindTenant(tenantId);
+        // The same refusal reserve, commit and release give: a historical import must never move stock.
+        ImportSuppression.refuse(ExternalEffect.INVENTORY_MOVEMENT, "dispose of stock");
+
+        if (store.disposalExists(tenantId, command.idempotencyKey())) {
+            return replayOf(tenantId, command.idempotencyKey());
+        }
+
+        Map<UUID, int[]> wanted = wantedBy(command);
+        Map<UUID, StockItemRow> items = store.findStockItems(tenantId, command.locationId(), wanted.keySet());
+
+        // Locked in stock-item order, the order reserveForQuote locks in, so a disposal and a reservation naming
+        // overlapping items wait for one another instead of deadlocking.
+        List<UUID> lockOrder =
+                items.values().stream().map(StockItemRow::stockItemId).sorted().toList();
+        store.lockPositions(tenantId, lockOrder);
+        List<JdbcInventoryStore.OrderReservationLine> reservationLines =
+                store.orderReservationLines(tenantId, command.orderQuoteIds(), lockOrder);
+
+        Instant now = clock.instant();
+        UUID disposalId = UUID.randomUUID();
+        List<StockDisposal.LineResult> results = new ArrayList<>();
+        List<JdbcInventoryStore.DisposalLineRow> persisted = new ArrayList<>();
+
+        // First pass: refuse before anything is written.
+        Map<UUID, int[]> plan = new java.util.LinkedHashMap<>();
+        for (Map.Entry<UUID, int[]> entry : wanted.entrySet()) {
+            StockItemRow item = items.get(entry.getKey());
+            if (item == null) {
+                continue;
+            }
+            plan.put(
+                    entry.getKey(),
+                    new int[] {heldAfterClaimCheck(command, item, entry.getValue()[0], reservationLines)});
+        }
+
+        store.insertDisposal(
+                disposalId,
+                tenantId,
+                command.brandId(),
+                command.locationId(),
+                command.orderId(),
+                command.idempotencyKey(),
+                command.declared().name(),
+                command.reasonCode(),
+                command.actorType(),
+                command.actorId(),
+                now);
+
+        for (UUID variantId : sortedByStockItem(wanted.keySet(), items)) {
+            int[] total = Objects.requireNonNull(wanted.get(variantId), "sorted from the wanted keys");
+            StockItemRow item = items.get(variantId);
+            if (item == null) {
+                // No stock item at this location: nothing is counted for the variant, so nothing is held,
+                // sold or lost here. Reported as untouched, and not stored (a line needs a stock item).
+                results.add(new StockDisposal.LineResult(variantId, 0, 0, 0, total[0], List.of()));
+                continue;
+            }
+            int units = total[0];
+            int started = total[1];
+            boolean counted = item.trackingMode() == TrackingMode.QUANTITY;
+            int held = Objects.requireNonNull(plan.get(variantId), "planned for every wanted variant")[0];
+
+            // Held first: those units were never sold, so they simply go back to the shelf as a release.
+            int[] split = splitUnits(command.declared(), units, started, held);
+            int released = split[0];
+            int toRelease = released;
+            for (JdbcInventoryStore.OrderReservationLine line : reservationLines) {
+                if (toRelease == 0) {
+                    break;
+                }
+                if (!line.stockItemId().equals(item.stockItemId()) || !"HELD".equals(line.status())) {
+                    continue;
+                }
+                int take = Math.min(toRelease, line.quantity().intValue());
+                if (take > 0) {
+                    store.reduceReservationLine(
+                            tenantId, line.reservationId(), item.stockItemId(), BigDecimal.valueOf(take));
+                    toRelease -= take;
+                }
+            }
+            if (counted && released > 0) {
+                store.releaseReservedQuantity(tenantId, item.stockItemId(), BigDecimal.valueOf(released), now);
+            }
+
+            int returned = split[1];
+            int writtenOff = split[2];
+            int noEffect = split[3];
+
+            List<UUID> movements = new ArrayList<>();
+            if (counted && returned + writtenOff > 0) {
+                String base = command.idempotencyKey() + ":" + item.stockItemId();
+                store.appendMovement(
+                                tenantId,
+                                item.stockItemId(),
+                                "RETURN",
+                                BigDecimal.valueOf(returned + writtenOff),
+                                command.orderId(),
+                                base + ":return",
+                                "LINE_REMOVED",
+                                command.actorType(),
+                                command.actorId(),
+                                now)
+                        .ifPresent(movements::add);
+                if (writtenOff > 0) {
+                    store.appendMovement(
+                                    tenantId,
+                                    item.stockItemId(),
+                                    "WASTE",
+                                    BigDecimal.valueOf(writtenOff).negate(),
+                                    command.orderId(),
+                                    base + ":waste",
+                                    command.reasonCode(),
+                                    command.actorType(),
+                                    command.actorId(),
+                                    now)
+                            .ifPresent(movements::add);
+                }
+                // The RETURN raised the shelf by everything reversed and the WASTE took the lost part off it
+                // again, so the position moves by what was actually put back.
+                store.addOnHand(tenantId, item.stockItemId(), BigDecimal.valueOf(returned), now);
+            }
+
+            StockDisposal.LineResult result =
+                    new StockDisposal.LineResult(variantId, released, returned, writtenOff, noEffect, movements);
+            results.add(result);
+            persisted.add(new JdbcInventoryStore.DisposalLineRow(
+                    item.stockItemId(), variantId, units, released, returned, writtenOff, noEffect, movements));
+        }
+        for (JdbcInventoryStore.DisposalLineRow line : persisted) {
+            store.insertDisposalLine(disposalId, tenantId, line);
+        }
+
+        recordDisposalAudit(command, results, now);
+        events.publishEvent(new InventoryStockDisposed(
+                UUID.randomUUID(),
+                tenantId,
+                command.brandId(),
+                command.locationId(),
+                command.orderId(),
+                command.declared().name(),
+                command.reasonCode(),
+                results.stream()
+                        .map(r -> new InventoryStockDisposed.Line(
+                                r.variantId(),
+                                r.units(),
+                                r.releasedUnits(),
+                                r.returnedUnits(),
+                                r.writtenOffUnits(),
+                                r.noEffectUnits()))
+                        .toList(),
+                now));
+        // The global registry, because a fixture builds this service by hand and the production
+        // registries are bound to it; no identifier is ever a label.
+        io.micrometer.core.instrument.Metrics.counter(
+                        "horecaos.inventory.disposed",
+                        "disposition",
+                        command.declared().name(),
+                        "mode",
+                        results.stream().anyMatch(r -> !r.movementIds().isEmpty()) ? "MOVED" : "NO_MOVEMENT")
+                .increment();
+        return new StockDisposal(results, false);
+    }
+
+    /**
+     * What a disposal would do, without doing it (ADR 0169): the same counts {@link #dispose} will produce for the
+     * same command at this moment, so an operator is told "two portions will be written off" before they apply.
+     * Reads only. The answer can differ from the later one if the order's stock moves in between, which is why the
+     * amendment applies by calling {@link #dispose} again and not by trusting this.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public StockDisposal previewDispose(StockDisposalCommand command) {
+        UUID tenantId = command.tenantId();
+        rls.bindTenant(tenantId);
+        Map<UUID, int[]> wanted = wantedBy(command);
+        Map<UUID, StockItemRow> items = store.findStockItems(tenantId, command.locationId(), wanted.keySet());
+        List<UUID> stockItemIds =
+                items.values().stream().map(StockItemRow::stockItemId).sorted().toList();
+        List<JdbcInventoryStore.OrderReservationLine> reservationLines =
+                store.orderReservationLines(tenantId, command.orderQuoteIds(), stockItemIds);
+        List<StockDisposal.LineResult> results = new ArrayList<>();
+        for (UUID variantId : sortedByStockItem(wanted.keySet(), items)) {
+            int[] total = Objects.requireNonNull(wanted.get(variantId), "sorted from the wanted keys");
+            StockItemRow item = items.get(variantId);
+            if (item == null) {
+                results.add(new StockDisposal.LineResult(variantId, 0, 0, 0, total[0], List.of()));
+                continue;
+            }
+            int held = heldAfterClaimCheck(command, item, total[0], reservationLines);
+            int[] split = splitUnits(command.declared(), total[0], total[1], held);
+            results.add(new StockDisposal.LineResult(variantId, split[0], split[1], split[2], split[3], List.of()));
+        }
+        return new StockDisposal(results, false);
+    }
+
+    /** One entry per variant, however the caller listed them: {@code [units, unitsStartedOrMade]}. */
+    private static Map<UUID, int[]> wantedBy(StockDisposalCommand command) {
+        Map<UUID, int[]> wanted = new java.util.LinkedHashMap<>();
+        for (StockDisposalCommand.Line line : command.lines()) {
+            int[] total = wanted.computeIfAbsent(line.variantId(), ignored -> new int[2]);
+            total[0] += line.units();
+            total[1] += line.unitsStartedOrMade();
+        }
+        return wanted;
+    }
+
+    /**
+     * The units of this item the order still has on a {@code HELD} hold, after refusing a request for more units
+     * than the order holds at all (held, or sold and not yet disposed of).
+     */
+    private int heldAfterClaimCheck(
+            StockDisposalCommand command,
+            StockItemRow item,
+            int wantedUnits,
+            List<JdbcInventoryStore.OrderReservationLine> reservationLines) {
+        int held = 0;
+        int committed = 0;
+        for (JdbcInventoryStore.OrderReservationLine line : reservationLines) {
+            if (!line.stockItemId().equals(item.stockItemId())) {
+                continue;
+            }
+            if ("HELD".equals(line.status())) {
+                held += line.quantity().intValue();
+            } else if ("COMMITTED".equals(line.status())) {
+                committed += line.quantity().intValue();
+            }
+        }
+        int alreadyDisposed = store.disposedSoldUnits(command.tenantId(), command.orderId(), item.stockItemId());
+        int claim = held + committed - alreadyDisposed;
+        if (wantedUnits > claim) {
+            throw new DisposalRefusedException(
+                    DisposalRefusedException.EXCEEDS_ORDER_CLAIM,
+                    "The order holds %d unit(s) of this item and %d were asked to be taken off it"
+                            .formatted(Math.max(claim, 0), wantedUnits));
+        }
+        return held;
+    }
+
+    /**
+     * Where each unit goes: held first (released), then the sold ones the kitchen has started or made (always
+     * written off), then the rest by the declared disposition.
+     *
+     * @return {@code [released, returned, writtenOff, noEffect]}
+     */
+    private static int[] splitUnits(StockDisposalCommand.Disposition declared, int units, int started, int held) {
+        int released = Math.min(units, held);
+        int sold = units - released;
+        int forced = Math.min(sold, started);
+        int rest = sold - forced;
+        int returned = declared == StockDisposalCommand.Disposition.RETURN_TO_STOCK ? rest : 0;
+        int noEffect = declared == StockDisposalCommand.Disposition.NO_EFFECT ? rest : 0;
+        int writtenOff = forced + (declared == StockDisposalCommand.Disposition.WRITE_OFF ? rest : 0);
+        return new int[] {released, returned, writtenOff, noEffect};
+    }
+
+    private static List<UUID> sortedByStockItem(java.util.Set<UUID> variantIds, Map<UUID, StockItemRow> items) {
+        return variantIds.stream()
+                .sorted(Comparator.comparing(id ->
+                        items.get(id) == null ? new UUID(0, 0) : items.get(id).stockItemId()))
+                .toList();
+    }
+
+    private StockDisposal replayOf(UUID tenantId, String idempotencyKey) {
+        return new StockDisposal(
+                store.findDisposalLines(tenantId, idempotencyKey).stream()
+                        .map(line -> new StockDisposal.LineResult(
+                                line.variantId(),
+                                line.releasedUnits(),
+                                line.returnedUnits(),
+                                line.writtenOffUnits(),
+                                line.noEffectUnits(),
+                                line.movementIds()))
+                        .toList(),
+                true);
+    }
+
+    /** The first audit fact the inventory module writes for a movement it makes after a sale (ADR 0027). */
+    private void recordDisposalAudit(
+            StockDisposalCommand command, List<StockDisposal.LineResult> results, Instant now) {
+        Map<String, Object> after = new java.util.LinkedHashMap<>();
+        after.put("orderId", command.orderId().toString());
+        after.put("disposition", command.declared().name());
+        after.put("reasonCategory", command.reasonCode());
+        after.put(
+                "units",
+                results.stream().mapToInt(StockDisposal.LineResult::units).sum());
+        after.put(
+                "releasedUnits",
+                results.stream()
+                        .mapToInt(StockDisposal.LineResult::releasedUnits)
+                        .sum());
+        after.put(
+                "returnedUnits",
+                results.stream()
+                        .mapToInt(StockDisposal.LineResult::returnedUnits)
+                        .sum());
+        after.put(
+                "writtenOffUnits",
+                results.stream()
+                        .mapToInt(StockDisposal.LineResult::writtenOffUnits)
+                        .sum());
+        after.put(
+                "movementCount",
+                results.stream().mapToInt(r -> r.movementIds().size()).sum());
+        audit.record(AuditFact.of("inventory.stock.disposed", AuditClass.BUSINESS)
+                .by(auditActorOf(command))
+                .at(ResourceScope.location(command.tenantId(), command.brandId(), command.locationId()))
+                .target("Order", command.orderId())
+                .because("Stock the order no longer needs was given back or written off")
+                .changed(ChangeDocuments.created(after))
+                .correlatedBy(command.orderId().toString())
+                .occurredAt(now)
+                .build());
+    }
+
+    private static ActorRef auditActorOf(StockDisposalCommand command) {
+        return switch (command.actorType()) {
+            case "USER" ->
+                ActorRef.user(
+                        command.actorId() == null
+                                ? "unknown-user"
+                                : command.actorId().toString(),
+                        null);
+            case "SYSTEM_JOB" -> ActorRef.systemJob("ordering");
+            default -> ActorRef.service("ordering");
+        };
     }
 
     private void applyQuantityRelease(UUID tenantId, UUID reservationId) {

@@ -640,6 +640,23 @@ export class UiCartService {
   }
 
   /** Prices the basket and binds the quote checkout will accept. */
+  /**
+   * The wording a rule states for the line it added (ADR 0158), in the customer's language: the platform keys
+   * it `ru`, `uz-Latn` and `en`. Null when the rule states none in this language, and then the screen says
+   * «added automatically».
+   */
+  private autoAddText(customerText: Readonly<Record<string, string>>): string | null {
+    const language = this.lang.langId();
+    const keys = language === 'uz' ? ['uz-Latn', 'uz'] : [language];
+    for (const key of keys) {
+      const text = customerText[key];
+      if (text && text.trim().length > 0) {
+        return text.trim();
+      }
+    }
+    return null;
+  }
+
   async priceCart(): Promise<PricedCart | null> {
     if (!this.carts.cart()) {
       return null;
@@ -984,6 +1001,19 @@ export class UiCartService {
           comboPicks,
           comboComponents,
           nestedModifiers,
+          ...(line.origin === 'AUTO_ADD' && line.autoAdd
+            ? {
+                origin: 'AUTO_ADD' as const,
+                autoAdd: {
+                  ruleCode: line.autoAdd.ruleCode,
+                  text: this.autoAddText(line.autoAdd.customerText),
+                  mandatory: line.autoAdd.mandatory,
+                  removable: line.autoAdd.removable,
+                  minimumQuantity: line.autoAdd.minimumQuantity,
+                  maximumQuantity: line.autoAdd.maximumQuantity,
+                },
+              }
+            : {}),
         };
         return projected;
       })

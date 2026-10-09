@@ -58,6 +58,21 @@ const COMPLETION_REASON: ReasonResponse = {
   updatedAt: '2026-08-01T00:00:00Z',
 };
 
+const REMOVAL_REASON: ReasonResponse = {
+  id: 'reason-removal-1',
+  kind: 'LINE_REMOVAL',
+  systemCategory: 'CUSTOMER_CHANGED_MIND',
+  internalName: 'Клиент передумал',
+  stockDisposition: 'RETURN_TO_STOCK',
+  liabilityParty: 'CUSTOMER',
+  customerRefund: null,
+  allowedFulfillmentModes: null,
+  customerTexts: { ru: 'Блюдо убрано по вашей просьбе', 'uz-Latn': '...', en: '...' },
+  status: 'ACTIVE',
+  version: 1,
+  updatedAt: '2026-10-08T00:00:00Z',
+};
+
 const CALENDAR: TenantCalendar = {
   timezone: 'Asia/Tashkent',
   businessDayStart: '00:00',
@@ -157,10 +172,20 @@ describe('ReferenceDataPage', () => {
           Promise.resolve(
             kind === 'CANCELLATION'
               ? [CANCELLATION_REASON, CANCELLATION_REASON_2]
-              : [COMPLETION_REASON],
+              : kind === 'LINE_REMOVAL'
+                ? [REMOVAL_REASON]
+                : [COMPLETION_REASON],
           ),
         ),
-      categories: vi.fn().mockResolvedValue(['OUT_OF_STOCK', 'CUSTOMER_UNREACHABLE']),
+      categories: vi
+        .fn()
+        .mockImplementation((_scope: LocationScope, kind: string) =>
+          Promise.resolve(
+            kind === 'LINE_REMOVAL'
+              ? ['CUSTOMER_CHANGED_MIND', 'ITEM_UNAVAILABLE']
+              : ['OUT_OF_STOCK', 'CUSTOMER_UNREACHABLE'],
+          ),
+        ),
       create: vi.fn().mockResolvedValue('reason-3'),
       update: vi.fn().mockResolvedValue(2),
       archive: vi.fn().mockResolvedValue(undefined),
@@ -236,6 +261,99 @@ describe('ReferenceDataPage', () => {
     expect(checkbox.checked).toBe(true);
   });
 
+  it('lists line-removal reasons (ADR 0169) in their own section, with a disposition and a liable party and no refund', () => {
+    const section = (fixture.nativeElement as HTMLElement).querySelector('#removal-reasons');
+    expect(section?.textContent).toContain('Клиент передумал');
+    expect(section?.textContent).toContain('RETURN_TO_STOCK');
+    expect(section?.textContent).toContain('CUSTOMER');
+    expect(section?.textContent).not.toContain('Default refund');
+    expect(section?.querySelectorAll('[data-testid="reason-row-LINE_REMOVAL"]')).toHaveLength(1);
+  });
+
+  async function openRemovalForm(): Promise<void> {
+    const add = (fixture.nativeElement as HTMLElement).querySelector(
+      '#removal-reasons .card__header .link',
+    ) as HTMLButtonElement;
+    add.click();
+    fixture.detectChanges();
+  }
+
+  it('offers a removal reason the three dispositions that act on sold stock, and no refund posture', async () => {
+    await openRemovalForm();
+    const host = fixture.nativeElement as HTMLElement;
+
+    const options = Array.from(host.querySelectorAll('#reason-stock option')).map((option) =>
+      option.textContent?.trim(),
+    );
+    expect(options).toEqual(['RETURN_TO_STOCK', 'WRITE_OFF', 'NO_EFFECT']);
+    expect(host.querySelector('#reason-refund')).toBeNull();
+    expect(host.querySelector('#reason-liability')).not.toBeNull();
+  });
+
+  it('creates a removal reason with its disposition and liable party, and sends no refund', async () => {
+    await openRemovalForm();
+    const host = fixture.nativeElement as HTMLElement;
+    const setValue = (id: string, value: string) => {
+      const el = host.querySelector(id) as HTMLInputElement;
+      el.value = value;
+      el.dispatchEvent(new Event('input'));
+    };
+    setValue('#reason-internal-name', 'Ошибка кухни');
+    setValue('#reason-text-ru', 'Блюдо убрано: ошибка на кухне');
+    setValue('#reason-text-uz', '...');
+    setValue('#reason-text-en', '...');
+    const stock = host.querySelector('#reason-stock') as HTMLSelectElement;
+    stock.value = 'WRITE_OFF';
+    stock.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    (
+      Array.from(host.querySelectorAll('.dialog__actions button')).find((button) =>
+        button.textContent?.includes('Create'),
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(api.create).toHaveBeenCalledTimes(1);
+    const request = api.create.mock.calls[0][1];
+    expect(request.kind).toBe('LINE_REMOVAL');
+    expect(request.stockDisposition).toBe('WRITE_OFF');
+    expect(request.liabilityParty).toBe('TENANT');
+    expect(request.customerRefund).toBeUndefined();
+    expect(request.allowedFulfillmentModes).toBeUndefined();
+  });
+
+  it('will not save «item unavailable» that returns to stock, and says why before the server would', async () => {
+    await openRemovalForm();
+    const host = fixture.nativeElement as HTMLElement;
+    const setValue = (id: string, value: string) => {
+      const el = host.querySelector(id) as HTMLInputElement;
+      el.value = value;
+      el.dispatchEvent(new Event('input'));
+    };
+    setValue('#reason-internal-name', 'Закончилось');
+    setValue('#reason-text-ru', 'Блюдо закончилось');
+    setValue('#reason-text-uz', '...');
+    setValue('#reason-text-en', '...');
+    const category = host.querySelector('#reason-category') as HTMLSelectElement;
+    category.value = 'ITEM_UNAVAILABLE';
+    category.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const submit = Array.from(host.querySelectorAll('.dialog__actions button')).find((button) =>
+      button.textContent?.includes('Create'),
+    ) as HTMLButtonElement;
+    expect(host.querySelector('[data-testid="reason-unavailable-hint"]')).not.toBeNull();
+    expect(submit.disabled).toBe(true);
+
+    const stock = host.querySelector('#reason-stock') as HTMLSelectElement;
+    stock.value = 'WRITE_OFF';
+    stock.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="reason-unavailable-hint"]')).toBeNull();
+    expect(submit.disabled).toBe(false);
+  });
+
   it('creates a cancellation reason with the stock/liability/refund posture set once, up front', async () => {
     const addButtons = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll('.link'),
@@ -273,10 +391,11 @@ describe('ReferenceDataPage', () => {
   });
 
   it('refuses to create a completion reason with no fulfilment mode selected', () => {
-    const addButtons = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll('.link'),
-    ).filter((el) => el.textContent?.includes('Add')) as HTMLButtonElement[];
-    addButtons[1].click();
+    (
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '#completion-reasons .card__header .link',
+      ) as HTMLButtonElement
+    ).click();
     fixture.detectChanges();
 
     const setValue = (id: string, value: string) => {
@@ -356,7 +475,7 @@ describe('ReferenceDataPage', () => {
     await flushMicrotasks();
     fixture.detectChanges();
 
-    expect(api.list).toHaveBeenCalledTimes(2); // the initial load only (CANCELLATION + COMPLETION)
+    expect(api.list).toHaveBeenCalledTimes(3); // the initial load only (CANCELLATION + COMPLETION + LINE_REMOVAL)
     const rows = Array.from(
       fixture.nativeElement.querySelectorAll('[data-testid="reason-row-CANCELLATION"]'),
     ) as HTMLElement[];
@@ -388,8 +507,8 @@ describe('ReferenceDataPage', () => {
     await flushMicrotasks();
     fixture.detectChanges();
 
-    // initial CANCELLATION+COMPLETION, then reload() re-reads both kinds.
-    expect(api.list).toHaveBeenCalledTimes(4);
+    // initial CANCELLATION+COMPLETION+LINE_REMOVAL, then reload() re-reads all three kinds.
+    expect(api.list).toHaveBeenCalledTimes(6);
     expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeTruthy();
   });
 });

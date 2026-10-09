@@ -59,6 +59,26 @@ public class JdbcOrderProcessStore {
     }
 
     /**
+     * Records the ledger movement a disposal wrote for an order's outcome (ADR 0169).
+     *
+     * <p>{@code ordering.order_outcomes} is append-only for the application role, with the one exception V0542
+     * grants: this column, which is null when the outcome is written and is filled once, by the process that
+     * carries the stock consequence out. It names the first movement of the disposal; the rest are found by the
+     * order and the disposal's key. Never overwritten: a repeat finds the column set and writes nothing.
+     */
+    public void recordOutcomeMovement(UUID tenantId, UUID orderId, UUID movementId) {
+        jdbc.sql("""
+                UPDATE ordering.order_outcomes
+                   SET inventory_movement_id = :movementId
+                 WHERE tenant_id = :tenantId AND order_id = :orderId AND inventory_movement_id IS NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .param("movementId", movementId)
+                .update();
+    }
+
+    /**
      * Claims runnable work for one process.
      *
      * <p>{@code FOR UPDATE SKIP LOCKED} so two workers never run one order's

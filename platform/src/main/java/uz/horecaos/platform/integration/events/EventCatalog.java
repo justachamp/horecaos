@@ -584,6 +584,19 @@ public final class EventCatalog {
                             + "Symmetric — active carries the direction — and identifiers and "
                             + "stable codes only, never a product name or free text."),
             new EventContract(
+                    "InventoryStockDisposed",
+                    1,
+                    "inventory",
+                    INVENTORY_EVENTS_TOPIC,
+                    "orderId",
+                    "events/inventory.events/InventoryStockDisposed.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "Stock an order no longer needs was given back or written off (ADR 0169): a line "
+                            + "removed from or lowered on a confirmed order, or an order cancelled after its "
+                            + "stock was committed. Per line, the units released from a hold, returned to stock, "
+                            + "written off or left untouched. Identifiers, stable codes and counts only."),
+            new EventContract(
                     "LeadRegistered",
                     1,
                     "customers",

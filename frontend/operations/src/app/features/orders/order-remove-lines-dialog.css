@@ -1,0 +1,49 @@
+/* Chrome is `q-modal` (ADR 0101); see `order-reason-dialog.css`'s identical note. */
+
+.remove-lines-dialog__lead {
+  margin: 0 0 8px;
+  color: var(--q-ink-muted);
+}
+
+.remove-lines-dialog__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.remove-lines-dialog__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.remove-lines-dialog__problem {
+  margin: 8px 0 0;
+  color: var(--q-error-text);
+}
+
+.remove-lines-dialog__dismiss,
+.remove-lines-dialog__confirm {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.remove-lines-dialog__confirm {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.remove-lines-dialog__confirm:disabled,
+.remove-lines-dialog__dismiss:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

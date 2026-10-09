@@ -507,6 +507,56 @@ class AutoAddCartHttpTests {
                 .isEqualByComparingTo("6");
     }
 
+    @Test
+    @DisplayName("ADR 0169 with ADR 0158: an amendment can neither remove nor lower a line a mandatory rule added, "
+            + "while a line the customer could decline can go")
+    void anAmendmentCannotTakeAMandatoryLineOff() throws Exception {
+        mandatoryAllowed(true);
+        UUID packaging = activeRule(mandatory(triggeredRule("bag-per-burger", bag, "[\"PICKUP\"]", burger, null, 1)));
+        UUID spoons = activeRule(plainRule("cutlery", cutlery, "[\"PICKUP\"]"));
+        publish("STOREFRONT");
+        gate(true, false);
+        set(OrderingConfigurationKeys.AMENDMENT_LINE_REMOVAL_ENABLED, ResourceScope.brand(TENANT, BRAND), true);
+        UUID cart = openCart("STOREFRONT", "PICKUP");
+        JsonNode view = putLine(cart, 1, "burger", burger, "3");
+        UUID orderId = checkout(cart, price(cart, view.get("version").asInt()));
+        UUID bagLine = orderLineOfRule(orderId, packaging);
+        UUID cutleryLine = orderLineOfRule(orderId, spoons);
+        assertThat(jdbc.sql("SELECT quantity FROM ordering.order_lines WHERE id = :id")
+                        .param("id", bagLine)
+                        .query(BigDecimal.class)
+                        .single())
+                .as("one bag per burger, three burgers")
+                .isEqualByComparingTo("3");
+        String reason = removalReason();
+
+        assertThat(amendRefusal(
+                        orderId,
+                        "am-mandatory-1",
+                        "{\"type\":\"REMOVE_LINES\",\"orderLineIds\":[\"" + bagLine + "\"],\"removalReasonId\":\""
+                                + reason + "\"}"))
+                .as("the customer could not have declined this line, so neither can the operator")
+                .isEqualTo("AUTO_ADD_LINE_MANDATORY");
+        assertThat(amendRefusal(
+                        orderId,
+                        "am-mandatory-2",
+                        "{\"type\":\"CHANGE_LINE_QUANTITY\",\"orderLineId\":\"" + bagLine
+                                + "\",\"quantity\":2,\"removalReasonId\":\"" + reason + "\"}"))
+                .as("lowering it is the same removal in part")
+                .isEqualTo("AUTO_ADD_LINE_MANDATORY");
+        assertThat(count("ordering.order_amendments")).isZero();
+
+        MvcResult removable = amendRaw(
+                orderId,
+                "am-mandatory-3",
+                "{\"type\":\"REMOVE_LINES\",\"orderLineIds\":[\"" + cutleryLine + "\"],\"removalReasonId\":\"" + reason
+                        + "\"}");
+        assertThat(removable.getResponse().getStatus())
+                .as(removable.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(count("ordering.order_amendments")).isEqualTo(1);
+    }
+
     // ---------------------------------------------------------------------- skips and races
 
     @Test
@@ -770,6 +820,55 @@ class AutoAddCartHttpTests {
         assertThat(without.get("totalMinor").asLong()).as("burger only").isEqualTo(40_000L);
     }
 
+    // ------------------------------------------------------------------------------- a republish
+
+    @Test
+    @DisplayName("price() after a republish re-evaluates the cart: an edited rule changes the injected quantity, an "
+            + "archived one takes the line away, and each advances the cart's version")
+    void aRepublishChangesTheInjectedSetAtPricing() throws Exception {
+        UUID rule = activeRule(plainRule("cutlery", cutlery, "[\"PICKUP\"]"));
+        publish("STOREFRONT");
+        gate(true, false);
+        UUID cart = openCart("STOREFRONT", "PICKUP");
+        JsonNode view = putLine(cart, 1, "burger", burger, "1");
+        int version = view.get("version").asInt();
+        assertThat(lineOf(view, "aa:" + rule).get("quantity").decimalValue()).isEqualByComparingTo("1");
+
+        // The author doubles the quantity and republishes; the customer has not touched the cart since.
+        replaceRule(rule, 2, plainRule("cutlery", cutlery, "[\"PICKUP\"]").replace("\"quantity\":1", "\"quantity\":2"));
+        publish("STOREFRONT");
+        JsonNode doubled = price(cart, version);
+
+        assertThat(doubled.get("changedByPricing").asBoolean())
+                .as("the cart the customer saw is not the cart that was priced")
+                .isTrue();
+        assertThat(doubled.get("cartVersion").asInt()).isGreaterThan(version);
+        assertThat(doubled.get("totalMinor").asLong())
+                .as("burger 40,000 + two sets of cutlery at 2,000")
+                .isEqualTo(44_000L);
+        Map<String, Object> stored = jdbc.sql("SELECT quantity, auto_add_rule_version FROM ordering.cart_lines "
+                        + "WHERE cart_id = :c AND line_key = :k")
+                .param("c", cart)
+                .param("k", "aa:" + rule)
+                .query()
+                .singleRow();
+        assertThat((BigDecimal) stored.get("quantity")).isEqualByComparingTo("2");
+        assertThat(stored.get("auto_add_rule_version"))
+                .as("the line names the version of the rule that now puts it there")
+                .isEqualTo(3);
+
+        // The author then archives the rule and republishes: the line goes.
+        archiveRule(rule, 3);
+        publish("STOREFRONT");
+        JsonNode gone = price(cart, doubled.get("cartVersion").asInt());
+
+        assertThat(gone.get("changedByPricing").asBoolean()).isTrue();
+        assertThat(gone.get("cartVersion").asInt())
+                .isGreaterThan(doubled.get("cartVersion").asInt());
+        assertThat(gone.get("totalMinor").asLong()).isEqualTo(40_000L);
+        assertThat(count("ordering.cart_lines WHERE origin = 'AUTO_ADD'")).isZero();
+    }
+
     // ---------------------------------------------------------------------- a moved cart
 
     @Test
@@ -934,6 +1033,65 @@ class AutoAddCartHttpTests {
                 .isEqualTo(200);
     }
 
+    private UUID orderLineOfRule(UUID orderId, UUID ruleId) {
+        return jdbc.sql("SELECT id FROM ordering.order_lines WHERE order_id = :o AND auto_add_rule_id = :r "
+                        + "AND revision_to IS NULL")
+                .param("o", orderId)
+                .param("r", ruleId)
+                .query(UUID.class)
+                .single();
+    }
+
+    /** A removal reason authored over the endpoint the settings screen uses. */
+    private String removalReason() throws Exception {
+        MvcResult created = mvc.perform(post("/api/v1/control-plane/tenants/" + TENANT + "/order-outcome-reasons")
+                        .with(operator())
+                        .header(IDEMPOTENCY_HEADER, "reason-" + requests++)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"kind":"LINE_REMOVAL","systemCategory":"CUSTOMER_CHANGED_MIND",\
+                                "internalName":"Customer changed their mind","stockDisposition":"RETURN_TO_STOCK",\
+                                "liabilityParty":"CUSTOMER",\
+                                "customerTexts":{"ru":"Блюдо убрано","uz-Latn":"Taom olib tashlandi","en":"Removed"}}"""))
+                .andReturn();
+        assertThat(created.getResponse().getStatus())
+                .as(created.getResponse().getContentAsString())
+                .isEqualTo(200);
+        return JSON.readTree(created.getResponse().getContentAsString())
+                .get("id")
+                .asText();
+    }
+
+    private MvcResult amendRaw(UUID orderId, String key, String command) throws Exception {
+        String path =
+                "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION + "/orders/" + orderId;
+        int version = JSON.readTree(mvc.perform(get(path).with(operator()))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString())
+                .get("summary")
+                .get("version")
+                .asInt();
+        return mvc.perform(post(path + "/amendments")
+                        .with(operator())
+                        .header(IDEMPOTENCY_HEADER, key)
+                        .header("If-Match", "\"" + version + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"commands\":[" + command + "],\"applyImmediately\":false,"
+                                + "\"reasonCode\":\"OPERATOR_EDIT\"}"))
+                .andReturn();
+    }
+
+    private String amendRefusal(UUID orderId, String key, String command) throws Exception {
+        MvcResult refused = amendRaw(orderId, key, command);
+        assertThat(refused.getResponse().getStatus())
+                .as(refused.getResponse().getContentAsString())
+                .isEqualTo(409);
+        return JSON.readTree(refused.getResponse().getContentAsString())
+                .path("reasonCode")
+                .asText();
+    }
+
     private static List<String> lineKeys(JsonNode cart) {
         List<String> keys = new ArrayList<>();
         cart.get("lines").forEach(line -> keys.add(line.get("lineKey").asText()));
@@ -1045,6 +1203,34 @@ class AutoAddCartHttpTests {
                 .as(activated.getResponse().getContentAsString())
                 .isEqualTo(200);
         return ruleId;
+    }
+
+    private void replaceRule(UUID ruleId, int version, String createBody) throws Exception {
+        ObjectNode replace = (ObjectNode) JSON.readTree(createBody);
+        replace.remove("code");
+        replace.remove("kind");
+        replace.put("status", "ACTIVE");
+        MvcResult replaced = mvc.perform(put(rulesPath() + "/" + ruleId)
+                        .with(operator())
+                        .header(IDEMPOTENCY_HEADER, "rule-" + requests++)
+                        .header("If-Match", String.valueOf(version))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(JSON.writeValueAsString(replace)))
+                .andReturn();
+        assertThat(replaced.getResponse().getStatus())
+                .as(replaced.getResponse().getContentAsString())
+                .isEqualTo(200);
+    }
+
+    private void archiveRule(UUID ruleId, int version) throws Exception {
+        MvcResult archived = mvc.perform(post(rulesPath() + "/" + ruleId + "/archive")
+                        .with(operator())
+                        .header(IDEMPOTENCY_HEADER, "rule-" + requests++)
+                        .header("If-Match", String.valueOf(version)))
+                .andReturn();
+        assertThat(archived.getResponse().getStatus())
+                .as(archived.getResponse().getContentAsString())
+                .isEqualTo(200);
     }
 
     private void publish(String channel) {

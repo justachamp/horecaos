@@ -55,15 +55,16 @@ public class JdbcOrderAmendmentStore {
         params.put("actorType", amendment.createdByActorType());
         params.put("actorId", amendment.createdByActorId());
         params.put("now", utc(amendment.createdAt()));
+        params.put("removesStock", amendment.removesStock());
 
         jdbc.sql("""
                 INSERT INTO ordering.order_amendments (
                     id, tenant_id, order_id, status, base_revision, quote_id, delta_total_minor,
                     requires_approval, approval_request_id, idempotency_key, expires_at,
-                    created_by_actor_type, created_by_actor_id, version, created_at, updated_at)
+                    created_by_actor_type, created_by_actor_id, removes_stock, version, created_at, updated_at)
                 VALUES (:id, :tenantId, :orderId, :status, :baseRevision, :quoteId, :delta,
                     :requiresApproval, :approvalRequestId, :idempotencyKey, :expiresAt,
-                    :actorType, :actorId, 1, :now, :now)
+                    :actorType, :actorId, :removesStock, 1, :now, :now)
                 """).params(params).update();
     }
 
@@ -316,7 +317,7 @@ public class JdbcOrderAmendmentStore {
                    delta_total_minor, requires_approval, approval_request_id,
                    confirmation_attested_by, confirmation_attested_at, confirmation_channel,
                    idempotency_key, expires_at, rejected_reason_code, created_by_actor_type,
-                   created_by_actor_id, version, created_at, settled_at
+                   created_by_actor_id, version, created_at, settled_at, removes_stock
             FROM ordering.order_amendments""";
 
     private static AmendmentRow mapAmendment(ResultSet row, int number) throws SQLException {
@@ -344,7 +345,8 @@ public class JdbcOrderAmendmentStore {
                 row.getString("created_by_actor_id"),
                 row.getInt("version"),
                 row.getObject("created_at", OffsetDateTime.class).toInstant(),
-                instantOrNull(row, "settled_at"));
+                instantOrNull(row, "settled_at"),
+                row.getBoolean("removes_stock"));
     }
 
     private static @Nullable Instant instantOrNull(ResultSet row, String column) throws SQLException {
@@ -370,7 +372,43 @@ public class JdbcOrderAmendmentStore {
             Instant expiresAt,
             String createdByActorType,
             String createdByActorId,
-            Instant createdAt) {}
+            Instant createdAt,
+            boolean removesStock) {
+
+        /** Every amendment before ADR 0169, none of which takes stock off the order. */
+        public NewAmendment(
+                UUID id,
+                UUID tenantId,
+                UUID orderId,
+                AmendmentStatus status,
+                int baseRevision,
+                @Nullable UUID quoteId,
+                long deltaTotalMinor,
+                boolean requiresApproval,
+                @Nullable UUID approvalRequestId,
+                String idempotencyKey,
+                Instant expiresAt,
+                String createdByActorType,
+                String createdByActorId,
+                Instant createdAt) {
+            this(
+                    id,
+                    tenantId,
+                    orderId,
+                    status,
+                    baseRevision,
+                    quoteId,
+                    deltaTotalMinor,
+                    requiresApproval,
+                    approvalRequestId,
+                    idempotencyKey,
+                    expiresAt,
+                    createdByActorType,
+                    createdByActorId,
+                    createdAt,
+                    false);
+        }
+    }
 
     public record AmendmentRow(
             UUID id,
@@ -393,7 +431,8 @@ public class JdbcOrderAmendmentStore {
             String createdByActorId,
             int version,
             Instant createdAt,
-            @Nullable Instant settledAt) {}
+            @Nullable Instant settledAt,
+            boolean removesStock) {}
 
     public record CommandRow(
             int sequence, AmendmentCommandType commandType, String payloadJson, String rejectedReasonCode) {}

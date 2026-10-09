@@ -1,0 +1,132 @@
+.reference-data {
+  max-width: 1100px;
+}
+
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+  max-width: 680px;
+}
+
+.reference-data__layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 24px;
+  margin-top: 16px;
+}
+
+@media (max-width: 720px) {
+  .reference-data__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.reference-data__rail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: stretch;
+}
+
+.reference-data__rail-item {
+  text-align: start;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.reference-data__rail-item--active {
+  background: var(--q-surface-1);
+  border-color: var(--q-primary);
+}
+
+.reference-data__rail-heading {
+  margin-top: 16px;
+  color: var(--q-ink-subtle);
+}
+
+.reference-data__rail a {
+  color: var(--q-ink);
+  padding: 4px 0;
+}
+
+.reference-data__panel {
+  min-width: 0;
+}
+
+.reference-data__form {
+  display: grid;
+  grid-template-columns: minmax(0, 420px);
+  gap: 6px;
+  margin: 16px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-surface-1);
+}
+
+.reference-data__form input[type='text'],
+.reference-data__form input[type='number'],
+.reference-data__form select,
+.reference-data__table input[type='text'],
+.reference-data__table input[type='number'],
+.reference-data__table select {
+  border: 1px solid var(--q-hairline);
+  padding: 6px 8px;
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  max-width: 100%;
+}
+
+.reference-data__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.reference-data__table th,
+.reference-data__table td {
+  text-align: start;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+  vertical-align: top;
+}
+
+.reference-data__table td input {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.reference-data__archived td {
+  color: var(--q-ink-subtle);
+}
+
+.reference-data__actions {
+  white-space: nowrap;
+}
+
+.reference-data__actions button {
+  margin-inline-end: 4px;
+}
+
+.error {
+  color: var(--q-error-text);
+}
+
+.denied {
+  color: var(--q-ink-muted);
+}
+
+button.primary {
+  border: none;
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+button.primary:disabled {
+  background: var(--q-hairline);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}

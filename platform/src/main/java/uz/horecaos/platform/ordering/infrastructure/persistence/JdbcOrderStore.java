@@ -367,6 +367,95 @@ public class JdbcOrderStore {
     }
 
     /**
+     * What an applied amendment took off one order line (ADR 0169), as the evidence row holds it.
+     *
+     * @param quantityAfter zero for a removal; the lowered quantity for a decrease
+     * @param stockUnits whole units the order no longer needs: the difference of the two ceilings
+     * @param reasonSnapshotJson the reason as it read when it was cited, so renaming it next year does not
+     *        rewrite this year's report
+     */
+    public record NewLineRemoval(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID orderId,
+            UUID amendmentId,
+            int revision,
+            UUID orderLineId,
+            UUID variantId,
+            BigDecimal quantityBefore,
+            BigDecimal quantityAfter,
+            int stockUnits,
+            int releasedUnits,
+            int returnedUnits,
+            int writtenOffUnits,
+            int noEffectUnits,
+            UUID reasonId,
+            int reasonVersion,
+            String reasonCategory,
+            String reasonSnapshotJson,
+            String dispositionDeclared,
+            String dispositionEffective,
+            String kitchenState,
+            String liabilityParty,
+            List<UUID> inventoryMovementIds,
+            @Nullable UUID approvalRequestId,
+            String actorType,
+            @Nullable String actorId,
+            Instant occurredAt) {}
+
+    /** Appends the evidence of one line taken off an order (ADR 0169). Append-only; never updated. */
+    public void insertLineRemoval(NewLineRemoval removal) {
+        jdbc.sql("""
+                INSERT INTO ordering.order_line_removals (
+                    id, tenant_id, brand_id, location_id, order_id, amendment_id, revision, order_line_id,
+                    variant_id, quantity_before, quantity_after, stock_units, released_units, returned_units,
+                    written_off_units, no_effect_units, reason_id, reason_version, reason_category,
+                    reason_snapshot_json, disposition_declared, disposition_effective, kitchen_state,
+                    liability_party, inventory_movement_ids, approval_request_id, actor_type, actor_id,
+                    occurred_at)
+                VALUES (
+                    :id, :tenantId, :brandId, :locationId, :orderId, :amendmentId, :revision, :orderLineId,
+                    :variantId, :quantityBefore, :quantityAfter, :stockUnits, :released, :returned,
+                    :writtenOff, :noEffect, :reasonId, :reasonVersion, :reasonCategory,
+                    CAST(:snapshot AS jsonb), :declared, :effective, :kitchenState,
+                    :liability, CAST(:movementIds AS uuid[]), :approvalRequestId, :actorType, :actorId,
+                    :occurredAt)
+                """)
+                .param("id", removal.id())
+                .param("tenantId", removal.tenantId())
+                .param("brandId", removal.brandId())
+                .param("locationId", removal.locationId())
+                .param("orderId", removal.orderId())
+                .param("amendmentId", removal.amendmentId())
+                .param("revision", removal.revision())
+                .param("orderLineId", removal.orderLineId())
+                .param("variantId", removal.variantId())
+                .param("quantityBefore", removal.quantityBefore())
+                .param("quantityAfter", removal.quantityAfter())
+                .param("stockUnits", removal.stockUnits())
+                .param("released", removal.releasedUnits())
+                .param("returned", removal.returnedUnits())
+                .param("writtenOff", removal.writtenOffUnits())
+                .param("noEffect", removal.noEffectUnits())
+                .param("reasonId", removal.reasonId())
+                .param("reasonVersion", removal.reasonVersion())
+                .param("reasonCategory", removal.reasonCategory())
+                .param("snapshot", removal.reasonSnapshotJson())
+                .param("declared", removal.dispositionDeclared())
+                .param("effective", removal.dispositionEffective())
+                .param("kitchenState", removal.kitchenState())
+                .param("liability", removal.liabilityParty())
+                .param("movementIds", uuidStrings(removal.inventoryMovementIds()))
+                .param("approvalRequestId", removal.approvalRequestId())
+                .param("actorType", removal.actorType())
+                .param("actorId", removal.actorId())
+                .param("occurredAt", OffsetDateTime.ofInstant(removal.occurredAt(), ZoneOffset.UTC))
+                .update();
+    }
+
+    /**
      * The live catchweight lines of an order that nobody has weighed yet (ADR 0137):
      * the question behind {@code CATCHWEIGHT_NOT_RECONCILED}, which refuses to hand an
      * order over while any of them is still priced against its nominal weight.

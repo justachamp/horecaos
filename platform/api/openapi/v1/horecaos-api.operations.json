@@ -808,6 +808,15 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "orderLineIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 10,
+            "minItems" : 0,
+            "type" : "array"
+          },
           "paymentMethodCode" : {
             "maxLength" : 32,
             "minLength" : 0,
@@ -830,6 +839,10 @@
           "recipientPhone" : {
             "maxLength" : 32,
             "minLength" : 0,
+            "type" : "string"
+          },
+          "removalReasonId" : {
+            "format" : "uuid",
             "type" : "string"
           },
           "type" : {
@@ -961,6 +974,12 @@
           },
           "status" : {
             "type" : "string"
+          },
+          "stockConsequence" : {
+            "items" : {
+              "$ref" : "#/components/schemas/StockConsequenceLine"
+            },
+            "type" : "array"
           },
           "warnings" : {
             "items" : {
@@ -15754,6 +15773,9 @@
           "kitchenNote" : {
             "type" : "string"
           },
+          "lineRemovalEnabled" : {
+            "type" : "boolean"
+          },
           "lines" : {
             "items" : {
               "$ref" : "#/components/schemas/OperationsOrderControllerLineResponse"
@@ -15992,7 +16014,7 @@
             "type" : "string"
           },
           "kind" : {
-            "enum" : [ "CANCELLATION", "COMPLETION" ],
+            "enum" : [ "CANCELLATION", "COMPLETION", "LINE_REMOVAL" ],
             "type" : "string"
           },
           "liabilityParty" : {
@@ -16004,7 +16026,7 @@
             "type" : "string"
           },
           "systemCategory" : {
-            "enum" : [ "CUSTOMER_CANCELLED", "CUSTOMER_UNREACHABLE", "CUSTOMER_NO_SHOW", "RESTAURANT_REFUSED", "ITEM_UNAVAILABLE", "KITCHEN_CAPACITY", "DELIVERY_FAILED", "COURIER_UNAVAILABLE", "ADDRESS_UNSERVICEABLE", "PAYMENT_NOT_RECEIVED", "DUPLICATE_ORDER", "TEST_ORDER", "SUSPECTED_FRAUD", "PRICING_ERROR", "DELIVERED_OWN_COURIER", "DELIVERED_PARTNER_COURIER", "COLLECTED_BY_CUSTOMER", "SERVED_IN_HOUSE", "APPROVAL_DEADLINE_LAPSED", "OTHER" ],
+            "enum" : [ "CUSTOMER_CANCELLED", "CUSTOMER_UNREACHABLE", "CUSTOMER_NO_SHOW", "RESTAURANT_REFUSED", "ITEM_UNAVAILABLE", "KITCHEN_CAPACITY", "DELIVERY_FAILED", "COURIER_UNAVAILABLE", "ADDRESS_UNSERVICEABLE", "PAYMENT_NOT_RECEIVED", "DUPLICATE_ORDER", "TEST_ORDER", "SUSPECTED_FRAUD", "PRICING_ERROR", "CUSTOMER_CHANGED_MIND", "KITCHEN_ERROR", "ORDER_ENTRY_ERROR", "QUALITY_ISSUE", "DELIVERED_OWN_COURIER", "DELIVERED_PARTNER_COURIER", "COLLECTED_BY_CUSTOMER", "SERVED_IN_HOUSE", "APPROVAL_DEADLINE_LAPSED", "OTHER" ],
             "type" : "string"
           }
         },
@@ -16014,7 +16036,7 @@
       "OrderOutcomeReasonControllerReorderRequest" : {
         "properties" : {
           "kind" : {
-            "enum" : [ "CANCELLATION", "COMPLETION" ],
+            "enum" : [ "CANCELLATION", "COMPLETION", "LINE_REMOVAL" ],
             "type" : "string"
           },
           "orderedReasonIds" : {
@@ -26242,6 +26264,64 @@
             "type" : "string"
           },
           "waitAfterPreviousSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "StockConsequenceLine" : {
+        "properties" : {
+          "declaredDisposition" : {
+            "type" : "string"
+          },
+          "effectiveDisposition" : {
+            "type" : "string"
+          },
+          "kitchenState" : {
+            "type" : "string"
+          },
+          "noEffectUnits" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "orderLineId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "productName" : {
+            "type" : "string"
+          },
+          "quantityAfter" : {
+            "type" : "number"
+          },
+          "quantityBefore" : {
+            "type" : "number"
+          },
+          "reasonCategory" : {
+            "type" : "string"
+          },
+          "reasonId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "releasedUnits" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "returnedUnits" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "stockUnits" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "variantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "writtenOffUnits" : {
             "format" : "int32",
             "type" : "integer"
           }
@@ -46489,7 +46569,7 @@
           "name" : "kind",
           "required" : true,
           "schema" : {
-            "enum" : [ "CANCELLATION", "COMPLETION" ],
+            "enum" : [ "CANCELLATION", "COMPLETION", "LINE_REMOVAL" ],
             "type" : "string"
           }
         }, {
@@ -46572,7 +46652,7 @@
           "name" : "kind",
           "required" : true,
           "schema" : {
-            "enum" : [ "CANCELLATION", "COMPLETION" ],
+            "enum" : [ "CANCELLATION", "COMPLETION", "LINE_REMOVAL" ],
             "type" : "string"
           }
         } ],
@@ -58153,7 +58233,7 @@
         "tags" : [ "Operations orders" ]
       },
       "post" : {
-        "description" : "An amendment is not an edit. Applying one appends a revision carrying its own complete total and leaves the previous one byte-identical; it never rewrites a revision and never creates a second order. Eleven of ADR 0039's twelve commands are built (wave 10 added six financial ones — ADD_LINES, CHANGE_LINE_QUANTITY increase-only, CHANGE_PAYMENT_METHOD, CHANGE_DELIVERY_ADDRESS, CHANGE_FULFILLMENT_TIME and CHANGE_CONTACT — beside the five already built); only REMOVE_LINES is still refused by name rather than half-performed, pending an ADR 0017 return/write-off primitive.",
+        "description" : "An amendment is not an edit. Applying one appends a revision carrying its own complete total and leaves the previous one byte-identical; it never rewrites a revision and never creates a second order. All twelve of ADR 0039's commands are built. REMOVE_LINES and a CHANGE_LINE_QUANTITY that lowers the quantity (ADR 0169) take a line off a confirmed order for a removal reason the tenant authored (removalReasonId, kind LINE_REMOVAL); the reason decides whether the stock goes back on the shelf or is written off, the kitchen's own record can only make that more conservative, and the response's stockConsequence says which before anything is applied. They are behind the brand's ordering.amendment_line_removal_enabled gate, need the customer's recorded agreement, and are refused on an order paid through a provider (PAID_ORDER_DECREASE_NOT_SUPPORTED).",
         "operationId" : "amend_1",
         "parameters" : [ {
           "in" : "path",

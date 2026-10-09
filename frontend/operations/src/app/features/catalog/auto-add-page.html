@@ -1,0 +1,486 @@
+<h1 class="q-title">{{ 'catalog.autoAdd.title' | t }}</h1>
+<p class="q-body-sm lead">{{ 'catalog.autoAdd.lead' | t }}</p>
+
+@if (loading()) {
+  <p class="q-body-sm">{{ 'catalog.autoAdd.loading' | t }}</p>
+} @else if (denied()) {
+  <p class="q-body-sm error" role="alert">{{ 'catalog.autoAdd.denied' | t }}</p>
+} @else {
+  @if (lastError(); as message) {
+    <p class="q-body-sm error" role="alert" data-testid="auto-add-error">{{ message }}</p>
+  }
+
+  <section class="card" id="auto-add-rules">
+    <div class="card__header">
+      <h2 class="q-subhead">{{ 'catalog.autoAdd.rules' | t }}</h2>
+      <button
+        type="button"
+        class="primary q-body-sm"
+        data-testid="auto-add-create"
+        (click)="openCreate()"
+      >
+        {{ 'catalog.autoAdd.add' | t }}
+      </button>
+    </div>
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ 'catalog.autoAdd.field.code' | t }}</th>
+          <th class="q-caption">{{ 'catalog.autoAdd.field.kind' | t }}</th>
+          <th class="q-caption">{{ 'catalog.autoAdd.field.does' | t }}</th>
+          <th class="q-caption">{{ 'catalog.autoAdd.field.mode' | t }}</th>
+          <th class="q-caption">{{ 'catalog.autoAdd.field.status' | t }}</th>
+          <th class="q-caption"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (rule of rules(); track rule.ruleId) {
+          <tr [attr.data-testid]="'auto-add-rule-' + rule.code">
+            <td class="q-body-sm">{{ rule.code }}</td>
+            <td class="q-body-sm">{{ kindKey(rule.kind) | t }}</td>
+            <td class="q-body-sm">
+              {{ summary(rule) }}
+              @if (rule.mandatory) {
+                <span class="q-caption"> · {{ 'catalog.autoAdd.mandatory' | t }}</span>
+              }
+            </td>
+            <td class="q-body-sm">{{ modeKey(rule.mode) | t }}</td>
+            <td class="q-body-sm">{{ statusKey(rule) | t }}</td>
+            <td class="q-body-sm">
+              @if (rule.status !== 'ARCHIVED') {
+                <button
+                  type="button"
+                  class="link q-body-sm"
+                  [attr.data-testid]="'auto-add-toggle-' + rule.code"
+                  (click)="toggleActive(rule)"
+                >
+                  {{ toggleKey(rule) | t }}
+                </button>
+                <button type="button" class="link q-body-sm" (click)="openEdit(rule)">
+                  {{ 'catalog.autoAdd.edit' | t }}
+                </button>
+                <button type="button" class="link q-body-sm" (click)="archive(rule)">
+                  {{ 'catalog.autoAdd.archive' | t }}
+                </button>
+              }
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td class="q-body-sm empty" colspan="6">{{ 'catalog.autoAdd.empty' | t }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card" id="auto-add-simulator">
+    <h2 class="q-subhead">{{ 'catalog.autoAdd.simulator.title' | t }}</h2>
+    <p class="q-body-sm lead">{{ 'catalog.autoAdd.simulator.lead' | t }}</p>
+
+    <label class="q-caption" for="sim-mode">{{ 'catalog.autoAdd.field.fulfillment' | t }}</label>
+    <select
+      id="sim-mode"
+      class="q-body field"
+      [value]="simMode()"
+      (change)="simMode.set($any($event.target).value)"
+    >
+      @for (mode of fulfillmentModes; track mode) {
+        <option [value]="mode">{{ mode }}</option>
+      }
+    </select>
+
+    <label class="q-caption" for="sim-channel">{{ 'catalog.autoAdd.field.channel' | t }}</label>
+    <select
+      id="sim-channel"
+      class="q-body field"
+      [value]="simChannel()"
+      (change)="simChannel.set($any($event.target).value)"
+    >
+      @for (channel of channelTypes; track channel) {
+        <option [value]="channel">{{ channel }}</option>
+      }
+    </select>
+
+    <span class="q-caption">{{ 'catalog.autoAdd.simulator.basket' | t }}</span>
+    <ul class="sim-lines">
+      @for (line of simLines(); track $index; let i = $index) {
+        <li class="sim-line" [attr.data-testid]="'auto-add-sim-line-' + i">
+          <span class="q-body-sm">{{ nameOf(line.variantId) }}</span>
+          <input
+            class="q-body field"
+            type="number"
+            min="0"
+            step="any"
+            [value]="line.quantity"
+            [attr.aria-label]="'catalog.autoAdd.simulator.quantity' | t"
+            (input)="setSimQuantity(i, $any($event.target).value)"
+          />
+          <button type="button" class="link q-body-sm" (click)="removeSimLine(i)">
+            {{ 'catalog.autoAdd.remove' | t }}
+          </button>
+        </li>
+      }
+    </ul>
+    <q-combobox
+      [query]="simQuery()"
+      [options]="simOptions()"
+      [loading]="simLoading()"
+      [placeholder]="'catalog.autoAdd.simulator.addLine' | t"
+      [ariaLabel]="'catalog.autoAdd.simulator.addLine' | t"
+      (queryChange)="simQuery.set($event)"
+      (search)="searchSimVariants($event)"
+      (optionSelected)="addSimLine($event)"
+      data-testid="auto-add-sim-picker"
+    />
+    <div class="dialog__actions">
+      <button
+        type="button"
+        class="primary q-body-sm"
+        data-testid="auto-add-simulate"
+        [disabled]="!canSimulate()"
+        (click)="simulate()"
+      >
+        {{ 'catalog.autoAdd.simulator.run' | t }}
+      </button>
+    </div>
+
+    @if (simError(); as message) {
+      <p class="q-body-sm error" role="alert">{{ message }}</p>
+    }
+    @if (simResult(); as result) {
+      <p class="q-body-sm" data-testid="auto-add-sim-totals">
+        {{
+          'catalog.autoAdd.simulator.totals' | t: { units: result.units, portions: result.portions }
+        }}
+      </p>
+      <table class="table" data-testid="auto-add-sim-outcomes">
+        <tbody>
+          @for (outcome of result.outcomes; track outcome.ruleId) {
+            <tr [attr.data-testid]="'auto-add-sim-outcome-' + outcome.ruleCode">
+              <td class="q-body-sm">{{ outcome.ruleCode }}</td>
+              <td class="q-body-sm outcome--{{ outcome.outcome }}">
+                {{ outcomeKey(outcome.outcome) | t }}
+              </td>
+              <td class="q-body-sm">
+                @if (outcome.outcome !== 'SKIPPED') {
+                  {{ outcome.quantity }} × {{ nameOf(outcome.variantId) }}
+                } @else {
+                  {{ outcome.reason }}
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </section>
+
+  @if (editing() !== null) {
+    <div class="backdrop" (click)="close()">
+      <div
+        class="dialog"
+        role="dialog"
+        aria-modal="true"
+        data-testid="auto-add-form"
+        (click)="$event.stopPropagation()"
+      >
+        <h2 class="q-subhead">
+          {{ (isCreate() ? 'catalog.autoAdd.add' : 'catalog.autoAdd.edit') | t }}
+        </h2>
+
+        @if (isCreate()) {
+          <label class="q-caption" for="rule-code">{{ 'catalog.autoAdd.field.code' | t }}</label>
+          <input
+            id="rule-code"
+            class="q-body field"
+            type="text"
+            [value]="draft().code"
+            (input)="patch({ code: $any($event.target).value })"
+          />
+          <label class="q-caption" for="rule-kind">{{ 'catalog.autoAdd.field.kind' | t }}</label>
+          <select
+            id="rule-kind"
+            class="q-body field"
+            [value]="draft().kind"
+            (change)="patch({ kind: $any($event.target).value })"
+          >
+            @for (kind of kinds; track kind) {
+              <option [value]="kind">{{ kindKey(kind) | t }}</option>
+            }
+          </select>
+        }
+
+        <label class="q-caption" for="rule-mode">{{ 'catalog.autoAdd.field.mode' | t }}</label>
+        <select
+          id="rule-mode"
+          class="q-body field"
+          [value]="draft().mode"
+          (change)="patch({ mode: $any($event.target).value })"
+        >
+          <option value="INJECT">{{ 'catalog.autoAdd.mode.INJECT' | t }}</option>
+          <option value="OFFER">{{ 'catalog.autoAdd.mode.OFFER' | t }}</option>
+        </select>
+
+        @if (draft().kind !== 'PORTION_BAND') {
+          <span class="q-caption">{{ 'catalog.autoAdd.field.adds' | t }}</span>
+          <p class="q-body-sm" data-testid="rule-add-variant">{{ nameOf(draft().addVariantId) }}</p>
+          <q-combobox
+            [query]="pickerQuery()"
+            [options]="pickerOptions()"
+            [loading]="pickerLoading()"
+            [placeholder]="'catalog.autoAdd.pickVariant' | t"
+            [ariaLabel]="'catalog.autoAdd.pickVariant' | t"
+            (focusin)="aim('add')"
+            (queryChange)="pickerQuery.set($event)"
+            (search)="searchVariants($event)"
+            (optionSelected)="pick($event)"
+            data-testid="rule-add-picker"
+          />
+          <label class="q-caption" for="rule-quantity">{{
+            'catalog.autoAdd.field.quantity' | t
+          }}</label>
+          <input
+            id="rule-quantity"
+            class="q-body field"
+            type="number"
+            min="0"
+            step="any"
+            [value]="draft().quantity"
+            (input)="patch({ quantity: $any($event.target).value })"
+          />
+        }
+
+        @if (draft().kind === 'PRODUCT_TRIGGERED') {
+          <span class="q-caption">{{ 'catalog.autoAdd.field.triggers' | t }}</span>
+          <ul class="chips">
+            @for (variantId of draft().triggerVariantIds; track variantId) {
+              <li class="chip q-body-sm">
+                {{ nameOf(variantId) }}
+                <button type="button" class="link q-body-sm" (click)="removeTrigger(variantId)">
+                  ×
+                </button>
+              </li>
+            }
+          </ul>
+          <q-combobox
+            [query]="pickerQuery()"
+            [options]="pickerOptions()"
+            [loading]="pickerLoading()"
+            [placeholder]="'catalog.autoAdd.pickTrigger' | t"
+            [ariaLabel]="'catalog.autoAdd.pickTrigger' | t"
+            (focusin)="aim('trigger')"
+            (queryChange)="pickerQuery.set($event)"
+            (search)="searchVariants($event)"
+            (optionSelected)="pick($event)"
+            data-testid="rule-trigger-picker"
+          />
+          <label class="q-caption" for="rule-threshold">{{
+            'catalog.autoAdd.field.threshold' | t
+          }}</label>
+          <input
+            id="rule-threshold"
+            class="q-body field"
+            type="number"
+            min="0"
+            step="any"
+            [value]="draft().triggerThreshold"
+            (input)="patch({ triggerThreshold: $any($event.target).value })"
+          />
+          <label class="check q-body-sm">
+            <input
+              type="checkbox"
+              [checked]="draft().repeatPerMultiple"
+              (change)="patch({ repeatPerMultiple: $any($event.target).checked })"
+            />
+            {{ 'catalog.autoAdd.field.repeat' | t }}
+          </label>
+        }
+
+        @if (draft().kind === 'PORTION_BAND') {
+          <span class="q-caption">{{ 'catalog.autoAdd.field.bands' | t }}</span>
+          @for (band of draft().bands; track $index; let i = $index) {
+            <div class="band" [attr.data-testid]="'rule-band-' + i">
+              <input
+                class="q-body field"
+                type="number"
+                min="0"
+                step="any"
+                [value]="band.from"
+                [attr.aria-label]="'catalog.autoAdd.band.from' | t"
+                (input)="patchBand(i, { from: $any($event.target).value })"
+              />
+              <input
+                class="q-body field"
+                type="number"
+                min="0"
+                step="any"
+                [value]="band.to"
+                [attr.aria-label]="'catalog.autoAdd.band.to' | t"
+                (input)="patchBand(i, { to: $any($event.target).value })"
+              />
+              <span class="q-body-sm">{{ nameOf(band.variantId) }}</span>
+              <input
+                class="q-body field"
+                type="number"
+                min="0"
+                step="any"
+                [value]="band.quantity"
+                [attr.aria-label]="'catalog.autoAdd.band.quantity' | t"
+                (input)="patchBand(i, { quantity: $any($event.target).value })"
+              />
+              <button type="button" class="link q-body-sm" (click)="removeBand(i)">×</button>
+              <q-combobox
+                [query]="pickerQuery()"
+                [options]="pickerOptions()"
+                [loading]="pickerLoading()"
+                [placeholder]="'catalog.autoAdd.pickVariant' | t"
+                [ariaLabel]="'catalog.autoAdd.pickVariant' | t"
+                (focusin)="aim({ band: i })"
+                (queryChange)="pickerQuery.set($event)"
+                (search)="searchVariants($event)"
+                (optionSelected)="pick($event)"
+              />
+            </div>
+          }
+          <button
+            type="button"
+            class="link q-body-sm"
+            data-testid="rule-add-band"
+            (click)="addBand()"
+          >
+            {{ 'catalog.autoAdd.band.add' | t }}
+          </button>
+        }
+
+        <label class="q-caption" for="rule-minimum">{{
+          'catalog.autoAdd.field.minimum' | t
+        }}</label>
+        <input
+          id="rule-minimum"
+          class="q-body field"
+          type="number"
+          min="0"
+          step="any"
+          [value]="draft().minimumQuantity"
+          (input)="patch({ minimumQuantity: $any($event.target).value })"
+        />
+        <label class="q-caption" for="rule-maximum">{{
+          'catalog.autoAdd.field.maximum' | t
+        }}</label>
+        <input
+          id="rule-maximum"
+          class="q-body field"
+          type="number"
+          min="0"
+          step="any"
+          [value]="draft().maximumQuantity"
+          (input)="patch({ maximumQuantity: $any($event.target).value })"
+        />
+        <label class="check q-body-sm">
+          <input
+            type="checkbox"
+            [checked]="draft().mandatory"
+            (change)="patch({ mandatory: $any($event.target).checked })"
+          />
+          {{ 'catalog.autoAdd.field.mandatory' | t }}
+        </label>
+
+        <span class="q-caption">{{ 'catalog.autoAdd.field.fulfillment' | t }}</span>
+        <div class="checks">
+          @for (mode of fulfillmentModes; track mode) {
+            <label class="check q-body-sm">
+              <input
+                type="checkbox"
+                [checked]="draft().fulfillmentModes.includes(mode)"
+                (change)="toggleIn('fulfillmentModes', mode)"
+              />
+              {{ mode }}
+            </label>
+          }
+        </div>
+
+        <span class="q-caption">{{ 'catalog.autoAdd.field.channel' | t }}</span>
+        <p class="q-caption">{{ 'catalog.autoAdd.channelsNote' | t }}</p>
+        <div class="checks">
+          @for (channel of channelTypes; track channel) {
+            <label class="check q-body-sm">
+              <input
+                type="checkbox"
+                [checked]="draft().channelSystemTypes.includes(channel)"
+                (change)="toggleIn('channelSystemTypes', channel)"
+              />
+              {{ channel }}
+            </label>
+          }
+        </div>
+
+        <label class="q-caption" for="rule-text-ru">{{ 'catalog.autoAdd.field.textRu' | t }}</label>
+        <input
+          id="rule-text-ru"
+          class="q-body field"
+          type="text"
+          [value]="draft().textRu"
+          (input)="patch({ textRu: $any($event.target).value })"
+        />
+        <label class="q-caption" for="rule-text-uz">{{ 'catalog.autoAdd.field.textUz' | t }}</label>
+        <input
+          id="rule-text-uz"
+          class="q-body field"
+          type="text"
+          [value]="draft().textUz"
+          (input)="patch({ textUz: $any($event.target).value })"
+        />
+        <label class="q-caption" for="rule-text-en">{{ 'catalog.autoAdd.field.textEn' | t }}</label>
+        <input
+          id="rule-text-en"
+          class="q-body field"
+          type="text"
+          [value]="draft().textEn"
+          (input)="patch({ textEn: $any($event.target).value })"
+        />
+
+        @if (!isCreate()) {
+          <label class="q-caption" for="rule-status">{{
+            'catalog.autoAdd.field.status' | t
+          }}</label>
+          <select
+            id="rule-status"
+            class="q-body field"
+            [value]="draft().status"
+            (change)="patch({ status: $any($event.target).value })"
+          >
+            <option value="DRAFT">{{ 'catalog.autoAdd.status.DRAFT' | t }}</option>
+            <option value="ACTIVE">{{ 'catalog.autoAdd.status.ACTIVE' | t }}</option>
+          </select>
+        }
+
+        @if (formError(); as message) {
+          <p class="q-body-sm error" role="alert" data-testid="auto-add-form-error">
+            {{ message }}
+          </p>
+        }
+
+        <div class="dialog__actions">
+          <button
+            type="button"
+            class="secondary q-body-sm"
+            [disabled]="submitting()"
+            (click)="close()"
+          >
+            {{ 'catalog.autoAdd.cancel' | t }}
+          </button>
+          <button
+            type="button"
+            class="primary q-body-sm"
+            data-testid="auto-add-save"
+            [disabled]="!canSubmit()"
+            (click)="submit()"
+          >
+            {{ 'catalog.autoAdd.save' | t }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+}

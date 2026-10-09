@@ -1,0 +1,97 @@
+<fieldset class="editor__vocabulary" [attr.data-kind]="kind()">
+  <legend class="q-caption">
+    {{
+      kind() === 'TAG'
+        ? ('catalog.editor.vocabulary.tags' | t)
+        : ('catalog.editor.vocabulary.ingredients' | t)
+    }}
+  </legend>
+  @if (loading()) {
+    <p class="q-caption">{{ 'catalog.editor.vocabulary.loading' | t }}</p>
+  } @else {
+    @if (selected().length === 0) {
+      <p class="q-caption" data-testid="vocabulary-empty">
+        {{ 'catalog.editor.vocabulary.empty' | t }}
+      </p>
+    } @else {
+      <ol class="editor__vocabulary-list" data-testid="vocabulary-selected">
+        @for (entry of selected(); track entry.id; let index = $index) {
+          <li [attr.data-code]="entry.code">
+            <span class="q-body-sm">{{ nameOf(entry) }}</span>
+            @if (entry.status === 'ARCHIVED') {
+              <span class="q-caption" data-testid="vocabulary-archived">
+                {{ 'catalog.referenceData.status.archived' | t }}
+              </span>
+            }
+            <button
+              type="button"
+              (click)="move(index, -1)"
+              [disabled]="index === 0"
+              [attr.aria-label]="'catalog.editor.vocabulary.up' | t"
+              data-testid="vocabulary-up"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              (click)="move(index, 1)"
+              [disabled]="index === selected().length - 1"
+              [attr.aria-label]="'catalog.editor.vocabulary.down' | t"
+              data-testid="vocabulary-down"
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              (click)="remove(index)"
+              [attr.aria-label]="'catalog.editor.vocabulary.remove' | t"
+              data-testid="vocabulary-remove"
+            >
+              ×
+            </button>
+          </li>
+        }
+      </ol>
+    }
+
+    @if (full()) {
+      <p class="q-caption" data-testid="vocabulary-full">
+        {{ 'catalog.editor.vocabulary.full' | t: { count: maximum() } }}
+      </p>
+    } @else if (available().length > 0) {
+      <select
+        class="editor__vocabulary-picker"
+        (change)="add($any($event.target).value); $any($event.target).value = ''"
+        [attr.aria-label]="'catalog.editor.vocabulary.add' | t"
+        data-testid="vocabulary-picker"
+      >
+        <option value="">{{ 'catalog.editor.vocabulary.add' | t }}</option>
+        @for (entry of available(); track entry.id) {
+          <option [value]="entry.id">{{ nameOf(entry) }}</option>
+        }
+      </select>
+    } @else {
+      <p class="q-caption" data-testid="vocabulary-none-left">
+        {{ 'catalog.editor.vocabulary.noneLeft' | t }}
+      </p>
+    }
+
+    <button
+      type="button"
+      class="primary"
+      [disabled]="!dirty() || saving()"
+      (click)="save()"
+      data-testid="vocabulary-save"
+    >
+      {{ saving() ? ('catalog.editor.saving' | t) : ('catalog.editor.vocabulary.save' | t) }}
+    </button>
+    @if (saved()) {
+      <span class="q-caption" data-testid="vocabulary-saved">{{
+        'catalog.editor.vocabulary.saved' | t
+      }}</span>
+    }
+  }
+  @if (error(); as message) {
+    <p class="q-body-sm error" role="alert" data-testid="vocabulary-error">{{ message }}</p>
+  }
+</fieldset>

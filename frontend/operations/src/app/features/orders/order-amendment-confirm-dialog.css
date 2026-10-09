@@ -41,3 +41,16 @@
   opacity: 0.6;
   cursor: default;
 }
+
+.amend-confirm-dialog__stock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.amend-confirm-dialog__writeoff {
+  color: var(--q-error-text);
+}
