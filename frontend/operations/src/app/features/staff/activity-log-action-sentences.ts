@@ -200,6 +200,26 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       'uz-Latn': 'Tasdiqlash soʻralindi',
     },
     'audit.read': { en: 'Audit read', ru: 'Журнал просмотр', 'uz-Latn': 'Jurnal koʻrish' },
+    'catalog.autoAddRule.activated': {
+      en: 'Catalog auto-add rule activated',
+      ru: 'Каталог правило автодобавления активировано',
+      'uz-Latn': 'Katalog avtomatik qoʻshish qoidasi faollashtirildi',
+    },
+    'catalog.autoAddRule.archived': {
+      en: 'Catalog auto-add rule archived',
+      ru: 'Каталог правило автодобавления архивировано',
+      'uz-Latn': 'Katalog avtomatik qoʻshish qoidasi arxivlandi',
+    },
+    'catalog.autoAddRule.created': {
+      en: 'Catalog auto-add rule created',
+      ru: 'Каталог правило автодобавления создано',
+      'uz-Latn': 'Katalog avtomatik qoʻshish qoidasi yaratildi',
+    },
+    'catalog.autoAddRule.updated': {
+      en: 'Catalog auto-add rule updated',
+      ru: 'Каталог правило автодобавления обновлено',
+      'uz-Latn': 'Katalog avtomatik qoʻshish qoidasi yangilandi',
+    },
     'catalog.channelMediaOverride.replaced': {
       en: 'Photos shown on a channel replaced',
       ru: 'Фото для канала заменены',
@@ -304,6 +324,31 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Catalog menu updated',
       ru: 'Каталог меню обновлено',
       'uz-Latn': 'Katalog menyu yangilandi',
+    },
+    'catalog.mxikReference.import-applied': {
+      en: 'IKPU/MXIK reference import applied',
+      ru: 'Справочник ИКПУ/MXIK импорт применено',
+      'uz-Latn': 'IKPU/MXIK maʻlumotnomasi importi qoʻllandi',
+    },
+    'catalog.mxikReference.import-failed': {
+      en: 'IKPU/MXIK reference import failed',
+      ru: 'Справочник ИКПУ/MXIK импорт не удалось',
+      'uz-Latn': 'IKPU/MXIK maʻlumotnomasi importi bajarilmadi',
+    },
+    'catalog.mxikReference.import-held': {
+      en: 'IKPU/MXIK reference import held for review',
+      ru: 'Справочник ИКПУ/MXIK импорт удержано для проверки',
+      'uz-Latn': 'IKPU/MXIK maʻlumotnomasi importi koʻrib chiqish uchun ushlab turildi',
+    },
+    'catalog.mxikReference.import-rejected': {
+      en: 'IKPU/MXIK reference import rejected',
+      ru: 'Справочник ИКПУ/MXIK импорт отклонено',
+      'uz-Latn': 'IKPU/MXIK maʻlumotnomasi importi rad etildi',
+    },
+    'catalog.mxikReference.import-validated': {
+      en: 'IKPU/MXIK reference import validated',
+      ru: 'Справочник ИКПУ/MXIK импорт проверено',
+      'uz-Latn': 'IKPU/MXIK maʻlumotnomasi importi tekshirildi',
     },
     'catalog.modifierAttachment.policySet': {
       en: 'Modifier group attachment policy set',

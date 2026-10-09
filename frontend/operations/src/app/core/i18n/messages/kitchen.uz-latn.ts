@@ -111,7 +111,7 @@ export const kitchenUzLatn: AreaMessages<typeof kitchenEn> = {
     'Tiket buyurtma toʻlanmagani uchun ushlab turilibdi. Baribir ishga tushirish sizning nomingizdan yoziladi.',
   'kitchen.buffer.override.reason': 'Nega',
   'kitchen.buffer.override.confirm': 'Baribir ishga tushirish',
-  'kitchen.buffer.override.reason.PAYMENT_PROMISED_AT_COUNTER': 'Toʻlov kassada vaʼda qilingan',
+  'kitchen.buffer.override.reason.PAYMENT_PROMISED_AT_COUNTER': 'Toʻlov kassada vaʻda qilingan',
   'kitchen.buffer.override.reason.CUSTOMER_KNOWN_TO_BRANCH': 'Mijoz filialga tanish',
   'kitchen.buffer.override.reason.MANAGER_DECISION': 'Menejer qarori',
 
@@ -237,7 +237,7 @@ export const kitchenUzLatn: AreaMessages<typeof kitchenEn> = {
   'kitchen.headcount.noPolicy.body':
     'Platforma oʻz raqamini qoʻymaydi. Har bir bekatda bir oshpaz soatiga nechta porsiya tayyorlashini koʻrsating — shunda soatlar boʻyicha oshpazlar soni shu yerda chiqadi.',
   'kitchen.headcount.empty':
-    'Tanlangan sanalarda hech bir bekat hech narsa tayyorlamagan, hisoblash uchun maʼlumot yoʻq.',
+    'Tanlangan sanalarda hech bir bekat hech narsa tayyorlamagan, hisoblash uchun maʻlumot yoʻq.',
   'kitchen.headcount.tooFewDates':
     'Bu hafta kuni uchun hozircha {count} ta sana bor; raqam koʻrsatish uchun kamida 3 ta kerak. Quyida har bir sana boʻyicha porsiyalar.',
   'kitchen.headcount.sampleDates': 'Hisob {dates} sanalardagi porsiyalar asosida qurilgan.',

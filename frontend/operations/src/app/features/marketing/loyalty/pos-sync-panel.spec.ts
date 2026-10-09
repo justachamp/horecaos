@@ -118,12 +118,10 @@ describe('PosSyncPanel', () => {
     api = {
       overview: vi.fn().mockResolvedValue(overview()),
       runs: vi.fn().mockResolvedValue([run()]),
-      run: vi
-        .fn()
-        .mockResolvedValue({
-          run: run(),
-          discrepancies: [difference()],
-        } satisfies PosSyncRunReport),
+      run: vi.fn().mockResolvedValue({
+        run: run(),
+        discrepancies: [difference()],
+      } satisfies PosSyncRunReport),
       discrepancies: vi.fn().mockResolvedValue([
         difference(),
         difference({

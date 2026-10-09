@@ -61,6 +61,7 @@ describe('activity log action-code dictionary coverage', () => {
 
   const CONCATENATED_PREFIXES = new Set([
     'approval.',
+    'catalog.mxikReference.',
     'dinein.reservation.',
     'fulfillment.dispatch.',
   ]);

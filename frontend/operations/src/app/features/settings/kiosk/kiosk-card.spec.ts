@@ -143,22 +143,20 @@ describe('KioskCard (ADR 0162)', () => {
   });
 
   it('moves a kiosk to another channel against the version it read, and shows the saved row', async () => {
-    const rebind = vi
-      .fn()
-      .mockReturnValue(
-        of(
-          kiosk({
-            displayName: 'Lobby 2',
-            version: 4,
-            channel: {
-              channelId: 'c2',
-              code: 'KIOSK_B',
-              displayName: 'Food court channel',
-              status: 'ACTIVE',
-            },
-          }),
-        ),
-      );
+    const rebind = vi.fn().mockReturnValue(
+      of(
+        kiosk({
+          displayName: 'Lobby 2',
+          version: 4,
+          channel: {
+            channelId: 'c2',
+            code: 'KIOSK_B',
+            displayName: 'Food court channel',
+            status: 'ACTIVE',
+          },
+        }),
+      ),
+    );
     await render({ devices: () => Promise.resolve([kiosk()]), rebind });
 
     click('kiosk-edit-start-k1');

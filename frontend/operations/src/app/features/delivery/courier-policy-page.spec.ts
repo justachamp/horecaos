@@ -472,13 +472,11 @@ describe('CourierPolicyPage', () => {
     });
 
     it('publishes the chosen mode with the acknowledgement, and an undecided one as null', async () => {
-      const writePolicy = vi
-        .fn()
-        .mockResolvedValue({
-          ...POLICY,
-          runPayMode: 'FIRST_FULL_THEN_INCREMENT',
-          policyVersion: 2,
-        });
+      const writePolicy = vi.fn().mockResolvedValue({
+        ...POLICY,
+        runPayMode: 'FIRST_FULL_THEN_INCREMENT',
+        policyVersion: 2,
+      });
       const host = await openEditor({ policy: () => Promise.resolve(POLICY), writePolicy });
       fill(host, 'policy-input-reason', 'Grouping pilot');
       fill(host, 'policy-input-runPayMode', 'FIRST_FULL_THEN_INCREMENT', 'change');

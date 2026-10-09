@@ -285,7 +285,8 @@ export const catalogUzLatn: AreaMessages<typeof catalogEn> = {
     'Boʻsh natija rasmiy ИКПУ/MXIK roʻyxati platformaga hali yuklanmaganini bildiradi — hech narsa topilmagani emas.',
   'catalog.editor.fiscal.mxikNotLoaded':
     'Milliy ИКПУ/MXIK roʻyxati platformaga hali yuklanmagan, shuning uchun qidiruv hech narsa topmaydi. Kodni qoʻlda kiritish baribir mumkin.',
-  'catalog.editor.fiscal.mxikLoaded': 'Milliy ИКПУ/MXIK roʻyxati: {version}-toʻplam, kodlar: {valid}.',
+  'catalog.editor.fiscal.mxikLoaded':
+    'Milliy ИКПУ/MXIK roʻyxati: {version}-toʻplam, kodlar: {valid}.',
   'catalog.editor.fiscal.mxikStale': 'Roʻyxat {days} kun oldin yangilangan.',
   'catalog.editor.physical.intro':
     'Variantning jismoniy tavsifi: ogʻirligi yoki hajmi, ogʻirlik boʻyicha sotiladimi (aniq ogʻirlik faqat topshirishda maʻlum boʻladi), ulushlab buyurtma qilish mumkinmi va ozuqaviy qiymati. Oddiy donali mahsulot uchun hammasini boʻsh qoldiring.',
