@@ -15,7 +15,7 @@ import { LatenessPolicyApi } from '../../core/lateness-policy-api';
 import { LatenessPolicyTracker } from '../../core/lateness-policy-tracker';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { KitchenApi, TicketResponse } from './kitchen-api';
-import { computeTicketSeverity } from './kitchen-ticket';
+import { computeTicketSeverity, ticketSeverityInput } from './kitchen-ticket';
 
 /** Same cadence as the KDS queue, until ADR 0045 exists. */
 const POLL_INTERVAL_MS = 10_000;
@@ -132,15 +132,7 @@ export class VduPage implements OnInit {
   }
 
   protected severityTone(ticket: TicketResponse): 'danger' | 'warning' | 'none' {
-    return computeTicketSeverity(
-      {
-        targetReadyAt: ticket.targetReadyAt ? new Date(ticket.targetReadyAt) : null,
-        createdAt: new Date(ticket.createdAt),
-        fulfilmentMode: ticket.fulfilmentMode,
-      },
-      new Date(),
-      this.latenessPolicy,
-    ).tone;
+    return computeTicketSeverity(ticketSeverityInput(ticket), new Date(), this.latenessPolicy).tone;
   }
 }
 

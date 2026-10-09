@@ -3,12 +3,15 @@ package uz.horecaos.platform.marketing;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static uz.horecaos.platform.marketing.ScenarioHarness.BRAND;
+import static uz.horecaos.platform.marketing.ScenarioHarness.LONG_TEMPLATE;
 import static uz.horecaos.platform.marketing.ScenarioHarness.OTHER_BRAND;
 import static uz.horecaos.platform.marketing.ScenarioHarness.PURPOSE;
+import static uz.horecaos.platform.marketing.ScenarioHarness.SHORT_TEMPLATE;
 import static uz.horecaos.platform.marketing.ScenarioHarness.START;
 import static uz.horecaos.platform.marketing.ScenarioHarness.TENANT;
 import static uz.horecaos.platform.marketing.ScenarioHarness.offerStep;
 import static uz.horecaos.platform.marketing.ScenarioHarness.smsStep;
+import static uz.horecaos.platform.marketing.ScenarioHarness.telegramStep;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -24,7 +27,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessException;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.audit.api.ActorRef;
+import uz.horecaos.platform.commercial.api.EntitlementKeys;
 import uz.horecaos.platform.marketing.api.CampaignMessagePort;
+import uz.horecaos.platform.marketing.application.CampaignService;
 import uz.horecaos.platform.marketing.application.OfferService.OfferDraft;
 import uz.horecaos.platform.marketing.application.ScenarioService.ScenarioDraft;
 import uz.horecaos.platform.marketing.application.ScenarioService.StepDraft;
@@ -363,6 +368,25 @@ class ScenarioAuthoringTests {
     }
 
     @Test
+    @DisplayName(
+            "a newer version of an offer published between approval and launch does not stop the launch: the scenario was approved with the old one")
+    void launchKeepsTheVersionTheScenarioWasApprovedWith() {
+        UUID offer = h.publishedOffer("Autumn ten");
+        UUID scenario =
+                h.approved(h.draftScenario(null, smsStep("MARKETING_PROMOTION", 0), offerStep("SMS", offer, 60)));
+        h.publishedNewVersion(offer);
+        assertThat(h.offerService.require(TENANT, BRAND, offer).status()).isEqualTo("SUPERSEDED");
+
+        assertThat(h.campaigns.start(TENANT, scenario)).isTrue();
+
+        assertThat(h.campaignStore.find(TENANT, scenario).orElseThrow().status())
+                .isEqualTo(CampaignStatus.SENDING);
+        // But the superseded version is not on offer to a new author: a step names what is in force.
+        assertRefused(
+                () -> create(List.of(offerStep("SMS", offer, 0))), ErrorCode.VALIDATION_FAILED, "only a published");
+    }
+
+    @Test
     @DisplayName("an offer retired between approval and launch stops the launch rather than the third step")
     void launchRefusesARetiredOffer() {
         UUID offer = h.publishedOffer("Autumn ten");
@@ -378,6 +402,103 @@ class ScenarioAuthoringTests {
                 "corr");
 
         assertRefused(() -> h.campaigns.start(TENANT, scenario), ErrorCode.UNPROCESSABLE_STATE, "not in force");
+    }
+
+    // ------------------------------------------------------- the whole scenario, not its first message
+
+    @Test
+    @DisplayName("a scenario that bills at any step needs a cost ceiling, not only one that opens with a billing step")
+    void aCeilingIsRequiredWhereverTheScenarioBills() {
+        StepDraft push = new StepDraft("PUSH", null, "PUSH_NOTICE", 0, null, null);
+
+        // A free first message and an SMS second: judged on the first alone, no ceiling was asked for.
+        assertRefused(
+                () -> create(h.everybody(), null, null, List.of(push, smsStep("MARKETING_PROMOTION", 60))),
+                ErrorCode.VALIDATION_FAILED,
+                "step 2 bills per segment");
+        // The same sequence with a ceiling, and a sequence that never bills, need none.
+        assertThat(create(h.everybody(), null, 500_000L, List.of(push, smsStep("MARKETING_PROMOTION", 60))))
+                .isNotNull();
+        UUID freeOnly = create(h.everybody(), null, null, List.of(push));
+
+        // And a draft cannot be given a billing step after the fact, which is the same hole by another door.
+        assertRefused(
+                () -> h.scenarioService.replaceSteps(
+                        TENANT, BRAND, freeOnly, List.of(push, smsStep("MARKETING_PROMOTION", 60)), h.author, "corr"),
+                ErrorCode.VALIDATION_FAILED,
+                "cost ceiling");
+    }
+
+    @Test
+    @DisplayName("the estimate an approver is shown prices every step on its own template, not the first message alone")
+    void theWholeScenarioIsPriced() {
+        h.templatesOfOneAndThreeSegments();
+        h.priceSegmentsAt(100);
+        h.reachableGuest("+998901600001");
+        UUID scenario = h.draftScenario(PURPOSE, null, 10_000L, smsStep(SHORT_TEMPLATE, 0), smsStep(LONG_TEMPLATE, 60));
+        h.projection.backfill(TENANT, BRAND);
+
+        CampaignService.Estimate estimate = h.campaigns.prepare(TENANT, scenario, h.author, "corr");
+
+        // One guest, one segment for the first step and three for the second, at 100 a segment.
+        // Priced on the first template alone it was 100.
+        assertThat(estimate.memberCount()).isEqualTo(1);
+        assertThat(estimate.lowMinor()).isEqualTo(400L);
+        assertThat(estimate.highMinor()).isEqualTo(400L);
+    }
+
+    @Test
+    @DisplayName("a scenario whose whole cost is above its ceiling cannot be launched, though its first message fits")
+    void launchIsRefusedWhenTheWholeScenarioCostsMoreThanItsCeiling() {
+        h.templatesOfOneAndThreeSegments();
+        h.priceSegmentsAt(100);
+        h.reachableGuest("+998901600002");
+        // The ceiling covers the first message three times over; the sequence is 100 + 300.
+        UUID tooDear = h.approved(
+                h.draftScenario(PURPOSE, null, 300L, smsStep(SHORT_TEMPLATE, 0), smsStep(LONG_TEMPLATE, 60)));
+
+        assertRefused(() -> h.campaigns.start(TENANT, tooDear), ErrorCode.UNPROCESSABLE_STATE, "COST_ABOVE_CEILING");
+        assertThat(h.campaignStore.find(TENANT, tooDear).orElseThrow().status()).isEqualTo(CampaignStatus.APPROVED);
+
+        // At exactly its whole cost it goes: the bound is a ceiling, not a margin.
+        UUID exact = h.approved(
+                h.draftScenario(PURPOSE, null, 400L, smsStep(SHORT_TEMPLATE, 0), smsStep(LONG_TEMPLATE, 60)));
+        assertThat(h.campaigns.start(TENANT, exact)).isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "a scenario with a Telegram step cannot be launched for a plan without Telegram broadcasts, though its audience is built for SMS")
+    void launchIsRefusedWhenALaterStepNeedsAChannelThePlanLacks() {
+        h.reachableGuest("+998901600003");
+        UUID mixed = h.approved(h.draftScenario(null, smsStep("MARKETING_PROMOTION", 0), telegramStep(60)));
+        UUID smsOnly = h.approved(h.draftScenario(null, smsStep("MARKETING_PROMOTION", 0)));
+        h.entitlements.deny(EntitlementKeys.TELEGRAM_BROADCASTS_ENABLED);
+
+        assertRefused(() -> h.campaigns.start(TENANT, mixed), ErrorCode.ENTITLEMENT_REQUIRED, "telegram.broadcasts");
+        assertThat(h.campaignStore.find(TENANT, mixed).orElseThrow().status()).isEqualTo(CampaignStatus.APPROVED);
+        // The refusal is about the Telegram step: the same plan launches a scenario that has none.
+        assertThat(h.campaigns.start(TENANT, smsOnly)).isTrue();
+
+        h.entitlements.allow(EntitlementKeys.TELEGRAM_BROADCASTS_ENABLED);
+        assertThat(h.campaigns.start(TENANT, mixed)).isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "a paused scenario with a Telegram step is not resumed once the plan no longer includes Telegram broadcasts")
+    void resumeAsksEveryStepsChannel() {
+        h.reachableGuest("+998901600004");
+        UUID scenario = h.launched(h.draftScenario(null, smsStep("MARKETING_PROMOTION", 0), telegramStep(60)));
+        h.campaignStore.pauseForBlockRate(TENANT, scenario, "Too many blocks", h.clock.instant());
+        h.entitlements.deny(EntitlementKeys.TELEGRAM_BROADCASTS_ENABLED);
+
+        assertRefused(
+                () -> h.campaigns.resume(TENANT, scenario, h.author, "Looked into it", "corr"),
+                ErrorCode.ENTITLEMENT_REQUIRED,
+                "telegram.broadcasts");
+        assertThat(h.campaignStore.find(TENANT, scenario).orElseThrow().status())
+                .isEqualTo(CampaignStatus.PAUSED);
     }
 
     // ---------------------------------------------------------------- helpers

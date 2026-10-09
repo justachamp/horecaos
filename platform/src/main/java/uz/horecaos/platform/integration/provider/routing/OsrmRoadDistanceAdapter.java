@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -39,20 +40,27 @@ import uz.horecaos.platform.web.cache.CacheRegistry;
  * {@code route} service for one origin and one destination with no geometry, no
  * steps and no alternatives, through {@link ProviderHttpClient} and so inside the
  * ADR 0007 outcome vocabulary, and answers with the metres, the engine's free-flow
- * seconds, its own name and the dataset version it was deployed with. Provider JSON
- * never leaves this class.
+ * seconds, its own name and the dataset version it was deployed with. The metres are
+ * the route plus the legs from the two pins to the road, which the engine reports
+ * separately and a route-only figure would drop. Provider JSON never leaves this class.
  *
  * <p><b>It never fabricates.</b> Every way of not knowing &mdash; the engine off, the
- * installation suspended, a timeout, an open breaker, a pair with no route &mdash; is
+ * installation not active, a timeout, an open breaker, a pair with no route &mdash; is
  * an empty answer, and the resolver turns that into a straight-line fee that says
  * {@code RADIUS_FALLBACK}. Nothing here may fail a quote.
  *
- * <p><b>The call is bounded and the engine is breakable.</b> One attempt, no retry,
- * under {@link OsrmProperties#timeout()} for the whole exchange. Repeated engine
- * faults open a breaker, after which a call returns empty without waiting at all.
- * The breaker counts faults only: "no route between these two points" is the engine
- * working, and counting it would take a healthy engine offline because customers
- * kept pinning the far side of a canal.
+ * <p><b>The call is bounded, the engine is breakable, and the waiting is capped.</b> One
+ * attempt, no retry, under {@link OsrmProperties#effectiveTimeout()} for the whole exchange
+ * (never more than {@link OsrmProperties#MAX_TIMEOUT}, whatever the deployment sets), on the
+ * quote thread. Repeated engine faults open a breaker, and so do repeated <em>slow</em>
+ * answers: an engine that still answers in 450 ms is not faulting, and would otherwise hold
+ * every uncached quote for 450 ms indefinitely. After it opens a call returns empty without
+ * waiting at all. At most {@link OsrmProperties#maxConcurrentCalls()} threads are inside an
+ * engine call at once; the rest return empty immediately, so a hung engine parks a bounded
+ * number of threads in the interval before the breaker has seen enough calls to open. The
+ * breaker counts faults and slowness only: "no route between these points" is the engine
+ * working, and counting it would take a healthy engine offline because customers kept
+ * pinning the far side of a canal.
  *
  * <p><b>Personal data.</b> What leaves is two coordinates and no identifier. The path
  * holds the customer's delivery point, so the HTTP client logs the label
@@ -85,6 +93,7 @@ public class OsrmRoadDistanceAdapter implements RoadRouteMeasurer {
     private final CacheManager caches;
     private final MeterRegistry meters;
     private final CircuitBreaker breaker;
+    private final Semaphore inFlight;
 
     public OsrmRoadDistanceAdapter(
             ProviderHttpClient http,
@@ -104,13 +113,29 @@ public class OsrmRoadDistanceAdapter implements RoadRouteMeasurer {
                 .slidingWindowSize(Math.max(20, properties.breakerMinimumCalls()))
                 .minimumNumberOfCalls(properties.breakerMinimumCalls())
                 .failureRateThreshold(50)
+                // A call that answers, but slower than this, is "slow": it is not a fault, so the
+                // failure rate never sees it, yet the quote thread waited for it. Half of the
+                // recent calls being slow opens the breaker the same way half being faults does.
+                .slowCallDurationThreshold(properties.slowCallThreshold())
+                .slowCallRateThreshold(50)
                 .waitDurationInOpenState(properties.breakerOpenFor())
                 .permittedNumberOfCallsInHalfOpenState(3)
                 .automaticTransitionFromOpenToHalfOpenEnabled(true)
                 .recordException(failure -> failure instanceof EngineFault)
                 .build());
         this.breaker = registry.circuitBreaker(PROVIDER);
+        this.inFlight = new Semaphore(properties.maxConcurrentCalls());
         ProviderCircuitMetrics.bind(registry, meters, "routing", clock);
+
+        if (properties.timeout().compareTo(OsrmProperties.MAX_TIMEOUT) > 0) {
+            // Loud once, at start, and never a refusal to start: the quote thread waits this long
+            // for every uncached ROAD quote, so the adapter keeps to the ceiling instead.
+            log.warn(
+                    "horecaos.routing.osrm.timeout is longer than {} ms; the engine is called with {} ms, because the "
+                            + "quote thread waits for it",
+                    OsrmProperties.MAX_TIMEOUT.toMillis(),
+                    OsrmProperties.MAX_TIMEOUT.toMillis());
+        }
 
         if (properties.enabled() && !properties.datasetVersionUsable()) {
             // Loud once, at start, and never a refusal to start: ADR 0147 puts routing
@@ -144,6 +169,26 @@ public class OsrmRoadDistanceAdapter implements RoadRouteMeasurer {
         }
         meters.counter(CACHE, "result", "miss").increment();
 
+        // The cheap refusal first and the permit second: a thread that is turned away here has
+        // not taken one of the breaker's half-open probes.
+        if (!inFlight.tryAcquire()) {
+            return record(Outcome.SATURATED);
+        }
+        try {
+            return askEngine(installation.get(), origin, destination, dataset, key, cache);
+        } finally {
+            inFlight.release();
+        }
+    }
+
+    /** The engine call itself, with the breaker's permit taken and returned. */
+    private Optional<RoadRoute> askEngine(
+            RoutingInstallation installation,
+            GeoPoint origin,
+            GeoPoint destination,
+            String dataset,
+            String key,
+            @Nullable Cache cache) {
         if (!breaker.tryAcquirePermission()) {
             return record(Outcome.BREAKER_OPEN);
         }
@@ -152,11 +197,11 @@ public class OsrmRoadDistanceAdapter implements RoadRouteMeasurer {
         ProviderOutcome outcome;
         try {
             outcome = http.getWithSensitivePath(
-                    new ProviderCall(installation.get().baseUrl(), "", null, properties.timeout()),
+                    new ProviderCall(installation.baseUrl(), "", null, properties.effectiveTimeout()),
                     pathFor(origin, destination),
                     LOG_LABEL,
                     Map.of(),
-                    OsrmRoadDistanceAdapter::interpretBody);
+                    body -> interpretBody(body, properties.snapRadiusMeters()));
         } catch (RuntimeException failure) {
             // The client classifies every failure it expects, so this is a defect. The permit
             // taken above is returned as a fault: a half-open breaker holds three, and one
@@ -210,7 +255,9 @@ public class OsrmRoadDistanceAdapter implements RoadRouteMeasurer {
      * <p>{@code overview=false} and no steps or alternatives, so the answer is a few
      * hundred bytes whatever the distance. {@code radiuses} bounds how far from a
      * road either coordinate may be, so a pin in a field is "no segment" and falls
-     * back, rather than measuring from some road on the other side of it.
+     * back, rather than measuring from some road on the other side of it. Within the
+     * radius, the distance from the pin to the road is part of the answer and is added
+     * to the route's metres ({@link #interpretBody}).
      */
     static String pathFor(GeoPoint origin, GeoPoint destination, int snapRadiusMeters) {
         return String.format(
@@ -252,13 +299,26 @@ public class OsrmRoadDistanceAdapter implements RoadRouteMeasurer {
     // ----------------------------------------------------------------- response
 
     /**
-     * Reads OSRM's route answer: {@code {"code":"Ok","routes":[{"distance":m,"duration":s}]}}.
+     * Reads OSRM's route answer:
+     * {@code {"code":"Ok","routes":[{"distance":m,"duration":s}],"waypoints":[{"distance":a},{"distance":b}]}}.
+     *
+     * <p><b>The metres are the route plus the two snap legs.</b> OSRM routes between the
+     * points where the two requested coordinates meet the road network, and says how far it
+     * had to move each one in that waypoint's {@code distance}. The route's own
+     * {@code distance} excludes those legs, so a pin in a courtyard or a field 800 m from the
+     * nearest road would be priced as if it stood on the road: an under-charge, in the
+     * direction nobody audits. The legs are straight lines (a lower bound on the walk), added
+     * to the metres, and the snap radius is enforced here as well as sent to the engine: a
+     * leg longer than {@code snapRadiusMeters} is "no route", the same answer the engine's
+     * own {@code NoSegment} gives, and the fee falls back rather than measuring from some
+     * road of another district. An answer without both waypoints cannot be priced and is a
+     * fault.
      *
      * <p>Anything else is not an answer. A 200 whose body will not parse into a route
      * is an engine fault and counts against the breaker; a 200 whose code says there
      * is no route is the engine working.
      */
-    private static ProviderOutcome interpretBody(Map<String, Object> body) {
+    private static ProviderOutcome interpretBody(Map<String, Object> body, int snapRadiusMeters) {
         Object code = body.get("code");
         if (!"Ok".equals(code)) {
             String safeCode = code instanceof String text && text.matches("[A-Za-z]{1,32}") ? text : "unknown";
@@ -274,7 +334,16 @@ public class OsrmRoadDistanceAdapter implements RoadRouteMeasurer {
                 || !(first.get("duration") instanceof Number duration)) {
             return ProviderOutcome.retryable("MALFORMED_ROUTE", "The engine's answer held no route", null);
         }
-        double metres = distance.doubleValue();
+        SnapLegs snapLegs = snapLegs(body.get("waypoints"));
+        if (snapLegs == null) {
+            return ProviderOutcome.retryable("MALFORMED_ROUTE", "The engine's answer held no snapped waypoints", null);
+        }
+        if (snapLegs.longest() > snapRadiusMeters) {
+            // The engine was asked for a radius and moved a coordinate further than it. The
+            // detail is fixed text: nothing of the request or the answer is carried.
+            return ProviderOutcome.rejected("NO_ROUTE", "SnapBeyondRadius");
+        }
+        double metres = distance.doubleValue() + snapLegs.origin() + snapLegs.destination();
         double seconds = duration.doubleValue();
         if (!Double.isFinite(metres)
                 || !Double.isFinite(seconds)
@@ -286,6 +355,35 @@ public class OsrmRoadDistanceAdapter implements RoadRouteMeasurer {
         }
         return ProviderOutcome.success(
                 Map.of("meters", (int) Math.round(metres), "seconds", (int) Math.round(seconds)), null);
+    }
+
+    /** How far the engine moved the origin and the destination to reach the road, in metres. */
+    private record SnapLegs(double origin, double destination) {
+
+        double longest() {
+            return Math.max(origin, destination);
+        }
+    }
+
+    /** The two snap legs of an answer, or null when it does not hold exactly two usable waypoints. */
+    private static @Nullable SnapLegs snapLegs(@Nullable Object waypoints) {
+        if (!(waypoints instanceof List<?> list)
+                || list.size() != 2
+                || !(list.get(0) instanceof Map<?, ?> first)
+                || !(list.get(1) instanceof Map<?, ?> second)
+                || !(first.get("distance") instanceof Number origin)
+                || !(second.get("distance") instanceof Number destination)) {
+            return null;
+        }
+        double originMetres = origin.doubleValue();
+        double destinationMetres = destination.doubleValue();
+        if (!Double.isFinite(originMetres)
+                || !Double.isFinite(destinationMetres)
+                || originMetres < 0
+                || destinationMetres < 0) {
+            return null;
+        }
+        return new SnapLegs(originMetres, destinationMetres);
     }
 
     /** A figure {@link #interpretBody} put there, which is always present on a SUCCESS outcome. */
@@ -351,6 +449,8 @@ public class OsrmRoadDistanceAdapter implements RoadRouteMeasurer {
         TIMEOUT("timeout"),
         NO_ROUTE("no_route"),
         BREAKER_OPEN("breaker_open"),
+        /** Too many quote threads were already waiting on the engine; this one did not wait. */
+        SATURATED("saturated"),
         /** The engine answered with a fault, or an answer that was not a route. */
         ERROR("error"),
         /** The engine is off, the dataset unnamed, or the installation absent or not active: nothing was asked. */

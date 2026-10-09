@@ -52,7 +52,7 @@ row carries the answer in `refusalReason`:
 | `FREQUENCY_CAP_REACHED` | The platform's cap, or this brand's own cap (the sentence names which, and the numbers) | Held on the same step; asked again at the time in `wait_until` |
 | `SCENARIO_CONFLICT` | Another live scenario gave this guest an offer in the last 24 hours | Held on the same step for 6 hours |
 | `SCENARIO_PRIORITY_LOST` | A broadcast about a higher-ranked purpose was also due on this channel | Held on the same step for 15 minutes |
-| `SCENARIO_STOPPED` | A stop or continuation condition, a retired offer, a channel that can no longer deliver, or the cost ceiling | Run ended (or the whole scenario halted, if the sentence says the ceiling) |
+| `SCENARIO_STOPPED` | A stop or continuation condition, a retired offer (not a newer version of it: a scenario keeps the offer version it was approved with), a channel that can no longer deliver or that the plan no longer includes, or the cost ceiling | Run ended (or the whole scenario halted, if the sentence says the ceiling) |
 | `NO_VERIFIED_ENDPOINT` | The guest has no verified contact on this channel | Held for a day |
 
 A hold is a deferral, never a drop: the guest is still on the step and is decided again.
@@ -68,7 +68,8 @@ purpose, fixed when they entered, never resampled), and each outcome. A guest co
 under `CONTROL` was never going to be messaged: that is the measurement baseline, not a
 fault. `campaign.status` must be `SENDING` for anybody to be decided; `HALTED_BUDGET`
 means the cost ceiling or the recipient cap stopped it, and `HALTED_OPERATOR` with
-"Superseded" means a newer version replaced it (step 5).
+"Superseded" means a newer version replaced it (step 5). A newer *offer* version does not
+end a scenario: it stays on the version it was approved with until that version is retired.
 
 ## 3. A marketing text is refused with `SMS_PURPOSE_NOT_PERMITTED`
 
@@ -86,6 +87,15 @@ decision, not an operator's.** Until it is made, a scenario with an SMS step can
 launched: the refusal arrives when somebody presses launch, naming the step, not weeks
 later at the third text.
 
+Launch is refused for two more reasons, and both are judged on the whole scenario and not on
+its first message. **`COST_ABOVE_CEILING`**: every messaging step, priced on its own template
+for every guest in the audience, can cost more than the ceiling the approver signed; the
+sentence gives both numbers, and the way out is a higher ceiling approved again or a shorter
+scenario. **`ENTITLEMENT_REQUIRED`**: any step, not only the first, is on Telegram and the plan
+does not include Telegram broadcasts. Both are asked again for each step as it is sent, so a
+price that rose or a plan that lapsed after launch ends a step with its reason on the decision
+row instead of sending it.
+
 ## 4. A brand wants fewer messages, or a longer night
 
 The contact policy is the brand's to tighten and never to loosen:
@@ -98,7 +108,13 @@ curl -s "https://$HORECAOS_HOST/api/v1/tenants/$TENANT/brands/$BRAND/marketing/c
 The `platform` object is the bound an override is measured against (a cap of three in a
 day or a week, eight in thirty days; quiet hours no shorter than 21:00 to 10:00). An
 override above a bound is refused with the platform's number in the sentence, and the
-table refuses it too if anything else writes to it. Setting or removing one needs
+table refuses it too if anything else writes to it. A quiet window is the evening and the
+morning, so it must wrap midnight (20:00 to 11:00); a window inside one day such as 05:00
+to 11:00 satisfies both bounds, would leave the night open, and is refused. The override
+applies to every send of that channel and purpose, a broadcast as much as a scenario step:
+a guest over a tenant's cap is refused on the campaign's recipient row with the rule and the
+numbers in `refusal_detail`, and a message inside a wider quiet window is held to its open
+boundary. Setting or removing one needs
 `marketing.contact_policy.manage` and **writes**; removing needs a `reason`.
 
 ## 5. Change a scenario that is already approved

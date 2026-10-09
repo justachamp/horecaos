@@ -114,6 +114,45 @@ describe('VduWall', () => {
     ).toBe(false);
   });
 
+  it('colours a ticket by its ORDER’s clock: an unpromised order the board calls late is late on the wall, though its ticket opened a moment ago (ADR 0150)', () => {
+    // Card 2 says twenty minutes. The order was placed half an hour ago and waited for approval; the
+    // kitchen opened its ticket ten seconds ago. Read from the ticket it is ten seconds old and on time.
+    const twenty: LatenessPolicy = {
+      delivery: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 1200 },
+      pickup: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 1200 },
+      dineIn: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 1200 },
+    };
+    const acceptedLate = ticket({
+      createdAt: new Date(Date.now() - 10_000).toISOString(),
+      targetReadyAt: null,
+      orderCreatedAt: new Date(Date.now() - 30 * 60_000).toISOString(),
+      orderPromisedAt: null,
+      orderTerminal: false,
+    });
+
+    const card = render({ tickets: [acceptedLate], policy: twenty }).querySelector(
+      '[data-testid="wallboard-vdu-card"]',
+    );
+
+    expect(card?.classList.contains('wv__card--danger')).toBe(true);
+  });
+
+  it('does not colour a delivery late a road-time before its promise: the order’s promise, not the ticket’s target, is the line', () => {
+    // Promised in ten minutes with twenty on the road: the kitchen's own target passed ten minutes ago.
+    const card = render({
+      tickets: [
+        ticket({
+          targetReadyAt: new Date(Date.now() - 10 * 60_000).toISOString(),
+          orderCreatedAt: new Date(Date.now() - 30 * 60_000).toISOString(),
+          orderPromisedAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+        }),
+      ],
+    }).querySelector('[data-testid="wallboard-vdu-card"]');
+
+    expect(card?.classList.contains('wv__card--danger')).toBe(false);
+    expect(card?.classList.contains('wv__card--warning')).toBe(false);
+  });
+
   it('draws a late ticket in the tenant’s colour and an at-risk one in the platform’s amber', () => {
     const policy: LatenessPolicy = {
       ...PLATFORM_DEFAULT_LATENESS_POLICY,

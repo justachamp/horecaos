@@ -47,6 +47,24 @@ export interface NavItem {
    * job.
    */
   readonly capability: Capability;
+  /**
+   * Further capabilities that admit an operator to the section when she does not hold {@link capability}.
+   *
+   * A section with a screen whose capability is held by a role that holds none of the representative one
+   * (ADR 0025 grants are per role and per level) would otherwise be invisible to exactly the people who
+   * work that screen. `/customers` is the case: a brand manager runs the call centre's lead queue
+   * (`CUSTOMER_LEAD_READ`, ADR 0111) and holds no `CUSTOMER_READ`, so the rail and the route guard
+   * turned her away from a screen her own role exists to use. Use sparingly: the first capability stays
+   * the section's representative one, and the screens inside still refuse what the server refuses.
+   */
+  readonly alsoAdmittedBy?: readonly Capability[];
+}
+
+/** Whether `held` admits the operator to a rail section: its capability, or one of the alternatives. */
+export function admitsSection(item: NavItem, held: (capability: Capability) => boolean): boolean {
+  return (
+    held(item.capability) || (item.alsoAdmittedBy ?? []).some((capability) => held(capability))
+  );
 }
 
 export interface NavGroup {
@@ -123,6 +141,9 @@ export const NAVIGATION: readonly NavGroup[] = [
         // of truth this build was scoped against.
         spec: 'frontend-information-architecture.md §5 (Customers)',
         capability: 'CUSTOMER_READ',
+        // ADR 0111: the call centre's callback queue lives under this section, and a brand manager
+        // holds `customer.lead.read` at her brand and no `customer.read` at all (`PlatformRole`).
+        alsoAdmittedBy: ['CUSTOMER_LEAD_READ'],
       },
       {
         path: '/staff',

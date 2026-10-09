@@ -207,7 +207,7 @@ class ScenarioRulesTests {
 
     @Test
     @DisplayName(
-            "overrides can only widen the closed window: the widest start and the latest end win, and none can open it")
+            "overrides can only widen the closed time: each window holds on its own, and a message leaves when none does")
     void quietHoursOnlyWiden() {
         OverrideRow early = quiet(LocalTime.of(19, 0), LocalTime.of(10, 0));
         OverrideRow late = quiet(LocalTime.of(21, 0), LocalTime.of(12, 0));
@@ -225,15 +225,62 @@ class ScenarioRulesTests {
                 1,
                 Instant.EPOCH);
 
-        EngagementPolicy folded = ContactPolicyService.withQuietHours(POLICY, List.of(early, late, capOnly));
+        List<EngagementPolicy> windows = ContactPolicyService.quietWindows(POLICY, List.of(early, late, capOnly));
 
-        assertThat(folded.quietHoursStart()).isEqualTo(LocalTime.of(19, 0));
-        assertThat(folded.quietHoursEnd()).isEqualTo(LocalTime.of(12, 0));
-        assertThat(folded.messagesPer7Days()).isEqualTo(POLICY.messagesPer7Days());
-        assertThat(ContactPolicyService.withQuietHours(POLICY, List.of(capOnly)).quietHoursStart())
-                .isEqualTo(POLICY.quietHoursStart());
-        assertThat(ContactPolicyService.withQuietHours(POLICY, List.of()).quietHoursEnd())
-                .isEqualTo(POLICY.quietHoursEnd());
+        // The brand's window and one per override that states quiet hours; a cap says none.
+        assertThat(windows).hasSize(3);
+        assertThat(ContactPolicyService.quietWindows(POLICY, List.of(capOnly))).containsExactly(POLICY);
+        assertThat(ContactPolicyService.quietWindows(POLICY, List.of())).containsExactly(POLICY);
+
+        // Open at 18:30; held from 19:30 by the early window alone, and not released at 10:00
+        // because the late one runs to 12:00; open again at 12:00.
+        assertThat(ContactPolicyService.holdingWindow(windows, local("2026-08-22T18:30")))
+                .isNull();
+        assertThat(ContactPolicyService.openAt(windows, local("2026-08-22T18:30")))
+                .isEqualTo(local("2026-08-22T18:30"));
+        assertThat(ContactPolicyService.holdingWindow(windows, local("2026-08-22T19:30")))
+                .isEqualTo(windows.get(1));
+        assertThat(ContactPolicyService.openAt(windows, local("2026-08-22T19:30")))
+                .isEqualTo(local("2026-08-23T12:00"));
+        assertThat(ContactPolicyService.openAt(windows, local("2026-08-23T11:30")))
+                .isEqualTo(local("2026-08-23T12:00"));
+        assertThat(ContactPolicyService.holdingWindow(windows, local("2026-08-23T12:00")))
+                .isNull();
+    }
+
+    @Test
+    @DisplayName(
+            "an override that does not wrap midnight cannot open the evening and the night it was meant to tighten")
+    void aWindowInsideOneDayCannotOpenTheEvening() {
+        // 05:00 to 11:00 starts no later than 21:00 and ends no later than 10:00 would allow:
+        // both tighten-only bounds hold, and it closes six hours of the morning and nothing else.
+        OverrideRow inverted = quiet(LocalTime.of(5, 0), LocalTime.of(11, 0));
+
+        List<EngagementPolicy> windows = ContactPolicyService.quietWindows(POLICY, List.of(inverted));
+
+        // 22:30: the brand's own window still holds, and the hold runs past 10:00 only because
+        // the override is closed until 11:00. Folding the two into one window by earliest start
+        // and latest end gave 05:00 to 11:00 here, and 22:30 was open.
+        EngagementPolicy evening = ContactPolicyService.holdingWindow(windows, local("2026-08-22T22:30"));
+        assertThat(evening).isNotNull();
+        assertThat(java.util.Objects.requireNonNull(evening).quietHoursStart()).isEqualTo(LocalTime.of(21, 0));
+        assertThat(ContactPolicyService.openAt(windows, local("2026-08-22T22:30")))
+                .isEqualTo(local("2026-08-23T11:00"));
+
+        // 03:00: the night belongs to the brand's window as well.
+        assertThat(ContactPolicyService.holdingWindow(windows, local("2026-08-23T03:00")))
+                .isNotNull();
+        assertThat(ContactPolicyService.openAt(windows, local("2026-08-23T03:00")))
+                .isEqualTo(local("2026-08-23T11:00"));
+
+        // The afternoon is open, as it was without the override.
+        assertThat(ContactPolicyService.holdingWindow(windows, local("2026-08-22T14:00")))
+                .isNull();
+        // And a window that is never open ends the walk instead of spinning on it.
+        OverrideRow never = quiet(LocalTime.of(12, 0), LocalTime.of(12, 0));
+        Instant at = local("2026-08-22T14:00");
+        assertThat(ContactPolicyService.openAt(ContactPolicyService.quietWindows(POLICY, List.of(never)), at))
+                .isAfterOrEqualTo(at);
     }
 
     @Test
@@ -244,6 +291,13 @@ class ScenarioRulesTests {
         assertThat(ContactPeriod.ROLLING_7D.platformCeiling()).isEqualTo(EngagementPolicy.DEFAULT_MESSAGES_PER_7_DAYS);
         assertThat(ContactPeriod.ROLLING_30D.platformCeiling())
                 .isEqualTo(EngagementPolicy.DEFAULT_MESSAGES_PER_30_DAYS);
+    }
+
+    /** A wall-clock moment in Tashkent (UTC+5, no daylight saving), as an instant. */
+    private static Instant local(String isoLocalDateTime) {
+        return java.time.LocalDateTime.parse(isoLocalDateTime)
+                .atZone(EngagementPolicy.DEFAULT_ZONE)
+                .toInstant();
     }
 
     private static OverrideRow quiet(LocalTime start, LocalTime end) {

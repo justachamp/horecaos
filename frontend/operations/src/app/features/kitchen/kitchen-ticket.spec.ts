@@ -9,6 +9,7 @@ import {
   isKitchenTabId,
   isKitchenTabMember,
   ticketItemRows,
+  ticketSeverityInput,
 } from './kitchen-ticket';
 
 const POLICY = PLATFORM_DEFAULT_LATENESS_POLICY; // at_risk 300s, late_after 0s, no_promise_fallback 2700s
@@ -56,7 +57,7 @@ describe('computeTicketSeverity', () => {
   it('is NORMAL well before the target', () => {
     const severity = computeTicketSeverity(
       {
-        targetReadyAt: new Date(now.getTime() + 20 * 60 * 1000),
+        promisedAt: new Date(now.getTime() + 20 * 60 * 1000),
         createdAt: now,
         fulfilmentMode: 'DELIVERY',
       },
@@ -70,7 +71,7 @@ describe('computeTicketSeverity', () => {
     const windowMs = POLICY.delivery.atRiskBeforeSeconds * 1000;
     const severity = computeTicketSeverity(
       {
-        targetReadyAt: new Date(now.getTime() + windowMs - 1),
+        promisedAt: new Date(now.getTime() + windowMs - 1),
         createdAt: now,
         fulfilmentMode: 'DELIVERY',
       },
@@ -83,7 +84,7 @@ describe('computeTicketSeverity', () => {
 
   it('is not yet BREACHED at exactly the target — the boundary is exclusive, matching OrderPromise.lateAt', () => {
     const severity = computeTicketSeverity(
-      { targetReadyAt: now, createdAt: now, fulfilmentMode: 'DELIVERY' },
+      { promisedAt: now, createdAt: now, fulfilmentMode: 'DELIVERY' },
       now,
       POLICY,
     );
@@ -92,7 +93,7 @@ describe('computeTicketSeverity', () => {
 
   it('is BREACHED the instant after the target passes, with zero grace under the platform default', () => {
     const severity = computeTicketSeverity(
-      { targetReadyAt: new Date(now.getTime() - 1), createdAt: now, fulfilmentMode: 'DELIVERY' },
+      { promisedAt: new Date(now.getTime() - 1), createdAt: now, fulfilmentMode: 'DELIVERY' },
       now,
       POLICY,
     );
@@ -104,7 +105,7 @@ describe('computeTicketSeverity', () => {
     const fallbackMs = POLICY.delivery.noPromiseFallbackSeconds * 1000;
     const justUnder = computeTicketSeverity(
       {
-        targetReadyAt: null,
+        promisedAt: null,
         createdAt: new Date(now.getTime() - (fallbackMs - 1)),
         fulfilmentMode: 'DELIVERY',
       },
@@ -113,7 +114,7 @@ describe('computeTicketSeverity', () => {
     );
     const justOver = computeTicketSeverity(
       {
-        targetReadyAt: null,
+        promisedAt: null,
         createdAt: new Date(now.getTime() - (fallbackMs + 1)),
         fulfilmentMode: 'DELIVERY',
       },
@@ -131,22 +132,97 @@ describe('computeTicketSeverity', () => {
       dineIn: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 2700 },
     };
     // 90s ahead of the target: inside delivery's 300s window, outside pickup's 60s one.
-    const targetReadyAt = new Date(now.getTime() + 90 * 1000);
+    const promisedAt = new Date(now.getTime() + 90 * 1000);
 
     expect(
-      computeTicketSeverity(
-        { targetReadyAt, createdAt: now, fulfilmentMode: 'DELIVERY' },
-        now,
-        policy,
-      ).level,
+      computeTicketSeverity({ promisedAt, createdAt: now, fulfilmentMode: 'DELIVERY' }, now, policy)
+        .level,
     ).toBe('AT_RISK');
     expect(
+      computeTicketSeverity({ promisedAt, createdAt: now, fulfilmentMode: 'PICKUP' }, now, policy)
+        .level,
+    ).toBe('NORMAL');
+  });
+});
+
+describe('ticketSeverityInput (ADR 0150: a ticket is coloured by its ORDER, as the board is)', () => {
+  const now = new Date('2026-08-30T12:00:00Z');
+  const minutes = (n: number): string => new Date(now.getTime() + n * 60_000).toISOString();
+  // card 2 set to 20 minutes for the branch: every mode's no-promise fallback is 1200 seconds.
+  const TWENTY: LatenessPolicy = {
+    delivery: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 1200 },
+    pickup: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 1200 },
+    dineIn: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 1200 },
+  };
+
+  it('measures an unpromised order from its creation, not from the later instant its ticket opened', () => {
+    // The order waited half an hour for approval; the kitchen opened its ticket a minute ago.
+    const ticket = {
+      fulfilmentMode: 'DELIVERY',
+      createdAt: minutes(-1),
+      targetReadyAt: null,
+      orderCreatedAt: minutes(-30),
+      orderPromisedAt: null,
+      orderTerminal: false,
+    };
+
+    expect(computeTicketSeverity(ticketSeverityInput(ticket), now, TWENTY).level).toBe('BREACHED');
+    // The same ticket read the old way (from its own opening) is a minute old and calls nothing late:
+    // this is the disagreement with the board that the order's clock removes.
+    expect(
       computeTicketSeverity(
-        { targetReadyAt, createdAt: now, fulfilmentMode: 'PICKUP' },
+        ticketSeverityInput({ ...ticket, orderCreatedAt: null, orderPromisedAt: null }),
         now,
-        policy,
+        TWENTY,
       ).level,
     ).toBe('NORMAL');
+  });
+
+  it('measures a promised order against its promise, not against the promise less the road', () => {
+    // Promised in 10 minutes; the road takes 20, so the kitchen's own target passed 10 minutes ago.
+    const ticket = {
+      fulfilmentMode: 'DELIVERY',
+      createdAt: minutes(-30),
+      targetReadyAt: minutes(-10),
+      orderCreatedAt: minutes(-30),
+      orderPromisedAt: minutes(10),
+      orderTerminal: false,
+    };
+
+    expect(computeTicketSeverity(ticketSeverityInput(ticket), now, POLICY).level).toBe('NORMAL');
+    // Ten minutes later the promise itself has passed, and only then is it late, as on the board.
+    const later = new Date(now.getTime() + 10 * 60_000 + 1);
+    expect(computeTicketSeverity(ticketSeverityInput(ticket), later, POLICY).level).toBe(
+      'BREACHED',
+    );
+  });
+
+  it('never flags the ticket of a finished order, whatever its history', () => {
+    const ticket = {
+      fulfilmentMode: 'PICKUP',
+      createdAt: minutes(-500),
+      targetReadyAt: minutes(-400),
+      orderCreatedAt: minutes(-500),
+      orderPromisedAt: minutes(-400),
+      orderTerminal: true,
+    };
+
+    expect(computeTicketSeverity(ticketSeverityInput(ticket), now, POLICY).level).toBe('NORMAL');
+  });
+
+  it('keeps colouring from the ticket’s own instants when the server sends no order clock', () => {
+    const ticket = {
+      fulfilmentMode: 'DELIVERY',
+      createdAt: minutes(-50),
+      targetReadyAt: minutes(-1),
+    };
+
+    expect(ticketSeverityInput(ticket)).toEqual({
+      promisedAt: new Date(minutes(-1)),
+      createdAt: new Date(minutes(-50)),
+      fulfilmentMode: 'DELIVERY',
+    });
+    expect(computeTicketSeverity(ticketSeverityInput(ticket), now, POLICY).level).toBe('BREACHED');
   });
 });
 

@@ -15,6 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.marketing.api.CampaignMessagePort;
 import uz.horecaos.platform.marketing.api.CampaignMessagePort.MarketingMessage;
+import uz.horecaos.platform.marketing.application.ContactPolicyService.ContactDecision;
+import uz.horecaos.platform.marketing.application.ContactPolicyService.ContactRequest;
 import uz.horecaos.platform.marketing.domain.CampaignStatus;
 import uz.horecaos.platform.marketing.domain.EngagementPolicy;
 import uz.horecaos.platform.marketing.domain.MarketingChannel;
@@ -50,6 +52,14 @@ import uz.horecaos.platform.tenancy.api.PlatformLocales;
  * before the intent is created. A recipient who fails one is written down as
  * refused with the reason rather than dropped, because "why did this customer not
  * get it" is the question a tenant actually asks.
+ *
+ * <p><strong>The brand's own contact policy governs a broadcast exactly as it governs a
+ * scenario step</strong> (ADR 0112). After the five subtractions, each recipient is put to
+ * {@link ContactPolicyService#decide}: a tenant's tighter cap for this channel, purpose and
+ * period refuses the recipient with the sentence that names the rule and its numbers, and a
+ * tenant's wider quiet hours hold that recipient's message to the open boundary. An override
+ * a tenant wrote down is therefore a rule of every send of that channel and purpose, not of
+ * the ones that happen to be scenarios.
  */
 @Service
 public class CampaignSendService {
@@ -60,24 +70,12 @@ public class CampaignSendService {
     private final JdbcAudienceStore audiences;
     private final JdbcEngagementStore engagement;
     private final MarketingEligibility eligibility;
+    private final ContactPolicyService contactPolicy;
     private final CampaignCostEstimator estimator;
     private final CampaignMessagePort messages;
     private final @Nullable ScenarioEnrolmentService scenarioEnrolment;
     private final Clock clock;
     private final int batchSize;
-
-    /** The shape every caller used before ADR 0112: no scenario enrolment, so a scenario cannot expand. */
-    public CampaignSendService(
-            JdbcCampaignStore campaigns,
-            JdbcAudienceStore audiences,
-            JdbcEngagementStore engagement,
-            MarketingEligibility eligibility,
-            CampaignCostEstimator estimator,
-            CampaignMessagePort messages,
-            Clock clock,
-            int batchSize) {
-        this(campaigns, audiences, engagement, eligibility, estimator, messages, null, clock, batchSize);
-    }
 
     @Autowired
     public CampaignSendService(
@@ -85,6 +83,7 @@ public class CampaignSendService {
             JdbcAudienceStore audiences,
             JdbcEngagementStore engagement,
             MarketingEligibility eligibility,
+            ContactPolicyService contactPolicy,
             CampaignCostEstimator estimator,
             CampaignMessagePort messages,
             @Nullable ScenarioEnrolmentService scenarioEnrolment,
@@ -94,6 +93,7 @@ public class CampaignSendService {
         this.audiences = audiences;
         this.engagement = engagement;
         this.eligibility = eligibility;
+        this.contactPolicy = contactPolicy;
         this.estimator = estimator;
         this.messages = messages;
         this.scenarioEnrolment = scenarioEnrolment;
@@ -193,16 +193,11 @@ public class CampaignSendService {
             }
         }
 
-        // Held to the next open boundary rather than dropped. A marketer reading a
-        // delivered count cannot distinguish a quiet-hour drop from a suppression,
-        // so the message is scheduled and the recipient row records the deferral.
-        boolean quiet = policy.isQuiet(now);
-        Instant deliverAt = quiet ? policy.nextOpenBoundary(now) : now;
-
         int base = campaigns.recipientCount(tenantId, campaignId);
         int queued = 0;
         int refused = 0;
         long spent = 0;
+        boolean deferred = false;
 
         for (int offset = 0; offset < members.size(); offset++) {
             SnapshotMemberRow member = members.get(offset);
@@ -234,6 +229,36 @@ public class CampaignSendService {
                 continue;
             }
 
+            // ADR 0112: the brand's own caps and quiet hours, asked as the same explicit
+            // decision a scenario step is asked. A refusal is recorded with the sentence that
+            // names the rule and its numbers; a message that falls inside quiet hours is held
+            // to the open boundary rather than dropped, because a marketer reading a delivered
+            // count cannot tell a quiet-hour drop from a suppression, so the message is
+            // scheduled and the recipient row records the deferral.
+            ContactDecision decision = contactPolicy.decide(
+                    new ContactRequest(tenantId, campaign.brandId(), accountId, channel, campaign.consentPurpose()),
+                    now);
+            if (!decision.allowed()) {
+                RefusalReason reason =
+                        decision.reason() == null ? RefusalReason.FREQUENCY_CAP_REACHED : decision.reason();
+                campaigns.recordRecipient(
+                        tenantId,
+                        campaignId,
+                        accountId,
+                        base + offset,
+                        "REFUSED",
+                        null,
+                        reason,
+                        within500(decision.reasonText()),
+                        null,
+                        now);
+                refused++;
+                continue;
+            }
+            Instant deliverAt = decision.deliverAt() == null ? now : decision.deliverAt();
+            boolean held = deliverAt.isAfter(now);
+            deferred |= held;
+
             // The idempotency key ADR 0044 names. Derived rather than random, so a
             // replayed batch produces the same key and the delivery path collapses
             // it onto the intent that already exists.
@@ -257,11 +282,11 @@ public class CampaignSendService {
                     campaignId,
                     accountId,
                     base + offset,
-                    quiet ? "DEFERRED" : "QUEUED",
+                    held ? "DEFERRED" : "QUEUED",
                     notificationId,
                     null,
                     null,
-                    quiet ? deliverAt : null,
+                    held ? deliverAt : null,
                     now);
 
             // The frequency ledger, written against the moment the message will
@@ -284,7 +309,7 @@ public class CampaignSendService {
         }
 
         campaigns.recordSpend(tenantId, campaignId, spent, now);
-        return new BatchOutcome(sequence, members.size(), queued, refused, spent, false, false, quiet, null);
+        return new BatchOutcome(sequence, members.size(), queued, refused, spent, false, false, deferred, null);
     }
 
     private BatchOutcome expandScenario(CampaignRow campaign, Instant now) {
@@ -320,6 +345,11 @@ public class CampaignSendService {
         return BatchOutcome.completed(terminal);
     }
 
+    /** The recipient row's detail column is 500 characters; a sentence longer than that is cut, never refused. */
+    private static @Nullable String within500(@Nullable String text) {
+        return text == null || text.length() <= 500 ? text : text.substring(0, 500);
+    }
+
     private static String localeOf(SnapshotMemberRow member) {
         // The locale frozen onto the snapshot member, not today's. The estimate an
         // approver saw was computed from these, and pricing the send from a
@@ -331,9 +361,11 @@ public class CampaignSendService {
     /**
      * What one expansion call did.
      *
-     * @param deferred whether the batch landed inside quiet hours and was held to
-     *                 the next open boundary. A campaign released at 20:50 finishes
-     *                 the following morning and its report spans two days
+     * @param deferred whether any message of the batch landed inside quiet hours and
+     *                 was held to the next open boundary, under the brand's own
+     *                 window or a wider one a tenant's override added. A campaign
+     *                 released at 20:50 finishes the following morning and its
+     *                 report spans two days
      */
     public record BatchOutcome(
             int batchSequence,

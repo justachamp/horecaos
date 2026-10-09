@@ -6,6 +6,8 @@ import static uz.horecaos.platform.marketing.ScenarioHarness.OTHER_BRAND;
 import static uz.horecaos.platform.marketing.ScenarioHarness.OTHER_TENANT;
 import static uz.horecaos.platform.marketing.ScenarioHarness.START;
 import static uz.horecaos.platform.marketing.ScenarioHarness.TENANT;
+import static uz.horecaos.platform.marketing.ScenarioHarness.offerStep;
+import static uz.horecaos.platform.marketing.ScenarioHarness.smsStep;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -216,6 +218,38 @@ class PresentedOfferTests {
             assertThat(row.dismissedAt()).isNull();
         });
         assertThat(h.presentedStore.historyForGuest(OTHER_TENANT, guest, 10)).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "a banner an approved scenario presented stays up when a newer version of its offer is published; a retirement takes it down")
+    void aNewerVersionDoesNotTakeDownABannerAScenarioPresented() {
+        UUID guest = h.reachableGuest("+998901300020");
+        UUID carried = h.publishedOffer("Autumn ten");
+        UUID loose = h.publishedOffer("Weekend twenty");
+        UUID scenario =
+                h.launched(h.draftScenario(null, smsStep("MARKETING_PROMOTION", 0), offerStep("IN_APP", carried, 0)));
+        h.enrolEverybody(scenario);
+        h.decide(scenario);
+        present(guest, loose);
+        assertThat(poll(guest)).extracting(Banner::name).containsExactlyInAnyOrder("Autumn ten", "Weekend twenty");
+
+        h.publishedNewVersion(carried);
+        h.publishedNewVersion(loose);
+
+        // The one a campaign presented is the version that campaign was approved with, and it stays.
+        // One nobody's campaign holds is just a superseded offer, which nobody is shown any more.
+        assertThat(poll(guest)).extracting(Banner::name).containsExactly("Autumn ten");
+
+        h.offerService.retire(
+                TENANT,
+                BRAND,
+                carried,
+                h.offerService.require(TENANT, BRAND, carried).rowVersion(),
+                h.author,
+                "Ended",
+                "corr");
+        assertThat(poll(guest)).isEmpty();
     }
 
     // ----------------------------------------------------------------- helpers

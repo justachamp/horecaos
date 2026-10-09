@@ -5,9 +5,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -54,6 +56,14 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * steps instead of one send, and its cost is the one the record names: a scenario needs an
  * approval at first publication and at every version after.
  *
+ * <p><strong>The cost and the plan are judged on the whole scenario, not on its first
+ * message.</strong> A scenario is priced as every messaging step for every guest in its
+ * audience, each on its own channel and its own template ({@link #estimate}); a ceiling is
+ * required as soon as any step is on a channel that bills; and launching is refused when that
+ * whole-scenario worst case is above the ceiling the approver signed, or when any step is on a
+ * channel the tenant's plan does not include. The runner asks the same two questions again for
+ * each step as it is sent, because a price, a template and a plan all change after launch.
+ *
  * <p><strong>No step can invent a discount.</strong> A step may reference an
  * {@code marketing.offers} version, which references one promotion or accrual rule; the
  * step itself carries a channel, a wait, two conditions from closed sets and a template
@@ -73,6 +83,7 @@ public class ScenarioService {
     private final JdbcOfferStore offers;
     private final JdbcEngagementStore engagement;
     private final AudienceService audiences;
+    private final CampaignCostEstimator estimator;
     private final CampaignMessagePort messages;
     private final AuditRecorder audit;
     private final Clock clock;
@@ -83,6 +94,7 @@ public class ScenarioService {
             JdbcOfferStore offers,
             JdbcEngagementStore engagement,
             AudienceService audiences,
+            CampaignCostEstimator estimator,
             CampaignMessagePort messages,
             AuditRecorder audit,
             Clock clock) {
@@ -91,6 +103,7 @@ public class ScenarioService {
         this.offers = offers;
         this.engagement = engagement;
         this.audiences = audiences;
+        this.estimator = estimator;
         this.messages = messages;
         this.audit = audit;
         this.clock = clock;
@@ -149,11 +162,7 @@ public class ScenarioService {
                 .orElseThrow(() -> invalid("A scenario needs at least one step that sends a message: its cost "
                         + "ceiling, consent purpose and estimate are those of a messaging channel"));
         MarketingChannel primaryChannel = primary.channel().messaging().orElseThrow();
-        if (primaryChannel.carriesMarginalCost() && draft.costCeilingMinor() == null) {
-            throw invalid("A scenario that sends %s needs a cost ceiling: this channel bills per segment and the "
-                            .formatted(primaryChannel)
-                    + "mistake is unrecoverable");
-        }
+        requireCeilingWhereAnyStepBills(steps, draft.costCeilingMinor());
 
         UUID id = Ids.newId();
         EngagementPolicy policy = engagement.resolvePolicy(tenantId, brandId);
@@ -214,6 +223,7 @@ public class ScenarioService {
                             .formatted(campaign.status()));
         }
         List<ResolvedStep> steps = resolve(tenantId, brandId, drafts);
+        requireCeilingWhereAnyStepBills(steps, campaign.costCeilingMinor());
         scenarios.deleteSteps(tenantId, campaignId);
         writeSteps(tenantId, brandId, campaignId, steps);
 
@@ -306,16 +316,20 @@ public class ScenarioService {
     }
 
     /**
-     * Refuses to start a scenario that cannot deliver, at the moment of launch.
+     * Refuses to start a scenario that cannot deliver, or cannot be afforded, at the moment of launch.
      *
-     * <p>Every messaging step's channel must be wired for this brand and every offer a
-     * step names must still be in force or yet to start. Read before {@code SENDING}, so
-     * the second signature is not spent on a scenario whose third step dies at send time.
+     * <p>Every messaging step's channel must be wired for this brand, every offer a step
+     * names must still be carried (published, or superseded by a newer version since the
+     * scenario was approved, and not retired or past its window), and the whole scenario must
+     * fit under its cost ceiling. Read before {@code SENDING}, so the second signature is not
+     * spent on a scenario whose third step dies at send time or whose fourth would be the one
+     * the ceiling stops.
      */
     @Transactional(readOnly = true)
     public void assertStartable(CampaignRow campaign) {
         Instant now = clock.instant();
-        for (StepRow step : scenarios.steps(campaign.tenantId(), campaign.id())) {
+        List<StepRow> steps = scenarios.steps(campaign.tenantId(), campaign.id());
+        for (StepRow step : steps) {
             ScenarioChannel channel = ScenarioChannel.valueOf(step.channel());
             if (channel == ScenarioChannel.CALL_CENTRE) {
                 throw new ApiException(
@@ -338,8 +352,11 @@ public class ScenarioService {
             }
             if (step.offerId() != null) {
                 Optional<OfferRow> offer = offers.find(campaign.tenantId(), step.offerId());
+                // The version the scenario was approved with, even if a newer one has been
+                // published since: a launch is refused for an offer that was retired or whose
+                // window has ended, and not for one that merely has a successor.
                 if (offer.isEmpty()
-                        || !"PUBLISHED".equals(offer.get().status())
+                        || !offer.get().carriedByApprovedCampaigns()
                         || (offer.get().validUntil() != null
                                 && !offer.get().validUntil().isAfter(now))) {
                     throw new ApiException(
@@ -347,6 +364,113 @@ public class ScenarioService {
                             "The offer step %d references is not in force".formatted(step.sequence()));
                 }
             }
+        }
+        assertAffordable(campaign, steps);
+    }
+
+    /**
+     * Every ADR 0020 channel this scenario's steps send on, in step order and without repeats.
+     *
+     * <p>What a plan entitles a tenant to is a property of the channels used anywhere in the
+     * scenario, not of the one its audience was built for.
+     */
+    @Transactional(readOnly = true)
+    public Set<MarketingChannel> messagingChannels(CampaignRow campaign) {
+        Set<MarketingChannel> channels = new LinkedHashSet<>();
+        for (StepRow step : scenarios.steps(campaign.tenantId(), campaign.id())) {
+            ScenarioChannel.valueOf(step.channel()).messaging().ifPresent(channels::add);
+        }
+        return channels;
+    }
+
+    /**
+     * What the whole scenario can cost: every messaging step, priced on its own channel and
+     * its own template, for every guest in the audience.
+     *
+     * <p>The bound is the one an approver is shown and the one the ceiling is held to, so it
+     * is the worst case: every guest reaches every step, no stop condition ends a run early
+     * and no control group is withheld. Pricing the first step and multiplying by nothing is
+     * what an estimate of "the template" did, and a sequence of a short message followed by two
+     * long ones is several times that.
+     *
+     * @return empty when any billing step cannot be priced (no price is configured, or a
+     *         locale with guests has no wording): an unknown cost is not a free one
+     */
+    @Transactional(readOnly = true)
+    public Optional<CampaignCostEstimator.Estimate> estimate(
+            CampaignRow campaign, Map<String, Integer> membersByLocale, EngagementPolicy policy) {
+        return estimate(campaign, scenarios.steps(campaign.tenantId(), campaign.id()), membersByLocale, policy);
+    }
+
+    private Optional<CampaignCostEstimator.Estimate> estimate(
+            CampaignRow campaign, List<StepRow> steps, Map<String, Integer> membersByLocale, EngagementPolicy policy) {
+        long low = 0;
+        long high = 0;
+        for (StepRow step : steps) {
+            Optional<MarketingChannel> channel =
+                    ScenarioChannel.valueOf(step.channel()).messaging();
+            if (channel.isEmpty()) {
+                continue;
+            }
+            Map<String, String> bodies = messages.templateBodies(
+                    campaign.tenantId(),
+                    campaign.brandId(),
+                    step.templateKey(),
+                    channel.get().name());
+            Optional<CampaignCostEstimator.Estimate> priced = estimator.estimate(
+                    channel.get(), bodies, membersByLocale, policy.smsPricePerSegmentMinor(), campaign.currency());
+            if (priced.isEmpty()) {
+                return Optional.empty();
+            }
+            low += priced.get().lowMinor();
+            high += priced.get().highMinor();
+        }
+        int recipients =
+                membersByLocale.values().stream().mapToInt(Integer::intValue).sum();
+        return Optional.of(new CampaignCostEstimator.Estimate(low, high, recipients, campaign.currency()));
+    }
+
+    /**
+     * The ceiling is held to the whole scenario before it can start, not to its first message.
+     *
+     * <p>A ceiling that only stops the scenario halfway is a ceiling that lets the first guests
+     * through every step and strands the last ones on the first, so a scenario whose worst case
+     * is above it is refused at launch with both numbers, and the author raises the ceiling and
+     * has it approved again or shortens the scenario. Priced afresh from the snapshot rather
+     * than read from the estimate stored at approval: a price and a template can both have
+     * changed since, and the runner holds each step to the ceiling again as it is sent.
+     */
+    private void assertAffordable(CampaignRow campaign, List<StepRow> steps) {
+        StepRow billing = steps.stream()
+                .filter(step -> ScenarioChannel.valueOf(step.channel())
+                        .messaging()
+                        .map(MarketingChannel::carriesMarginalCost)
+                        .orElse(false))
+                .findFirst()
+                .orElse(null);
+        if (billing == null) {
+            return;
+        }
+        Long ceiling = campaign.costCeilingMinor();
+        if (ceiling == null) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "COST_CEILING_MISSING: step %d sends on %s, which bills per segment, and this scenario has no cost ceiling"
+                            .formatted(billing.sequence(), billing.channel()));
+        }
+        if (campaign.snapshotId() == null) {
+            return;
+        }
+        EngagementPolicy policy = engagement.resolvePolicy(campaign.tenantId(), campaign.brandId());
+        Optional<CampaignCostEstimator.Estimate> whole =
+                estimate(campaign, steps, audiences.memberLocales(campaign.tenantId(), campaign.snapshotId()), policy);
+        if (whole.isPresent() && whole.get().highMinor() > ceiling) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    ("COST_ABOVE_CEILING: the whole scenario, every step for every guest in its audience, can cost up "
+                                    + "to %d %s, above the cost ceiling of %d it was approved with; raise the ceiling "
+                                    + "and have it approved again, or shorten the scenario")
+                            .formatted(whole.get().highMinor(), campaign.currency(), ceiling));
         }
     }
 
@@ -504,6 +628,25 @@ public class ScenarioService {
             return Enum.valueOf(type, value == null ? "" : value);
         } catch (IllegalArgumentException unknown) {
             throw invalid(value + " is not a valid value for " + what);
+        }
+    }
+
+    /**
+     * A ceiling is required as soon as any step is on a channel that bills per segment, whichever
+     * step that is. Judging only the first messaging step let a scenario that opens with a free
+     * push and ends on three SMS be authored, approved and launched with no ceiling at all.
+     */
+    private static void requireCeilingWhereAnyStepBills(List<ResolvedStep> steps, @Nullable Long ceiling) {
+        if (ceiling != null) {
+            return;
+        }
+        for (int index = 0; index < steps.size(); index++) {
+            Optional<MarketingChannel> channel = steps.get(index).channel().messaging();
+            if (channel.isPresent() && channel.get().carriesMarginalCost()) {
+                throw invalid("A scenario that sends %s needs a cost ceiling: step %d bills per segment and the "
+                                .formatted(channel.get(), index + 1)
+                        + "mistake is unrecoverable");
+            }
         }
     }
 

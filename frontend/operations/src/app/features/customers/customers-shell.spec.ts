@@ -45,7 +45,7 @@ async function tabLabels(): Promise<(string | undefined)[]> {
 
 describe('CustomersShell', () => {
   it('renders a tab for every Customers section screen, including wave 44’s Feedback settings', async () => {
-    configure([]);
+    configure(['CUSTOMER_READ']);
 
     // 5.3 Segments and 5.4 Reviews (wave 39), plus 5.5 Feedback settings —
     // the last tier-3 Customers row, built in wave 44 alongside Marketing
@@ -54,7 +54,7 @@ describe('CustomersShell', () => {
   });
 
   it('offers the callback queue only to an operator who holds customer.lead.read (ADR 0111)', async () => {
-    configure(['CUSTOMER_LEAD_READ']);
+    configure(['CUSTOMER_READ', 'CUSTOMER_LEAD_READ']);
 
     expect(await tabLabels()).toEqual([
       'Клиенты',
@@ -63,5 +63,15 @@ describe('CustomersShell', () => {
       'Отзывы',
       'Настройки отзывов',
     ]);
+  });
+
+  it('offers a brand manager the queue and not the customer list she cannot read', async () => {
+    // PlatformRole.BRAND_MANAGER: customer.lead.read/manage at her brand, no customer.read.
+    configure(['CUSTOMER_LEAD_READ', 'CUSTOMER_LEAD_MANAGE']);
+
+    const tabs = await tabLabels();
+
+    expect(tabs).toContain('Обратные звонки');
+    expect(tabs).not.toContain('Клиенты');
   });
 });

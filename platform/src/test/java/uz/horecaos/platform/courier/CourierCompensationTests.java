@@ -2580,7 +2580,18 @@ class CourierCompensationTests {
      * boundary) without pulling the reporting module into this test.
      */
     private static BusinessDayWindows businessDayWindows() {
-        return (tenantId, at) -> at.atZone(ZoneId.of("Asia/Tashkent")).toLocalDate();
+        return new BusinessDayWindows() {
+            @Override
+            public LocalDate businessDateOf(UUID tenantId, Instant at) {
+                return at.atZone(ZoneId.of("Asia/Tashkent")).toLocalDate();
+            }
+
+            @Override
+            public Optional<LocalDate> lastClosedBusinessDate(UUID tenantId) {
+                // Nothing in this suite has closed a day: every accrual lands on its own tap's date.
+                return Optional.empty();
+            }
+        };
     }
 
     private static ActorRef manager() {

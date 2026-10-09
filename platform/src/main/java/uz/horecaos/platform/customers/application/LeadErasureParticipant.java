@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcLeadStore;
 import uz.horecaos.platform.customers.spi.CustomerErasureParticipant;
+import uz.horecaos.platform.customers.spi.CustomerErasureParticipant.ErasedContacts;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
@@ -18,12 +19,13 @@ import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
  * extending {@code CustomerErasureService}: the same seam {@code marketing}'s projection uses, called
  * in the same transaction, so a failure here rolls the whole erasure back.
  *
- * <p>Only leads <em>linked</em> to the account are reached. A lead that was never linked is a number
- * and a first name with nothing tying it to the erased account, and the account's own contact points
- * have already been overwritten by the time participants run, so there is no number left to match
- * on; that is the one gap, and it is why an operator confirming a duplicate links the lead to the
- * account first. The journal of contact attempts holds no personal data and is left as it is: it is
- * evidence that a call was made, not who was called.
+ * <p>Two kinds of lead are hers. A lead an operator <em>linked</em> to the account -- when the
+ * guest was identified, or when the lead converted into her order -- is reached by the link. A lead
+ * nobody linked is reached by her number: the erasure hands this participant the lookup hashes of
+ * the numbers she held, read before the account's own contact points were overwritten, and an
+ * unlinked lead holding one of them is hers too. A lead linked to a <em>different</em> account is
+ * that account's, whatever number it holds, and stays. The journal of contact attempts holds no
+ * personal data and is left as it is: it is evidence that a call was made, not who was called.
  *
  * <p>Idempotent: a retried erasure overwrites the same rows with new tombstones.
  */
@@ -45,9 +47,15 @@ public class LeadErasureParticipant implements CustomerErasureParticipant {
 
     @Override
     public void erase(UUID tenantId, UUID customerAccountId) {
+        erase(tenantId, customerAccountId, ErasedContacts.none());
+    }
+
+    @Override
+    public void erase(UUID tenantId, UUID customerAccountId, ErasedContacts held) {
         leads.erasePersonalFields(
                 tenantId,
                 customerAccountId,
+                held.phoneLookupHashes(),
                 id -> protection
                         .protect(
                                 tenantId,

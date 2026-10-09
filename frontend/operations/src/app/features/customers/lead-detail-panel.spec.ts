@@ -3,6 +3,7 @@ import { provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { I18n } from '../../core/i18n/i18n';
 import { LocationView } from '../settings/locations/locations-api';
 import { LeadDetailPanel } from './lead-detail-panel';
@@ -37,6 +38,7 @@ describe('LeadDetailPanel', () => {
     initial: Lead = lead(),
     access: LeadAccess = BRAND_ACCESS,
     detail: Lead = initial,
+    held: readonly string[] = ['CUSTOMER_READ'],
   ): Promise<HTMLElement> {
     api = {
       detail: vi.fn().mockResolvedValue({ value: detail, version: detail.version }),
@@ -48,11 +50,19 @@ describe('LeadDetailPanel', () => {
       }),
       transition: vi.fn(),
       assign: vi.fn(),
+      linkCustomer: vi.fn(),
       recordAttempt: vi.fn().mockResolvedValue(ATTEMPT),
     };
     await TestBed.configureTestingModule({
       imports: [LeadDetailPanel],
-      providers: [provideRouter([]), { provide: LeadsApi, useValue: api }],
+      providers: [
+        provideRouter([]),
+        { provide: LeadsApi, useValue: api },
+        {
+          provide: SessionCapabilities,
+          useValue: { has: (capability: string) => held.includes(capability) },
+        },
+      ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
     fixture = TestBed.createComponent(LeadDetailPanel);
@@ -116,6 +126,51 @@ describe('LeadDetailPanel', () => {
 
     expect(host.querySelector('[data-testid="lead-hint-accounts"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="lead-hint-leads"]')!.textContent).toContain('2');
+  });
+
+  it('links the lead to the hinted account the operator confirms, at the version it was read at', async () => {
+    const hinted = lead({ version: 3, possibleAccountIds: ['account-9'] });
+    const host = await mount(hinted);
+    const linked = lead({ version: 4, customerAccountId: 'account-9' });
+    api['linkCustomer'].mockResolvedValue(linked);
+    api['detail'].mockResolvedValue({ value: linked, version: 4 });
+
+    click(host, 'lead-link-customer');
+    await flush();
+    fixture.detectChanges();
+
+    expect(api['linkCustomer']).toHaveBeenCalledWith(BRAND_ACCESS.reach, 'lead-1', 'account-9', 3);
+    expect(changed.map((value) => value.customerAccountId)).toEqual(['account-9']);
+    expect(host.querySelector('[data-testid="lead-hint-accounts"]')).toBeNull();
+  });
+
+  it('shows why a link was refused and keeps the hint to try again', async () => {
+    const host = await mount(lead({ possibleAccountIds: ['account-9'] }));
+    api['linkCustomer'].mockRejectedValue(
+      new ApiError(ApiErrorCode.STALE_VERSION, 409, null, null),
+    );
+
+    click(host, 'lead-link-customer');
+    await flush();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="lead-panel-error"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="lead-link-customer"]')).not.toBeNull();
+    expect(changed).toEqual([]);
+  });
+
+  it('offers no link to an operator who cannot manage leads, and no customer page without customer.read', async () => {
+    const host = await mount(
+      lead({ possibleAccountIds: ['account-9'], customerAccountId: 'account-1' }),
+      { ...BRAND_ACCESS, canManage: false },
+      undefined,
+      [],
+    );
+
+    expect(host.querySelector('[data-testid="lead-link-customer"]')).toBeNull();
+    expect(host.querySelector('a[href="/customers/account-9"]')).toBeNull();
+    expect(host.querySelector('a[href="/customers/account-1"]')).toBeNull();
+    expect(host.querySelector('[data-testid="lead-linked"]')).not.toBeNull();
   });
 
   it('moves the lead with the version it was read at, and hands the lead back to the queue', async () => {

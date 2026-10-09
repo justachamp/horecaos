@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../../core/lateness-policy';
-import { computeTicketSeverity } from '../kitchen/kitchen-ticket';
+import { computeTicketSeverity, ticketSeverityInput } from '../kitchen/kitchen-ticket';
 import {
   APPROVAL_DEADLINE_THRESHOLD_MS,
   OrderSeverityInput,
@@ -332,7 +332,7 @@ describe('computeOrderSeverity and computeTicketSeverity share one AT_RISK bound
       POLICY,
     );
     const ticketSeverity = computeTicketSeverity(
-      { targetReadyAt: promisedAt, createdAt: NOW, fulfilmentMode: 'DELIVERY' },
+      { promisedAt, createdAt: NOW, fulfilmentMode: 'DELIVERY' },
       NOW,
       POLICY,
     );
@@ -367,7 +367,7 @@ describe('the order board and the kitchen queue agree per fulfilment mode (rows 
         PER_MODE,
       );
       const ticket = computeTicketSeverity(
-        { targetReadyAt: promisedAt, createdAt: NOW, fulfilmentMode },
+        { promisedAt, createdAt: NOW, fulfilmentMode },
         NOW,
         PER_MODE,
       );
@@ -391,7 +391,7 @@ describe('the order board and the kitchen queue agree per fulfilment mode (rows 
         PER_MODE,
       );
       const ticket = computeTicketSeverity(
-        { targetReadyAt: null, createdAt, fulfilmentMode: mode },
+        { promisedAt: null, createdAt, fulfilmentMode: mode },
         NOW,
         PER_MODE,
       );
@@ -400,6 +400,91 @@ describe('the order board and the kitchen queue agree per fulfilment mode (rows 
       expect(ticket.level, `kitchen queue, ${mode}`).toBe(late ? 'BREACHED' : 'NORMAL');
     }
   });
+});
+
+describe('the kitchen queue and the walls colour an order exactly as the order board does (ADR 0150)', () => {
+  // A branch whose card 2 says 20 minutes: the only number the unpromised orders below can see.
+  const TWENTY: LatenessPolicy = {
+    delivery: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 1200 },
+    pickup: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 1200 },
+    dineIn: { atRiskBeforeSeconds: 300, lateAfterSeconds: 0, noPromiseFallbackSeconds: 1200 },
+  };
+  const iso = (date: Date): string => date.toISOString();
+
+  // The order shapes ADR 0150 decides: an aggregator order with no promise that waited for approval, a
+  // native delivery whose road time is 20 minutes, a scheduled order taken hours ahead, an order that is over.
+  const ORDERS = [
+    {
+      name: 'an unpromised order accepted late',
+      order: { createdAt: minutesAgo(30), promisedAt: null, status: 'PREPARING' },
+      ticketOpened: minutesAgo(1),
+      travelMinutes: 0,
+    },
+    {
+      name: 'a promised delivery with twenty minutes of road',
+      order: { createdAt: minutesAgo(30), promisedAt: minutesFromNow(10), status: 'PREPARING' },
+      ticketOpened: minutesAgo(25),
+      travelMinutes: 20,
+    },
+    {
+      name: 'a scheduled order taken hours ahead',
+      order: { createdAt: minutesAgo(300), promisedAt: minutesFromNow(120), status: 'PREPARING' },
+      ticketOpened: minutesAgo(2),
+      travelMinutes: 0,
+    },
+    {
+      name: 'a finished order whose ticket is still on the pass',
+      order: { createdAt: minutesAgo(500), promisedAt: minutesAgo(400), status: 'COMPLETED' },
+      ticketOpened: minutesAgo(450),
+      travelMinutes: 0,
+    },
+  ] as const;
+
+  // Sampled across the lifetime of each order, including the instants either side of every edge.
+  const INSTANTS_IN_MINUTES = [-30, 0, 4, 5, 9, 10, 10.01, 25, 45, 119, 121, 600];
+
+  for (const { name, order, ticketOpened, travelMinutes } of ORDERS) {
+    it(`agrees with the board about ${name} at every instant`, () => {
+      const targetReadyAt =
+        order.promisedAt === null
+          ? null
+          : new Date(order.promisedAt.getTime() - travelMinutes * 60_000);
+
+      for (const offset of INSTANTS_IN_MINUTES) {
+        const at = new Date(NOW.getTime() + offset * 60_000);
+        const board = computeOrderSeverity(
+          baseInput({
+            status: order.status,
+            createdAt: order.createdAt,
+            promisedAt: order.promisedAt,
+            fulfillmentMode: 'DELIVERY',
+          }),
+          at,
+          TWENTY,
+        );
+        // What the server sends for the ticket of that order, queue or wall alike.
+        const kitchen = computeTicketSeverity(
+          ticketSeverityInput({
+            fulfilmentMode: 'DELIVERY',
+            createdAt: iso(ticketOpened),
+            targetReadyAt: targetReadyAt === null ? null : iso(targetReadyAt),
+            orderCreatedAt: iso(order.createdAt),
+            orderPromisedAt: order.promisedAt === null ? null : iso(order.promisedAt),
+            orderTerminal: order.status === 'COMPLETED',
+          }),
+          at,
+          TWENTY,
+        );
+
+        expect(kitchen.level === 'BREACHED', `late at ${offset} minutes`).toBe(
+          board.level === 'LATE',
+        );
+        expect(kitchen.level === 'AT_RISK', `at risk at ${offset} minutes`).toBe(
+          board.level === 'AT_RISK',
+        );
+      }
+    });
+  }
 });
 
 describe('formatSeverityCaption', () => {

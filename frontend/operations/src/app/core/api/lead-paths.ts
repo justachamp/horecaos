@@ -45,6 +45,11 @@ export const leadPaths = {
     return `${this.lead(reach, leadId)}/assignment`;
   },
 
+  /** Confirming who the guest behind a lead is — the lead is linked to that account. */
+  customerLink(reach: LeadReach, leadId: string): string {
+    return `${this.lead(reach, leadId)}/customer`;
+  },
+
   /** The one decrypt a lead has, purpose-stamped and audited. */
   contact(reach: LeadReach, leadId: string): string {
     return `${this.lead(reach, leadId)}/contact`;

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -17,6 +18,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.customers.api.CustomerHistoryEntry;
 import uz.horecaos.platform.customers.api.CustomerHistoryEntry.Kind;
+import uz.horecaos.platform.customers.api.CustomerHistorySource;
+import uz.horecaos.platform.customers.api.HistoryCursor;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcCustomerEngagementHistory;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcCustomerCommunicationHistory;
 import uz.horecaos.platform.ordering.OrderBoardFixtures;
@@ -122,8 +125,7 @@ class CustomerHistorySourcesTests {
 
         JdbcCustomerCommunicationHistory source = new JdbcCustomerCommunicationHistory(jdbc);
         List<CustomerHistoryEntry> first = source.history(TENANT, guest, null, 2);
-        List<CustomerHistoryEntry> second =
-                source.history(TENANT, guest, first.getLast().occurredAt(), 2);
+        List<CustomerHistoryEntry> second = source.history(TENANT, guest, HistoryCursor.after(first.getLast()), 2);
 
         assertThat(first).extracting(CustomerHistoryEntry::detailCode).containsExactly("t3", "t2");
         assertThat(second).extracting(CustomerHistoryEntry::detailCode).containsExactly("t1", "t0");
@@ -232,17 +234,150 @@ class CustomerHistorySourcesTests {
                 null,
                 null));
 
-        List<CustomerHistoryEntry> older =
-                new JdbcCustomerEngagementHistory(jdbc, discounts).history(TENANT, guest, BASE.plusSeconds(50), 10);
+        List<CustomerHistoryEntry> older = new JdbcCustomerEngagementHistory(jdbc, discounts)
+                .history(TENANT, guest, HistoryCursor.olderThan(BASE.plusSeconds(50)), 10);
 
         assertThat(older).extracting(CustomerHistoryEntry::kind).containsExactly(Kind.PROMO_REDEMPTION);
+    }
+
+    // ------------------------------------------------------- a page boundary inside one instant
+
+    /**
+     * Ids chosen to straddle the sign bit of both halves: PostgreSQL orders a uuid as unsigned
+     * bytes, {@code UUID.compareTo} as signed longs, and a merge that used the latter would order
+     * these differently from the database the cursor was cut by.
+     */
+    private static final List<UUID> TIED_IDS = List.of(
+            UUID.fromString("00000000-0000-4000-8000-000000000001"),
+            UUID.fromString("7fffffff-ffff-4fff-bfff-ffffffffffff"),
+            UUID.fromString("80000000-0000-4000-8000-000000000000"),
+            UUID.fromString("ffffffff-ffff-4fff-bfff-fffffffffffe"),
+            UUID.fromString("40000000-0000-4000-8000-000000000002"));
+
+    private static final Instant TIE = BASE.plusSeconds(500);
+
+    @Test
+    @DisplayName("notifications: entries sharing the boundary instant are on the next page, none lost or repeated")
+    void notificationsPageThroughATie() {
+        for (UUID id : TIED_IDS) {
+            notification(id, guest, "SMS", "DELIVERED", null, "tie", TIE);
+        }
+        UUID older = notification(guest, "SMS", "DELIVERED", null, "older", BASE);
+
+        assertPagesLoseNothing(new JdbcCustomerCommunicationHistory(jdbc), expectedNewestFirst(TIED_IDS, older));
+    }
+
+    @Test
+    @DisplayName("reviews: entries sharing the boundary instant are on the next page, none lost or repeated")
+    void reviewsPageThroughATie() {
+        for (int i = 0; i < TIED_IDS.size(); i++) {
+            review(
+                    TIED_IDS.get(i),
+                    guest,
+                    5,
+                    null,
+                    TIE,
+                    fixtures.insertOrder(OrderBoardFixtures.order("tie-" + i).at(TENANT, BRAND, LOCATION)));
+        }
+        UUID older = review(guest, 3, null, BASE);
+
+        assertPagesLoseNothing(new JdbcCustomerReviewHistory(jdbc), expectedNewestFirst(TIED_IDS, older));
+    }
+
+    @Test
+    @DisplayName("marketing: receipts and redemptions sharing the boundary instant are on the next page too")
+    void engagementPagesThroughATie() {
+        List<UUID> campaigns = TIED_IDS.subList(0, 3);
+        for (UUID id : campaigns) {
+            recipient(campaign("Tie " + id, id), guest, "REFUSED", "SUPPRESSED", null, TIE);
+        }
+        UUID redemption = TIED_IDS.get(3);
+        CustomerDiscountHistoryPort discounts = (tenantId, accountId) -> List.of(new Redemption(
+                redemption,
+                BRAND,
+                UUID.randomUUID(),
+                null,
+                UUID.randomUUID(),
+                "Tie 10%",
+                null,
+                Redemption.Status.REDEEMED,
+                0,
+                "UZS",
+                TIE.minusSeconds(5),
+                TIE,
+                null));
+        UUID older = campaign("Older", UUID.randomUUID());
+        recipient(older, guest, "REFUSED", "SUPPRESSED", null, BASE);
+
+        assertPagesLoseNothing(
+                new JdbcCustomerEngagementHistory(jdbc, discounts),
+                expectedNewestFirst(List.of(campaigns.get(0), campaigns.get(1), campaigns.get(2), redemption), older));
+    }
+
+    /** What the card service does with a source: ask for one more than a page, sort, cut, continue from the cut. */
+    private void assertPagesLoseNothing(CustomerHistorySource source, List<UUID> expected) {
+        List<UUID> walked = walk(source, TENANT, guest, 2, false);
+        assertThat(walked)
+                .as("every entry exactly once, in the order the database and the merge agree on")
+                .containsExactlyElementsOf(expected);
+        assertThat(walk(source, TENANT, guest, 2, true))
+                .as("and the fixture is not vacuous: continuing from the instant alone, as the card used to, "
+                        + "drops the entries of the tie that did not fit on the first page")
+                .hasSizeLessThan(expected.size());
+    }
+
+    private static List<UUID> walk(
+            CustomerHistorySource source, UUID tenant, UUID guest, int pageSize, boolean byInstantOnly) {
+        List<UUID> seen = new ArrayList<>();
+        HistoryCursor cursor = null;
+        while (true) {
+            List<CustomerHistoryEntry> got = new ArrayList<>(source.history(tenant, guest, cursor, pageSize + 1));
+            got.sort(HistoryCursor.newestFirst());
+            boolean more = got.size() > pageSize;
+            List<CustomerHistoryEntry> page = more ? got.subList(0, pageSize) : got;
+            page.forEach(entry -> seen.add(entry.referenceId()));
+            if (!more) {
+                return seen;
+            }
+            CustomerHistoryEntry last = page.getLast();
+            cursor = byInstantOnly ? HistoryCursor.olderThan(last.occurredAt()) : HistoryCursor.after(last);
+        }
+    }
+
+    /**
+     * The same ids by unsigned id descending, written out by hand so that the order the assertions expect
+     * is not computed by the comparator they are checking.
+     */
+    private static final List<UUID> TIED_DESCENDING = List.of(
+            UUID.fromString("ffffffff-ffff-4fff-bfff-fffffffffffe"),
+            UUID.fromString("80000000-0000-4000-8000-000000000000"),
+            UUID.fromString("7fffffff-ffff-4fff-bfff-ffffffffffff"),
+            UUID.fromString("40000000-0000-4000-8000-000000000002"),
+            UUID.fromString("00000000-0000-4000-8000-000000000001"));
+
+    /** The tied ids by unsigned id descending, then the older entry. */
+    private static List<UUID> expectedNewestFirst(List<UUID> tied, UUID older) {
+        List<UUID> ordered =
+                new ArrayList<>(TIED_DESCENDING.stream().filter(tied::contains).toList());
+        ordered.add(older);
+        return ordered;
     }
 
     // -------------------------------------------------------------------- seeding
 
     private UUID notification(
             UUID accountId, String channel, String status, @Nullable String suppression, String template, Instant at) {
-        UUID id = UUID.randomUUID();
+        return notification(UUID.randomUUID(), accountId, channel, status, suppression, template, at);
+    }
+
+    private UUID notification(
+            UUID id,
+            UUID accountId,
+            String channel,
+            String status,
+            @Nullable String suppression,
+            String template,
+            Instant at) {
         jdbc.sql("""
                 INSERT INTO notifications.notifications (
                     id, tenant_id, brand_id, notification_class, channel, template_key, subject_type, subject_id,
@@ -270,7 +405,10 @@ class CustomerHistorySourcesTests {
     }
 
     private UUID review(UUID accountId, int rating, @Nullable String comment, Instant at, UUID orderId) {
-        UUID id = UUID.randomUUID();
+        return review(UUID.randomUUID(), accountId, rating, comment, at, orderId);
+    }
+
+    private UUID review(UUID id, UUID accountId, int rating, @Nullable String comment, Instant at, UUID orderId) {
         jdbc.sql("""
                 INSERT INTO reviews.order_reviews (
                     id, tenant_id, brand_id, location_id, order_id, customer_account_id, rating,
@@ -291,6 +429,10 @@ class CustomerHistorySourcesTests {
     }
 
     private UUID campaign(String name) {
+        return campaign(name, UUID.randomUUID());
+    }
+
+    private UUID campaign(String name, UUID campaign) {
         UUID audience = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO marketing.audiences (id, tenant_id, brand_id, name, created_by)
@@ -302,7 +444,6 @@ class CustomerHistorySourcesTests {
                 .param("name", "Everyone " + audience)
                 .param("by", UUID.randomUUID())
                 .update();
-        UUID campaign = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO marketing.campaigns (id, tenant_id, brand_id, name, channel, consent_purpose, audience_id,
                     template_key, recipient_cap, created_by)

@@ -31,7 +31,7 @@ import { CallBar } from './call-bar';
 import { LocaleScopeOffer } from './locale-scope-offer';
 import { ShellMessageKey, shellMessages } from './shell-messages';
 import { ShortcutSheet } from './shortcut-sheet';
-import { NAVIGATION, NavGroup, NavItem } from './navigation';
+import { NAVIGATION, NavGroup, NavItem, admitsSection } from './navigation';
 import { ServiceStatus } from './service-status';
 import { SupportBanner } from './support-banner';
 import { VoicePresence } from './voice-presence';
@@ -141,7 +141,9 @@ export class Shell {
       // a rail the capability filter already allowed, never put back a section the operator may not use.
       items: this.forProfile(
         group.items.filter(
-          (item) => this.capabilities.has(item.capability) && !hidden.includes(item.path),
+          (item) =>
+            admitsSection(item, (capability) => this.capabilities.has(capability)) &&
+            !hidden.includes(item.path),
         ),
         deliveries,
       ),

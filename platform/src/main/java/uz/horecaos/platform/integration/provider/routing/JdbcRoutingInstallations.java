@@ -34,9 +34,11 @@ class JdbcRoutingInstallations {
      * The installation behind a tariff's routing reference, with the approved endpoint
      * its environment names.
      *
-     * <p>Read on every call and never cached: suspending the installation is the
-     * rollback ADR 0147 promises, and a cache holding a suspended installation's
-     * standing for a TTL would make that rollback slower than the incident.
+     * <p>Read on every call and never cached: a status change on the row has to take
+     * effect on the next quote, and a cache holding an installation's standing for a TTL
+     * would make that slower than the incident. No console or API door changes a platform
+     * routing installation's status today, so the per-tenant rollback an operator uses is
+     * the tariff version's distance mode (runbook step 7), not this row.
      */
     Optional<RoutingInstallation> find(UUID installationId) {
         return jdbc.sql("""

@@ -199,7 +199,8 @@ class RoadDistanceEndToEndTests {
         JsonNode fee = storefrontFee(DOORSTEP);
         assertThat(fee.path("outcome").asString()).isEqualTo("RESOLVED");
         assertThat(fee.path("distanceSource").asString()).isEqualTo("ROAD");
-        assertThat(fee.path("distanceMeters").asInt()).isEqualTo(4_322);
+        // The route's 4,321.7 m plus the 3.2 m and 1.9 m from the two pins to the road.
+        assertThat(fee.path("distanceMeters").asInt()).isEqualTo(4_327);
         // Five started kilometres at 2,000 each.
         assertThat(fee.path("feeMinor").asLong()).isEqualTo(10_000L);
 

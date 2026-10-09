@@ -36,6 +36,8 @@ class OsrmPropertiesTests {
             assertThat(properties.datasetVersion()).isNull();
             assertThat(properties.timeout()).isEqualTo(Duration.ofMillis(500));
             assertThat(properties.snapRadiusMeters()).isEqualTo(1_000);
+            assertThat(properties.slowCallThreshold()).isEqualTo(Duration.ofMillis(250));
+            assertThat(properties.maxConcurrentCalls()).isEqualTo(16);
         });
     }
 
@@ -52,13 +54,17 @@ class OsrmPropertiesTests {
                                 Map.of(
                                         "HORECAOS_ROUTING_OSRM_ENABLED", "true",
                                         "HORECAOS_ROUTING_OSRM_DATASET_VERSION", "2026-10-01",
-                                        "HORECAOS_ROUTING_OSRM_TIMEOUT", "250ms"))))
+                                        "HORECAOS_ROUTING_OSRM_TIMEOUT", "250ms",
+                                        "HORECAOS_ROUTING_OSRM_SLOW_CALL_THRESHOLD", "120ms",
+                                        "HORECAOS_ROUTING_OSRM_MAX_CONCURRENT_CALLS", "4"))))
                 .run(run -> {
                     OsrmProperties properties = run.getBean(OsrmProperties.class);
 
                     assertThat(properties.enabled()).isTrue();
                     assertThat(properties.datasetVersion()).isEqualTo("2026-10-01");
                     assertThat(properties.timeout()).isEqualTo(Duration.ofMillis(250));
+                    assertThat(properties.slowCallThreshold()).isEqualTo(Duration.ofMillis(120));
+                    assertThat(properties.maxConcurrentCalls()).isEqualTo(4);
                     assertThat(properties.answering()).isTrue();
                 });
     }
@@ -84,5 +90,47 @@ class OsrmPropertiesTests {
         assertThatThrownBy(() ->
                         new OsrmProperties(true, "2026-10-01", Duration.ofMillis(500), 0, 10, Duration.ofSeconds(30)))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("a slow-call threshold or a concurrency cap that is not positive is refused at start")
+    void nonsenseBoundsAreRefused() {
+        assertThatThrownBy(() -> new OsrmProperties(
+                        true,
+                        "2026-10-01",
+                        Duration.ofMillis(500),
+                        1_000,
+                        10,
+                        Duration.ofSeconds(30),
+                        Duration.ZERO,
+                        16))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new OsrmProperties(
+                        true,
+                        "2026-10-01",
+                        Duration.ofMillis(500),
+                        1_000,
+                        10,
+                        Duration.ofSeconds(30),
+                        Duration.ofMillis(250),
+                        0))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("a timeout past the ceiling is held to it, a shorter one is kept, and nothing is refused at start")
+    void theTimeoutIsHeldToTheCeiling() {
+        context.withPropertyValues("horecaos.routing.osrm.timeout=30s").run(run -> {
+            OsrmProperties properties = run.getBean(OsrmProperties.class);
+
+            assertThat(properties.timeout()).as("what was configured").isEqualTo(Duration.ofSeconds(30));
+            assertThat(properties.effectiveTimeout())
+                    .as("what the quote thread waits")
+                    .isEqualTo(Duration.ofSeconds(1));
+        });
+        assertThat(new OsrmProperties(true, "2026-10-01", Duration.ofMillis(300), 1_000, 10, Duration.ofSeconds(30))
+                        .effectiveTimeout())
+                .isEqualTo(Duration.ofMillis(300));
+        assertThat(OsrmProperties.MAX_TIMEOUT).isEqualTo(Duration.ofSeconds(1));
     }
 }

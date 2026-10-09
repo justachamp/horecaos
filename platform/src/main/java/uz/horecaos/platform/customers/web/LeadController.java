@@ -201,6 +201,26 @@ public class LeadController {
         return ResponseEntity.ok().eTag(AggregateVersion.toETag(lead.version())).body(lead);
     }
 
+    @PostMapping("/leads/{leadId}/customer")
+    @RequiresCapability(value = Capability.CUSTOMER_LEAD_MANAGE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            summary = "Identify the guest behind a lead",
+            description = "The operator's confirmation of the hint the detail gives (an account holding the "
+                    + "same number): the lead is linked to that account, appears on its card, and is "
+                    + "erased with it. Never made by the platform on a number match alone. Allowed at "
+                    + "any status; an account merged away is followed to the account it became. "
+                    + "Needs If-Match with the lead's version.")
+    public ResponseEntity<LeadView> linkCustomer(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID leadId,
+            @Valid @RequestBody LinkLeadCustomerRequest body,
+            HttpServletRequest request) {
+        LeadView lead = leads.linkCustomer(
+                tenantId, Reach.brand(brandId), leadId, body.customerAccountId(), version(request), actor());
+        return ResponseEntity.ok().eTag(AggregateVersion.toETag(lead.version())).body(lead);
+    }
+
     @GetMapping("/leads/{leadId}/contact")
     @RequiresCapability(value = Capability.CUSTOMER_PII_REVEAL, scope = ScopeType.BRAND)
     @Operation(
@@ -290,6 +310,29 @@ public class LeadController {
             HttpServletRequest request) {
         LeadView lead = leads.transition(
                 tenantId, Reach.location(brandId, locationId), leadId, body.toTransition(), version(request), actor());
+        return ResponseEntity.ok().eTag(AggregateVersion.toETag(lead.version())).body(lead);
+    }
+
+    @PostMapping("/locations/{locationId}/leads/{leadId}/customer")
+    @RequiresCapability(value = Capability.CUSTOMER_LEAD_MANAGE, scope = ScopeType.LOCATION, mutating = true)
+    @Operation(
+            summary = "Identify the guest behind a lead handed to this branch",
+            description = "As the brand route, for a lead this branch was handed: the branch that rings the "
+                    + "guest is the one that learns who she is.")
+    public ResponseEntity<LeadView> linkCustomerForLocation(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID leadId,
+            @Valid @RequestBody LinkLeadCustomerRequest body,
+            HttpServletRequest request) {
+        LeadView lead = leads.linkCustomer(
+                tenantId,
+                Reach.location(brandId, locationId),
+                leadId,
+                body.customerAccountId(),
+                version(request),
+                actor());
         return ResponseEntity.ok().eTag(AggregateVersion.toETag(lead.version())).body(lead);
     }
 
@@ -451,6 +494,9 @@ public class LeadController {
     }
 
     public record AssignLeadRequest(@NotNull UUID locationId) {}
+
+    /** The account the operator confirmed the lead is. */
+    public record LinkLeadCustomerRequest(@NotNull UUID customerAccountId) {}
 
     /**
      * @param attemptId a client-chosen id that makes a retried submit one attempt, or absent to have one minted

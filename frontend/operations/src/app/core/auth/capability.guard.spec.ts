@@ -86,6 +86,36 @@ describe('capabilityGuard', () => {
     expect(String(result)).toBe('/access-denied?capability=TENANT_READ&section=shell.nav.settings');
   });
 
+  describe("a section a role reaches by another capability than the section's own", () => {
+    /**
+     * `PlatformRole.BRAND_MANAGER`'s customer capabilities at her brand: the call centre's queue and
+     * nothing of the customer list (`LeadControllerEndpointTests` pins that the session context the
+     * server builds for her carries exactly this).
+     */
+    const BRAND_MANAGER: ScopeGrant = {
+      scope: { type: 'BRAND', tenantId: 't1', brandId: 'b1', locationId: null },
+      roleCode: 'brand-manager',
+      capabilities: ['ORDER_READ', 'CATALOG_READ', 'CUSTOMER_LEAD_READ', 'CUSTOMER_LEAD_MANAGE'],
+    };
+
+    it('admits a brand manager to the lead queue under /customers, though she holds no customer.read', async () => {
+      tenant.scopes.set([BRAND_MANAGER]);
+
+      expect(await run('/customers/leads')).toBe(true);
+      expect(await run('/customers')).toBe(true);
+    });
+
+    it("still refuses an operator who holds neither, naming the section's own capability", async () => {
+      tenant.scopes.set([grant(['ORDER_READ', 'CUSTOMER_LEAD_MANAGE'])]);
+
+      const result = await run('/customers/leads');
+
+      expect(String(result)).toBe(
+        '/access-denied?capability=CUSTOMER_READ&section=shell.nav.customers',
+      );
+    });
+  });
+
   it('waits for the session context to load before deciding', async () => {
     let resolveLoad!: () => void;
     tenant.ensureLoaded = () =>

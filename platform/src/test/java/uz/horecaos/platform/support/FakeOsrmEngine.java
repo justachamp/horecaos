@@ -37,7 +37,16 @@ public final class FakeOsrmEngine implements AutoCloseable {
     private final ExecutorService executor;
     private final AtomicInteger hits = new AtomicInteger();
     private final List<String> requests = new CopyOnWriteArrayList<>();
-    private final AtomicReference<Mode> mode = new AtomicReference<>(new Mode.Route(4_321.7, 468.2));
+    /**
+     * How far a pin that is on the network typically sits from the road, as the real engine
+     * reports it in each waypoint's {@code distance}: a few metres, never exactly zero.
+     */
+    private static final double ORIGIN_SNAP_METERS = 3.2;
+
+    private static final double DESTINATION_SNAP_METERS = 1.9;
+
+    private final AtomicReference<Mode> mode =
+            new AtomicReference<>(new Mode.Route(4_321.7, 468.2, ORIGIN_SNAP_METERS, DESTINATION_SNAP_METERS));
 
     private FakeOsrmEngine(HttpServer server, ExecutorService executor) {
         this.server = server;
@@ -87,7 +96,24 @@ public final class FakeOsrmEngine implements AutoCloseable {
     }
 
     public void routeOf(double meters, double seconds) {
-        mode.set(new Mode.Route(meters, seconds));
+        mode.set(new Mode.Route(meters, seconds, ORIGIN_SNAP_METERS, DESTINATION_SNAP_METERS));
+    }
+
+    /**
+     * A route whose two pins are not on the road: each waypoint's {@code distance} is how far
+     * the engine had to move the requested coordinate to reach the network (a courtyard, a
+     * field), which is walked and is not in the route's own {@code distance}.
+     */
+    public void routeOf(double meters, double seconds, double originSnapMeters, double destinationSnapMeters) {
+        mode.set(new Mode.Route(meters, seconds, originSnapMeters, destinationSnapMeters));
+    }
+
+    /** HTTP 200 with a route and no {@code waypoints}, which the real engine never sends for a route. */
+    public void routeWithoutWaypoints() {
+        mode.set(new Mode.Status(
+                200,
+                "{\"code\":\"Ok\",\"routes\":[{\"legs\":[],\"weight_name\":\"routability\","
+                        + "\"weight\":468.2,\"duration\":468.2,\"distance\":4321.7}]}"));
     }
 
     /** HTTP 400 {@code NoRoute}, which is how the real engine says two points are not connected. */
@@ -130,7 +156,10 @@ public final class FakeOsrmEngine implements AutoCloseable {
                     Thread.currentThread().interrupt();
                 }
                 try {
-                    respond(exchange, 200, routeBody(new Mode.Route(1_000, 100)));
+                    respond(
+                            exchange,
+                            200,
+                            routeBody(new Mode.Route(1_000, 100, ORIGIN_SNAP_METERS, DESTINATION_SNAP_METERS)));
                 } catch (IOException clientGaveUp) {
                     // The adapter's deadline passed and it closed the connection, which is the point.
                     exchange.close();
@@ -144,8 +173,10 @@ public final class FakeOsrmEngine implements AutoCloseable {
                         .formatted(route.seconds(), route.seconds(), route.meters())
                 + "\"weight_name\":\"routability\",\"weight\":%s,\"duration\":%s,\"distance\":%s}],"
                         .formatted(route.seconds(), route.seconds(), route.meters())
-                + "\"waypoints\":[{\"hint\":\"h1\",\"location\":[69.2405,41.3110],\"name\":\"\",\"distance\":3.2},"
-                + "{\"hint\":\"h2\",\"location\":[69.2641,41.3309],\"name\":\"\",\"distance\":1.9}]}";
+                + "\"waypoints\":[{\"hint\":\"h1\",\"location\":[69.2405,41.3110],\"name\":\"\",\"distance\":%s},"
+                        .formatted(route.originSnapMeters())
+                + "{\"hint\":\"h2\",\"location\":[69.2641,41.3309],\"name\":\"\",\"distance\":%s}]}"
+                        .formatted(route.destinationSnapMeters());
     }
 
     private static void respond(HttpExchange exchange, int status, String body) throws IOException {
@@ -164,7 +195,8 @@ public final class FakeOsrmEngine implements AutoCloseable {
     }
 
     private sealed interface Mode {
-        record Route(double meters, double seconds) implements Mode {}
+        record Route(double meters, double seconds, double originSnapMeters, double destinationSnapMeters)
+                implements Mode {}
 
         record NoRoute(String code, String message) implements Mode {}
 

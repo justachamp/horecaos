@@ -19,6 +19,7 @@ import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.marketing.api.CampaignMessagePort;
 import uz.horecaos.platform.marketing.api.CampaignMessagePort.MarketingMessage;
+import uz.horecaos.platform.marketing.domain.AutomationTriggerType;
 import uz.horecaos.platform.marketing.domain.EngagementPolicy;
 import uz.horecaos.platform.marketing.domain.MarketingChannel;
 import uz.horecaos.platform.marketing.domain.RefusalReason;
@@ -131,6 +132,29 @@ public class AutomationFiringService {
         Instant now = clock.instant();
         UUID runId = Ids.newId();
 
+        // Once per order means once per order, not once per rule. The guard key below is unique
+        // per rule, customer and order, so two armed rules whose thresholds both fit one late
+        // order would each find it and each apologise; the second is stopped here with its
+        // reason on its own row, and by a partial unique index (V0581) if the two race.
+        boolean lateOrderApology =
+                AutomationTriggerType.LATE_ORDER_APOLOGY.name().equals(rule.triggerType());
+        if (lateOrderApology
+                && subjectId != null
+                && runs.subjectHeldByAnotherRule(rule.tenantId(), rule.triggerType(), subjectId, rule.id())) {
+            boolean recorded = runs.recordCancelled(
+                    runId,
+                    rule.tenantId(),
+                    rule.brandId(),
+                    rule.id(),
+                    customerAccountId,
+                    rule.triggerType(),
+                    guardKey,
+                    subjectId,
+                    "Another rule has already apologised for this order, and an order is apologised for once",
+                    now);
+            return recorded ? FireOutcome.CANCELLED : FireOutcome.ALREADY_GUARDED;
+        }
+
         boolean claimed = runs.claim(
                 runId,
                 rule.tenantId(),
@@ -193,7 +217,10 @@ public class AutomationFiringService {
             }
             deliverAt = decision.deliverAt() == null ? now : decision.deliverAt();
         }
-        String idempotencyKey = "automation:%s:%s:%s".formatted(rule.id(), customerAccountId, guardKey);
+        // A late-order apology is keyed by the order and not by the rule that found it, so the
+        // delivery path collapses a second rule's message onto the first's even if both got here.
+        String idempotencyKey = "automation:%s:%s:%s"
+                .formatted(lateOrderApology ? rule.triggerType() : rule.id().toString(), customerAccountId, guardKey);
 
         UUID notificationId = messages.enqueue(new MarketingMessage(
                 rule.tenantId(),

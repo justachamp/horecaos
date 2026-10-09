@@ -11,6 +11,7 @@ import {
 import { RouterLink } from '@angular/router';
 
 import { ApiError } from '../../core/api/problem-details';
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { formatDateTime } from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
@@ -72,6 +73,7 @@ type Action = 'schedule' | 'convert' | 'decline' | 'lose' | 'assign';
 export class LeadDetailPanel {
   private readonly api = inject(LeadsApi);
   protected readonly i18n = inject(I18n);
+  private readonly capabilities = inject(SessionCapabilities);
 
   readonly lead = input.required<Lead>();
   readonly access = input.required<LeadAccess>();
@@ -110,6 +112,10 @@ export class LeadDetailPanel {
     () => this.access().reach.kind === 'BRAND' && this.access().canManage && this.open(),
   );
   protected readonly canWork = computed(() => this.access().canManage && this.open());
+  /** Linking is identity, not the machine: it is offered whatever the lead's status. */
+  protected readonly canLink = computed(() => this.access().canManage);
+  /** The customer's page is `customer.read`'s; a brand manager runs the queue without it. */
+  protected readonly canOpenCustomer = computed(() => this.capabilities.has('CUSTOMER_READ'));
 
   constructor() {
     // The queue reuses this component across a selection change, so the load keys on the input.
@@ -219,6 +225,13 @@ export class LeadDetailPanel {
       case null:
         return;
     }
+  }
+
+  /** The operator confirms the hinted account is the guest behind this lead. */
+  protected async linkTo(accountId: string): Promise<void> {
+    await this.run((lead) =>
+      this.api.linkCustomer(this.access().reach, lead.id, accountId, lead.version),
+    );
   }
 
   protected async record(request: RecordContactAttemptRequest): Promise<void> {

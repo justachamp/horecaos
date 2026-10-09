@@ -1089,6 +1089,8 @@
         [error]="cardError()"
         [canRecord]="canRecordCalls()"
         [recordBusy]="recordBusy()"
+        [recordError]="recordError()"
+        [recordedCount]="recordedCount()"
         (olderRequested)="loadOlderHistory()"
         (callRecorded)="recordCall($event)"
       />

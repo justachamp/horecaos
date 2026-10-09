@@ -27,6 +27,7 @@ final class FakeCampaignMessagePort implements CampaignMessagePort {
     private final Map<String, UUID> byIdempotencyKey = new LinkedHashMap<>();
     private final List<MarketingMessage> sent = new ArrayList<>();
     private final Map<String, String> bodies = new LinkedHashMap<>();
+    private final Map<String, Map<String, String>> bodiesByTemplate = new LinkedHashMap<>();
     private boolean wired = true;
     private String notWiredReason = "NO_PROVIDER_BINDING";
     private final java.util.Set<String> refusedPurposes = new java.util.HashSet<>();
@@ -36,6 +37,18 @@ final class FakeCampaignMessagePort implements CampaignMessagePort {
 
     FakeCampaignMessagePort withBody(String locale, String body) {
         bodies.put(locale, body);
+        return this;
+    }
+
+    /**
+     * The wording of one template, which wins over {@link #withBody} for that key. A scenario's
+     * steps carry their own templates, and a test that prices them has to be able to give them
+     * different lengths.
+     */
+    FakeCampaignMessagePort withTemplateBody(String templateKey, String locale, String body) {
+        bodiesByTemplate
+                .computeIfAbsent(templateKey, key -> new LinkedHashMap<>())
+                .put(locale, body);
         return this;
     }
 
@@ -58,7 +71,7 @@ final class FakeCampaignMessagePort implements CampaignMessagePort {
 
     @Override
     public Map<String, String> templateBodies(UUID tenantId, UUID brandId, String templateKey, String channel) {
-        return Map.copyOf(bodies);
+        return Map.copyOf(bodiesByTemplate.getOrDefault(templateKey, bodies));
     }
 
     @Override

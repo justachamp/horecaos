@@ -1,5 +1,6 @@
 package uz.horecaos.platform.customers.spi;
 
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -54,4 +55,33 @@ public interface CustomerErasureParticipant {
      * participants ran and is retried will call every participant again.
      */
     void erase(UUID tenantId, UUID customerAccountId);
+
+    /**
+     * As {@link #erase(UUID, UUID)}, and told what the account held that identifies her in
+     * another module's rows -- read <em>before</em> the account's own contact points were
+     * overwritten, because afterwards no number is left to match on.
+     *
+     * <p>The default ignores {@code held}, so a participant that reaches its rows by the
+     * account id alone implements only the two-argument method. {@code CustomerErasureService}
+     * always calls this one.
+     */
+    default void erase(UUID tenantId, UUID customerAccountId, ErasedContacts held) {
+        erase(tenantId, customerAccountId);
+    }
+
+    /**
+     * The keyed lookup hashes (ADR 0029) of the phone numbers an erased account held, as they were
+     * when the erasure began. A hash, never a number: a participant can find its own rows that hold
+     * the same number without the number leaving {@code customers}.
+     */
+    record ErasedContacts(Set<String> phoneLookupHashes) {
+
+        public ErasedContacts {
+            phoneLookupHashes = Set.copyOf(phoneLookupHashes);
+        }
+
+        public static ErasedContacts none() {
+            return new ErasedContacts(Set.of());
+        }
+    }
 }

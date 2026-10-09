@@ -122,7 +122,7 @@ def read_sample(path: Path) -> list[Trip]:
 
 
 def engine_route(base_url: str, trip: Trip, timeout: float = 5.0) -> float:
-    """The engine's driving distance in metres for one trip, as the adapter asks it."""
+    """The engine's driving distance in metres for one trip, as the adapter asks it and charges it."""
     (olat, olon), (dlat, dlon) = trip.origin, trip.destination
     url = (
         f"{base_url.rstrip('/')}/route/v1/driving/{olon:.6f},{olat:.6f};{dlon:.6f},{dlat:.6f}"
@@ -139,7 +139,11 @@ def engine_route(base_url: str, trip: Trip, timeout: float = 5.0) -> float:
         raise UnusableSample(f"the engine did not answer: {error}") from error
     if body.get("code") != "Ok" or not body.get("routes"):
         raise UnusableSample("the engine answered with no route for a reference trip")
-    return float(body["routes"][0]["distance"])
+    # What the platform charges is the route plus the legs from the two pins to the road
+    # (OsrmRoadDistanceAdapter), which the engine reports in the waypoints and not in the
+    # route's own distance. A gate that left them out would be measuring a figure no fee uses.
+    snap_legs = sum(float(waypoint.get("distance", 0.0)) for waypoint in body.get("waypoints", []))
+    return float(body["routes"][0]["distance"]) + snap_legs
 
 
 def percentile(values: Sequence[float], fraction: float) -> float:

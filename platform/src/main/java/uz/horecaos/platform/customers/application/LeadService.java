@@ -70,7 +70,7 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * {@link #reveal} is the one decrypt, purpose-stamped and audited, and its capability is the
  * existing {@code customer.pii.reveal}. The number is hashed under the same domain as a customer's
  * contact point so a lead can say "this number is also an account's" as a hint an operator confirms
- * through the existing merge endpoint -- never as an automatic match (ADR 0015).
+ * through {@link #linkCustomer} -- never as an automatic match (ADR 0015).
  */
 @Service
 public class LeadService implements LeadIntake {
@@ -318,7 +318,15 @@ public class LeadService implements LeadIntake {
                                     "A lead converts into exactly one of an order and a reservation");
                         }
                         requireConversionTarget(tenantId, lead.brandId(), orderId, reservationId);
-                        yield lead.withOutcome(to.name(), null, orderId, reservationId, null);
+                        LeadRow converted = lead.withOutcome(to.name(), null, orderId, reservationId, null);
+                        // The order or reservation the lead became names the guest it was for: an
+                        // unlinked lead is linked to her, so her card and her erasure reach it.
+                        UUID guest = lead.customerAccountId() != null
+                                ? null
+                                : conversionCustomer(tenantId, lead.brandId(), orderId, reservationId)
+                                        .flatMap(id -> linkable(tenantId, lead.brandId(), id))
+                                        .orElse(null);
+                        yield guest == null ? converted : converted.withAccount(guest);
                     }
                     case DECLINED, LOST -> {
                         LeadClosedReason reason = command.closedReason();
@@ -363,6 +371,12 @@ public class LeadService implements LeadIntake {
                 "callbackDueAt",
                 lead.callbackDueAt() == null ? null : lead.callbackDueAt().toString());
         facts.put("closedReason", lead.closedReason());
+        // An id, not a person: the diff of a conversion that linked the lead shows the link.
+        facts.put(
+                "customerAccountId",
+                lead.customerAccountId() == null
+                        ? null
+                        : lead.customerAccountId().toString());
         return facts;
     }
 
@@ -382,6 +396,84 @@ public class LeadService implements LeadIntake {
                     ErrorCode.VALIDATION_FAILED,
                     orderId != null ? "No such order in this brand" : "No such reservation in this brand");
         }
+    }
+
+    // ===================================================================== identification
+
+    /**
+     * Records who the guest behind a lead is (ADR 0111 §4: "set once identified"): an operator has
+     * looked at the account the detail suggested -- the one holding the same number -- and
+     * confirmed it is her. Never made by the platform on a match alone (ADR 0015); the number is a
+     * hint, this call is the confirmation.
+     *
+     * <p>What the link buys: the lead appears on the account's card with the calls made about it, and
+     * the account's erasure (ADR 0029) overwrites the lead's number, name and notes. It is allowed
+     * at any status -- a guest is often recognised only after the lead was closed -- and a lead
+     * linked to another account is moved to this one, the audit fact recording both. An account that
+     * was merged away is followed to the account it became; one that was erased, or that belongs to
+     * another brand's identity partition, is "no such customer".
+     *
+     * @throws ApiException {@code RESOURCE_NOT_FOUND} for a lead outside the reach or an account
+     *                      that cannot be linked; {@code STALE_VERSION}
+     */
+    @Transactional
+    public LeadView linkCustomer(
+            UUID tenantId, Reach reach, UUID leadId, UUID accountId, int expectedVersion, ActorRef actor) {
+        LeadRow lead = requireLead(tenantId, reach, leadId);
+        requireVersion(lead, expectedVersion);
+        UUID target = linkable(tenantId, lead.brandId(), accountId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such customer"));
+        if (target.equals(lead.customerAccountId())) {
+            return view(lead);
+        }
+        Instant now = clock.instant();
+        persist(lead.withAccount(target), expectedVersion, now);
+        java.util.HashMap<String, Object> before = new java.util.HashMap<>();
+        before.put(
+                "customerAccountId",
+                lead.customerAccountId() == null
+                        ? null
+                        : lead.customerAccountId().toString());
+        audit.record(managed(AuditFact.of("customer.lead.linked", AuditClass.BUSINESS), actor)
+                .by(actor)
+                .at(ResourceScope.brand(tenantId, lead.brandId()))
+                .target("customer_lead", leadId)
+                .targetVersion((long) expectedVersion + 1)
+                .because("Lead identified as a customer")
+                .changed(ChangeDocuments.diff(before, Map.of("customerAccountId", target.toString())))
+                .correlatedBy(leadId.toString())
+                .occurredAt(now)
+                .build());
+        return view(requireLead(tenantId, Reach.tenant(), leadId));
+    }
+
+    /**
+     * The account a lead of {@code brandId} may be linked to for {@code accountId}: the account
+     * itself, or the one it was merged into; empty for one that does not exist, was erased (a link
+     * to it would keep a number its erasure already had its chance to take), or belongs to another
+     * brand's identity partition.
+     */
+    private Optional<UUID> linkable(UUID tenantId, UUID brandId, UUID accountId) {
+        UUID resolved = customers.resolveMergeTarget(tenantId, accountId);
+        return customers
+                .account(tenantId, resolved)
+                .filter(account -> !"ANONYMIZED".equals(account.status()))
+                .filter(account -> account.partitionBrandId() == null
+                        || account.partitionBrandId().equals(brandId))
+                .map(account -> account.id());
+    }
+
+    private Optional<UUID> conversionCustomer(
+            UUID tenantId, UUID brandId, @Nullable UUID orderId, @Nullable UUID reservationId) {
+        for (LeadConversionTargets targets : conversionTargets) {
+            Optional<UUID> found = orderId != null
+                    ? targets.orderCustomer(tenantId, brandId, orderId)
+                    : targets.reservationCustomer(tenantId, brandId, Objects.requireNonNull(reservationId));
+            if (found.isPresent()) {
+                return found;
+            }
+        }
+        return Optional.empty();
     }
 
     // ======================================================================= hand-off

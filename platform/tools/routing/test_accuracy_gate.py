@@ -158,6 +158,21 @@ class EngineTests(unittest.TestCase):
         self.assertTrue(self.requests[0].startswith("/route/v1/driving/69.240562,41.311081;"))
         self.assertIn("overview=false", self.requests[0])
 
+    def test_the_legs_from_the_pins_to_the_road_are_part_of_the_distance(self) -> None:
+        # The figure the platform charges is the route plus the two snap legs, so that is what
+        # the gate has to compare with the reference: without them a map that leaves pins far
+        # from any road would pass a gate that its fees then under-charge.
+        url = self.serve(
+            200,
+            {
+                "code": "Ok",
+                "routes": [{"distance": 3_000.0, "duration": 400}],
+                "waypoints": [{"distance": 120.5}, {"distance": 80.25}],
+            },
+        )
+
+        self.assertAlmostEqual(gate.engine_route(url, trip(3_000.0)), 3_200.75)
+
     def test_a_trip_the_engine_cannot_route_is_unusable_evidence(self) -> None:
         url = self.serve(400, {"code": "NoRoute", "message": "Impossible route between points"})
 

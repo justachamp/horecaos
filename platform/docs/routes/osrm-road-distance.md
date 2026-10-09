@@ -16,16 +16,17 @@ one of these; see `docs/routes/README.md` for the format.
 | Service identity | None. The engine is keyless and answers only on the internal network; the installation is the tenant's standing to use it, not a credential |
 | Secret reference type | None. There is no secret: `integration.installations.secret_reference` is null for a platform routing installation, and the adapter holds no credential |
 | Connect timeout | 5s (`ProviderHttpClient`'s own ceiling), but never reached in practice: the whole call is bounded by the total timeout below, and a local engine connects in microseconds |
-| Total timeout | 500 ms for the whole exchange including the body (`horecaos.routing.osrm.timeout`). ADR 0147 gives the checkout path exactly this: a quote waits half a second at worst for a distance and then prices from the straight line |
+| Total timeout | 500 ms for the whole exchange including the body (`horecaos.routing.osrm.timeout`), **held to 1 s whatever is configured** (`OsrmProperties.MAX_TIMEOUT`; a longer value is logged at start and the ceiling is used). ADR 0147 gives the checkout path exactly 500 ms: the route is a `direct:` endpoint, so a quote waits on its own thread for a distance, half a second at worst, and then prices from the straight line |
 | Retry classification | **None, deliberately.** One attempt per quote. A timeout, a 5xx, a refused connection and a malformed body are all "no answer"; none is retried on the checkout path, because a second attempt spends the customer's wait on a question the first already answered. "No route between these points" (`NoRoute`, `NoSegment`) is the engine working and is not a failure of any kind |
 | Idempotency key | None, and none needed: a route measurement has no side effect and creates nothing, so repeating one is harmless. The cache (below) makes repeats cheap, not safe |
-| Circuit breaker | Sliding window of 20 calls (or the minimum, if larger), minimum 10 calls, 50% failure rate, 30s open, 3 half-open probes (`horecaos.routing.osrm.breaker-minimum-calls`, `...breaker-open-for`). Engine faults count (timeout, 5xx, refused, malformed answer); "no route" and a request the engine refused as invalid do not. Unlike the SMS route, the fallback here is graceful, so an open breaker costs a slightly wrong fee and never a failed sign-in or a failed checkout. While open, a call returns empty without waiting |
+| Circuit breaker | Sliding window of 20 calls (or the minimum, if larger), minimum 10 calls, 50% failure rate **or 50% slow calls** (an answered call taking longer than `horecaos.routing.osrm.slow-call-threshold`, 250 ms), 30s open, 3 half-open probes (`horecaos.routing.osrm.breaker-minimum-calls`, `...breaker-open-for`). Engine faults count (timeout, 5xx, refused, malformed answer), and so do slow answers, because an engine that still answers in 450 ms is not failing and is stalling every uncached quote; "no route" and a request the engine refused as invalid are not faults (a slow one is still slow). Unlike the SMS route, the fallback here is graceful, so an open breaker costs a slightly wrong fee and never a failed sign-in or a failed checkout. While open, a call returns empty without waiting |
+| Concurrency cap | At most `horecaos.routing.osrm.max-concurrent-calls` (16) quote threads are inside an engine call at once. The next one returns empty immediately (`outcome="saturated"`) instead of parking for up to the timeout, so a hung engine holds a bounded number of threads in the interval before the breaker has seen enough calls to open. It is not a fault and does not count against the breaker |
 | Dead-letter destination | `routing.road-distance.dead-letter`, which answers "no distance", counts `horecaos.routing.calls{outcome="error"}` and logs the exception class only. **No durable record**: a distance that was not measured is not work to retry later, and the quote it was asked for has already been priced without it |
 | PII classification | Two coordinates and no identifier, one of which is a customer's delivery point: a precise location is as identifying as the address beside it (ADR 0029). Nothing else is sent. `RoadDistanceCommand` prints neither point from `toString`, `ProviderHttpClient.getWithSensitivePath` logs the label `osrm.route` instead of the path, and no metric label carries a coordinate, a tenant or an installation |
 | Expected volume | Pilot: under 2,000 quotes/day/tenant, of which the cache absorbs repeated doorsteps. The engine's own capacity is far above that on one core |
 | SLO | p95 under 100 ms for an engine call (local, single-digit to low tens of ms); the 500 ms timeout is the ceiling, not the target |
 | Runbook | `docs/runbooks/load-uzbekistan-routing-dataset.md` |
-| Dashboard | Metrics `horecaos.routing.calls` tagged `outcome` (`ok`, `timeout`, `no_route`, `breaker_open`, `error`, `unavailable`), `horecaos.routing.cache` tagged `result` (`hit`, `miss`), `horecaos.routing.call.duration` tagged `outcome`, `horecaos.routing.dataset.age_days`, and the resolver's `horecaos.delivery.distance.fallbacks` and `horecaos.delivery.distance.road_measurements` tagged `mode` |
+| Dashboard | Metrics `horecaos.routing.calls` tagged `outcome` (`ok`, `timeout`, `no_route`, `breaker_open`, `saturated`, `error`, `unavailable`), `horecaos.routing.cache` tagged `result` (`hit`, `miss`), `horecaos.routing.call.duration` tagged `outcome`, `horecaos.routing.dataset.age_days`, and the resolver's `horecaos.delivery.distance.fallbacks` and `horecaos.delivery.distance.road_measurements` tagged `mode` |
 
 ## What the route is and is not
 
@@ -43,18 +44,36 @@ and on the quote's own evidence. It is **not** in the quote's context hash: an i
 quote keeps the fee it was issued with across a monthly dataset refresh, and the next
 quote measures against the new map.
 
+## What the metres are
+
+OSRM routes between the points where the two requested coordinates meet the road network.
+Its route `distance` covers only that stretch of road, and each waypoint's `distance` says
+how far the engine had to move the requested coordinate to reach it. A pin in a courtyard
+800 m from the nearest street is therefore a short route plus an 800 m leg, and the route
+alone would price the door as if it stood on the street. `RoadRoute.meters` is the route plus
+the two legs (straight lines, so a lower bound on the walk), rounded once. The seconds are
+the engine's own and do not include the legs. The snap radius (`horecaos.routing.osrm.snap-radius-meters`,
+1,000 m) is sent as `radiuses` and enforced again on the answer: past it the pair is "no route"
+and the fee falls back to the straight line times the detour factor. The accuracy gate
+(`platform/tools/routing/accuracy_gate.py`) adds the same legs, so it compares the figure the
+fee uses.
+
 ## Outcome policy
 
 | Outcome | What the adapter does | Breaker | Why |
 |---|---|---|---|
-| Route found | Returns metres, seconds, `osrm`, the dataset tag; caches it for 24 hours | success | — |
+| Route found, both snap legs within the radius | Returns metres (the route plus the two snap legs), seconds, `osrm`, the dataset tag; caches it for 24 hours | success | — |
+| Route found, but a snap leg is longer than the snap radius | Empty (`no_route`) | success | The engine moved a pin further than the deployment allows (it was sent `radiuses` and should have said `NoSegment`); measuring from a road of another district would under-charge, so the fee falls back. The engine answered, so it is no fault |
+| 200 with a route and no usable `waypoints` | Empty | failure | The legs cannot be added, so the figure cannot be priced; an answer that is not a complete route is a broken engine |
 | `NoRoute` / `NoSegment` (HTTP 400) | Empty | success | The engine answered. A pin on the far side of a canal is the customer's, not the engine's fault |
 | Any other 4xx | Empty, logs the error code | success | Our request was wrong, not the engine; counting it would open the breaker on a healthy engine because of a bug here |
 | 5xx, refused connection | Empty | failure | The engine is unhealthy |
 | Timeout, connection lost | Empty | failure | The engine did not answer in time. Never retried |
 | 200 with no route, or an impossible figure | Empty | failure | An answer that is not a route is a broken engine |
-| Engine switched off, dataset unnamed, installation absent or not `ACTIVE`, installation not `ROUTING`/`OSRM` | Empty, nothing sent | not consulted | The rollback: suspending the installation takes effect at once, even for a cached route, because the installation is read before the cache |
+| Engine switched off, dataset unnamed, installation absent or not `ACTIVE`, installation not `ROUTING`/`OSRM` | Empty, nothing sent | not consulted | The engine-wide rollback is the flag. The installation is read before the cache, so a status that is not `ACTIVE` takes effect at once even for a cached route; but no console or API door sets one for a platform routing installation today (Integrations suspends bindings only), so this is a guard and not an operator's switch |
+| Answer inside the deadline but slower than the slow-call threshold | The route, as for any answer | success, recorded as slow | The engine is degraded, not failing; when half of the recent calls are slow the breaker opens and quotes stop waiting |
 | Breaker open | Empty, nothing sent | n/a | A slightly wrong fee, never a failed quote |
+| Too many threads already waiting on the engine | Empty, nothing sent (`saturated`) | not consulted | A bounded stall: the quote prices from the straight line rather than parking another thread |
 
 ## The cache
 
@@ -69,5 +88,8 @@ the metres it used, not a cache key.
 Off by default (`horecaos.routing.osrm.enabled=false`), so nothing changes until a
 deployment runs the `routing` compose profile and sets the flag. Enable it for one pilot
 tenant's `ROAD` tariff and compare a week of fees with their `RADIUS_FALLBACK` shadow.
-Rollback is switching the flag off or suspending the installation: the port answers empty,
-the resolver falls back, and every fee says so. Neither needs a deploy of code.
+Rollback is switching the flag off, which answers empty for every tenant so the resolver
+falls back and every fee says `RADIUS_FALLBACK`, or, for one tenant, activating a new
+version of its `ROAD` tariff in `RADIUS` mode, which stops that tariff asking the engine at
+all (its fees say `RADIUS`, with no detour factor, so it is a price change to agree with the
+tenant). Neither needs a deploy of code; runbook step 7 has the procedure.

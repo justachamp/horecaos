@@ -1,6 +1,5 @@
 package uz.horecaos.platform.reviews.infrastructure.persistence;
 
-import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -12,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.customers.api.CustomerHistoryEntry;
 import uz.horecaos.platform.customers.api.CustomerHistoryEntry.Kind;
 import uz.horecaos.platform.customers.api.CustomerHistorySource;
+import uz.horecaos.platform.customers.api.HistoryCursor;
 
 /**
  * The reviews one guest has left, for the customer card (ADR 0111 §2): the rating and the order it
@@ -41,18 +41,20 @@ public class JdbcCustomerReviewHistory implements CustomerHistorySource {
     @Override
     @Transactional(readOnly = true)
     public List<CustomerHistoryEntry> history(
-            UUID tenantId, UUID customerAccountId, @Nullable Instant before, int limit) {
+            UUID tenantId, UUID customerAccountId, @Nullable HistoryCursor before, int limit) {
         return jdbc.sql("""
                 SELECT id, order_id, rating, submitted_at
                   FROM reviews.order_reviews
                  WHERE tenant_id = :tenantId AND customer_account_id = :accountId
-                   AND (CAST(:before AS timestamptz) IS NULL OR submitted_at < CAST(:before AS timestamptz))
+                   AND (CAST(:before AS timestamptz) IS NULL
+                        OR (submitted_at, id) < (CAST(:before AS timestamptz), CAST(:beforeId AS uuid)))
                  ORDER BY submitted_at DESC, id DESC
                  LIMIT :limit
                 """)
                 .param("tenantId", tenantId)
                 .param("accountId", customerAccountId)
-                .param("before", before == null ? null : before.atOffset(ZoneOffset.UTC))
+                .param("before", before == null ? null : before.occurredAt().atOffset(ZoneOffset.UTC))
+                .param("beforeId", before == null ? null : before.referenceId().toString())
                 .param("limit", limit)
                 .query((rs, n) -> new CustomerHistoryEntry(
                         Kind.REVIEW,

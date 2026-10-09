@@ -51,8 +51,13 @@ package uz.horecaos.platform.marketing.domain;
  *       been closed for {@code AutomationSweepService#APOLOGY_SETTLE_DELAY}, long enough for
  *       the person handling the complaint to record a remedy before an unattended message
  *       goes out.
- *   <li><em>Once per order</em> ({@link AutomationGuardKeys#order}), and under the same
- *       consent, frequency cap, contact policy and quiet hours as every other trigger.
+ *   <li><em>Once per order, across rules.</em> {@link AutomationGuardKeys#order} makes a rule's
+ *       own firing once per order; two armed rules whose thresholds both fit one late order
+ *       are stopped from each apologising by the firing service (the second is cancelled, with
+ *       that reason on its run row), by the partial unique index V0581 puts on {@code
+ *       (tenant_id, subject_id)} for this kind, and by an idempotency key that names the order
+ *       and not the rule. It runs under the same consent, frequency cap, contact policy and
+ *       quiet hours as every other trigger.
  * </ul>
  */
 public enum AutomationTriggerType {

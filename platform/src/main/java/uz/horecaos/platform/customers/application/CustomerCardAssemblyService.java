@@ -3,7 +3,6 @@ package uz.horecaos.platform.customers.application;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -15,6 +14,7 @@ import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.customers.api.CustomerHistoryEntry;
 import uz.horecaos.platform.customers.api.CustomerHistorySource;
+import uz.horecaos.platform.customers.api.HistoryCursor;
 import uz.horecaos.platform.customers.application.ContactAttemptService.ContactAttemptView;
 import uz.horecaos.platform.customers.application.LeadService.LeadView;
 import uz.horecaos.platform.iam.api.Capability;
@@ -80,14 +80,14 @@ public class CustomerCardAssemblyService {
     /**
      * Opens one guest's card.
      *
-     * @param before  the oldest entry of the page already shown, to read further back; null for the newest
+     * @param before  the last entry of the page already shown, to read further back; null for the newest
      * @param purpose why the card was opened, recorded on the fact
      * @throws ApiException {@code RESOURCE_NOT_FOUND} for an account that is not this tenant's -- and
      *                      no fact is written for it, because nothing was read
      */
     @Transactional
     public CustomerCard open(
-            UUID tenantId, UUID accountId, @Nullable Instant before, int limit, String purpose, ActorRef actor) {
+            UUID tenantId, UUID accountId, @Nullable HistoryCursor before, int limit, String purpose, ActorRef actor) {
         var account = profiles.profile(tenantId, accountId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such customer"));
 
@@ -123,11 +123,13 @@ public class CustomerCardAssemblyService {
         for (CustomerHistorySource source : sources) {
             merged.addAll(source.history(tenantId, accountId, before, limit + 1));
         }
-        merged.sort(Comparator.comparing(CustomerHistoryEntry::occurredAt).reversed());
+        // By instant and then by id, the order every source answers in, so a page boundary that falls
+        // between two entries of one instant is a boundary the next page continues from.
+        merged.sort(HistoryCursor.newestFirst());
 
         boolean more = merged.size() > limit;
         List<CustomerHistoryEntry> page = more ? List.copyOf(merged.subList(0, limit)) : List.copyOf(merged);
-        Instant next = more ? page.getLast().occurredAt() : null;
+        HistoryCursor next = more ? HistoryCursor.after(page.getLast()) : null;
 
         return new CustomerCard(
                 accountId,
@@ -138,12 +140,15 @@ public class CustomerCardAssemblyService {
                 blacklist.isCurrentlyBlacklisted(tenantId, accountId),
                 leads.forAccount(tenantId, accountId, LEAD_LIMIT),
                 page,
-                next);
+                next == null ? null : next.occurredAt(),
+                next == null ? null : next.referenceId());
     }
 
     /**
      * @param blacklisted whether an entry is in force right now, so an operator is warned before she calls
      * @param nextBefore  the instant to pass as {@code before} for the next older page, or null at the end
+     * @param nextBeforeId the id to pass as {@code beforeId} with it: the last entry's id, so entries that share
+     *                     its instant and did not fit are on the next page rather than lost
      */
     public record CustomerCard(
             UUID customerAccountId,
@@ -154,5 +159,6 @@ public class CustomerCardAssemblyService {
             boolean blacklisted,
             List<LeadView> leads,
             List<CustomerHistoryEntry> history,
-            @Nullable Instant nextBefore) {}
+            @Nullable Instant nextBefore,
+            @Nullable UUID nextBeforeId) {}
 }

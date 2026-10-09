@@ -70,33 +70,75 @@ export function isKitchenTabMember(
  * SLA colour-coding (IA 2.1: "colour-coded by SLA", gap map rows
  * `1.1g`/`X.39`).
  *
- * **More real than the order board's own severity model, not less.** A
- * kitchen ticket carries `targetReadyAt` — a genuine, server-computed promise
- * (`KitchenTicketService`/ADR 0041's own time model) — so this needs none of
- * `order-severity.ts`'s ADR 0014 workarounds. Before this wave the two tiers
- * here (`BREACHED`/`AT_RISK`) were computed against a five-minute window this
- * file invented on its own (`AT_RISK_THRESHOLD_MS`), independent of
- * `order-severity.ts`'s own, different invented number. Both now call
- * `core/lateness-policy.ts`'s shared `evaluateLateness` against the same
- * resolved `ordering.lateness` policy the order board reads, so the two
- * boards agree on the AT_RISK/LATE boundary by construction — this row's
- * whole point. `BREACHED` is this file's own name for that shared module's
- * `LATE`; kept rather than renamed because every caller of this type
- * (`kitchen-queue-page.ts`, `vdu-page.ts`) already matches on it.
+ * **One definition of late, the order's (ADR 0150).** A ticket is coloured by the *order* it was
+ * opened for: the order's promise when it has one, otherwise the order's creation plus the resolved
+ * no-promise fallback, and never when the order is over — exactly what the order board, the order
+ * header and `GET .../{orderId}/lateness` decide, through the same `core/lateness-policy.ts`
+ * `evaluateLateness` and the same resolved `ordering.lateness` policy. The ticket's own two instants
+ * are not that definition and are not what this reads: `createdAt` is when the kitchen *opened* the
+ * ticket, which for an order that waited for approval or was taken for a slot is long after checkout
+ * (so a clock started there would read zero minutes for an order the board calls late — acceptance
+ * restarting the clock, which ADR 0150 refuses), and `targetReadyAt` is the promise *less the road*
+ * (so a delivery would turn red a road-time before the board does). `targetReadyAt` stays what the
+ * card prints as "ready by"; it no longer colours anything.
+ *
+ * `BREACHED` is this file's own name for that shared module's `LATE`; kept rather than renamed
+ * because every caller of this type (`kitchen-queue-page.ts`, `vdu-page.ts`, `vdu-wall.ts`) already
+ * matches on it.
  */
 export type TicketSeverityLevel = 'BREACHED' | 'AT_RISK' | 'NORMAL';
 export type TicketSeverityTone = 'danger' | 'warning' | 'none';
 
 export interface TicketSeverityInput {
-  readonly targetReadyAt: Date | null;
+  /** The order's promise (`promisedAt`), null when the order was never promised a time. */
+  readonly promisedAt: Date | null;
+  /** When the order was created: the no-promise fallback measures from here, not from the ticket. */
   readonly createdAt: Date;
   /** `DELIVERY` | `PICKUP` | `DINE_IN` — selects the resolved policy's per-mode thresholds. */
   readonly fulfilmentMode: string | null | undefined;
+  /** The order is over: a finished order is never flagged, whatever its history. Defaults to false. */
+  readonly isTerminal?: boolean;
 }
 
 export interface TicketSeverity {
   readonly level: TicketSeverityLevel;
   readonly tone: TicketSeverityTone;
+}
+
+/**
+ * The fields of a kitchen ticket (the queue's `TicketResponse`, the wall's `VduTicketResponse`) a
+ * lateness colour is decided from. The `order*` fields are the order's clock (ADR 0150) and are
+ * optional only so a response from a server that predates them still colours, as it did then, from
+ * the ticket's own instants.
+ */
+export interface TicketClockFields {
+  readonly fulfilmentMode: string | null | undefined;
+  readonly createdAt: string;
+  readonly targetReadyAt?: string | null;
+  readonly orderCreatedAt?: string | null;
+  readonly orderPromisedAt?: string | null;
+  readonly orderTerminal?: boolean | null;
+}
+
+/**
+ * The one place a kitchen ticket becomes the input of {@link computeTicketSeverity}, so the queue and
+ * both walls cannot each decide for themselves which instants a colour is read from.
+ */
+export function ticketSeverityInput(ticket: TicketClockFields): TicketSeverityInput {
+  if (!ticket.orderCreatedAt) {
+    // A server that does not send the order's clock: the ticket's own instants, as before ADR 0150.
+    return {
+      promisedAt: ticket.targetReadyAt ? new Date(ticket.targetReadyAt) : null,
+      createdAt: new Date(ticket.createdAt),
+      fulfilmentMode: ticket.fulfilmentMode,
+    };
+  }
+  return {
+    promisedAt: ticket.orderPromisedAt ? new Date(ticket.orderPromisedAt) : null,
+    createdAt: new Date(ticket.orderCreatedAt),
+    fulfilmentMode: ticket.fulfilmentMode,
+    isTerminal: ticket.orderTerminal === true,
+  };
 }
 
 const NORMAL_SEVERITY: TicketSeverity = { level: 'NORMAL', tone: 'none' };
@@ -109,12 +151,9 @@ export function computeTicketSeverity(
   const level = evaluateLateness(
     {
       fulfilmentMode: input.fulfilmentMode,
-      // The kitchen's own promise is targetReadyAt (already net of travel,
-      // ADR 0041) — not the order's full promisedAt, which is the order
-      // board's own concern.
-      promisedAt: input.targetReadyAt,
+      promisedAt: input.promisedAt,
       createdAt: input.createdAt,
-      isTerminal: false, // a ticket carries no order status here; the board filters handed-over tickets itself
+      isTerminal: input.isTerminal === true,
     },
     policy,
     now,

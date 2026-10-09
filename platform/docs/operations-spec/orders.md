@@ -480,7 +480,12 @@ tenant that never set it sees nothing change, and a resolved default is never re
 choice). An unusable stored value (under one minute or over the setting's ten hours) is
 ignored rather than taking the boards down. The same resolved number reaches the board's
 «Только опаздывающие» filter, the order header's `GET .../{orderId}/lateness`, the
-kitchen queue, both VDUs and the wallboard, because they all read the one policy; a scalar
+kitchen queue, both VDUs and the wallboard, because they all read the one policy **and apply
+it to the order**: a kitchen ticket is coloured by its order's clock, `orderCreatedAt`,
+`orderPromisedAt` and `orderTerminal`, which `GET .../kitchen/tickets` and `GET .../kitchen/vdu`
+carry on every ticket and `kitchen-ticket.ts`'s `ticketSeverityInput` reads, and not by the
+ticket's own `created_at` (when the kitchen opened it, after approval or a slot's wait) or its
+`target_ready_at` (the promise less the road), neither of which the board uses. A scalar
 write drops the cached resolution of every brand and location beneath the scope written.
 It does nothing for an order with a promise, and the card's label says so. Its two siblings,
 `ordering.average_order_minutes` and `ordering.maximum_order_minutes`, are not decided by
