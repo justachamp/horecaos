@@ -12,6 +12,9 @@ import { BrandChoice } from '../core/auth/brand-choice';
 import { CurrentLocation, LocationOption } from '../core/auth/current-location';
 import { CurrentTenant } from '../core/auth/current-tenant';
 import { OwnProfile } from '../core/auth/own-profile';
+import { StaffMember } from '../core/api/staff-member';
+import { OwnPreferences } from '../core/preferences/own-preferences';
+import { staffMemberDetail } from '../features/staff/staff-member.testing';
 import { ScopeGrant } from '../core/auth/session-context';
 import { LocationScope } from '../core/api/operations-paths';
 import { I18n } from '../core/i18n/i18n';
@@ -24,7 +27,20 @@ import { NAV_ITEMS } from './navigation';
 
 class FakeOwnProfile {
   readonly displayName = signal<string | null>(null);
+  readonly member = signal<StaffMember | null>(null);
   readonly ensureLoaded = vi.fn().mockResolvedValue(undefined);
+}
+
+/**
+ * ADR 0160: the person's stored preferences. The shell only starts the read and flushes it before it
+ * signs out; what they hold is the order board's and the branch picker's business.
+ */
+class FakePreferences {
+  readonly shell = signal({});
+  readonly orderBoard = signal({});
+  readonly persistent = signal(true);
+  readonly ensureLoaded = vi.fn().mockResolvedValue(undefined);
+  readonly flush = vi.fn().mockResolvedValue(undefined);
 }
 
 class FakeAuth {
@@ -91,8 +107,10 @@ describe('Shell', () => {
   let currentTenant: FakeCurrentTenant;
   let auth: FakeAuth;
   let ownProfile: FakeOwnProfile;
+  let preferences: FakePreferences;
 
   beforeEach(async () => {
+    preferences = new FakePreferences();
     currentLocation = new FakeCurrentLocation();
     currentTenant = new FakeCurrentTenant();
     auth = new FakeAuth();
@@ -102,6 +120,7 @@ describe('Shell', () => {
       providers: [
         provideRouter([]),
         { provide: Auth, useValue: auth },
+        { provide: OwnPreferences, useValue: preferences },
         { provide: OwnProfile, useValue: ownProfile },
         { provide: CurrentLocation, useValue: currentLocation },
         { provide: CurrentTenant, useValue: currentTenant },
@@ -141,6 +160,83 @@ describe('Shell', () => {
     it('shows no chip at all when there is neither', () => {
       expect(chip()).toBeUndefined();
     });
+  });
+
+  describe('the language switcher (ADR 0160, decision 4)', () => {
+    const offer = (): HTMLElement | null =>
+      fixture.nativeElement.querySelector('[data-testid="locale-scope-offer"]');
+
+    async function choose(value: string): Promise<void> {
+      const select = fixture.nativeElement.querySelector('.locale__select') as HTMLSelectElement;
+      select.value = value;
+      select.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+    }
+
+    it('chooses for this device and offers, once, to make the choice the account’s as well', async () => {
+      ownProfile.member.set(staffMemberDetail({ uiLocale: 'ru' }));
+
+      await choose('en');
+
+      expect(TestBed.inject(I18n).locale()).toBe('en');
+      expect(offer()).not.toBeNull();
+      expect(offer()!.textContent).toContain('this device only');
+      expect(offer()!.textContent).toContain('For all my devices');
+    });
+
+    it('stays quiet when the account already carries the language just picked', async () => {
+      ownProfile.member.set(staffMemberDetail({ uiLocale: 'en' }));
+
+      await choose('en');
+
+      expect(offer()).toBeNull();
+    });
+
+    it('stays quiet for an account the tenant keeps no record for: there is nothing to write the choice to', async () => {
+      ownProfile.member.set(null);
+
+      await choose('en');
+
+      expect(TestBed.inject(I18n).locale()).toBe('en');
+      expect(offer()).toBeNull();
+    });
+
+    it('takes the offer down when it is answered, and again on the next change', async () => {
+      ownProfile.member.set(staffMemberDetail({ uiLocale: 'ru' }));
+      await choose('en');
+      (offer()!.querySelector('[data-testid="locale-scope-dismiss"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(offer()).toBeNull();
+
+      await choose('uz-Latn');
+
+      expect(offer()).not.toBeNull();
+    });
+  });
+
+  it('writes the person’s last preference change before it signs them out', async () => {
+    let flushed = false;
+    preferences.flush.mockImplementation(() => {
+      flushed = true;
+      return Promise.resolve();
+    });
+    auth.logout.mockImplementation(() => {
+      expect(flushed, 'the token is still good when the last change is written').toBe(true);
+      return of(null);
+    });
+
+    (fixture.nativeElement.querySelector('.rail__signout') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(preferences.flush).toHaveBeenCalledTimes(1);
+    expect(auth.logout).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts the read of the person’s preferences when it mounts, without waiting for it', () => {
+    expect(preferences.ensureLoaded).toHaveBeenCalled();
   });
 
   it('groups the rail by the working day', () => {
@@ -334,6 +430,7 @@ describe('Shell: the toast host', () => {
       providers: [
         provideRouter([]),
         { provide: Auth, useValue: new FakeAuth() },
+        { provide: OwnPreferences, useValue: new FakePreferences() },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
       ],
     }).compileComponents();
@@ -427,6 +524,7 @@ describe('Shell: the keyboard and the brand picker', () => {
       providers: [
         provideRouter([{ path: '', component: Probe }]),
         { provide: Auth, useValue: new FakeAuth() },
+        { provide: OwnPreferences, useValue: new FakePreferences() },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
       ],
     }).compileComponents();
@@ -678,6 +776,7 @@ describe('Shell: the location a screen rebuilt by a brand pick reads', () => {
         provideRouter([{ path: '', component: Probe }]),
         { provide: ApiClient, useValue: new StubApi() },
         { provide: Auth, useValue: new FakeAuth() },
+        { provide: OwnPreferences, useValue: new FakePreferences() },
         { provide: OwnProfile, useValue: new FakeOwnProfile() },
         // The stream opens a real `fetch`; nothing here is about it.
         { provide: RealtimeClient, useValue: { state: signal(null), onFrame: () => () => {} } },
@@ -747,6 +846,7 @@ describe('Shell language switcher', () => {
       providers: [
         provideRouter([]),
         { provide: Auth, useValue: new FakeAuth() },
+        { provide: OwnPreferences, useValue: new FakePreferences() },
         { provide: OwnProfile, useValue: new FakeOwnProfile() },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
         { provide: CurrentTenant, useValue: new FakeCurrentTenant() },

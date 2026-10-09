@@ -3,6 +3,7 @@ package uz.horecaos.platform.ordering.application;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -25,6 +26,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
+import uz.horecaos.platform.iam.api.staff.StaffDirectory;
 import uz.horecaos.platform.ordering.api.OrderCounts;
 import uz.horecaos.platform.ordering.api.OrderCountsQuery;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
@@ -85,6 +87,7 @@ public class OrderQueryService implements OrderCountsQuery {
     private final AuditRecorder audit;
     private final Clock clock;
     private final OrderBoardReadModels boardReadModels;
+    private final StaffDirectory staffDirectory;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderQueryService(
@@ -98,7 +101,9 @@ public class OrderQueryService implements OrderCountsQuery {
             ObjectMapper objectMapper,
             AuditRecorder audit,
             Clock clock,
-            OrderBoardReadModels boardReadModels) {
+            OrderBoardReadModels boardReadModels,
+            StaffDirectory staffDirectory) {
+        this.staffDirectory = staffDirectory;
         this.orders = orders;
         this.processes = processes;
         this.payments = payments;
@@ -439,12 +444,14 @@ public class OrderQueryService implements OrderCountsQuery {
         }
         JdbcOrderStore.OrderListQuery resolved = boardReadModels.withLatenessResolved(query);
         List<JdbcOrderStore.OrderBoardRow> rows = orders.listForLocation(resolved, before, cursorOrderId, limit);
-        return withTables(
+        return withActorNames(
                 query.tenantId(),
-                withPresentablePayments(
+                withTables(
                         query.tenantId(),
-                        withAmendmentAwaitingOperator(
-                                query.tenantId(), withCourierAssignments(query.tenantId(), rows))));
+                        withPresentablePayments(
+                                query.tenantId(),
+                                withAmendmentAwaitingOperator(
+                                        query.tenantId(), withCourierAssignments(query.tenantId(), rows)))));
     }
 
     /**
@@ -457,6 +464,55 @@ public class OrderQueryService implements OrderCountsQuery {
     public List<OrderBoardReadModels.MarketplaceBindingOption> marketplaceBindings(
             UUID tenantId, UUID brandId, List<UUID> locationIds) {
         return boardReadModels.marketplaceBindings(tenantId, brandId, locationIds);
+    }
+
+    /**
+     * Fills in {@link JdbcOrderStore.OrderBoardRow#createdByDisplayName()} and {@code acceptedByDisplayName}
+     * for a page of board rows (ADR 0160, gap map row 1.1's «Создал» and «Принял» columns): <strong>one</strong>
+     * {@link StaffDirectory#namesOf} batch over the page's {@code USER} actors, never a lookup per row --
+     * the same tenant-scoped, read-time resolution the order detail uses for its header (row
+     * {@code 9.2d}), so the two cannot disagree about who someone is.
+     *
+     * <p>Only a {@code USER} actor is looked up: a system job, an integration or a migration run has no
+     * staff record, and its id is not a subject. A subject the tenant has no name for stays null and the
+     * console draws a dash, never the raw subject. The names go only to callers the board's own
+     * {@code order.read} already admits, because this runs on the board read and nowhere else.
+     */
+    private List<JdbcOrderStore.OrderBoardRow> withActorNames(UUID tenantId, List<JdbcOrderStore.OrderBoardRow> rows) {
+        Set<String> subjects = new LinkedHashSet<>();
+        for (JdbcOrderStore.OrderBoardRow row : rows) {
+            collectUser(subjects, row.order().createdByActorType(), row.order().createdByActorId());
+            collectUser(subjects, row.order().acceptedByActorType(), row.order().acceptedByActorId());
+        }
+        if (subjects.isEmpty()) {
+            return rows;
+        }
+        Map<String, String> names = staffDirectory.namesOf(tenantId, subjects);
+        if (names.isEmpty()) {
+            return rows;
+        }
+        return rows.stream()
+                .map(row -> row.withActorNames(
+                        userName(
+                                names,
+                                row.order().createdByActorType(),
+                                row.order().createdByActorId()),
+                        userName(
+                                names,
+                                row.order().acceptedByActorType(),
+                                row.order().acceptedByActorId())))
+                .toList();
+    }
+
+    private static void collectUser(Set<String> subjects, @Nullable String actorType, @Nullable String actorId) {
+        if ("USER".equals(actorType) && actorId != null) {
+            subjects.add(actorId);
+        }
+    }
+
+    private static @Nullable String userName(
+            Map<String, String> names, @Nullable String actorType, @Nullable String actorId) {
+        return "USER".equals(actorType) && actorId != null ? names.get(actorId) : null;
     }
 
     /**

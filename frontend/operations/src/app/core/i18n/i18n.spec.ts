@@ -2,13 +2,18 @@ import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  ACCOUNT_STORAGE_KEY,
   I18n,
   LOCALES,
   STORAGE_KEY,
   areasLoadedForTesting,
+  forgetAccountLocale,
+  hasStoredLocale,
   interpolate,
+  peekStoredLocale,
   preloadAllAreas,
   preloadLocale,
+  rememberAccountLocale,
   resetCatalogueCacheForTesting,
   setLoaderForTesting,
 } from './i18n';
@@ -98,6 +103,85 @@ describe('I18n', () => {
   it('interpolates named placeholders', () => {
     i18n.setLocale('en');
     expect(i18n.t('shell.late', { count: 6 })).toBe('6 late');
+  });
+});
+
+/**
+ * ADR 0160, decision 4: one rule for language and branch. A choice made on this device wins, the person's
+ * account language applies where this device has none, and the platform default (Russian) applies last. The
+ * account language is *read*, never *chosen*, so it must never turn into a device choice behind the
+ * person's back: that is what «Использовать мой язык на этом устройстве» exists to give up.
+ */
+describe('I18n — device choice and account language (ADR 0160)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.configureTestingModule({});
+  });
+
+  afterEach(() => localStorage.clear());
+
+  it('opens in the device’s own choice first, then the account language, then Russian', () => {
+    expect(peekStoredLocale()).toBe('ru');
+
+    rememberAccountLocale('uz-Latn');
+    expect(peekStoredLocale()).toBe('uz-Latn');
+
+    localStorage.setItem(STORAGE_KEY, 'en');
+    expect(peekStoredLocale()).toBe('en');
+  });
+
+  it('counts only a choice made on this device as a device choice', () => {
+    rememberAccountLocale('en');
+
+    expect(hasStoredLocale()).toBe(false);
+    expect(TestBed.inject(I18n).deviceLocale()).toBeNull();
+  });
+
+  it('applies the account language without making it this device’s choice', () => {
+    const i18n = TestBed.inject(I18n);
+
+    i18n.setLocale('uz-Latn', { persist: false });
+
+    expect(i18n.locale()).toBe('uz-Latn');
+    expect(i18n.deviceLocale()).toBeNull();
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it('makes the switcher’s pick this device’s choice, remembered across a reload', () => {
+    const i18n = TestBed.inject(I18n);
+
+    i18n.setLocale('en');
+
+    expect(i18n.deviceLocale()).toBe('en');
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('en');
+  });
+
+  it('gives up the device’s choice, so the next load follows the account again', () => {
+    const i18n = TestBed.inject(I18n);
+    i18n.setLocale('en');
+    rememberAccountLocale('uz-Latn');
+
+    i18n.clearDeviceLocale();
+
+    expect(i18n.deviceLocale()).toBeNull();
+    expect(hasStoredLocale()).toBe(false);
+    expect(peekStoredLocale()).toBe('uz-Latn');
+  });
+
+  it('forgets the remembered account language at sign-out, so the next person starts in Russian', () => {
+    rememberAccountLocale('en');
+    expect(localStorage.getItem(ACCOUNT_STORAGE_KEY)).toBe('en');
+
+    forgetAccountLocale();
+
+    expect(localStorage.getItem(ACCOUNT_STORAGE_KEY)).toBeNull();
+    expect(peekStoredLocale()).toBe('ru');
+  });
+
+  it('ignores a remembered language it has no catalogue for', () => {
+    localStorage.setItem(ACCOUNT_STORAGE_KEY, 'kk');
+
+    expect(peekStoredLocale()).toBe('ru');
   });
 });
 

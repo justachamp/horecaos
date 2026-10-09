@@ -13,6 +13,7 @@ import { Auth } from '../core/auth/auth';
 import { BrandChoice } from '../core/auth/brand-choice';
 import { CurrentLocation, LocationOption } from '../core/auth/current-location';
 import { OwnProfile } from '../core/auth/own-profile';
+import { OwnPreferences } from '../core/preferences/own-preferences';
 import { SessionCapabilities } from '../core/auth/session-capabilities';
 import { RegionalFormatSync } from '../core/format/regional-format-sync';
 import { I18n, LOCALES, Locale, isLocale } from '../core/i18n/i18n';
@@ -26,12 +27,16 @@ import { RefreshIndicator } from '../shared/ui/refresh-indicator';
 import { Toasts } from '../shared/ui/toast';
 import { ToastHost } from '../shared/ui/toast-host';
 import { CallBar } from './call-bar';
+import { LocaleScopeOffer } from './locale-scope-offer';
 import { ShellMessageKey, shellMessages } from './shell-messages';
 import { ShortcutSheet } from './shortcut-sheet';
 import { NAVIGATION, NavGroup } from './navigation';
 import { ServiceStatus } from './service-status';
 import { SupportBanner } from './support-banner';
 import { VoicePresence } from './voice-presence';
+
+/** The longest sign-out waits for the person's last preference change to reach the platform. */
+const SIGN_OUT_FLUSH_MS = 1500;
 
 /**
  * The console shell: rail, top bar, and the routed view.
@@ -87,6 +92,7 @@ import { VoicePresence } from './voice-presence';
     LiveBadge,
     RefreshIndicator,
     ShortcutSheet,
+    LocaleScopeOffer,
   ],
   templateUrl: './shell.html',
   styleUrl: './shell.css',
@@ -100,6 +106,7 @@ export class Shell {
   private readonly voicePresence = inject(VoicePresence);
   protected readonly auth = inject(Auth);
   private readonly ownProfile = inject(OwnProfile);
+  private readonly preferences = inject(OwnPreferences);
   protected readonly status = inject(ServiceStatus);
   // Field injection, not a call inside the constructor body: this is what
   // guarantees the connection is opened by the time the shell mounts,
@@ -153,6 +160,13 @@ export class Shell {
   });
   protected readonly locale = this.i18n.locale;
 
+  /**
+   * The language just chosen on this device, while the line offering to make it the account's is showing
+   * (ADR 0160). Only a person with a staff record to write to is offered it, and only when the account does
+   * not already carry that language.
+   */
+  protected readonly localeOffer = signal<Locale | null>(null);
+
   /** Every location the picker may offer — see this class's own doc comment. */
   protected readonly locationOptions = this.currentLocation.options;
 
@@ -187,6 +201,9 @@ export class Shell {
     void this.capabilities.ensureLoaded();
     // The chip's name (ADR 0139). Cosmetic: a refusal leaves the token claim.
     void this.ownProfile.ensureLoaded();
+    // ADR 0160: the person's own columns, saved views and default branch. The board and the branch picker
+    // read them as signals; a failed read leaves the code's defaults, and nothing waits on it here.
+    void this.preferences.ensureLoaded();
     // Row 10.12: the brand's own money and phone formats, applied to every
     // formatter in the console. Constructing the sync is what starts it — it
     // follows the location's brand from here on, so it is built here, with
@@ -284,7 +301,23 @@ export class Shell {
   protected onLocaleChange(value: string): void {
     if (isLocale(value)) {
       this.i18n.setLocale(value as Locale);
+      this.offerAccountLanguage(value);
     }
+  }
+
+  /**
+   * The switcher decides for this device, which is already done. When the person has a record to write to
+   * and their account carries another language, say so once and offer to make this their language
+   * everywhere (`q-locale-scope-offer`); leaving it alone keeps the choice on this device.
+   */
+  private offerAccountLanguage(chosen: Locale): void {
+    const member = this.ownProfile.member();
+    if (member === null) {
+      this.localeOffer.set(null);
+      return;
+    }
+    const accountTag = member.uiLocale === null ? null : this.registry.canonical(member.uiLocale);
+    this.localeOffer.set(accountTag === chosen ? null : chosen);
   }
 
   protected onLocationChange(locationId: string): void {
@@ -309,12 +342,19 @@ export class Shell {
     }
   }
 
-  protected signOut(): void {
+  protected async signOut(): Promise<void> {
     // `Toasts.clear()`'s own doc: a sign-out "must not leave the previous
     // session's words on screen" — a toast raised just before the operator
     // clicks sign-out must not still be reading on a shared kiosk terminal
     // once the next operator sits down.
     this.toasts.clear();
+    // A column ticked a moment ago is still waiting out its debounce; it is written before the token goes.
+    // Bounded, because a sign-out that waits on a slow network is worse than a toggle that is lost. The
+    // mirror and the remembered account language are removed once nobody is signed in (`OwnPreferences`).
+    await Promise.race([
+      this.preferences.flush().catch(() => undefined),
+      new Promise<void>((resolve) => setTimeout(resolve, SIGN_OUT_FLUSH_MS)),
+    ]);
     this.auth.logout().subscribe();
   }
 }

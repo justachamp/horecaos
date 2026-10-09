@@ -246,7 +246,24 @@
     [lastUpdatedAt]="lastUpdatedAt()"
     (tabSelected)="selectTab($event)"
     (refreshRequested)="manualRefresh()"
-  />
+  >
+    <!-- ADR 0160: the person's own saved views and optional columns, kept in their account. -->
+    <q-order-saved-views
+      [views]="savedViews()"
+      [persistent]="preferencesPersistent()"
+      [leftOut]="viewsLeftOut()"
+      (applied)="onViewApplied($event)"
+      (saved)="onViewSaved($event)"
+      (removed)="onViewRemoved($event)"
+    />
+    <q-column-picker
+      [columns]="pickerColumns()"
+      [persistent]="preferencesPersistent()"
+      [canReset]="canResetColumns()"
+      (toggled)="onColumnToggled($event)"
+      (resetRequested)="onColumnsReset()"
+    />
+  </q-order-queue-toolbar>
 
   @if (lastError(); as error) {
     <div class="order-queue__error-band" role="alert">
@@ -309,16 +326,42 @@
             }
             <th class="order-queue__rail-col" aria-hidden="true"></th>
             <th>{{ 'orders.column.number' | t }}</th>
-            @if (allBranchesActive()) {
+            @if (cols().branch) {
               <th data-testid="order-queue-branch-column">{{ 'orders.column.branch' | t }}</th>
             }
             <th>{{ 'orders.column.time' | t }}</th>
             <th>{{ 'orders.column.type' | t }}</th>
             <th class="order-queue__num-col">{{ 'orders.column.total' | t }}</th>
             <th class="order-queue__num-col">{{ 'orders.column.fee' | t }}</th>
-            <th>{{ 'orders.column.payment' | t }}</th>
-            <th>{{ 'orders.column.customer' | t }}</th>
-            <th>{{ 'orders.column.courier' | t }}</th>
+            @if (cols().payment) {
+              <th>{{ 'orders.column.payment' | t }}</th>
+            }
+            @if (cols().customer) {
+              <th>{{ 'orders.column.customer' | t }}</th>
+            }
+            @if (cols().courier) {
+              <th>{{ 'orders.column.courier' | t }}</th>
+            }
+            @if (cols().courierType) {
+              <th data-testid="order-queue-courier-type-column">
+                {{ 'orders.column.courierType' | t }}
+              </th>
+            }
+            @if (cols().discount) {
+              <th class="order-queue__num-col" data-testid="order-queue-discount-column">
+                {{ 'orders.column.discount' | t }}
+              </th>
+            }
+            @if (cols().createdBy) {
+              <th data-testid="order-queue-created-by-column">
+                {{ 'orders.column.createdBy' | t }}
+              </th>
+            }
+            @if (cols().acceptedBy) {
+              <th data-testid="order-queue-accepted-by-column">
+                {{ 'orders.column.acceptedBy' | t }}
+              </th>
+            }
             <th>{{ 'orders.column.status' | t }}</th>
             <th class="order-queue__actions-col">
               <span class="q-visually-hidden">{{ 'orders.column.actions' | t }}</span>
@@ -371,7 +414,7 @@
                   </div>
                 }
               </td>
-              @if (allBranchesActive()) {
+              @if (cols().branch) {
                 <td data-testid="order-row-branch">{{ branchLabel(row.order) }}</td>
               }
               <td class="q-tnum">{{ formatCreated(row.createdAt) }}</td>
@@ -383,9 +426,29 @@
               <td class="order-queue__num-col q-mono q-tnum" data-testid="order-row-fee">
                 {{ formatFee(row.order) }}
               </td>
-              <td data-testid="order-row-payment-status">{{ paymentStatusLabel(row.order) }}</td>
-              <td data-testid="order-row-customer">{{ customerLabel(row.order) }}</td>
-              <td data-testid="order-row-courier">{{ courierLabel(row.order) }}</td>
+              @if (cols().payment) {
+                <td data-testid="order-row-payment-status">{{ paymentStatusLabel(row.order) }}</td>
+              }
+              @if (cols().customer) {
+                <td data-testid="order-row-customer">{{ customerLabel(row.order) }}</td>
+              }
+              @if (cols().courier) {
+                <td data-testid="order-row-courier">{{ courierLabel(row.order) }}</td>
+              }
+              @if (cols().courierType) {
+                <td data-testid="order-row-courier-type">{{ courierTypeLabel(row.order) }}</td>
+              }
+              @if (cols().discount) {
+                <td class="order-queue__num-col q-mono q-tnum" data-testid="order-row-discount">
+                  {{ formatDiscount(row.order) }}
+                </td>
+              }
+              @if (cols().createdBy) {
+                <td data-testid="order-row-created-by">{{ createdByLabel(row.order) }}</td>
+              }
+              @if (cols().acceptedBy) {
+                <td data-testid="order-row-accepted-by">{{ acceptedByLabel(row.order) }}</td>
+              }
               <td>
                 <!-- Status and lateness in one object rather than two visual
                      systems on opposite sides of the row (ADR 0101, X.15). The

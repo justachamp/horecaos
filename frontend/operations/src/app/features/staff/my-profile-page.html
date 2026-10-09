@@ -127,6 +127,13 @@
     }
   </section>
 
+  <!--
+    ADR 0160: what the console remembers for the person -- the language rule, the default branch, the saved
+    views and the board's columns. Not a @defer: the page is a lazy route already, and the first @defer in
+    the console would pull the framework's defer runtime into the initial bundle.
+  -->
+  <q-my-profile-interface-card />
+
   <section class="section">
     <h2 class="q-emphasis">{{ 'staff.myProfile.telegram.title' | t }}</h2>
     <p class="q-body-sm">{{ 'staff.myProfile.telegram.body' | t }}</p>

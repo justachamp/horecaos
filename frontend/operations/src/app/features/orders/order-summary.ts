@@ -102,9 +102,18 @@ export interface OrderSummaryResponse {
   /** §2.5's "behind the picker" Создал column — who took the order. */
   readonly createdByActorType?: string | null;
   readonly createdByActorId?: string | null;
+  /**
+   * The name the tenant keeps for the staff member who took the order (ADR 0160, the board's optional
+   * «Создал» column), resolved on the platform with one directory batch per page. Null for an actor that
+   * is not a person and for a subject the tenant has no name for -- the column then draws «—», never the
+   * raw `createdByActorId`.
+   */
+  readonly createdByDisplayName?: string | null;
   /** §2.5's "behind the picker" Принял column — who accepted it, once decided. */
   readonly acceptedByActorType?: string | null;
   readonly acceptedByActorId?: string | null;
+  /** As {@link createdByDisplayName}, for the «Принял» column. */
+  readonly acceptedByDisplayName?: string | null;
   /**
    * §2.5 column 12 (Курьер), gap map row 1.1: the in-house courier carrying
    * this order's active shipment, read server-side through {@code

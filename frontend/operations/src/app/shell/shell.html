@@ -164,6 +164,13 @@
             }
           </select>
         </label>
+
+        <!-- ADR 0160: the switcher chose for this device; this offers to make it the account's language
+             too. Not a @defer: the first one in the console would pull the framework's whole defer runtime
+             into the initial bundle (about 9 kB) to save loading one small component. -->
+        @if (localeOffer(); as offered) {
+          <q-locale-scope-offer [locale]="offered" (done)="localeOffer.set(null)" />
+        }
       </div>
     </header>
 

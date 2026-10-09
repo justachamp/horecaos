@@ -7,7 +7,7 @@ import { OwnProfile } from '../../core/auth/own-profile';
 import { ScopeGrant } from '../../core/auth/session-context';
 import { ApiError } from '../../core/api/problem-details';
 import { StaffMember, hasName } from '../../core/api/staff-member';
-import { I18n, isLocale } from '../../core/i18n/i18n';
+import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { localeDisplayName } from '../../core/i18n/locale-labels';
 import { PlatformLocales } from '../../core/i18n/platform-locales';
@@ -17,6 +17,7 @@ import { CAPABILITY_SENTENCES, capabilityAreaName } from './capability-sentences
 import { StaffApi, TelegramLinkCodeResponse } from './staff-api';
 import { StaffMembersApi } from './staff-members-api';
 import { ProfileDraft, draftOf, toSelfRequest } from './staff-profile-draft';
+import { MyProfileInterfaceCard } from './my-profile-interface-card';
 import { MyProfileMfaCard } from './my-profile-mfa-card';
 import { MyProfilePinCard } from './my-profile-pin-card';
 import { MyProfileSessionsCard } from './my-profile-sessions-card';
@@ -76,7 +77,14 @@ interface CapabilityGroup {
  */
 @Component({
   selector: 'q-my-profile-page',
-  imports: [TPipe, StaffProfileForm, MyProfileMfaCard, MyProfilePinCard, MyProfileSessionsCard],
+  imports: [
+    TPipe,
+    StaffProfileForm,
+    MyProfileMfaCard,
+    MyProfilePinCard,
+    MyProfileSessionsCard,
+    MyProfileInterfaceCard,
+  ],
   templateUrl: './my-profile-page.html',
   styleUrl: './my-profile-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -178,7 +186,10 @@ export class MyProfilePage {
       this.editing.set(false);
       this.notice.set(this.i18n.t('staff.profile.saved'));
       if (updated.uiLocale !== current.uiLocale) {
-        this.applyInterfaceLanguage(updated.uiLocale);
+        // The account's language, not this device's (ADR 0160): it is remembered for the next first paint
+        // and applied here only where this device has not chosen a language of its own. When it has, the
+        // «Интерфейс» section below says so and offers to use the account's.
+        this.ownProfile.adoptStoredLanguage(updated);
       }
     } catch (error) {
       this.profileError.set(this.describe(error));
@@ -263,20 +274,6 @@ export class MyProfilePage {
   private took(member: StaffMember): void {
     this.member.set(member);
     this.ownProfile.apply(member);
-  }
-
-  /**
-   * A person who just chose an interface language gets it at once, here, on
-   * this device. (Signing in somewhere with no language chosen yet picks it up
-   * from the record -- see `OwnProfile`.)
-   */
-  private applyInterfaceLanguage(code: string | null): void {
-    // The record holds the registry's tag; a bare `uz` from an older record is read as `uz-Latn`.
-    // A language the registry offers but this build has no catalogue for changes nothing here.
-    const tag = code === null ? null : this.registry.canonical(code);
-    if (tag !== null && isLocale(tag)) {
-      this.i18n.setLocale(tag);
-    }
   }
 
   protected toggleCapabilities(index: number): void {

@@ -8,7 +8,7 @@ import { ApiError, ApiErrorCode } from '../api/problem-details';
 import { StaffMember } from '../api/staff-member';
 import { staffMemberDetail } from '../../features/staff/staff-member.testing';
 import { REGISTRY_FIXTURE } from '../../../testing/platform-locales.fixture';
-import { I18n, STORAGE_KEY } from '../i18n/i18n';
+import { ACCOUNT_STORAGE_KEY, I18n, STORAGE_KEY } from '../i18n/i18n';
 import { seedPlatformLocalesForTesting } from '../i18n/platform-locales';
 import { Auth } from './auth';
 import { CurrentTenant } from './current-tenant';
@@ -37,6 +37,7 @@ describe('OwnProfile', () => {
     setLocale = vi.fn();
     storedLocale = localStorage.getItem(STORAGE_KEY);
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(ACCOUNT_STORAGE_KEY);
     TestBed.configureTestingModule({
       providers: [
         { provide: ApiClient, useValue: { get } },
@@ -51,6 +52,7 @@ describe('OwnProfile', () => {
   });
 
   afterEach(() => {
+    localStorage.removeItem(ACCOUNT_STORAGE_KEY);
     if (storedLocale === null) {
       localStorage.removeItem(STORAGE_KEY);
     } else {
@@ -147,7 +149,7 @@ describe('OwnProfile', () => {
 
     await TestBed.inject(OwnProfile).ensureLoaded();
 
-    expect(setLocale).toHaveBeenCalledWith('uz-Latn');
+    expect(setLocale).toHaveBeenCalledWith('uz-Latn', { persist: false });
   });
 
   it('adopts the tag the platform now answers with, which is what the catalogues are keyed by', async () => {
@@ -155,7 +157,7 @@ describe('OwnProfile', () => {
 
     await TestBed.inject(OwnProfile).ensureLoaded();
 
-    expect(setLocale).toHaveBeenCalledWith('uz-Latn');
+    expect(setLocale).toHaveBeenCalledWith('uz-Latn', { persist: false });
   });
 
   it('leaves the language alone when the registry offers one this build has no catalogue for', async () => {
@@ -174,6 +176,39 @@ describe('OwnProfile', () => {
     } finally {
       seedPlatformLocalesForTesting(REGISTRY_FIXTURE);
     }
+  });
+
+  it('applies the account language without turning it into a choice made on this device', async () => {
+    reply(staffMemberDetail({ uiLocale: 'uz-Latn' }));
+
+    await TestBed.inject(OwnProfile).ensureLoaded();
+
+    // ADR 0160: the account language is read here, not chosen here. A device override is the one thing
+    // «Мой профиль» offers to give up, so it must not appear by itself.
+    expect(setLocale).toHaveBeenCalledWith('uz-Latn', { persist: false });
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    // It is remembered, apart from the device's choice, only so the next first paint is already in it.
+    expect(localStorage.getItem(ACCOUNT_STORAGE_KEY)).toBe('uz-Latn');
+  });
+
+  it('forgets the remembered account language when the record carries none', async () => {
+    localStorage.setItem(ACCOUNT_STORAGE_KEY, 'en');
+    reply(staffMemberDetail({ uiLocale: null }));
+
+    await TestBed.inject(OwnProfile).ensureLoaded();
+
+    expect(localStorage.getItem(ACCOUNT_STORAGE_KEY)).toBeNull();
+  });
+
+  it('remembers the account language even where the device has a choice that wins', async () => {
+    localStorage.setItem(STORAGE_KEY, 'en');
+    reply(staffMemberDetail({ uiLocale: 'ru' }));
+
+    await TestBed.inject(OwnProfile).ensureLoaded();
+
+    expect(setLocale).not.toHaveBeenCalled();
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('en');
+    expect(localStorage.getItem(ACCOUNT_STORAGE_KEY)).toBe('ru');
   });
 
   it('does not override a language already chosen on this browser', async () => {

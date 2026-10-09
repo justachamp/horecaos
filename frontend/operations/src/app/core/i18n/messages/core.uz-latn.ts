@@ -435,4 +435,15 @@ export const coreUzLatn: AreaMessages<typeof coreEn> = {
   'settings.orderPolicy.field.reason': 'Oʻzgarish sababi',
   'settings.orderPolicy.publish': 'Eʻlon qilish',
   'settings.orderPolicy.publishing': 'Eʻlon qilinmoqda…',
+
+  'shared.columnPicker.toggle': 'Ustunlar',
+  'shared.columnPicker.label': 'Jadval ustunlari',
+  'shared.columnPicker.reset': 'Ustunlarni standart holatga qaytarish',
+  'shared.columnPicker.saved':
+    'Tanlovingiz hisobingizda saqlanadi va barcha qurilmalaringizda koʻrinadi.',
+  'shared.columnPicker.session': 'Tanlov faqat shu seans tugaguncha amal qiladi.',
+  'shell.localeScope.thisDevice': 'Til faqat shu qurilma uchun tanlandi.',
+  'shell.localeScope.allDevices': 'Barcha qurilmalarim uchun',
+  'shell.localeScope.keep': 'Faqat shu qurilmada',
+  'shell.localeScope.failed': 'Tilni saqlab boʻlmadi. U faqat shu qurilmada qoladi.',
 };

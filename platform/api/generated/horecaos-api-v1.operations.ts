@@ -3981,6 +3981,7 @@ export interface OperationsOrderControllerLineResponse {
 export interface OperationsOrderControllerOrderSummaryResponse {
   acceptedByActorId?: string;
   acceptedByActorType?: string;
+  acceptedByDisplayName?: string;
   actions?: Array<OrderActionResponse>;
   approvalDeadlineAt?: string;
   channelCode?: string;
@@ -3988,6 +3989,7 @@ export interface OperationsOrderControllerOrderSummaryResponse {
   createdAt?: string;
   createdByActorId?: string;
   createdByActorType?: string;
+  createdByDisplayName?: string;
   currency?: string;
   customerAccountId?: string;
   discountMinor?: number;
@@ -4167,6 +4169,16 @@ export interface OptionsResponse {
 export interface OrderActionResponse {
   action?: string;
   targetStatus?: string;
+}
+
+export interface OrderBoardColumnsChange {
+  hide?: Array<"branch" | "channel" | "customer" | "items" | "payment" | "courier" | "createdBy" | "acceptedBy" | "courierType" | "discount">;
+  show?: Array<"branch" | "channel" | "customer" | "items" | "payment" | "courier" | "createdBy" | "acceptedBy" | "courierType" | "discount">;
+}
+
+export interface OrderBoardPreferencesDocument {
+  columns?: OrderBoardColumnsChange;
+  savedViews?: Array<SavedView>;
 }
 
 export interface OrderCancellationResponse {
@@ -4483,6 +4495,16 @@ export interface OwnMfaResponse {
   enrolled?: boolean;
   maximum?: number;
   requirement?: "NOT_REQUIRED" | "OFFERED" | "REQUIRED";
+}
+
+export interface OwnPreferenceResponse {
+  document?: ShellPreferencesDocument | OrderBoardPreferencesDocument;
+  documentSchema?: number;
+  version?: number;
+}
+
+export interface OwnPreferencesResponse {
+  surfaces?: { [key: string]: OwnPreferenceResponse };
 }
 
 export interface PageAuditEventView {
@@ -6320,6 +6342,32 @@ export interface RunResponse {
   version?: number;
 }
 
+export interface SaveOwnPreferenceRequest {
+  document: ShellPreferencesDocument | OrderBoardPreferencesDocument;
+}
+
+export interface SavedView {
+  filters?: SavedViewFilters;
+  id?: string;
+  label?: string;
+  tab?: "attention" | "new" | "preparing" | "delivering" | "completed" | "cancelled" | "all";
+}
+
+export interface SavedViewFilters {
+  allBranches?: boolean;
+  callbackRequested?: boolean;
+  channelCode?: string;
+  dateRange?: "TODAY" | "YESTERDAY" | "LAST_7_DAYS" | "THIS_MONTH";
+  fiscalStatus?: "ATTENTION" | "NOT_APPLICABLE" | "PENDING" | "SUBMITTED" | "ISSUED" | "FAILED" | "BLOCKED";
+  fulfillmentMode?: "DELIVERY" | "PICKUP" | "DINE_IN";
+  lateOnly?: boolean;
+  mineOnly?: boolean;
+  origin?: "HORECAOS" | "MARKETPLACE";
+  paymentMethodCode?: string;
+  paymentStatus?: "NOT_REQUIRED" | "PENDING" | "AUTHORIZED" | "CAPTURED" | "FAILED" | "VOIDED" | "REFUNDED";
+  problemOnly?: boolean;
+}
+
 export interface ScenarioBody {
   channelId?: string;
   confirmedAt: string;
@@ -6551,6 +6599,10 @@ export interface SettlementPeriodResponse {
   settledAt?: string;
   statementHash?: string;
   status?: string;
+}
+
+export interface ShellPreferencesDocument {
+  defaultLocationId?: string;
 }
 
 export interface ShipmentCancelRequest {
@@ -8155,6 +8207,9 @@ export interface Operations {
   "me": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/staff/me"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": StaffMemberResponse } };
   "updateMe": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/staff/me"; request: { parameters: { path: { tenantId: string } }; body: UpdateMyProfileRequest }; responses: { "200": StaffMemberResponse } };
   "setPhoto": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/staff/me/photo"; request: { parameters: { path: { tenantId: string } }; body: string }; responses: { "200": StaffMemberResponse } };
+  "readMyPreferences": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/staff/me/preferences"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OwnPreferencesResponse } };
+  "resetMyPreference": { method: "DELETE"; path: "/api/v1/operations/tenants/{tenantId}/staff/me/preferences/{surface}"; request: { parameters: { path: { surface: string; tenantId: string } } }; responses: { "204": unknown } };
+  "saveMyPreference": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/staff/me/preferences/{surface}"; request: { parameters: { path: { surface: string; tenantId: string } }; body: SaveOwnPreferenceRequest }; responses: { "200": OwnPreferenceResponse } };
   "listForTenant": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/staff/members"; request: { parameters: { path: { tenantId: string }; query: { brandId?: string; locationId?: string; q?: string; status?: string } } }; responses: { "200": PageStaffMemberResponse } };
   "detailForTenant": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/staff/members/{memberId}"; request: { parameters: { path: { memberId: string; tenantId: string } } }; responses: { "200": StaffMemberResponse } };
   "updateForTenant": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/staff/members/{memberId}"; request: { parameters: { path: { memberId: string; tenantId: string } }; body: UpdateStaffMemberRequest }; responses: { "200": StaffMemberResponse } };

@@ -27,11 +27,20 @@ import { TimeZone, formatClock, formatTime } from '../../core/format/datetime';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { SavedView } from '../../core/preferences/preference-documents';
+import {
+  normalisedSavedViewLabel,
+  withColumnShown,
+  withoutColumnChoice,
+  withSavedViews,
+} from '../../core/preferences/preference-edits';
+import { OwnPreferences } from '../../core/preferences/own-preferences';
 import { BrandOrderStream } from '../../core/realtime/brand-order-stream';
 import { RealtimeClient, RealtimeFrame } from '../../core/realtime/realtime-client';
 import { startVisibilityPoll } from '../../core/realtime/visibility-poll';
 import { ServiceStatus } from '../../shell/service-status';
 import { ShortcutRegistry } from '../../shared/keyboard/shortcut-registry';
+import { ColumnPicker, ColumnPickerItem } from '../../shared/ui/column-picker';
 import { DateRange, DateRangePicker } from '../../shared/ui/date-range-picker';
 import { FilterBar, FilterBarChip } from '../../shared/ui/filter-bar';
 import { OrderTableChip } from '../../shared/ui/order-table-chip/order-table-chip';
@@ -60,6 +69,7 @@ import { CountableOrder, OrderCounts, PolicyFor, TabCounts, zeroTabCounts } from
 import { describeApiError, errorReference, mutationErrorNotice } from './order-errors';
 import { OrderOutcomeReasonDialog, OutcomeReasonSubmission } from './order-outcome-reason-dialog';
 import { BoardKeyAction, OrderBoardKeys, orderBoardScope } from './order-board-shortcuts';
+import { ORDER_BOARD_COLUMNS, columnVisibility, offeredColumns } from './order-board-columns';
 import { OrderQueueBulkBar } from './order-queue-bulk-bar';
 import { OrderQueueBulkResult } from './order-queue-bulk-result';
 import { OrderQueueToolbar } from './order-queue-toolbar';
@@ -88,6 +98,8 @@ import {
   toggleSelectPage,
 } from './order-queue-selection';
 import { OrderReasonDialog, OrderReasonSubmission } from './order-reason-dialog';
+import { OrderSavedViews } from './order-saved-views';
+import { filtersFromView, viewFiltersFrom } from './order-saved-view-filters';
 import {
   OrderRejectReasonDialog,
   OrderRejectSubmission,
@@ -278,6 +290,8 @@ interface RowDialogState {
     OrderQueueBulkResult,
     OrderQueueToolbar,
     OrderRowActions,
+    OrderSavedViews,
+    ColumnPicker,
   ],
   templateUrl: './order-queue.html',
   styleUrl: './order-queue.css',
@@ -307,6 +321,7 @@ export class OrderQueue implements OnInit {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly shortcuts = inject(ShortcutRegistry);
   protected readonly filterState = inject(OrderQueueFilterState);
+  private readonly preferences = inject(OwnPreferences);
 
   protected readonly tabs = ORDER_TABS.map((id) => ORDER_TAB_DEFINITIONS[id]);
 
@@ -378,6 +393,43 @@ export class OrderQueue implements OnInit {
   /** The queue is reading the brand-scoped board right now. */
   protected readonly allBranchesActive = computed(
     () => this.canViewAllBranches() && this.filters().allBranches,
+  );
+
+  // ----------------------------------------------- the person's own board (ADR 0160)
+
+  /**
+   * Which columns the table draws: the person's choice from their account (`ORDER_BOARD`), held to what
+   * this screen can draw -- «Филиал» exists only on «Все филиалы». The columns the table always draws are
+   * not in this record because no choice can name them. While the account's document is on its way the
+   * mirror, then the code's default, decides; a failed read leaves the board as it always was.
+   */
+  protected readonly cols = computed(() =>
+    columnVisibility(this.preferences.orderBoard(), { allBranches: this.allBranchesActive() }),
+  );
+
+  /** The picker lists the columns whose cell has something to draw here, in the platform's order. */
+  protected readonly pickerColumns = computed<readonly ColumnPickerItem[]>(() => {
+    const visibility = this.cols();
+    return offeredColumns({ allBranches: this.allBranchesActive() }).map((key) => ({
+      key,
+      label: this.i18n.t(ORDER_BOARD_COLUMNS[key].labelKey),
+      shown: visibility[key],
+    }));
+  });
+
+  protected readonly canResetColumns = computed(() => {
+    const columns = this.preferences.orderBoard().columns;
+    return (columns?.show?.length ?? 0) + (columns?.hide?.length ?? 0) > 0;
+  });
+
+  protected readonly savedViews = computed(() => this.preferences.orderBoard().savedViews ?? []);
+
+  /** False for an account the tenant keeps no record for: its choices then last for the session only. */
+  protected readonly preferencesPersistent = this.preferences.persistent;
+
+  /** The board has a filter on that a saved view cannot hold, so «Сохранить вид» says it is left out. */
+  protected readonly viewsLeftOut = computed(
+    () => viewFiltersFrom(this.filters(), new Date()).leftOut,
   );
 
   /**
@@ -617,6 +669,9 @@ export class OrderQueue implements OnInit {
   }
 
   private async start(): Promise<void> {
+    // The person's columns and views arrive on their own; the board never waits for them (a mirror paints
+    // first, and a failed read falls back to the code's default).
+    void this.preferences.ensureLoaded();
     await this.location.ensureLoaded();
     await this.refresh();
     this.hasStarted = true;
@@ -1093,7 +1148,8 @@ export class OrderQueue implements OnInit {
 
   protected typeLabel(order: OrderSummaryResponse): string {
     const mode = order.fulfillmentMode ? this.fulfillmentModeLabel(order.fulfillmentMode) : '—';
-    return order.channelCode ? `${mode} · ${order.channelCode}` : mode;
+    // «Канал» is the channel part of this cell (ADR 0160): turning it off leaves the fulfilment mode.
+    return order.channelCode && this.cols().channel ? `${mode} · ${order.channelCode}` : mode;
   }
 
   private fulfillmentModeLabel(mode: string): string {
@@ -1149,6 +1205,42 @@ export class OrderQueue implements OnInit {
       this.courierRoster().find((courier) => courier.courierId === order.courierId)
         ?.displayReference ?? order.courierId
     );
+  }
+
+  /**
+   * «Тип курьера» (ADR 0160): the courier type's name from the roster this page already fetches for the
+   * «Курьер» column. «—» for an order with no courier of its own (unassigned, or carried by a partner),
+   * and while the roster has not answered; never the courier's id.
+   */
+  protected courierTypeLabel(order: OrderSummaryResponse): string {
+    if (!order.courierId) {
+      return '—';
+    }
+    return (
+      this.courierRoster().find((courier) => courier.courierId === order.courierId)
+        ?.courierTypeName ?? '—'
+    );
+  }
+
+  /** «Скидка»: the order's discount in its own currency; `0` is a dash, like the delivery fee. */
+  protected formatDiscount(order: OrderSummaryResponse): string {
+    const discountMinor = order.discountMinor ?? 0;
+    return discountMinor > 0
+      ? formatMoney({ amountMinor: discountMinor, currency: order.currency }, this.i18n.locale())
+      : '—';
+  }
+
+  /**
+   * «Создал»: the name the tenant keeps for the staff member who took the order. «—» for an actor that is
+   * not a person and for a subject the tenant has no name for -- the raw `createdByActorId` is never drawn.
+   */
+  protected createdByLabel(order: OrderSummaryResponse): string {
+    return order.createdByDisplayName?.trim() || '—';
+  }
+
+  /** «Принял»: as {@link createdByLabel}, for the accepting actor. */
+  protected acceptedByLabel(order: OrderSummaryResponse): string {
+    return order.acceptedByDisplayName?.trim() || '—';
   }
 
   /**
@@ -1373,6 +1465,68 @@ export class OrderQueue implements OnInit {
     // `me`. Lazily loaded here rather than at start-up, so a session that
     // never touches this toggle never spends the extra request.
     void this.tenant.ensureLoaded().then(() => void this.refresh());
+  }
+
+  // --------------------------------------------- the person's columns and views (ADR 0160)
+
+  protected onColumnToggled(change: { readonly key: string; readonly shown: boolean }): void {
+    const key = change.key as keyof typeof ORDER_BOARD_COLUMNS;
+    this.preferences.updateOrderBoard((document) => withColumnShown(document, key, change.shown));
+  }
+
+  protected onColumnsReset(): void {
+    this.preferences.updateOrderBoard((document) => withoutColumnChoice(document));
+  }
+
+  /** Saves the board as it is now -- its tab and the filters a view can hold -- under the name the person typed. */
+  protected onViewSaved(label: string): void {
+    const { filters } = viewFiltersFrom(this.filters(), new Date());
+    const view: SavedView = {
+      id: crypto.randomUUID(),
+      label: normalisedSavedViewLabel(label),
+      tab: this.activeTab(),
+      filters,
+    };
+    this.preferences.updateOrderBoard((document) =>
+      withSavedViews(document, [...(document.savedViews ?? []), view]),
+    );
+  }
+
+  protected onViewRemoved(viewId: string): void {
+    this.preferences.updateOrderBoard((document) =>
+      withSavedViews(
+        document,
+        (document.savedViews ?? []).filter((view) => view.id !== viewId),
+      ),
+    );
+  }
+
+  /**
+   * Opens a saved view: its tab, and exactly its filters over an empty board. The board's own memory for
+   * that tab is replaced, as a pasted link replaces it, so the next cold visit remembers the view's state.
+   */
+  protected onViewApplied(view: SavedView): void {
+    const filters = filtersFromView(view, new Date(), {
+      canViewAllBranches: this.canViewAllBranches(),
+    });
+    const params = filtersToQueryParams(filters);
+    const tabChanges = view.tab !== this.activeTab();
+    const urlCarriesFilters = Object.values(params).some((value) => value !== null);
+    this.filterState.setFilters(view.tab, filters);
+    this.bindingOptionsScopeKey = null;
+    void this.router
+      .navigate([], {
+        relativeTo: this.route,
+        queryParams: { tab: view.tab, ...params },
+        queryParamsHandling: 'merge',
+      })
+      .then(() => {
+        // A tab change, or filters in the URL, already made the route subscription read the board; a view
+        // that only clears the filters of the tab already open changes no part of the URL it listens to.
+        if (!tabChanges && !urlCarriesFilters) {
+          void this.refresh();
+        }
+      });
   }
 
   protected onResetFilters(): void {
@@ -1711,7 +1865,11 @@ export class OrderQueue implements OnInit {
 
   /** The table's column count, for the empty row's `colspan`. */
   protected columnCount(): number {
-    return 11 + (this.canSelectOrders() ? 1 : 0) + (this.allBranchesActive() ? 1 : 0);
+    // The columns the table always draws: the severity rail, number, time, type, total, delivery fee,
+    // status and actions -- and then whichever optional ones the person's choice leaves on.
+    const always = 8;
+    const optional = Object.values(this.cols()).filter(Boolean).length;
+    return always + optional + (this.canSelectOrders() ? 1 : 0);
   }
 
   protected canBulkCancel(): boolean {

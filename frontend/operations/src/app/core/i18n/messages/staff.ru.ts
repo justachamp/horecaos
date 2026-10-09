@@ -795,4 +795,36 @@ export const staffRu: AreaMessages<typeof staffEn> = {
   'staff.shifts.reason.WORKED_AS_RECORDED': 'Работал(а), как записано',
   'staff.shifts.reason.PERSON_UNAVAILABLE': 'Сотрудник не может выйти',
   'staff.shifts.reason.SCHEDULE_CHANGED': 'График изменился',
+  'staff.myProfile.interface.title': 'Интерфейс',
+  'staff.myProfile.interface.sessionOnly':
+    'Для этого входа у организации нет карточки сотрудника: настройки действуют только до конца сеанса.',
+  'staff.myProfile.interface.writeFailed':
+    'Не удалось сохранить последнее изменение. Оно видно здесь, но не попало в учётную запись.',
+  'staff.myProfile.interface.language.title': 'Язык',
+  'staff.myProfile.interface.language.current': 'Язык интерфейса: {language}.',
+  'staff.myProfile.interface.language.deviceOnly':
+    'Язык «{language}» выбран только на этом устройстве. Чтобы он действовал везде, задайте язык в «Личных данных».',
+  'staff.myProfile.interface.language.override':
+    'На этом устройстве выбран язык «{device}», а в вашей учётной записи — «{account}». Здесь действует выбранный на этом устройстве.',
+  'staff.myProfile.interface.language.useMine': 'Использовать мой язык на этом устройстве',
+  'staff.myProfile.interface.branch.title': 'Филиал по умолчанию',
+  'staff.myProfile.interface.branch.none': 'Не выбран (первый из списка)',
+  'staff.myProfile.interface.branch.hint':
+    'Консоль открывается на нём там, где на этом устройстве филиал не выбран.',
+  'staff.myProfile.interface.branch.stale':
+    'У вас больше нет доступа к этому филиалу, поэтому он не используется.',
+  'staff.myProfile.interface.branch.single': 'Вам доступен один филиал — выбирать нечего.',
+  'staff.myProfile.interface.views.title': 'Мои виды доски заказов',
+  'staff.myProfile.interface.views.empty':
+    'Видов нет. Сохраните вид кнопкой «Мои виды» на доске заказов.',
+  'staff.myProfile.interface.views.rename': 'Переименовать',
+  'staff.myProfile.interface.views.delete': 'Удалить',
+  'staff.myProfile.interface.views.save': 'Сохранить',
+  'staff.myProfile.interface.views.cancel': 'Отмена',
+  'staff.myProfile.interface.columns.title': 'Столбцы доски заказов',
+  'staff.myProfile.interface.columns.reset': 'Вернуть столбцы по умолчанию',
+  'staff.myProfile.interface.reset.board': 'Сбросить всё для доски (столбцы и виды)',
+  'staff.myProfile.interface.reset.confirm':
+    'Столбцы и все сохранённые виды будут удалены. Это нельзя отменить.',
+  'staff.myProfile.interface.reset.yes': 'Да, сбросить',
 };

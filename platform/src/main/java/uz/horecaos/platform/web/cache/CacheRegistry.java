@@ -97,6 +97,23 @@ public enum CacheRegistry {
             "StaffMemberChanged (evicted on every profile write)"),
 
     /**
+     * A person's stored interface preferences, as the sealed rows (ADR 0160), keyed by {@code (tenant,
+     * subject)}.
+     *
+     * <p>Twenty seconds, evicted after the commit of every write, reset and anonymisation. What it holds is
+     * ciphertext and versions, never a plaintext document: the console reads a person's documents once per
+     * session and the read decrypts every time, so this saves the database round trip and nothing else. A
+     * write checks the version against the database and never against this cache, so no correctness
+     * decision reads it; a replica that did not see the write serves the old row until the TTL, which is the
+     * window the console's one retry on a stale version has to tolerate.
+     */
+    STAFF_PREFERENCES(
+            "staff.preferences",
+            Duration.ofSeconds(20),
+            20_000,
+            "StaffPreferencesService (evicted after every write, reset and anonymisation)"),
+
+    /**
      * Geocoder answers (ADR 0145, ADR 0033), keyed by tenant, region and version, locale,
      * operation and a keyed hash of the normalized query.
      *
