@@ -1,0 +1,56 @@
+@if (shown(); as popup) {
+  <div class="backdrop" data-testid="content-popup-backdrop" (click)="onBackdrop($event)">
+    <div
+      #dialog
+      class="dialog"
+      data-testid="content-popup"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      [attr.aria-labelledby]="titleId(popup)"
+      (keydown)="onKeydown($event)"
+    >
+      <button
+        #closeButton
+        type="button"
+        class="close"
+        data-testid="content-popup-close"
+        [attr.aria-label]="'content.popupClose' | t"
+        (click)="dismiss()"
+      >
+        <app-icon name="close" [size]="20" />
+      </button>
+
+      @if (plan(); as picture) {
+        <app-content-media
+          class="picture"
+          [plan]="picture"
+          [alt]="popup.media?.alt ?? ''"
+          [aspectRatio]="aspect()"
+          sizes="(min-width: 480px) 420px, 92vw"
+          (failed)="pictureError()"
+        />
+      }
+
+      <div class="text" data-testid="content-popup-text" [attr.lang]="lang()">
+        <h2 class="title" data-testid="content-popup-title" [id]="titleId(popup)">
+          {{ popup.title }}
+        </h2>
+        @if (popup.body) {
+          <p class="body">{{ popup.body }}</p>
+        }
+      </div>
+
+      @if (hasLink()) {
+        <app-content-link
+          class="cta-wrap"
+          data-testid="content-popup-cta"
+          [link]="popup.link"
+          (activated)="followedLink()"
+        >
+          <span class="cta">{{ popup.ctaLabel ?? ('content.openLink' | t) }}</span>
+        </app-content-link>
+      }
+    </div>
+  </div>
+}

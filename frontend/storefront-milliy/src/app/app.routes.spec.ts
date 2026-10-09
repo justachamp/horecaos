@@ -127,3 +127,52 @@ describe('app.routes: sign-in (ADR 0051)', () => {
     expect(deepestPath(router)).toBe('login');
   });
 });
+
+describe('app.routes: the editorial pages (ADR 0157, Release 5)', () => {
+  beforeEach(() => localStorage.clear());
+
+  it.each([
+    ['/news', 'news', 'news'],
+    ['/gallery', 'gallery', 'gallery'],
+    ['/recipes', 'recipes', 'recipes'],
+    ['/careers', 'careers', 'careers'],
+  ])('%s is a listing of its own kind, not a redirect home', async (url, path, kind) => {
+    const router = setUp();
+
+    const ok = await router.navigateByUrl(url);
+
+    expect(ok).toBe(true);
+    expect(deepestPath(router)).toBe(path);
+    expect(router.routerState.snapshot.root.firstChild?.data['kind']).toBe(kind);
+  });
+
+  it.each([
+    ['/news/plov-week', 'news/:slug', 'news'],
+    ['/gallery/opening', 'gallery/:slug', 'gallery'],
+    ['/recipes/plov', 'recipes/:slug', 'recipes'],
+    ['/careers/line-cook', 'careers/:slug', 'careers'],
+  ])('%s is one entry of its kind, with the slug as a route parameter', async (url, path, kind) => {
+    const router = setUp();
+
+    const ok = await router.navigateByUrl(url);
+    const route = router.routerState.snapshot.root.firstChild;
+
+    expect(ok).toBe(true);
+    expect(deepestPath(router)).toBe(path);
+    expect(route?.data['kind']).toBe(kind);
+    expect(route?.paramMap.get('slug')).toBe(url.split('/')[2]);
+  });
+
+  it('is public and lazy: no sign-in, and nothing joins the initial chunk', () => {
+    const editorial = routes.filter((route) =>
+      /^(news|gallery|recipes|careers)(\/:slug)?$/.test(route.path ?? ''),
+    );
+
+    expect(editorial).toHaveLength(8);
+    for (const route of editorial) {
+      expect(route.canActivate).toBeUndefined();
+      expect(route.loadComponent).toBeTypeOf('function');
+      expect(route.component).toBeUndefined();
+    }
+  });
+});

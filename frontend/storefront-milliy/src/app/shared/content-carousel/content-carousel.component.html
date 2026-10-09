@@ -1,0 +1,15 @@
+@if (visible().length > 0) {
+  <section
+    class="carousel"
+    data-testid="content-carousel"
+    [attr.aria-label]="'content.carouselLabel' | t"
+  >
+    <ul class="track rail" data-testid="content-carousel-track" tabindex="0">
+      @for (item of visible(); track item.id; let first = $first) {
+        <li class="slide">
+          <app-content-tile [item]="item" [eager]="first" (failed)="drop(item.id)" />
+        </li>
+      }
+    </ul>
+  </section>
+}

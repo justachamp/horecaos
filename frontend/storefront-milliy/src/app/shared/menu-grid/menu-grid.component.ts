@@ -1,5 +1,17 @@
-import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  computed,
+  effect,
+  inject,
+  input,
+  output,
+  signal,
+  untracked,
+} from '@angular/core';
 
+import { ReducedMotionService } from '../../services/reduced-motion.service';
 import type { CategoryItem, MenuCategory, MenuItem } from '../../types/home.types';
 import { DishCardComponent } from '../dish-card/dish-card.component';
 import { TranslatePipe } from '../translate/translate.pipe';
@@ -22,7 +34,16 @@ import { TranslatePipe } from '../translate/translate.pipe';
   styleUrl: './menu-grid.component.scss',
 })
 export class MenuGridComponent {
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly reducedMotion = inject(ReducedMotionService);
+
   readonly categories = input.required<readonly MenuCategory[]>();
+  /**
+   * A category the screen asks the grid to show -- a content link to a category lands here (ADR
+   * 0157). Applied once per request, and only when the menu has that category: a link to one it
+   * lacks leaves the grid showing everything. The customer is free to choose another afterwards.
+   */
+  readonly requestedCategoryId = input<string | null>(null);
   readonly sections = input.required<readonly CategoryItem[]>();
   readonly currency = input<string | null>(null);
   /** False on the table screen, where a dish is not a link into the delivery basket. */
@@ -47,6 +68,29 @@ export class MenuGridComponent {
       (section) => section.items.length > 0 && (active === null || section.id === active),
     );
   });
+
+  private appliedRequest: string | null = null;
+
+  constructor() {
+    effect(() => {
+      const requested = this.requestedCategoryId();
+      const known = requested !== null && this.categories().some((c) => c.id === requested);
+      if (!known || requested === this.appliedRequest) {
+        return;
+      }
+      this.appliedRequest = requested;
+      untracked(() => {
+        this.activeCategoryId.set(requested);
+        const element = this.host.nativeElement;
+        if (typeof element.scrollIntoView === 'function') {
+          element.scrollIntoView({
+            block: 'start',
+            behavior: this.reducedMotion.reduced() ? 'auto' : 'smooth',
+          });
+        }
+      });
+    });
+  }
 
   protected selectCategory(categoryId: string | null): void {
     this.activeCategoryId.set(categoryId);

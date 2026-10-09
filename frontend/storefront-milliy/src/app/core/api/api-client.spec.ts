@@ -5,6 +5,7 @@ import {
   ApiClient,
   ANONYMOUS,
   PLATFORM_API_REQUEST,
+  SILENT_FAILURE,
   versionFromETag,
   weakETag,
 } from './api-client';
@@ -196,6 +197,22 @@ describe('ApiClient.get', () => {
     expect(req.request.context.get(ANONYMOUS)).toBe(false);
     req.flush({});
     await promise;
+  });
+
+  it('marks a read whose failure the customer is not to be told about, and only when asked', async () => {
+    const { client, httpMock } = setUp();
+
+    const quiet = client.get('/content', { anonymous: true, silent: true });
+    const quietReq = httpMock.expectOne('/api/v1/content');
+    expect(quietReq.request.context.get(SILENT_FAILURE)).toBe(true);
+    quietReq.flush({});
+    await quiet;
+
+    const loud = client.get('/me');
+    const loudReq = httpMock.expectOne('/api/v1/me');
+    expect(loudReq.request.context.get(SILENT_FAILURE)).toBe(false);
+    loudReq.flush({});
+    await loud;
   });
 
   it('sends If-None-Match when an etag is supplied, and omits it otherwise', async () => {
