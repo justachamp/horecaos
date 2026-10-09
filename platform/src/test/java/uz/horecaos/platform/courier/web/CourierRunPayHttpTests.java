@@ -48,6 +48,7 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalService;
 import uz.horecaos.platform.audit.application.ApprovalDecisionService;
 import uz.horecaos.platform.courier.application.CourierRateCardService;
+import uz.horecaos.platform.courier.application.CourierSettlementService;
 import uz.horecaos.platform.courier.application.CourierShiftService;
 import uz.horecaos.platform.courier.application.DeliveryAccrualOrderCompletionTrigger;
 import uz.horecaos.platform.courier.domain.RateComponent;
@@ -193,6 +194,10 @@ class CourierRunPayHttpTests {
     @Autowired
     @SuppressWarnings("NullAway")
     private ApprovalDecisionService approvals;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private CourierSettlementService settlement;
 
     private final AtomicInteger keys = new AtomicInteger();
     private UUID channelId;
@@ -448,6 +453,29 @@ class CourierRunPayHttpTests {
                                 """).param("t", TENANT).query(String.class).single())
                 .isEqualTo("{-45000,-30000}");
 
+        // The statement line is where the courier sees it: the later order shows both distances and the reason, and
+        // the first order's line is exactly the line it always was.
+        UUID period = jdbc.sql(
+                        "SELECT settlement_period_id FROM fulfillment.courier_assignment_earnings WHERE tenant_id = :t LIMIT 1")
+                .param("t", TENANT)
+                .query(UUID.class)
+                .single();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> lines = (List<Map<String, Object>>) java.util.Objects.requireNonNull(settlement
+                .close(TENANT, period, ActorRef.user(MANAGER, null), "closing the run test's period")
+                .document()
+                .get("lines"));
+        Map<String, Object> directLine = lineOf(lines, firstShipment);
+        Map<String, Object> runLine = lineOf(lines, secondShipment);
+        assertThat(directLine).doesNotContainKeys("payBasis", "directDistanceMeters", "runKey");
+        assertThat(runLine)
+                .containsEntry("payBasis", "RUN_INCREMENT")
+                .containsEntry("directDistanceMeters", secondDistance)
+                .containsEntry("runKey", String.valueOf(runKey))
+                .containsEntry(
+                        "distanceMeters",
+                        secondOffer.path("quotedDistanceMeters").asInt());
+
         // The reveal of each door for the feed is on record, for the named purpose, and carries no address.
         assertThat(jdbc.sql("""
                                 SELECT count(*) FROM audit.audit_events
@@ -547,6 +575,13 @@ class CourierRunPayHttpTests {
                           FROM fulfillment.courier_assignment_earnings
                          WHERE tenant_id = :t AND shipment_id = :s
                         """).param("t", TENANT).param("s", shipmentId).query().singleRow();
+    }
+
+    private static Map<String, Object> lineOf(List<Map<String, Object>> lines, UUID shipmentId) {
+        return lines.stream()
+                .filter(line -> shipmentId.toString().equals(line.get("shipmentId")))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no statement line for shipment " + shipmentId));
     }
 
     private int planDistance(UUID orderId) {
