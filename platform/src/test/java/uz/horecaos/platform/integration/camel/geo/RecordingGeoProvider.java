@@ -1,5 +1,7 @@
 package uz.horecaos.platform.integration.camel.geo;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -16,6 +18,7 @@ import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.LoggerFactory;
 
 /**
  * A Yandex-shaped fake that remembers exactly what was sent to it (ADR 0007's controlled-fake
@@ -47,6 +50,7 @@ final class RecordingGeoProvider implements AutoCloseable {
     }
 
     static RecordingGeoProvider start() throws IOException {
+        keepTheServersOwnLogOutOfTheApplicationLog();
         HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
         // A pool, not the serial default: a stalled handler must not also stall the next call.
         server.setExecutor(Executors.newCachedThreadPool());
@@ -54,6 +58,28 @@ final class RecordingGeoProvider implements AutoCloseable {
         server.createContext("/", fake::handle);
         server.start();
         return fake;
+    }
+
+    /**
+     * The JDK server writes one DEBUG line per request it receives and one per reply it sends
+     * ({@code Exchange request line: GET /1.x/?apikey=...&geocode=...}, then the same path with
+     * the status) through {@code System.Logger}, which in a JVM that has started a Spring context
+     * is bridged into logback. Those lines are the <em>provider's</em> access log: this class
+     * stands in for Yandex, and what Yandex receives necessarily includes the key and the typed
+     * address, because that is the request. They are not output of the code under test, and
+     * {@code GeocodePortContractTests#noAddressOrKeyReachesALog} -- which captures the whole JVM
+     * at {@code ALL} to prove that code logs neither -- failed on them in CI (2026-10-09) while
+     * passing on a machine where nothing had bridged the JDK's logging yet.
+     *
+     * <p>Pinned on the logback logger, not on the JUL one: the bridge's level propagator resets
+     * every JUL level when it starts, and so would a pin made there. Re-applied on every start
+     * because a logback reconfiguration resets levels too. The server's WARN and above still
+     * arrive, so a fixture that genuinely breaks is still heard.
+     */
+    private static void keepTheServersOwnLogOutOfTheApplicationLog() {
+        if (LoggerFactory.getLogger("com.sun.net.httpserver") instanceof Logger jdkServerLog) {
+            jdkServerLog.setLevel(Level.WARN);
+        }
     }
 
     /** Scripts one answer from a fixture file. Queued, so a path can answer differently next time. */
