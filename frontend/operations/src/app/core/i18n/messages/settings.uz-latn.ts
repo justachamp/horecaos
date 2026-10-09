@@ -1699,4 +1699,22 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.printing.reason.amendedOrder': 'Buyurtma oʻzgartirildi',
   'settings.printing.reason.test': 'Sinov',
   'settings.printing.reason.other': 'Boshqa',
+  'settings.printing.policy.title': 'Til va muddatlar',
+  'settings.printing.policy.lead':
+    'Shu filial uchun belgilanadi. Bu yerda belgilamagan qiymatingiz brenddan, kompaniyadan yoki standartdan olinadi.',
+  'settings.printing.policy.locale.label': 'Chop etilgan hujjatlar tili',
+  'settings.printing.policy.locale.hint': 'Hujjat uchun bitta til — filial tili, mijozniki emas.',
+  'settings.printing.policy.expire.label':
+    'Kutayotgan oshxona chiptasi necha daqiqadan keyin tashlab yuboriladi',
+  'settings.printing.policy.expire.hint':
+    'Printerni shuncha kutgan chipta kech chop etilmaydi, tashlab yuboriladi (5 dan 240 gacha).',
+  'settings.printing.policy.late.label':
+    'Chop etilgan hujjat necha daqiqadan keyin «kechikkan» deb belgilanadi',
+  'settings.printing.policy.late.hint':
+    'Navbatda shundan koʻp turgan hujjat navbatga qoʻyilgan vaqtini koʻrsatadi (1 dan 1440 gacha).',
+  'settings.printing.policy.minutes': '{n} daq',
+  'settings.printing.policy.reason': 'Nima uchun oʻzgartiryapsiz (faoliyat jurnalida saqlanadi)',
+  'settings.printing.policy.saved': 'Shu filial uchun saqlandi.',
+  'settings.printing.policy.reverted': 'Filial qiymatni yana meros qilib oladi.',
+  'settings.printing.policy.revertReason': 'Meros qilib olingan qiymatga qaytarildi',
 };

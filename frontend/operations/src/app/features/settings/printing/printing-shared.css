@@ -213,3 +213,11 @@
   border: 1px solid var(--q-hairline);
   image-rendering: pixelated;
 }
+
+.policy {
+  margin-block-start: 12px;
+}
+
+.policy p {
+  margin: 2px 0 0;
+}

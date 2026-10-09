@@ -50,6 +50,7 @@
         [posMayPrint]="posMayPrint()"
         (changed)="reload()"
       />
+      <q-print-policy-card [scope]="branch" />
       <q-print-fiscal-receipt-card [routes]="routes()" [printers]="printers()" />
     } @else {
       <p class="q-body-sm banner" data-testid="print-page-pick-branch">

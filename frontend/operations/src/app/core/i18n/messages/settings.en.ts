@@ -1680,4 +1680,21 @@ export const settingsEn = {
   'settings.printing.reason.amendedOrder': 'The order was changed',
   'settings.printing.reason.test': 'Test',
   'settings.printing.reason.other': 'Something else',
+  'settings.printing.policy.title': 'Language and timing',
+  'settings.printing.policy.lead':
+    'Set for this branch. A value you do not set here is inherited from the brand, the company or the platform’s default.',
+  'settings.printing.policy.locale.label': 'Language of printed documents',
+  'settings.printing.policy.locale.hint':
+    'One language per document: the branch’s, never the customer’s.',
+  'settings.printing.policy.expire.label': 'Minutes before a waiting kitchen ticket is dropped',
+  'settings.printing.policy.expire.hint':
+    'A ticket still waiting for its printer after this long is dropped rather than printed stale (5 to 240).',
+  'settings.printing.policy.late.label': 'Minutes before a printed document says “delayed”',
+  'settings.printing.policy.late.hint':
+    'A document that waited longer than this in the queue prints the time it was queued (1 to 1440).',
+  'settings.printing.policy.minutes': '{n} min',
+  'settings.printing.policy.reason': 'Why you are changing it (kept in the activity log)',
+  'settings.printing.policy.saved': 'Saved for this branch.',
+  'settings.printing.policy.reverted': 'This branch inherits the value again.',
+  'settings.printing.policy.revertReason': 'Back to the inherited value',
 } as const;

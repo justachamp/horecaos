@@ -19,6 +19,7 @@ import { KitchenApi, StationResponse } from '../../kitchen/kitchen-api';
 import { SettingsScope } from '../settings-scope';
 import { AgentsCard } from './agents-card';
 import { FiscalReceiptCard } from './fiscal-receipt-card';
+import { PrintPolicyCard } from './print-policy-card';
 import { PrintQueueCard } from './print-queue-card';
 import { AgentView, PrinterView, PrintingApi, RouteView } from './printing-api';
 import { describePrintError } from './printing-errors';
@@ -51,6 +52,7 @@ type PageState = 'loading' | 'ready' | 'denied' | 'error';
     PrintersCard,
     AgentsCard,
     RoutesCard,
+    PrintPolicyCard,
     FiscalReceiptCard,
     ReceiptProfileCard,
     PrintQueueCard,

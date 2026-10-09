@@ -1,0 +1,97 @@
+<section
+  class="card"
+  data-testid="print-policy"
+  [attr.aria-label]="'settings.printing.policy.title' | t"
+>
+  <h2 class="q-subhead">{{ 'settings.printing.policy.title' | t }}</h2>
+  <p class="q-body-sm muted">{{ 'settings.printing.policy.lead' | t }}</p>
+
+  @if (loadError(); as message) {
+    <p class="q-body-sm error" role="alert" data-testid="print-policy-load-error">{{ message }}</p>
+  }
+  @if (notice(); as message) {
+    <p class="q-body-sm success" role="status" data-testid="print-policy-notice">{{ message }}</p>
+  }
+
+  @for (field of fields; track field.code) {
+    <div class="policy" [attr.data-field]="field.code">
+      @if (editing() === field.code) {
+        <div class="form">
+          <label class="q-body-sm">
+            {{ field.labelKey | t }}
+            @if (field.kind === 'locale') {
+              <select
+                class="field"
+                data-testid="print-policy-locale"
+                (change)="draft.set($any($event.target).value)"
+              >
+                @for (locale of locales; track locale.code) {
+                  <option [value]="locale.code" [selected]="draft() === locale.code">
+                    {{ locale.labelKey | t }}
+                  </option>
+                }
+              </select>
+            } @else {
+              <input
+                class="field"
+                type="number"
+                inputmode="numeric"
+                [min]="field.min ?? null"
+                [max]="field.max ?? null"
+                data-testid="print-policy-minutes"
+                [value]="draft()"
+                (input)="draft.set($any($event.target).value)"
+              />
+            }
+          </label>
+          <p class="q-caption muted">{{ field.hintKey | t }}</p>
+          <label class="q-body-sm">
+            {{ 'settings.printing.policy.reason' | t }}
+            <input
+              class="field"
+              type="text"
+              data-testid="print-policy-reason"
+              [value]="reason()"
+              (input)="reason.set($any($event.target).value)"
+            />
+          </label>
+          @if (error(); as message) {
+            <p class="q-body-sm error" role="alert" data-testid="print-policy-error">
+              {{ message }}
+            </p>
+          }
+          <div class="form__actions">
+            <button type="button" class="secondary" [disabled]="saving()" (click)="cancel()">
+              {{ 'settings.printing.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              class="primary"
+              data-testid="print-policy-save"
+              [disabled]="!canSave()"
+              (click)="save(field)"
+            >
+              {{ 'settings.printing.save' | t }}
+            </button>
+          </div>
+        </div>
+      } @else {
+        <q-inherited-field
+          [label]="field.labelKey | t"
+          [resolution]="resolutionFor(field.code)"
+          [loading]="loading()"
+          currentScopeType="LOCATION"
+          [settableScopes]="settable"
+          [formatValue]="formatter(field)"
+          (override)="startEditing(field)"
+          (setValueRequested)="startEditing(field)"
+          (revertToInherit)="revert(field)"
+        />
+        <p class="q-caption muted">{{ field.hintKey | t }}</p>
+      }
+    </div>
+  }
+  @if (editing() === null && error(); as message) {
+    <p class="q-body-sm error" role="alert" data-testid="print-policy-error">{{ message }}</p>
+  }
+</section>

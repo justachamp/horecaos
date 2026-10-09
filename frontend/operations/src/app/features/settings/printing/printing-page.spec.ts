@@ -7,6 +7,7 @@ import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { FeatureFlags } from '../../../core/feature-flags';
 import { I18n } from '../../../core/i18n/i18n';
 import { KitchenApi } from '../../kitchen/kitchen-api';
+import { ConfigurationApi } from '../configuration-api';
 import { SettingsScope } from '../settings-scope';
 import { PrintingApi } from './printing-api';
 import { el, flush } from './printing-dom';
@@ -55,6 +56,22 @@ async function render(
     imports: [PrintingPage],
     providers: [
       { provide: PrintingApi, useValue: api },
+      {
+        provide: ConfigurationApi,
+        useValue: {
+          resolution: vi.fn().mockResolvedValue({
+            keyCode: 'printing.document_locale',
+            value: 'ru',
+            cameFromDefault: true,
+            source: 'CODE_DEFAULT',
+            winningScope: null,
+            inspectedLevels: [],
+            describe: '',
+            currentVersionAtScope: null,
+          }),
+          setValue: vi.fn(),
+        },
+      },
       { provide: CurrentTenant, useValue: options.tenant ?? new FakeTenant() },
       { provide: SettingsScope, useValue: options.scope ?? new FakeScope() },
       { provide: FeatureFlags, useValue: new FakeFlags(options.flagsOn ?? true) },

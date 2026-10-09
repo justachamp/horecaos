@@ -1346,6 +1346,13 @@ Brand scope. The logo switch and up to three footer lines per language (48 chara
 80 mm roll). The seller, order number, totals, QR and fiscal block are **not fields**. Tape width is
 the printer's, set on the printer. **Judgement unchanged:** no receipt-template designer.
 
+### Language and timing
+
+Three ADR 0030 keys written at the chosen branch and shown with where each value comes from
+(`q-inherited-field`): `printing.document_locale` (the language a document prints in: the branch's,
+never the customer's), `printing.kitchen_ticket.expire_minutes` (5–240) and
+`printing.late_marker_minutes` (1–1440, the «delayed» line). Every change asks why.
+
 ### Print queue
 
 Beside the cards: every job at the branch, newest first, filterable by state, with the failure in

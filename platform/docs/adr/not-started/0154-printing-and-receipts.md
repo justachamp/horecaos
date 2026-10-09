@@ -35,9 +35,9 @@
   roll's width), and the order detail has «Печать» beside «Экспорт в кассу». The reference agent
   is `tools/print-agent` (Node, no dependencies, with a fake printer that is also the `printing`
   profile's `fake-printer` service in `compose.yaml`), run by `make print-agent-test` in CI, and
-  the runbook documents running it and the wire contract. Not built: the Settings editors for the
-  two location policy keys `printing.document_locale` and `printing.late_marker_minutes` (they
-  are settable through the configuration API and default to `ru` and 5); a render in CI inside the
+  the runbook documents running it and the wire contract. The screen also edits the three policy
+  keys (`printing.document_locale`, `printing.kitchen_ticket.expire_minutes` and
+  `printing.late_marker_minutes`) at the chosen branch. Not built: a render in CI inside the
   production image (the runtime image already carries `fontconfig` and `freetype`, and one
   render was run by hand in it on 2026-10-08, with the same layout and a 0.04% difference
   in dots from the developer's macOS rasteriser); the pilot's printer model (nothing has

@@ -1676,4 +1676,22 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.printing.reason.amendedOrder': 'Заказ изменили',
   'settings.printing.reason.test': 'Проверка',
   'settings.printing.reason.other': 'Другое',
+  'settings.printing.policy.title': 'Язык и сроки',
+  'settings.printing.policy.lead':
+    'Задаётся для этого филиала. Значение, которое вы не задали здесь, берётся у бренда, компании или по умолчанию.',
+  'settings.printing.policy.locale.label': 'Язык печатных документов',
+  'settings.printing.policy.locale.hint': 'Один язык на документ — язык филиала, а не клиента.',
+  'settings.printing.policy.expire.label':
+    'Через сколько минут ожидающий кухонный тикет отбрасывается',
+  'settings.printing.policy.expire.hint':
+    'Тикет, который так долго ждёт принтер, отбрасывается, а не печатается с опозданием (от 5 до 240).',
+  'settings.printing.policy.late.label':
+    'Через сколько минут напечатанный документ помечается «с задержкой»',
+  'settings.printing.policy.late.hint':
+    'Документ, пробывший в очереди дольше, печатается со временем постановки в очередь (от 1 до 1440).',
+  'settings.printing.policy.minutes': '{n} мин',
+  'settings.printing.policy.reason': 'Зачем вы это меняете (сохранится в журнале действий)',
+  'settings.printing.policy.saved': 'Сохранено для этого филиала.',
+  'settings.printing.policy.reverted': 'Теперь филиал снова наследует значение.',
+  'settings.printing.policy.revertReason': 'Возврат к унаследованному значению',
 };
