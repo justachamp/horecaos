@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.configuration.rls.TenantRlsSession;
-import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.devices.DeviceEnrolmentPort;
 import uz.horecaos.platform.iam.api.devices.DeviceEnrolmentPort.ApproveEnrolment;
@@ -101,7 +100,6 @@ public class PrintAgentService {
                         userCode,
                         ResourceScope.location(tenantId, brandId, locationId),
                         DevicePrincipalClass.PRINT_AGENT,
-                        PlatformRole.PRINT_AGENT.code(),
                         displayName),
                 approver);
         Map<String, Object> after = new LinkedHashMap<>();

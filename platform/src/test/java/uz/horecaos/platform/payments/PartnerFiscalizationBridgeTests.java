@@ -668,7 +668,8 @@ class PartnerFiscalizationBridgeTests {
                                 "22030000000000000", "123456", 796, "Vodka", "4600000000015", true));
         MarkedOrderReceiptProjection projection =
                 new MarkedOrderReceiptProjection(marks, classifications, service, protection, fact -> {}, CLOCK);
-        return new PartnerFiscalizationBridge(service, bindings, intents, orders, legalEntities, CLOCK, projection);
+        return new PartnerFiscalizationBridge(
+                service, bindings, intents, orders, legalEntities, binding -> true, CLOCK, projection);
     }
 
     /** A Click port that says it can carry codes and remembers every document it is asked to send. */

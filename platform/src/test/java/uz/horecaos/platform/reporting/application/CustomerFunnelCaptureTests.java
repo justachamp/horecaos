@@ -331,7 +331,7 @@ class CustomerFunnelCaptureTests {
         insertProfile(BRAND, ACCOUNT_SELF, tashkent(DAY, 9, 0));
         // A close from before the capture existed: no funnel capture wired.
         DayCloseService oldClose =
-                new DayCloseService(store, businessDays, new SubjectPseudonym(new StubProtection()), clock, null, null);
+                new DayCloseService(store, businessDays, new SubjectPseudonym(new StubProtection()), clock);
         oldClose.close(TENANT, DAY);
         assertThat(jdbc.sql("SELECT count(*) FROM reporting.fact_funnel_day")
                         .query(Long.class)
@@ -361,7 +361,7 @@ class CustomerFunnelCaptureTests {
     void theBackfillMarksDaysPastRetentionAsNotRecorded() {
         UUID cart = insertCart(webChannel, ACCOUNT_SELF, null, "CONVERTED", tashkent(DAY, 12, 0));
         insertOrder("ANCIENT", cart, webChannel, "WEB", ACCOUNT_SELF, tashkent(DAY, 12, 10));
-        new DayCloseService(store, businessDays, new SubjectPseudonym(new StubProtection()), clock, null, null)
+        new DayCloseService(store, businessDays, new SubjectPseudonym(new StubProtection()), clock)
                 .close(TENANT, DAY);
 
         clock.advance(Duration.ofDays(200));
@@ -381,7 +381,7 @@ class CustomerFunnelCaptureTests {
     void theHealthProbeFlagsAClosedDayWithOrdersAndNoFunnelRow() {
         UUID cart = insertCart(webChannel, ACCOUNT_SELF, null, "CONVERTED", tashkent(DAY, 12, 0));
         insertOrder("PROBE", cart, webChannel, "WEB", ACCOUNT_SELF, tashkent(DAY, 12, 10));
-        new DayCloseService(store, businessDays, new SubjectPseudonym(new StubProtection()), clock, null, null)
+        new DayCloseService(store, businessDays, new SubjectPseudonym(new StubProtection()), clock)
                 .close(TENANT, DAY);
         clock.advance(Duration.ofDays(10));
         FunnelHealthProbe probe = new FunnelHealthProbe(

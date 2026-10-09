@@ -90,7 +90,7 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
     private final Clock clock;
     private final @Nullable MarkedOrderReceiptProjection markedOrders;
 
-    /** A bridge wired without marked-goods projection: every order takes the aggregate line, as before ADR 0161. */
+    /** A bridge wired without marked-goods projection: an unmarked order takes the aggregate line where ADR 0166 allows it. */
     public PartnerFiscalizationBridge(
             PaymentFiscalService fiscalDocuments,
             PaymentBindingResolver bindings,
@@ -99,7 +99,7 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
             LegalEntityDirectory legalEntities,
             SyntheticLineGate syntheticLines,
             Clock clock) {
-        this(fiscalDocuments, bindings, intents, orders, legalEntities, clock, null);
+        this(fiscalDocuments, bindings, intents, orders, legalEntities, syntheticLines, clock, null);
     }
 
     /**
@@ -113,6 +113,7 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
             JdbcPaymentIntentStore intents,
             OrderDirectory orders,
             LegalEntityDirectory legalEntities,
+            SyntheticLineGate syntheticLines,
             Clock clock,
             @Nullable MarkedOrderReceiptProjection markedOrders) {
         this.fiscalDocuments = fiscalDocuments;

@@ -133,6 +133,7 @@ public class DeviceEnrolmentService implements DeviceEnrolmentPort {
         return switch (deviceClass) {
             case KITCHEN_KDS -> PlatformRole.KITCHEN_DEVICE;
             case KITCHEN_VDU -> PlatformRole.KITCHEN_VDU_DEVICE;
+            case PRINT_AGENT -> PlatformRole.PRINT_AGENT;
             case KIOSK -> PlatformRole.KIOSK_DEVICE;
         };
     }

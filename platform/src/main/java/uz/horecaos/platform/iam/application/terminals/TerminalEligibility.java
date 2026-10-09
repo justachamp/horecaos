@@ -63,7 +63,7 @@ public class TerminalEligibility {
         return switch (deviceClass) {
             case KITCHEN_KDS -> EnumSet.of(Capability.KITCHEN_TICKET_ADVANCE);
             // A class nobody unlocks has no set: ADR 0155 gives each future class its own, in the record that adds it.
-            case KITCHEN_VDU, KIOSK -> Set.of();
+            case KITCHEN_VDU, PRINT_AGENT, KIOSK -> Set.of();
         };
     }
 
