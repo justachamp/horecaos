@@ -168,6 +168,35 @@ describe('TenantOnboarding', () => {
     );
   });
 
+  it('recommends the deliveries-console module for a courier service, as a line and never as a grant (ADR 0164)', async () => {
+    await createWith(null, {
+      template: DEFAULT,
+      businessType: 'COURIER_SERVICE',
+      matched: false,
+      recommendedModule: 'deliveries-console',
+    });
+    await settle();
+
+    const start = panel(ru['onboarding.start.title']);
+    const line = start.querySelector('[data-testid="recommended-module"]');
+    expect(line?.textContent).toContain('deliveries-console');
+    expect(line?.textContent).toContain('Тип бизнеса его не включает');
+  });
+
+  it('says nothing about a module for a business type that has none to recommend', async () => {
+    await createWith(null, {
+      template: DEFAULT,
+      businessType: 'CAFE',
+      matched: false,
+      recommendedModule: null,
+    });
+    await settle();
+
+    expect(
+      panel(ru['onboarding.start.title']).querySelector('[data-testid="recommended-module"]'),
+    ).toBeNull();
+  });
+
   it('lets the operator choose another template, and says when the default is only a fallback', async () => {
     await createWith(null, { template: DEFAULT, businessType: 'CAFE', matched: false }, [
       DEFAULT,

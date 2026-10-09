@@ -14,6 +14,10 @@ package uz.horecaos.platform.ordering.domain;
  * because a hundred cancellations in one click is how one operator's mistake
  * becomes a hundred refunds.
  *
+ * <p>{@link #ASSIGN_COURIER} was ADR 0039's first supported action and ADR 0172 adds it
+ * as the third member: it reuses this class's one-transaction-per-item rule, its
+ * 200-order cap and its idempotency, and changes none of them.
+ *
  * <p>Deliberately absent, and why:
  *
  * <ul>
@@ -37,5 +41,15 @@ package uz.horecaos.platform.ordering.domain;
  */
 public enum BulkActionType {
     ADVANCE,
-    CANCEL
+    CANCEL,
+
+    /**
+     * N independent assignments of selected delivery orders to one named courier (ADR
+     * 0172), the first supported action ADR 0039 named and could not build until ADR
+     * 0014's single assignment existed. Each item is decided and applied in its own
+     * transaction through {@code fulfillment.api.CourierAssignmentPort}; the request
+     * additionally needs {@code delivery.manual_assign}, and a person's assignment
+     * overrides a dispatch rule, visibly, and never creates a run.
+     */
+    ASSIGN_COURIER
 }

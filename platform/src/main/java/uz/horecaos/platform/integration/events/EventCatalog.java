@@ -398,6 +398,16 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "Nobody decided before the approval deadline."),
             new EventContract(
+                    "OrderPaymentLapsed",
+                    1,
+                    "ordering",
+                    ORDERING_EVENTS_TOPIC,
+                    "orderId",
+                    "events/ordering.events/OrderPaymentLapsed.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "An unpaid order's window elapsed and it ended as PAYMENT_FAILED."),
+            new EventContract(
                     "OrderCancelled",
                     1,
                     "ordering",

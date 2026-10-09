@@ -548,6 +548,9 @@ public class JdbcCourierLedgerStore {
         params.put("pickupPoint", earning.protectedPickupPoint());
         params.put("deliveryPoint", earning.protectedDeliveryPoint());
         params.put("periodId", earning.settlementPeriodId());
+        params.put("payBasis", earning.payBasis());
+        params.put("runKey", earning.runKey());
+        params.put("directDistance", earning.directDistanceMeters());
 
         return jdbc.sql("""
                 INSERT INTO fulfillment.courier_assignment_earnings (
@@ -560,7 +563,8 @@ public class JdbcCourierLedgerStore {
                     fixed_minor, per_order_minor, per_km_minor, minimum_topup_minor,
                     total_minor, currency, geo_unverified,
                     protected_pickup_point, protected_delivery_point,
-                    settlement_period_id, computed_at)
+                    settlement_period_id, computed_at,
+                    pay_basis, run_key, direct_distance_meters)
                 VALUES (:id, :tenantId, :courierId, :shiftId, :shipmentId, :attemptId,
                     :legalEntityId, :locationId, :businessDate,
                     :rateCardId, :rateCardVersion, :courierTypeId,
@@ -570,7 +574,8 @@ public class JdbcCourierLedgerStore {
                     :fixed, :perOrder, :perKm, :topUp,
                     :total, :currency, :geoUnverified,
                     :pickupPoint, :deliveryPoint,
-                    :periodId, now())
+                    :periodId, now(),
+                    :payBasis, :runKey, :directDistance)
                 ON CONFLICT ON CONSTRAINT uq_earning_attempt DO NOTHING
                 """).params(params).update() == 1;
     }
@@ -870,7 +875,10 @@ public class JdbcCourierLedgerStore {
             @Nullable String protectedPickupPoint,
             @Nullable String protectedDeliveryPoint,
             @Nullable Instant pointsPurgedAt,
-            UUID settlementPeriodId) {}
+            UUID settlementPeriodId,
+            String payBasis,
+            @Nullable UUID runKey,
+            @Nullable Integer directDistanceMeters) {}
 
     public record StatementRow(
             UUID id,
@@ -926,7 +934,7 @@ public class JdbcCourierLedgerStore {
                    kitchen_handover_at, pickup_window_end, fixed_minor, per_order_minor,
                    per_km_minor, minimum_topup_minor, total_minor, currency, geo_unverified,
                    protected_pickup_point, protected_delivery_point, points_purged_at,
-                   settlement_period_id
+                   settlement_period_id, pay_basis, run_key, direct_distance_meters
               FROM fulfillment.courier_assignment_earnings
             """;
 
@@ -1015,6 +1023,9 @@ public class JdbcCourierLedgerStore {
                 rs.getString("protected_pickup_point"),
                 rs.getString("protected_delivery_point"),
                 JdbcCourierStore.instant(rs.getObject("points_purged_at", OffsetDateTime.class)),
-                rs.getObject("settlement_period_id", UUID.class));
+                rs.getObject("settlement_period_id", UUID.class),
+                rs.getString("pay_basis"),
+                rs.getObject("run_key", UUID.class),
+                rs.getObject("direct_distance_meters", Integer.class));
     }
 }

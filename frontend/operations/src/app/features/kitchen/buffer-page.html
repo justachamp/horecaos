@@ -43,20 +43,54 @@
                 @if (ticket.channelCode) {
                   <span class="chip chip--muted">{{ ticket.channelCode }}</span>
                 }
+                <!-- ADR 0168: why this ticket will not fire on its schedule. -->
+                @if (isHeldForPayment(ticket)) {
+                  <span
+                    class="chip buffer__hold"
+                    [class.buffer__hold--stuck]="holdStage(ticket) === 'overdue'"
+                    [attr.data-hold-stage]="holdStage(ticket)"
+                    data-testid="buffer-hold-chip"
+                    >{{ holdChipKey(ticket) | t }}</span
+                  >
+                }
               </td>
               <td>{{ releaseModeLabel(ticket.releaseMode) }}</td>
               <td class="q-tnum">{{ releaseAtLabel(ticket) ?? '—' }}</td>
               <td class="q-tnum">{{ targetReadyLabel(ticket) ?? '—' }}</td>
               <td class="buffer__actions">
-                <button
-                  type="button"
-                  class="buffer__release"
-                  [disabled]="isBusy(ticket)"
-                  (click)="releaseNow(ticket)"
-                  data-testid="buffer-release"
-                >
-                  {{ 'kitchen.buffer.releaseNow' | t }}
-                </button>
+                @if (isHeldForPayment(ticket)) {
+                  <!-- Not offered: the timer will not fire it and the endpoint answers 409 PAYMENT_HOLD. -->
+                  <button
+                    type="button"
+                    class="buffer__release"
+                    disabled
+                    [attr.title]="'kitchen.buffer.hold.releaseDisabled' | t"
+                    data-testid="buffer-release"
+                  >
+                    {{ 'kitchen.buffer.releaseNow' | t }}
+                  </button>
+                  @if (canOverrideHold()) {
+                    <button
+                      type="button"
+                      class="buffer__edit"
+                      [disabled]="isBusy(ticket)"
+                      (click)="startOverride(ticket)"
+                      data-testid="buffer-override"
+                    >
+                      {{ 'kitchen.buffer.override.action' | t }}
+                    </button>
+                  }
+                } @else {
+                  <button
+                    type="button"
+                    class="buffer__release"
+                    [disabled]="isBusy(ticket)"
+                    (click)="releaseNow(ticket)"
+                    data-testid="buffer-release"
+                  >
+                    {{ 'kitchen.buffer.releaseNow' | t }}
+                  </button>
+                }
                 <button
                   type="button"
                   class="buffer__edit"
@@ -77,6 +111,51 @@
                 </button>
               </td>
             </tr>
+            @if (overridingTicketId() === ticket.ticketId) {
+              <tr data-testid="buffer-override-row">
+                <td colspan="5">
+                  <form
+                    class="buffer__edit-form"
+                    (submit)="$event.preventDefault(); confirmOverride(ticket)"
+                  >
+                    <p class="q-caption buffer__edit-hint">
+                      {{ 'kitchen.buffer.override.lead' | t }}
+                    </p>
+                    <label class="buffer__edit-field">
+                      <span class="q-caption">{{ 'kitchen.buffer.override.reason' | t }}</span>
+                      <select
+                        [value]="overrideReasonCode()"
+                        (change)="setOverrideReason($any($event.target).value)"
+                        data-testid="buffer-override-reason"
+                      >
+                        @for (code of overrideReasons; track code) {
+                          <option [value]="code" [selected]="code === overrideReasonCode()">
+                            {{ overrideReasonLabel(code) }}
+                          </option>
+                        }
+                      </select>
+                    </label>
+                    <div class="buffer__edit-actions">
+                      <button
+                        type="submit"
+                        class="primary"
+                        [disabled]="isBusy(ticket)"
+                        data-testid="buffer-override-confirm"
+                      >
+                        {{ 'kitchen.buffer.override.confirm' | t }}
+                      </button>
+                      <button
+                        type="button"
+                        (click)="cancelOverride()"
+                        data-testid="buffer-override-cancel"
+                      >
+                        {{ 'kitchen.buffer.edit.cancel' | t }}
+                      </button>
+                    </div>
+                  </form>
+                </td>
+              </tr>
+            }
             @if (editingTicketId() === ticket.ticketId) {
               <tr data-testid="buffer-edit-row">
                 <td colspan="5">

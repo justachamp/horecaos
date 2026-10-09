@@ -641,7 +641,8 @@ public class OperationsDispatchRulesController {
             PickupView pickup,
             List<String> notes,
             List<String> violations,
-            boolean providerCalled) {
+            boolean providerCalled,
+            @Nullable GroupingFeedView grouping) {
 
         static SimulationResponse of(Simulation simulation) {
             return new SimulationResponse(
@@ -658,7 +659,38 @@ public class OperationsDispatchRulesController {
                     simulation.notes(),
                     simulation.violations(),
                     // Stated, not implied: a simulation asks no provider and no quote, ever.
-                    false);
+                    false,
+                    simulation.grouping() == null ? null : GroupingFeedView.of(simulation.grouping()));
+        }
+    }
+
+    /**
+     * ADR 0170: what the grouping bias measured for a recent plan, and the pay basis each offer would carry.
+     * Courier ids and distances only (ADR 0029).
+     */
+    public record GroupingFeedView(int candidates, List<GroupedCandidateView> measured) {
+
+        static GroupingFeedView of(DispatchRuleSimulator.GroupingFeed feed) {
+            return new GroupingFeedView(
+                    feed.candidates(),
+                    feed.measured().stream().map(GroupedCandidateView::of).toList());
+        }
+    }
+
+    public record GroupedCandidateView(
+            UUID courierId,
+            int activeAssignments,
+            int concurrencyCeiling,
+            @Nullable Integer groupableWithMetres,
+            String payBasis) {
+
+        static GroupedCandidateView of(DispatchRuleSimulator.GroupedCandidate candidate) {
+            return new GroupedCandidateView(
+                    candidate.courierId(),
+                    candidate.activeAssignments(),
+                    candidate.concurrencyCeiling(),
+                    candidate.groupableWithMetres(),
+                    candidate.payBasis());
         }
     }
 

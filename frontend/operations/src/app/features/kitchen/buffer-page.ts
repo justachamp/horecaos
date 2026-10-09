@@ -11,6 +11,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import {
   TimeZone,
   formatClock,
@@ -26,6 +27,13 @@ import { KitchenApi, TicketResponse } from './kitchen-api';
 
 /** Same cadence as the KDS queue (kitchen-queue-page.ts), until ADR 0045 exists. */
 const POLL_INTERVAL_MS = 10_000;
+
+/** ADR 0168's closed registry of reasons a person may fire a payment-held ticket anyway: no free text. */
+export const PAYMENT_HOLD_OVERRIDE_REASONS = [
+  'PAYMENT_PROMISED_AT_COUNTER',
+  'CUSTOMER_KNOWN_TO_BRANCH',
+  'MANAGER_DECISION',
+] as const;
 
 /**
  * Used until {@link BufferPage.locationTimeZone} resolves (or if it never
@@ -53,10 +61,15 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  * edit would do either, but the server's refusal is what actually decides
  * it, the same as every other capability-gated affordance in this console.
  *
- * **Paid-only hold** (orders.md nowhere specifies which payment fact gates
- * it, and ADR 0013's payment-method registry is itself not built) is
- * therefore not modelled — every held ticket in the buffer is shown, and
- * release is offered unconditionally.
+ * **Paid-only hold** (ADR 0168). A ticket the platform is holding for money its
+ * order requires and has not received says so on its row ("awaiting payment",
+ * then "blocked on payment" once its fire time passed, then "stuck" once the
+ * policy's overdue minutes did), and «Release now» is not offered for it:
+ * the endpoint answers `409 PAYMENT_HOLD` without an override. An operator who
+ * holds `kitchen.ticket.release.override` gets «Release anyway», which asks for
+ * one of the registered reason codes and sends it; nobody else sees it. The
+ * hold changes whether the timer may fire the ticket, never when it is due, so
+ * editing the fire time still works on a held row.
  */
 @Component({
   selector: 'q-buffer-page',
@@ -71,6 +84,7 @@ export class BufferPage implements OnInit {
   private readonly locationsApi = inject(LocationsApi);
   private readonly i18n = inject(I18n);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly capabilities = inject(SessionCapabilities);
 
   protected readonly tickets = signal<readonly TicketResponse[]>([]);
   protected readonly firstLoadComplete = signal(false);
@@ -80,6 +94,11 @@ export class BufferPage implements OnInit {
   protected readonly actionNotice = signal<string | null>(null);
   /** The branch's real IANA zone once {@link loadLocationTimeZone} resolves; {@link PLACEHOLDER_TIME_ZONE} until then. */
   protected readonly locationTimeZone = signal<TimeZone>(PLACEHOLDER_TIME_ZONE);
+
+  /** ADR 0168: the one payment-held row, if any, whose «Release anyway» reason picker is open. */
+  protected readonly overridingTicketId = signal<string | null>(null);
+  protected readonly overrideReasonCode = signal<string>(PAYMENT_HOLD_OVERRIDE_REASONS[0]);
+  protected readonly overrideReasons = PAYMENT_HOLD_OVERRIDE_REASONS;
 
   /** The one row, if any, whose fire-time editor is open. */
   protected readonly editingTicketId = signal<string | null>(null);
@@ -217,11 +236,74 @@ export class BufferPage implements OnInit {
     }
   }
 
+  /** ADR 0168: waiting for money, whatever the fire time says. */
+  protected isHeldForPayment(ticket: TicketResponse): boolean {
+    return ticket.holdReason === 'PAYMENT';
+  }
+
+  /**
+   * `holding` until the fire time, `blocked` once it passed with the money still absent, `overdue`
+   * once the policy's minutes after that passed too -- the three stages the sweep records.
+   */
+  protected holdStage(ticket: TicketResponse): 'holding' | 'blocked' | 'overdue' {
+    if (ticket.holdOverdue) {
+      return 'overdue';
+    }
+    return ticket.holdBlocked ? 'blocked' : 'holding';
+  }
+
+  protected holdChipKey(
+    ticket: TicketResponse,
+  ):
+    | 'kitchen.buffer.hold.awaitingPayment'
+    | 'kitchen.buffer.hold.blockedOnPayment'
+    | 'kitchen.buffer.hold.stuckOnPayment' {
+    switch (this.holdStage(ticket)) {
+      case 'overdue':
+        return 'kitchen.buffer.hold.stuckOnPayment';
+      case 'blocked':
+        return 'kitchen.buffer.hold.blockedOnPayment';
+      default:
+        return 'kitchen.buffer.hold.awaitingPayment';
+    }
+  }
+
+  /** Only a person holding the override capability is offered «Release anyway»; the server decides all the same. */
+  protected canOverrideHold(): boolean {
+    return this.capabilities.has('KITCHEN_TICKET_RELEASE_OVERRIDE');
+  }
+
+  protected startOverride(ticket: TicketResponse): void {
+    this.overridingTicketId.set(ticket.ticketId);
+    this.overrideReasonCode.set(PAYMENT_HOLD_OVERRIDE_REASONS[0]);
+  }
+
+  protected cancelOverride(): void {
+    this.overridingTicketId.set(null);
+  }
+
+  protected setOverrideReason(value: string): void {
+    this.overrideReasonCode.set(value);
+  }
+
+  protected overrideReasonLabel(code: string): string {
+    switch (code) {
+      case 'PAYMENT_PROMISED_AT_COUNTER':
+        return this.i18n.t('kitchen.buffer.override.reason.PAYMENT_PROMISED_AT_COUNTER');
+      case 'CUSTOMER_KNOWN_TO_BRANCH':
+        return this.i18n.t('kitchen.buffer.override.reason.CUSTOMER_KNOWN_TO_BRANCH');
+      case 'MANAGER_DECISION':
+        return this.i18n.t('kitchen.buffer.override.reason.MANAGER_DECISION');
+      default:
+        return code;
+    }
+  }
+
   protected isBusy(ticket: TicketResponse): boolean {
     return this.busyTicketIds().has(ticket.ticketId);
   }
 
-  protected async releaseNow(ticket: TicketResponse): Promise<void> {
+  protected async releaseNow(ticket: TicketResponse, overrideReasonCode?: string): Promise<void> {
     const scope = this.location.scope();
     if (!scope || this.isBusy(ticket)) {
       return;
@@ -229,8 +311,22 @@ export class BufferPage implements OnInit {
     this.setBusy(ticket.ticketId, true);
     try {
       const updated = await firstValueFrom(
-        this.kitchen.release(scope, ticket.ticketId, ticket.version, 'OPERATIONS_BUFFER_RELEASE'),
+        overrideReasonCode === undefined
+          ? this.kitchen.release(
+              scope,
+              ticket.ticketId,
+              ticket.version,
+              'OPERATIONS_BUFFER_RELEASE',
+            )
+          : this.kitchen.release(
+              scope,
+              ticket.ticketId,
+              ticket.version,
+              'OPERATIONS_BUFFER_RELEASE',
+              overrideReasonCode,
+            ),
       );
+      this.overridingTicketId.set(null);
       // Fired now — it belongs on the KDS queue, not here.
       this.tickets.update((current) => current.filter((row) => row.ticketId !== updated.ticketId));
     } catch (error) {
@@ -242,6 +338,11 @@ export class BufferPage implements OnInit {
     } finally {
       this.setBusy(ticket.ticketId, false);
     }
+  }
+
+  /** «Release anyway»: fires a payment-held ticket with the registered reason the operator picked. */
+  protected async confirmOverride(ticket: TicketResponse): Promise<void> {
+    await this.releaseNow(ticket, this.overrideReasonCode());
   }
 
   protected dismissNotice(): void {

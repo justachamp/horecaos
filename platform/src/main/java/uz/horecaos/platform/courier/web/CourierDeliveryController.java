@@ -361,6 +361,12 @@ public class CourierDeliveryController {
     /**
      * @param customerLocationRevealable the tenant reveals the customer's address before acceptance,
      *                                   so this offer's {@code customer-location-reveals} will answer
+     * @param payBasis                   ADR 0170: {@code DIRECT}, or {@code RUN_INCREMENT} when this order joins
+     *                                   a run the courier already carries. Stamped when the offer was made and
+     *                                   never lowered
+     * @param quotedEarningMinor         what the order earns on that basis, shown before accepting; null when no
+     *                                   rate card resolves for this courier
+     * @param quotedDistanceMeters       the distance the quote is paid on, so a smaller figure can say why
      */
     record CourierOfferResponse(
             UUID offerId,
@@ -378,7 +384,11 @@ public class CourierDeliveryController {
             Instant pickupWindowEnd,
             @Nullable Instant promisedDeliveryEnd,
             CourierPickupResponse pickup,
-            boolean customerLocationRevealable) {
+            boolean customerLocationRevealable,
+            String payBasis,
+            @Nullable Long quotedEarningMinor,
+            @Nullable String quoteCurrency,
+            @Nullable Integer quotedDistanceMeters) {
 
         static CourierOfferResponse of(OfferView view) {
             Offer offer = view.offer();
@@ -398,7 +408,11 @@ public class CourierDeliveryController {
                     offer.pickupWindowEnd(),
                     offer.promisedDeliveryEnd(),
                     CourierPickupResponse.of(offer.pickup()),
-                    view.customerLocationRevealable());
+                    view.customerLocationRevealable(),
+                    offer.payBasis(),
+                    view.quotedEarningMinor(),
+                    view.quoteCurrency(),
+                    view.quotedDistanceMeters());
         }
     }
 

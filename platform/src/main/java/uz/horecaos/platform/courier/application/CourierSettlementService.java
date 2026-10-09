@@ -459,6 +459,13 @@ public class CourierSettlementService {
                             line.put("rateCardVersion", earning.rateCardVersion());
                             line.put("onTimeOutcome", earning.onTimeOutcome().name());
                             line.put("amountMinor", earning.totalMinor());
+                            // ADR 0170: a run's later order shows both distances and the reason. A DIRECT
+                            // line gains no key, so every statement without a run hashes exactly as it did.
+                            if ("RUN_INCREMENT".equals(earning.payBasis())) {
+                                line.put("payBasis", earning.payBasis());
+                                line.put("directDistanceMeters", earning.directDistanceMeters());
+                                line.put("runKey", String.valueOf(earning.runKey()));
+                            }
                             return line;
                         })
                         .toList());

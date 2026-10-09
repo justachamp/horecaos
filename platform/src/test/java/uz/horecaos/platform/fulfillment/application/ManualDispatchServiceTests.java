@@ -338,11 +338,146 @@ class ManualDispatchServiceTests {
         assertThat(realtime.signals).extracting(RealtimeSignal::channel).containsExactly(StreamChannel.DISPATCH_BOARD);
     }
 
+    @Test
+    @DisplayName("ADR 0172: a CANCELLED plan is not handed a courier and is not dragged back out of CANCELLED")
+    void assignRefusesACancelledPlan() {
+        DeliveryPlan plan = openPlan();
+        jdbc.sql("UPDATE fulfillment.delivery_plans SET status = 'CANCELLED' WHERE id = :id")
+                .param("id", plan.id())
+                .update();
+        int version = planVersion(plan.id());
+
+        ManualDispatchService.DispatchOutcome outcome =
+                dispatch.assign(TENANT, plan.id(), COURIER, version, "OPERATIONS_MANUAL_ASSIGN", OPERATOR);
+
+        assertThat(outcome.applied()).as("a cancelled plan is over").isFalse();
+        assertThat(outcome.reason()).isEqualTo("PLAN_NOT_OPEN");
+        assertThat(countShipmentsFor(plan.id())).isZero();
+        assertThat(planStatus(plan.id())).isEqualTo("CANCELLED");
+        assertThat(audit.facts).isEmpty();
+        assertThat(realtime.signals).isEmpty();
+    }
+
+    @Test
+    @DisplayName("ADR 0172: a COMPLETED plan is not handed a second courier after the food was delivered")
+    void assignRefusesACompletedPlan() {
+        DeliveryPlan plan = openPlan();
+        jdbc.sql("UPDATE fulfillment.delivery_plans SET status = 'COMPLETED' WHERE id = :id")
+                .param("id", plan.id())
+                .update();
+        int version = planVersion(plan.id());
+
+        ManualDispatchService.DispatchOutcome outcome =
+                dispatch.assign(TENANT, plan.id(), COURIER, version, "OPERATIONS_MANUAL_ASSIGN", OPERATOR);
+
+        assertThat(outcome.applied()).isFalse();
+        assertThat(outcome.reason()).isEqualTo("PLAN_NOT_OPEN");
+        assertThat(countShipmentsFor(plan.id())).isZero();
+        assertThat(planStatus(plan.id())).isEqualTo("COMPLETED");
+    }
+
+    @Test
+    @DisplayName("ADR 0172: a plan automated sourcing is mid-decision on is not pre-empted by a person")
+    void assignDoesNotPreemptAPlanBeingSourced() {
+        DeliveryPlan plan = openPlan();
+        jdbc.sql("UPDATE fulfillment.delivery_plans SET status = 'SOURCING' WHERE id = :id")
+                .param("id", plan.id())
+                .update();
+
+        ManualDispatchService.DispatchOutcome outcome = dispatch.assign(
+                TENANT, plan.id(), COURIER, planVersion(plan.id()), "OPERATIONS_MANUAL_ASSIGN", OPERATOR);
+
+        assertThat(outcome.applied()).isFalse();
+        assertThat(outcome.reason()).isEqualTo("ALREADY_BEING_SOURCED");
+        assertThat(countShipmentsFor(plan.id())).isZero();
+    }
+
+    @Test
+    @DisplayName("ADR 0172: an assignment retried under the same attempt key reaches the attempt it already "
+            + "opened instead of opening a second one")
+    void assignUnderAKeyIsIdempotentAcrossACrashBetweenOpenAndWin() {
+        DeliveryPlan plan = openPlan();
+        String key = "bulk:0123456789abcdef:" + plan.orderId();
+        // The state a crash between open and win leaves behind: the attempt exists, REQUESTED, no shipment.
+        jdbc.sql("""
+                INSERT INTO fulfillment.assignment_attempts (id, tenant_id, delivery_plan_id,
+                    sequence_number, source_type, courier_id, status, idempotency_key, decision_reason)
+                VALUES (:id, :t, :plan, 1, 'INTERNAL', :courier, 'REQUESTED', :key, 'OPERATIONS_BULK_ASSIGN')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("t", TENANT)
+                .param("plan", plan.id())
+                .param("courier", COURIER)
+                .param("key", key)
+                .update();
+
+        ManualDispatchService.DispatchOutcome outcome = dispatch.assign(
+                TENANT,
+                plan.id(),
+                COURIER,
+                plan.version(),
+                "OPERATIONS_BULK_ASSIGN",
+                OPERATOR,
+                key,
+                new ManualDispatchService.AssignmentContext(plan.id().toString(), null, List.of()));
+
+        assertThat(outcome.applied()).isTrue();
+        assertThat(countShipmentsFor(plan.id())).isEqualTo(1L);
+        assertThat(jdbc.sql("SELECT count(*) FROM fulfillment.assignment_attempts WHERE delivery_plan_id = :p")
+                        .param("p", plan.id())
+                        .query(Long.class)
+                        .single())
+                .as("the retry reached the attempt the crash left, it opened no second one")
+                .isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("ADR 0172: another dispatcher's live attempt on the plan is theirs, and the call neither wins "
+            + "with it nor books its courier")
+    void assignDoesNotWinWithAnotherDispatchersLiveAttempt() {
+        DeliveryPlan plan = openPlan();
+        UUID otherCourier = UUID.fromString("44444444-4444-4444-4444-444444444444");
+        seedCourier(otherCourier, "K-002");
+        jdbc.sql("""
+                INSERT INTO fulfillment.assignment_attempts (id, tenant_id, delivery_plan_id,
+                    sequence_number, source_type, courier_id, status, idempotency_key, decision_reason)
+                VALUES (:id, :t, :plan, 1, 'INTERNAL', :courier, 'REQUESTED', 'someone-elses-key', 'OPERATIONS_MANUAL_ASSIGN')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("t", TENANT)
+                .param("plan", plan.id())
+                .param("courier", otherCourier)
+                .update();
+
+        ManualDispatchService.DispatchOutcome outcome =
+                dispatch.assign(TENANT, plan.id(), COURIER, plan.version(), "OPERATIONS_MANUAL_ASSIGN", OPERATOR);
+
+        assertThat(outcome.applied()).isFalse();
+        assertThat(outcome.reason()).isEqualTo("ALREADY_BEING_SOURCED");
+        assertThat(countShipmentsFor(plan.id()))
+                .as("no shipment: the call did not win with the other dispatcher's attempt")
+                .isZero();
+    }
+
     // -------------------------------------------------------------- helpers
 
     private DeliveryPlan openPlan() {
         UUID orderId = seedDeliveryOrder();
         return planning.open(TENANT, BRAND, branch, orderId, CONFIRMED).orElseThrow();
+    }
+
+    private int planVersion(UUID planId) {
+        return jdbc.sql("SELECT version FROM fulfillment.delivery_plans WHERE id = :id")
+                .param("id", planId)
+                .query(Integer.class)
+                .single();
+    }
+
+    private String planStatus(UUID planId) {
+        return jdbc.sql("SELECT status FROM fulfillment.delivery_plans WHERE id = :id")
+                .param("id", planId)
+                .query(String.class)
+                .single();
     }
 
     private long countShipmentsFor(UUID planId) {

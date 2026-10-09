@@ -385,7 +385,33 @@ class OrderAmendmentAndOutcomeTests {
                                 jdbc, objectMapper)),
                 new uz.horecaos.platform.ordering.infrastructure.catalog.JdbcCartMenuRules(jdbc, objectMapper));
         bulkActions = new OrderBulkActionService(
-                orderStore, new JdbcBulkOperationStore(jdbc), orderState, outcomes, auditRecorder, clock);
+                orderStore,
+                new JdbcBulkOperationStore(jdbc),
+                orderState,
+                outcomes,
+                auditRecorder,
+                clock,
+                new uz.horecaos.platform.fulfillment.api.CourierAssignmentPort() {
+                    @Override
+                    public Outcome assignForOrder(
+                            UUID tenantId,
+                            UUID brandId,
+                            UUID locationId,
+                            UUID orderId,
+                            UUID courierId,
+                            String reasonCode,
+                            String attemptKey,
+                            UUID bulkOperationId,
+                            uz.horecaos.platform.audit.api.ActorRef actor) {
+                        throw new UnsupportedOperationException("this suite bulk-applies ADVANCE and CANCEL only");
+                    }
+
+                    @Override
+                    public boolean courierExists(UUID tenantId, UUID courierId) {
+                        return false;
+                    }
+                },
+                false);
 
         var migrationOwnership = new MigrationOwnershipService(
                 new JdbcMigrationScopeStore(jdbc, objectMapper), new SimpleMeterRegistry());

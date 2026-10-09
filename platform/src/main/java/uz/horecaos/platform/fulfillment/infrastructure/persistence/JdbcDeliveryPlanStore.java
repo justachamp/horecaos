@@ -152,6 +152,26 @@ public class JdbcDeliveryPlanStore {
                 .list();
     }
 
+    /**
+     * The order's newest plan whatever its status, {@code CANCELLED} included.
+     *
+     * <p>{@link #findByOrder} answers only the live plan, so a cancelled one reads as
+     * "no plan". A person assigning a courier needs to tell "this order never had a
+     * plan" from "its plan is over" (ADR 0172: {@code NO_DELIVERY_PLAN} against
+     * {@code PLAN_NOT_OPEN}).
+     */
+    public Optional<DeliveryPlan> findLatestByOrder(UUID tenantId, UUID orderId) {
+        return jdbc.sql(SELECT + """
+                 WHERE tenant_id = :tenantId AND order_id = :orderId
+                 ORDER BY (status <> 'CANCELLED') DESC, created_at DESC
+                 LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query(JdbcDeliveryPlanStore::mapPlan)
+                .optional();
+    }
+
     /** The live plan, which {@code ux_plan_one_live} guarantees is at most one. */
     public Optional<DeliveryPlan> findByOrder(UUID tenantId, UUID orderId) {
         return jdbc.sql(SELECT + """

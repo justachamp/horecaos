@@ -80,8 +80,8 @@ public class PaymentWindowAuthoringService {
                 .optional()
                 .flatMap(scope -> policies.resolve(OrderingConfigurationKeys.PAYMENT_WINDOW_POLICY, scope));
         return resolved.map(found ->
-                        new Window(found.document().window(), found.document().action(), true))
-                .orElseGet(() -> new Window(fallback, Action.FLAG_ONLY, false));
+                        new Window(found.document().window(), found.document().action(), true, found.policyVersion()))
+                .orElseGet(() -> new Window(fallback, Action.FLAG_ONLY, false, 0));
     }
 
     /** The document in force at a scope, read from the table and paired with the version a save is checked against. */
@@ -99,8 +99,9 @@ public class PaymentWindowAuthoringService {
     /**
      * Publishes the next version at exactly {@code scope}.
      *
-     * @throws ApiException {@code VALIDATION_FAILED} for a number outside its bounds or for {@code CANCEL},
-     *                      {@code STALE_VERSION} when the scope has moved on
+     * @throws ApiException {@code VALIDATION_FAILED} for a number outside its bounds,
+     *                      {@code PAYMENT_WINDOW_TOO_SHORT_FOR_CANCEL} for {@code CANCEL} under fifteen
+     *                      minutes, {@code STALE_VERSION} when the scope has moved on
      */
     @Transactional
     public Editor author(
@@ -112,6 +113,14 @@ public class PaymentWindowAuthoringService {
             Duration fallback) {
 
         requireSettable(scope);
+        if (document.action() == Action.CANCEL
+                && document.windowMinutes() >= PaymentWindowPolicy.MIN_MINUTES
+                && document.windowMinutes() < PaymentWindowPolicy.MIN_CANCEL_MINUTES) {
+            throw new ApiException(
+                    ErrorCode.PAYMENT_WINDOW_TOO_SHORT_FOR_CANCEL,
+                    "A window that cancels an unpaid order is at least %d minutes"
+                            .formatted(PaymentWindowPolicy.MIN_CANCEL_MINUTES));
+        }
         List<String> violations = document.violations();
         if (!violations.isEmpty()) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, String.join("; ", violations));
@@ -180,10 +189,11 @@ public class PaymentWindowAuthoringService {
     }
 
     /**
-     * @param staleAfter how long an order may sit awaiting payment
-     * @param authored   false when this is the deploy-property fallback
+     * @param staleAfter    how long an order may sit awaiting payment
+     * @param authored      false when this is the deploy-property fallback
+     * @param policyVersion the version of the document in force; 0 for the fallback
      */
-    public record Window(Duration staleAfter, Action action, boolean authored) {}
+    public record Window(Duration staleAfter, Action action, boolean authored, int policyVersion) {}
 
     /**
      * @param isDefault      nothing was published anywhere in the chain, so the deploy default applies

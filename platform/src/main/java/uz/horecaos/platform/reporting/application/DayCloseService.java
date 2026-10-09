@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -227,13 +228,18 @@ public class DayCloseService {
         derived.reviews().forEach(store::insertReviewFact);
         derived.reviewTags().forEach(store::insertReviewTagFact);
         derived.recoveryCases().forEach(store::upsertRecoveryCaseFact);
+        // ADR 0163 (Decision 1): the portions each station fired, in the same transaction for the same "a
+        // day is written whole or not at all" reason. This extends the close job's one stated exception
+        // ("reads ordering and payments") by one source, kitchen, exactly as ADR 0115 did for tenders.
+        derived.stationLoads().forEach(store::insertStationLoadFact);
 
         store.completeRun(runId, derived.orders().size(), derived.lines().size(), 0, clock.instant());
 
         log.info(
                 "Closed business day {} for tenant {}: {} orders, {} lines, {} tenders, {} refunds, "
                         + "{} call-hours, {} deliveries, {} fee resolutions, {} external-delivery costs, "
-                        + "{} promotion redemptions, {} staff shifts, {} reviews, {} recovery cases",
+                        + "{} promotion redemptions, {} staff shifts, {} reviews, {} recovery cases, "
+                        + "{} station-hours",
                 businessDate,
                 tenantId,
                 derived.orders().size(),
@@ -247,7 +253,8 @@ public class DayCloseService {
                 derived.promotionRedemptions().size(),
                 derived.staffShifts().size(),
                 derived.reviews().size(),
-                derived.recoveryCases().size());
+                derived.recoveryCases().size(),
+                derived.stationLoads().size());
 
         return new CloseResult(
                 runId,
@@ -329,6 +336,7 @@ public class DayCloseService {
         compareReviewFacts(divergences, tenantId, businessDate, derived.reviews());
         compareRecoveryFacts(divergences, tenantId, businessDate, derived.recoveryCases());
         comparePaymentMix(divergences, tenantId, businessDate, derived.tenders());
+        compareStationLoad(divergences, tenantId, businessDate, derived.stationLoads());
 
         for (Divergence divergence : divergences) {
             store.insertDivergence(
@@ -636,6 +644,9 @@ public class DayCloseService {
                         source.remedyMoneyMinor() > 0 ? source.remedyCurrency() : null));
             }
         }
+        // ADR 0163: the portions each station fired, at the instant the ticket fired, in the same
+        // [from, to) range as every source read above.
+        List<ReportingFacts.StationLoadFact> stationLoads = stationLoadsOf(tenantId, businessDate, boundary);
 
         return new DerivedDay(
                 orders,
@@ -652,11 +663,110 @@ public class DayCloseService {
                 staffShiftFacts,
                 reviewFactList,
                 reviewTagFactList,
-                recoveryCaseFacts);
+                recoveryCaseFacts,
+                stationLoads);
     }
 
     private static @Nullable Long seconds(Instant from, @Nullable Instant to) {
         return to == null ? null : Duration.between(from, to).toSeconds();
+    }
+
+    private List<ReportingFacts.StationLoadFact> stationLoadsOf(
+            UUID tenantId, LocalDate businessDate, BusinessDayBoundary boundary) {
+        return store
+                .readSourceStationLoad(tenantId, boundary.startOf(businessDate), boundary.endOf(businessDate))
+                .stream()
+                .map(source -> new ReportingFacts.StationLoadFact(
+                        tenantId,
+                        businessDate,
+                        source.locationId(),
+                        source.stationId(),
+                        source.stationCode(),
+                        source.stationRole(),
+                        source.operatingHour(),
+                        source.portions(),
+                        source.tickets(),
+                        boundary.version(),
+                        MetricRegistry.CALCULATION_VERSION))
+                .toList();
+    }
+
+    /**
+     * ADR 0163 Decision 1, the fact-scoped rebuild: deletes and rewrites {@code reporting.fact_station_load}
+     * for one business date, calls no {@code clearDay}, and touches no other fact and no aggregate, so no
+     * figure a manager acted on moves.
+     *
+     * <p>It is allowed because the fact is new: a closed day has no earlier figure for anybody to have acted
+     * on, which is the reason ADR 0043 gives for the recut's rule that it never writes. It takes the boundary
+     * version the day closed under (recorded on that date's {@code CLOSE} run) and refuses a date whose
+     * version differs from the tenant's current one ({@link RebuildStatus#BOUNDARY_CHANGED}), leaving the
+     * date without rows, which the headcount plan skips as a non-qualifying date. Only the one-time backfill
+     * calls it; no schedule does. Re-running it over unchanged tickets reproduces byte-identical rows.
+     */
+    @Transactional
+    public StationLoadRebuild rebuildStationLoad(UUID tenantId, LocalDate businessDate) {
+        BusinessDayBoundary boundary = businessDays.boundaryFor(tenantId);
+        Optional<Integer> closedUnder = store.closedUnderBoundaryVersion(tenantId, businessDate);
+        if (closedUnder.isEmpty()) {
+            // A date that was never closed has no day for the fact to belong to; the close writes it.
+            return new StationLoadRebuild(businessDate, RebuildStatus.NOT_CLOSED, 0);
+        }
+        if (closedUnder.get() != boundary.version()) {
+            return new StationLoadRebuild(businessDate, RebuildStatus.BOUNDARY_CHANGED, 0);
+        }
+        List<ReportingFacts.StationLoadFact> facts = stationLoadsOf(tenantId, businessDate, boundary);
+        store.deleteStationLoad(tenantId, businessDate);
+        facts.forEach(store::insertStationLoadFact);
+        log.info(
+                "Rebuilt the station-load fact of {} for tenant {}: {} station-hours",
+                businessDate,
+                tenantId,
+                facts.size());
+        return new StationLoadRebuild(businessDate, RebuildStatus.REBUILT, facts.size());
+    }
+
+    /**
+     * ADR 0163: the portions each station fired in the day, per location and station, in thousandths of a
+     * portion (exact: {@code portions} has three decimals and the divergence columns are {@code bigint}),
+     * against the rows the close stored. A difference is a divergence row and nothing else: the recut
+     * never writes this fact.
+     *
+     * <p>A date with no stored rows at all is not compared. The fact starts on the close that first wrote
+     * it, and a day closed before that has nothing to disagree with; a day closed after it that fired any
+     * ticket always has rows, so a ticket that fires, or is struck, after the close is still reported.
+     */
+    private void compareStationLoad(
+            List<Divergence> into,
+            UUID tenantId,
+            LocalDate businessDate,
+            List<ReportingFacts.StationLoadFact> derived) {
+        List<ReportingFacts.StationLoadFact> storedFacts = store.readStationLoadFacts(tenantId, businessDate);
+        if (storedFacts.isEmpty()) {
+            return;
+        }
+        Map<String, Long> stored = new LinkedHashMap<>();
+        for (var fact : storedFacts) {
+            stored.merge(stationDimension(fact.locationId(), fact.stationId()), fact.thousandths(), Long::sum);
+        }
+        Map<String, Long> fresh = new LinkedHashMap<>();
+        for (var fact : derived) {
+            fresh.merge(stationDimension(fact.locationId(), fact.stationId()), fact.thousandths(), Long::sum);
+        }
+        java.util.Set<String> slices = new java.util.LinkedHashSet<>(stored.keySet());
+        slices.addAll(fresh.keySet());
+        for (String slice : slices) {
+            compare(
+                    into,
+                    slice,
+                    "kitchen_station_portions",
+                    1,
+                    stored.getOrDefault(slice, 0L),
+                    fresh.getOrDefault(slice, 0L));
+        }
+    }
+
+    private static String stationDimension(UUID locationId, UUID stationId) {
+        return "location=%s;station=%s".formatted(locationId, stationId);
     }
 
     /**
@@ -1049,7 +1159,20 @@ public class DayCloseService {
             List<StaffShiftFact> staffShifts,
             List<ReportingFacts.ReviewFact> reviews,
             List<ReportingFacts.ReviewTagFact> reviewTags,
-            List<ReportingFacts.RecoveryCaseFact> recoveryCases) {}
+            List<ReportingFacts.RecoveryCaseFact> recoveryCases,
+            List<ReportingFacts.StationLoadFact> stationLoads) {}
+
+    /** What a fact-scoped station-load rebuild did for one date. */
+    public enum RebuildStatus {
+        /** The date's rows were deleted and rewritten from the tickets. */
+        REBUILT,
+        /** The date closed under another boundary regime than the tenant's current one: left without rows. */
+        BOUNDARY_CHANGED,
+        /** The date was never closed, so there is no day for the fact to belong to. */
+        NOT_CLOSED
+    }
+
+    public record StationLoadRebuild(LocalDate businessDate, RebuildStatus status, int rows) {}
 
     /**
      * One slice whose re-derived figure disagrees with the stored one.

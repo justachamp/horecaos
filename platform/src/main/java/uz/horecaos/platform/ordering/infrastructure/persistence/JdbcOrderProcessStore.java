@@ -90,6 +90,28 @@ public class JdbcOrderProcessStore {
                 .list();
     }
 
+    /**
+     * Whether any payment attempt on the order is {@code UNCERTAIN} (ADR 0170 Decision 15, ADR 0007).
+     *
+     * <p>A question about money is owned by its resolver, and an unpaid order is never ended over an
+     * unanswered one: the attempt may have been captured at the provider with the answer lost. Reads
+     * {@code payments.*} directly, the established crossing {@code JdbcOrderStore}'s own order search already
+     * makes for the same two tables, and only a status: no amount, no provider reference.
+     */
+    public boolean hasUncertainPaymentAttempt(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                        SELECT count(*)
+                        FROM payments.payment_attempts a
+                        JOIN payments.payment_intents i ON i.id = a.intent_id AND i.tenant_id = a.tenant_id
+                        WHERE i.tenant_id = :tenantId AND i.order_id = :orderId AND a.status = 'UNCERTAIN'
+                        """)
+                        .param("tenantId", tenantId)
+                        .param("orderId", orderId)
+                        .query(Long.class)
+                        .single()
+                > 0;
+    }
+
     public Optional<ProcessRow> find(UUID orderId, String processName) {
         return jdbc.sql("""
                 SELECT order_id, process_name, tenant_id, status, checkpoint::text AS checkpoint,

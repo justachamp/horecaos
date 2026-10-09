@@ -345,6 +345,22 @@ public final class EntitlementKeys {
             .describedAs("Whether the tenant's brands may upload and play video in storefront content (ADR 0157).")
             .build();
 
+    /**
+     * ADR 0164: whether the operations console opens as a deliveries console for this tenant --
+     * landing on the dispatch board, with Kitchen, Marketing and Inbox put away. A shape is a
+     * presentation of the one console, granted commercially by the {@code deliveries-console}
+     * module, never by the tenant's business type and never a source of capability.
+     *
+     * <p>{@code safeDefault(FALSE)}, like the Telegram family: a feature a tenant has because a
+     * module says so, and a tenant that bought nothing keeps the console it always had.
+     */
+    public static final EntitlementKey<Boolean> DELIVERY_DELIVERIES_CONSOLE_ENABLED = EntitlementKey.feature(
+                    "delivery.deliveries_console.enabled")
+            .safeDefault(Boolean.FALSE)
+            .ownedBy("fulfillment")
+            .describedAs("Whether the operations console opens as a deliveries console (ADR 0164).")
+            .build();
+
     private static final Map<String, EntitlementKey<?>> BY_CODE = index(List.of(
             BRANDS_MAX_COUNT,
             LOCATIONS_MAX_COUNT,
@@ -368,7 +384,8 @@ public final class EntitlementKeys {
             ASSISTANT_ANSWERING_ENABLED,
             ASSISTANT_TURNS_MONTHLY_INCLUDED,
             CONTENT_EDITORIAL_ENABLED,
-            CONTENT_VIDEO_ENABLED));
+            CONTENT_VIDEO_ENABLED,
+            DELIVERY_DELIVERIES_CONSOLE_ENABLED));
 
     private EntitlementKeys() {}
 

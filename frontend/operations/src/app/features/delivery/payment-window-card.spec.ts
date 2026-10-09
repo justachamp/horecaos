@@ -76,15 +76,59 @@ describe('PaymentWindowCard (ADR 0142 Decision 7: the unpaid-order window)', () 
     expect(control(host, 'window-default').textContent).toContain('system’s own limit');
   });
 
-  it('offers only "flag the order": cancelling is shown and cannot be chosen, with the reason', async () => {
+  it('offers both: flag the order for a person (the default) or cancel it', async () => {
     const { host } = await render();
 
     const action = control<HTMLSelectElement>(host, 'window-action');
-    expect(action.disabled).toBe(true);
-    const cancel = [...action.options].find((option) => option.value === 'CANCEL');
-    expect(cancel?.disabled).toBe(true);
-    expect(control(host, 'window-cancel-locked').textContent).toContain(
-      'not available until product decides',
+    expect(action.disabled).toBe(false);
+    expect(action.value).toBe('FLAG_ONLY');
+    const options = [...action.options];
+    expect(options.map((option) => option.value)).toEqual(['FLAG_ONLY', 'CANCEL']);
+    expect(options.every((option) => !option.disabled)).toBe(true);
+    expect(host.querySelector('[data-testid="window-cancel-note"]')).toBeNull();
+  });
+
+  it('shows a loaded cancelling window as cancelling, and says what cancelling does', async () => {
+    const { host } = await render({
+      ...DEFAULT,
+      isDefault: false,
+      action: 'CANCEL',
+      windowMinutes: 30,
+      versionAtScope: 1,
+      policyVersion: 1,
+    });
+
+    expect(control<HTMLSelectElement>(host, 'window-action').value).toBe('CANCEL');
+    const note = control(host, 'window-cancel-note').textContent ?? '';
+    expect(note).toContain('Cancelled: not paid');
+    expect(note).toContain('never revives it');
+  });
+
+  it('will not publish a cancelling window under fifteen minutes, and says so before the server has to', async () => {
+    const { fixture, host, publish } = await render();
+    const button = (): HTMLButtonElement => control<HTMLButtonElement>(host, 'window-publish');
+
+    type(host, 'window-reason', 'Cancel what nobody pays', 'input');
+    control<HTMLSelectElement>(host, 'window-action').value = 'CANCEL';
+    control<HTMLSelectElement>(host, 'window-action').dispatchEvent(new Event('change'));
+    type(host, 'window-minutes', '10', 'change');
+    fixture.detectChanges();
+
+    expect(control(host, 'window-cancel-too-short').textContent).toContain('at least 15 minutes');
+    expect(button().disabled).toBe(true);
+
+    type(host, 'window-minutes', '15', 'change');
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="window-cancel-too-short"]')).toBeNull();
+    expect(button().disabled).toBe(false);
+
+    button().click();
+    await settle(fixture);
+    expect(publish).toHaveBeenCalledWith(
+      SCOPE,
+      { windowMinutes: 15, action: 'CANCEL' },
+      'Cancel what nobody pays',
+      0,
     );
   });
 
@@ -137,7 +181,7 @@ describe('PaymentWindowCard (ADR 0142 Decision 7: the unpaid-order window)', () 
     const refused = new ApiError(
       'VALIDATION_FAILED',
       400,
-      { status: 400, detail: 'Cancelling an unpaid order is not available yet' },
+      { status: 400, detail: 'windowMinutes must be between 1 and 1440' },
       null,
     );
     const { fixture, host } = await render(DEFAULT, true, vi.fn().mockRejectedValue(refused));
@@ -148,7 +192,7 @@ describe('PaymentWindowCard (ADR 0142 Decision 7: the unpaid-order window)', () 
     control<HTMLButtonElement>(host, 'window-publish').click();
     await settle(fixture);
 
-    expect(control(host, 'window-error').textContent).toContain('not available yet');
+    expect(control(host, 'window-error').textContent).toContain('windowMinutes must be');
     expect(host.querySelector('[data-testid="window-notice"]')).toBeNull();
   });
 

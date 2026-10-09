@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { zonedTimeToInstant } from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
 import { LocationView, LocationsApi } from '../settings/locations/locations-api';
@@ -80,7 +81,7 @@ describe('BufferPage', () => {
 
   async function render(
     kitchenApi: Partial<KitchenApi>,
-    options: { locationsApi?: Partial<LocationsApi> } = {},
+    options: { locationsApi?: Partial<LocationsApi>; capabilities?: readonly string[] } = {},
   ): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [BufferPage],
@@ -95,6 +96,12 @@ describe('BufferPage', () => {
         },
         { provide: KitchenApi, useValue: kitchenApi },
         { provide: LocationsApi, useValue: options.locationsApi ?? defaultLocationsApi() },
+        {
+          provide: SessionCapabilities,
+          useValue: {
+            has: (capability: string) => (options.capabilities ?? []).includes(capability),
+          },
+        },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -398,5 +405,121 @@ describe('BufferPage', () => {
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('[data-testid="buffer-denied"]'),
     ).not.toBeNull();
+  });
+
+  describe('the paid-only hold (ADR 0168)', () => {
+    const heldForPayment = (overrides: Partial<TicketResponse> = {}): TicketResponse =>
+      held({
+        ticketId: 't-unpaid',
+        sequenceLabel: 'P-001',
+        releaseMode: 'SCHEDULED',
+        releaseAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+        holdReason: 'PAYMENT',
+        holdSince: new Date().toISOString(),
+        holdBlocked: false,
+        holdOverdue: false,
+        ...overrides,
+      });
+
+    const rowOf = (): HTMLElement =>
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="buffer-row"]',
+      ) as HTMLElement;
+
+    it('says a ticket is awaiting payment and does not offer to release it', async () => {
+      await render({ board: () => Promise.resolve({ tickets: [heldForPayment()], warnings: [] }) });
+
+      const chip = rowOf().querySelector('[data-testid="buffer-hold-chip"]') as HTMLElement;
+      expect(chip.textContent?.trim()).toBe('Awaiting payment');
+      expect(chip.getAttribute('data-hold-stage')).toBe('holding');
+      expect(
+        (rowOf().querySelector('[data-testid="buffer-release"]') as HTMLButtonElement).disabled,
+      ).toBe(true);
+      expect(rowOf().querySelector('[data-testid="buffer-override"]')).toBeNull();
+    });
+
+    it('shows a blocked ticket, then a stuck one, as the sweep records them', async () => {
+      await render({
+        board: () =>
+          Promise.resolve({
+            tickets: [
+              heldForPayment({ ticketId: 'a', sequenceLabel: 'A', holdBlocked: true }),
+              heldForPayment({
+                ticketId: 'b',
+                sequenceLabel: 'B',
+                holdBlocked: true,
+                holdOverdue: true,
+                releaseAt: new Date(Date.now() + 31 * 60_000).toISOString(),
+              }),
+            ],
+            warnings: [],
+          }),
+      });
+
+      const chips = [
+        ...(fixture.nativeElement as HTMLElement).querySelectorAll(
+          '[data-testid="buffer-hold-chip"]',
+        ),
+      ] as HTMLElement[];
+      expect(chips.map((chip) => chip.getAttribute('data-hold-stage'))).toEqual([
+        'blocked',
+        'overdue',
+      ]);
+      expect(chips[0].textContent?.trim()).toBe('Blocked on payment');
+      expect(chips[1].textContent?.trim()).toBe('Stuck: payment overdue');
+    });
+
+    it('a ticket that is not held keeps its ordinary release button and shows no chip', async () => {
+      const release = vi.fn().mockReturnValue(of(held({ status: 'FIRED' })));
+      await render({
+        board: () => Promise.resolve({ tickets: [held({ ticketId: 'plain' })], warnings: [] }),
+        release,
+      });
+
+      expect(rowOf().querySelector('[data-testid="buffer-hold-chip"]')).toBeNull();
+      (rowOf().querySelector('[data-testid="buffer-release"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+      expect(release).toHaveBeenCalledWith(SCOPE, 'plain', 1, 'OPERATIONS_BUFFER_RELEASE');
+    });
+
+    it('offers «Release anyway» only to a holder of the override capability, and sends the registered reason', async () => {
+      const release = vi
+        .fn()
+        .mockReturnValue(of(heldForPayment({ status: 'FIRED', holdReason: null })));
+      await render(
+        {
+          board: () => Promise.resolve({ tickets: [heldForPayment()], warnings: [] }),
+          release,
+        },
+        { capabilities: ['KITCHEN_TICKET_RELEASE_OVERRIDE'] },
+      );
+
+      (rowOf().querySelector('[data-testid="buffer-override"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      const select = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="buffer-override-reason"]',
+      ) as HTMLSelectElement;
+      expect([...select.options].map((option) => option.value)).toEqual([
+        'PAYMENT_PROMISED_AT_COUNTER',
+        'CUSTOMER_KNOWN_TO_BRANCH',
+        'MANAGER_DECISION',
+      ]);
+      select.value = 'MANAGER_DECISION';
+      select.dispatchEvent(new Event('change'));
+      (
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="buffer-override-confirm"]',
+        ) as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+
+      expect(release).toHaveBeenCalledWith(
+        SCOPE,
+        't-unpaid',
+        1,
+        'OPERATIONS_BUFFER_RELEASE',
+        'MANAGER_DECISION',
+      );
+    });
   });
 });

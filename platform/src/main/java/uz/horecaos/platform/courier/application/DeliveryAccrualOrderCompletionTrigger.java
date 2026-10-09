@@ -186,7 +186,10 @@ public class DeliveryAccrualOrderCompletionTrigger {
                     // to surface exactly this until it does.
                     true,
                     null,
-                    null));
+                    null,
+                    internal.payBasis(),
+                    internal.runKey(),
+                    internal.runMergeDistanceMeters()));
         } catch (ApiException failure) {
             // Almost always ErrorCode.UNPROCESSABLE_STATE: no active rate
             // card for this branch and courier type yet. A real

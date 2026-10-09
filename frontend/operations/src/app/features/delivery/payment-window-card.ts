@@ -13,7 +13,12 @@ import { ApiError } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
-import { DispatchRulesApi, DispatchScope, PaymentWindowView } from './dispatch-rules-api';
+import {
+  DispatchRulesApi,
+  DispatchScope,
+  PaymentWindowAction,
+  PaymentWindowView,
+} from './dispatch-rules-api';
 import { parseOptionalInt } from './dispatch-rules-model';
 
 /**
@@ -24,10 +29,12 @@ import { parseOptionalInt } from './dispatch-rules-model';
  * nobody has paid for -- and not in the rules because no dispatch plan exists for an unpaid order. The
  * deploy property it replaces survives as the answer when nothing is published.
  *
- * **"Cancel the order" is shown and cannot be chosen.** Whether an unpaid order should be cancelled at all
- * is ADR 0019's open product input, and the server refuses it at publish; offering it as a live choice
- * would only teach an operator to expect a refusal. Until product answers, the window decides when an
- * order reaches the stuck list and nothing more.
+ * **"Cancel the order" is a real choice (ADR 0170).** It ends an order nobody paid as «Cancelled: not
+ * paid» (`PAYMENT_FAILED`): its stock and promo code go back, the payment page is closed, and a payment
+ * that arrives afterwards never revives it -- finance is told a refund is due instead. It needs a wait of
+ * at least fifteen minutes, which the card enforces before the server has to; "flag the order" stays the
+ * default and what a tenant that publishes nothing gets. Whether the platform acts on a published
+ * cancelling window yet is the deployment's own switch (shadow first), not this card's.
  */
 @Component({
   selector: 'q-payment-window-card',
@@ -51,19 +58,30 @@ export class PaymentWindowCard {
   protected readonly isDefault = signal(true);
 
   private readonly loadedMinutes = signal<number | null>(null);
+  private readonly loadedAction = signal<PaymentWindowAction>('FLAG_ONLY');
   private readonly version = signal(0);
   protected readonly minutes = signal<number | null>(null);
+  protected readonly action = signal<PaymentWindowAction>('FLAG_ONLY');
   protected readonly reason = signal('');
 
   protected readonly dirty = computed(
-    () => this.minutes() !== null && this.minutes() !== this.loadedMinutes(),
+    () =>
+      this.minutes() !== null &&
+      (this.minutes() !== this.loadedMinutes() || this.action() !== this.loadedAction()),
+  );
+
+  /** A window that ends the order is at least this long: the customer may be on a slow provider page. */
+  protected readonly minimumMinutes = computed(() => (this.action() === 'CANCEL' ? 15 : 1));
+
+  protected readonly cancelTooShort = computed(
+    () => this.action() === 'CANCEL' && (this.minutes() ?? 0) < this.minimumMinutes(),
   );
 
   protected readonly canPublish = computed(
     () =>
       this.canWrite() &&
       this.dirty() &&
-      (this.minutes() ?? 0) >= 1 &&
+      (this.minutes() ?? 0) >= this.minimumMinutes() &&
       this.reason().trim() !== '' &&
       !this.saving(),
   );
@@ -83,8 +101,16 @@ export class PaymentWindowCard {
     }
   }
 
+  protected setAction(raw: string): void {
+    if (raw === 'FLAG_ONLY' || raw === 'CANCEL') {
+      this.action.set(raw);
+      this.notice.set(null);
+    }
+  }
+
   protected discard(): void {
     this.minutes.set(this.loadedMinutes());
+    this.action.set(this.loadedAction());
     this.reason.set('');
     this.saveError.set(null);
   }
@@ -99,7 +125,7 @@ export class PaymentWindowCard {
     try {
       const published = await this.api.publishPaymentWindow(
         this.scope(),
-        { windowMinutes: minutes, action: 'FLAG_ONLY' },
+        { windowMinutes: minutes, action: this.action() },
         this.reason().trim(),
         this.version(),
       );
@@ -132,7 +158,9 @@ export class PaymentWindowCard {
 
   private adopt(view: PaymentWindowView): void {
     this.loadedMinutes.set(view.windowMinutes);
+    this.loadedAction.set(view.action);
     this.minutes.set(view.windowMinutes);
+    this.action.set(view.action);
     this.isDefault.set(view.isDefault);
     this.version.set(view.versionAtScope);
   }

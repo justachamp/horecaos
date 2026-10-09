@@ -192,8 +192,10 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
   'delivery.paymentWindow.action': 'После этого',
   'delivery.paymentWindow.action.FLAG_ONLY': 'Отметить заказ для сотрудника',
   'delivery.paymentWindow.action.CANCEL': 'Отменить заказ',
-  'delivery.paymentWindow.cancelLocked':
-    'Отмена неоплаченного заказа недоступна, пока это не решит продукт.',
+  'delivery.paymentWindow.cancelNote':
+    'Отмена завершает заказ как «Отменён: не оплачен»: товар и промокод возвращаются, страница оплаты закрывается. Платёж, пришедший позже, заказ не оживляет; финансы получают уведомление, что нужен возврат.',
+  'delivery.paymentWindow.cancelTooShort':
+    'Срок, после которого заказ отменяется, не меньше 15 минут.',
   'delivery.paymentWindow.save': 'Опубликовать срок',
   'delivery.paymentWindow.saved': 'Опубликовано как версия {version}.',
   'delivery.dialog.cancel': 'Отмена',
@@ -677,6 +679,17 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
   'delivery.policy.overridden': 'Переопределено',
   'delivery.policy.inherited': 'Наследуется: {value}',
   'delivery.policy.policyIdentity': 'Политика {id} · в{version}',
+  'delivery.policy.runPayMode': 'Оплата за заезд с несколькими заказами',
+  'delivery.policy.runPayMode.UNDECIDED': 'Не решено (каждый заказ оплачивается полностью)',
+  'delivery.policy.runPayMode.PER_ORDER': 'Каждый заказ полностью',
+  'delivery.policy.runPayMode.FIRST_FULL_THEN_INCREMENT':
+    'Первый заказ полностью, остальные — по дополнительному расстоянию',
+  'delivery.policy.runPayMode.acknowledge':
+    'Подтверждаю: условия работы с нашими курьерами допускают оплату, зависящую от заезда. HorecaOS ничего не утверждает о наших договорах.',
+  'delivery.policy.runPayMode.pendingApproval':
+    'Отправлено на вторую подпись (запрос {request}). Пока её нет, ничего не меняется; после одобрения опубликуйте тот же документ ещё раз.',
+  'delivery.policy.consequence.runPayMode':
+    'Определяет, сколько получает курьер, когда один заезд везёт несколько заказов к соседним адресам. «Первый полностью» платит каждому следующему заказу ставку за заказ и минимум полностью, а за километры — только расстояние сверх предыдущей точки; курьер видит сумму до принятия. Правило диспетчеризации не включит группировку, пока это не решено.',
   'delivery.policy.shiftEnforcement': 'Контроль смены',
   'delivery.policy.shiftEnforcement.ENFORCED': 'Строгий',
   'delivery.policy.shiftEnforcement.ADVISORY': 'Рекомендательный',

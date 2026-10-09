@@ -14,6 +14,7 @@ import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.Waypoint;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
+import uz.horecaos.platform.ordering.api.PaymentStatusFacts;
 import uz.horecaos.platform.ordering.domain.DeliveryDestination;
 import uz.horecaos.platform.ordering.domain.OrderPromise;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
@@ -286,12 +287,49 @@ public class JdbcDeliveryOrderPort implements DeliveryOrderPort {
     }
 
     /**
+     * ADR 0170 Decision 9: the one fact the grouping feed needs of a door. Decrypts the address document under
+     * the caller's purpose and returns a latitude and a longitude; the address line, the instructions, the name
+     * and the telephone number are never read, and the point is never logged. A destination with no real
+     * coordinate ({@code 0,0}) answers empty: the candidate is then simply not groupable.
+     */
+    @Override
+    public Optional<uz.horecaos.platform.tenancy.api.GeoPoint> dropoffPoint(
+            UUID tenantId, UUID orderId, String purpose) {
+        return jdbc.sql("""
+                SELECT s.address_encrypted
+                FROM ordering.orders o
+                JOIN ordering.order_customer_snapshots s
+                  ON s.order_id = o.id AND s.tenant_id = o.tenant_id
+                WHERE o.tenant_id = :tenantId
+                  AND o.id = :orderId
+                  AND o.fulfillment_mode = 'DELIVERY'
+                  AND s.address_encrypted IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, number) -> row.getString(ADDRESS_COLUMN))
+                .optional()
+                .flatMap(ciphertext -> {
+                    String revealed = reveal(tenantId, orderId, ADDRESS_COLUMN, ciphertext, purpose);
+                    if (revealed == null) {
+                        return Optional.empty();
+                    }
+                    DeliveryDestination destination = objectMapper.readValue(revealed, DeliveryDestination.class);
+                    if (destination.latitude() == 0.0 && destination.longitude() == 0.0) {
+                        return Optional.empty();
+                    }
+                    return Optional.of(new uz.horecaos.platform.tenancy.api.GeoPoint(
+                            destination.latitude(), destination.longitude()));
+                });
+    }
+
+    /**
      * Prepaid means HorecaOS has the money. NOT_REQUIRED is the cash order -- the courier collects
      * at the door -- and PENDING is money that has not arrived. Getting this wrong charges the
      * customer twice or lets them pay nobody.
      */
     private static boolean isPrepaid(@Nullable String paymentStatus) {
-        return "AUTHORIZED".equals(paymentStatus) || "CAPTURED".equals(paymentStatus);
+        return PaymentStatusFacts.moneyIsHeld(paymentStatus);
     }
 
     /**

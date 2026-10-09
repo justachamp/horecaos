@@ -16,7 +16,7 @@ import java.util.Objects;
  * dependency that trigger exists to keep. It is shown on the same console screen because an operator
  * thinks of it as one question: what happens to an order nobody has paid for.
  *
- * <p>Until now the window was a deploy property
+ * <p>The window was a deploy property
  * ({@code horecaos.ordering.workers.payment.stale-after}, thirty minutes). That property survives as the
  * fallback when no document is published, so nothing changes until someone does.
  *
@@ -28,18 +28,21 @@ public record PaymentWindowPolicy(int windowMinutes, Action action) {
     public static final int MIN_MINUTES = 1;
     public static final int MAX_MINUTES = 1440;
 
+    /** A window that ends the order is at least this long (ADR 0170): the customer may be on a slow provider page. */
+    public static final int MIN_CANCEL_MINUTES = 15;
+
     /** What happens to an order still unpaid after the window. */
     public enum Action {
 
-        /** The order reaches the stuck list ({@code MANUAL_ACTION_REQUIRED}) for a person to look at. Today's behaviour, and the only one available. */
+        /** The order reaches the stuck list ({@code MANUAL_ACTION_REQUIRED}) for a person to look at. The default, and what a tenant that publishes nothing gets. */
         FLAG_ONLY,
 
         /**
-         * The order is cancelled. A named value that is <strong>refused at publish</strong> until
-         * ADR 0019's open input -- "checkout payment timing, cancellation, approval timeout" -- is
-         * answered by product, and until finance and product settle what a payment captured after the
-         * cancellation does (the void path exists; whether a late capture may revive the order is a
-         * money-and-promise question the record does not settle).
+         * The order ends as {@code PAYMENT_FAILED} (ADR 0170): the platform's own word for a payment that
+         * never came, not a customer's or an operator's cancellation. Available at a window of at least
+         * {@link #MIN_CANCEL_MINUTES}, and only while the order is still {@code PAYMENT_AUTHORIZING} with no
+         * payment attempt left {@code UNCERTAIN} (ADR 0007: an order is never ended over an unanswered
+         * question about money). A payment captured afterwards never revives the order.
          */
         CANCEL
     }
@@ -58,10 +61,8 @@ public record PaymentWindowPolicy(int windowMinutes, Action action) {
         if (windowMinutes < MIN_MINUTES || windowMinutes > MAX_MINUTES) {
             found.add("windowMinutes must be between %d and %d".formatted(MIN_MINUTES, MAX_MINUTES));
         }
-        if (action == Action.CANCEL) {
-            found.add("Cancelling an unpaid order is not available yet: product has to answer ADR 0019's open "
-                    + "question on checkout payment timing and cancellation first, so the window only decides "
-                    + "when an order reaches the stuck list");
+        if (action == Action.CANCEL && windowMinutes >= MIN_MINUTES && windowMinutes < MIN_CANCEL_MINUTES) {
+            found.add("A window that cancels an unpaid order is at least %d minutes".formatted(MIN_CANCEL_MINUTES));
         }
         return List.copyOf(found);
     }

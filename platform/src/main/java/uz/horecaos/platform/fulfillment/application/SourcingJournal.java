@@ -168,6 +168,8 @@ public interface SourcingJournal {
      *                  told an offer ended holds an order nobody else can be given
      * @param policyId  the ADR 0030 policy this decision resolved under, or null
      *                  when nothing was configured
+     * @param runStamp  how the order will be paid (ADR 0170), decided now and fixed for good: the quote the
+     *                  courier sees before accepting is the pay
      */
     record InternalOffer(
             UUID tenantId,
@@ -178,7 +180,60 @@ public interface SourcingJournal {
             String decisionReason,
             @Nullable UUID policyId,
             int policyVersion,
-            Instant now) {}
+            Instant now,
+            RunStamp runStamp) {
+
+        /** An offer paid on the order's own distance: every offer that is not part of a run. */
+        public InternalOffer(
+                UUID tenantId,
+                UUID planId,
+                UUID courierId,
+                String idempotencyKey,
+                Instant expiresAt,
+                String decisionReason,
+                @Nullable UUID policyId,
+                int policyVersion,
+                Instant now) {
+            this(
+                    tenantId,
+                    planId,
+                    courierId,
+                    idempotencyKey,
+                    expiresAt,
+                    decisionReason,
+                    policyId,
+                    policyVersion,
+                    now,
+                    RunStamp.DIRECT);
+        }
+    }
+
+    /**
+     * The pay basis of an internal offer (ADR 0170 Decision 2).
+     *
+     * @param runIncrement true when the order is paid {@code RUN_INCREMENT}: the shorter of its own distance
+     *                     and {@code mergeDistanceMeters}
+     * @param mergeDistanceMeters straight-line metres to the nearest carried drop-off; null for {@code DIRECT}
+     * @param leadShipmentId the carried shipment that distance was measured to; null for {@code DIRECT}
+     */
+    record RunStamp(
+            boolean runIncrement,
+            @Nullable Integer mergeDistanceMeters,
+            @Nullable UUID leadShipmentId) {
+
+        public static final RunStamp DIRECT = new RunStamp(false, null, null);
+
+        public RunStamp {
+            if (runIncrement != (mergeDistanceMeters != null && leadShipmentId != null)) {
+                throw new IllegalArgumentException("A RUN_INCREMENT stamp names its distance and its lead shipment, "
+                        + "and a DIRECT one names neither");
+            }
+        }
+
+        public static RunStamp runIncrement(int mergeDistanceMeters, UUID leadShipmentId) {
+            return new RunStamp(true, mergeDistanceMeters, leadShipmentId);
+        }
+    }
 
     /**
      * One recognised {@code DELIVERY_COST_SUBSIDY}.

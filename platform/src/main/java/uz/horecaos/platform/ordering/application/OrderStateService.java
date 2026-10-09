@@ -20,9 +20,11 @@ import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
 import uz.horecaos.platform.ordering.api.OrderCancelled;
+import uz.horecaos.platform.ordering.api.OrderCapturedAfterLapse;
 import uz.horecaos.platform.ordering.api.OrderCompleted;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderExpired;
+import uz.horecaos.platform.ordering.api.OrderPaymentLapsed;
 import uz.horecaos.platform.ordering.api.OrderRejected;
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
 import uz.horecaos.platform.ordering.domain.AcceptanceMode;
@@ -61,6 +63,11 @@ import uz.horecaos.platform.tenancy.api.TenantId;
  */
 @Service
 public class OrderStateService {
+
+    /** The reason code and actor of the transition the unpaid-order sweep makes (ADR 0170). */
+    static final String PAYMENT_WINDOW_ELAPSED = "PAYMENT_WINDOW_ELAPSED";
+
+    static final String PAYMENT_WINDOW_ACTOR = "order-payment-window";
 
     private static final Logger log = LoggerFactory.getLogger(OrderStateService.class);
 
@@ -358,6 +365,13 @@ public class OrderStateService {
                             + "recorded against the settlement",
                     orderId,
                     order.status());
+            if (order.status() == OrderStatus.PAYMENT_FAILED) {
+                // ADR 0170 Decision 17: a capture after the window never revives the order. The money is
+                // recorded on the settlement as it always was; this says a refund is due, so a person is
+                // told rather than left to find it.
+                events.publishEvent(new OrderCapturedAfterLapse(
+                        UUID.randomUUID(), new TenantId(tenantId), orderId, now, order.brandId(), order.locationId()));
+            }
             return new DecisionResult(false, order.status(), order.version(), null);
         }
 
@@ -568,6 +582,110 @@ public class OrderStateService {
                 target,
                 version,
                 orders.findEffectiveDecision(tenantId, orderId).orElse(null));
+    }
+
+    /**
+     * The unpaid-order window elapsed and the policy in force says {@code CANCEL} (ADR 0170 Decisions 13 to
+     * 16): the order ends as {@code PAYMENT_FAILED}, the platform's own word for a payment that never came.
+     *
+     * <p>In the shape of {@link #approvalDeadlineReached}: one conditional update naming {@code
+     * PAYMENT_AUTHORIZING} as the status it expects, so a capture landing in the same instant settles the
+     * order at exactly one outcome. It is deliberately not {@code CANCELLED}: that status and its reason
+     * registry are for a person's decision, and a payment that never came is its own commercial fact (ADR
+     * 0039). The outcome pairs the kind with the {@code PAYMENT_NOT_RECEIVED} category the schema already
+     * reserves for it; the consequences are the uniform ones of any terminal order (the inventory hold and
+     * the promo claim released, the kitchen slot freed, the settlement closed, the payment process row
+     * settled), and {@link OrderPaymentLapsed} is published so the provider's side is closed and the
+     * customer is told.
+     *
+     * <p>It decides nothing about whether the order <em>should</em> be ended: the guards (still unpaid, the
+     * window elapsed, no attempt left {@code UNCERTAIN}) belong to {@code OrderPaymentProcess.sweep}, which
+     * is the only caller.
+     *
+     * @param windowMinutes the {@code ordering.payment_window} that elapsed, carried on the event
+     * @param policyVersion the version of that document in force, recorded on the audit fact (0 when the
+     *                      deploy property, not a document, set the window)
+     */
+    @Transactional
+    public DecisionResult paymentWindowReached(UUID tenantId, UUID orderId, int windowMinutes, int policyVersion) {
+        Instant now = clock.instant();
+        OrderRow order = orders.find(tenantId, orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
+
+        if (order.status() != OrderStatus.PAYMENT_AUTHORIZING) {
+            return new DecisionResult(false, order.status(), order.version(), null);
+        }
+        OrderStateMachine.require(OrderStatus.PAYMENT_AUTHORIZING, OrderStatus.PAYMENT_FAILED);
+
+        Optional<Integer> won =
+                orders.transition(tenantId, orderId, OrderStatus.PAYMENT_AUTHORIZING, OrderStatus.PAYMENT_FAILED, now);
+        if (won.isEmpty()) {
+            // A capture won the race. Whatever settled the order stands; this call applies nothing.
+            OrderRow settled = orders.find(tenantId, orderId).orElseThrow();
+            return new DecisionResult(false, settled.status(), settled.version(), null);
+        }
+
+        int version = won.get();
+        orders.recordTransition(
+                tenantId,
+                orderId,
+                version,
+                OrderStatus.PAYMENT_AUTHORIZING,
+                OrderStatus.PAYMENT_FAILED,
+                TransitionTrigger.SYSTEM,
+                PAYMENT_WINDOW_ELAPSED,
+                "SYSTEM_JOB",
+                PAYMENT_WINDOW_ACTOR,
+                null,
+                now);
+
+        // Nothing was paid, so there is nothing to refund and nobody is out of pocket: the hold taken at
+        // checkout is released (a payment-first order is confirmed only after capture, so it was never
+        // committed), and the outcome says the payment is what was missing.
+        OrderOutcome outcome = new OrderOutcome(
+                TerminalOutcomeKind.PAYMENT_FAILED,
+                OutcomeSystemCategory.PAYMENT_NOT_RECEIVED,
+                null,
+                null,
+                null,
+                StockDisposition.RELEASE,
+                null,
+                CustomerRefund.NONE,
+                reservationCommitted(order),
+                null);
+
+        applyConsequences(
+                order,
+                OrderStatus.PAYMENT_FAILED,
+                version,
+                PAYMENT_WINDOW_ELAPSED,
+                null,
+                "SYSTEM_JOB",
+                PAYMENT_WINDOW_ACTOR,
+                outcome,
+                now,
+                windowMinutes);
+
+        recordAudit(
+                order,
+                "ordering.order.payment-window-lapsed",
+                "SYSTEM_JOB",
+                PAYMENT_WINDOW_ACTOR,
+                PAYMENT_WINDOW_ELAPSED,
+                version,
+                Map.of("status", OrderStatus.PAYMENT_AUTHORIZING.name()),
+                Map.of(
+                        "status",
+                        OrderStatus.PAYMENT_FAILED.name(),
+                        "windowMinutes",
+                        windowMinutes,
+                        "policyVersion",
+                        policyVersion),
+                AuditFact.Outcome.SUCCEEDED,
+                null,
+                now);
+
+        log.info("Order {} was not paid within {} minutes and is now PAYMENT_FAILED", orderId, windowMinutes);
+        return new DecisionResult(true, OrderStatus.PAYMENT_FAILED, version, null);
     }
 
     /**
@@ -1285,6 +1403,24 @@ public class OrderStateService {
             @Nullable String actorId,
             @Nullable OrderOutcome outcome,
             Instant now) {
+        applyConsequences(order, target, version, reasonCode, decisionChannel, actorType, actorId, outcome, now, 0);
+    }
+
+    /**
+     * @param paymentWindowMinutes the unpaid window that elapsed, carried on {@link OrderPaymentLapsed};
+     *                             zero for every other transition
+     */
+    private void applyConsequences(
+            OrderRow order,
+            OrderStatus target,
+            int version,
+            @Nullable String reasonCode,
+            @Nullable String decisionChannel,
+            @Nullable String actorType,
+            @Nullable String actorId,
+            @Nullable OrderOutcome outcome,
+            Instant now,
+            int paymentWindowMinutes) {
 
         // ADR 0039: every order ends in exactly one recorded outcome, written in
         // the same transaction as the transition. The table is primary-keyed on
@@ -1429,6 +1565,17 @@ public class OrderStateService {
                         outcome == null || outcome.liabilityParty() == null
                                 ? null
                                 : outcome.liabilityParty().name()));
+            case PAYMENT_FAILED ->
+                events.publishEvent(new OrderPaymentLapsed(
+                        UUID.randomUUID(),
+                        tenant,
+                        order.orderId(),
+                        now,
+                        order.brandId(),
+                        order.locationId(),
+                        paymentWindowMinutes,
+                        target.name(),
+                        version));
             case COMPLETED ->
                 events.publishEvent(new OrderCompleted(
                         UUID.randomUUID(),

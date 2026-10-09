@@ -1,14 +1,23 @@
 package uz.horecaos.platform.courier.infrastructure.dispatch;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.courier.application.CourierDispatchGate;
+import uz.horecaos.platform.courier.application.CourierPolicyResolver;
+import uz.horecaos.platform.courier.domain.RunPayMode;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierRateCardStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore.FleetRow;
+import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.telemetry.api.CourierProximityPort;
 
 /**
@@ -72,16 +81,107 @@ public class InternalFleetAdapter implements InternalFleetPort {
     private final CourierDispatchGate gate;
     private final ActiveAssignments assignments;
     private final CourierProximityPort proximity;
+    private final @Nullable CourierPolicyResolver policies;
+    private final @Nullable JdbcCourierRateCardStore rateCards;
+    private final @Nullable JdbcCourierStore couriers;
+    private final @Nullable MeterRegistry meters;
+    private final Clock clock;
 
+    /** A fleet that can rank but not measure a run: no pay treatment, no card check. Every test that predates ADR 0170. */
     public InternalFleetAdapter(
             JdbcCourierShiftStore shifts,
             CourierDispatchGate gate,
             ActiveAssignments assignments,
             CourierProximityPort proximity) {
+        this(shifts, gate, assignments, proximity, null, null, null, null, Clock.systemUTC());
+    }
+
+    @Autowired
+    public InternalFleetAdapter(
+            JdbcCourierShiftStore shifts,
+            CourierDispatchGate gate,
+            ActiveAssignments assignments,
+            CourierProximityPort proximity,
+            @Nullable CourierPolicyResolver policies,
+            @Nullable JdbcCourierRateCardStore rateCards,
+            @Nullable JdbcCourierStore couriers,
+            @Nullable MeterRegistry meters,
+            Clock clock) {
         this.shifts = shifts;
         this.gate = gate;
         this.assignments = assignments;
         this.proximity = proximity;
+        this.policies = policies;
+        this.rateCards = rateCards;
+        this.couriers = couriers;
+        this.meters = meters;
+        this.clock = clock;
+    }
+
+    /**
+     * The candidates, measured against the plan's drop-off when a rule groups (ADR 0170 Decisions 5, 6 and 8).
+     *
+     * <p>The measurement is {@code fulfillment}'s ({@link ActiveAssignments#groupable}): a distance and the
+     * shipment it was measured to, never a coordinate. What this module adds is the pay treatment, because pay
+     * is its own: a measured courier is paid on the run basis only when the resolved {@code courier.compensation}
+     * says first-full-then-increment <em>and</em> a rate card resolves for them, since a quote the courier is
+     * shown before accepting needs a card to compute it. A courier with no card who is groupable is still ranked
+     * first (grouping saves the road) but is never offered a run price: {@code runIncrementPay} stays false and
+     * the order is paid {@code DIRECT}; the miss is counted as {@code no_card}.
+     */
+    @Override
+    public List<FleetCandidate> candidates(
+            UUID tenantId, UUID brandId, UUID locationId, int distanceMeters, @Nullable GroupingProbe probe) {
+
+        List<FleetCandidate> plain = candidates(tenantId, brandId, locationId, distanceMeters);
+        if (probe == null || plain.isEmpty()) {
+            return plain;
+        }
+        Map<UUID, Groupable> groupable = assignments.groupable(
+                tenantId,
+                probe.planId(),
+                plain.stream().map(FleetCandidate::courierId).toList(),
+                probe.mergeRadiusMeters(),
+                probe.maxOrdersPerRun());
+        if (groupable.isEmpty()) {
+            return plain;
+        }
+        boolean incrementPolicy = policies != null
+                && policies.resolve(ResourceScope.location(tenantId, brandId, locationId))
+                                .runPayMode()
+                        == RunPayMode.FIRST_FULL_THEN_INCREMENT;
+
+        List<FleetCandidate> measured = new ArrayList<>(plain.size());
+        for (FleetCandidate candidate : plain) {
+            Groupable near = groupable.get(candidate.courierId());
+            if (near == null) {
+                measured.add(candidate);
+                continue;
+            }
+            boolean runPay = incrementPolicy && hasCard(tenantId, brandId, locationId, candidate.courierId());
+            if (incrementPolicy && !runPay) {
+                count("no_card");
+            }
+            measured.add(candidate.withGroupableTo(near.distanceMeters(), near.leadShipmentId(), runPay));
+        }
+        return List.copyOf(measured);
+    }
+
+    /** Whether a rate card resolves for this courier's type at the branch: the precondition of any quote. */
+    private boolean hasCard(UUID tenantId, UUID brandId, UUID locationId, UUID courierId) {
+        if (rateCards == null || couriers == null) {
+            return false;
+        }
+        return couriers.findCourier(tenantId, courierId)
+                .flatMap(courier ->
+                        rateCards.resolve(tenantId, brandId, locationId, courier.courierTypeId(), clock.instant()))
+                .isPresent();
+    }
+
+    private void count(String outcome) {
+        if (meters != null) {
+            meters.counter("fulfillment.grouping.offers", "outcome", outcome).increment();
+        }
     }
 
     @Override

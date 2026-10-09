@@ -113,6 +113,13 @@ public interface DeliveryCompletionPort {
      *                        modules share one enum
      * @param promisedDeliveryEnd null when the plan recorded no promise
      * @param pickupWindowEnd     when the plan said the order would be ready
+     * @param payBasis        ADR 0170: {@code DIRECT} or {@code RUN_INCREMENT}. Stamped on the offer and
+     *                        carried here as the delivery finds it, except that a {@code RUN_INCREMENT}
+     *                        order whose whole run was cancelled before any of it was picked up is {@code
+     *                        DIRECT} (it only ever improves for the courier after the offer)
+     * @param runKey          the run this shipment belongs to; null when it belongs to none
+     * @param runMergeDistanceMeters the distance a {@code RUN_INCREMENT} order is paid on when it is shorter
+     *                        than {@code distanceMeters}; null for {@code DIRECT}
      * @param prepaid         whether the order's payment status is {@code
      *                        AUTHORIZED} or {@code CAPTURED} — HorecaOS
      *                        already holds the money, so a courier collects
@@ -142,5 +149,43 @@ public interface DeliveryCompletionPort {
             @Nullable String distanceSourceName,
             @Nullable Instant promisedDeliveryEnd,
             @Nullable Instant pickupWindowEnd,
-            boolean prepaid) {}
+            boolean prepaid,
+            String payBasis,
+            @Nullable UUID runKey,
+            @Nullable Integer runMergeDistanceMeters) {
+
+        /** A delivery that belongs to no run: paid on its own distance. */
+        public InternalDelivery(
+                UUID brandId,
+                UUID locationId,
+                UUID courierId,
+                UUID shipmentId,
+                UUID assignmentAttemptId,
+                Instant acceptedAt,
+                Instant deliveredAt,
+                @Nullable Instant pickedUpAt,
+                int distanceMeters,
+                @Nullable String distanceSourceName,
+                @Nullable Instant promisedDeliveryEnd,
+                @Nullable Instant pickupWindowEnd,
+                boolean prepaid) {
+            this(
+                    brandId,
+                    locationId,
+                    courierId,
+                    shipmentId,
+                    assignmentAttemptId,
+                    acceptedAt,
+                    deliveredAt,
+                    pickedUpAt,
+                    distanceMeters,
+                    distanceSourceName,
+                    promisedDeliveryEnd,
+                    pickupWindowEnd,
+                    prepaid,
+                    "DIRECT",
+                    null,
+                    null);
+        }
+    }
 }

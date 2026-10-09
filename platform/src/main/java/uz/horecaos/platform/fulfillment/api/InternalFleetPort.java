@@ -47,6 +47,30 @@ public interface InternalFleetPort {
     List<FleetCandidate> candidates(UUID tenantId, UUID brandId, UUID locationId, int distanceMeters);
 
     /**
+     * The same candidates, each measured against the drop-off of the plan being sourced (ADR 0170 Decision 8).
+     *
+     * <p>Asked only when the resolved dispatch action has a {@code grouping}; otherwise nothing is read and
+     * the overload above is the one called. The probe names the plan, the merge radius and the run's order
+     * ceiling, and the answer is one number per candidate that qualifies, never an address or a coordinate
+     * (ADR 0029). An implementation that cannot measure answers the plain candidates, which is what the
+     * default does: grouping is a ranking bias and never a reason to ask nobody.
+     */
+    default List<FleetCandidate> candidates(
+            UUID tenantId, UUID brandId, UUID locationId, int distanceMeters, @Nullable GroupingProbe probe) {
+        return candidates(tenantId, brandId, locationId, distanceMeters);
+    }
+
+    /**
+     * What a grouping rule needs measured (ADR 0170 Decision 8).
+     *
+     * @param planId            the plan being sourced; its drop-off is the one every carried drop-off is
+     *                          measured against
+     * @param mergeRadiusMeters the rule's radius: a carried drop-off further away than this does not count
+     * @param maxOrdersPerRun   the rule's ceiling on orders carried at once: a courier at it is not groupable
+     */
+    record GroupingProbe(UUID planId, int mergeRadiusMeters, int maxOrdersPerRun) {}
+
+    /**
      * One courier who could take this order now.
      *
      * <p>Carries no name. ADR 0029 keeps a courier's name inside envelope
@@ -68,6 +92,13 @@ public interface InternalFleetPort {
      *                          0045 has no fresh position. Null ranks last
      *                          rather than nearest: an unknown position is not
      *                          evidence of being close
+     * @param groupLeadShipmentId the carried shipment {@code groupableWithMetres} was measured to (ADR 0170),
+     *                          so acceptance joins that shipment's run without decrypting an address again.
+     *                          An id and never a place; null exactly when {@code groupableWithMetres} is
+     * @param runIncrementPay   whether this courier would be offered a grouped order on the
+     *                          {@code FIRST_FULL_THEN_INCREMENT} basis: the resolved {@code courier.compensation}
+     *                          says so and a rate card resolves for them (ADR 0170 Decision 5). False means
+     *                          a grouped order is still ranked but is paid {@code DIRECT}
      * @param groupableWithMetres ADR 0142 grouping: the straight-line distance
      *                          between this plan's drop-off and the nearest drop-off of
      *                          an un-picked-up plan from the same branch that this
@@ -83,7 +114,30 @@ public interface InternalFleetPort {
             int concurrencyCeiling,
             @Nullable Integer metresFromBranch,
             int deliveriesThisShift,
-            @Nullable Integer groupableWithMetres) {
+            @Nullable Integer groupableWithMetres,
+            @Nullable UUID groupLeadShipmentId,
+            boolean runIncrementPay) {
+
+        /** A candidate with a measured drop-off and no pay treatment: the shape ADR 0142's ranking was tested with. */
+        public FleetCandidate(
+                UUID courierId,
+                int offerTtlSeconds,
+                int activeAssignments,
+                int concurrencyCeiling,
+                @Nullable Integer metresFromBranch,
+                int deliveriesThisShift,
+                @Nullable Integer groupableWithMetres) {
+            this(
+                    courierId,
+                    offerTtlSeconds,
+                    activeAssignments,
+                    concurrencyCeiling,
+                    metresFromBranch,
+                    deliveriesThisShift,
+                    groupableWithMetres,
+                    null,
+                    false);
+        }
 
         /** A candidate nothing has measured against another drop-off: the shape every adapter answers today. */
         public FleetCandidate(
@@ -116,7 +170,24 @@ public interface InternalFleetPort {
                     concurrencyCeiling,
                     metresFromBranch,
                     deliveriesThisShift,
-                    metres);
+                    metres,
+                    metres == null ? null : groupLeadShipmentId,
+                    runIncrementPay);
+        }
+
+        /** The same candidate, measured against one named carried shipment, and paid on the run basis or not (ADR 0170). */
+        public FleetCandidate withGroupableTo(
+                @Nullable Integer metres, @Nullable UUID leadShipmentId, boolean runIncrementPay) {
+            return new FleetCandidate(
+                    courierId,
+                    offerTtlSeconds,
+                    activeAssignments,
+                    concurrencyCeiling,
+                    metresFromBranch,
+                    deliveriesThisShift,
+                    metres,
+                    metres == null ? null : leadShipmentId,
+                    metres != null && runIncrementPay);
         }
     }
 
@@ -140,7 +211,27 @@ public interface InternalFleetPort {
     interface ActiveAssignments {
 
         Map<UUID, Integer> byCourier(UUID tenantId, Collection<UUID> courierIds);
+
+        /**
+         * For each courier that qualifies, the straight-line distance in metres from the drop-off of {@code
+         * planId} to the nearest drop-off of a shipment they are carrying and have not yet picked up, from the
+         * same branch (ADR 0170 Decision 8).
+         *
+         * <p>A courier qualifies only when they carry fewer than {@code maxOrdersPerRun} shipments and that
+         * nearest drop-off is within {@code radiusMeters}. The answer is a distance and the id of the shipment
+         * it was measured to; the other order's coordinates are revealed under the purpose {@code
+         * DISPATCH_GROUPING}, used for the comparison and kept nowhere. A courier whose carried order has no
+         * coordinate, or whose address cannot be read, simply does not qualify: never an error. The default
+         * answers nobody, which is what an implementation that cannot measure should say.
+         */
+        default Map<UUID, Groupable> groupable(
+                UUID tenantId, UUID planId, Collection<UUID> courierIds, int radiusMeters, int maxOrdersPerRun) {
+            return Map.of();
+        }
     }
+
+    /** A courier who can take the plan as part of a run: how far, and the shipment they would join. */
+    record Groupable(int distanceMeters, UUID leadShipmentId) {}
 
     /** Whether a real implementation is present. */
     default boolean isWired() {

@@ -9,9 +9,12 @@
       [bulkAdvanceLabel]="bulkAdvanceLabel()"
       [canBulkCancel]="canBulkCancel()"
       [bulkCancelUnavailableMessage]="bulkCancelUnavailableMessage()"
+      [canBulkAssign]="canBulkAssign()"
+      [bulkAssignUnavailableMessage]="bulkAssignUnavailableMessage()"
       [bulkBusy]="bulkBusy()"
       (advanceRequested)="onBulkAdvanceClick()"
       (cancelRequested)="onBulkCancelClick()"
+      (assignRequested)="onBulkAssignClick()"
       (clearRequested)="clearSelection()"
     />
   } @else {
@@ -560,6 +563,16 @@
     />
   }
 
+  @if (bulkAssignDialogOpen()) {
+    <q-order-bulk-assign-dialog
+      [couriers]="bulkAssignRoster()"
+      [count]="selectionCount()"
+      [busy]="bulkBusy()"
+      (confirmed)="onBulkAssignConfirm($event)"
+      (dismissed)="onBulkAssignDismiss()"
+    />
+  }
+
   @if (bulkCancelDialogOpen()) {
     <q-order-outcome-reason-dialog
       titleKey="orders.queue.bulk.cancelDialog.title"
@@ -583,6 +596,7 @@
       [bulkBusy]="bulkBusy()"
       [itemLabel]="bulkItemLabeller"
       [problemLabel]="bulkProblemLabeller"
+      [noteLabel]="bulkNoteLabeller"
       (retryRequested)="retryFailedBulkItems()"
       (dismissRequested)="dismissBulkResult()"
     />

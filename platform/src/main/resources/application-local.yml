@@ -134,3 +134,10 @@ horecaos:
       # gateway ignores an ACTIVE fake when it is false, so a database carried out of a laptop cannot
       # make a deployment take "payments" from a double.
       allow-fake: ${HORECAOS_COMMERCIAL_CARD_ALLOW_FAKE:true}
+  ordering:
+    bulk:
+      assign-courier:
+        # ADR 0172: ASSIGN_COURIER on the orders board's bulk endpoint ships refused by default
+        # (VALIDATION_FAILED) and a pilot branch turns it on. On for a laptop, so the bar's button
+        # and the result panel are walkable; a deployment states it explicitly.
+        enabled: ${HORECAOS_ORDERING_BULK_ASSIGN_COURIER_ENABLED:true}

@@ -137,6 +137,7 @@ holds organization and subject identifiers and applied configuration.
 | `OrderConfirmed` | 1 | `orderId` | [`OrderConfirmed.v1`](../../src/main/resources/events/ordering.events/OrderConfirmed.v1.schema.json) | `orderId`, brand/location, acceptance mode, decision channel, confirmed-at, currency, total, status, version |
 | `OrderRejected` | 1 | `orderId` | [`OrderRejected.v1`](../../src/main/resources/events/ordering.events/OrderRejected.v1.schema.json) | `orderId`, brand/location, decision channel, reason code, status, version |
 | `OrderExpired` | 1 | `orderId` | [`OrderExpired.v1`](../../src/main/resources/events/ordering.events/OrderExpired.v1.schema.json) | `orderId`, brand/location, approval deadline, status, version |
+| `OrderPaymentLapsed` | 1 | `orderId` | [`OrderPaymentLapsed.v1`](../../src/main/resources/events/ordering.events/OrderPaymentLapsed.v1.schema.json) | `orderId`, brand/location, the lapsed window in minutes, status, version |
 | `OrderCancelled` | 1 | `orderId` | [`OrderCancelled.v1`](../../src/main/resources/events/ordering.events/OrderCancelled.v1.schema.json) | `orderId`, brand/location, cancelling actor type, reason code, previous status, status, version |
 | `OrderCompleted` | 1 | `orderId` | [`OrderCompleted.v1`](../../src/main/resources/events/ordering.events/OrderCompleted.v1.schema.json) | `orderId`, brand/location, completed-at, currency, total, version |
 | `OrderAmendmentProposed` | 1 | `orderId` | [`OrderAmendmentProposed.v1`](../../src/main/resources/events/ordering.events/OrderAmendmentProposed.v1.schema.json) | `orderId`, brand/location, `amendmentId`, base revision, command types, amendment status, order version |
@@ -161,6 +162,11 @@ a discriminator. "The restaurant declined" and "the restaurant never looked" lea
 to different customer wording, different operational follow-up, and different
 quality metrics for the branch, and a single event hides the second inside the
 first.
+
+`OrderPaymentLapsed` is not `OrderCancelled` for the same reason (ADR 0170, ADR 0039): a
+payment that never came is the platform's own commercial fact, and a customer's
+change of mind or an operator's decision is a different one. It carries the
+window that elapsed and nothing about the money.
 
 `OrderCancelled` never follows `OrderConfirmed` in this release: cancellation
 after confirmation is ADR 0039's and the application refuses it.

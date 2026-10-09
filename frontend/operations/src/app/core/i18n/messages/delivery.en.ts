@@ -189,8 +189,9 @@ export const deliveryEn = {
   'delivery.paymentWindow.action': 'After that',
   'delivery.paymentWindow.action.FLAG_ONLY': 'Flag the order for a person',
   'delivery.paymentWindow.action.CANCEL': 'Cancel the order',
-  'delivery.paymentWindow.cancelLocked':
-    'Cancelling an unpaid order is not available until product decides it.',
+  'delivery.paymentWindow.cancelNote':
+    'Cancelling ends the order as «Cancelled: not paid»: its stock and promo code go back and the payment page is closed. A payment that arrives afterwards never revives it; finance is told a refund is due.',
+  'delivery.paymentWindow.cancelTooShort': 'A window that cancels is at least 15 minutes.',
   'delivery.paymentWindow.save': 'Publish the window',
   'delivery.paymentWindow.saved': 'Published as version {version}.',
   'delivery.dialog.cancel': 'Cancel',
@@ -675,6 +676,17 @@ export const deliveryEn = {
   'delivery.policy.overridden': 'Overridden',
   'delivery.policy.inherited': 'Inherited: {value}',
   'delivery.policy.policyIdentity': 'Policy {id} · v{version}',
+  'delivery.policy.runPayMode': 'Pay for a run of several orders',
+  'delivery.policy.runPayMode.UNDECIDED': 'Not decided (every order is paid in full)',
+  'delivery.policy.runPayMode.PER_ORDER': 'Every order in full',
+  'delivery.policy.runPayMode.FIRST_FULL_THEN_INCREMENT':
+    'First order in full, the rest by their extra distance',
+  'delivery.policy.runPayMode.acknowledge':
+    'I confirm our courier engagement terms allow pay that depends on the run. HorecaOS asserts nothing about our contracts.',
+  'delivery.policy.runPayMode.pendingApproval':
+    'Sent for a second signature (request {request}). Nothing changes until it is approved; publish the same document again afterwards.',
+  'delivery.policy.consequence.runPayMode':
+    'Decides what a courier is paid when one run carries several orders to neighbouring doors. «First in full» pays each later order its per-order amount and minimum in full and its per-kilometre amount only for the distance beyond the previous drop-off; the courier sees the amount before accepting. A dispatch rule cannot turn grouping on while this is undecided.',
   'delivery.policy.shiftEnforcement': 'Shift enforcement',
   'delivery.policy.shiftEnforcement.ENFORCED': 'Enforced',
   'delivery.policy.shiftEnforcement.ADVISORY': 'Advisory',

@@ -188,14 +188,39 @@ class OperationsPaymentWindowEndpointTests {
     }
 
     @Test
-    @DisplayName("CANCEL is refused with VALIDATION_FAILED until product answers ADR 0019, and nothing is published")
-    void cancelIsRefused() throws Exception {
-        MvcResult attempt = put(ADMIN, "window-cancel", path(), 0, body(30, "CANCEL"));
+    @DisplayName("CANCEL under fifteen minutes is refused with PAYMENT_WINDOW_TOO_SHORT_FOR_CANCEL, "
+            + "and nothing is published")
+    void cancelUnderFifteenMinutesIsRefused() throws Exception {
+        MvcResult attempt = put(ADMIN, "window-cancel-short", path(), 0, body(14, "CANCEL"));
 
-        assertThat(attempt.getResponse().getStatus()).isEqualTo(400);
-        assertThat(json(attempt).path("code").asText()).isEqualTo("VALIDATION_FAILED");
-        assertThat(json(attempt).path("detail").asText()).contains("ADR 0019");
+        assertThat(attempt.getResponse().getStatus()).isEqualTo(422);
+        assertThat(json(attempt).path("code").asText()).isEqualTo("PAYMENT_WINDOW_TOO_SHORT_FOR_CANCEL");
         assertThat(count()).isZero();
+    }
+
+    @Test
+    @DisplayName("CANCEL at fifteen minutes or more is published, versioned, and read back as CANCEL")
+    void cancelFromFifteenMinutesIsPublishable() throws Exception {
+        MvcResult published = put(ADMIN, "window-cancel-ok", path(), 0, body(15, "CANCEL"));
+
+        assertThat(published.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json(published).path("action").asText()).isEqualTo("CANCEL");
+        assertThat(json(published).path("windowMinutes").asInt()).isEqualTo(15);
+        assertThat(published.getResponse().getHeader(HttpHeaders.ETAG)).isEqualTo("W/\"1\"");
+        assertThat(json(mvc.perform(get(path()).with(tokenFor(ADMIN))).andReturn())
+                        .path("action")
+                        .asText())
+                .isEqualTo("CANCEL");
+        assertThat(count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a FLAG_ONLY window can be as short as a minute: the fifteen-minute floor is for CANCEL only")
+    void theFloorIsForCancelOnly() throws Exception {
+        MvcResult flagged = put(ADMIN, "window-flag-short", path(), 0, body(5, "FLAG_ONLY"));
+
+        assertThat(flagged.getResponse().getStatus()).isEqualTo(200);
+        assertThat(json(flagged).path("windowMinutes").asInt()).isEqualTo(5);
     }
 
     @Test

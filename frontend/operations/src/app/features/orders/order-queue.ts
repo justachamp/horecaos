@@ -65,6 +65,7 @@ import {
   BulkOrderRef,
   OrderBulkActionsApi,
 } from './order-bulk-actions-api';
+import { BulkAssignSubmission, OrderBulkAssignDialog } from './order-bulk-assign-dialog';
 import { CountableOrder, OrderCounts, PolicyFor, TabCounts, zeroTabCounts } from './order-counts';
 import { describeApiError, errorReference, mutationErrorNotice } from './order-errors';
 import { OrderOutcomeReasonDialog, OutcomeReasonSubmission } from './order-outcome-reason-dialog';
@@ -91,6 +92,8 @@ import {
 } from './order-queue-filter-state';
 import {
   bulkAdvanceTarget,
+  bulkAssignEligible,
+  bulkAssignIneligibleCount,
   bulkCancelEligible,
   bulkCancelIneligibleCount,
   pruneSelection,
@@ -245,10 +248,11 @@ interface RowDialogState {
  *
  * **Selection and bulk actions.** A checkbox column, a bulk-action bar that
  * replaces the filter row while anything is selected, and `POST
- * .../orders/bulk-actions` (ADR 0039) — `ADVANCE`/`CANCEL` only.
- * **Bulk courier assignment is explicitly out of scope**: `BulkActionType`
- * has no such member, and the bulk bar says so rather than offering a button
- * that would 400. Every bulk action is offered only when it is valid for
+ * .../orders/bulk-actions` (ADR 0039) — `ADVANCE`, `CANCEL` and, since ADR
+ * 0172, `ASSIGN_COURIER`: «Назначить курьера» opens a courier picker over the
+ * roster and sends one request naming the courier, a reason code and the
+ * selection; it needs `order.bulk-action` **and** `delivery.manual_assign`,
+ * and the server decides per item. Every bulk action is offered only when it is valid for
  * *every* selected row (§2.10) — see `order-queue-selection.ts` for the
  * eligibility rules — and a partial failure renders §2.10's result panel,
  * with **Повторить проблемные** resubmitting only the failed items under a
@@ -286,6 +290,7 @@ interface RowDialogState {
     StatusPill,
     FilterBar,
     DateRangePicker,
+    OrderBulkAssignDialog,
     OrderQueueBulkBar,
     OrderQueueBulkResult,
     OrderQueueToolbar,
@@ -514,6 +519,9 @@ export class OrderQueue implements OnInit {
   protected readonly bulkBusy = signal(false);
   protected readonly bulkResult = signal<BulkActionResponse | null>(null);
   protected readonly bulkCancelDialogOpen = signal(false);
+  /** ADR 0172: the courier picker behind «Назначить курьера», and the roster it lists. */
+  protected readonly bulkAssignDialogOpen = signal(false);
+  protected readonly bulkAssignRoster = signal<readonly RosterEntryResponse[]>([]);
   protected readonly bulkCancelReasons = signal<readonly ReasonResponse[]>([]);
   private lastBulkSubmission: BulkActionRequest | null = null;
 
@@ -1890,6 +1898,57 @@ export class OrderQueue implements OnInit {
     });
   }
 
+  /**
+   * ADR 0172: «Назначить курьера» needs both grants at the location — `order.bulk-action` for the
+   * endpoint and `delivery.manual_assign` for the act — and every selected row's `actions[]` to
+   * carry `ASSIGN_COURIER`. A prediction; the server decides.
+   */
+  protected canBulkAssign(): boolean {
+    return (
+      this.capabilities.has('DELIVERY_MANUAL_ASSIGN') && bulkAssignEligible(this.selectedOrders())
+    );
+  }
+
+  protected bulkAssignUnavailableMessage(): string | null {
+    if (this.selectionCount() === 0 || !this.capabilities.has('DELIVERY_MANUAL_ASSIGN')) {
+      return null;
+    }
+    const ineligible = bulkAssignIneligibleCount(this.selectedOrders());
+    if (ineligible === 0) {
+      return null;
+    }
+    return this.i18n.t('orders.queue.bulk.assignUnavailable', {
+      ineligible,
+      total: this.selectionCount(),
+    });
+  }
+
+  protected onBulkAssignClick(): void {
+    const tenantId = this.location.scope()?.tenantId;
+    if (!this.canBulkAssign() || !tenantId) {
+      return;
+    }
+    void this.couriersApi
+      .roster(tenantId)
+      .then((roster) => this.bulkAssignRoster.set(roster))
+      .catch(() => this.bulkAssignRoster.set([]))
+      .finally(() => this.bulkAssignDialogOpen.set(true));
+  }
+
+  protected onBulkAssignDismiss(): void {
+    this.bulkAssignDialogOpen.set(false);
+  }
+
+  protected onBulkAssignConfirm(submission: BulkAssignSubmission): void {
+    this.bulkAssignDialogOpen.set(false);
+    void this.submitBulk({
+      actionType: 'ASSIGN_COURIER',
+      orders: this.orderRefsOf(this.selectedOrders()),
+      courierId: submission.courierId,
+      reasonCode: submission.reasonCode,
+    });
+  }
+
   protected bulkAdvanceTargetStatus(): string | null {
     return bulkAdvanceTarget(this.selectedOrders());
   }
@@ -2030,6 +2089,8 @@ export class OrderQueue implements OnInit {
     this.bulkResultItemLabel(orderId);
   protected readonly bulkProblemLabeller = (code: string | null | undefined): string =>
     this.bulkProblemLabel(code);
+  protected readonly bulkNoteLabeller = (note: string | null | undefined): string =>
+    this.bulkNoteLabel(note);
 
   protected bulkResultItemLabel(orderId: string): string {
     const row = this.rows().find((r) => r.order.orderId === orderId);
@@ -2061,8 +2122,53 @@ export class OrderQueue implements OnInit {
         return this.i18n.t('orders.queue.bulk.problem.ORDER_NOT_FOUND_AT_LOCATION');
       case 'UNEXPECTED_FAILURE':
         return this.i18n.t('orders.queue.bulk.problem.UNEXPECTED_FAILURE');
+      // ADR 0172: the assignment's own stable codes.
+      case 'NOT_A_DELIVERY_ORDER':
+      case 'NO_DELIVERY_PLAN':
+      case 'PLAN_NOT_OPEN':
+      case 'ALREADY_ASSIGNED_TO_THIS_COURIER':
+      case 'ALREADY_ASSIGNED':
+      case 'ALREADY_BEING_SOURCED':
+      case 'PARTNER_ATTEMPT_UNRECONCILED':
+      case 'COURIER_NOT_ELIGIBLE':
+      case 'COURIER_AT_CAPACITY':
+        return this.i18n.t(`orders.queue.bulk.problem.${code}`);
       default:
         return code ?? '';
+    }
+  }
+
+  /**
+   * ADR 0172: an item's note is a comma-separated list of stable codes. A code this client does
+   * not know renders as itself, the same «renders harmlessly» rule as an unknown problem code.
+   */
+  protected bulkNoteLabel(note: string | null | undefined): string {
+    if (!note) {
+      return '';
+    }
+    return note
+      .split(',')
+      .map((code) => this.bulkNoteCodeLabel(code))
+      .join(', ');
+  }
+
+  private bulkNoteCodeLabel(code: string): string {
+    switch (code) {
+      case 'OVERRODE_DISPATCH_RULE':
+        return this.i18n.t('orders.queue.bulk.note.OVERRODE_DISPATCH_RULE');
+      case 'OUTSIDE_DISTANCE_BAND':
+        return this.i18n.t('orders.queue.bulk.note.OUTSIDE_DISTANCE_BAND');
+      case 'NO_OPEN_SHIFT':
+        return this.i18n.t('orders.queue.bulk.note.NO_OPEN_SHIFT');
+      case 'COURIER_NOT_ACTIVE':
+        return this.i18n.t('orders.queue.bulk.note.COURIER_NOT_ACTIVE');
+      case 'REGISTRATION_LAPSED':
+        return this.i18n.t('orders.queue.bulk.note.REGISTRATION_LAPSED');
+      case 'ENGAGEMENT_NOT_ACTIVE':
+        return this.i18n.t('orders.queue.bulk.note.ENGAGEMENT_NOT_ACTIVE');
+      default:
+        // DUTY_STATE_* and any refusal this client does not know render as themselves.
+        return code;
     }
   }
 

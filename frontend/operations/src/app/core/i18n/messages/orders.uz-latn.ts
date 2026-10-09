@@ -579,8 +579,36 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   'orders.queue.bulk.cancel': 'Bekor qilish',
   'orders.queue.bulk.cancelUnavailable':
     '«Bekor qilish» mavjud emas: {total} tadan {ineligible} tasini bekor qilib boʻlmaydi',
-  'orders.queue.bulk.courierNote':
-    'Kuryerni ommaviy tayinlash hali mavjud emas — kuryerni har bir buyurtma uchun alohida tayinlang.',
+  'orders.queue.bulk.assign': 'Kuryer tayinlash',
+  'orders.queue.bulk.assignUnavailable':
+    '«Kuryer tayinlash» mavjud emas: {total} ta buyurtmadan {ineligible} tasini kuryerga berib boʻlmaydi',
+  'orders.queue.bulk.assignDialog.title': '{count} ta buyurtmaga kuryer tayinlash',
+  'orders.queue.bulk.assignDialog.empty': 'Roʻyxatda kuryerlar yoʻq.',
+  'orders.queue.bulk.assignDialog.load': '{ceiling} tadan {active} tasini olib ketmoqda',
+  'orders.queue.bulk.assignDialog.online': 'Aloqada',
+  'orders.queue.bulk.assignDialog.offline': 'Aloqada emas',
+  'orders.queue.bulk.assignDialog.inactive': 'Faol emas',
+  'orders.queue.bulk.assignDialog.reason': 'Sabab kodi',
+  'orders.queue.bulk.assignDialog.reasonInvalid':
+    '1 dan 48 gacha katta lotin harflari, raqamlar yoki pastki chiziq',
+  'orders.queue.bulk.assignDialog.confirm': 'Tayinlash',
+  'orders.queue.bulk.problem.NOT_A_DELIVERY_ORDER': 'Bu yetkazib berish buyurtmasi emas',
+  'orders.queue.bulk.problem.NO_DELIVERY_PLAN': 'Yetkazib berish hali rejalashtirilmagan',
+  'orders.queue.bulk.problem.PLAN_NOT_OPEN': 'Yetkazib berish allaqachon tugagan',
+  'orders.queue.bulk.problem.ALREADY_ASSIGNED_TO_THIS_COURIER': 'Allaqachon shu kuryerda',
+  'orders.queue.bulk.problem.ALREADY_ASSIGNED': 'Buyurtma boshqa kuryerda',
+  'orders.queue.bulk.problem.ALREADY_BEING_SOURCED': 'Tizim hozir uni kuryerga taklif qilmoqda',
+  'orders.queue.bulk.problem.PARTNER_ATTEMPT_UNRECONCILED':
+    'Hamkordagi buyurtma tasdiqlanmagan — avval uni hal qiling',
+  'orders.queue.bulk.problem.COURIER_NOT_ELIGIBLE': 'Bu kuryer hozir buyurtma ola olmaydi',
+  'orders.queue.bulk.problem.COURIER_AT_CAPACITY':
+    'Kuryer allaqachon eng koʻp buyurtmani olib ketmoqda',
+  'orders.queue.bulk.note.OVERRODE_DISPATCH_RULE': 'dispetcherlik qoidasi chetlab oʻtildi',
+  'orders.queue.bulk.note.OUTSIDE_DISTANCE_BAND': 'kuryerning masofa oraligʻidan tashqarida',
+  'orders.queue.bulk.note.NO_OPEN_SHIFT': 'ochiq smena yoʻq',
+  'orders.queue.bulk.note.COURIER_NOT_ACTIVE': 'kuryer faol emas',
+  'orders.queue.bulk.note.REGISTRATION_LAPSED': 'roʻyxatdan oʻtish muddati tugagan',
+  'orders.queue.bulk.note.ENGAGEMENT_NOT_ACTIVE': 'shartnoma faol emas',
   'orders.queue.bulk.cancelDialog.title': '{count} ta buyurtmani bekor qilish',
   'orders.queue.bulk.cancelDialog.confirm': 'Buyurtmalarni bekor qilish',
   'orders.queue.bulk.result.summary': '{applied} qoʻllandi · {failed} muammo',

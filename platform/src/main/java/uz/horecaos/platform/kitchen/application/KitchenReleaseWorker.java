@@ -35,11 +35,15 @@ public class KitchenReleaseWorker {
     private static final Logger log = LoggerFactory.getLogger(KitchenReleaseWorker.class);
 
     private final KitchenTicketService tickets;
+    private final KitchenPaymentHoldService holds;
     private final int batchSize;
 
     public KitchenReleaseWorker(
-            KitchenTicketService tickets, @Value("${horecaos.kitchen.release-worker.batch-size:50}") int batchSize) {
+            KitchenTicketService tickets,
+            KitchenPaymentHoldService holds,
+            @Value("${horecaos.kitchen.release-worker.batch-size:50}") int batchSize) {
         this.tickets = tickets;
+        this.holds = holds;
         this.batchSize = batchSize;
     }
 
@@ -48,6 +52,14 @@ public class KitchenReleaseWorker {
             fixedDelayString = "${horecaos.kitchen.release-worker.interval:PT5S}")
     public void releaseDueTickets() {
         try {
+            // ADR 0168: the payment-hold sweep runs first, in this tick, so a ticket whose payment became
+            // required is held before the due-ticket claim looks at it and a hold whose money arrived is
+            // cleared before it. A failure here must not stop the buffer draining.
+            try {
+                holds.sweep(batchSize);
+            } catch (RuntimeException failure) {
+                log.error("The kitchen payment-hold sweep could not run", failure);
+            }
             int fired = tickets.releaseDue(batchSize);
             if (fired > 0) {
                 log.debug("Released {} buffered ticket(s)", fired);

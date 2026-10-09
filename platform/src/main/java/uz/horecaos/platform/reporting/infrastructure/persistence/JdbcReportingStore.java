@@ -654,6 +654,8 @@ public class JdbcReportingStore {
      */
     public void clearDay(UUID tenantId, LocalDate businessDate) {
         for (String table : List.of(
+                // ADR 0163: the station-load fact, cleared and rewritten with the day it belongs to.
+                "fact_station_load",
                 "fact_order_line",
                 "fact_order_tender",
                 "fact_order",
@@ -680,6 +682,145 @@ public class JdbcReportingStore {
                     .param("day", businessDate)
                     .update();
         }
+    }
+
+    // ------------------------------------------------------------ station load (ADR 0163)
+
+    /**
+     * The portions each station fired in one business day, by operating hour (ADR 0163 Decision 1).
+     *
+     * <p>Read from {@code kitchen.tickets} and {@code kitchen.ticket_items} by the close job, the one thing
+     * that may read another module's tables, exactly as {@link #readSourceTenders} reads {@code payments}
+     * (ADR 0115). A ticket counts by the instant it fired, {@code released_at}, inside the day's own
+     * {@code [from, to)}; an item counts when {@code status <> 'CANCELLED' OR started_at IS NOT NULL}, so work a
+     * cook began keeps its portions and a line struck before anyone touched it does not (the replacement an
+     * amendment appends counts once, in the hour of the ticket's own {@code released_at}). A ticket voided
+     * before it fired has no {@code released_at} and counts nothing. This is deliberately not the ceiling read
+     * ("still to be cooked in a window"): it asks what was cooked.
+     *
+     * <p>The hour is whole elapsed hours since the day's own start instant, not a wall-clock extract, so a
+     * business day that starts at 09:00 and crosses midnight reads 0 to 23 in order, and a day an offset change
+     * makes 23 or 25 hours long cannot produce hour 24 (the last hour is clamped to 23).
+     */
+    public List<SourceStationLoad> readSourceStationLoad(UUID tenantId, Instant from, Instant to) {
+        return jdbc.sql("""
+                SELECT t.location_id, ti.station_id, s.code AS station_code, s.role AS station_role,
+                       LEAST(23, GREATEST(0, floor(extract(epoch FROM (t.released_at - :from)) / 3600)::int))
+                           AS operating_hour,
+                       sum(ti.quantity) AS portions,
+                       count(DISTINCT t.id) AS tickets
+                  FROM kitchen.ticket_items ti
+                  JOIN kitchen.tickets t ON t.id = ti.ticket_id AND t.tenant_id = ti.tenant_id
+                  JOIN kitchen.stations s ON s.id = ti.station_id AND s.tenant_id = ti.tenant_id
+                 WHERE t.tenant_id = :tenantId
+                   AND t.released_at IS NOT NULL
+                   AND t.released_at >= :from AND t.released_at < :to
+                   AND (ti.status <> 'CANCELLED' OR ti.started_at IS NOT NULL)
+                 GROUP BY t.location_id, ti.station_id, s.code, s.role, operating_hour
+                 ORDER BY t.location_id, ti.station_id, operating_hour
+                """)
+                .param("tenantId", tenantId)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .query((ResultSet row, int number) -> new SourceStationLoad(
+                        row.getObject("location_id", UUID.class),
+                        row.getObject("station_id", UUID.class),
+                        row.getString("station_code"),
+                        row.getString("station_role"),
+                        row.getInt("operating_hour"),
+                        row.getBigDecimal("portions"),
+                        row.getInt("tickets")))
+                .list();
+    }
+
+    /** One row of {@link #readSourceStationLoad}. */
+    public record SourceStationLoad(
+            UUID locationId,
+            UUID stationId,
+            String stationCode,
+            String stationRole,
+            int operatingHour,
+            java.math.BigDecimal portions,
+            int tickets) {}
+
+    public void insertStationLoadFact(ReportingFacts.StationLoadFact fact) {
+        jdbc.sql("""
+                INSERT INTO reporting.fact_station_load (
+                    tenant_id, business_date, location_id, station_id, station_code, station_role,
+                    operating_hour, portions, tickets, boundary_version, metric_calculation_version)
+                VALUES (
+                    :tenantId, :businessDate, :locationId, :stationId, :stationCode, :stationRole,
+                    :operatingHour, :portions, :tickets, :boundaryVersion, :calculationVersion)
+                """)
+                .param("tenantId", fact.tenantId())
+                .param("businessDate", fact.businessDate())
+                .param("locationId", fact.locationId())
+                .param("stationId", fact.stationId())
+                .param("stationCode", fact.stationCode())
+                .param("stationRole", fact.stationRole())
+                .param("operatingHour", fact.operatingHour())
+                .param("portions", fact.portions())
+                .param("tickets", fact.tickets())
+                .param("boundaryVersion", fact.boundaryVersion())
+                .param("calculationVersion", fact.metricCalculationVersion())
+                .update();
+    }
+
+    /**
+     * Deletes the station-load fact of one date and nothing else: the rebuild's one destructive statement
+     * (ADR 0163 Decision 1). Never {@link #clearDay}, which would take every fact a manager has already acted
+     * on with it.
+     */
+    public int deleteStationLoad(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql("DELETE FROM reporting.fact_station_load WHERE tenant_id = :tenantId AND business_date = :day")
+                .param("tenantId", tenantId)
+                .param("day", businessDate)
+                .update();
+    }
+
+    /** The stored station-load fact of one date, ordered so two reads of unchanged data compare byte for byte. */
+    public List<ReportingFacts.StationLoadFact> readStationLoadFacts(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql("""
+                SELECT tenant_id, business_date, location_id, station_id, station_code, station_role,
+                       operating_hour, portions, tickets, boundary_version, metric_calculation_version
+                  FROM reporting.fact_station_load
+                 WHERE tenant_id = :tenantId AND business_date = :day
+                 ORDER BY location_id, station_id, operating_hour
+                """)
+                .param("tenantId", tenantId)
+                .param("day", businessDate)
+                .query((ResultSet row, int number) -> new ReportingFacts.StationLoadFact(
+                        row.getObject("tenant_id", UUID.class),
+                        row.getObject("business_date", LocalDate.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getObject("station_id", UUID.class),
+                        row.getString("station_code"),
+                        row.getString("station_role"),
+                        row.getInt("operating_hour"),
+                        row.getBigDecimal("portions"),
+                        row.getInt("tickets"),
+                        row.getInt("boundary_version"),
+                        row.getInt("metric_calculation_version")))
+                .list();
+    }
+
+    /**
+     * The boundary regime the date's most recent completed {@code CLOSE} run was computed under, or empty when
+     * the date has never been closed. The rebuild takes it so a date closed under another regime is refused
+     * rather than rebuilt on the wrong day boundaries.
+     */
+    public Optional<Integer> closedUnderBoundaryVersion(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql("""
+                SELECT boundary_version FROM reporting.close_runs
+                 WHERE tenant_id = :tenantId AND business_date = :day
+                   AND run_kind = 'CLOSE' AND status = 'COMPLETED'
+                 ORDER BY started_at DESC
+                 LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("day", businessDate)
+                .query(Integer.class)
+                .optional();
     }
 
     /** ADR 0064. Mirrors {@link #insertAggregate}'s shape: one row per {@code CallHourFact}. */

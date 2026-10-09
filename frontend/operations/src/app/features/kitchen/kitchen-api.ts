@@ -96,6 +96,17 @@ export interface TicketResponse {
    */
   readonly table?: OrderTableView | null;
   readonly items: readonly TicketItemView[];
+  /**
+   * ADR 0168: `PAYMENT` while the ticket waits in the buffer for money its order requires and has not
+   * received; null for every other ticket. The ticket keeps its release mode and its `releaseAt` -- the hold
+   * says whether the timer may fire it, not when it is due.
+   */
+  readonly holdReason?: string | null;
+  readonly holdSince?: string | null;
+  /** `releaseAt` arrived with the money still absent (once per hold). */
+  readonly holdBlocked?: boolean;
+  /** ... and it stayed absent for the policy's `overdueAfterMinutes`: the board treats it as stuck. */
+  readonly holdOverdue?: boolean;
 }
 
 /**
@@ -251,10 +262,18 @@ export class KitchenApi {
     ticketId: string,
     expectedVersion: number,
     reasonCode: string,
+    overrideReasonCode?: string,
   ): Observable<TicketResponse> {
-    return this.api.post<{ expectedVersion: number; reasonCode: string }, TicketResponse>(
+    return this.api.post<
+      { expectedVersion: number; reasonCode: string; overrideReasonCode?: string },
+      TicketResponse
+    >(
       operationsPaths.kitchenTicketRelease(scope, ticketId),
-      command({ expectedVersion, reasonCode }),
+      command({
+        expectedVersion,
+        reasonCode,
+        ...(overrideReasonCode === undefined ? {} : { overrideReasonCode }),
+      }),
     );
   }
 

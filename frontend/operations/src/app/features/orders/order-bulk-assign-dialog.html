@@ -1,0 +1,96 @@
+<div class="assign-dialog__backdrop" data-testid="order-bulk-assign-dialog">
+  <div
+    class="assign-dialog"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="'orders.queue.bulk.assignDialog.title' | t: { count: count() }"
+  >
+    <h2 class="q-emphasis assign-dialog__title">
+      {{ 'orders.queue.bulk.assignDialog.title' | t: { count: count() } }}
+    </h2>
+
+    @if (couriers().length === 0) {
+      <p class="q-body-sm" data-testid="order-bulk-assign-empty">
+        {{ 'orders.queue.bulk.assignDialog.empty' | t }}
+      </p>
+    } @else {
+      <ul class="assign-dialog__list" role="radiogroup">
+        @for (courier of couriers(); track courier.courierId) {
+          <li>
+            <label
+              class="assign-dialog__option"
+              [class.assign-dialog__option--disabled]="!isPickable(courier)"
+            >
+              <input
+                type="radio"
+                name="bulk-assign-courier"
+                [disabled]="!isPickable(courier) || busy()"
+                [checked]="selectedCourierId() === courier.courierId"
+                (change)="select(courier)"
+                data-testid="order-bulk-assign-courier"
+              />
+              <span class="q-mono">{{ courier.displayReference }}</span>
+              <span class="q-caption">{{ courier.courierTypeName }}</span>
+              <span class="q-caption q-tnum" data-testid="order-bulk-assign-load">{{
+                'orders.queue.bulk.assignDialog.load'
+                  | t: { active: courier.activeAssignments, ceiling: courier.concurrencyCeiling }
+              }}</span>
+              @if (!isPickable(courier)) {
+                <span
+                  class="q-caption assign-dialog__off"
+                  data-testid="order-bulk-assign-inactive"
+                  >{{ 'orders.queue.bulk.assignDialog.inactive' | t }}</span
+                >
+              } @else if (courier.online) {
+                <span class="q-caption">{{ 'orders.queue.bulk.assignDialog.online' | t }}</span>
+              } @else {
+                <span class="q-caption">{{ 'orders.queue.bulk.assignDialog.offline' | t }}</span>
+              }
+            </label>
+          </li>
+        }
+      </ul>
+    }
+
+    <label class="assign-dialog__field">
+      <span class="q-body-sm">{{ 'orders.queue.bulk.assignDialog.reason' | t }}</span>
+      <input
+        class="assign-dialog__input q-mono"
+        type="text"
+        maxlength="48"
+        [value]="reasonCode()"
+        [disabled]="busy()"
+        (input)="onReasonInput($any($event.target).value)"
+        data-testid="order-bulk-assign-reason"
+      />
+      @if (!reasonValid()) {
+        <span
+          class="q-caption assign-dialog__error"
+          data-testid="order-bulk-assign-reason-invalid"
+          >{{ 'orders.queue.bulk.assignDialog.reasonInvalid' | t }}</span
+        >
+      }
+    </label>
+
+    <div class="assign-dialog__actions">
+      <button
+        type="button"
+        class="assign-dialog__dismiss"
+        [disabled]="busy()"
+        (click)="dismiss()"
+        data-testid="order-bulk-assign-dismiss"
+      >
+        {{ 'orders.dialog.dismiss' | t }}
+      </button>
+      <button
+        type="button"
+        class="assign-dialog__confirm"
+        [disabled]="!canConfirm()"
+        (click)="confirm()"
+        data-testid="order-bulk-assign-confirm"
+      >
+        {{ 'orders.queue.bulk.assignDialog.confirm' | t }}
+      </button>
+    </div>
+  </div>
+</div>

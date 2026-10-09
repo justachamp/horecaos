@@ -681,4 +681,47 @@ public final class ReportingFacts {
             }
         }
     }
+
+    /**
+     * ADR 0163: the portions one kitchen station fired in one operating hour of one business day.
+     *
+     * <p>Counted at the ticket's fire instant ({@code kitchen.tickets.released_at}), because that is when a
+     * cook starts work, not at the order's creation, which would put a 20:00 pre-order in the 11:00 hour. The
+     * station's code and role are stored as they were that day, so renaming or archiving a station never
+     * rewrites last quarter's planning. No order identifier and no person is stored.
+     *
+     * @param operatingHour 0 is the business day's own start ({@code BusinessDayBoundary}), not the wall clock
+     * @param portions      three decimals, exactly the sum of {@code ticket_items.quantity} (ADR 0137)
+     * @param tickets       how many tickets fired at this station in this hour
+     */
+    public record StationLoadFact(
+            UUID tenantId,
+            LocalDate businessDate,
+            UUID locationId,
+            UUID stationId,
+            String stationCode,
+            String stationRole,
+            int operatingHour,
+            BigDecimal portions,
+            int tickets,
+            int boundaryVersion,
+            int metricCalculationVersion) {
+
+        public StationLoadFact {
+            Objects.requireNonNull(tenantId, "A fact is tenant-owned");
+            Objects.requireNonNull(businessDate, "A fact is dated");
+            Objects.requireNonNull(stationId, "A fact names its station");
+            if (operatingHour < 0 || operatingHour > 23) {
+                throw new IllegalArgumentException("An operating hour is 0 to 23, was " + operatingHour);
+            }
+            if (portions.signum() < 0) {
+                throw new IllegalArgumentException("Fired portions cannot be negative");
+            }
+        }
+
+        /** The portions in thousandths, which is exact (three decimals) and fits the divergence columns. */
+        public long thousandths() {
+            return portions.movePointRight(3).longValueExact();
+        }
+    }
 }

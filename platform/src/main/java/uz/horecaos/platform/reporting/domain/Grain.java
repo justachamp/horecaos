@@ -62,7 +62,15 @@ public enum Grain {
      * from a different fact table than every other {@code /queries} metric.
      */
     DAY_LOCATION_LEGAL_ENTITY_CUSTOMER_TYPE(
-            List.of(Dimension.LOCATION, Dimension.LEGAL_ENTITY, Dimension.CUSTOMER_TYPE));
+            List.of(Dimension.LOCATION, Dimension.LEGAL_ENTITY, Dimension.CUSTOMER_TYPE)),
+
+    /**
+     * ADR 0163: the kitchen's own grain, over {@code reporting.fact_station_load} -- a business date, a
+     * location, a station and an operating hour. Not money, so nothing here names the legal entity. Answered
+     * by the headcount plan ({@code GET .../kitchen/headcount-plan}), never by the typed {@code /queries}
+     * pipeline: a plan is a forecast over several dates of one station's hours, not one figure per slice.
+     */
+    DAY_LOCATION_STATION_HOUR(List.of(Dimension.LOCATION, Dimension.STATION));
 
     /** The axes a reporting query may group by. */
     public enum Dimension {
@@ -93,7 +101,13 @@ public enum Grain {
          * excluded from this dimension entirely rather than folded into
          * either bucket.
          */
-        CUSTOMER_TYPE
+        CUSTOMER_TYPE,
+
+        /**
+         * ADR 0163: {@code reporting.fact_station_load.station_id}, the station as it was that day (its
+         * code and role are stored beside it, so a renamed or archived station never rewrites history).
+         */
+        STATION
     }
 
     // ImmutableEnumChecker judges by the field's declared type, which is the

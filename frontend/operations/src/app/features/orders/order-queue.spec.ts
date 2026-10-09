@@ -57,6 +57,9 @@ function configureForBulk(
     readonly bulkSubmit?: ReturnType<typeof vi.fn>;
     readonly cancelReasons?: readonly ReasonResponse[];
     readonly tabCounts?: TabCounts;
+    /** ADR 0172: the session's capabilities; `ORDER_BULK_ACTION` alone by default. */
+    readonly capabilities?: readonly string[];
+    readonly roster?: readonly RosterEntryResponse[];
   } = {},
 ): void {
   TestBed.configureTestingModule({
@@ -89,8 +92,12 @@ function configureForBulk(
       },
       {
         provide: SessionCapabilities,
-        useValue: { has: (capability: string) => capability === 'ORDER_BULK_ACTION' },
+        useValue: {
+          has: (capability: string) =>
+            (overrides.capabilities ?? ['ORDER_BULK_ACTION']).includes(capability),
+        },
       },
+      { provide: CouriersApi, useValue: { roster: () => Promise.resolve(overrides.roster ?? []) } },
       { provide: OrderBulkActionsApi, useValue: { submit: overrides.bulkSubmit ?? vi.fn() } },
       {
         provide: ReferenceDataApi,
@@ -1671,7 +1678,7 @@ describe('OrderQueue: filters round-trip through the URL (gap map row 1.1c)', ()
 
 /**
  * orders.md §2.10, wave P07: selection, the bulk-action bar, and §2.10's
- * result panel. Bulk courier assignment is explicitly out of scope.
+ * result panel; bulk courier assignment since ADR 0172.
  */
 describe('OrderQueue: selection and bulk actions (orders.md §2.10, wave P07)', () => {
   it('offers no selection column to an operator without ORDER_BULK_ACTION', async () => {
@@ -1714,15 +1721,56 @@ describe('OrderQueue: selection and bulk actions (orders.md §2.10, wave P07)', 
     expect(host.querySelector('[data-testid="order-queue-bulk-cancel"]')).not.toBeNull();
   });
 
-  it('never offers bulk courier assignment — explicitly out of scope', async () => {
+  it('offers «Assign courier» only when every selected order carries ASSIGN_COURIER and the session holds both grants (ADR 0172)', async () => {
     const getOrders = ordersResponse([
       order({
         orderId: 'a',
+        publicOrderNumber: '0001',
         status: 'CONFIRMED',
-        actions: [{ action: 'CANCEL' }, { action: 'ADVANCE', targetStatus: 'PREPARING' }],
+        actions: [{ action: 'CANCEL' }, { action: 'ASSIGN_COURIER' }],
+      }),
+      order({
+        orderId: 'b',
+        publicOrderNumber: '0002',
+        status: 'CONFIRMED',
+        actions: [{ action: 'CANCEL' }],
       }),
     ]);
-    configureForBulk(getOrders);
+    configureForBulk(getOrders, { capabilities: ['ORDER_BULK_ACTION', 'DELIVERY_MANUAL_ASSIGN'] });
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    const checkboxes = [
+      ...host.querySelectorAll('[data-testid="order-row-select"]'),
+    ] as HTMLInputElement[];
+    checkboxes[0].click();
+    await flushMicrotasks();
+
+    expect(host.querySelector('[data-testid="order-queue-bulk-assign"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="order-queue-bulk-courier-note"]')).toBeNull();
+
+    checkboxes[1].click();
+    await flushMicrotasks();
+
+    expect(host.querySelector('[data-testid="order-queue-bulk-assign"]')).toBeNull();
+    expect(
+      host
+        .querySelector('[data-testid="order-queue-bulk-assign-unavailable"]')
+        ?.textContent?.trim(),
+    ).toBe('“Assign courier” unavailable: 1 of 2 orders can’t be given a courier');
+  });
+
+  it('offers no assignment to an operator without delivery.manual_assign, and says nothing about it', async () => {
+    configureForBulk(
+      ordersResponse([
+        order({
+          orderId: 'a',
+          status: 'CONFIRMED',
+          actions: [{ action: 'CANCEL' }, { action: 'ASSIGN_COURIER' }],
+        }),
+      ]),
+    );
     const harness = await RouterTestingHarness.create('/orders?tab=preparing');
     await flushMicrotasks();
     const host = harness.routeNativeElement!;
@@ -1730,14 +1778,160 @@ describe('OrderQueue: selection and bulk actions (orders.md §2.10, wave P07)', 
     (host.querySelector('[data-testid="order-row-select"]') as HTMLInputElement).click();
     await flushMicrotasks();
 
-    // The bulk bar says explicitly that bulk courier assignment is not
-    // offered, and no button in it performs one.
-    expect(host.querySelector('[data-testid="order-queue-bulk-courier-note"]')).not.toBeNull();
-    const bulkBar = host.querySelector('[data-testid="order-queue-bulk-bar"]')!;
-    const buttonLabels = [...bulkBar.querySelectorAll('button')].map((button) =>
-      button.textContent?.trim().toLowerCase(),
+    expect(host.querySelector('[data-testid="order-queue-bulk-assign"]')).toBeNull();
+    expect(host.querySelector('[data-testid="order-queue-bulk-assign-unavailable"]')).toBeNull();
+  });
+
+  it('picks a courier and sends one ASSIGN_COURIER request, then shows the overridden rule beside the order', async () => {
+    const bulkSubmit = vi.fn().mockReturnValue(
+      of({
+        bulkOperationId: 'bulk-assign-1',
+        actionType: 'ASSIGN_COURIER',
+        requestedCount: 1,
+        appliedCount: 1,
+        failedCount: 0,
+        replayed: false,
+        items: [
+          {
+            orderId: 'a',
+            itemStatus: 'APPLIED',
+            resultingOrderVersion: 3,
+            planId: 'p1',
+            shipmentId: 's1',
+            note: 'OVERRODE_DISPATCH_RULE',
+          },
+        ],
+      }),
     );
-    expect(buttonLabels.some((label) => label?.includes('courier'))).toBe(false);
+    configureForBulk(
+      ordersResponse([
+        order({
+          orderId: 'a',
+          publicOrderNumber: '0001',
+          version: 3,
+          status: 'CONFIRMED',
+          actions: [{ action: 'ASSIGN_COURIER' }],
+        }),
+      ]),
+      {
+        bulkSubmit,
+        capabilities: ['ORDER_BULK_ACTION', 'DELIVERY_MANUAL_ASSIGN'],
+        roster: [
+          {
+            courierId: 'courier-1',
+            displayReference: 'K-001',
+            status: 'ACTIVE',
+            courierTypeId: 't',
+            courierTypeName: 'Scooter',
+            vehicleClass: 'SCOOTER',
+            activeAssignments: 0,
+            concurrencyCeiling: 3,
+            engagementStatus: 'ACTIVE',
+            online: true,
+          },
+        ],
+      },
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=preparing');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelector('[data-testid="order-row-select"]') as HTMLInputElement).click();
+    await flushMicrotasks();
+    (host.querySelector('[data-testid="order-queue-bulk-assign"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(host.querySelector('[data-testid="order-bulk-assign-dialog"]')).not.toBeNull();
+    (host.querySelector('[data-testid="order-bulk-assign-courier"]') as HTMLInputElement).click();
+    await flushMicrotasks();
+    (host.querySelector('[data-testid="order-bulk-assign-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(bulkSubmit).toHaveBeenCalledTimes(1);
+    expect(bulkSubmit.mock.calls[0][1]).toEqual({
+      actionType: 'ASSIGN_COURIER',
+      orders: [{ orderId: 'a', expectedVersion: 3 }],
+      courierId: 'courier-1',
+      reasonCode: 'OPERATIONS_BULK_ASSIGN',
+    });
+    expect(host.querySelector('[data-testid="order-bulk-assign-dialog"]')).toBeNull();
+    expect(
+      host
+        .querySelector('[data-testid="order-queue-bulk-result-applied-note"]')
+        ?.textContent?.replace(/\s+/g, ' ')
+        .trim(),
+    ).toBe('0001 — overrode the dispatch rule');
+  });
+
+  it('translates the new problem codes and retries only the refused orders under a new submission', async () => {
+    const bulkSubmit = vi
+      .fn()
+      .mockReturnValueOnce(
+        of({
+          bulkOperationId: 'bulk-assign-2',
+          actionType: 'ASSIGN_COURIER',
+          requestedCount: 2,
+          appliedCount: 1,
+          failedCount: 1,
+          replayed: false,
+          items: [
+            { orderId: 'a', itemStatus: 'APPLIED', resultingOrderVersion: 1 },
+            { orderId: 'b', itemStatus: 'FAILED', itemProblemCode: 'COURIER_AT_CAPACITY' },
+          ],
+        }),
+      )
+      .mockReturnValue(NEVER);
+    configureForBulk(
+      ordersResponse([
+        order({ orderId: 'a', publicOrderNumber: '0001', actions: [{ action: 'ASSIGN_COURIER' }] }),
+        order({ orderId: 'b', publicOrderNumber: '0002', actions: [{ action: 'ASSIGN_COURIER' }] }),
+      ]),
+      {
+        bulkSubmit,
+        capabilities: ['ORDER_BULK_ACTION', 'DELIVERY_MANUAL_ASSIGN'],
+        roster: [
+          {
+            courierId: 'courier-1',
+            displayReference: 'K-001',
+            status: 'ACTIVE',
+            courierTypeId: 't',
+            courierTypeName: 'Scooter',
+            vehicleClass: 'SCOOTER',
+            activeAssignments: 0,
+            concurrencyCeiling: 1,
+            engagementStatus: 'ACTIVE',
+          },
+        ],
+      },
+    );
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await flushMicrotasks();
+    const host = harness.routeNativeElement!;
+
+    (host.querySelector('[data-testid="order-queue-select-page"]') as HTMLInputElement).click();
+    await flushMicrotasks();
+    (host.querySelector('[data-testid="order-queue-bulk-assign"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+    (host.querySelector('[data-testid="order-bulk-assign-courier"]') as HTMLInputElement).click();
+    await flushMicrotasks();
+    (host.querySelector('[data-testid="order-bulk-assign-confirm"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(
+      host
+        .querySelector('[data-testid="order-queue-bulk-result-item"]')
+        ?.textContent?.replace(/\s+/g, ' ')
+        .trim(),
+    ).toBe('0002 — The courier is carrying as many as they can');
+
+    (host.querySelector('[data-testid="order-queue-bulk-retry"]') as HTMLButtonElement).click();
+    await flushMicrotasks();
+
+    expect(bulkSubmit).toHaveBeenCalledTimes(2);
+    const retry = bulkSubmit.mock.calls[1][1];
+    expect(retry.actionType).toBe('ASSIGN_COURIER');
+    expect(retry.courierId).toBe('courier-1');
+    expect(retry.orders.map((ref: { orderId: string }) => ref.orderId)).toEqual(['b']);
   });
 
   it('offers Отменить only when every selected order can be cancelled, with a reason when it cannot', async () => {

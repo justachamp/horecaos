@@ -213,33 +213,39 @@
 
             <!-- ------------------------------------------------- §5.4 ТИП / АДРЕС -->
             <div class="new-order__fulfillment-toggle" role="radiogroup">
-              <button
-                type="button"
-                class="q-caption new-order__mode-button"
-                [class.new-order__mode-button--active]="fulfillmentMode() === 'PICKUP'"
-                (click)="setFulfillmentMode('PICKUP')"
-                data-testid="new-order-mode-pickup"
-              >
-                {{ 'orders.fulfillmentMode.PICKUP' | t }}
-              </button>
-              <button
-                type="button"
-                class="q-caption new-order__mode-button"
-                [class.new-order__mode-button--active]="fulfillmentMode() === 'DELIVERY'"
-                (click)="setFulfillmentMode('DELIVERY')"
-                data-testid="new-order-mode-delivery"
-              >
-                {{ 'orders.fulfillmentMode.DELIVERY' | t }}
-              </button>
-              <button
-                type="button"
-                class="q-caption new-order__mode-button"
-                [class.new-order__mode-button--active]="fulfillmentMode() === 'DINE_IN'"
-                (click)="setFulfillmentMode('DINE_IN')"
-                data-testid="new-order-mode-dine-in"
-              >
-                {{ 'orders.fulfillmentMode.DINE_IN' | t }}
-              </button>
+              @if (handoverOffered('PICKUP')) {
+                <button
+                  type="button"
+                  class="q-caption new-order__mode-button"
+                  [class.new-order__mode-button--active]="fulfillmentMode() === 'PICKUP'"
+                  (click)="setFulfillmentMode('PICKUP')"
+                  data-testid="new-order-mode-pickup"
+                >
+                  {{ 'orders.fulfillmentMode.PICKUP' | t }}
+                </button>
+              }
+              @if (handoverOffered('DELIVERY')) {
+                <button
+                  type="button"
+                  class="q-caption new-order__mode-button"
+                  [class.new-order__mode-button--active]="fulfillmentMode() === 'DELIVERY'"
+                  (click)="setFulfillmentMode('DELIVERY')"
+                  data-testid="new-order-mode-delivery"
+                >
+                  {{ 'orders.fulfillmentMode.DELIVERY' | t }}
+                </button>
+              }
+              @if (handoverOffered('DINE_IN')) {
+                <button
+                  type="button"
+                  class="q-caption new-order__mode-button"
+                  [class.new-order__mode-button--active]="fulfillmentMode() === 'DINE_IN'"
+                  (click)="setFulfillmentMode('DINE_IN')"
+                  data-testid="new-order-mode-dine-in"
+                >
+                  {{ 'orders.fulfillmentMode.DINE_IN' | t }}
+                </button>
+              }
             </div>
 
             @if (fulfillmentMode() === 'DINE_IN') {

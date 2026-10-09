@@ -49,6 +49,20 @@
     </div>
 
     <div class="rail__foot">
+      <!-- ADR 0164: a profile that puts sections away says so, and lets this person see them. A
+           per-viewer convenience: no request, and it never changes what anyone may do. -->
+      @if (consoleProfile.putAway().length > 0) {
+        <button
+          type="button"
+          class="rail__signout q-caption"
+          data-testid="shell-show-all-sections"
+          (click)="toggleShowAll()"
+        >
+          {{
+            (consoleProfile.showingAll() ? 'shell.profile.hideAgain' : 'shell.profile.showAll') | t
+          }}
+        </button>
+      }
       @if (accountName(); as name) {
         <a class="q-body-sm rail__account" routerLink="/my-profile">{{ name }}</a>
       }

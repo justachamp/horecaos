@@ -108,6 +108,33 @@ public enum ErrorCode {
      */
     APPROVAL_POLICY_REQUIRED(HttpStatus.CONFLICT, "Approval policy required"),
 
+    /**
+     * ADR 0168: a buffered ticket is held because its order's payment is required and has not arrived.
+     * Firing it by hand needs {@code kitchen.ticket.release.override} and a reason code from the closed
+     * registry. Distinct from {@link #RESOURCE_CONFLICT}: the remedy is not to re-read, it is to wait for
+     * the customer, or to say, by name and by code, that the kitchen starts anyway.
+     */
+    PAYMENT_HOLD(HttpStatus.CONFLICT, "Held for payment"),
+
+    /**
+     * ADR 0170: a dispatch rule asks for grouping while the {@code courier.compensation} document resolved at
+     * its scope has not decided how a run of several orders is paid ({@code runPayMode} is null). Grouping
+     * changes what a courier earns for the same kilometres, so it is never switched on by omission.
+     */
+    RUN_PAY_MODE_UNDECIDED(HttpStatus.UNPROCESSABLE_ENTITY, "Run pay mode undecided"),
+
+    /**
+     * ADR 0170: a dispatch rule's grouping names a wait above zero. The bounded wait is deferred until a month
+     * of ranking-only offers says how often a groupable courier existed; grouping is a ranking bias only.
+     */
+    GROUPING_WAIT_NOT_AVAILABLE(HttpStatus.UNPROCESSABLE_ENTITY, "Grouping wait not available"),
+
+    /**
+     * ADR 0170: an unpaid-order window that cancels is at least fifteen minutes. A shorter one ends orders
+     * whose customer is still on the provider's payment page.
+     */
+    PAYMENT_WINDOW_TOO_SHORT_FOR_CANCEL(HttpStatus.UNPROCESSABLE_ENTITY, "Payment window too short to cancel"),
+
     /** ADR 0018: the quote's inputs changed; never silently charge the difference. */
     PRICE_CHANGED(HttpStatus.CONFLICT, "Price changed"),
 

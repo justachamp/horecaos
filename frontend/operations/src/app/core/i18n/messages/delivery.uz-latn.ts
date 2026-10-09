@@ -195,8 +195,10 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.paymentWindow.action': 'Shundan keyin',
   'delivery.paymentWindow.action.FLAG_ONLY': 'Buyurtmani xodim uchun belgilash',
   'delivery.paymentWindow.action.CANCEL': 'Buyurtmani bekor qilish',
-  'delivery.paymentWindow.cancelLocked':
-    'Toʻlanmagan buyurtmani bekor qilish mahsulot jamoasi hal qilmaguncha mavjud emas.',
+  'delivery.paymentWindow.cancelNote':
+    'Bekor qilish buyurtmani «Bekor qilindi: toʻlanmagan» deb yakunlaydi: mahsulot va promokod qaytariladi, toʻlov sahifasi yopiladi. Keyin kelgan toʻlov buyurtmani qayta tiklamaydi; moliya qaytarish kerakligi haqida xabar oladi.',
+  'delivery.paymentWindow.cancelTooShort':
+    'Bekor qiladigan muddat kamida 15 daqiqa boʻlishi kerak.',
   'delivery.paymentWindow.save': 'Muddatni eʻlon qilish',
   'delivery.paymentWindow.saved': '{version}-versiya sifatida eʻlon qilindi.',
   'delivery.dialog.cancel': 'Bekor qilish',
@@ -683,6 +685,17 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.policy.overridden': 'Ustunlik berilgan',
   'delivery.policy.inherited': 'Meros qilib olingan: {value}',
   'delivery.policy.policyIdentity': 'Siyosat {id} · v{version}',
+  'delivery.policy.runPayMode': 'Bir necha buyurtmali reys uchun toʻlov',
+  'delivery.policy.runPayMode.UNDECIDED': 'Hal qilinmagan (har bir buyurtma toʻliq toʻlanadi)',
+  'delivery.policy.runPayMode.PER_ORDER': 'Har bir buyurtma toʻliq',
+  'delivery.policy.runPayMode.FIRST_FULL_THEN_INCREMENT':
+    'Birinchisi toʻliq, qolganlari qoʻshimcha masofa boʻyicha',
+  'delivery.policy.runPayMode.acknowledge':
+    'Tasdiqlayman: kuryerlar bilan shartlarimiz reysga bogʻliq toʻlovga ruxsat beradi. HorecaOS shartnomalarimiz haqida hech narsa daʼvo qilmaydi.',
+  'delivery.policy.runPayMode.pendingApproval':
+    'Ikkinchi imzo uchun yuborildi (soʻrov {request}). Tasdiqlanmaguncha hech narsa oʻzgarmaydi; tasdiqdan keyin xuddi shu hujjatni qayta eʻlon qiling.',
+  'delivery.policy.consequence.runPayMode':
+    'Bir reys qoʻshni manzillarga bir necha buyurtma olib borganda kuryer qancha olishini belgilaydi. «Birinchisi toʻliq» keyingi har bir buyurtmaga buyurtma uchun stavka va minimumni toʻliq, kilometr uchun esa faqat oldingi nuqtadan keyingi masofani toʻlaydi; kuryer qabul qilishdan oldin summani koʻradi. Bu hal qilinmaguncha dispetcherlik qoidasi guruhlashni yoqa olmaydi.',
   'delivery.policy.shiftEnforcement': 'Smena nazorati',
   'delivery.policy.shiftEnforcement.ENFORCED': 'Qatʻiy',
   'delivery.policy.shiftEnforcement.ADVISORY': 'Tavsiya xarakterida',

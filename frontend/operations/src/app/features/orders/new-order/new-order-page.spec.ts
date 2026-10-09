@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
+import { ConsoleProfile } from '../../../core/auth/console-profile';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
 import { Toasts } from '../../../shared/ui/toast';
@@ -379,6 +380,35 @@ describe('NewOrderPage', () => {
     await flushMicrotasks();
     fixture.detectChanges();
   }
+
+  // ------------------------------------------------------------------ ADR 0164: the console profile
+
+  it('offers all three handovers on the standard console, starting on pickup', async () => {
+    await render();
+    fixture.componentInstance['selectedCustomer'].set({ accountId: 'acct-1', label: 'Aziza' });
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelector('[data-testid="new-order-mode-pickup"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="new-order-mode-delivery"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="new-order-mode-dine-in"]')).not.toBeNull();
+    expect(fixture.componentInstance['fulfillmentMode']()).toBe('PICKUP');
+  });
+
+  it('offers delivery only on the deliveries profile, and starts on it rather than on pickup', async () => {
+    TestBed.overrideProvider(ConsoleProfile, {
+      useValue: { ensureLoaded: () => Promise.resolve(), handovers: () => ['DELIVERY'] },
+    });
+    await render();
+    fixture.componentInstance['selectedCustomer'].set({ accountId: 'acct-1', label: 'Aziza' });
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+
+    expect(host.querySelector('[data-testid="new-order-mode-pickup"]')).toBeNull();
+    expect(host.querySelector('[data-testid="new-order-mode-dine-in"]')).toBeNull();
+    expect(host.querySelector('[data-testid="new-order-mode-delivery"]')).not.toBeNull();
+    expect(fixture.componentInstance['fulfillmentMode']()).toBe('DELIVERY');
+  });
 
   // ------------------------------------------------------------------ search
 

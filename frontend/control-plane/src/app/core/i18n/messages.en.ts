@@ -355,6 +355,10 @@ export const en = {
   'tenants.column.currency': 'Currency',
   'tenants.column.country': 'Country',
   'tenants.column.businessType': 'Business',
+  'tenants.profileNote.courierServiceWithoutModule':
+    'A courier service without the deliveries console: it opens as a restaurant console',
+  'tenants.profileNote.moduleWithoutCourierService':
+    'Has the deliveries console but is not a courier service',
   'tenants.column.plan': 'Plan',
   'tenants.column.health': 'Open problems',
   'tenants.health.problems': '{count} waiting',
@@ -754,6 +758,8 @@ export const en = {
     'The owner’s email could not be decrypted for this tenant. Start a new run with the owner’s email.',
   'onboarding.template.suggested':
     'Suggested for a {type}: the {code} template names this business type.',
+  'onboarding.template.recommendedModule':
+    'Recommended for this kind of business: the “{code}” module, which changes how the console opens. It is not granted by the business type.',
   'onboarding.template.fallback':
     'No template names {type} yet, so new runs follow the {code} template.',
   'onboarding.template.choose': 'Template',

@@ -101,6 +101,19 @@ export const kitchenRu: AreaMessages<typeof kitchenEn> = {
     'Требуется причина — это откладывает запуск позже обещанного времени заказа',
   'kitchen.buffer.edit.save': 'Сохранить',
   'kitchen.buffer.edit.cancel': 'Отмена',
+  'kitchen.buffer.hold.awaitingPayment': 'Ждёт оплаты',
+  'kitchen.buffer.hold.blockedOnPayment': 'Не запущен: нет оплаты',
+  'kitchen.buffer.hold.stuckOnPayment': 'Завис: оплата просрочена',
+  'kitchen.buffer.hold.releaseDisabled':
+    'Удерживается, пока заказ не оплачен. Используйте «Запустить всё равно» с причиной.',
+  'kitchen.buffer.override.action': 'Запустить всё равно',
+  'kitchen.buffer.override.lead':
+    'Тикет удерживается, потому что заказ не оплачен. Запуск всё равно будет записан на ваше имя.',
+  'kitchen.buffer.override.reason': 'Почему',
+  'kitchen.buffer.override.confirm': 'Запустить всё равно',
+  'kitchen.buffer.override.reason.PAYMENT_PROMISED_AT_COUNTER': 'Оплату обещали на кассе',
+  'kitchen.buffer.override.reason.CUSTOMER_KNOWN_TO_BRANCH': 'Клиента знают в филиале',
+  'kitchen.buffer.override.reason.MANAGER_DECISION': 'Решение менеджера',
 
   'kitchen.expo.handOver': 'Передать',
   'kitchen.expo.empty': 'Нечего передавать',
@@ -201,9 +214,7 @@ export const kitchenRu: AreaMessages<typeof kitchenEn> = {
   'kitchen.capacity.edit.cancel': 'Отмена',
   'kitchen.capacity.delete.button': 'Удалить',
   'kitchen.capacity.delete.confirm': 'Удалить этот потолок пропускной способности?',
-  'kitchen.capacity.card2.title': 'Расчёт числа поваров',
-  'kitchen.capacity.card2.body':
-    'Не реализовано. Расчёт нужного числа поваров требует прогноза спроса и норматива порций на повара — ни того, ни другого в платформе пока нет, см. frontend-information-architecture.md §2.6 и ADR 0041.',
+  'kitchen.capacity.card2.title': 'Нужно поваров',
   'kitchen.capacity.weekday.1': 'Понедельник',
   'kitchen.capacity.weekday.2': 'Вторник',
   'kitchen.capacity.weekday.3': 'Среда',
@@ -211,6 +222,62 @@ export const kitchenRu: AreaMessages<typeof kitchenEn> = {
   'kitchen.capacity.weekday.5': 'Пятница',
   'kitchen.capacity.weekday.6': 'Суббота',
   'kitchen.capacity.weekday.7': 'Воскресенье',
+  // Cook headcount plan and pace (ADR 0163, row 2.6a)
+  'kitchen.headcount.notARota':
+    'Это подсказка для планирования, а не график смен. Она делит порции, которые филиал отдавал на готовку в последние такие же дни недели, на скорость, которую вы укажете для каждого цеха. В ней нет имён, она никого не ставит на смену и не меняет ни тикеты, ни время запуска, ни лимиты.',
+  'kitchen.headcount.weekday': 'День недели',
+  'kitchen.headcount.loading': 'Загружаем расчёт',
+  'kitchen.headcount.denied': 'Нет доступа к расчёту числа поваров для этого филиала',
+  'kitchen.headcount.loadError': 'Не удалось загрузить расчёт числа поваров',
+  'kitchen.headcount.noPolicy.title': 'Скорость поваров ещё не указана',
+  'kitchen.headcount.noPolicy.body':
+    'Платформа не подставляет свои цифры. Укажите, сколько порций один повар готовит за час в каждом цехе, — и здесь появится число поваров по часам.',
+  'kitchen.headcount.empty': 'В выбранные даты ни один цех ничего не готовил, считать нечего.',
+  'kitchen.headcount.tooFewDates':
+    'Подходящих дат для этого дня недели пока только {count}; чтобы показать число, нужно не меньше 3. Ниже — порции по каждой дате.',
+  'kitchen.headcount.sampleDates': 'Расчёт построен по порциям за {dates}.',
+  'kitchen.headcount.column.station': 'Цех',
+  'kitchen.headcount.column.hour': 'Час',
+  'kitchen.headcount.column.date': 'Дата',
+  'kitchen.headcount.column.portions': 'Порции',
+  'kitchen.headcount.hoursNote':
+    'Часы отсчитываются от начала рабочего дня. Маленькое число — поваров на верхней границе диапазона прогноза.',
+  'kitchen.headcount.cell.detail':
+    'ожидается порций: {portions} ({low}–{high}); поваров на верхней границе диапазона: {bandCooks}',
+  'kitchen.headcount.cell.noPolicy': 'нет нормы',
+  'kitchen.headcount.peak':
+    'Самый загруженный час {hour}: поваров {cooks}, на верхней границе диапазона {bandCooks}',
+  'kitchen.headcount.plantLimited':
+    'Предел цеха: «{station}» в {hour} готовит не больше {ceiling} порций в час — это ниже верхней границы прогноза, больше поваров не поможет.',
+  'kitchen.headcount.withoutFigure': 'Не указана норма для: {stations}; они не входят в итоги.',
+  'kitchen.headcount.history.title': 'Порции по каждой дате',
+  'kitchen.pace.title': 'Скорость поваров',
+  'kitchen.pace.lead':
+    'Сколько порций один повар готовит за час, по цехам. Эту цифру называете вы: платформа своих значений не подставляет.',
+  'kitchen.pace.field': 'Порций на повара в час',
+  'kitchen.pace.none': 'Не указано',
+  'kitchen.pace.scope': 'Для чего задать',
+  'kitchen.pace.scope.location': 'Этот филиал',
+  'kitchen.pace.scope.brand': 'Этот бренд',
+  'kitchen.pace.scope.tenant': 'Весь бизнес',
+  'kitchen.pace.replaces':
+    'Документ на этом уровне целиком заменяет вышестоящий, а не дополняет его.',
+  'kitchen.pace.byRole': 'По типу цеха',
+  'kitchen.pace.byStation': 'По цеху (важнее типа)',
+  'kitchen.pace.role.HOT': 'Горячий цех',
+  'kitchen.pace.role.COLD': 'Холодный цех',
+  'kitchen.pace.role.GRILL': 'Гриль',
+  'kitchen.pace.role.BAR': 'Бар',
+  'kitchen.pace.role.BAKERY': 'Пекарня',
+  'kitchen.pace.role.PACKING': 'Упаковка',
+  'kitchen.pace.reason': 'Причина изменения',
+  'kitchen.pace.save': 'Сохранить',
+  'kitchen.pace.saving': 'Сохраняем…',
+  'kitchen.pace.cancel': 'Отмена',
+  'kitchen.pace.invalid': 'Каждая цифра — целое число от 1 до 1000, причина обязательна.',
+  'kitchen.pace.stale':
+    'Пока вы правили, эти цифры изменил кто-то другой. Закройте окно и откройте заново, чтобы начать с его значений.',
+  'kitchen.pace.saved': 'Скорость поваров сохранена',
 
   // Кухонные устройства (строка 2/X.2, ADR 0079) — волна P17
   'kitchen.devices.title': 'Кухонные устройства',

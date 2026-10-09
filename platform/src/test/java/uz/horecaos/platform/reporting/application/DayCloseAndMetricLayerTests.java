@@ -615,11 +615,12 @@ class DayCloseAndMetricLayerTests {
         // ADR 0156 took the budget from 57 to 58: close() gained one fixed, once-per-close read of the
         // day's staff-hours totals (the fact_staff_shift aggregate it compares the recut against). ADR 0159
         // (w7-service-recovery) then took it to 60: clearDay gained the two review-fact deletes
-        // (fact_review_tag, fact_review), fixed per close. Neither is per refund, which is the property
-        // this assertion exists to protect.
+        // (fact_review_tag, fact_review), fixed per close. ADR 0163 (w8-kitchen-delivery) took it to 62: one
+        // more fixed source read (readSourceStationLoad, kitchen's tickets) and one more table in clearDay's
+        // fixed list. None is per refund, which is the property this assertion exists to protect.
         assertThat(used)
                 .as("a busy Saturday's close should not spend a round-trip per refund")
-                .isLessThanOrEqualTo(60);
+                .isLessThanOrEqualTo(62);
     }
 
     // ----------------------------------------------------- the settle recut

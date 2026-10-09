@@ -167,3 +167,9 @@
 .owner .waiting {
   color: var(--q-warning-text);
 }
+
+/* ADR 0164: the read-only hint under the business type. It blocks nothing. */
+.profileNote {
+  display: block;
+  margin-top: 2px;
+}
