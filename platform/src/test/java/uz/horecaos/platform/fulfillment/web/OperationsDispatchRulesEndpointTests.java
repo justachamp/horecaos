@@ -372,7 +372,7 @@ class OperationsDispatchRulesEndpointTests {
                 { "id": "hold", "name": "Hold", "then": { "mode": "PARTNER_FIRST", "holdBeforeConfirm": true } }
                 """);
         String grouped = rulesJson("""
-                { "id": "grouped", "name": "Grouped", "then": { "mode": "FLEET_FIRST", "grouping": { "mergeRadiusMeters": 700, "maxOrdersPerRun": 3, "maxWaitSeconds": 0 } } }
+                { "id": "grouped", "name": "Grouped", "then": { "mode": "FLEET_FIRST", "grouping": { "mergeRadiusMeters": 700, "maxOrdersPerRun": 3, "maxWaitSeconds": 120 } } }
                 """);
 
         assertThat(json(put(MANAGER, "late", 0, lateStart)).path("detail").asText())
