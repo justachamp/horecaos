@@ -1,12 +1,13 @@
 # ADR 0157: Content and merchandising slots
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Partial — the backend of Releases 1, 2, 3 and 5 is built
-  (2026-10-08, wave 20 step 1 of 2) and nothing an operator or a customer can see is.
-  *Built:* the `content` module (V0534, V0535) with `item_revisions` and `revision_media`
-  insert-only by grant; the typed documents with strict decoding and the block model that
-  is its own sanitizer; the publication gates and `content_hash`; the staff API under
-  `/api/v1/tenants/{tenantId}/brands/{brandId}/content`; the storefront reads
+- Implementation status: Partial — Releases 1, 2, 3 and 5 are built end to end
+  (2026-10-08, wave 20: step 1 the backend, step 2 the console and both storefronts);
+  Release 4 and a few things that wait on an external fact are not.
+  *Backend (step 1):* the `content` module (V0534, V0535) with `item_revisions` and
+  `revision_media` insert-only by grant; the typed documents with strict decoding and the
+  block model that is its own sanitizer; the publication gates and `content_hash`; the staff
+  API under `/api/v1/tenants/{tenantId}/brands/{brandId}/content`; the storefront reads
   `GET .../content/home` and, behind the `content.editorial.enabled` grant and the brand's
   `content.editorial` policy, `features`, `news`, `gallery`, `recipes` and `careers`, with a
   body-digest `ETag` and the external-link allowlist re-checked on every read; anonymous
@@ -20,15 +21,42 @@
   `ContentStoriesPopupsAndCountersEndpointTests`, `ContentEditorialEndpointTests`,
   `ContentMediaRetentionTests`, `ContentSchemaTests`, `ContentEntitlementGateTests`,
   `VideoProbeTests`, `MediaLifecycleTests` and `MediaAssetReferenceCatalogTests`.
-  *Not built:* the operations screens `/marketing/content` and `/marketing/storefront`
-  (rows `6.7`, `6.8`) still render `NotBuiltPage`, so an operator can author only through
-  the API; neither storefront reads `GET .../content/home` and `offer` stays null;
-  `q-media-uploader` still refuses a video before any request and `q-rich-text` has no
-  block mode; Release 4 (the brand switcher and the marketplace layout) is deferred until
-  a tenant asks, as this record decides; the legacy `ui_elements` import is a later
-  programme step; the real malware scanner, the CDN egress tripwire and machine
-  translation are not built; the media of an archived or withdrawn item's last revision
-  is kept, not released; `content` is not yet enrolled in row-level security (ADR 0056).
+  *Console (step 2):* the operations screens `/marketing/content` (rows `6.7`, `6.7a`) and
+  `/marketing/storefront` (row `6.8`), lazy-loaded: a list per placement (the home
+  carousel, the promo grid, the story rail, the entry pop-up) on `q-rule-list` with its
+  `showToggle` input off, so the flat order is dragged or moved by keyboard and saved at once
+  with the order token; the editor (name, placement, channels, a schedule of whole days,
+  the promotion a card is tied to, language tabs with `q-localized-field-group`'s completeness
+  dots, the fields of each kind, a `q-phone-frame` preview from the preview endpoint,
+  revision history with `q-diff-viewer` and a restore into the draft, the client-reported
+  counts, publish/withdraw/archive/discard behind `q-confirm-dialog`); the allowed link
+  hosts, the two content policies and the health read; the editorial kinds only when the plan
+  and the brand both allow them. `q-media-uploader` takes a per-use export edge and, with
+  `allowVideo`, an MP4 checked against the caps and a poster frame captured in the operator's
+  own browser; `q-rich-text` has a block-document mode (runs with bold, italic and a link; no
+  markup is representable); `q-date-range-picker` takes `showPresets`. Every creative is
+  uploaded `PUBLIC`, the brand's and, for an image, with the `CREATIVE` profile.
+  *Storefronts (step 2):* both `frontend/storefront` and `frontend/storefront-milliy` read
+  `content/home` once per session start and on revalidation as a request of their own that
+  never rejects (a failed read renders no content and raises no toast), draw the carousel
+  (scroll-snap over the renditions, video muted and inline with a poster, poster only under
+  reduced motion), the promo grid, product groups joined against the menu the page holds
+  (an absent id is skipped), stories, and the pop-up whose frequency cap lives on the device
+  under a key of item and revision with every storage access guarded; counters go
+  anonymously in batches of at most twenty; and the editorial pages (news, gallery, recipes,
+  careers) render the block document with one fixed template per block type, with a
+  build-time guard against `innerHTML` and the sanitiser bypasses. The hard-coded promo tile
+  left `frontend/storefront`'s template; `CustomerUiResponse.offer`, `offerData` and the block
+  they guard stayed as ADR 0112's slot.
+  *Not built:* Release 4 (the brand switcher and the marketplace layout), deferred until a
+  tenant asks, as this record decides; a `PROMOTION` link has no storefront screen to open, so
+  both storefronts treat it as no link; the legacy `ui_elements` import is a later programme
+  step; the real malware scanner, the CDN egress tripwire and machine translation are not
+  built; the media API names no rejection code, so the console's sentence for a refused video
+  lists every rule; the media of an archived or withdrawn item's last revision is kept, not
+  released; `content` is not yet enrolled in row-level security (ADR 0056). Nothing in step 2
+  has been exercised by a browser against a running platform: it is covered by unit and
+  component specs, lint, format and a production build of all three applications.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
@@ -1192,28 +1220,36 @@ before it is run.
       both registries with the drift test.
 - [x] Both Caddyfiles' `@storefront_browse` list; `check_storefront_api_routing` passes;
       the OpenAPI baseline and generated clients refreshed and reviewed.
-- [ ] Operations `/marketing/content` and `/marketing/storefront`; `q-media-uploader`
+- [x] Operations `/marketing/content` and `/marketing/storefront`; `q-media-uploader`
       export-edge input; `q-rule-list` `showToggle` input; ru, uz-Latn and en strings;
-      initial-bundle budget unchanged.
-- [ ] Both storefronts: `ContentService`, carousel, groups, failure isolation; the
+      initial-bundle budget unchanged. *Built 2026-10-08 (wave 20 step 2); the budget was
+      not raised and the production build reports no warning.*
+- [x] Both storefronts: `ContentService`, carousel, groups, failure isolation; the
       hard-coded promo tile removed; `CustomerUiResponse.offer`, `offerData` and the block
-      they guard kept for ADR 0112 (it renders nothing while `offer` is null).
-- [~] Release 2: story and pop-up documents, the device-local cap, counters and the
+      they guard kept for ADR 0112 (it renders nothing while `offer` is null). *Built
+      2026-10-08. `frontend/storefront-milliy` never had the tile or the offer block.*
+- [x] Release 2: story and pop-up documents, the device-local cap, counters and the
       events endpoint (with its two named exemptions in `EndpointCapabilityDeclarationTests`
-      and its `SecurityConfiguration` entry), the stats view. *Built 2026-10-08, except
-      that the device-local cap is enforced by the storefront apps (step 2).*
-- [~] Release 3: `VideoProbe` and its fixtures, `video/mp4` in `MediaAssetService`,
+      and its `SecurityConfiguration` entry), the stats view. *Built 2026-10-08: the backend
+      in step 1; in step 2 both storefronts enforce the cap on the device (under a key of item
+      and revision) and report the counters, and the console shows them, labelled
+      client-reported.*
+- [x] Release 3: `VideoProbe` and its fixtures, `video/mp4` in `MediaAssetService`,
       `duration_ms`, the derivative job skip, the presign window, poster capture,
       `content.video.enabled`, the sweeper with `MediaRelease`, the three
       `MediaUsageProbe` implementations and the catalog test that every media-asset-id
       column has a probe or a recorded exemption. *Built 2026-10-08 with four probes
       (`content`, `catalog`, `tenancy`, `helpcenter`) where this list said three; poster
-      capture and the uploader's video mode are the operations screen's (step 2).*
+      capture and the uploader's video mode were the operations screen's and are built in
+      step 2: the uploader checks an MP4 against the caps before any request and captures
+      the poster in the operator's browser; both storefronts play a video muted and inline.*
 - [ ] Release 4 (on request): switcher entries, the home of the layout choice,
       `storefront_sort_order`.
-- [~] Release 5 (on request): the block document and its renderer test corpus,
+- [x] Release 5 (on request): the block document and its renderer test corpus,
       `q-rich-text` block mode, the four kinds, the storefront routes, `content.editorial`.
-      *The backend, the routes and the policy built 2026-10-08; the block editor is step 2.*
+      *The backend, the routes and the policy built in step 1; in step 2 the console's block
+      editor and the editorial lists, and the storefront pages (news, gallery, recipes,
+      careers) with a build-time guard against `innerHTML` and the sanitiser bypasses.*
 - [ ] Update `docs/operations-gap-map.md` rows `6.7`, `6.7a`, `6.8` and `X.12` against the
       code as each release lands (never from a wave report), the IA's struck-through `6.7`
       sub-features, and the `ui_elements` row of `docs/domains/legacy-mapping.md`.
