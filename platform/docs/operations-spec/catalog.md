@@ -1336,17 +1336,21 @@ clicks away: an author touches these monthly, not hourly.
 
 | Vocabulary | Status |
 |---|---|
-| Теги | **not built — ADR 0016** (legacy merchandising disposition, an open input). Storefront badges and filter facets |
-| Ингредиенты | **not built — ADR 0016.** A customer-facing composition label, **not** a bill of materials. Delever does not have a BOM either; the parity brief's assumption is corrected in the matrix and must not be re-introduced |
-| Отделы кухни | **not built — ADR 0016 / ADR 0041.** Routes tickets and segments kitchen load; the highest-value item on this list |
-| Атрибуты | **not built — ADR 0016.** Whether these are the variant axis or a spec-sheet vocabulary is an open question in the matrix; decide before building |
-| Комментарии к продукту | **not built — ADR 0016.** Must be a controlled vocabulary with ids, not free text, because R-Keeper transports them as modifiers |
-| Рекомендованные товары | **not built — ADR 0016.** Cross-sell, filtered to active + in-menu + not-stopped |
-| Бренды | Built, but it is **tenancy**, not catalog: `tenant.brands`. Link out, do not duplicate the CRUD |
+Dispositions are decided by **ADR 0174** (2026-10-07); the screen is `/catalog/reference-data`.
 
-Nothing on this screen should be built before its disposition is decided. Listing
-them here is the point: they are named, sourced, and unowned, so nobody
-improvises one into the product editor as a free-text field.
+| Vocabulary | Status |
+|---|---|
+| Теги | **Built — ADR 0174.** `catalog.tags` (tenant-wide, a name per locale, an icon from a closed list, two switches: badge and filter), assigned in the product editor, published as `TAG` items, drawn by both storefronts as badges and an AND filter. Authored on this screen |
+| Ингредиенты | **Built — ADR 0174.** `catalog.ingredients`: a customer-facing composition label, **not** a bill of materials and with no allergen meaning. Delever does not have a BOM either; the parity brief's assumption is corrected in the matrix and must not be re-introduced. Authored on this screen, assigned in the product editor, shown on the product page |
+| Отделы кухни | **Already decided — ADR 0041.** The closed station-role set plus the brand-layer routing rule the product editor's picker writes (row `4.2g`); this screen links to the kitchen stations and routing screen |
+| Атрибуты | **Retired as a vocabulary — ADR 0174.** The variant's own translated name is the axis label, and since ADR 0174 that name is published (`names` on a published variant, `MenuVariant.name` on the storefront wire); weight and volume are ADR 0137's physical facts |
+| Комментарии к продукту | **Built (row `2.1b`).** A controlled vocabulary with ids (`catalog.comment_presets`, `pos_modifier_code`), authored in Settings, comment presets; this screen links out |
+| Рекомендованные товары | **Built (row `4.2h`).** The product editor's recommendations tab; this screen links out |
+| Бренды | Built, but it is **tenancy**, not catalog: `tenant.brands`. This screen links out, it does not duplicate the CRUD |
+
+Nobody improvises a vocabulary into the product editor as a free-text field: tags and
+ingredients are chosen from the registries above, counts are bounded, and an archived entry
+stays on the products that carry it and leaves the next publication.
 
 ---
 
@@ -1369,7 +1373,7 @@ improvises one into the product editor as a free-text field.
 | Product physical/nutritional attributes, catchweight, splittable, portions | **Match later — ADR 0016.** `splittable` and marking interact (ADR 0038 forbids splittable on marked goods), so build them together |
 | Аggregator menu preview (mobile/desktop, per marketplace) | **Match the data, not the chrome — ADR 0138.** The preview shows what the channel would receive, per branch, in HorecaOS's own frames; a marketplace's own app is not mocked |
 | ABC-XYZ analysis, demand forecasting, holidays, kitchen buffer | **Later — ADR 0043.** Analytics, not catalog; and the forecast's 09:00→09:00 business day is a cross-cutting decision the reporting ADR owns |
-| Auto-add rules (plain, product-triggered, portion-band) | **Match later.** Portion-band is unimplementable without portions as a product attribute — ADR 0016 first |
+| Auto-add rules (plain, product-triggered, portion-band) | **Match — built, ADR 0158.** The cart evaluates them on the server for every entry path; portions are a catalog fact (`portions_per_unit`), blank until an author types it, and a portion-band rule on a brand with none publishes with a warning and never fires. `INJECT` ships; the offer mode and `mandatory` (off until the platform owner turns the tenant key on) follow |
 | **Skip: AI generation of ИКПУ / package code** | A wrong code is a tax classification error on a legal document, and generating it transfers that risk to HorecaOS invisibly. ADR 0038 permits assistive search with a human selecting. AI on descriptions is fine |
 | **Skip: Рецепты and general editorial CMS** | Website-builder work, and Delever's static-page editor accepts raw HTML — an XSS surface pointed at the tenant's own customers |
 | **Skip: ingredient-level BOM and recipe costing** | Delever does not have it either; the matrix corrects the brief's assumption. Depletion lives in the POS |
@@ -1418,18 +1422,18 @@ an existing table.
 | Counted per-item stock with a daily default and automatic reset | 4.6 | **ADR 0017** — `QUANTITY` mode is decided and refused by the service; the scheduled daily seed is unowned |
 | Stop **scope** and stop **source** (operator / POS terminal / rule) | 4.6 | **ADR 0017 + ADR 0041** |
 | Per-aggregator stop threshold | 4.5, 4.6 | **ADR 0040** |
-| The ИКПУ/MXIK list actually imported — `catalog.mxik_reference` and its search endpoint (`FiscalReferenceController`) are built and empty; source and refresh cadence are an open input for finance | 4.12 typeahead | **ADR 0038 (Accepted, Partial)** |
+| The ИКПУ/MXIK list actually imported — the importer, the dry-run and apply endpoints, the withdrawal valve and the freshness alerts are built (**ADR 0173**); the table stays empty until the platform administrator uploads the official file (`docs/runbooks/mxik-reference-import.md`), whose exact columns are the profile's one external fact | 4.12 typeahead | **ADR 0173 / ADR 0038 (Accepted, Partial)** |
 | Blocker-severity enforcement of fiscal classification (ADR 0038 rollout stage 3) and `FISCAL_RESTRICTED_NODE_ON_UNVERIFIED_CHANNEL` — `FISCAL_CLASSIFICATION_MISSING` and `FISCAL_DELIVERY_FEE_UNCLASSIFIED` already fire as warnings via `catalog.fiscal_classifications`, which is fully built (`V0028`) | 4.10 | **ADR 0038 (Accepted, Partial)** |
 | Combo/bundle products with choice-sets and per-variant price maps | 4.2 | **ADR 0016** |
 | Nested variant-modifiers; hidden modifiers auto-selected by order type; modifier-level fallback to group values | 4.2 tab 3 | **ADR 0016** |
-| Product physical and nutritional attributes: weight, measure, КБЖУ, `splittable`, catchweight + weight quantum, **portions as a decimal** | 4.2 tab 1 | **ADR 0016** (portions also block auto-add type 3) |
+| Product physical and nutritional attributes: weight, measure, КБЖУ, `splittable`, catchweight + weight quantum, **portions as a decimal** | 4.2 tab 1 | **ADR 0137**; `portions_per_unit` (ADR 0158) is the portions fact the portion-band rule reads |
 | Kitchen department on the product | 4.2, ticket routing | **ADR 0016 disposition + ADR 0041** |
-| Tags, ingredients, attributes, product-comment presets, recommended products | 4.13 | **ADR 0016** (explicitly an open input: legacy merchandising disposition) |
+| Tags, ingredients, attributes, product-comment presets, recommended products | 4.13 | **ADR 0174** (decided 2026-10-07 and built: tags and ingredients are registries, attributes are retired for the variant's published name, the rest were built under other records) |
 | Per-channel image variants; per-asset content hash | 4.9 | **ADR 0010** |
 | Image fetch by URL, SSRF-guarded | 4.9, 4.11a | **ADR 0010 + ADR 0012** |
 | Excel import job entity: mapping profile, dry-run result, per-row outcomes | 4.11a | **ADR 0012** — currently scoped to POS sources only and must be widened |
 | POS external-id mapping table with linked / unlinked / conflict states | 4.11b | **ADR 0012** |
-| Auto-add rules: plain, product-triggered, portion-band | 4.9 of the IA | Unowned; closest **ADR 0018 / ADR 0019**. Needs a decision before design |
+| Auto-add rules: plain, product-triggered, portion-band | 4.9 of the IA | **ADR 0158** (decided 2026-10-07 and built behind `ordering.auto_add_enabled`; the offer mode and the legacy packaging import are not) |
 | Aggregator menu preview and per-marketplace pre-publication checks | 4.10 | **ADR 0138 (Accepted, Partial)** — the preview, the findings and the ruleset plug point are built; the per-marketplace rulesets are not (an open input). The outbound push is ADR 0040 |
 | ABC-XYZ, demand forecasting, holiday calendar, kitchen buffer, and the business-day boundary that crosses midnight | not in this section | **ADR 0043** |
 | Promotions, promo codes, markup (наценка), redemption ledger | 4.8 | **ADR 0018** — decided, unbuilt |

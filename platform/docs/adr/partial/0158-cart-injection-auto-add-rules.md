@@ -1,42 +1,37 @@
 # ADR 0158: Cart injection: auto-add rules
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Not started — nothing evaluates a rule that adds a line to
-  a cart. There is no rule table, no evaluator, no origin on a cart or order line
-  and no endpoint. What exists is the neighbourhood, and each neighbour stops short
-  of the row: `frontend/operations` registers the route `/catalog/auto-add` in
-  `app.routes.ts` as an honest not-built page ("no backend") and lists it in
-  `catalog-shell.html`; `docs/operations-spec/orders.md` §5.5 promises that
-  auto-added items "appear in the basket flagged добавлено автоматически and
-  removable only where the rule allows", and the only code that prints that label
-  is `order-detail-lines.html`, which prints it beside an ADR 0136 hidden charge
-  (`autoSelectedCharges`), not beside a line. A hidden, order-type-scoped modifier
-  group (`catalog.product_modifier_groups` / `variant_modifier_groups` with
-  `visibility = 'HIDDEN_AUTO_SELECT'`, V0443-V0447; read by
-  `pricing.infrastructure.catalog.JdbcCompositeProductsLookup#hiddenCharges`)
-  puts a delivery box on the receipt of the products that carry it: a charge on a
-  product, applied by the quote, which is not a cart line the customer can see or
-  remove. ADR 0140's `FREE_ITEM` action prices a gift the cart already holds, and
-  `AppliedPromotionService` offers the gift on the priced cart (`giftOffers`,
-  `StorefrontOrderingController.GiftOfferResponse`) for the customer to add with
-  one tap; pricing adds no line. ADR 0016 named
-  `catalog.variant_packaging_requirements` (sold variant, packaging variant,
-  numerator and denominator) and its body says it was never built (the "Not yet
-  built" paragraph, 0016:299; its status line does not mention it); no migration
-  creates it. The legacy side is on record and decided nowhere:
-  `variants.package_id`, `package_volume` and `is_package` put synthetic package
-  lines on a legacy order, kept out of the subtotal and rolled into
-  `packaging_price` (`platform/docs/domains/legacy-profile-findings.md`,
-  `legacy-schema-profile.md`). Every cart a customer or operator fills goes through
-  `CartService` (`StorefrontOrderingController`, `CustomerBotOrderingAdapter`,
-  `OperatorOrderingService`; a reorder is a plan the client turns into the same
-  calls), so one place can see every basket; `AggregatorOrderIntakeService`
-  deliberately does not use it, writing `JdbcAggregatorOrderStore` directly because
-  an externally priced total is never run back through `QuoteService` (ADR 0040).
-  `kitchen.stations` already has a `PACKING` role and a fallback
-  station (V0030), so an injected line has somewhere to route. ADR 0137 shipped
-  `catalog.variant_physical_attributes.portion_size` (V0448), which is the step a
-  splittable dish is ordered in, not the number of servings one unit is worth.
+- Implementation status: Partial — built in operations batch 20 (2026-10-09), behind
+  `ordering.auto_add_enabled`, which is off everywhere. V0538 creates
+  `catalog.auto_add_rules` with its trigger, band and location tables,
+  `portions_per_unit` on `catalog.variant_physical_attributes`, the `AUTO_ADD_RULE`
+  translation entity type, the origin columns on `ordering.cart_lines` and
+  `ordering.order_lines`, and `ordering.cart_auto_add_declines`, each granted
+  explicitly. `ordering.domain.AutoAddEvaluator` is the one pure evaluator (the
+  console's simulator and the cart run the same code); `AutoAddReconciler` runs inside
+  `CartService` on `putLine`, `removeLine`, `setDestination`, `rebuildAtLocation` and
+  `price()` and reads the live publication through
+  `CartAutoAddRules`/`JdbcCartAutoAddRules`; a rule that cannot be honoured is skipped,
+  a race at pricing or checkout drops the line and re-quotes, a removal is remembered
+  for the life of the cart. Catalog authors rules over `AutoAddRuleController`
+  (`catalog.read`/`catalog.author`), the simulation endpoint lives in ordering, the
+  rules are published as `AUTO_ADD_RULE` items and `CatalogValidator` carries the ADR's
+  findings; `ordering.auto_add_enabled`, `ordering.auto_add_shadow_enabled` and
+  `catalog.auto_add_mandatory_allowed` (tenant scope, not tenant-visible) are declared
+  and mirrored. The storefront cart, the operator quote and the order read carry
+  `origin` and the `autoAdd` block, the 409 codes `AUTO_ADD_LINE_MANDATORY` and
+  `AUTO_ADD_QUANTITY_OUT_OF_BOUNDS` exist, order lines and the reporting fact keep the
+  origin and the rule, an amendment refuses to remove or lower a mandatory line (ADR
+  0169), and an aggregator order carries no injected line. The console's
+  `/catalog/auto-add` is the authoring screen with its simulator; both storefronts and
+  the New order composer draw the line from `autoAdd.removable`. Proved by
+  `AutoAddEvaluatorTests`, `AutoAddRuleValidatorTests`, `AutoAddRuleEndpointTests`,
+  `AutoAddCartHttpTests` and `AggregatorOrderIntakeServiceTests`. Not built: the `OFFER`
+  mode (the schema carries it; the first build ships `INJECT` only, as the ADR decided),
+  the alert on one rule's skip rate, the legacy packaging import (`variants.package_id`,
+  `package_volume`, `is_package` order lines and the rounding check against
+  `get_packages_count`; no legacy catalog or order import port exists yet, only
+  `LegacyBrandImportPort`), and the pointer from ADR 0016 and ADR 0137 to this record.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides

@@ -1,30 +1,36 @@
 # ADR 0173: The ИКПУ/MXIK reference dataset
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Not started — the table and the readers exist and the dataset is
-  not in it. `catalog.mxik_reference` (V0028) is created empty: `code` primary key,
-  `parent_code` (a self foreign key that is not deferrable), `label_ru`, `label_uz` (both
-  `NOT NULL`), `label_en`, `default_package_codes text[]`, `default_unit_codes integer[]`,
-  `valid_from`, `valid_until` and `imported_at`. Nothing writes it: no importer, no
-  endpoint, no job, no seed and no migration inserts a row, and
-  `FiscalReferenceControllerTests` is the only code that ever does, by hand. What reads it:
-  `FiscalReferenceController` (`GET /api/v1/control-plane/fiscal-reference/mxik` and
-  `/status`, `CATALOG_READ` at PLATFORM scope); its tenant alias in `CatalogQueryController`
-  (`GET .../brands/{brandId}/catalog/fiscal-reference/mxik`, `CATALOG_READ` at BRAND scope)
-  that feeds `q-mxik-picker` in `frontend/operations` (product editor, row `4.2e`, and the
-  fiscalization tab's backfill editor, row `10.7c`); and `CatalogValidator`, whose
-  `FISCAL_MXIK_CODE_UNKNOWN` warning stays silent until the table has a row
-  (`JdbcCatalogStore#mxikReferenceIsLoaded`). Three defects wait in those readers.
-  `JdbcCatalogStore#knownMxikCodes` selects by code alone and ignores `valid_until`, so a
-  withdrawn code would be reported as known; `searchMxikReference` honours the window, so
-  the picker and the validator would disagree. The `status` read has no tenant alias, so a
-  catalog author at a brand cannot tell "never imported" from "nothing matched" except from
-  a sentence in the picker's help text. And `horecaos_application` holds
-  `SELECT, INSERT, UPDATE, DELETE` on the table, so a bug in any tenant-facing path could
-  delete the national list. `catalog.fiscal_classifications` (V0028) carries the tenant's
-  assignment (`mxik_code`, `package_code`, `fiscal_unit_code`, `fiscal_name`, marking and
-  age fields) with no foreign key to the reference, deliberately. `PartnerFiscalizationBridge`
-  still sends one synthetic aggregate line, so no receipt reads a classification yet.
+- Implementation status: Partial — built in operations batch 20 (2026-10-09); the
+  dataset itself is not loaded, because the official file is an external fact. V0540
+  adds the version and run columns and `replaced_by_code` to `catalog.mxik_reference`,
+  creates `catalog.mxik_reference_state`, `catalog.mxik_import_runs`, their findings and
+  a row staging table, and revokes `DELETE` on the reference from the application role
+  (`MxikImportHttpTests` proves it). `MxikFileParser` and
+  `MxikMappingProfile` (`TASNIF_XLSX_V1`, `TASNIF_CSV_V1`) read an uploaded file,
+  `MxikReferenceImporter` diffs it against the list, and `MxikReferenceImportService`
+  runs the audited two-step import: an upload is always a dry run, `apply` is a second
+  `PLATFORM_ADMIN` call, a full snapshot dates a withdrawal and reinstates a returning
+  code, a partial run withdraws nothing, a run that would withdraw more than
+  `catalog.mxik_import_withdrawal_threshold_percent` is held until the exact count is
+  acknowledged, the raw file is kept under its hash in the object store and a large file
+  goes through a signed upload. `MxikValidity` is the one validity definition used by
+  the search, `knownMxikCodes`, the validator and the coverage read;
+  `FISCAL_MXIK_CODE_WITHDRAWN` and `FISCAL_PACKAGE_CODE_NOT_LISTED_FOR_MXIK` are
+  warnings that stay silent while the list is empty; the status read gained its fields
+  and a brand-scoped twin; `MxikReferenceFreshnessSweeper` raises
+  `FISCAL_REFERENCE_NOT_LOADED` and `FISCAL_REFERENCE_STALE` through
+  `ControlPlaneAlertService`. The control plane has a Fiscal reference page, the picker
+  says when the list is not loaded, and the fiscalization workbench filters withdrawn
+  codes and replaces one only with the successor the list names.
+  `docs/runbooks/mxik-reference-import.md` is the runbook. Proved by
+  `MxikReferenceImporterTests`, `MxikImportHttpTests`, `FiscalReferenceControllerTests`
+  and `CatalogValidatorTests` against `src/test/resources/mxik/tasnif-fixture.csv`, a
+  small made-up sample. Not done and external: the profile's columns are written against
+  that sample, not the Committee's file, so the first real load needs the profile
+  checked against the real header, then the pre-production run and finance's fifty-code
+  check from the runbook; a documented feed from the Committee (the upload is the
+  supported source); and the pointer from ADR 0038's status line to this record.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
