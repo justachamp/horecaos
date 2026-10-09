@@ -18,9 +18,7 @@
   the search, `knownMxikCodes`, the validator and the coverage read;
   `FISCAL_MXIK_CODE_WITHDRAWN` and `FISCAL_PACKAGE_CODE_NOT_LISTED_FOR_MXIK` are
   warnings that stay silent while the list is empty; the status read gained its fields
-  and a brand-scoped twin; `MxikReferenceFreshnessSweeper` raises
-  `FISCAL_REFERENCE_NOT_LOADED` and `FISCAL_REFERENCE_STALE` through
-  `ControlPlaneAlertService`. The control plane has a Fiscal reference page, the picker
+  and a brand-scoped twin; the notifications module's `FiscalReferenceAlerts` (a daily `FiscalReferenceFreshnessSweeper` over the catalog's `MxikReferenceHealth` port) raises `FISCAL_REFERENCE_NOT_LOADED` and `FISCAL_REFERENCE_STALE` through `ControlPlaneAlertService`, and the catalog's `MxikReferenceApplied` event resolves them with the apply. The control plane has a Fiscal reference page, the picker
   says when the list is not loaded, and the fiscalization workbench filters withdrawn
   codes and replaces one only with the successor the list names.
   `docs/runbooks/mxik-reference-import.md` is the runbook. Proved by

@@ -18,6 +18,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -28,7 +29,9 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
+import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.catalog.api.CatalogConfigurationKeys;
+import uz.horecaos.platform.catalog.api.MxikReferenceApplied;
 import uz.horecaos.platform.catalog.application.MxikMappingProfile.MxikImportFormatException;
 import uz.horecaos.platform.catalog.application.MxikReferenceImporter.Normalised;
 import uz.horecaos.platform.catalog.application.MxikReferenceImporter.RowError;
@@ -39,7 +42,6 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMxikImportSto
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.media.api.ObjectStorage;
-import uz.horecaos.platform.notifications.api.ControlPlaneAlertPort;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -72,20 +74,14 @@ public class MxikReferenceImportService {
     /** The findings cap per run (ADR 0173): a wrong file must not turn the findings table into a dump. */
     public static final int MAX_FINDINGS = 5_000;
 
-    public static final String ALERT_NOT_LOADED = "FISCAL_REFERENCE_NOT_LOADED";
-    public static final String ALERT_STALE = "FISCAL_REFERENCE_STALE";
-    public static final String ALERT_SUBJECT_TYPE = "FiscalReference";
-    public static final String ALERT_SUBJECT_ID = "mxik";
-
     private final JdbcMxikImportStore store;
     private final MxikFileParser parser;
-    private final MxikReferenceStatusService statuses;
     private final MxikReferenceImporter importer;
     private final ObjectStorage objectStorage;
     private final ConfigurationResolver configuration;
     private final AuditRecorder audit;
     private final MeterRegistry metrics;
-    private final ControlPlaneAlertPort alerts;
+    private final ApplicationEventPublisher events;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final TransactionTemplate independently;
@@ -96,26 +92,24 @@ public class MxikReferenceImportService {
     public MxikReferenceImportService(
             JdbcMxikImportStore store,
             MxikFileParser parser,
-            MxikReferenceStatusService statuses,
             MxikReferenceImporter importer,
             ObjectStorage objectStorage,
             ConfigurationResolver configuration,
             AuditRecorder audit,
             MeterRegistry metrics,
-            ControlPlaneAlertPort alerts,
+            ApplicationEventPublisher events,
             ObjectMapper objectMapper,
             Clock clock,
             PlatformTransactionManager transactionManager,
             @Value("${horecaos.catalog.mxik.bucket:${horecaos.media.bucket:horecaos-media}}") String bucket) {
         this.store = store;
         this.parser = parser;
-        this.statuses = statuses;
         this.importer = importer;
         this.objectStorage = objectStorage;
         this.configuration = configuration;
         this.audit = audit;
         this.metrics = metrics;
-        this.alerts = alerts;
+        this.events = events;
         this.objectMapper = objectMapper;
         this.clock = clock;
         TransactionTemplate isolated = new TransactionTemplate(transactionManager);
@@ -250,7 +244,15 @@ public class MxikReferenceImportService {
                         "{}",
                         actorSubject,
                         unreadable.code());
-                record("import-failed", runId, sha256, mode, Map.of("reason", unreadable.code()), actorSubject);
+                record(
+                        "import-failed",
+                        runId,
+                        null,
+                        "FAILED",
+                        sha256,
+                        mode,
+                        Map.of("reason", unreadable.code()),
+                        actorSubject);
             });
             metrics.counter("horecaos.fiscal_reference.import", "outcome", "failed")
                     .increment();
@@ -326,6 +328,8 @@ public class MxikReferenceImportService {
         record(
                 held ? "import-held" : "import-validated",
                 runId,
+                null,
+                held ? "HELD_FOR_REVIEW" : "VALIDATED",
                 sha256,
                 mode,
                 Map.of(
@@ -421,6 +425,8 @@ public class MxikReferenceImportService {
         record(
                 "import-applied",
                 runId,
+                run.status(),
+                "APPLIED",
                 run.sourceSha256(),
                 run.mode(),
                 Map.of(
@@ -431,7 +437,9 @@ public class MxikReferenceImportService {
                 actorSubject);
         metrics.counter("horecaos.fiscal_reference.import", "outcome", "applied")
                 .increment();
-        resolveAlerts(actorSubject);
+        // The alert module resolves "not loaded" and "stale" when it hears this (it owns the incidents; the catalog
+        // may not depend on it, and a daily check there is what raises them).
+        events.publishEvent(new MxikReferenceApplied(runId, datasetVersion, actorSubject));
         return store.findRun(runId).orElseThrow();
     }
 
@@ -463,6 +471,8 @@ public class MxikReferenceImportService {
         record(
                 "import-rejected",
                 runId,
+                run.status(),
+                "REJECTED",
                 run.sourceSha256(),
                 run.mode(),
                 Map.of("rowsTotal", run.rowsTotal()),
@@ -490,57 +500,6 @@ public class MxikReferenceImportService {
         return store.findings(runId, afterOrdinal, Math.clamp(limit, 1, 500));
     }
 
-    // --------------------------------------------------------------------------- freshness
-
-    /**
-     * The daily check (ADR 0173 Decision 9): raise an incident when the list is empty while a tenant has
-     * classified something, and when it is older than {@code catalog.mxik_reference_max_age_days}. Once per
-     * class and subject; a successful import resolves them.
-     *
-     * @param anyTenantClassified whether any tenant holds a classified node, which only the caller can ask
-     * @return the event class raised, if any
-     */
-    public Optional<String> checkFreshness(boolean anyTenantClassified) {
-        MxikReferenceStatusService.Status status = statuses.status();
-        Integer maxAge =
-                configuration.value(CatalogConfigurationKeys.MXIK_REFERENCE_MAX_AGE_DAYS, ResourceScope.platform());
-        metrics.gauge("horecaos.fiscal_reference.age_days", status.ageDays() == null ? -1 : status.ageDays());
-        if (!status.loaded()) {
-            if (anyTenantClassified) {
-                raise(ALERT_NOT_LOADED, Map.of("classifiedNodesExist", "true"));
-                return Optional.of(ALERT_NOT_LOADED);
-            }
-            return Optional.empty();
-        }
-        if (status.stale() && status.ageDays() != null && maxAge != null) {
-            raise(
-                    ALERT_STALE,
-                    Map.of("ageDays", String.valueOf(status.ageDays()), "maxAgeDays", String.valueOf(maxAge)));
-            return Optional.of(ALERT_STALE);
-        }
-        return Optional.empty();
-    }
-
-    private void raise(String eventClass, Map<String, String> variables) {
-        alerts.raise(new uz.horecaos.platform.notifications.api.ControlPlaneAlert(
-                eventClass, ALERT_SUBJECT_TYPE, ALERT_SUBJECT_ID, variables, clock.instant()));
-    }
-
-    private void resolveAlerts(String actorSubject) {
-        alerts.resolve(
-                ALERT_NOT_LOADED,
-                ALERT_SUBJECT_TYPE,
-                ALERT_SUBJECT_ID,
-                actorSubject,
-                "A successful import loaded the list");
-        alerts.resolve(
-                ALERT_STALE,
-                ALERT_SUBJECT_TYPE,
-                ALERT_SUBJECT_ID,
-                actorSubject,
-                "A successful import refreshed the list");
-    }
-
     // ---------------------------------------------------------------------------- internals
 
     private int thresholdPercent() {
@@ -559,19 +518,36 @@ public class MxikReferenceImportService {
         return objectMapper.writeValueAsString(asText);
     }
 
+    /**
+     * Audits one step of a run (ADR 0027): the status it left (none when the step creates the run) and the status
+     * it reached, with the file's hash, the mode and the counts, and never a file body or row content.
+     */
     private void record(
-            String action, UUID runId, String sha256, String mode, Map<String, Object> counts, String actorSubject) {
-        Map<String, Object> change = new java.util.LinkedHashMap<>();
-        change.put("sourceSha256", sha256);
-        change.put("mode", mode);
-        change.putAll(counts);
+            String action,
+            UUID runId,
+            @Nullable String fromStatus,
+            String toStatus,
+            String sha256,
+            String mode,
+            Map<String, Object> counts,
+            String actorSubject) {
+        Map<String, Object> before = new java.util.LinkedHashMap<>();
+        if (fromStatus != null) {
+            before.put("status", fromStatus);
+        }
+        Map<String, Object> after = new java.util.LinkedHashMap<>();
+        after.put("status", toStatus);
+        after.put("sourceSha256", sha256);
+        after.put("mode", mode);
+        after.putAll(counts);
+        Map<String, Object> document = ChangeDocuments.diff(before, after);
         audit.record(AuditFact.of("catalog.mxikReference." + action, AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.platform())
                 .target("MxikImportRun", runId)
                 .because("ИКПУ/MXIK reference import")
                 .usingCapability(Capability.PLATFORM_ADMIN.code())
-                .changed(uz.horecaos.platform.audit.api.ChangeDocuments.created(change))
+                .changed(document)
                 .correlatedBy(runId.toString())
                 .occurredAt(clock.instant())
                 .build());

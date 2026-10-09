@@ -44,13 +44,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
-import uz.horecaos.platform.catalog.application.MxikReferenceImportService;
 import uz.horecaos.platform.catalog.domain.MxikValidity;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMxikImportStore;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.media.api.ObjectStorage;
+import uz.horecaos.platform.notifications.application.FiscalReferenceAlerts;
 import uz.horecaos.platform.support.StubJwtIssuer;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
@@ -115,7 +115,7 @@ class MxikImportHttpTests {
     private InMemoryObjectStore store;
 
     @Autowired
-    private MxikReferenceImportService imports;
+    private FiscalReferenceAlerts alerts;
 
     @Autowired
     private JdbcCatalogStore catalogStore;
@@ -746,9 +746,7 @@ class MxikImportHttpTests {
     @DisplayName(
             "an absent list raises one incident per class while a tenant holds a classified node, and an import resolves it")
     void anAbsentOrStaleListRaisesOneIncidentAndAnImportResolvesIt() throws Exception {
-        assertThat(imports.checkFreshness(false))
-                .as("nothing classified, nothing to protect")
-                .isEmpty();
+        assertThat(alerts.check()).as("nothing classified, nothing to protect").isEmpty();
         assertThat(count("notifications.control_plane_alerts")).isZero();
 
         assertThat(importStore.anyTenantHasClassifiedNode()).isFalse();
@@ -756,8 +754,8 @@ class MxikImportHttpTests {
         assertThat(importStore.anyTenantHasClassifiedNode())
                 .as("the sweeper asks this before it raises")
                 .isTrue();
-        assertThat(imports.checkFreshness(true)).contains("FISCAL_REFERENCE_NOT_LOADED");
-        assertThat(imports.checkFreshness(true)).contains("FISCAL_REFERENCE_NOT_LOADED");
+        assertThat(alerts.check()).contains("FISCAL_REFERENCE_NOT_LOADED");
+        assertThat(alerts.check()).contains("FISCAL_REFERENCE_NOT_LOADED");
         assertThat(count("notifications.control_plane_alerts WHERE status = 'OPEN'"))
                 .as("raised once per class and subject; the second sweep counts an occurrence")
                 .isEqualTo(1);
@@ -776,11 +774,11 @@ class MxikImportHttpTests {
         assertThat(count("notifications.control_plane_alerts WHERE status = 'RESOLVED'"))
                 .as("a successful import ends 'not loaded'")
                 .isEqualTo(1);
-        assertThat(imports.checkFreshness(true)).isEmpty();
+        assertThat(alerts.check()).isEmpty();
 
         jdbc.sql("UPDATE catalog.mxik_reference_state SET imported_at = now() - interval '60 days'")
                 .update();
-        assertThat(imports.checkFreshness(true)).contains("FISCAL_REFERENCE_STALE");
+        assertThat(alerts.check()).contains("FISCAL_REFERENCE_STALE");
         assertThat(JsonPath.<Boolean>read(read(STATUS), "$.stale")).isTrue();
         assertThat(JsonPath.<Integer>read(read(STATUS), "$.maxAgeDays")).isEqualTo(45);
 

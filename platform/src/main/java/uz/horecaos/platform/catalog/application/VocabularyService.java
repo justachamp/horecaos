@@ -161,7 +161,7 @@ public class VocabularyService {
             created.put("showAsFilter", row.showAsFilter());
         }
         created.put("locales", names.keySet().stream().sorted().collect(Collectors.joining(",")));
-        record(kind, "created", tenantId, row.id(), ChangeDocuments.created(created), now, actorSubject);
+        record(kind, "created", tenantId, row.id(), Map.of(), created, now, actorSubject);
         return new EntryView(row, names);
     }
 
@@ -226,7 +226,7 @@ public class VocabularyService {
                         .map(Map.Entry::getKey)
                         .sorted()
                         .collect(Collectors.joining(",")));
-        record(kind, "updated", tenantId, id, ChangeDocuments.diff(was, is), now, actorSubject);
+        record(kind, "updated", tenantId, id, was, is, now, actorSubject);
 
         Map<String, String> merged = new LinkedHashMap<>(before);
         merged.putAll(names);
@@ -271,7 +271,8 @@ public class VocabularyService {
                 "archived",
                 tenantId,
                 id,
-                ChangeDocuments.diff(Map.of("status", existing.status()), Map.of("status", "ARCHIVED")),
+                Map.of("status", existing.status()),
+                Map.of("status", "ARCHIVED"),
                 now,
                 actorSubject);
         return new EntryView(
@@ -448,9 +449,11 @@ public class VocabularyService {
             String verb,
             UUID tenantId,
             UUID id,
-            Map<String, Object> change,
+            Map<String, Object> before,
+            Map<String, Object> after,
             Instant at,
             String actorSubject) {
+        Map<String, Object> document = ChangeDocuments.diff(before, after);
         audit.record(AuditFact.of("catalog." + kind.auditName() + "." + verb, AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.tenant(tenantId))
@@ -458,7 +461,7 @@ public class VocabularyService {
                 .because(verb.substring(0, 1).toUpperCase(java.util.Locale.ROOT) + verb.substring(1) + " a "
                         + kind.auditName())
                 .usingCapability(Capability.CATALOG_AUTHOR.code())
-                .changed(change)
+                .changed(document)
                 .correlatedBy(id.toString())
                 .occurredAt(at)
                 .build());

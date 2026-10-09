@@ -8,6 +8,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.catalog.api.CatalogConfigurationKeys;
+import uz.horecaos.platform.catalog.api.MxikReferenceHealth;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMxikImportStore;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
@@ -21,7 +22,7 @@ import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
  * different problem, with a different owner, than a picker that finds nothing in a list that is there.
  */
 @Service
-public class MxikReferenceStatusService {
+public class MxikReferenceStatusService implements MxikReferenceHealth {
 
     private final JdbcMxikImportStore store;
     private final ConfigurationResolver configuration;
@@ -52,6 +53,21 @@ public class MxikReferenceStatusService {
             @Nullable Long ageDays,
             @Nullable Integer maxAgeDays,
             boolean stale) {}
+
+    /** The daily check's view of the list: the same status the consoles read, and whether anyone depends on it. */
+    @Override
+    @Transactional(readOnly = true)
+    public Health health() {
+        Status status = status();
+        return new Health(
+                status.loaded(),
+                status.stale(),
+                status.ageDays(),
+                status.maxAgeDays(),
+                status.validRows(),
+                status.withdrawnRows(),
+                store.anyTenantHasClassifiedNode());
+    }
 
     @Transactional(readOnly = true)
     public Status status() {
