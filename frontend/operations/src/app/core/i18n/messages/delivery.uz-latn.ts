@@ -177,6 +177,8 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.rules.sim.note.GROUPING_NEEDS_A_PLAN_TO_MEASURE':
     'Qaysi kuryerlar oʻlchanishini koʻrish uchun yaqinda berilgan buyurtmani tanlang: qoʻlda yozilgan stsenariyda manzil yoʻq.',
   'delivery.rules.sim.note.FLEET_NOT_MEASURABLE': 'Kuryerlarni bu yerda oʻlchab boʻlmadi.',
+  'delivery.rules.sim.note.GROUPING_SWITCHED_OFF':
+    'Birlashtirish butun platforma uchun oʻchirilgan, shuning uchun buyurtmalar birma-bir taklif qilinadi va kuryerlar oʻlchanmaydi.',
   'delivery.rules.sim.grouping.heading': 'Birlashtirish uchun oʻlchangan kuryerlar',
   'delivery.rules.sim.grouping.empty': 'Smenada oʻlchanadigan kuryer yoʻq.',
   'delivery.rules.sim.grouping.carrying': '{max} tadan {n} tasini olib ketmoqda',

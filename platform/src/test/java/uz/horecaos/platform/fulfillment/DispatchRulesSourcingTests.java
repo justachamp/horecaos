@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.fulfillment.api.DeliveryOrderPort;
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort;
@@ -48,6 +49,7 @@ import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchDecision;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument.Action;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument.Conditions;
+import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument.Grouping;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument.PartnerSelection;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument.PartnerSet;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument.Rule;
@@ -647,6 +649,79 @@ class DispatchRulesSourcingTests {
                 .contains("not a delivery zone of this company");
     }
 
+    // ---------------------------------------- ADR 0170: the simulator and the grouping feed
+
+    @Test
+    @DisplayName("with the platform's grouping switch off the simulator measures nothing for the document in force,"
+            + " as the live path would not, and says so")
+    void theSimulatorHonoursTheGroupingSwitchForTheDocumentInForce() {
+        policies.publish(document(groupingRule()));
+        DeliveryPlan live = plan();
+        ProbeRecordingFleet probing = new ProbeRecordingFleet();
+
+        Simulation simulated = simulatorOver(probing, false)
+                .simulate(TENANT, BRAND, branch, ResourceScope.location(TENANT, BRAND, branch), null, null, live.id());
+
+        assertThat(probing.probes)
+                .as("a probe is what reads customers' doors: none while the switch is off")
+                .isEmpty();
+        assertThat(simulated.grouping()).isNull();
+        assertThat(simulated.notes()).contains("GROUPING_SWITCHED_OFF");
+    }
+
+    @Test
+    @DisplayName("with the switch on the simulator measures the feed, and the drop-offs it reads are recorded as read"
+            + " by the person who asked")
+    void theSimulatorMeasuresTheFeedOnBehalfOfThePerson() {
+        policies.publish(document(groupingRule()));
+        DeliveryPlan live = plan();
+        ProbeRecordingFleet probing = new ProbeRecordingFleet();
+        ActorRef dispatcher = ActorRef.user("dispatcher-7", null);
+
+        Simulation simulated = simulatorOver(probing, true)
+                .simulate(
+                        TENANT,
+                        BRAND,
+                        branch,
+                        ResourceScope.location(TENANT, BRAND, branch),
+                        null,
+                        null,
+                        live.id(),
+                        dispatcher);
+
+        assertThat(probing.probes).singleElement().satisfies(probe -> {
+            assertThat(probe.planId()).isEqualTo(live.id());
+            assertThat(probe.mergeRadiusMeters()).isEqualTo(700);
+            assertThat(probe.maxOrdersPerRun()).isEqualTo(3);
+            assertThat(probe.requestedBy()).isEqualTo(dispatcher);
+        });
+        assertThat(simulated.grouping()).isNotNull();
+        assertThat(simulated.notes()).doesNotContain("GROUPING_SWITCHED_OFF");
+    }
+
+    @Test
+    @DisplayName("a draft that groups is measured even with the switch off: previewing the feed first is how grouping"
+            + " is rolled out, and the draft's own violations say it cannot be published yet")
+    void aDraftIsMeasuredWhateverTheSwitchSays() {
+        DeliveryPlan live = plan();
+        ProbeRecordingFleet probing = new ProbeRecordingFleet();
+
+        Simulation simulated = simulatorOver(probing, false)
+                .simulate(
+                        TENANT,
+                        BRAND,
+                        branch,
+                        ResourceScope.location(TENANT, BRAND, branch),
+                        document(groupingRule()),
+                        null,
+                        live.id());
+
+        assertThat(simulated.documentSource()).isEqualTo("DRAFT");
+        assertThat(probing.probes).hasSize(1);
+        assertThat(simulated.violations()).anyMatch(violation -> violation.contains("grouping is not enabled"));
+        assertThat(simulated.notes()).doesNotContain("GROUPING_SWITCHED_OFF");
+    }
+
     @Test
     @DisplayName("the simulator calls no provider and asks no quote")
     void theSimulatorCallsNobody() {
@@ -830,6 +905,33 @@ class DispatchRulesSourcingTests {
                 .query(java.time.OffsetDateTime.class)
                 .single()
                 .toInstant();
+    }
+
+    /** A rule every order matches that groups on a 700 m radius, three to a run, with no wait. */
+    private Rule groupingRule() {
+        return rule(
+                "groups",
+                Conditions.any(),
+                new Action(
+                        SourcingMode.FLEET_ONLY,
+                        PartnerSet.bindingOrder(),
+                        Start.lead(),
+                        new Grouping(700, 3, 0),
+                        null));
+    }
+
+    private DispatchRuleSimulator simulatorOver(InternalFleetPort measuredFleet, boolean groupingAllowed) {
+        JdbcDispatchRuleStore store = new JdbcDispatchRuleStore(jdbc);
+        return new DispatchRuleSimulator(
+                new DispatchRulesAuthoringService(
+                        policies, policies.author(), store, fact -> {}, clock, groupingAllowed),
+                policies,
+                bookings,
+                orders,
+                planStore,
+                new JdbcDispatchBranchStore(jdbc),
+                store,
+                measuredFleet);
     }
 
     private DispatchRulesDocument document(Rule... rules) {
@@ -1179,6 +1281,26 @@ class DispatchRulesSourcingTests {
         @Override
         public List<FleetCandidate> candidates(UUID tenantId, UUID brandId, UUID locationId, int distanceMeters) {
             return candidates;
+        }
+    }
+
+    /** Records the probes a simulation makes, and measures nobody. */
+    private static final class ProbeRecordingFleet implements InternalFleetPort {
+
+        private final List<GroupingProbe> probes = new ArrayList<>();
+
+        @Override
+        public List<FleetCandidate> candidates(UUID tenantId, UUID brandId, UUID locationId, int distanceMeters) {
+            return List.of();
+        }
+
+        @Override
+        public List<FleetCandidate> candidates(
+                UUID tenantId, UUID brandId, UUID locationId, int distanceMeters, @Nullable GroupingProbe probe) {
+            if (probe != null) {
+                probes.add(probe);
+            }
+            return List.of();
         }
     }
 

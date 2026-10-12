@@ -53,7 +53,10 @@ public class JdbcActiveAssignments implements InternalFleetPort.ActiveAssignment
 
     private static final double EARTH_RADIUS_METERS = 6_371_008.8;
 
-    /** The job the audit fact of a reveal names: sourcing runs as a system job, never as a person. */
+    /**
+     * The job the audit fact of a reveal names when nobody asked for it: sourcing runs as a system job. A reveal
+     * a person asked for (the dispatch-rule simulator) names that person instead.
+     */
     private static final String SYSTEM_JOB = "delivery-sourcing";
 
     private final JdbcClient jdbc;
@@ -136,6 +139,17 @@ public class JdbcActiveAssignments implements InternalFleetPort.ActiveAssignment
     @Override
     public Map<UUID, InternalFleetPort.Groupable> groupable(
             UUID tenantId, UUID planId, Collection<UUID> courierIds, int radiusMeters, int maxOrdersPerRun) {
+        return groupable(tenantId, planId, courierIds, radiusMeters, maxOrdersPerRun, null);
+    }
+
+    @Override
+    public Map<UUID, InternalFleetPort.Groupable> groupable(
+            UUID tenantId,
+            UUID planId,
+            Collection<UUID> courierIds,
+            int radiusMeters,
+            int maxOrdersPerRun,
+            @Nullable ActorRef requestedBy) {
 
         if (courierIds.isEmpty()) {
             return Map.of();
@@ -183,13 +197,13 @@ public class JdbcActiveAssignments implements InternalFleetPort.ActiveAssignment
         }
 
         ResourceScope scope = planDoor.get().scope();
-        Optional<GeoPoint> here = reveal(tenantId, scope, planDoor.get().orderId());
+        Optional<GeoPoint> here = reveal(tenantId, scope, planDoor.get().orderId(), requestedBy);
         if (here.isEmpty()) {
             return Map.of();
         }
         Map<UUID, InternalFleetPort.Groupable> nearest = new HashMap<>();
         for (UnPickedShipment shipment : candidates) {
-            Optional<GeoPoint> there = reveal(tenantId, scope, shipment.orderId());
+            Optional<GeoPoint> there = reveal(tenantId, scope, shipment.orderId(), requestedBy);
             if (there.isEmpty()) {
                 continue;
             }
@@ -209,17 +223,19 @@ public class JdbcActiveAssignments implements InternalFleetPort.ActiveAssignment
      * A door, or nothing: an unreadable or un-geocoded address makes a courier not groupable and is never an error.
      *
      * <p>Every attempt to read one is a recorded reveal (ADR 0029, ADR 0027): a SECURITY fact that names the order
-     * and the purpose and carries no part of the address, and a counter by purpose. The fact is written before the
+     * and the purpose, and who asked (the person, when one did; the sourcing job otherwise), and carries no part
+     * of the address, and a counter by purpose. The fact is written before the
      * read, so a read that fails is still on record as attempted.
      */
-    private Optional<GeoPoint> reveal(UUID tenantId, ResourceScope scope, UUID orderId) {
+    private Optional<GeoPoint> reveal(
+            UUID tenantId, ResourceScope scope, UUID orderId, @Nullable ActorRef requestedBy) {
         if (meters != null) {
             meters.counter("fulfillment.grouping.reveals", "purpose", PURPOSE_DISPATCH_GROUPING)
                     .increment();
         }
         if (audit != null) {
             audit.record(AuditFact.of("fulfillment.grouping.dropoff-revealed", AuditClass.SECURITY)
-                    .by(ActorRef.systemJob(SYSTEM_JOB))
+                    .by(requestedBy != null ? requestedBy : ActorRef.systemJob(SYSTEM_JOB))
                     .at(scope)
                     .target("ordering.order", orderId)
                     .because("The grouping bias measured a drop-off (" + PURPOSE_DISPATCH_GROUPING + ")")

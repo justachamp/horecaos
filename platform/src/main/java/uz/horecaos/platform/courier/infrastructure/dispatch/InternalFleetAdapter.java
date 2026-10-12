@@ -143,7 +143,8 @@ public class InternalFleetAdapter implements InternalFleetPort {
                 probe.planId(),
                 plain.stream().map(FleetCandidate::courierId).toList(),
                 probe.mergeRadiusMeters(),
-                probe.maxOrdersPerRun());
+                probe.maxOrdersPerRun(),
+                probe.requestedBy());
         if (groupable.isEmpty()) {
             return plain;
         }
