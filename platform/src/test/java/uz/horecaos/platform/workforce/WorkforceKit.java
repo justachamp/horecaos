@@ -41,6 +41,7 @@ import uz.horecaos.platform.tenancy.api.ResolutionTrace;
 import uz.horecaos.platform.tenancy.api.Resolved;
 import uz.horecaos.platform.workforce.application.AttendanceSettings;
 import uz.horecaos.platform.workforce.application.Branch;
+import uz.horecaos.platform.workforce.application.RosterMissedSweeper;
 import uz.horecaos.platform.workforce.application.StaffAttendanceExportAdapter;
 import uz.horecaos.platform.workforce.application.StaffAttendanceSelfService;
 import uz.horecaos.platform.workforce.application.StaffPeople;
@@ -138,6 +139,17 @@ final class WorkforceKit {
      */
     <T> T inTransaction(Supplier<T> call) {
         return new TransactionTemplate(new DataSourceTransactionManager(dataSource)).execute(status -> call.get());
+    }
+
+    /** One pass of the missed-entry sweeper at the kit's clock. @return how many entries it marked */
+    int sweepMissed() {
+        return new RosterMissedSweeper(
+                        rosterStore,
+                        shiftStore,
+                        clock,
+                        new io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
+                        100)
+                .runOnce();
     }
 
     static Branch branch() {

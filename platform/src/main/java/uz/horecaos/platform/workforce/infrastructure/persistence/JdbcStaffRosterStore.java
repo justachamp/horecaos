@@ -232,15 +232,21 @@ public class JdbcStaffRosterStore {
     }
 
     /**
-     * The published entry of this person and branch whose start is nearest {@code startedAt} within
-     * {@code windowMinutes} (ADR 0156, Lifecycle and arithmetic).
+     * The entry of this person and branch whose start is nearest {@code startedAt} within {@code
+     * windowMinutes} and that no shift has covered yet (ADR 0156, Lifecycle and arithmetic).
+     *
+     * <p>"Not covered yet" is {@code PUBLISHED} <em>or {@code MISSED}</em>. The sweeper marks an entry
+     * {@code MISSED} minutes after its end, so hours a manager records after the fact -- the usual way
+     * a forgotten clock-in is put right -- meet an entry that is already {@code MISSED}. Leaving it out
+     * would give the shift no plan, no variance and so no approval however many hours were recorded,
+     * and would leave a coverage miss standing beside the shift that covers it.
      */
-    public Optional<EntryRow> nearestPublished(
+    public Optional<EntryRow> nearestUncovered(
             UUID tenantId, UUID locationId, UUID memberId, Instant startedAt, int windowMinutes) {
         return jdbc.sql("SELECT " + COLUMNS + """
                          FROM workforce.staff_roster_entries
                         WHERE tenant_id = :tenantId AND location_id = :locationId AND staff_member_id = :memberId
-                          AND status = 'PUBLISHED'
+                          AND status IN ('PUBLISHED', 'MISSED')
                           AND planned_start BETWEEN :from AND :to
                         ORDER BY abs(extract(epoch FROM (planned_start - CAST(:at AS timestamptz)))), id
                         LIMIT 1
@@ -282,12 +288,15 @@ public class JdbcStaffRosterStore {
                 .list();
     }
 
-    /** Set when a shift opens against the entry; conditional on it still being PUBLISHED. */
+    /**
+     * Set when a shift opens against the entry; conditional on it not being covered yet, which is
+     * PUBLISHED or, for hours recorded after the sweeper ran, MISSED.
+     */
     public int markConsumed(UUID tenantId, UUID entryId) {
         return jdbc.sql("""
                         UPDATE workforce.staff_roster_entries
                            SET status = 'CONSUMED', version = version + 1, updated_at = now()
-                         WHERE tenant_id = :tenantId AND id = :id AND status = 'PUBLISHED'
+                         WHERE tenant_id = :tenantId AND id = :id AND status IN ('PUBLISHED', 'MISSED')
                         """).param("tenantId", tenantId).param("id", entryId).update();
     }
 

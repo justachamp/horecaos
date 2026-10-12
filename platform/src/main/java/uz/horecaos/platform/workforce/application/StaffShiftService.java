@@ -455,9 +455,10 @@ public class StaffShiftService {
                     Map.of("reason", "SHIFT_ALREADY_OPEN", "shiftId", open.id().toString()));
         });
         // Matched to the nearest published entry of the same person and branch within the window, and
-        // the entry becomes CONSUMED in the same transaction (ADR 0156, Lifecycle and arithmetic).
+        // the entry becomes CONSUMED in the same transaction (ADR 0156, Lifecycle and arithmetic). An
+        // entry the sweeper already marked MISSED still counts: hours recorded after the fact meet it.
         @Nullable
-        UUID entryId = roster.nearestPublished(
+        UUID entryId = roster.nearestUncovered(
                         tenantId, branch.locationId(), memberId, startedAt, settings.matchWindowMinutes(tenantId))
                 .filter(entry -> roster.markConsumed(tenantId, entry.id()) == 1)
                 .map(EntryRow::id)
