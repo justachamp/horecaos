@@ -18,5 +18,13 @@ public final class PosBalanceSyncReasons {
     /** A person accepted the till's number over the platform's, under approval where it credits above the threshold. */
     public static final String CORRECTION = "POS_SYNC_CORRECTION";
 
+    /**
+     * The codes a person's resolution of a till discrepancy may write: the held credit they accept, and the
+     * difference they accept. {@link #SPEND} is the sync's alone and no person resolves into it.
+     */
+    public static boolean isWrittenByAResolution(String reasonCode) {
+        return EARN.equals(reasonCode) || CORRECTION.equals(reasonCode);
+    }
+
     private PosBalanceSyncReasons() {}
 }

@@ -175,7 +175,43 @@ public class LoyaltyAdjustmentService {
         // anything else happens, so a refused code costs no approval request and no row. In
         // report-only mode it is counted and goes through; the policy that permitted it is
         // what the audit fact below records.
-        AdjustmentReasonPolicyService.Effective permittedBy = reasons.admit(command.reasonCode());
+        return adjustUnder(command, reasons.admit(command.reasonCode()));
+    }
+
+    /**
+     * The adjustment a person's resolution of a till discrepancy writes (ADR 0171, Decision 5): the same arithmetic,
+     * the same aggregate threshold and the same second signature as {@link #adjust}, under a reason code only the
+     * till sync writes.
+     *
+     * <p>ADR 0171 says those codes «never pass through the operator reason-code list of ADR 0165», and the reason is
+     * that «earned at the till» is a fact the sync observed and not a justification a person chose: the list exists to
+     * close the label an operator can invent, and there is no label to invent here. Applied anyway it counted every
+     * resolution as an operator typing something off the list, and the flip to {@code ENFORCE} would have refused
+     * every one, so no difference between the platform and a till could be resolved.
+     *
+     * <p>This is a separate entry point and not an exemption inside {@link #adjust} on purpose. An exemption keyed on
+     * the code would let an operator type {@code POS_SYNC_CORRECTION} into the manual adjustment and walk round the
+     * list; here the code is fixed by the caller, which is the sync service, and refused if it is any other.
+     *
+     * @throws IllegalArgumentException when the command's reason code is not one a resolution writes
+     */
+    @Transactional
+    public ApprovalOutcome adjustForTillResolution(AdjustmentCommand command) {
+        if (!PosBalanceSyncReasons.isWrittenByAResolution(command.reasonCode())) {
+            throw new IllegalArgumentException("A till resolution writes a till sync reason code, not a typed one");
+        }
+        if (command.amountMinor() == 0) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "An adjustment moves a non-zero amount");
+        }
+        return adjustUnder(command, null);
+    }
+
+    /**
+     * @param permittedBy the reason-code policy the adjustment was admitted under, for its audit fact; null for a
+     *     code that is not an operator's to choose and so was not put to the list
+     */
+    private ApprovalOutcome adjustUnder(
+            AdjustmentCommand command, AdjustmentReasonPolicyService.@Nullable Effective permittedBy) {
         Instant now = clock.instant();
 
         ResourceScope scope = ResourceScope.brand(command.tenantId(), command.brandId());
@@ -209,7 +245,7 @@ public class LoyaltyAdjustmentService {
             AdjustmentCommand command,
             ResourceScope scope,
             @Nullable UUID approvalId,
-            AdjustmentReasonPolicyService.Effective permittedBy,
+            AdjustmentReasonPolicyService.@Nullable Effective permittedBy,
             Instant now) {
 
         AccountRow account = store.openAccount(
@@ -286,7 +322,7 @@ public class LoyaltyAdjustmentService {
         change.put("amountMinor", command.amountMinor());
         change.put("reasonCode", command.reasonCode());
         change.put("balanceAfterMinor", balanceAfter);
-        if (permittedBy.policyId() != null) {
+        if (permittedBy != null && permittedBy.policyId() != null) {
             change.put("policyId", permittedBy.policyId().toString());
             change.put("policyVersion", permittedBy.policyVersion());
         }
