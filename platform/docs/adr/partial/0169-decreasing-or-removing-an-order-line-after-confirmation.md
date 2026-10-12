@@ -17,7 +17,8 @@
   built and `CHANGE_LINE_QUANTITY` may lower a quantity: both take a `removalReasonId`,
   reprice through the ordinary path, append a revision with the fiscal correction
   marker, refuse `WOULD_EMPTY_ORDER`, `COMBO_COMPONENT_NOT_REMOVABLE`, `LINE_NOT_LIVE`,
-  `REMOVAL_REASON_*`, a mandatory auto-added line (`AUTO_ADD_LINE_MANDATORY`) and a
+  `REMOVAL_REASON_*`, a mandatory auto-added line (`AUTO_ADD_LINE_MANDATORY`), a line
+  holding a scanned unit (`MARKS_ALREADY_CAPTURED`, ADR 0161 Decision 10) and a
   provider-paid order (`PAID_ORDER_DECREASE_NOT_SUPPORTED`), preview the stock
   consequence, and restate the cash due on a `NOT_REQUIRED` order, which now also
   happens for `ADD_LINES`. A cancellation after commitment disposes of the remaining
@@ -408,6 +409,9 @@ Stable refusal codes (ADR 0031, Problem Details with `reasonCode`):
 `REMOVAL_REASON_REQUIRED`, `REMOVAL_REASON_NOT_FOUND`, `REMOVAL_REASON_ARCHIVED`,
 `WOULD_EMPTY_ORDER`, `COMBO_COMPONENT_NOT_REMOVABLE`, `LINE_NOT_LIVE`,
 `PAID_ORDER_DECREASE_NOT_SUPPORTED`, `AUTO_ADD_LINE_MANDATORY` (ADR 0158),
+`MARKS_ALREADY_CAPTURED` (ADR 0161, Decision 10: a line that holds a scanned unit is neither removed nor
+lowered; the check is `OrderAmendmentService#requireScannedLinesAreNotReplaced`, which keys on the
+lines an amendment names, asked at propose and again at apply under the order row's lock),
 `AMENDMENT_PAST_CUT_POINT` and `CUSTOMER_CONFIRMATION_REQUIRED` as today. The generic
 `QUANTITY_DECREASE_NOT_SUPPORTED` is retired once the command is enabled.
 

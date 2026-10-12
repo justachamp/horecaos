@@ -2427,6 +2427,108 @@ class OrderAmendmentAndOutcomeTests {
     }
 
     @Test
+    @DisplayName("ADR 0161 decision 10: REMOVE_LINES on a line that holds a scanned unit is refused before it "
+            + "writes anything, and goes through once the unit is released")
+    void removeLinesIsRefusedWhileTheLineHoldsAScan() {
+        UUID orderId = confirmedOrderOnShelf("idem-rm-marked", 10);
+        UUID reasonId = returnReason();
+        var added = proposeOnly(
+                orderId,
+                "k-rm-marked-add",
+                OrderAmendmentService.AmendmentCommand.addLines(
+                        List.of(new OrderAmendmentService.AmendmentCommand.LineRequest(burgerVariant, 1, List.of()))));
+        confirmAndApply(orderId, added.amendment().id());
+        UUID addedLine = orderStore.lines(TENANT, orderId).get(1).lineId();
+        UUID markId = UUID.randomUUID();
+        insertLiveMark(markId, orderId, addedLine);
+        int revisionsBefore = orderQuery.revisions(TENANT, orderId).size();
+
+        assertThatThrownBy(() -> proposeRemoval(
+                        orderId,
+                        "k-rm-marked-1",
+                        OrderAmendmentService.AmendmentCommand.removeLines(List.of(addedLine), reasonId)))
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class)
+                .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
+                        .as("closing the line would leave its scanned unit live on a line nobody can see")
+                        .isEqualTo("MARKS_ALREADY_CAPTURED"));
+        assertThat(orderQuery.revisions(TENANT, orderId))
+                .as("nothing was written")
+                .hasSize(revisionsBefore);
+        assertThat(orderStore.lines(TENANT, orderId)).hasSize(2);
+        assertThat(orderStore.linesHoldingLiveMarks(TENANT, orderId)).containsExactly(addedLine);
+
+        jdbc.sql("UPDATE ordering.order_line_marks SET released_at = now(), released_reason = 'UNIT_DAMAGED' "
+                        + "WHERE id = :id")
+                .param("id", markId)
+                .update();
+        var proposed = proposeRemoval(
+                orderId,
+                "k-rm-marked-2",
+                OrderAmendmentService.AmendmentCommand.removeLines(List.of(addedLine), reasonId));
+
+        assertThat(proposed.amendment().removesStock())
+                .as("a released unit no longer blocks the removal: the guard keys on live marks")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("ADR 0161 decision 10: a removal priced before a unit was scanned is refused when it is applied "
+            + "after the scan, because apply asks again")
+    void aRemovalProposedBeforeAScanIsRefusedAtApply() {
+        UUID orderId = confirmedOrderOnShelf("idem-rm-marked-late", 10);
+        var added = proposeOnly(
+                orderId,
+                "k-rm-late-add",
+                OrderAmendmentService.AmendmentCommand.addLines(
+                        List.of(new OrderAmendmentService.AmendmentCommand.LineRequest(burgerVariant, 1, List.of()))));
+        confirmAndApply(orderId, added.amendment().id());
+        UUID addedLine = orderStore.lines(TENANT, orderId).get(1).lineId();
+        var proposed = proposeRemoval(
+                orderId,
+                "k-rm-late-1",
+                OrderAmendmentService.AmendmentCommand.removeLines(List.of(addedLine), returnReason()));
+        int revisionsBefore = orderQuery.revisions(TENANT, orderId).size();
+
+        // The operator at the pass scans the unit while the customer is still on the phone.
+        insertLiveMark(UUID.randomUUID(), orderId, addedLine);
+
+        assertThatThrownBy(() ->
+                        attestAndApplyRemoval(orderId, proposed.amendment().id()))
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class)
+                .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
+                        .isEqualTo("MARKS_ALREADY_CAPTURED"));
+        assertThat(orderQuery.revisions(TENANT, orderId))
+                .as("the revision rolled back")
+                .hasSize(revisionsBefore);
+        assertThat(orderStore.lines(TENANT, orderId))
+                .as("the scanned line is still the live one")
+                .hasSize(2);
+        assertThat(burgerOnHand()).as("and its stock was not returned").isEqualByComparingTo("7");
+    }
+
+    @Test
+    @DisplayName("ADR 0161 decision 10: a priced CHANGE_LINE_QUANTITY proposed before a scan is refused at apply "
+            + "once the line holds a unit")
+    void aQuantityChangeProposedBeforeAScanIsRefusedAtApply() {
+        UUID orderId = orderIdOf(placeOrder("idem-qty-marked-late"));
+        UUID lineId = orderStore.lines(TENANT, orderId).getFirst().lineId();
+        var proposed = proposeOnly(
+                orderId, "k-qty-late-1", OrderAmendmentService.AmendmentCommand.changeLineQuantity(lineId, 3));
+        insertLiveMark(UUID.randomUUID(), orderId, lineId);
+
+        assertThatThrownBy(() -> confirmAndApply(orderId, proposed.amendment().id()))
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class)
+                .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
+                        .isEqualTo("MARKS_ALREADY_CAPTURED"));
+        assertThat(orderQuery.revisions(TENANT, orderId))
+                .as("no revision was appended")
+                .hasSize(1);
+        assertThat(orderStore.lines(TENANT, orderId).getFirst().lineId())
+                .as("the scanned line is still the live one")
+                .isEqualTo(lineId);
+    }
+
+    @Test
     @DisplayName("a financial amendment is refused past the ADR 0039 cut point; a non-financial one is not")
     void aFinancialAmendmentIsRefusedPastTheCutPoint() {
         UUID orderId = orderIdOf(placeOrder("idem-cutpoint"));

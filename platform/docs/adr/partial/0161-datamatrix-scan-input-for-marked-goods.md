@@ -617,7 +617,11 @@ rejected in Alternatives considered.
 A cancellation, rejection or expiry of an order that has not reached `FULFILLING`
 releases its marks (`ORDER_CANCELLED`) in the same transaction; one that has
 keeps them. An amendment (ADR 0039's engine, Decision 10 above) that closes or
-reduces a line holding a live mark is refused before it writes anything;
+reduces a line holding a live mark -- `CHANGE_LINE_QUANTITY`, `REMOVE_LINES` and the
+line decreases of ADR 0169 alike, because the check keys on the lines the amendment
+names -- is refused before it writes anything, at propose and again at apply under the
+order row's lock (a scan does not move the order's version, so a scan made between the
+two is otherwise invisible);
 `LINE_REPLACED` is reserved for the day an amendment may carry marks forward and
 is written by nothing in v1.
 
