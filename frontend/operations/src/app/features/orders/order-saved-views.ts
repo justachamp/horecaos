@@ -55,6 +55,8 @@ export class OrderSavedViews {
   readonly views = input.required<readonly SavedView[]>();
   /** True when views are kept in the person's account; false when they live for this session only. */
   readonly persistent = input(true, { transform: booleanAttribute });
+  /** True after the last attempt to save the views to the account failed: the small print must not say they are kept there. */
+  readonly writeFailed = input(false, { transform: booleanAttribute });
   /** The board has a filter on that a view cannot hold (a search, a courier, an aggregator, an exact period). */
   readonly leftOut = input(false, { transform: booleanAttribute });
 

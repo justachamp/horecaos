@@ -883,6 +883,10 @@ export const ordersEn = {
   'orders.queue.views.limit': 'At most 20 views. Delete one you no longer use.',
   'orders.queue.views.saved': 'Views are kept in your account.',
   'orders.queue.views.session': 'Views last only until this session ends.',
+  'orders.queue.views.writeFailed':
+    'Your last change could not be saved to your account. It applies on this screen only.',
+  'orders.queue.preferences.writeFailed':
+    'Your last change to the columns or saved views did not reach your account. It applies on this screen only, and your other devices may not show it.',
   // ---------------------------------------------------------------- ADR 0161 marked goods (X.35)
   'orders.queue.bulk.problem.MARKS_INCOMPLETE': 'Marked items are not all scanned yet',
   'orders.marking.title': 'Marked goods',

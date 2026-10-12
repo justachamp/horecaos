@@ -26,8 +26,9 @@ export interface ColumnPickerItem {
  * it, so the order board can keep it in the person's account while the data table's own chooser stays in
  * the browser (the two are different on purpose -- ADR 0160, decision 8).
  *
- * `persistent` only changes one line of small print: whether the choice follows the person to another
- * machine or lives for this session. A choice is applied at once either way; saving it is the host's job.
+ * `persistent` and `writeFailed` only change one line of small print: whether the choice follows the person
+ * to another machine, lives for this session, or could not be saved to the account just now. A choice is
+ * applied at once either way; saving it is the host's job.
  */
 @Component({
   selector: 'q-column-picker',
@@ -44,6 +45,8 @@ export class ColumnPicker {
   readonly columns = input.required<readonly ColumnPickerItem[]>();
   /** True when the host keeps the choice in the person's account; false when it lives for this session only. */
   readonly persistent = input(true, { transform: booleanAttribute });
+  /** True after the host's last attempt to save the choice to the account failed: the small print must not say it is saved. */
+  readonly writeFailed = input(false, { transform: booleanAttribute });
   /** Whether there is a choice to give up: the reset is offered only then. */
   readonly canReset = input(false, { transform: booleanAttribute });
 

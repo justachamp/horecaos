@@ -70,7 +70,12 @@ import { CountableOrder, OrderCounts, PolicyFor, TabCounts, zeroTabCounts } from
 import { describeApiError, errorReference, mutationErrorNotice } from './order-errors';
 import { OrderOutcomeReasonDialog, OutcomeReasonSubmission } from './order-outcome-reason-dialog';
 import { BoardKeyAction, OrderBoardKeys, orderBoardScope } from './order-board-shortcuts';
-import { ORDER_BOARD_COLUMNS, columnVisibility, offeredColumns } from './order-board-columns';
+import {
+  ORDER_BOARD_COLUMNS,
+  OrderBoardColumnContext,
+  columnVisibility,
+  offeredColumns,
+} from './order-board-columns';
 import { OrderQueueBulkBar } from './order-queue-bulk-bar';
 import { OrderQueueBulkResult } from './order-queue-bulk-result';
 import { OrderQueueToolbar } from './order-queue-toolbar';
@@ -402,20 +407,27 @@ export class OrderQueue implements OnInit {
 
   // ----------------------------------------------- the person's own board (ADR 0160)
 
+  /** What this screen and this person can draw: «Все филиалы» for «Филиал», `COURIER_READ`'s roster for «Тип курьера». */
+  private readonly columnContext = computed<OrderBoardColumnContext>(() => ({
+    allBranches: this.allBranchesActive(),
+    courierRoster: this.capabilities.has('COURIER_READ'),
+  }));
+
   /**
    * Which columns the table draws: the person's choice from their account (`ORDER_BOARD`), held to what
-   * this screen can draw -- «Филиал» exists only on «Все филиалы». The columns the table always draws are
+   * this screen and this person can draw -- «Филиал» exists only on «Все филиалы», «Тип курьера» only for
+   * someone who may read the courier roster. The columns the table always draws are
    * not in this record because no choice can name them. While the account's document is on its way the
    * mirror, then the code's default, decides; a failed read leaves the board as it always was.
    */
   protected readonly cols = computed(() =>
-    columnVisibility(this.preferences.orderBoard(), { allBranches: this.allBranchesActive() }),
+    columnVisibility(this.preferences.orderBoard(), this.columnContext()),
   );
 
   /** The picker lists the columns whose cell has something to draw here, in the platform's order. */
   protected readonly pickerColumns = computed<readonly ColumnPickerItem[]>(() => {
     const visibility = this.cols();
-    return offeredColumns({ allBranches: this.allBranchesActive() }).map((key) => ({
+    return offeredColumns(this.columnContext()).map((key) => ({
       key,
       label: this.i18n.t(ORDER_BOARD_COLUMNS[key].labelKey),
       shown: visibility[key],
@@ -431,6 +443,13 @@ export class OrderQueue implements OnInit {
 
   /** False for an account the tenant keeps no record for: its choices then last for the session only. */
   protected readonly preferencesPersistent = this.preferences.persistent;
+
+  /**
+   * True after a change to the columns or the saved views was dropped on its way to the account (a second
+   * device won twice, or the platform refused it): the screen still shows it, the account does not hold it.
+   * Said on the board itself, not only in a menu that is usually closed.
+   */
+  protected readonly preferencesWriteFailed = this.preferences.writeFailed;
 
   /** The board has a filter on that a saved view cannot hold, so «Сохранить вид» says it is left out. */
   protected readonly viewsLeftOut = computed(

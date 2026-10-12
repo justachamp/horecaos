@@ -22,7 +22,7 @@ describe('the order board’s column registry (ADR 0160)', () => {
   });
 
   it('offers only the columns whose cell has something to draw: not «Позиции», and «Филиал» only on «Все филиалы»', () => {
-    expect(offeredColumns({ allBranches: false })).toEqual([
+    expect(offeredColumns({ allBranches: false, courierRoster: true })).toEqual([
       'channel',
       'customer',
       'payment',
@@ -32,7 +32,7 @@ describe('the order board’s column registry (ADR 0160)', () => {
       'courierType',
       'discount',
     ]);
-    expect(offeredColumns({ allBranches: true })).toEqual([
+    expect(offeredColumns({ allBranches: true, courierRoster: true })).toEqual([
       'branch',
       'channel',
       'customer',
@@ -46,8 +46,36 @@ describe('the order board’s column registry (ADR 0160)', () => {
     expect(ORDER_BOARD_COLUMNS.items.reads).toBeNull();
   });
 
+  it('offers «Тип курьера» only to a person who can read the courier roster that names it', () => {
+    const without = offeredColumns({ allBranches: false, courierRoster: false });
+
+    expect(without).not.toContain('courierType');
+    expect(without).toEqual([
+      'channel',
+      'customer',
+      'payment',
+      'courier',
+      'createdBy',
+      'acceptedBy',
+      'discount',
+    ]);
+    expect(offeredColumns({ allBranches: false, courierRoster: true })).toContain('courierType');
+    expect(ORDER_BOARD_COLUMNS.courierType.needs).toBe('courierRoster');
+  });
+
+  it('never draws «Тип курьера» for a person without the roster, whatever another device of theirs stored', () => {
+    const stored = { columns: { show: ['courierType', 'discount'] } } as const;
+
+    const without = columnVisibility(stored, { allBranches: false, courierRoster: false });
+    const withRoster = columnVisibility(stored, { allBranches: false, courierRoster: true });
+
+    expect(without.courierType).toBe(false);
+    expect(without.discount).toBe(true);
+    expect(withRoster.courierType).toBe(true);
+  });
+
   it('draws the defaults for a person who has chosen nothing, and holds «Филиал» to the screen that can draw it', () => {
-    const plain = columnVisibility({}, { allBranches: false });
+    const plain = columnVisibility({}, { allBranches: false, courierRoster: true });
 
     expect(plain).toMatchObject({
       branch: false,
@@ -60,14 +88,14 @@ describe('the order board’s column registry (ADR 0160)', () => {
       courierType: false,
       discount: false,
     });
-    expect(columnVisibility({}, { allBranches: true }).branch).toBe(true);
+    expect(columnVisibility({}, { allBranches: true, courierRoster: true }).branch).toBe(true);
     expect(plain.items).toBe(false);
   });
 
   it('applies the person’s change from the default, and shows a column added later to a person whose document predates it', () => {
     const visibility = columnVisibility(
       { columns: { show: ['createdBy', 'discount'], hide: ['courier'] } },
-      { allBranches: false },
+      { allBranches: false, courierRoster: true },
     );
 
     expect(visibility.createdBy).toBe(true);
@@ -82,10 +110,16 @@ describe('the order board’s column registry (ADR 0160)', () => {
 
   it('never draws a column the screen cannot, however the document says', () => {
     expect(
-      columnVisibility({ columns: { show: ['createdBy'] } }, { allBranches: false }).branch,
+      columnVisibility(
+        { columns: { show: ['createdBy'] } },
+        { allBranches: false, courierRoster: true },
+      ).branch,
     ).toBe(false);
-    expect(columnVisibility({ columns: { hide: ['branch'] } }, { allBranches: true }).branch).toBe(
-      false,
-    );
+    expect(
+      columnVisibility(
+        { columns: { hide: ['branch'] } },
+        { allBranches: true, courierRoster: true },
+      ).branch,
+    ).toBe(false);
   });
 });

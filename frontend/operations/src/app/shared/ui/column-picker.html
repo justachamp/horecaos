@@ -38,7 +38,14 @@
         </button>
       }
       <p class="q-column-picker__note q-caption" data-testid="column-picker-note">
-        {{ (persistent() ? 'shared.columnPicker.saved' : 'shared.columnPicker.session') | t }}
+        {{
+          (persistent()
+            ? writeFailed()
+              ? 'shared.columnPicker.writeFailed'
+              : 'shared.columnPicker.saved'
+            : 'shared.columnPicker.session'
+          ) | t
+        }}
       </p>
     </div>
   }

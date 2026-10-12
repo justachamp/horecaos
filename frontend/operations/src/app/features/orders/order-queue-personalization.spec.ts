@@ -146,6 +146,8 @@ function configure(options: {
   readonly branches?: readonly LocationOption[];
   readonly roster?: readonly RosterEntryResponse[];
   readonly persistent?: boolean;
+  /** What the signed-in person holds; the roster behind «Курьер» and «Тип курьера» needs `COURIER_READ`. */
+  readonly capabilities?: readonly string[];
 }): Harness {
   const preferences = fakePreferences(options.document, options.persistent ?? true);
   const boardCalls: Harness['boardCalls'] = [];
@@ -186,7 +188,13 @@ function configure(options: {
           resolve: () => Promise.resolve(PLATFORM_DEFAULT_LATENESS_POLICY),
         },
       },
-      { provide: SessionCapabilities, useValue: { has: () => false } },
+      {
+        provide: SessionCapabilities,
+        useValue: {
+          has: (capability: string) =>
+            (options.capabilities ?? ['COURIER_READ']).includes(capability),
+        },
+      },
       { provide: OrderActionsApi, useValue: {} },
       {
         provide: CouriersApi,
@@ -382,7 +390,9 @@ describe('OrderQueue: the columns a person chose (ADR 0160, gap map row 1.1)', (
       expect(bareRow.querySelector(`[data-testid="${id}"]`)?.textContent?.trim(), key).toBe('—');
     }
     // Every column the picker could offer on this screen has its cell somewhere in the table.
-    expect(offeredColumns({ allBranches: true }).length).toBeGreaterThan(optional.length);
+    expect(offeredColumns({ allBranches: true, courierRoster: true }).length).toBeGreaterThan(
+      optional.length,
+    );
   });
 });
 
@@ -473,11 +483,98 @@ describe('OrderQueue: the column picker (ADR 0160)', () => {
     expect(headers(host)).not.toContain('Discount');
   });
 
+  it('does not offer «Тип курьера» to a person who cannot read the courier roster, and never draws it from an old choice', async () => {
+    // The roster is what names a courier's type, and it needs COURIER_READ: without it the column would be a
+    // column of dashes. Another device of theirs, held by someone with the capability, may have ticked it.
+    configure({
+      rows: [FULL_ROW],
+      document: { columns: { show: ['courierType', 'createdBy'] } },
+      capabilities: [],
+    });
+    const host = await open();
+    await openPicker(host);
+
+    const menu = host.querySelector('[data-testid="column-picker-menu"]')!;
+    const labels = [...menu.querySelectorAll('label')].map((label) => label.textContent?.trim());
+    expect(labels).not.toContain('Courier type');
+    expect(labels).toContain('Created by');
+    expect(headers(host)).not.toContain('Courier type');
+    expect(host.querySelector('[data-testid="order-row-courier-type"]')).toBeNull();
+    // The rest of what they ticked is still drawn.
+    expect(headers(host)).toContain('Created by');
+  });
+
   it('says choices last for the session only when the account keeps no record to write them to', async () => {
     configure({ rows: [FULL_ROW], persistent: false });
     const host = await open();
     await openPicker(host);
 
+    expect(cell(host, 'column-picker-note')).toContain('only until this session ends');
+  });
+});
+
+describe('OrderQueue: a change that did not reach the account (ADR 0160)', () => {
+  const SAVED_NOTE = 'is saved to your account';
+
+  it('says nothing while writes land, and says so on the board, in the picker and in the views once one is dropped', async () => {
+    const { preferences } = configure({ rows: [FULL_ROW] });
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await settle();
+    const host = harness.routeNativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="order-queue-preferences-write-failed"]')).toBeNull();
+
+    preferences.writeFailed.set(true);
+    await settle();
+    harness.detectChanges();
+
+    const band = host.querySelector('[data-testid="order-queue-preferences-write-failed"]');
+    expect(
+      band,
+      'the failure is on the board itself, not only inside a closed menu',
+    ).not.toBeNull();
+    expect(band?.getAttribute('role')).toBe('alert');
+    expect(band?.textContent).toContain('did not reach your account');
+
+    pick(host, 'column-picker-toggle');
+    await settle();
+    harness.detectChanges();
+    expect(cell(host, 'column-picker-note')).toContain('could not be saved to your account');
+    expect(cell(host, 'column-picker-note')).not.toContain(SAVED_NOTE);
+
+    pick(host, 'saved-views-toggle');
+    await settle();
+    harness.detectChanges();
+    expect(cell(host, 'saved-views-note')).toContain('could not be saved to your account');
+    expect(cell(host, 'saved-views-note')).not.toContain('are kept in your account');
+  });
+
+  it('goes back to saying it is saved when the next write lands', async () => {
+    const { preferences } = configure({ rows: [FULL_ROW] });
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await settle();
+    const host = harness.routeNativeElement as HTMLElement;
+    preferences.writeFailed.set(true);
+    await settle();
+    harness.detectChanges();
+    pick(host, 'column-picker-toggle');
+    await settle();
+    harness.detectChanges();
+
+    preferences.writeFailed.set(false);
+    await settle();
+    harness.detectChanges();
+
+    expect(host.querySelector('[data-testid="order-queue-preferences-write-failed"]')).toBeNull();
+    expect(cell(host, 'column-picker-note')).toContain(SAVED_NOTE);
+  });
+
+  it('does not claim a failure for an account that never writes: that one says the choice lasts for the session', async () => {
+    configure({ rows: [FULL_ROW], persistent: false });
+    const host = await open();
+    pick(host, 'column-picker-toggle');
+    await settle();
+
+    expect(host.querySelector('[data-testid="order-queue-preferences-write-failed"]')).toBeNull();
     expect(cell(host, 'column-picker-note')).toContain('only until this session ends');
   });
 });

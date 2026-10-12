@@ -625,6 +625,31 @@ class StaffPreferencesEndpointTests {
                 .isEqualTo(200);
     }
 
+    @Test
+    @DisplayName(
+            "a reset does not take the version back: a tablet that read before it is told 409 once the surface is saved again")
+    void aStaleDeviceCannotWriteOverADocumentSavedAfterAReset() throws Exception {
+        put(prefs("ORDER_BOARD"), COOK_1, boardBody("Read by the old tablet"), null);
+        put(prefs("ORDER_BOARD"), COOK_1, boardBody("Edited on the laptop"), 1);
+        assertThat(delete(prefs("ORDER_BOARD"), COOK_1).getResponse().getStatus())
+                .isEqualTo(204);
+
+        MvcResult fresh = put(prefs("ORDER_BOARD"), COOK_1, boardBody("Fresh start"), null);
+        assertThat(fresh.getResponse().getStatus()).isEqualTo(200);
+        assertThat(fresh.getResponse().getHeader("ETag"))
+                .as("the reset was a version of its own, and the document saved after it is the next")
+                .isEqualTo("W/\"4\"");
+
+        MvcResult late = put(prefs("ORDER_BOARD"), COOK_1, boardBody("The old tablet's late edit"), 1);
+        assertThat(late.getResponse().getStatus()).isEqualTo(409);
+        assertThat(late.getResponse().getContentAsString(UTF_8)).contains("STALE_VERSION");
+        assertThat(label(get(prefs(), COOK_1))).isEqualTo("Fresh start");
+        assertThat(put(prefs("ORDER_BOARD"), COOK_1, boardBody("Next edit"), 4)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+    }
+
     // ===================================================================== rate limit
 
     @Test

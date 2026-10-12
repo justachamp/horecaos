@@ -457,6 +457,8 @@ export const coreRu: AreaMessages<typeof coreEn> = {
   'shared.columnPicker.saved':
     'Выбор сохраняется в вашей учётной записи и виден на всех ваших устройствах.',
   'shared.columnPicker.session': 'Выбор действует только до конца этого сеанса.',
+  'shared.columnPicker.writeFailed':
+    'Последнее изменение не удалось сохранить в вашей учётной записи. Оно действует только на этом экране.',
   'shell.localeScope.thisDevice': 'Язык выбран только для этого устройства.',
   'shell.localeScope.allDevices': 'Для всех моих устройств',
   'shell.localeScope.keep': 'Только на этом устройстве',

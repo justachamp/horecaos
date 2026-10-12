@@ -478,6 +478,8 @@ export const coreEn = {
   'shared.columnPicker.saved':
     'Your choice is saved to your account and follows you to every device.',
   'shared.columnPicker.session': 'Your choice lasts only until this session ends.',
+  'shared.columnPicker.writeFailed':
+    'Your last change could not be saved to your account. It applies on this screen only.',
   'shell.localeScope.thisDevice': 'Language set for this device only.',
   'shell.localeScope.allDevices': 'For all my devices',
   'shell.localeScope.keep': 'Only on this device',

@@ -101,6 +101,23 @@ describe('ColumnPicker (ADR 0160)', () => {
     expect(query('column-picker-note')?.textContent).toContain('only until this session ends');
   });
 
+  it('stops saying the choice is saved once the host says the last save failed', async () => {
+    await render({ persistent: true });
+    query<HTMLButtonElement>('column-picker-toggle')!.click();
+    fixture.detectChanges();
+
+    fixture.componentRef.setInput('writeFailed', true);
+    fixture.detectChanges();
+    expect(query('column-picker-note')?.textContent).toContain(
+      'could not be saved to your account',
+    );
+    expect(query('column-picker-note')?.textContent).not.toContain('is saved to your account');
+
+    fixture.componentRef.setInput('writeFailed', false);
+    fixture.detectChanges();
+    expect(query('column-picker-note')?.textContent).toContain('saved to your account');
+  });
+
   it('closes on Escape and on a click anywhere else, but not on a click inside', async () => {
     await render();
     const open = (): void => {
