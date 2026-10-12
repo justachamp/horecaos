@@ -623,6 +623,71 @@ class PrintAgentHttpTests extends PrintingSpringTest {
         assertThat(alerts.calls().size()).as("an online printer raises nothing").isEqualTo((int) before);
     }
 
+    private void releaseATicket(String number) {
+        SeededOrder order = world.order(LOCATION, number, null, false, LineSpec.of("Plov", 1, 50_000));
+        UUID ticket = world.releasedTicket(order, LOCATION, number, Map.of(0, PrintingWorld.GRILL), clock.instant());
+        new TransactionTemplate(transactions)
+                .executeWithoutResult(
+                        status -> events.publishEvent(new uz.horecaos.platform.kitchen.api.KitchenTicketReleased(
+                                UUID.randomUUID(), TENANT, BRAND, LOCATION, ticket, order.orderId(), clock.instant())));
+    }
+
+    private List<String> offlineAlertKeys() {
+        return alerts.calls().stream()
+                .filter(call -> call.eventClass().equals("PRINTER_OFFLINE"))
+                .filter(call -> call.subjectId().equals(counter.id()))
+                .map(call -> call.idempotencyKeyBase())
+                .distinct()
+                .toList();
+    }
+
+    @Test
+    @DisplayName(
+            "an outage is one episode however often the agent repeats that the printer is offline; a recovery and a second outage is another")
+    void anOutageIsOneEpisodeAcrossTheAgentsPolls() throws Exception {
+        routes.create(
+                TENANT,
+                BRAND,
+                LOCATION,
+                new RouteDraft(PrintDocumentType.KITCHEN_TICKET, null, counter.id(), 1, true, true),
+                MANAGER);
+        releaseATicket("K-010");
+        fake.reportsStatus("counter", "OFFLINE");
+        fake.claimed(1);
+        clock.advance(Duration.ofSeconds(130));
+        assertThat(maintenance.runOnce().offlineAlerts()).isEqualTo(1);
+        assertThat(offlineAlertKeys()).hasSize(1);
+
+        // The agent polls every half minute for three more minutes and says the same thing each time. A report
+        // that repeats a status is not a change of status: the outage is still the one the first alert named.
+        for (int poll = 0; poll < 6; poll++) {
+            clock.advance(Duration.ofSeconds(30));
+            assertThat(fake.claimed(1)).as("an offline printer is not served").isEmpty();
+            assertThat(maintenance.runOnce().offlineAlerts()).isEqualTo(1);
+        }
+        assertThat(offlineAlertKeys())
+                .as("seven passes over one outage carry one key, which is what the fan-out de-duplicates on")
+                .hasSize(1);
+
+        // The printer comes back and the waiting ticket prints.
+        fake.reportsStatus("counter", "ONLINE");
+        assertThat(fake.handleOnce()).hasSize(1);
+        clock.advance(Duration.ofMinutes(1));
+        assertThat(maintenance.runOnce().offlineAlerts())
+                .as("an online printer raises nothing")
+                .isZero();
+
+        // It fails again with another ticket waiting: a later outage alerts again.
+        releaseATicket("K-011");
+        fake.reportsStatus("counter", "OFFLINE");
+        fake.claimed(1);
+        clock.advance(Duration.ofSeconds(130));
+        assertThat(maintenance.runOnce().offlineAlerts()).isEqualTo(1);
+        assertThat(offlineAlertKeys())
+                .as("the second outage is a second episode")
+                .hasSize(2);
+    }
+
     // ---------------------------------------------------- late and retried paper
 
     @Test

@@ -193,15 +193,31 @@ class JdbcOrderPrintSource implements OrderPrintSource {
                 purpose);
     }
 
+    /**
+     * The version an order was confirmed at is the sequence number of its transition to {@code CONFIRMED}:
+     * history allocates its sequence from the order's version (V0022), and the {@code OrderConfirmed} a
+     * listener keys its slip on carries the same number. It is <em>not</em> the order's live
+     * {@code version}, which every later transition (preparing, ready, completed) bumps -- keyed on that, the
+     * sweeper would find "a slip missing" at each status change and print another.
+     *
+     * <p>An order born confirmed (an aggregator's delivery order is inserted already {@code CONFIRMED}, at
+     * version 1, with no transition and no event) has no such row: its confirmation is its creation, so it
+     * answers 1.
+     */
     @Override
     @Transactional(readOnly = true)
     public List<ConfirmedOrder> confirmedBetween(UUID tenantId, UUID locationId, Instant from, Instant to, int limit) {
         return jdbc.sql("""
-                SELECT id, version, confirmed_at
-                  FROM ordering.orders
-                 WHERE tenant_id = :tenantId AND location_id = :locationId
-                   AND confirmed_at >= :from AND confirmed_at < :to
-                 ORDER BY confirmed_at, id
+                SELECT o.id,
+                       COALESCE((SELECT min(h.sequence_number)
+                                   FROM ordering.order_state_history h
+                                  WHERE h.tenant_id = o.tenant_id AND h.order_id = o.id
+                                    AND h.to_status = 'CONFIRMED'), 1) AS confirmed_version,
+                       o.confirmed_at
+                  FROM ordering.orders o
+                 WHERE o.tenant_id = :tenantId AND o.location_id = :locationId
+                   AND o.confirmed_at >= :from AND o.confirmed_at < :to
+                 ORDER BY o.confirmed_at, o.id
                  LIMIT :limit
                 """)
                 .param("tenantId", tenantId)
@@ -211,7 +227,7 @@ class JdbcOrderPrintSource implements OrderPrintSource {
                 .param("limit", limit)
                 .query((row, number) -> new ConfirmedOrder(
                         row.getObject("id", UUID.class),
-                        row.getInt("version"),
+                        row.getInt("confirmed_version"),
                         row.getObject("confirmed_at", OffsetDateTime.class).toInstant()))
                 .list();
     }

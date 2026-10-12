@@ -23,6 +23,7 @@ describe('printPaths', () => {
     expect(printPaths.jobCancel(SCOPE, 'j1')).toBe(`${BASE}/print/jobs/j1/cancel`);
     expect(printPaths.jobReprint(SCOPE, 'j1')).toBe(`${BASE}/print/jobs/j1/reprint`);
     expect(printPaths.preview(SCOPE)).toBe(`${BASE}/print/documents/preview`);
+    expect(printPaths.jobPicture(SCOPE, 'j1')).toBe(`${BASE}/print/jobs/j1/picture`);
     expect(printPaths.agents(SCOPE)).toBe(`${BASE}/print/agents`);
     expect(printPaths.agentEnrolment(SCOPE, 'ABCD-1234')).toBe(
       `${BASE}/print/agents/enrolments/ABCD-1234`,

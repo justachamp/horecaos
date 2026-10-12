@@ -268,12 +268,35 @@ final class PrintingWorld {
 
     // ----------------------------------------------------------------- an order
 
+    /** The version a seeded order was confirmed at: what its history's transition to {@code CONFIRMED} carries. */
+    static final int CONFIRMED_AT_VERSION = 3;
+
     /**
      * An order at {@code CONFIRMED} with its lines, inserted rather than checked out. The total is the sum of the
-     * lines' final amounts, so the order reconciles the way a real one does.
+     * lines' final amounts, so the order reconciles the way a real one does. It carries what a checkout leaves
+     * besides: the history row of its transition to {@code CONFIRMED}, whose sequence number is the version the
+     * order was confirmed at ({@link #CONFIRMED_AT_VERSION}) -- the number an {@code OrderConfirmed} names.
      */
     SeededOrder order(
             UUID location, String number, @Nullable Long cashTendered, boolean withCustomer, LineSpec... lines) {
+        return insertOrder(location, number, cashTendered, withCustomer, true, lines);
+    }
+
+    /**
+     * An order that was never transitioned into {@code CONFIRMED}: inserted already confirmed, at version 1, with
+     * no history and no event -- the way an aggregator's delivery order arrives.
+     */
+    SeededOrder bornConfirmedOrder(UUID location, String number, LineSpec... lines) {
+        return insertOrder(location, number, null, false, false, lines);
+    }
+
+    private SeededOrder insertOrder(
+            UUID location,
+            String number,
+            @Nullable Long cashTendered,
+            boolean withCustomer,
+            boolean transitioned,
+            LineSpec... lines) {
         UUID orderId = UUID.randomUUID();
         UUID quoteId = UUID.randomUUID();
         UUID cartId = UUID.randomUUID();
@@ -324,6 +347,7 @@ final class PrintingWorld {
         params.put("total", total);
         params.put("cash", cashTendered);
         params.put("confirmedAt", OffsetDateTime.now(ZoneOffset.UTC));
+        params.put("version", transitioned ? CONFIRMED_AT_VERSION : 1);
         jdbc.sql("""
                 INSERT INTO ordering.orders (id, public_order_number, tenant_id, brand_id, location_id, channel_id,
                     channel_code_snapshot, guest_reference_hash, fulfillment_mode, acceptance_mode_snapshot,
@@ -333,7 +357,7 @@ final class PrintingWorld {
                     promise_basis, cash_tendered_expected_minor, version, confirmed_at)
                 VALUES (:id, :number, :tenantId, :brandId, :locationId, :channelId, 'TELEGRAM', :guest, 'PICKUP',
                     'AUTO_CONFIRM', NULL, 0, 'NONE', NULL, 'CONFIRMED', 'UZS', :total, 0, :total, :quoteId, 'hash',
-                    :publicationId, :cartId, :guest, 'NOT_PROMISED', CAST(:cash AS bigint), 3, :confirmedAt)
+                    :publicationId, :cartId, :guest, 'NOT_PROMISED', CAST(:cash AS bigint), :version, :confirmedAt)
                 """).params(params).update();
         jdbc.sql("""
                 INSERT INTO ordering.order_revisions (order_id, revision, tenant_id, source, pricing_quote_id,
@@ -355,6 +379,22 @@ final class PrintingWorld {
         }
         if (withCustomer) {
             customerSnapshot(orderId);
+        }
+        if (transitioned) {
+            // The history allocates its sequence from the order's version (V0022): the row of the transition to
+            // CONFIRMED is the record of the version the order was confirmed at.
+            jdbc.sql("""
+                    INSERT INTO ordering.order_state_history (id, tenant_id, order_id, sequence_number, from_status,
+                        to_status, trigger, actor_type, actor_id, occurred_at)
+                    VALUES (:id, :tenantId, :orderId, :sequence, 'RECEIVED', 'CONFIRMED', 'CHECKOUT', 'SYSTEM_JOB',
+                        'order-acceptance-policy', :at)
+                    """)
+                    .param("id", UUID.randomUUID())
+                    .param("tenantId", TENANT)
+                    .param("orderId", orderId)
+                    .param("sequence", CONFIRMED_AT_VERSION)
+                    .param("at", params.get("confirmedAt"))
+                    .update();
         }
         return new SeededOrder(orderId, lineIds, total);
     }

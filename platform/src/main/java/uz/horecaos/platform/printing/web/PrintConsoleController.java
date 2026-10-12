@@ -421,6 +421,30 @@ public class PrintConsoleController {
                 .body(png);
     }
 
+    @GetMapping(value = "/print/jobs/{jobId}/picture", produces = MediaType.IMAGE_PNG_VALUE)
+    @RequiresCapability(value = Capability.PRINT_REPRINT, scope = ScopeType.LOCATION)
+    @Operation(
+            operationId = "printHandedOffPicture",
+            summary = "The picture of a job the caller handed to the browser",
+            description = "The workstation prints the preview bitmap through the browser (ADR 0154, Decision 10), "
+                    + "so the person who asked for paper on a browser printer fetches the picture here: the same "
+                    + "1-bit bitmap the preview draws, for a job in state HANDED_OFF that this caller requested. A "
+                    + "job that is anyone else's, is not handed off, or does not exist answers 404. It changes "
+                    + "nothing. It declares print.reprint, the capability that made the job, because the preview's "
+                    + "print.read -- a picture of any document of the branch -- is held by managers and not by the "
+                    + "floor.")
+    public ResponseEntity<byte[]> handedOffPicture(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID locationId,
+            @PathVariable UUID jobId) {
+        byte[] png = onDemand.handedOffPicture(tenantId, brandId, locationId, jobId, actor());
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_PNG)
+                .cacheControl(CacheControl.noStore())
+                .body(png);
+    }
+
     // =================================================================== agents
 
     @GetMapping("/print/agents")
@@ -653,7 +677,7 @@ public class PrintConsoleController {
                     row.queuedAt(),
                     row.expiresAt(),
                     row.printedAt(),
-                    row.protectedDocument() == null,
+                    row.documentErased(),
                     row.version());
         }
     }

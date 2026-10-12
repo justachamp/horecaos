@@ -104,6 +104,7 @@ public class PrintJobFactory {
                 built.profileVersion(),
                 EscPosEncoder.PROTOCOL,
                 stored,
+                false,
                 codec.digest(built.document()),
                 handedOff ? now.plus(RETENTION_AFTER_END) : now.plus(PROVISIONAL_RETENTION),
                 now,

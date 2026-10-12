@@ -130,6 +130,16 @@ describe('PrintingApi', () => {
     expect((await pending).size).toBe(3);
   });
 
+  it('reads the picture of a job handed to the browser with a GET, no key and no version', async () => {
+    const pending = api.handedOffPicture(SCOPE, 'j1');
+    const request = http.expectOne(`${BASE}/print/jobs/j1/picture`);
+    expect(request.request.method).toBe('GET');
+    expect(request.request.responseType).toBe('blob');
+    expect(request.request.headers.has('Idempotency-Key')).toBe(false);
+    request.flush(new Blob(['png'], { type: 'image/png' }));
+    expect((await pending).size).toBe(3);
+  });
+
   it('saves the receipt profile on the brand under If-Match', async () => {
     const pending = api.saveReceiptProfile(
       { tenantId: 't1', brandId: 'b1' },

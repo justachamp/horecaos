@@ -734,7 +734,9 @@ public enum Capability {
      * is a picture of what a job would put on paper.
      *
      * <p>Held by the location, brand and tenant managers and nobody on the floor: the queue lists
-     * failed and dead jobs of the branch, and a preview of a slip is an order's lines.
+     * failed and dead jobs of the branch, and a preview of a slip is an order's lines. The one picture the
+     * floor fetches is that of a job the person herself handed to her browser, which
+     * {@link #PRINT_REPRINT} carries: she is the one who prints it.
      */
     PRINT_READ("print.read", "print", "read"),
 

@@ -109,6 +109,13 @@ public class JdbcPrintingStore {
             @Nullable String agentBuild,
             Instant seenAt) {}
 
+    /**
+     * @param protectedDocument the stored, still protected document -- only on a row read with {@link #findJob};
+     *                          every list and every {@code RETURNING} leaves it out, so it is null there whether
+     *                          or not the document exists
+     * @param documentErased    whether the document is gone (erased on schedule, ADR 0154): the one fact about it
+     *                          every read answers, so a list can tell «erased» from «not selected»
+     */
     public record JobRow(
             UUID id,
             UUID tenantId,
@@ -139,6 +146,7 @@ public class JdbcPrintingStore {
             @Nullable Integer profileVersion,
             String renderProtocol,
             @Nullable String protectedDocument,
+            boolean documentErased,
             String documentDigest,
             Instant payloadPurgeAfter,
             Instant queuedAt,
@@ -245,11 +253,22 @@ public class JdbcPrintingStore {
                 .optional();
     }
 
-    /** What the agent last reported for a printer. Not a version bump: a status is a reading, not an edit. */
+    /**
+     * What the agent last reported for a printer, and since when it has been so. Not a version bump: a status is
+     * a reading, not an edit.
+     *
+     * <p>{@code last_status_at} is the instant the reported status last <em>changed</em>, the start of the
+     * episode the printer is in -- which is what ADR 0154 means by "the status change's {@code last_status_at}"
+     * as the episode of the offline alert. A report that repeats the status leaves it where it was. An agent
+     * polls every few seconds; stamping each poll would hand every sweep of one outage a key of its own, and
+     * the chat would be told again every half minute. (When the agent was last heard from is the advert's
+     * {@code seen_at}.)
+     */
     public void recordPrinterStatus(UUID tenantId, UUID printerId, PrinterStatus status, Instant at) {
         jdbc.sql("""
                 UPDATE printing.printers
-                   SET last_status = :status, last_status_at = :at
+                   SET last_status_at = CASE WHEN last_status IS DISTINCT FROM :status THEN :at ELSE last_status_at END,
+                       last_status = :status
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
                 .param("tenantId", tenantId)
@@ -540,10 +559,19 @@ public class JdbcPrintingStore {
                    source_id, source_revision, station_id, copy_no, origin, requested_by, reason_code,
                    reprint_of, status, attempt, next_attempt_at, expires_at, lease_token, lease_expires_at,
                    claimed_by_device_id, failure_code, locale, tape_width_mm, profile_version,
-                   render_protocol, protected_document, document_digest, payload_purge_after, queued_at,
-                   printed_at, version, created_at, updated_at
+                   render_protocol, protected_document, (protected_document IS NULL) AS document_erased,
+                   document_digest, payload_purge_after, queued_at, printed_at, version, created_at, updated_at
               FROM printing.print_jobs
             """;
+
+    /**
+     * {@link #SELECT_JOB} without the document: the encrypted payload is never carried into a list, but whether
+     * it is still there is -- {@code document_erased} is computed in the database from the column the list leaves
+     * out, so a row read this way is told apart from one whose document was erased.
+     */
+    private static final String SELECT_JOB_WITHOUT_DOCUMENT = SELECT_JOB.replace(
+            "protected_document, (protected_document IS NULL)",
+            "NULL AS protected_document, (protected_document IS NULL)");
 
     /**
      * Inserts a job; an automatic job whose key already exists is a no-op and answers {@code false}.
@@ -657,7 +685,7 @@ public class JdbcPrintingStore {
             @Nullable Instant beforeQueuedAt,
             @Nullable UUID beforeId,
             int limit) {
-        StringBuilder sql = new StringBuilder(SELECT_JOB.replace("protected_document,", "NULL AS protected_document,"));
+        StringBuilder sql = new StringBuilder(SELECT_JOB_WITHOUT_DOCUMENT);
         sql.append(" WHERE tenant_id = :tenantId AND location_id = :locationId");
         if (!statuses.isEmpty()) {
             sql.append(" AND status IN (:statuses)");
@@ -686,7 +714,7 @@ public class JdbcPrintingStore {
 
     /** The jobs made for one source, any state: what the order action and the sweeper read. */
     public List<JobRow> jobsOfSource(UUID tenantId, String sourceType, UUID sourceId) {
-        return jdbc.sql(SELECT_JOB.replace("protected_document,", "NULL AS protected_document,") + """
+        return jdbc.sql(SELECT_JOB_WITHOUT_DOCUMENT + """
                  WHERE tenant_id = :tenantId AND source_type = :sourceType AND source_id = :sourceId
                  ORDER BY queued_at, id
                 """)
@@ -699,7 +727,7 @@ public class JdbcPrintingStore {
 
     /** This agent's own unexpired leases, which a claim repeats first so a retry after a lost reply is whole. */
     public List<JobRow> leasesHeldBy(UUID tenantId, UUID locationId, UUID deviceId, Instant now) {
-        return jdbc.sql(SELECT_JOB.replace("protected_document,", "NULL AS protected_document,") + """
+        return jdbc.sql(SELECT_JOB_WITHOUT_DOCUMENT + """
                  WHERE tenant_id = :tenantId AND location_id = :locationId AND claimed_by_device_id = :device
                    AND status = 'CLAIMED' AND lease_expires_at > :now
                  ORDER BY queued_at, id
@@ -752,7 +780,8 @@ public class JdbcPrintingStore {
                           job.reprint_of, job.status, job.attempt, job.next_attempt_at, job.expires_at,
                           job.lease_token, job.lease_expires_at, job.claimed_by_device_id, job.failure_code,
                           job.locale, job.tape_width_mm, job.profile_version, job.render_protocol,
-                          NULL AS protected_document, job.document_digest, job.payload_purge_after,
+                          NULL AS protected_document, (job.protected_document IS NULL) AS document_erased,
+                          job.document_digest, job.payload_purge_after,
                           job.queued_at, job.printed_at, job.version, job.created_at, job.updated_at
                 """)
                 .param("tenantId", tenantId)
@@ -796,8 +825,8 @@ public class JdbcPrintingStore {
             source_revision, station_id, copy_no, origin, requested_by, reason_code, reprint_of, status,
             attempt, next_attempt_at, expires_at, lease_token, lease_expires_at, claimed_by_device_id,
             failure_code, locale, tape_width_mm, profile_version, render_protocol,
-            NULL AS protected_document, document_digest, payload_purge_after, queued_at, printed_at, version,
-            created_at, updated_at""";
+            NULL AS protected_document, (protected_document IS NULL) AS document_erased, document_digest,
+            payload_purge_after, queued_at, printed_at, version, created_at, updated_at""";
 
     /**
      * Records a FAILED result: back to the queue at {@code retryAt} while attempts remain, dead when they
@@ -1070,6 +1099,7 @@ public class JdbcPrintingStore {
                 row.getObject("profile_version", Integer.class),
                 row.getString("render_protocol"),
                 row.getString("protected_document"),
+                row.getBoolean("document_erased"),
                 row.getString("document_digest"),
                 instant(row, "payload_purge_after"),
                 instant(row, "queued_at"),

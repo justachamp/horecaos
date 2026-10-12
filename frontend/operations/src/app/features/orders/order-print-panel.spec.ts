@@ -159,15 +159,19 @@ describe('OrderPrintPanel', () => {
     const printOrderDocument = vi
       .fn()
       .mockResolvedValue([job({ id: 'j9', status: 'HANDED_OFF', tapeWidthMm: 58 })]);
-    const preview = vi.fn().mockResolvedValue(picture);
+    const handedOffPicture = vi.fn().mockResolvedValue(picture);
     const fixture = await render(
-      { printOrderDocument, preview, printers: vi.fn().mockResolvedValue([browserPrinter()]) },
+      {
+        printOrderDocument,
+        handedOffPicture,
+        printers: vi.fn().mockResolvedValue([browserPrinter()]),
+      },
       { browser: { print } },
     );
 
     await click(fixture, '[data-testid="order-print-submit"]');
 
-    expect(preview).toHaveBeenCalledWith(SCOPE, { jobId: 'j9' });
+    expect(handedOffPicture).toHaveBeenCalledWith(SCOPE, 'j9');
     expect(print).toHaveBeenCalledWith(picture, 58);
     expect(el(fixture, '[data-testid="order-print-notice"]').textContent).toContain('print dialog');
   });

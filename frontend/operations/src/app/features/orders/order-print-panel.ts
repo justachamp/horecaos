@@ -145,7 +145,8 @@ export class OrderPrintPanel {
       }
       try {
         for (const job of handedOff) {
-          const picture = await this.api.preview(scope, { jobId: job.id });
+          // The cashier who made the job fetches its picture: the preview is print.read, a manager's.
+          const picture = await this.api.handedOffPicture(scope, job.id);
           await this.browser.print(picture, job.tapeWidthMm);
         }
         this.notice.set(this.i18n.t('orders.detail.print.browser'));
