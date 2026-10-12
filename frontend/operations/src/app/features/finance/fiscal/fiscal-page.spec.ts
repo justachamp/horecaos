@@ -189,6 +189,33 @@ describe('FiscalPage', () => {
     expect(api.blocked).toHaveBeenLastCalledWith(TENANT_ID, 'MARKS_INCOMPLETE');
   });
 
+  it('offers every reason a document can be blocked for, the placeholder gate’s among them', async () => {
+    const offered = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('select.filter option'),
+    ).map((option) => (option as HTMLOptionElement).value);
+
+    // `FiscalReasonCode.BLOCKING`, the platform's own list. LINES_NOT_BUILT is what every Click receipt outside a
+    // sandbox is blocked for until the real line builder exists, so it is the reason most documents wait on.
+    expect(offered).toEqual([
+      '',
+      'PROVIDER_REPORT_OVERDUE',
+      'CLASSIFICATION_MISSING',
+      'MARKS_INCOMPLETE',
+      'NO_FISCAL_PATH',
+      'TERMINAL_OFFLINE',
+      'LINES_NOT_BUILT',
+    ]);
+  });
+
+  it('reloads the worklist filtered by the lines-not-built reason too', async () => {
+    const select = fixture.nativeElement.querySelector('select.filter') as HTMLSelectElement;
+    select.value = 'LINES_NOT_BUILT';
+    select.dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+
+    expect(api.blocked).toHaveBeenLastCalledWith(TENANT_ID, 'LINES_NOT_BUILT');
+  });
+
   it('retries a blocked document with the reason and its version as If-Match', async () => {
     const retryButton = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
