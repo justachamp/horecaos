@@ -185,11 +185,13 @@ export class ApiClient {
    * It is the one `POST` that carries no `Idempotency-Key`, on purpose. A key exists so a retried
    * request is not performed twice; a counter is not retried, and a client-generated token on a
    * request the platform promises never to attribute is one more thing that must not be there. No
-   * bearer goes with it either, and its failure is the caller's to swallow, never a toast.
+   * bearer goes with it either, and its failure is the caller's to swallow, never a toast. The body is
+   * optional: the attribution-link click (ADR 0167) has none, because the path already says what was
+   * counted.
    */
-  report<B>(path: string, body: B): Promise<void> {
+  report<B = never>(path: string, body?: B): Promise<void> {
     return firstValueFrom(
-      this.http.post<void>(this.url(path), body, {
+      this.http.post<void>(this.url(path), body ?? null, {
         context: new HttpContext()
           .set(PLATFORM_API_REQUEST, true)
           .set(ANONYMOUS, true)
