@@ -147,6 +147,85 @@ describe('OwnPreferences (ADR 0160)', () => {
     ]);
   });
 
+  it('puts a change made while the first read is in flight on the platform’s document, and never over it', async () => {
+    const prefs = preferences();
+    const loaded = prefs.ensureLoaded();
+    await settle();
+    const read = http.expectOne(url(BASE));
+
+    // The person ticks «Создал» in the first second, before the platform has answered.
+    prefs.updateOrderBoard((document) => withColumnShown(document, 'createdBy', true));
+    expect(prefs.orderBoard().columns?.show).toEqual(['createdBy']);
+
+    // They had saved a view and hidden a column on another machine: that is what the read returns.
+    read.flush({
+      surfaces: {
+        ORDER_BOARD: stored(
+          {
+            columns: { hide: ['customer'] },
+            savedViews: [{ id: VIEW_ID, label: 'Late deliveries', tab: 'attention', filters: {} }],
+          },
+          5,
+        ),
+      },
+    });
+    await loaded;
+
+    // The screen already has both: the platform's document with the one change on top of it.
+    expect(prefs.orderBoard().savedViews).toHaveLength(1);
+    expect(prefs.orderBoard().columns).toEqual({ show: ['createdBy'], hide: ['customer'] });
+
+    await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE_MS);
+    const request = http.expectOne(url(`${BASE}/ORDER_BOARD`));
+    expect(request.request.headers.get('If-Match')).toBe('W/"5"');
+    expect(request.request.body).toEqual({
+      document: {
+        columns: { show: ['createdBy'], hide: ['customer'] },
+        savedViews: [{ id: VIEW_ID, label: 'Late deliveries', tab: 'attention', filters: {} }],
+      },
+    });
+    request.flush(stored(request.request.body.document, 6));
+    await settle();
+    expect(prefs.writeFailed()).toBe(false);
+  });
+
+  it('puts a change made on a stale mirror, before the first read returns, on what the platform now holds', async () => {
+    // This tablet last looked a week ago; another device has added a view since.
+    localStorage.setItem(
+      mirrorKeyFor('subject-1'),
+      JSON.stringify({ ORDER_BOARD: { columns: { hide: ['customer'] } } }),
+    );
+    const prefs = preferences();
+    const loaded = prefs.ensureLoaded();
+    await settle();
+    const read = http.expectOne(url(BASE));
+
+    prefs.updateOrderBoard((document) => withColumnShown(document, 'discount', true));
+    read.flush({
+      surfaces: {
+        ORDER_BOARD: stored(
+          {
+            savedViews: [{ id: VIEW_ID, label: 'Mine', tab: 'all', filters: {} }],
+          },
+          2,
+        ),
+      },
+    });
+    await loaded;
+    await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE_MS);
+
+    const request = http.expectOne(url(`${BASE}/ORDER_BOARD`));
+    // The mirror's hidden «Клиент» was an old, stale choice: the platform's document did not hold it.
+    expect(request.request.body).toEqual({
+      document: {
+        columns: { show: ['discount'] },
+        savedViews: [{ id: VIEW_ID, label: 'Mine', tab: 'all', filters: {} }],
+      },
+    });
+    request.flush(stored(request.request.body.document, 3));
+    await settle();
+  });
+
   it('keeps the mirror and the code’s default when the read fails, and the board still works', async () => {
     localStorage.setItem(
       mirrorKeyFor('subject-1'),

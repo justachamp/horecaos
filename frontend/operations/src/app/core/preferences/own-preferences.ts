@@ -246,11 +246,14 @@ export class OwnPreferences {
           this.assign(documents, surface, stored);
         }
       }
-      // A change made on screen while the read was in flight is newer than the read and stays.
-      const held = this.held();
+      // A change made on screen while the read was in flight is newer than the read, and it goes on top of
+      // what the platform holds -- the same rule as the retry after a stale version. It never stands in the
+      // platform's place: the screen it was made on was drawn from the mirror, which may be a week old, and
+      // writing that document back would erase whatever another device saved since.
       for (const surface of PREFERENCE_SURFACES) {
-        if (this.pending.has(surface) && held?.documents[surface] !== undefined) {
-          this.copyDocument(documents, held.documents, surface);
+        const changes = this.pending.get(surface);
+        if (changes !== undefined && changes.length > 0) {
+          this.assignRebased(documents, surface, changes);
         }
       }
       this.replace({ subject, status: 'ready', documents });
@@ -344,14 +347,7 @@ export class OwnPreferences {
         this.api.get<PreferencesResponse>(staffPaths.mePreferences(tenantId)),
       );
       const theirs = fresh.value.surfaces?.[surface];
-      const base = (theirs?.document ?? this.emptyOf(surface)) as never;
-      const merged = this.sanitize(
-        surface,
-        changes.reduce<unknown>(
-          (current, change) => change(current as never),
-          this.sanitize(surface, base),
-        ),
-      );
+      const merged = this.rebase(surface, theirs?.document, changes);
       if (theirs === undefined || theirs === null) {
         this.versions.delete(surface);
       } else {
@@ -421,11 +417,30 @@ export class OwnPreferences {
     }
   }
 
-  private copyDocument(target: Documents, source: Documents, surface: PreferenceSurface): void {
-    if (surface === 'ORDER_BOARD' && source.ORDER_BOARD !== undefined) {
-      target.ORDER_BOARD = source.ORDER_BOARD;
-    } else if (surface === 'SHELL' && source.SHELL !== undefined) {
-      target.SHELL = source.SHELL;
+  /** The platform's document for a surface (`base`, nothing when it holds none) with this device's changes applied on top, in order. */
+  private rebase(
+    surface: PreferenceSurface,
+    base: unknown,
+    changes: ReadonlyArray<(document: never) => unknown>,
+  ): PreferenceDocuments[PreferenceSurface] {
+    return this.sanitize(
+      surface,
+      changes.reduce<unknown>(
+        (current, change) => change(current as never),
+        this.sanitize(surface, base ?? this.emptyOf(surface)),
+      ),
+    );
+  }
+
+  private assignRebased(
+    target: Documents,
+    surface: PreferenceSurface,
+    changes: ReadonlyArray<(document: never) => unknown>,
+  ): void {
+    if (surface === 'ORDER_BOARD') {
+      target.ORDER_BOARD = this.rebase(surface, target.ORDER_BOARD, changes) as OrderBoardDocument;
+    } else {
+      target.SHELL = this.rebase(surface, target.SHELL, changes) as ShellDocument;
     }
   }
 }
