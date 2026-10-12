@@ -303,6 +303,8 @@ export const customersRu: AreaMessages<typeof customersEn> = {
   'customers.reviews.column.comment': 'Комментарий',
   'customers.reviews.column.order': 'Заказ',
   'customers.reviews.column.customer': 'Клиент',
+  'customers.reviews.column.recovery': 'Дело',
+  'customers.reviews.recovery.open': 'Открыть дело',
   'customers.reviews.empty': 'Отзывов пока нет.',
   'customers.address.line2': 'Вторая строка адреса',
   'customers.address.postalCode': 'Почтовый индекс',

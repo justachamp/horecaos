@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 
 import { CursorState, Page, firstPage, nextPage } from '../../../core/api/page';
 import { BrandScope } from '../../../core/api/catalog-paths';
@@ -80,6 +81,9 @@ function emptyColumns(): Record<CaseState, Column> {
  * above reads the brand's worklist, across every branch; a branch manager, who holds it at her branch
  * and nowhere wider, is refused by the brand routes, so she reads her own branch's, one branch at a
  * time, and the filter offers her only the branches she works ({@link RecoveryReachResolver}).
+ *
+ * <p>The Reviews list links here with {@code ?case=&location=} (the case about a review, and the
+ * branch it is worked at); the page opens that case's drawer once, on first load.
  */
 @Component({
   selector: 'q-recovery-worklist-page',
@@ -93,6 +97,7 @@ export class RecoveryWorklistPage {
   private readonly locationsApi = inject(LocationsApi);
   private readonly brand = inject(CurrentBrand);
   private readonly reachResolver = inject(RecoveryReachResolver);
+  private readonly route = inject(ActivatedRoute);
   protected readonly i18n = inject(I18n);
 
   protected readonly state = signal<LoadState>('loading');
@@ -102,6 +107,7 @@ export class RecoveryWorklistPage {
   protected readonly counts = signal<CaseCounts | null>(null);
   protected readonly locations = signal<readonly LocationView[]>([]);
   private readonly reach = signal<RecoveryReach | null>(null);
+  private linkHandled = false;
 
   protected readonly locationFilter = signal('');
   protected readonly slaFilter = signal<SlaState | ''>('');
@@ -377,6 +383,7 @@ export class RecoveryWorklistPage {
       if (this.state() === 'loading') {
         this.state.set('ready');
         void this.loadLocationsOnce();
+        void this.openLinkedCase(scope);
       }
     } catch (error) {
       this.fail(error);
@@ -424,6 +431,30 @@ export class RecoveryWorklistPage {
 
   private patchColumn(state: CaseState, column: Column): void {
     this.columns.update((current) => ({ ...current, [state]: column }));
+  }
+
+  /**
+   * Opens the case a link from the review list names, once. The drawer reads the case itself; this
+   * only turns the ids in the link into the summary the drawer is opened with, at the branch the link
+   * names (a case is worked at its own branch, which the brand list does not need to know).
+   */
+  private async openLinkedCase(scope: BrandScope): Promise<void> {
+    if (this.linkHandled) {
+      return;
+    }
+    this.linkHandled = true;
+    const params = this.route.snapshot.queryParamMap;
+    const caseId = params.get('case');
+    const locationId = params.get('location');
+    if (!caseId || !locationId) {
+      return;
+    }
+    try {
+      const detail = await this.api.detail(scope, locationId, caseId);
+      this.open(detail.summary);
+    } catch (error) {
+      this.errorText.set(this.describe(error));
+    }
   }
 
   private async loadLocationsOnce(): Promise<void> {

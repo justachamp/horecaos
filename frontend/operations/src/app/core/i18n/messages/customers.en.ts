@@ -300,6 +300,8 @@ export const customersEn = {
   'customers.reviews.column.comment': 'Comment',
   'customers.reviews.column.order': 'Order',
   'customers.reviews.column.customer': 'Customer',
+  'customers.reviews.column.recovery': 'Recovery case',
+  'customers.reviews.recovery.open': 'Open a case',
   'customers.reviews.empty': 'No reviews yet.',
   'customers.address.line2': 'Second address line',
   'customers.address.postalCode': 'Postal code',

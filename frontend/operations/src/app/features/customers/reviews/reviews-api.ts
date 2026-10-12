@@ -5,8 +5,12 @@ import { ApiClient, QueryParams } from '../../../core/api/api-client';
 import { BrandScope } from '../../../core/api/catalog-paths';
 import { CursorState, Page } from '../../../core/api/page';
 import { reviewPaths } from '../../../core/api/reviews-paths';
+import { CaseState } from './recovery-api';
 
-/** Mirrors `OperationsReviewController.ReviewResponse`. */
+/**
+ * Mirrors `OperationsReviewController.ReviewResponse`, the fields this console reads. The response
+ * also carries the review's tags and where its comment stands for the public page.
+ */
 export interface ReviewRow {
   readonly id: string;
   readonly orderId: string;
@@ -15,6 +19,9 @@ export interface ReviewRow {
   readonly rating: number;
   readonly comment: string | null;
   readonly submittedAt: string;
+  /** The service-recovery case that answers this review (ADR 0159), or null when there is none. */
+  readonly caseId: string | null;
+  readonly caseState: CaseState | null;
 }
 
 /** Mirrors `OperationsReviewController.SummaryResponse`. */
@@ -47,7 +54,8 @@ function toQueryParams(filters: ReviewFilters): QueryParams {
 /**
  * §5.4 Reviews: a brand's own order reviews, filtered (ADR 0071). Read-only —
  * there is no write call here because there is nothing an operator writes; a
- * review is customer-authored and immutable once submitted.
+ * review is customer-authored and immutable once submitted. Opening a service-recovery
+ * case about one is `RecoveryApi.open`, not a change to the review.
  */
 @Injectable({ providedIn: 'root' })
 export class ReviewsApi {

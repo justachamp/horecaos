@@ -1,7 +1,7 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-import { provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BrandScope } from '../../../core/api/catalog-paths';
@@ -73,6 +73,11 @@ describe('RecoveryWorklistPage', () => {
     transition: ReturnType<typeof vi.fn>;
   };
   let locationsApi: { list: ReturnType<typeof vi.fn>; profile: ReturnType<typeof vi.fn> };
+  /** What the next `detail` read fails with, if a spec wants the drawer's read to be refused. */
+  let detailFailure: ApiError | null = null;
+  beforeEach(() => {
+    detailFailure = null;
+  });
 
   /** The reach a brand-wide operator resolves to; a spec passes its own for a branch manager. */
   function resolverFor(reach: RecoveryReach | null = { scope: SCOPE, locationIds: null }) {
@@ -84,6 +89,7 @@ describe('RecoveryWorklistPage', () => {
     counts: CaseCounts = { byState: {}, bySla: {} },
     brand: FakeCurrentBrand = new FakeCurrentBrand(),
     reach: RecoveryReach | null = { scope: SCOPE, locationIds: null },
+    query: Record<string, string> = {},
   ): Promise<void> {
     const listing = async (filters: CaseFilters) => {
       const items = filters.state ? (byState[filters.state] ?? []) : Object.values(byState).flat();
@@ -99,7 +105,12 @@ describe('RecoveryWorklistPage', () => {
           listing(filters),
       ),
       countsAtLocation: vi.fn().mockResolvedValue(counts),
-      detail: vi.fn(async () => caseDetail()),
+      detail: vi.fn(async () => {
+        if (detailFailure) {
+          throw detailFailure;
+        }
+        return caseDetail();
+      }),
       transition: vi.fn().mockResolvedValue({}),
     };
     locationsApi = {
@@ -116,6 +127,10 @@ describe('RecoveryWorklistPage', () => {
         { provide: LocationsApi, useValue: locationsApi },
         { provide: CurrentBrand, useValue: brand },
         { provide: RecoveryReachResolver, useValue: resolverFor(reach) },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap(query) } },
+        },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -391,6 +406,38 @@ describe('RecoveryWorklistPage', () => {
     expect(host().querySelector('[data-testid="recovery-drawer"]')).not.toBeNull();
   });
 
+  describe('a link from the review list (?case=&location=)', () => {
+    it('opens that case in the drawer, read at the branch the link names', async () => {
+      await render({ NEW: [caseSummary()] }, undefined, undefined, undefined, {
+        case: 'case-9',
+        location: 'location-2',
+      });
+      expect(api.detail).toHaveBeenCalledWith(SCOPE, 'location-2', 'case-9');
+      expect(host().querySelector('[data-testid="recovery-drawer"]')).not.toBeNull();
+    });
+
+    it('opens nothing when the link names no case', async () => {
+      await render({ NEW: [caseSummary()] });
+
+      expect(api.detail).not.toHaveBeenCalled();
+      expect(host().querySelector('[data-testid="recovery-drawer"]')).toBeNull();
+    });
+
+    it('says so in a sentence when the case cannot be read, and still shows the board', async () => {
+      detailFailure = new ApiError(ApiErrorCode.RESOURCE_NOT_FOUND, 404, null, 'corr-1');
+
+      await render({ NEW: [caseSummary()] }, undefined, undefined, undefined, {
+        case: 'case-9',
+        location: 'location-2',
+      });
+
+      expect(host().querySelector('[data-testid="recovery-inline-error"]')).not.toBeNull();
+      expect(host().textContent).not.toContain('RESOURCE_NOT_FOUND');
+      expect(host().querySelectorAll('[data-testid="recovery-card"]')).toHaveLength(1);
+      expect(host().querySelector('[data-testid="recovery-drawer"]')).toBeNull();
+    });
+  });
+
   describe('a branch manager, who holds the capability at her branch and nowhere wider', () => {
     const MINE: RecoveryReach = { scope: SCOPE, locationIds: ['location-1'] };
 
@@ -569,4 +616,6 @@ describe('RecoveryWorklistPage', () => {
   });
 });
 
-beforeEach(() => TestBed.resetTestingModule());
+beforeEach(() => {
+  TestBed.resetTestingModule();
+});
