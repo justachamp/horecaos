@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import com.jayway.jsonpath.JsonPath;
 import java.io.IOException;
 import java.net.URI;
+import java.sql.Connection;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -21,8 +22,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -122,6 +128,9 @@ class MxikImportHttpTests {
 
     @Autowired
     private JdbcMxikImportStore importStore;
+
+    @Autowired
+    private DataSource dataSource;
 
     @BeforeEach
     void reset() {
@@ -481,6 +490,89 @@ class MxikImportHttpTests {
         assertThat(count("catalog.mxik_reference"))
                 .as("only the first run landed")
                 .isEqualTo(7);
+    }
+
+    @Test
+    @DisplayName("two applies never run side by side: the second waits for the first and then finds the list moved")
+    void appliesAreSerialised() throws Exception {
+        apply(upload("base.csv", bigList(8, Set.of()), "FULL_SNAPSHOT", "2026-10-01"), "{}");
+        // Both runs were validated against the list as it stands, and touch different codes, so nothing but
+        // the apply itself keeps them apart.
+        MvcResult first = upload("a.csv", onlyCodes(4, 5), "PARTIAL", "2026-10-02");
+        MvcResult second = upload("b.csv", onlyCodes(1, 2), "PARTIAL", "2026-10-02");
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try (Connection holder = dataSource.getConnection()) {
+            // Freezes the first apply halfway through its transaction: code 4 is the first row it writes.
+            holder.setAutoCommit(false);
+            holder.createStatement()
+                    .execute("SELECT 1 FROM catalog.mxik_reference WHERE code = '" + code(4) + "' FOR UPDATE");
+            Future<MvcResult> firstApply = pool.submit(() -> apply(first, "{}"));
+            awaitASessionWaitingOnALock();
+
+            Future<MvcResult> secondApply = pool.submit(() -> apply(second, "{}"));
+            Thread.sleep(1_500);
+            assertThat(secondApply.isDone())
+                    .as("the second apply started while the first was still writing the list: nothing "
+                            + "serialises them, so the second reads a list the first is about to change")
+                    .isFalse();
+
+            holder.rollback();
+            assertThat(firstApply.get(60, TimeUnit.SECONDS).getResponse().getStatus())
+                    .isEqualTo(200);
+            MvcResult refused = secondApply.get(60, TimeUnit.SECONDS);
+            assertThat(refused.getResponse().getStatus()).isEqualTo(422);
+            assertThat(refused.getResponse().getContentAsString()).contains("RUN_IS_STALE");
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(jdbc.sql("SELECT dataset_version FROM catalog.mxik_reference_state")
+                        .query(Integer.class)
+                        .single())
+                .isEqualTo(2);
+        assertThat(count("catalog.mxik_import_runs WHERE status = 'APPLIED' AND dataset_version = 2"))
+                .as("one run made dataset 2, not two")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a run validated while another run's apply was open is stale once that apply lands, and does not "
+            + "withdraw the codes it added")
+    void aRunValidatedDuringAnotherApplyIsStale() throws Exception {
+        apply(upload("base.csv", bigList(100, Set.of()), "FULL_SNAPSHOT", "2026-10-01"), "{}");
+        MvcResult adding = upload("adds.csv", bigList(102, Set.of()), "FULL_SNAPSHOT", "2026-10-02");
+
+        MvcResult behind;
+        ExecutorService pool = Executors.newFixedThreadPool(1);
+        try (Connection holder = dataSource.getConnection()) {
+            holder.setAutoCommit(false);
+            holder.createStatement()
+                    .execute("SELECT 1 FROM catalog.mxik_reference WHERE code = '" + code(50) + "' FOR UPDATE");
+            Future<MvcResult> applying = pool.submit(() -> apply(adding, "{}"));
+            awaitASessionWaitingOnALock();
+
+            // Validated after the apply began and before it commits: it reads the list without the two codes
+            // and would withdraw only code 100, a one percent change that is not held for review.
+            behind = upload("behind.csv", bigList(100, Set.of(100)), "FULL_SNAPSHOT", "2026-10-02");
+            assertThat(JsonPath.<Integer>read(behind.getResponse().getContentAsString(), "$.rowsWithdrawn"))
+                    .isEqualTo(1);
+
+            holder.rollback();
+            assertThat(applying.get(60, TimeUnit.SECONDS).getResponse().getStatus())
+                    .isEqualTo(200);
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(count("catalog.mxik_reference WHERE valid_until IS NULL")).isEqualTo(102);
+
+        MvcResult refused = apply(behind, "{}");
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(422);
+        assertThat(refused.getResponse().getContentAsString()).contains("RUN_IS_STALE");
+        assertThat(count("catalog.mxik_reference WHERE valid_until IS NULL"))
+                .as("the two codes the other run added were not withdrawn by a file that never heard of them")
+                .isEqualTo(102);
     }
 
     @Test
@@ -892,6 +984,34 @@ class MxikImportHttpTests {
         return jdbc.sql("SELECT count(*) FROM " + tableAndWhere)
                 .query(Long.class)
                 .single();
+    }
+
+    /** Waits until another session is parked on a lock: the moment an apply has reached its write. */
+    private void awaitASessionWaitingOnALock() throws InterruptedException {
+        for (int attempt = 0; attempt < 200; attempt++) {
+            Long waiting = jdbc.sql("SELECT count(*) FROM pg_stat_activity "
+                            + "WHERE datname = current_database() AND wait_event_type = 'Lock'")
+                    .query(Long.class)
+                    .single();
+            if (waiting > 0) {
+                return;
+            }
+            Thread.sleep(50);
+        }
+        throw new AssertionError("no session ever waited on a lock");
+    }
+
+    private static byte[] onlyCodes(int... numbers) {
+        StringBuilder csv = new StringBuilder("code,label ru,label uz\n");
+        for (int n : numbers) {
+            csv.append(code(n))
+                    .append(",Товар ")
+                    .append(n)
+                    .append(",Mahsulot ")
+                    .append(n)
+                    .append('\n');
+        }
+        return csv.toString().getBytes(UTF_8);
     }
 
     private static String code(int n) {

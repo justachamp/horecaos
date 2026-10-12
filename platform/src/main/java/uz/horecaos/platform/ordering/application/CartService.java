@@ -1100,7 +1100,10 @@ public class CartService {
         }
 
         List<CartLineRow> lines = lines(tenantId, cartId);
-        if (lines.isEmpty()) {
+        if (lines.stream().allMatch(CartLineRow::injected)) {
+            // ADR 0158: a rule's line goes with something the customer chose, never alone. The rules
+            // drop it with the customer's last line; this holds for a cart they could not (a closed
+            // gate neither adds nor removes), so a basket of packaging is never priced.
             throw new CartRefusedException("CART_EMPTY", "An empty cart has nothing to price");
         }
         // Row 4.2g: re-checked here, not only at putLine. A line added inside its
@@ -1506,13 +1509,16 @@ public class CartService {
 
     /** One cart line, as pricing is asked about it: the single place a stored line becomes a pricing item. */
     CartPricingPort.PricingCommand.Item pricingItemOf(CartLineRow line) {
-        return new CartPricingPort.PricingCommand.Item(
+        CartPricingPort.PricingCommand.Item item = new CartPricingPort.PricingCommand.Item(
                 line.lineKey(),
                 line.variantId(),
                 line.quantity(),
                 modifierIdsOf(line),
                 pricingPicks(comboPicksOf(line)),
                 pricingNested(nestedModifiersOf(line)));
+        // ADR 0158 (open input 2): pricing is told a line's origin, never the rule behind it, so a promotion
+        // that names products, variants or categories can leave a rule's line out of what it counts.
+        return line.injected() ? item.asAutoAdded() : item;
     }
 
     private static List<CartPricingPort.PricingCommand.ComboPick> pricingPicks(List<ComboPick> picks) {

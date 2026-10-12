@@ -145,6 +145,23 @@ public class JdbcMxikImportStore {
                 .optional();
     }
 
+    /**
+     * Makes two applies run one after the other, for the length of the surrounding transaction
+     * ({@code pg_advisory_xact_lock}: released at commit or rollback).
+     *
+     * <p>The run row's own lock serialises nothing between two <em>different</em> runs, and the list has no
+     * single row to lock before its first import: both applies would read the same state, count the same
+     * dataset version and write the list side by side. Taken before anything is read, so the second apply
+     * starts from the list the first one left.
+     */
+    public void lockApply() {
+        // The row mapper never reads the void column; consuming the one row is what waits for the lock.
+        jdbc.sql("SELECT pg_advisory_xact_lock(hashtextextended(:lockKey, 0))")
+                .param("lockKey", "catalog.mxik_reference.apply")
+                .query((row, number) -> Boolean.TRUE)
+                .list();
+    }
+
     public Optional<RunRow> findRunForUpdate(UUID id) {
         return jdbc.sql("SELECT " + RUN_COLUMNS + " FROM catalog.mxik_import_runs WHERE id = :id FOR UPDATE")
                 .param("id", id)
