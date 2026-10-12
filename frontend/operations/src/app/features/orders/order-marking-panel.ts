@@ -120,6 +120,9 @@ export class OrderMarkingPanel {
     return this.selfTest() ? 1 : line === null ? 0 : this.remaining(line);
   });
 
+  /** Whether the order holds a marked line at all. The server sends `marking` only while the flag is on. */
+  private readonly hasMarkedLines = computed(() => this.rows().length > 0);
+
   constructor() {
     // The detail pane is reused across orders under one route: scans and notices must not carry to the next.
     effect(() => {
@@ -131,8 +134,17 @@ export class OrderMarkingPanel {
         this.units.set({});
         this.queue = [];
         this.paused.set(false);
-        void this.reloadUnits(orderId);
       });
+    });
+    // The unit list is read only for an order that has a marked line to list units of. Every order opened in
+    // the console used to cost a `GET .../marks` here, including all of them while `feature.marked_goods` is
+    // off and no order carries `marking`. The effect runs again when the order changes or when its first
+    // marked line appears (an amendment can add one), and not on the reads that merely refresh the counts.
+    effect(() => {
+      const orderId = this.orderId();
+      if (this.hasMarkedLines()) {
+        untracked(() => void this.reloadUnits(orderId));
+      }
     });
   }
 

@@ -11,7 +11,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.audit.api.ActorRef;
@@ -253,25 +252,27 @@ public class OrderMarkService implements OrderMarksGuard, OrderMarksPort {
                         canonical)
                 .serialize();
         Instant now = clock.instant();
-        try {
-            marks.insert(new NewMark(
-                    markId,
-                    tenantId,
-                    command.orderId(),
-                    line.lineId(),
-                    sequence,
-                    claimed.gtin(),
-                    envelope,
-                    hash,
-                    stage.name(),
-                    command.entryMethod().name(),
-                    gtinChecked,
-                    "USER",
-                    command.actorId(),
-                    now));
-        } catch (DuplicateKeyException raced) {
-            // The unique index on live codes is the last line of defence, and it names no column that
-            // holds the code; the answer is the same as the check above.
+        boolean written = marks.insert(new NewMark(
+                markId,
+                tenantId,
+                command.orderId(),
+                line.lineId(),
+                sequence,
+                claimed.gtin(),
+                envelope,
+                hash,
+                stage.name(),
+                command.entryMethod().name(),
+                gtinChecked,
+                "USER",
+                command.actorId(),
+                now));
+        if (!written) {
+            // Another order took the unit between the check above and this insert (the lock is per order, so
+            // nothing serialises two orders). The unique index on live codes is the last line of defence and it
+            // answered without aborting the transaction, so the question can be asked here; the answer is the
+            // same as the check above. The owner may have been released since, in which case the next scan
+            // of the unit goes through.
             throw alreadyCaptured(
                     marks.liveOwnerOfCode(tenantId, hash)
                             .map(found -> found.lineId().equals(line.lineId()))

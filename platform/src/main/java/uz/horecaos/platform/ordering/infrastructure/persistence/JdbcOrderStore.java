@@ -2395,6 +2395,22 @@ public class JdbcOrderStore {
     }
 
     /**
+     * Takes the order row's lock for the rest of the transaction (ADR 0161).
+     *
+     * <p>The lock a mark capture, a mark removal and the handover guard serialise on
+     * ({@code JdbcOrderMarkStore#lockOrder}), taken here by the one other writer that must read the marks
+     * and then act on them: an amendment that closes a line. Without it a scan committing between the
+     * amendment's read of the marks and its write of the revision is missed.
+     */
+    public void lockForUpdate(UUID tenantId, UUID orderId) {
+        jdbc.sql("SELECT 1 FROM ordering.orders WHERE tenant_id = :tenantId AND id = :orderId FOR UPDATE")
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query(Integer.class)
+                .list();
+    }
+
+    /**
      * The lines of this order that hold at least one live mark (ADR 0161). Read by the amendment guard that
      * refuses to close or reduce a line a unit has been scanned against, without making the amendment
      * service depend on the marking service.

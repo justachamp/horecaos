@@ -486,6 +486,13 @@ public class OrderAmendmentService {
         requireBeforeCutPoint(
                 order, commands.stream().anyMatch(c -> c.commandType().financial()));
         DecodedAmendment decoded = decode(typedPayloadsOfStored(commands));
+        // ADR 0161, decision 10: asked again, under the lock a scan takes. A scan does not move the order's
+        // version, so the check above cannot see one made since this amendment was priced.
+        if (!decoded.basket().removedLineIds().isEmpty()
+                || !decoded.basket().changedQuantities().isEmpty()) {
+            orders.lockForUpdate(tenantId, orderId);
+            requireScannedLinesAreNotReplaced(tenantId, orderId, decoded);
+        }
         List<OrderLineRow> liveLines = orders.lines(tenantId, orderId);
 
         // Re-derived rather than trusted from the stored column: an approval is
@@ -1738,25 +1745,40 @@ public class OrderAmendmentService {
      * ADR 0161, Decision 10: an amendment that would close or reduce a line holding a live mark is refused
      * before it writes anything.
      *
-     * <p>{@code CHANGE_LINE_QUANTITY} closes the line and inserts a replacement, which would orphan the
-     * marks scanned against the old one. Adding units is {@code ADD_LINES}: a new line with its own scans.
-     * The refusal is what a future {@code REMOVE_LINES} and line decrease (ADR 0169) call as well, so they
-     * add no marking logic of their own: the operator releases the line's marks through the removal
-     * endpoint first, then amends and rescans.
+     * <p>{@code CHANGE_LINE_QUANTITY} closes the line and inserts a replacement, and {@code REMOVE_LINES}
+     * (ADR 0169) closes it and inserts nothing; either would leave the marks scanned against the old line
+     * live on a line nobody can see, which the handover guard and the receipt would then count against an
+     * order that no longer holds the unit. Adding units is {@code ADD_LINES}: a new line with its own scans.
+     * The operator releases the line's marks through the removal endpoint first, then amends and rescans, and
+     * ADR 0169 adds no marking logic of its own: it reaches this check, which keys on the lines an amendment
+     * names, not on the command that names them.
+     *
+     * <p>Asked at propose, so the operator is refused before the customer is rung, and asked again at apply,
+     * because a scan is a write of its own that does not move the order's version: an operator at the pass
+     * can scan a unit between the two. At apply it runs under the order row's lock, the one a capture takes
+     * ({@code JdbcOrderMarkStore#lockOrder}), so a scan that is committing waits and is counted, and a scan
+     * that arrives afterwards finds the line closed.
      */
     private void requireScannedLinesAreNotReplaced(UUID tenantId, UUID orderId, DecodedAmendment decoded) {
-        Set<UUID> touched = decoded.basket().changedQuantities().keySet();
-        if (touched.isEmpty()) {
+        Set<UUID> removed = decoded.basket().removedLineIds();
+        Set<UUID> changed = decoded.basket().changedQuantities().keySet();
+        if (removed.isEmpty() && changed.isEmpty()) {
             return;
         }
         Set<UUID> scanned = orders.linesHoldingLiveMarks(tenantId, orderId);
-        for (UUID lineId : touched) {
-            if (scanned.contains(lineId)) {
-                throw new AmendmentRefusedException(
-                        "MARKS_ALREADY_CAPTURED",
-                        "This line already has scanned units. Take them back at the pass first, or add the "
-                                + "extra units as a new line with its own scans");
-            }
+        if (scanned.isEmpty()) {
+            return;
+        }
+        if (removed.stream().anyMatch(scanned::contains)) {
+            throw new AmendmentRefusedException(
+                    "MARKS_ALREADY_CAPTURED",
+                    "This line already has scanned units. Take them back at the pass first, then remove the line");
+        }
+        if (changed.stream().anyMatch(scanned::contains)) {
+            throw new AmendmentRefusedException(
+                    "MARKS_ALREADY_CAPTURED",
+                    "This line already has scanned units. Take them back at the pass first, or add the "
+                            + "extra units as a new line with its own scans");
         }
     }
 

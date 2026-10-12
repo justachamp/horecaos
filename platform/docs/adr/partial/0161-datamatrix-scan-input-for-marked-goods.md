@@ -614,10 +614,22 @@ the same row lock, so the release that follows it in that transaction takes no
 second one. The other way to close the race, a version bump on every scan, is
 rejected in Alternatives considered.
 
+The lock is per order, so it does not serialise two *orders* scanning one physical
+unit: both find the code free and both insert. The unique index on live codes
+decides, and the capture's insert is `ON CONFLICT DO NOTHING` (a unique violation
+would abort the Postgres transaction and the question "who holds it?" that follows
+would fail with `current transaction is aborted`, a 500). The loser reads the owner
+after the skipped insert and answers `MARKING_CODE_ALREADY_CAPTURED` like any other
+duplicate. `OrderMarkingIntegrationTests` drives that interleaving.
+
 A cancellation, rejection or expiry of an order that has not reached `FULFILLING`
 releases its marks (`ORDER_CANCELLED`) in the same transaction; one that has
 keeps them. An amendment (ADR 0039's engine, Decision 10 above) that closes or
-reduces a line holding a live mark is refused before it writes anything;
+reduces a line holding a live mark -- `CHANGE_LINE_QUANTITY`, `REMOVE_LINES` and the
+line decreases of ADR 0169 alike, because the check keys on the lines the amendment
+names -- is refused before it writes anything, at propose and again at apply under the
+order row's lock (a scan does not move the order's version, so a scan made between the
+two is otherwise invisible);
 `LINE_REPLACED` is reserved for the day an amendment may carry marks forward and
 is written by nothing in v1.
 

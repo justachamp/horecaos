@@ -101,6 +101,7 @@ export const coreRu: AreaMessages<typeof coreEn> = {
   'orders.action.conflict': 'Переход {from} → {to} больше недоступен.',
   'orders.table.chip': 'Стол {tables}',
   'orders.action.catchweightNotReconciled': 'Взвесьте весовые позиции, прежде чем выдавать заказ',
+  'orders.action.marksIncomplete': 'Отсканируйте маркированные позиции, прежде чем выдавать заказ',
 
   'notBuilt.title': 'Ещё не построено',
   'notBuilt.body': 'Раздел описан, но экранов пока нет. Спецификация: {spec}.',

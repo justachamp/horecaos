@@ -154,6 +154,59 @@ describe('OrderMarkingPanel (ADR 0161)', () => {
     expect(q('datamatrix-input')).toBeNull();
   });
 
+  describe('the unit list read', () => {
+    it('asks the server for nothing when the order has no marked line (the flag is off for most tenants)', async () => {
+      const { list, fixture } = open([plain()]);
+      await flush();
+
+      expect(list).not.toHaveBeenCalled();
+
+      fixture.componentRef.setInput('orderId', 'o2');
+      fixture.detectChanges();
+      await flush();
+
+      expect(list, 'opening the next unmarked order costs nothing either').not.toHaveBeenCalled();
+    });
+
+    it('reads the list once for a marked order, and again when the pane moves to another order', async () => {
+      const { list, fixture } = open([marked('wine', 'Red wine', 5, 2)]);
+      await flush();
+
+      expect(list).toHaveBeenCalledTimes(1);
+      expect(list).toHaveBeenLastCalledWith(SCOPE, 'o1');
+
+      fixture.componentRef.setInput('orderId', 'o2');
+      fixture.detectChanges();
+      await flush();
+
+      expect(list).toHaveBeenCalledTimes(2);
+      expect(list).toHaveBeenLastCalledWith(SCOPE, 'o2');
+    });
+
+    it('does not read it again when the host only refreshes the counts', async () => {
+      const { list, fixture } = open([marked('wine', 'Red wine', 5, 2)]);
+      await flush();
+
+      fixture.componentRef.setInput('lines', [marked('wine', 'Red wine', 5, 3)]);
+      fixture.detectChanges();
+      await flush();
+
+      expect(list).toHaveBeenCalledTimes(1);
+    });
+
+    it('reads it when an amendment adds the first marked line to an order that had none', async () => {
+      const { list, fixture } = open([plain()]);
+      await flush();
+      expect(list).not.toHaveBeenCalled();
+
+      fixture.componentRef.setInput('lines', [plain(), marked('wine', 'Red wine', 1, 0)]);
+      fixture.detectChanges();
+      await flush();
+
+      expect(list).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('lists only the marked lines, each with how many units are scanned of how many it needs', () => {
     const { all } = open([plain(), marked('wine', 'Red wine', 5, 2)]);
 

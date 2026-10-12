@@ -152,6 +152,11 @@ export function mutationErrorNotice(
     // and the pass both offer. Re-reading would only move the operator away from it.
     return { text: translate('orders.action.catchweightNotReconciled'), shouldReread: false };
   }
+  if (isMarksIncomplete(error)) {
+    // The same shape as the weighing above: the order is as the operator saw it, and what is missing is a
+    // scan, which the order detail and the pass both offer. Re-reading would only move them away from it.
+    return { text: translate('orders.action.marksIncomplete'), shouldReread: false };
+  }
   const conflict = transitionConflict(error);
   if (conflict) {
     return {
@@ -173,5 +178,16 @@ export function isCatchweightNotReconciled(error: ApiError): boolean {
   return (
     error.code === ApiErrorCode.RESOURCE_CONFLICT &&
     error.problem?.['reason'] === 'CATCHWEIGHT_NOT_RECONCILED'
+  );
+}
+
+/**
+ * ADR 0161: a `409 RESOURCE_CONFLICT` whose `reason` is `MARKS_INCOMPLETE` -- the order cannot leave the
+ * pass while a marked line holds fewer scanned units than it has. `orderLineIds` names the lines, never a code.
+ */
+export function isMarksIncomplete(error: ApiError): boolean {
+  return (
+    error.code === ApiErrorCode.RESOURCE_CONFLICT &&
+    error.problem?.['reason'] === 'MARKS_INCOMPLETE'
   );
 }
