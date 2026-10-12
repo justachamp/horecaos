@@ -36,6 +36,7 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.nav.locations': 'Filiallar',
   'settings.nav.salesChannels': 'Sotuv kanallari',
   'settings.nav.channelSetup': 'Kanallarni sozlash',
+  'settings.nav.kiosks': 'Kiosklar',
   'settings.nav.orderPolicy': 'Buyurtma qoidalari',
   'settings.nav.paymentMethods': 'Toʻlov usullari',
   'settings.nav.fiscalization': 'Fiskalizatsiya',
@@ -104,6 +105,8 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.home.description.salesChannels':
     'Restoranga qanday kanallar orqali kirish mumkin va har biriga nima ruxsat etilgan.',
   'settings.home.description.channelSetup': 'Har bir kanal ortidagi doʻkonni sozlash.',
+  'settings.home.description.kiosks':
+    'Kioskni ekranidagi kod bilan ulash hamda filial kiosklarini koʻrish, nomini oʻzgartirish, boshqa kanalga oʻtkazish va uzish.',
   'settings.home.description.orderPolicy': 'Har bir buyurtma solishtiriladigan qoidalar toʻplami.',
   'settings.home.description.catalogBaseSettings':
     'Butun kompaniya uchun qoldiq logikasi va QR/kiosk narxlash almashtirgichlari.',
@@ -1567,7 +1570,7 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.kioskPairing.done': '{name} endi {channel} kanali orqali sotadi.',
   'settings.kioskPairing.doneHint':
     'Kiosk bir daqiqa ichida sozlamalarni oʻqiydi va holatni koʻrsatadi. Unda hech narsa kiritish shart emas.',
-  'settings.kioskPairing.back': 'Savdo kanallariga qaytish',
+  'settings.kioskPairing.back': 'Kiosklarga qaytish',
   'settings.kioskPairing.error.gone':
     'Kod nomaʻlum, ishlatilgan yoki muddati tugagan. Kioskdan yangisini soʻrang.',
   'settings.kioskPairing.error.tooMany':

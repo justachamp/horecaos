@@ -542,6 +542,8 @@ export const staffEn = {
   'staff.terminals.policy.defaultMode': 'New devices start as',
   'staff.terminals.policy.saved': 'Saved.',
   'staff.terminals.policy.saving': 'Saving',
+  'staff.terminals.policy.retry': 'Try again',
+  'staff.terminals.kiosks.manage': 'Kiosks: pair one, or move or revoke the branch’s',
   'staff.terminals.policy.save': 'Save',
   'staff.terminals.active.title': 'Devices',
   'staff.terminals.active.empty':

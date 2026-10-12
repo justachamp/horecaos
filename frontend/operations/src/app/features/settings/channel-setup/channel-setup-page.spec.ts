@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
+import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { I18n, Locale } from '../../../core/i18n/i18n';
 import { LocaleSet } from '../../../core/i18n/locale-set';
 import { MediaApi } from '../../catalog/media-api';
@@ -148,6 +149,15 @@ describe('ChannelSetupPage', () => {
           useValue: { downloadUrl: vi.fn().mockReturnValue(of('https://cdn.example/og.jpg')) },
         },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+        {
+          // Whoever opens the hub reads the tenant (it sits behind tenant.read and channel.read), and so reads the flags:
+          // the KIOSK card follows its dark flag for her (ADR 0082, ADR 0162).
+          provide: SessionCapabilities,
+          useValue: {
+            ensureLoaded: () => Promise.resolve(),
+            has: (capability: string) => capability === 'TENANT_READ',
+          },
+        },
         provideRouter([]),
       ],
     }).compileComponents();

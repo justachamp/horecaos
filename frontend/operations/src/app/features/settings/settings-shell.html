@@ -20,17 +20,19 @@
   </nav>
 
   <div class="settings__content">
-    <q-scope-bar
-      [showBrandPicker]="scope.brands().length > 1"
-      [brands]="scope.brands()"
-      [selectedBrandId]="scope.brandId()"
-      [locations]="scope.locations()"
-      [selectedLocationId]="scope.locationId()"
-      [tenantWide]="scope.tenantWide()"
-      (brandChange)="onBrandChange($event)"
-      (locationChange)="onLocationChange($event)"
-      (tenantWideChange)="onTenantWideChange($event)"
-    />
+    @if (tenantSettings()) {
+      <q-scope-bar
+        [showBrandPicker]="scope.brands().length > 1"
+        [brands]="scope.brands()"
+        [selectedBrandId]="scope.brandId()"
+        [locations]="scope.locations()"
+        [selectedLocationId]="scope.locationId()"
+        [tenantWide]="scope.tenantWide()"
+        (brandChange)="onBrandChange($event)"
+        (locationChange)="onLocationChange($event)"
+        (tenantWideChange)="onTenantWideChange($event)"
+      />
+    }
     <router-outlet />
   </div>
 </div>

@@ -13,6 +13,14 @@
       {{ 'staff.terminals.loadError' | t }}
     </p>
   } @else {
+    @if (kiosksLink()) {
+      <p class="q-body-sm terminals__hint" data-testid="terminals-kiosks">
+        <a routerLink="/settings/channel-setup/kiosks" class="terminals__link">{{
+          'staff.terminals.kiosks.manage' | t
+        }}</a>
+      </p>
+    }
+
     <!-- The Policy card: five values, where each comes from, the odds beside the length. -->
     <section class="card" data-testid="terminals-policy">
       <h2 class="q-subhead">{{ 'staff.terminals.policy.title' | t }}</h2>
@@ -147,6 +155,19 @@
             </button>
           }
         </form>
+      } @else if (policyError()) {
+        <!-- A load that failed: the card has no policy to show, and the error would otherwise be said nowhere. -->
+        <p class="q-body-sm terminals__error" role="alert" data-testid="terminals-policy-error">
+          {{ policyError() }}
+        </p>
+        <button
+          type="button"
+          class="secondary"
+          (click)="retryPolicy()"
+          data-testid="terminals-policy-retry"
+        >
+          {{ 'staff.terminals.policy.retry' | t }}
+        </button>
       }
     </section>
 

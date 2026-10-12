@@ -14,6 +14,10 @@
   margin: 0 0 12px;
 }
 
+.terminals__link {
+  color: var(--q-primary);
+}
+
 .card {
   margin-top: 16px;
   padding: 16px 20px;

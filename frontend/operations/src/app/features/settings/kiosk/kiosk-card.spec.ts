@@ -67,7 +67,12 @@ describe('KioskCard (ADR 0162)', () => {
 
   async function render(
     api: Partial<KioskApi>,
-    options: { flag?: boolean; manage?: boolean } = {},
+    options: {
+      flag?: boolean;
+      manage?: boolean;
+      /** Whether the operator holds `tenant.read`, which is what reads the flags (ADR 0082). A branch manager does not. */
+      readsFlags?: boolean;
+    } = {},
   ): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [KioskCard],
@@ -85,7 +90,8 @@ describe('KioskCard (ADR 0162)', () => {
           provide: SessionCapabilities,
           useValue: {
             has: (capability: string) =>
-              capability === 'KIOSK_DEVICE_MANAGE' && options.manage !== false,
+              (capability === 'KIOSK_DEVICE_MANAGE' && options.manage !== false) ||
+              (capability === 'TENANT_READ' && options.readsFlags !== false),
           },
         },
       ],
@@ -105,6 +111,17 @@ describe('KioskCard (ADR 0162)', () => {
     expect(byId('kiosk-off')).not.toBeNull();
     expect(byId('kiosk-pair')).toBeNull();
     expect(devices).not.toHaveBeenCalled();
+  });
+
+  it('shows a branch manager the card though the console cannot read the flag for her (ADR 0082)', async () => {
+    // Flags are read with tenant.read, which she does not hold: every flag reads as off for her, which is not "off".
+    const devices = vi.fn().mockResolvedValue([kiosk()]);
+    await render({ devices }, { flag: false, readsFlags: false });
+
+    expect(byId('kiosk-off')).toBeNull();
+    expect(byId('kiosk-pair')).not.toBeNull();
+    expect(devices).toHaveBeenCalledWith(SCOPE);
+    expect(byId('kiosk-table')).not.toBeNull();
   });
 
   it('lists the branch kiosks with the channel each sells through, and flags one that cannot sell', async () => {

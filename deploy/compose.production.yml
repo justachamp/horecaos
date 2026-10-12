@@ -436,6 +436,15 @@ services:
       HORECAOS_MEDIA_ACCESS_KEY_REF: horecaos:${HORECAOS_ENVIRONMENT:-production}:object_storage:platform:media-access-key
       HORECAOS_MEDIA_SECRET_KEY_REF: horecaos:${HORECAOS_ENVIRONMENT:-production}:object_storage:platform:media-secret-key
       HORECAOS_HANDOVER_PEPPER_REF: horecaos:${HORECAOS_ENVIRONMENT:-production}:data_encryption:platform:handover-pepper
+      # ADR 0155's terminal PIN pepper. application.yml gives this reference no default (it carries the environment
+      # segment the secret path is built from), so a platform-app started without it fails with a placeholder error
+      # and restarts in a loop. Compose forwards nothing from --env-file except what is listed here, which is why it is
+      # listed: the reference follows HORECAOS_ENVIRONMENT like every other one, and an operator rotating the pepper
+      # (terminals-and-kiosks.md) overrides the three variables in production.env. ProductionComposeSecretReferenceTests
+      # fails when a reference application.yml will not default is missing from this block.
+      HORECAOS_TERMINAL_PIN_PEPPER_REF: ${HORECAOS_TERMINAL_PIN_PEPPER_REF:-horecaos:${HORECAOS_ENVIRONMENT:-production}:data_encryption:platform:terminal-pin-pepper}
+      HORECAOS_TERMINAL_PIN_PEPPER_VERSION: ${HORECAOS_TERMINAL_PIN_PEPPER_VERSION:-1}
+      HORECAOS_TERMINAL_PIN_PEPPER_PREVIOUS_REF: ${HORECAOS_TERMINAL_PIN_PEPPER_PREVIOUS_REF:-}
       # Keycloak subject ids to grant PLATFORM scope on startup (ADR 0025's
       # PlatformAdminBootstrapReconciler). This is the ONLY way a deployment gets
       # its first platform administrator -- the alternative is a hand-written SQL

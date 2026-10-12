@@ -412,12 +412,20 @@ export const routes: Routes = [
               },
               {
                 // ADR 0162: the page a kiosk's QR opens. Declared before `:channelId`, which would otherwise take
-                // the literal segment as a channel id. It approves nothing on arrival.
+                // the literal segment as a channel id. It approves nothing on arrival. A branch manager reaches it
+                // without the rest of Settings (`NavItem.alsoAdmittedAt` in `shell/navigation.ts`, which names this path).
                 path: 'kiosk-pairing',
                 loadComponent: () =>
                   import('./features/settings/kiosk/kiosk-pairing-page').then(
                     (m) => m.KioskPairingPage,
                   ),
+              },
+              {
+                // ADR 0162, Decision 6: the branch's kiosks (the KIOSK card) without the channel hub around them, for the
+                // branch manager the hub's `channel.read` turns away. Admitted by path like `kiosk-pairing` above.
+                path: 'kiosks',
+                loadComponent: () =>
+                  import('./features/settings/kiosk/kiosks-page').then((m) => m.KiosksPage),
               },
               {
                 path: ':channelId',

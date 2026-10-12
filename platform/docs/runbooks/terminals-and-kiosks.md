@@ -105,7 +105,8 @@ A PIN not used before step 5 stops verifying; its owner is shown **Set a PIN** a
 2. Open `/device`, choose **This is a self-service kiosk**. It shows a QR and a code, and renews them by itself every
    ten minutes.
 3. On your phone, scan the QR with the camera. The console opens **Settings → Channel setup → Pair a kiosk** with the
-   code filled in. **Nothing is paired yet.**
+   code filled in. **Nothing is paired yet.** A branch manager (`kiosk.device.manage` at her branch, with no
+   `tenant.read`) is let into that page and into the branch's kiosks page below, and into no other part of Settings.
 4. Choose the branch, the KIOSK channel it sells through and a name; tick that **the code on the screen in front of
    you matches the one shown**; press **Pair the kiosk**.
 
@@ -114,8 +115,11 @@ If the code on the page is not the code on the screen, do not pair: a QR on a co
 
 ### Revoke one (theft, or it leaves service)
 
-**Settings → Channel setup →** a KIOSK channel **→ Revoke**, with a reason. The next request from the unit is refused
-and it cannot mint a token again; it returns to the pairing screen. **Check:** the row moves to *Revoked kiosks*.
+**Settings → Channel setup →** a KIOSK channel **→ Revoke**, with a reason. A branch manager cannot open the channel
+hub (it reads the channel, which needs `channel.read`), so her door to the same list is the link at the top of **Staff →
+Terminals**, shown once the branch has a kiosk, which opens **Settings → Channel setup → Kiosks**. The next request from
+the unit is refused and it cannot mint a token again; it returns to the pairing screen. **Check:** the row moves to
+*Revoked kiosks*.
 
 ### Replace or re-pair
 
@@ -126,4 +130,6 @@ channel was archived or withdrawn) is flagged and cannot sell until it is moved.
 ### Switching the feature on
 
 Kiosk pairing is dark behind `feature.kiosk_devices`. A tenant's console shows *not switched on* until the flag is set
-for that tenant.
+for that tenant. The console reads flags with `tenant.read` (ADR 0082), which a branch manager does not hold, so for her
+it cannot tell and draws the kiosk screens; the platform refuses a pairing while the flag is off, with a message that
+names it.

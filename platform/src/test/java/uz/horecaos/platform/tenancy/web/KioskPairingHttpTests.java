@@ -810,6 +810,50 @@ class KioskPairingHttpTests {
         assertThat(row.get("version").asInt()).isEqualTo(1);
     }
 
+    @Test
+    @DisplayName(
+            "a rename or a move answers with the approver's name, as the registry does, so the row keeps «paired by»")
+    void aRebindAnswersWithTheApproversNameAndTheRegistryWithTheRevokersToo() throws Exception {
+        UUID member = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO iam.staff_members (id, tenant_id, principal_subject, display_reference, employment_status)
+                VALUES (:id, :tenantId, :subject, 'S-0042', 'ACTIVE')
+                ON CONFLICT DO NOTHING
+                """)
+                .param("id", member)
+                .param("tenantId", TENANT)
+                .param("subject", MANAGER)
+                .update();
+        Paired kiosk = pair(LOBBY);
+        assertThat(kiosk.response().get("enrolledBy").asString())
+                .as("the approval answers with the approver's name")
+                .isEqualTo("S-0042");
+        assertThat(rowOf(kiosk.deviceId()).get("enrolledBy").asString())
+                .as("so does the registry")
+                .isEqualTo("S-0042");
+
+        JsonNode moved = JSON.readTree(rebind(kiosk.deviceId(), "Terrace kiosk", TERRACE, 1, MANAGER)
+                .getResponse()
+                .getContentAsString());
+        assertThat(moved.get("channel").get("code").asString()).isEqualTo("TERRACE");
+        assertThat(moved.get("enrolledBy").isNull())
+                .as("a change must not turn «paired by» into a blank in the row the console replaces")
+                .isFalse();
+        assertThat(moved.get("enrolledBy").asString()).isEqualTo("S-0042");
+
+        JsonNode unchanged = JSON.readTree(rebind(kiosk.deviceId(), "Terrace kiosk", TERRACE, 2, MANAGER)
+                .getResponse()
+                .getContentAsString());
+        assertThat(unchanged.get("enrolledBy").asString())
+                .as("a save that changes nothing answers the same row")
+                .isEqualTo("S-0042");
+
+        revoke(kiosk.deviceId(), "Gone", MANAGER);
+        JsonNode revoked = rowOf(kiosk.deviceId());
+        assertThat(revoked.get("enrolledBy").asString()).isEqualTo("S-0042");
+        assertThat(revoked.get("revokedBy").asString()).isEqualTo("S-0042");
+    }
+
     // ----------------------------------------------------------------------- helpers
 
     private record Begun(String userCode, String deviceCode) {}

@@ -4,6 +4,7 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { ScopeBar } from '../../shared/ui/scope-bar/scope-bar';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { FeatureFlags } from '../../core/feature-flags';
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { visibleSettings } from './settings-nav';
 import { SettingsScope } from './settings-scope';
 
@@ -28,7 +29,19 @@ import { SettingsScope } from './settings-scope';
 export class SettingsShell {
   protected readonly scope = inject(SettingsScope);
   private readonly flags = inject(FeatureFlags);
-  protected readonly groups = computed(() => visibleSettings((flag) => this.flags.isOn(flag)));
+  private readonly capabilities = inject(SessionCapabilities);
+  /**
+   * Whether the operator reads the tenant's settings. The scope bar picks the brand and branch those screens write to; the
+   * kiosk screens a branch manager is given here (ADR 0162) work the branch she is working in and read none of it, so for
+   * her the bar would offer choices that change nothing.
+   */
+  protected readonly tenantSettings = computed(() => this.capabilities.has('TENANT_READ'));
+  protected readonly groups = computed(() =>
+    visibleSettings(
+      (flag) => this.flags.isOn(flag),
+      (capability) => this.capabilities.has(capability),
+    ),
+  );
 
   constructor() {
     void this.flags.ensureLoaded();
