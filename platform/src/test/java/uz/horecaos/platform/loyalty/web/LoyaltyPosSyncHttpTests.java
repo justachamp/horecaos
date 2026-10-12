@@ -190,7 +190,8 @@ class LoyaltyPosSyncHttpTests {
         jdbc.sql("TRUNCATE TABLE iam.grants CASCADE").update();
         jdbc.sql("TRUNCATE TABLE integration.provider_entity_mappings").update();
         jdbc.sql("TRUNCATE TABLE tenant.configuration_values").update();
-        jdbc.sql("TRUNCATE TABLE loyalty.pos_sync_discrepancies, loyalty.pos_sync_movements, "
+        jdbc.sql("TRUNCATE TABLE loyalty.pos_sync_run_findings, loyalty.pos_sync_match_progress, "
+                        + "loyalty.pos_sync_discrepancies, loyalty.pos_sync_movements, "
                         + "loyalty.pos_balance_sync_state, loyalty.pos_sync_runs")
                 .update();
         jdbc.sql("DELETE FROM integration.binding_capabilities").update();
@@ -787,6 +788,273 @@ class LoyaltyPosSyncHttpTests {
                 .isEqualTo(200);
     }
 
+    // ------------------------------------------------------------------ absorbing is durable
+
+    @Test
+    @DisplayName(
+            "a till customer with no account, and an ambiguous match, that a person absorbed are not reopened by the next"
+                    + " passes, still count and are listed in the run, and stop being carried when the customer is matched")
+    void absorbingATillCustomerDifferenceIsDurable() throws Exception {
+        pointsAccount(TWIN_ONE, PHONE_SHARED, 5_000);
+        pointsAccount(TWIN_TWO, PHONE_SHARED, 6_000);
+        till.tillCustomer("T-STRANGER", PHONE_STRANGER, 9_000).tillCustomer("T-TWINS", PHONE_SHARED, 7_000);
+        reconcile(FAKE_BINDING);
+        String open = openDiscrepancies();
+        Map<String, Object> stranger = discrepancyOfTillCustomer(open, "TILL_ONLY", "T-STRANGER");
+        Map<String, Object> twins = discrepancyOfTillCustomer(open, "AMBIGUOUS_MATCH", "T-TWINS");
+        assertThat(resolve(idOf(stranger), intOf(stranger.get("version")), "ABSORB", "not our customer", FINANCE)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+        assertThat(resolve(idOf(twins), intOf(twins.get("version")), "ABSORB", "one phone, two households", FINANCE)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+
+        MvcResult second = reconcile(FAKE_BINDING);
+        MvcResult third = reconcile(FAKE_BINDING);
+
+        assertThat(JsonPath.<List<Object>>read(openDiscrepancies(), "$"))
+                .as("what a person absorbed is not asked about again")
+                .isEmpty();
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'TILL_ONLY'"))
+                .isEqualTo(1);
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'AMBIGUOUS_MATCH'"))
+                .isEqualTo(1);
+        assertThat(counted(second, "tillOnly") + counted(third, "tillOnly"))
+                .as("the till still has this customer, so the run still counts it")
+                .isEqualTo(2);
+        assertThat(listed(runIdOf(second), "TILL_ONLY"))
+                .as("and the run lists what it counted")
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row).containsEntry("status", "RESOLVED").containsEntry("resolutionCode", "ABSORB");
+                    assertThat(row.get("discrepancyId")).isEqualTo(stranger.get("discrepancyId"));
+                });
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE carried")).isEqualTo(2);
+
+        pointsAccount(FARRUKH, PHONE_STRANGER, 1_000);
+        MvcResult matched = reconcile(FAKE_BINDING);
+
+        assertThat(count("loyalty.pos_balance_sync_state"))
+                .as("the stranger became a customer")
+                .isEqualTo(1);
+        assertThat(counted(matched, "tillOnly")).isZero();
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'TILL_ONLY' AND carried"))
+                .as("the condition ended, so the absorption ended with it")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "a customer the till forgot, and a balance that could not be read, stay absorbed while that holds, and the same"
+                    + " thing happening again after the till answered is reported as the new difference it is")
+    void absorbingAnAccountConditionHoldsUntilItEnds() throws Exception {
+        pointsAccount(AZIZA, PHONE_AZIZA, 40_000);
+        pointsAccount(DILYA, PHONE_DILYA, 10_000);
+        till.tillCustomer("T-AZIZA", PHONE_AZIZA, 40_000).tillCustomer("T-DILYA", PHONE_DILYA, 10_000);
+        reconcile(FAKE_BINDING);
+
+        till.removeTillCustomer("T-AZIZA");
+        reconcile(FAKE_BINDING);
+        Map<String, Object> forgotten = onlyDiscrepancy();
+        assertThat(forgotten).containsEntry("kind", "PLATFORM_ONLY");
+        resolve(idOf(forgotten), intOf(forgotten.get("version")), "ABSORB", "closed her card at the till", FINANCE);
+
+        MvcResult again = reconcile(FAKE_BINDING);
+
+        assertThat(JsonPath.<List<Object>>read(openDiscrepancies(), "$")).isEmpty();
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'PLATFORM_ONLY'"))
+                .isEqualTo(1);
+        assertThat(counted(again, "platformOnly")).isEqualTo(1);
+
+        till.tillCustomer("T-AZIZA", PHONE_AZIZA, 40_000);
+        reconcile(FAKE_BINDING);
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE carried"))
+                .as("the till knows her again")
+                .isZero();
+        till.removeTillCustomer("T-AZIZA");
+        reconcile(FAKE_BINDING);
+        assertThat(openOfKind("PLATFORM_ONLY"))
+                .as("losing her a second time is a second difference")
+                .hasSize(1);
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'PLATFORM_ONLY'"))
+                .isEqualTo(2);
+
+        till.tillCustomer("T-AZIZA", PHONE_AZIZA, 40_000).balanceInCurrency("USD");
+        reconcile(FAKE_BINDING);
+        Map<String, Object> dilya = discrepancyOfTillCustomer(openDiscrepancies(), "UNVERIFIABLE", "T-DILYA");
+        resolve(idOf(dilya), intOf(dilya.get("version")), "ABSORB", "known till fault", FINANCE);
+
+        reconcile(FAKE_BINDING);
+
+        assertThat(openOfKind("UNVERIFIABLE"))
+                .as("only Aziza's is still waiting; Dilya's was absorbed")
+                .singleElement()
+                .satisfies(row -> assertThat(row).containsEntry("externalCustomerId", "T-AZIZA"));
+        till.balanceInCurrency(null);
+        reconcile(FAKE_BINDING);
+        assertThat(openOfKind("UNVERIFIABLE")).isEmpty();
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'UNVERIFIABLE' AND carried"))
+                .isZero();
+        till.balanceInCurrency("USD");
+        reconcile(FAKE_BINDING);
+        assertThat(openOfKind("UNVERIFIABLE"))
+                .as("unreadable again, after the till answered, is unreadable again")
+                .hasSize(2);
+    }
+
+    @Test
+    @DisplayName("an absorbed difference of a size is that size only: the same gap is not reopened and a bigger one is")
+    void absorbingADifferenceIsAbsorbingThatAmount() throws Exception {
+        pointsAccount(DILYA, PHONE_DILYA, 10_000);
+        till.tillCustomer("T-DILYA", PHONE_DILYA, 25_000);
+        reconcile(FAKE_BINDING);
+        Map<String, Object> gap = onlyDiscrepancy();
+        resolve(idOf(gap), intOf(gap.get("version")), "ABSORB", "the till carries a promotion", FINANCE);
+
+        MvcResult same = reconcile(FAKE_BINDING);
+
+        assertThat(JsonPath.<List<Object>>read(openDiscrepancies(), "$")).isEmpty();
+        assertThat(counted(same, "tillHigher")).isEqualTo(1);
+        till.corruptTillBalance("T-DILYA", 30_000);
+
+        reconcile(FAKE_BINDING);
+
+        Map<String, Object> bigger = onlyDiscrepancy();
+        assertThat(bigger).containsEntry("kind", "TILL_HIGHER").containsEntry("deltaMinor", 20_000);
+        assertThat(bigger.get("discrepancyId")).isNotEqualTo(gap.get("discrepancyId"));
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE carried"))
+                .as("what was accepted was fifteen thousand, not every gap after it")
+                .isZero();
+    }
+
+    // ------------------------------------------------------------------ the walk of the till's customers
+
+    @Test
+    @DisplayName(
+            "a till with more customers than one pass reads is walked over several passes: the customers beyond the first"
+                    + " pages are matched and reported, and a finished walk starts again at the top")
+    void aLongCustomerListIsWalkedOverSeveralPasses() throws Exception {
+        pointsAccount(AZIZA, PHONE_AZIZA, 40_000);
+        till.walletPageSize(1);
+        for (int i = 0; i < 55; i++) {
+            till.tillCustomer("T-FILL-%03d".formatted(i), null, 0);
+        }
+        till.tillCustomer("T-AZIZA", PHONE_AZIZA, 40_000); // the 56th: beyond the first fifty pages
+
+        MvcResult first = reconcile(FAKE_BINDING);
+
+        assertThat(counted(first, "tillOnly")).isEqualTo(50);
+        assertThat(count("loyalty.pos_balance_sync_state"))
+                .as("not reached yet")
+                .isZero();
+        assertThat(count("loyalty.pos_sync_match_progress WHERE customer_cursor IS NOT NULL"))
+                .isEqualTo(1);
+
+        MvcResult second = reconcile(FAKE_BINDING);
+
+        assertThat(counted(second, "tillOnly")).as("the five that were left").isEqualTo(5);
+        assertThat(count("loyalty.pos_balance_sync_state"))
+                .as("Aziza was reached")
+                .isEqualTo(1);
+        assertThat(counted(second, "matched")).isEqualTo(1);
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'TILL_ONLY'"))
+                .as("every customer seen once, none twice")
+                .isEqualTo(55);
+        assertThat(count("loyalty.pos_sync_match_progress WHERE customer_cursor IS NOT NULL"))
+                .isZero();
+
+        MvcResult third = reconcile(FAKE_BINDING);
+
+        assertThat(counted(third, "tillOnly"))
+                .as("the walk starts at the top again")
+                .isEqualTo(50);
+    }
+
+    // ------------------------------------------------------------------ the report is history and its counts are its
+    // rows
+
+    @Test
+    @DisplayName(
+            "a run's report is still that run's after later passes see the same difference: its rows, its numbers and its"
+                    + " counts agree for good")
+    void aRunsReportIsHistory() throws Exception {
+        pointsAccount(DILYA, PHONE_DILYA, 10_000);
+        till.tillCustomer("T-DILYA", PHONE_DILYA, 25_000);
+        MvcResult a = reconcile(FAKE_BINDING);
+        till.corruptTillBalance("T-DILYA", 27_000);
+        MvcResult b = reconcile(FAKE_BINDING);
+
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'TILL_HIGHER'"))
+                .as("one standing difference, seen by two runs")
+                .isEqualTo(1);
+        assertThat(listed(runIdOf(a), "TILL_HIGHER"))
+                .singleElement()
+                .satisfies(row -> assertThat(row)
+                        .containsEntry("tillBalanceMinor", 25_000)
+                        .containsEntry("deltaMinor", 15_000));
+        assertThat(listed(runIdOf(b), "TILL_HIGHER"))
+                .singleElement()
+                .satisfies(row -> assertThat(row)
+                        .containsEntry("tillBalanceMinor", 27_000)
+                        .containsEntry("deltaMinor", 17_000));
+        assertThat(counted(a, "tillHigher"))
+                .isEqualTo(listed(runIdOf(a), "TILL_HIGHER").size());
+        assertThat(counted(b, "tillHigher"))
+                .isEqualTo(listed(runIdOf(b), "TILL_HIGHER").size());
+        assertThat(onlyDiscrepancy()).containsEntry("tillBalanceMinor", 27_000);
+    }
+
+    @Test
+    @DisplayName(
+            "each till customer that leads to an already paired account is its own ambiguous match, and the count is the rows")
+    void everyAmbiguousTillCustomerIsItsOwnRow() throws Exception {
+        pointsAccount(AZIZA, PHONE_AZIZA, 40_000);
+        till.tillCustomer("T-AZIZA", PHONE_AZIZA, 40_000)
+                .tillCustomer("T-AZIZA-2", PHONE_AZIZA, 0)
+                .tillCustomer("T-AZIZA-3", PHONE_AZIZA, 0);
+
+        MvcResult first = reconcile(FAKE_BINDING);
+        MvcResult second = reconcile(FAKE_BINDING);
+
+        assertThat(counted(first, "ambiguous")).isEqualTo(2);
+        assertThat(listed(runIdOf(first), "AMBIGUOUS_MATCH")).hasSize(2);
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'AMBIGUOUS_MATCH'"))
+                .isEqualTo(2);
+        assertThat(counted(second, "ambiguous")).isEqualTo(2);
+        assertThat(listed(runIdOf(second), "AMBIGUOUS_MATCH")).hasSize(2);
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'AMBIGUOUS_MATCH'"))
+                .as("the second pass refreshed them and opened nothing")
+                .isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName(
+            "unverifiable is the accounts (and the customer list) the run could not vouch for, each once, each listed;"
+                    + " when the till answers again they close")
+    void unverifiableIsWhatTheRunCouldNotVouchForAndListsIt() throws Exception {
+        pointsAccount(AZIZA, PHONE_AZIZA, 40_000);
+        pointsAccount(DILYA, PHONE_DILYA, 10_000);
+        till.tillCustomer("T-AZIZA", PHONE_AZIZA, 40_000).tillCustomer("T-DILYA", PHONE_DILYA, 10_000);
+        mode("PULL");
+        assertThat(counted(reconcile(FAKE_BINDING), "unverifiable")).isZero();
+        till.movementFeedUnreadable(true).customerListUnreadable(true).balanceInCurrency("USD");
+
+        MvcResult broken = reconcile(FAKE_BINDING);
+
+        assertThat(counted(broken, "unverifiable"))
+                .as("two accounts, each unreadable in the feed and in the balance but one account each, and the list")
+                .isEqualTo(3);
+        assertThat(listed(runIdOf(broken), "UNVERIFIABLE")).hasSize(3);
+
+        till.movementFeedUnreadable(false).customerListUnreadable(false).balanceInCurrency(null);
+        MvcResult healed = reconcile(FAKE_BINDING);
+
+        assertThat(counted(healed, "unverifiable")).isZero();
+        assertThat(openOfKind("UNVERIFIABLE")).isEmpty();
+    }
+
     // ------------------------------------------------------------------ push
 
     @Test
@@ -1080,6 +1348,28 @@ class LoyaltyPosSyncHttpTests {
                         .header("If-Match", "W/\"" + version + "\"")
                         .with(tokenFor(subject)))
                 .andReturn();
+    }
+
+    private String openDiscrepancies() throws Exception {
+        return get(BASE + "/discrepancies?status=OPEN", FINANCE).getResponse().getContentAsString(UTF_8);
+    }
+
+    private List<Map<String, Object>> openOfKind(String kind) throws Exception {
+        return JsonPath.read(openDiscrepancies(), "$[?(@.kind=='" + kind + "')]");
+    }
+
+    /** What a run lists under one kind, read from the report of that run and no other. */
+    private List<Map<String, Object>> listed(UUID runId, String kind) throws Exception {
+        String report = get(BASE + "/runs/" + runId, FINANCE).getResponse().getContentAsString(UTF_8);
+        return JsonPath.read(report, "$.discrepancies[?(@.kind=='" + kind + "')]");
+    }
+
+    private static UUID runIdOf(MvcResult run) throws Exception {
+        return UUID.fromString(JsonPath.read(run.getResponse().getContentAsString(UTF_8), "$.runId"));
+    }
+
+    private static int counted(MvcResult run, String field) throws Exception {
+        return JsonPath.<Integer>read(run.getResponse().getContentAsString(UTF_8), "$." + field);
     }
 
     private Map<String, Object> onlyDiscrepancy() throws Exception {

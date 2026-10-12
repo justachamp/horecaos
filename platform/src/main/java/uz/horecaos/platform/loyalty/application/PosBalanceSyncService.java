@@ -44,6 +44,7 @@ import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcPosBalanceSyn
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcPosBalanceSyncStore.PendingPush;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcPosBalanceSyncStore.RunRow;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcPosBalanceSyncStore.StateRow;
+import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcPosBalanceSyncStore.Subject;
 import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -88,6 +89,15 @@ public class PosBalanceSyncService {
 
     /** Likewise for one account's movement feed. */
     static final int MAX_MOVEMENT_PAGES = 20;
+
+    /** The longest vendor cursor kept to resume a walk of the till's customers; a longer one starts the next pass at the top. */
+    static final int MAX_STORED_CURSOR = 1024;
+
+    /**
+     * The kinds that are a size: the same kind with another amount is another difference, so what a person absorbed
+     * was the amount and not every later gap.
+     */
+    private static final Set<String> SIZED_KINDS = Set.of("TILL_HIGHER", "TILL_LOWER");
 
     public enum Mode {
         REPORT_ONLY,
@@ -242,14 +252,14 @@ public class PosBalanceSyncService {
                 pull(tenantId, brandId, binding, runId, counts);
             }
             if (kind == RunKind.PUSH && mode.pushes()) {
-                push(tenantId, binding, counts);
+                push(tenantId, brandId, binding, runId, counts);
             }
             if (kind == RunKind.RECONCILE) {
                 if (mode.pulls()) {
                     pull(tenantId, brandId, binding, runId, counts);
                 }
                 if (mode.pushes()) {
-                    push(tenantId, binding, counts);
+                    push(tenantId, brandId, binding, runId, counts);
                 }
                 compare(tenantId, brandId, binding, runId, counts);
             }
@@ -278,21 +288,64 @@ public class PosBalanceSyncService {
     // ==================================================================== match
 
     private void match(UUID tenantId, UUID brandId, SyncBinding binding, UUID runId, Counts counts) {
+        UUID bindingId = binding.bindingId();
         if (Boolean.FALSE.equals(binding.limits().get("one_to_one"))) {
             // ADR 0046's rejected row stays rejected: a programme whose unit is not one point to one som cannot be
             // bound, and the refusal says why. Opened once, refreshed after.
-            openOrRefresh(
-                    tenantId, brandId, binding.bindingId(), null, runId, null, "RATIO_MISMATCH", null, null, null);
+            observe(
+                    tenantId,
+                    brandId,
+                    bindingId,
+                    runId,
+                    "RATIO_MISMATCH",
+                    Subject.BINDING,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
             return;
         }
 
         Set<String> seen = new HashSet<>();
-        String cursor = null;
+        // Where the last pass stopped. One pass reads a bounded number of pages, so a till with more customers than
+        // that is walked over several; a walk that reached the end starts again at the top, where the customers who
+        // joined the till since are.
+        String cursor = store.matchCursor(tenantId, bindingId).orElse(null);
+        boolean readable = false;
         for (int page = 0; page < MAX_CUSTOMER_PAGES; page++) {
-            TillCustomerPage customers = port.listTillCustomers(tenantId, binding.bindingId(), cursor);
+            TillCustomerPage customers = port.listTillCustomers(tenantId, bindingId, cursor);
             if (customers.result() != Result.OK) {
-                counts.unverifiable++;
+                counts.customerListUnverifiable = true;
+                observe(
+                        tenantId,
+                        brandId,
+                        bindingId,
+                        runId,
+                        "UNVERIFIABLE",
+                        Subject.BINDING,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null);
+                if (customers.result() == Result.REJECTED && cursor != null) {
+                    // The till will not take the cursor kept for it: start again at the top next time, instead of
+                    // asking for the same page for ever and never reaching a customer beyond it.
+                    store.saveMatchCursor(tenantId, bindingId, null, clock.instant());
+                }
                 return;
+            }
+            if (!readable) {
+                readable = true;
+                conditionEnded(
+                        tenantId,
+                        bindingId,
+                        "UNVERIFIABLE",
+                        Subject.BINDING,
+                        null,
+                        null,
+                        "The till's customer list can be read again");
             }
             for (TillCustomer customer : customers.customers()) {
                 if (!seen.add(customer.externalCustomerId())) {
@@ -301,64 +354,48 @@ public class PosBalanceSyncService {
                 matchOne(tenantId, brandId, binding, runId, customer, counts);
             }
             cursor = customers.nextCursor();
+            // After the page's customers are matched, so a crash repeats a page (which matches each customer once)
+            // and never skips one.
+            store.saveMatchCursor(tenantId, bindingId, storable(bindingId, cursor), clock.instant());
             if (cursor == null) {
                 return;
             }
         }
     }
 
+    /** A cursor too long to keep is not kept: the next pass starts at the top, and the operator is told once. */
+    private static @Nullable String storable(UUID bindingId, @Nullable String cursor) {
+        if (cursor != null && cursor.length() > MAX_STORED_CURSOR) {
+            log.warn(
+                    "A till's customer cursor for binding {} is too long to resume from; the next pass starts at the top",
+                    bindingId);
+            return null;
+        }
+        return cursor;
+    }
+
     private void matchOne(
             UUID tenantId, UUID brandId, SyncBinding binding, UUID runId, TillCustomer customer, Counts counts) {
         UUID bindingId = binding.bindingId();
-        if (store.findStateByExternal(tenantId, bindingId, customer.externalCustomerId())
-                .isPresent()) {
+        String external = customer.externalCustomerId();
+        if (store.findStateByExternal(tenantId, bindingId, external).isPresent()) {
             return;
         }
         String phone = customer.phone();
         if (phone == null || phone.isBlank()) {
-            openOrRefresh(
-                    tenantId,
-                    brandId,
-                    bindingId,
-                    null,
-                    runId,
-                    customer.externalCustomerId(),
-                    "TILL_ONLY",
-                    null,
-                    null,
-                    null);
+            tillCustomerDifference(tenantId, brandId, bindingId, runId, "TILL_ONLY", null, external);
             counts.tillOnly++;
             return;
         }
         List<CustomerAccountRef> found = phones.findByPhone(tenantId, phone);
         if (found.isEmpty()) {
-            openOrRefresh(
-                    tenantId,
-                    brandId,
-                    bindingId,
-                    null,
-                    runId,
-                    customer.externalCustomerId(),
-                    "TILL_ONLY",
-                    null,
-                    null,
-                    null);
+            tillCustomerDifference(tenantId, brandId, bindingId, runId, "TILL_ONLY", null, external);
             counts.tillOnly++;
             return;
         }
         if (found.size() > 1) {
             // ADR 0015: two households can share one phone, and a guess would be the auto-merge it forbids.
-            openOrRefresh(
-                    tenantId,
-                    brandId,
-                    bindingId,
-                    null,
-                    runId,
-                    customer.externalCustomerId(),
-                    "AMBIGUOUS_MATCH",
-                    null,
-                    null,
-                    null);
+            tillCustomerDifference(tenantId, brandId, bindingId, runId, "AMBIGUOUS_MATCH", null, external);
             counts.ambiguous++;
             return;
         }
@@ -368,56 +405,29 @@ public class PosBalanceSyncService {
         if (account == null) {
             // A customer who has never earned or spent points at this brand has no points account, and one is not
             // created from a till row.
-            openOrRefresh(
-                    tenantId,
-                    brandId,
-                    bindingId,
-                    null,
-                    runId,
-                    customer.externalCustomerId(),
-                    "TILL_ONLY",
-                    null,
-                    null,
-                    null);
+            tillCustomerDifference(tenantId, brandId, bindingId, runId, "TILL_ONLY", null, external);
             counts.tillOnly++;
             return;
         }
         if (store.findStateByAccount(tenantId, bindingId, account.id()).isPresent()) {
             // The account is already paired with another till customer: two till records for one person.
-            openOrRefresh(
-                    tenantId,
-                    brandId,
-                    bindingId,
-                    account.id(),
-                    runId,
-                    customer.externalCustomerId(),
-                    "AMBIGUOUS_MATCH",
-                    null,
-                    null,
-                    null);
+            tillCustomerDifference(tenantId, brandId, bindingId, runId, "AMBIGUOUS_MATCH", account.id(), external);
             counts.ambiguous++;
             return;
         }
-        UUID mappingId = port.recordMatch(tenantId, bindingId, account.id(), customer.externalCustomerId())
-                .orElse(null);
+        UUID mappingId =
+                port.recordMatch(tenantId, bindingId, account.id(), external).orElse(null);
         if (mappingId == null) {
-            openOrRefresh(
-                    tenantId,
-                    brandId,
-                    bindingId,
-                    account.id(),
-                    runId,
-                    customer.externalCustomerId(),
-                    "AMBIGUOUS_MATCH",
-                    null,
-                    null,
-                    null);
+            tillCustomerDifference(tenantId, brandId, bindingId, runId, "AMBIGUOUS_MATCH", account.id(), external);
             counts.ambiguous++;
             return;
         }
         Instant now = clock.instant();
-        store.insertState(
-                Ids.newId(), tenantId, brandId, bindingId, account.id(), mappingId, customer.externalCustomerId(), now);
+        store.insertState(Ids.newId(), tenantId, brandId, bindingId, account.id(), mappingId, external, now);
+        // Matched: what said this till customer had no account, or too many, is over.
+        String reason = "The till customer is matched to a points account now";
+        conditionEnded(tenantId, bindingId, "TILL_ONLY", Subject.TILL_CUSTOMER, null, external, reason);
+        conditionEnded(tenantId, bindingId, "AMBIGUOUS_MATCH", Subject.TILL_CUSTOMER, null, external, reason);
         audit.record(AuditFact.of("loyalty.pos_sync.matched", AuditClass.BUSINESS)
                 .by(ActorRef.service(PosSyncMovementImporter.actorOf(bindingId)))
                 .at(ResourceScope.brand(tenantId, brandId))
@@ -427,6 +437,28 @@ public class PosBalanceSyncService {
                 .correlatedBy(runId.toString())
                 .occurredAt(now)
                 .build());
+    }
+
+    private void tillCustomerDifference(
+            UUID tenantId,
+            UUID brandId,
+            UUID bindingId,
+            UUID runId,
+            String kind,
+            @Nullable UUID accountId,
+            String externalCustomerId) {
+        observe(
+                tenantId,
+                brandId,
+                bindingId,
+                runId,
+                kind,
+                Subject.TILL_CUSTOMER,
+                accountId,
+                externalCustomerId,
+                null,
+                null,
+                null);
     }
 
     // ===================================================================== pull
@@ -449,7 +481,7 @@ public class PosBalanceSyncService {
                 TillMovementPage movements =
                         port.readMovements(tenantId, binding.bindingId(), state.externalCustomerId(), cursor);
                 if (movements.result() != Result.OK) {
-                    counts.unverifiable++;
+                    unverifiable(tenantId, brandId, binding.bindingId(), runId, state, counts);
                     break;
                 }
                 for (TillMovement movement : movements.movements()) {
@@ -482,7 +514,7 @@ public class PosBalanceSyncService {
 
     // ===================================================================== push
 
-    private void push(UUID tenantId, SyncBinding binding, Counts counts) {
+    private void push(UUID tenantId, UUID brandId, SyncBinding binding, UUID runId, Counts counts) {
         for (PendingPush pending : store.pendingPushes(tenantId, binding.bindingId())) {
             // Only the latest version matters: this reads the account as it is now, so a burst of movements since the
             // last pass is one write of one number.
@@ -510,7 +542,15 @@ public class PosBalanceSyncService {
                         tenantId, pending.stateId(), pending.accountVersion(), pending.balanceMinor(), clock.instant());
                 counts.pushed++;
             } else {
-                counts.unverifiable++;
+                unverifiable(
+                        tenantId,
+                        brandId,
+                        binding.bindingId(),
+                        runId,
+                        pending.accountId(),
+                        pending.externalCustomerId(),
+                        pending.balanceMinor(),
+                        counts);
             }
         }
     }
@@ -518,29 +558,32 @@ public class PosBalanceSyncService {
     // =================================================================== compare
 
     private void compare(UUID tenantId, UUID brandId, SyncBinding binding, UUID runId, Counts counts) {
-        for (StateRow state : store.matchedStates(tenantId, binding.bindingId())) {
+        UUID bindingId = binding.bindingId();
+        for (StateRow state : store.matchedStates(tenantId, bindingId)) {
             AccountRow account =
                     loyalty.findAccountById(tenantId, state.accountId()).orElse(null);
             if (account == null) {
                 continue;
             }
             counts.compared++;
-            TillBalance till = port.readBalance(tenantId, binding.bindingId(), state.externalCustomerId());
+            TillBalance till = port.readBalance(tenantId, bindingId, state.externalCustomerId());
             Instant now = clock.instant();
             if (till.result() == Result.REJECTED) {
                 // The till no longer knows this customer: matched on the platform side only.
-                openOrRefresh(
+                observe(
                         tenantId,
                         brandId,
-                        binding.bindingId(),
-                        account.id(),
+                        bindingId,
                         runId,
-                        state.externalCustomerId(),
                         "PLATFORM_ONLY",
+                        Subject.ACCOUNT,
+                        account.id(),
+                        state.externalCustomerId(),
                         account.balanceMinor(),
                         null,
                         null);
                 counts.platformOnly++;
+                endUnverifiableUnlessThisRunFoundIt(tenantId, bindingId, account.id(), counts);
                 continue;
             }
             if (till.result() != Result.OK
@@ -548,40 +591,48 @@ public class PosBalanceSyncService {
                     || (till.currency() != null && !till.currency().equals(account.currency()))) {
                 // "We could not tell" and "it differs" lead to different actions, and a till balance in another
                 // currency is refused rather than compared.
-                openOrRefresh(
+                unverifiable(
                         tenantId,
                         brandId,
-                        binding.bindingId(),
-                        account.id(),
+                        bindingId,
                         runId,
+                        account.id(),
                         state.externalCustomerId(),
-                        "UNVERIFIABLE",
                         account.balanceMinor(),
-                        null,
-                        null);
-                counts.unverifiable++;
+                        counts);
                 continue;
             }
+            // The till answered with a number we can compare: the two conditions that said it did not are over.
+            conditionEnded(
+                    tenantId,
+                    bindingId,
+                    "PLATFORM_ONLY",
+                    Subject.ACCOUNT,
+                    account.id(),
+                    null,
+                    "The till knows this customer again");
+            endUnverifiableUnlessThisRunFoundIt(tenantId, bindingId, account.id(), counts);
             long tillBalance = till.balanceMinor();
             store.observeTill(tenantId, state.id(), tillBalance, till.observedAt() != null ? till.observedAt() : now);
             if (tillBalance == account.balanceMinor()) {
                 counts.matched++;
-                closeConverged(tenantId, binding.bindingId(), account.id(), now);
+                endDifference(tenantId, bindingId, account.id(), "TILL_HIGHER");
+                endDifference(tenantId, bindingId, account.id(), "TILL_LOWER");
                 continue;
             }
             long delta = tillBalance - account.balanceMinor();
             String kind = delta > 0 ? "TILL_HIGHER" : "TILL_LOWER";
             // The opposite direction is stale the moment this one is true.
-            closeConvergedKind(
-                    tenantId, binding.bindingId(), account.id(), delta > 0 ? "TILL_LOWER" : "TILL_HIGHER", now);
-            openOrRefresh(
+            endDifference(tenantId, bindingId, account.id(), delta > 0 ? "TILL_LOWER" : "TILL_HIGHER");
+            observe(
                     tenantId,
                     brandId,
-                    binding.bindingId(),
-                    account.id(),
+                    bindingId,
                     runId,
-                    state.externalCustomerId(),
                     kind,
+                    Subject.ACCOUNT,
+                    account.id(),
+                    state.externalCustomerId(),
                     account.balanceMinor(),
                     tillBalance,
                     delta);
@@ -594,26 +645,110 @@ public class PosBalanceSyncService {
     }
 
     /**
-     * Opens a discrepancy, or refreshes the open one of the same kind for the same account (or till customer), so a
-     * pass that finds the same difference again updates the numbers a person is looking at instead of stacking rows.
+     * A matched account the run could not verify, once per run however many steps failed on it: the same account
+     * unreadable in the movement feed, in the push and in the balance read is one account the report cannot vouch for.
+     * It is also a row a person can read, so the number in the run is the number of rows listed under it.
      */
-    private void openOrRefresh(
+    private void unverifiable(UUID tenantId, UUID brandId, UUID bindingId, UUID runId, StateRow state, Counts counts) {
+        Long platformBalance = loyalty.findAccountById(tenantId, state.accountId())
+                .map(AccountRow::balanceMinor)
+                .orElse(null);
+        unverifiable(
+                tenantId,
+                brandId,
+                bindingId,
+                runId,
+                state.accountId(),
+                state.externalCustomerId(),
+                platformBalance,
+                counts);
+    }
+
+    private void unverifiable(
             UUID tenantId,
             UUID brandId,
             UUID bindingId,
-            @Nullable UUID accountId,
             UUID runId,
-            @Nullable String externalCustomerId,
+            UUID accountId,
+            String externalCustomerId,
+            @Nullable Long platformBalance,
+            Counts counts) {
+        if (!counts.unverifiableAccounts.add(accountId)) {
+            return;
+        }
+        observe(
+                tenantId,
+                brandId,
+                bindingId,
+                runId,
+                "UNVERIFIABLE",
+                Subject.ACCOUNT,
+                accountId,
+                externalCustomerId,
+                platformBalance,
+                null,
+                null);
+    }
+
+    /**
+     * The till has answered for this account; an earlier "could not tell" is over unless this very run met one on the
+     * account in the movement feed or the push, in which case it still stands.
+     */
+    private void endUnverifiableUnlessThisRunFoundIt(UUID tenantId, UUID bindingId, UUID accountId, Counts counts) {
+        if (!counts.unverifiableAccounts.contains(accountId)) {
+            conditionEnded(
+                    tenantId,
+                    bindingId,
+                    "UNVERIFIABLE",
+                    Subject.ACCOUNT,
+                    accountId,
+                    null,
+                    "The till answers for this customer again");
+        }
+    }
+
+    private void endDifference(UUID tenantId, UUID bindingId, UUID accountId, String kind) {
+        conditionEnded(tenantId, bindingId, kind, Subject.ACCOUNT, accountId, null, "The two balances agree again");
+    }
+
+    /**
+     * Records that a run saw a difference, and opens it only if it is new.
+     *
+     * <p>An open one of the same kind about the same subject is brought up to date; a pass that finds it again
+     * updates the numbers a person is looking at instead of stacking rows. One a person <em>absorbed</em> and that
+     * still holds is not reopened either: the brand has said it carries this, and asking again every pass is how an
+     * inbox stops being read. A difference whose size is what was absorbed (a balance difference of the same
+     * amount) is the same difference; a different size is a new one, because what was accepted was the amount.
+     * Either way the run lists it, so its counts and its listing agree.
+     */
+    private void observe(
+            UUID tenantId,
+            UUID brandId,
+            UUID bindingId,
+            UUID runId,
             String kind,
+            Subject subject,
+            @Nullable UUID accountId,
+            @Nullable String externalCustomerId,
             @Nullable Long platformBalance,
             @Nullable Long tillBalance,
             @Nullable Long delta) {
         Instant now = clock.instant();
-        DiscrepancyRow existing = store.findOpen(tenantId, bindingId, accountId, externalCustomerId, kind)
+        DiscrepancyRow open = store.findOpen(tenantId, bindingId, kind, subject, accountId, externalCustomerId)
                 .orElse(null);
-        if (existing != null) {
-            store.refreshDiscrepancy(tenantId, existing.id(), runId, platformBalance, tillBalance, delta, now);
+        if (open != null) {
+            store.refreshDiscrepancy(tenantId, open.id(), platformBalance, tillBalance, delta, now);
+            store.recordFinding(tenantId, runId, open.id(), platformBalance, tillBalance, delta, now);
             return;
+        }
+        DiscrepancyRow carried = store.findCarried(tenantId, bindingId, kind, subject, accountId, externalCustomerId)
+                .orElse(null);
+        if (carried != null) {
+            if (!SIZED_KINDS.contains(kind) || java.util.Objects.equals(carried.deltaMinor(), delta)) {
+                store.recordFinding(tenantId, runId, carried.id(), platformBalance, tillBalance, delta, now);
+                return;
+            }
+            store.uncarry(tenantId, carried.id());
         }
         UUID id = Ids.newId();
         store.insertDiscrepancy(
@@ -633,27 +768,33 @@ public class PosBalanceSyncService {
         events.publishEvent(new LoyaltySyncDiscrepancyOpened(tenantId, brandId, bindingId, id, accountId, kind));
     }
 
-    private void closeConverged(UUID tenantId, UUID bindingId, UUID accountId, Instant now) {
-        closeConvergedKind(tenantId, bindingId, accountId, "TILL_HIGHER", now);
-        closeConvergedKind(tenantId, bindingId, accountId, "TILL_LOWER", now);
-    }
-
     /**
      * A difference that is no longer true is closed by the system with the one resolution that describes what happened:
-     * the two numbers agree again without the platform having been rewritten, which is what ACCEPT_PLATFORM means. It is
-     * never a way to make a difference disappear that still exists.
+     * the two sides agree again without the platform having been rewritten, which is what ACCEPT_PLATFORM means. It is
+     * never a way to make a difference disappear that still exists. One a person had absorbed is let go of, so that if
+     * the condition comes back it is reported as the new difference it is.
      */
-    private void closeConvergedKind(UUID tenantId, UUID bindingId, UUID accountId, String kind, Instant now) {
-        store.findOpen(tenantId, bindingId, accountId, null, kind)
+    private void conditionEnded(
+            UUID tenantId,
+            UUID bindingId,
+            String kind,
+            Subject subject,
+            @Nullable UUID accountId,
+            @Nullable String externalCustomerId,
+            String reason) {
+        store.findOpen(tenantId, bindingId, kind, subject, accountId, externalCustomerId)
                 .ifPresent(open -> store.resolve(
                         tenantId,
                         open.id(),
                         open.version(),
                         Resolution.ACCEPT_PLATFORM.name(),
-                        "The two balances agree again",
+                        reason,
                         PosSyncMovementImporter.actorOf(bindingId),
                         null,
-                        now));
+                        false,
+                        clock.instant()));
+        store.findCarried(tenantId, bindingId, kind, subject, accountId, externalCustomerId)
+                .ifPresent(carried -> store.uncarry(tenantId, carried.id()));
     }
 
     // ================================================================ resolution
@@ -716,6 +857,9 @@ public class PosBalanceSyncService {
                 reason,
                 actorSubject,
                 approvalId,
+                // The brand carries it: a later pass that sees the same condition does not ask again. A difference
+                // that stands on a movement is that movement's, settled once, and is never seen again.
+                resolution == Resolution.ABSORB && discrepancy.movementId() == null,
                 now)) {
             throw new ApiException(
                     ErrorCode.RESOURCE_CONFLICT, "This discrepancy was resolved or changed by someone else");
@@ -949,8 +1093,13 @@ public class PosBalanceSyncService {
         int ambiguous;
         int imported;
         int held;
-        int unverifiable;
         int pushed;
+
+        /** The matched accounts this run could not vouch for, each once however many steps failed on it. */
+        final Set<UUID> unverifiableAccounts = new HashSet<>();
+
+        /** The till's customer list could not be read: not an account, but a thing the report cannot vouch for. */
+        boolean customerListUnverifiable;
 
         RunRow toRow(
                 UUID id,
@@ -977,7 +1126,7 @@ public class PosBalanceSyncService {
                     ambiguous,
                     imported,
                     held,
-                    unverifiable,
+                    unverifiableAccounts.size() + (customerListUnverifiable ? 1 : 0),
                     pushed,
                     "RUNNING",
                     null,
