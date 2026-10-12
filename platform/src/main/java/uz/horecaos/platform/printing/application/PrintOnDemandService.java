@@ -545,33 +545,61 @@ public class PrintOnDemandService {
     public byte[] preview(UUID tenantId, UUID brandId, UUID locationId, PreviewRequest request) {
         rls.bindTenant(tenantId);
         Instant now = clock.instant();
-        PrintDocument document;
-        RenderContext context;
         if (request.jobId() != null) {
             JobRow job = store.findJob(tenantId, request.jobId())
                     .filter(found -> found.locationId().equals(locationId))
                     .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such print job"));
-            if (job.protectedDocument() == null) {
-                throw new ApiException(
-                        ErrorCode.UNPROCESSABLE_STATE,
-                        "The document of this job has been erased",
-                        Map.of("reason", "DOCUMENT_ERASED"));
-            }
-            document = codec.fromJson(protection.reveal(
-                    tenantId,
-                    ProtectedValue.deserialize(job.protectedDocument()),
-                    new FieldProtection.RecordRef(PrintJobFactory.TABLE, PrintJobFactory.COLUMN, job.id()),
-                    "PRINT_PREVIEW"));
-            context = new RenderContext(
-                    Math.max(1, job.attempt()),
-                    job.queuedAt(),
-                    now,
-                    policy.lateMarkerMinutes(tenantId, brandId, locationId),
-                    (asset, width) -> logos.forAsset(tenantId, asset, width));
-        } else {
-            document = build(tenantId, brandId, locationId, request, now);
-            context = RenderContext.fresh(now).withLogos((asset, width) -> logos.forAsset(tenantId, asset, width));
+            return pictureOf(job, brandId, "PRINT_PREVIEW", now);
         }
+        PrintDocument document = build(tenantId, brandId, locationId, request, now);
+        return draw(
+                document, RenderContext.fresh(now).withLogos((asset, width) -> logos.forAsset(tenantId, asset, width)));
+    }
+
+    /**
+     * The picture of a job the caller handed to her browser (ADR 0154, Decision 10): the workstation prints the
+     * preview bitmap, so the person who pressed «Печать» has to be able to fetch it -- and a cashier, who holds
+     * {@code print.reprint} and not {@code print.read}, is that person. It is the same bitmap {@link #preview}
+     * draws, for one job only: one {@code HANDED_OFF} to a browser <em>by this person</em>. A job that is not that
+     * -- someone else's, one still in the queue, one that does not exist -- is not found, and the three look alike,
+     * so the answer says nothing about which jobs exist.
+     */
+    @Transactional(readOnly = true)
+    public byte[] handedOffPicture(UUID tenantId, UUID brandId, UUID locationId, UUID jobId, String requestedBy) {
+        rls.bindTenant(tenantId);
+        JobRow job = store.findJob(tenantId, jobId)
+                .filter(found -> found.locationId().equals(locationId))
+                .filter(found -> found.status() == JobStatus.HANDED_OFF && requestedBy.equals(found.requestedBy()))
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such print job"));
+        return pictureOf(job, brandId, "PRINT_BROWSER_HANDOFF", clock.instant());
+    }
+
+    /** A stored job's document, drawn as it would print now; {@code purpose} is what the decryption is recorded for. */
+    private byte[] pictureOf(JobRow job, UUID brandId, String purpose, Instant now) {
+        UUID tenantId = job.tenantId();
+        UUID locationId = job.locationId();
+        if (job.protectedDocument() == null) {
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    "The document of this job has been erased",
+                    Map.of("reason", "DOCUMENT_ERASED"));
+        }
+        PrintDocument document = codec.fromJson(protection.reveal(
+                tenantId,
+                ProtectedValue.deserialize(job.protectedDocument()),
+                new FieldProtection.RecordRef(PrintJobFactory.TABLE, PrintJobFactory.COLUMN, job.id()),
+                purpose));
+        return draw(
+                document,
+                new RenderContext(
+                        Math.max(1, job.attempt()),
+                        job.queuedAt(),
+                        now,
+                        policy.lateMarkerMinutes(tenantId, brandId, locationId),
+                        (asset, width) -> logos.forAsset(tenantId, asset, width)));
+    }
+
+    private byte[] draw(PrintDocument document, RenderContext context) {
         long started = System.nanoTime();
         try {
             return renderer.render(document, context).png();

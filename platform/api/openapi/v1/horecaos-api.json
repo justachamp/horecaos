@@ -97178,6 +97178,60 @@
         "tags" : [ "Printing" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/print/jobs/{jobId}/picture" : {
+      "get" : {
+        "description" : "The workstation prints the preview bitmap through the browser (ADR 0154, Decision 10), so the person who asked for paper on a browser printer fetches the picture here: the same 1-bit bitmap the preview draws, for a job in state HANDED_OFF that this caller requested. A job that is anyone else's, is not handed off, or does not exist answers 404. It changes nothing. It declares print.reprint, the capability that made the job, because the preview's print.read -- a picture of any document of the branch -- is held by managers and not by the floor.",
+        "operationId" : "printHandedOffPicture",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "jobId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "image/png" : {
+                "schema" : {
+                  "format" : "byte",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The picture of a job the caller handed to the browser",
+        "tags" : [ "Printing" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/print/jobs/{jobId}/reprint" : {
       "post" : {
         "description" : "For a dead, expired, cancelled or printed job: a new job, regenerated from the facts as they are now, marked as a copy, linked to the first print and recorded with the person and the reason. printerId chooses the printer; without it the document goes to the printer the old job was for, which must still be active. A job still queued or claimed, and a test page, are refused 422; a fiscal receipt is refused naming the state if its document is no longer an ISSUED SALE.",

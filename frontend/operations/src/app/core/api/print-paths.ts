@@ -81,6 +81,14 @@ export const printPaths = {
     return `${printRoot(scope)}/documents/preview`;
   },
 
+  /**
+   * `GET` (PNG back): the picture of a job the caller handed to the browser. The preview above is
+   * `print.read`, which a cashier does not hold; this is `print.reprint`, which made the job.
+   */
+  jobPicture(scope: LocationScope, jobId: string): string {
+    return `${printRoot(scope)}/jobs/${encodeURIComponent(jobId)}/picture`;
+  },
+
   agents(scope: LocationScope): string {
     return `${printRoot(scope)}/agents`;
   },

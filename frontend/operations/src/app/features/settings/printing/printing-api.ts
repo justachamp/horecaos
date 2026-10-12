@@ -364,9 +364,18 @@ export class PrintingApi {
     );
   }
 
-  /** The PNG of what a job would put on paper. Changes nothing. */
+  /** The PNG of what a job would put on paper. Changes nothing. Needs `print.read`: a manager's. */
   preview(scope: LocationScope, request: PreviewRequest): Promise<Blob> {
     return firstValueFrom(this.api.readBlob(printPaths.preview(scope), request));
+  }
+
+  /**
+   * The PNG of a job this person handed to the browser, which the workstation prints. A cashier holds
+   * `print.reprint` and not `print.read`, so this, and not {@link preview}, is how she gets the picture
+   * of the job she just made. Changes nothing.
+   */
+  handedOffPicture(scope: LocationScope, jobId: string): Promise<Blob> {
+    return firstValueFrom(this.api.blob(printPaths.jobPicture(scope, jobId)));
   }
 
   // -------------------------------------------------------------------- agents
