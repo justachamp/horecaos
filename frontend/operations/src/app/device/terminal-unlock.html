@@ -68,6 +68,16 @@
       <p class="unlock__hint" data-testid="terminal-locked">
         {{ message() ?? ('device.terminal.lockedUntilReset' | t) }}
       </p>
+      <!-- ADR 0155, Decision 4: «a person with no PIN, or a locked one» types an activation code here. The credential
+           locked for the day dropped its digest, so a code is the only way to replace it at the terminal. -->
+      <button
+        type="button"
+        class="unlock__action unlock__action--primary"
+        (click)="startActivation()"
+        data-testid="terminal-locked-code"
+      >
+        {{ 'device.terminal.haveCode' | t }}
+      </button>
       <button type="button" class="unlock__action" (click)="backToRoster()">
         {{ 'device.terminal.back' | t }}
       </button>

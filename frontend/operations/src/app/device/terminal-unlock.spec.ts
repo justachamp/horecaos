@@ -126,6 +126,16 @@ describe('TerminalUnlock (ADR 0155)', () => {
     expect(byId('pin-keypad')).toBeNull();
   });
 
+  it('still offers an activation code while a lock runs, which clears the lock', async () => {
+    await render();
+    terminal.unlock.mockResolvedValue({ kind: 'LOCKED', retryAfterSeconds: 840 });
+
+    tap('terminal-person-m1', ...digits('000000'));
+    await ok();
+
+    expect(byId('terminal-locked-code')).not.toBeNull();
+  });
+
   it('says a credential locked for the day is the manager’s to reset, without a keypad', async () => {
     await render();
 
@@ -133,6 +143,50 @@ describe('TerminalUnlock (ADR 0155)', () => {
 
     expect(byId('terminal-locked')?.textContent).toContain('Ask your manager');
     expect(byId('pin-keypad')).toBeNull();
+  });
+
+  it('lets a credential locked for the day be replaced with an activation code at this terminal (ADR 0155, Decision 4)', async () => {
+    const closed = await render();
+
+    tap('terminal-person-m3', 'terminal-locked-code');
+    expect(byId('pin-keypad')?.textContent).toContain('Enter the activation code');
+    tap(...digits('12345678'));
+    await ok();
+    tap(...digits('482915'));
+    await ok();
+    tap(...digits('482915'));
+    await ok();
+
+    expect(terminal.activate).toHaveBeenCalledWith('m3', '12345678', '482915');
+    expect(terminal.unlock).not.toHaveBeenCalled();
+    expect(closed).toHaveBeenCalled();
+  });
+
+  it('offers the code too when the twelfth wrong PIN locks the credential at this very terminal', async () => {
+    const closed = await render();
+    terminal.unlock.mockResolvedValue({ kind: 'LOCKED', retryAfterSeconds: null });
+
+    tap('terminal-person-m1', ...digits('000000'));
+    await ok();
+    expect(byId('terminal-locked')?.textContent).toContain('Ask your manager');
+    tap('terminal-locked-code', ...digits('87654321'));
+    await ok();
+    tap(...digits('482915'));
+    await ok();
+    tap(...digits('482915'));
+    await ok();
+
+    expect(terminal.activate).toHaveBeenCalledWith('m1', '87654321', '482915');
+    expect(closed).toHaveBeenCalled();
+  });
+
+  it('goes back to the roster from the code entry of a locked person, forgetting what was typed', async () => {
+    await render();
+
+    tap('terminal-person-m3', 'terminal-locked-code', 'pin-cancel');
+
+    expect(byId('terminal-roster')).not.toBeNull();
+    expect(terminal.activate).not.toHaveBeenCalled();
   });
 
   it('sets a PIN with a code: the code, the new PIN twice, then one activation call', async () => {
