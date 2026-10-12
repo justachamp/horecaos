@@ -37,7 +37,12 @@ function setUp(tableToken: string | null) {
   return { fixture, dineIn, router: TestBed.inject(Router) };
 }
 
-async function flush(): Promise<void> {
+/**
+ * Gives a path that must *not* do anything asynchronous a couple of turns in which to
+ * betray itself. It is only for absence checks: waiting for an effect to land is
+ * `vi.waitFor`, never a count of turns.
+ */
+async function letPendingWorkRun(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
 }
@@ -49,11 +54,14 @@ describe('DineInScanComponent', () => {
     const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
 
     fixture.detectChanges();
-    await flush();
+    // The navigation follows the exchange's promise by a runtime-defined number of
+    // microtask turns; wait for the call rather than counting turns.
+    // replaceUrl: the one-time token must not stay in history or a bookmark.
+    await vi.waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith(['/dine-in', 'table'], { replaceUrl: true }),
+    );
 
     expect(dineIn.exchange).toHaveBeenCalledWith('printed-table-token');
-    // replaceUrl: the one-time token must not stay in history or a bookmark.
-    expect(navigate).toHaveBeenCalledWith(['/dine-in', 'table'], { replaceUrl: true });
     expect(fixture.componentInstance.failed()).toBe(false);
   });
 
@@ -62,10 +70,11 @@ describe('DineInScanComponent', () => {
     dineIn.exchange.mockRejectedValue(new Error('refused'));
 
     fixture.detectChanges();
-    await flush();
+    // `failed` is set in a catch handler chained after the exchange's rejection, a
+    // runtime-defined number of microtask turns later; wait for it.
+    await vi.waitFor(() => expect(fixture.componentInstance.failed()).toBe(true));
     fixture.detectChanges();
 
-    expect(fixture.componentInstance.failed()).toBe(true);
     const host = fixture.nativeElement as HTMLElement;
     expect(host.querySelector('[data-testid="dine-in-scan-failed"]')).not.toBeNull();
     expect(host.textContent).toContain('dineIn.scanFailedTitle');
@@ -88,7 +97,7 @@ describe('DineInScanComponent', () => {
     const { fixture, dineIn } = setUp(null);
 
     fixture.detectChanges();
-    await flush();
+    await letPendingWorkRun();
 
     expect(dineIn.exchange).not.toHaveBeenCalled();
     expect(fixture.componentInstance.failed()).toBe(true);

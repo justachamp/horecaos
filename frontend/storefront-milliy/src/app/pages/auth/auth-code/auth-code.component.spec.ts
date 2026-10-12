@@ -95,10 +95,17 @@ function errorText(host: HTMLElement): string | null {
   return host.querySelector('[data-testid="auth-error"]')?.textContent?.trim() ?? null;
 }
 
+/**
+ * Lets the in-flight resend or sign-in run to its end, then renders the result.
+ *
+ * How many microtask turns a chain of awaited calls needs is the runtime's, so this does
+ * not count them: every spec that settles runs on fake timers, and the fake clock's async
+ * advance yields to the event loop before it moves the clock, which runs every
+ * already-queued promise continuation to the end. Advancing by nothing leaves the
+ * countdown where it was.
+ */
 async function settle(h: Harness): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  await vi.advanceTimersByTimeAsync(0);
   h.fixture.detectChanges();
 }
 

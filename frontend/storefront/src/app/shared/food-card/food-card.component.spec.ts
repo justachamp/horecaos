@@ -137,12 +137,12 @@ describe('FoodCardComponent: add-to-cart, signed in', () => {
     signIn(session);
 
     comp.increase(clickEvent());
-    await Promise.resolve();
-    await Promise.resolve();
+    // The add runs after the cart's load promise settles, a runtime-defined number of
+    // microtask turns later; wait for it rather than counting turns.
+    await vi.waitFor(() => expect(cart.add).toHaveBeenCalledWith('variant-1', 1));
 
     expect(navigateSpy).not.toHaveBeenCalled();
     expect(cart.load).toHaveBeenCalledTimes(1);
-    expect(cart.add).toHaveBeenCalledWith('variant-1', 1);
   });
 });
 
@@ -335,10 +335,7 @@ describe('FoodCardComponent: portions and weighed items (ADR 0137)', () => {
     signIn(session);
 
     comp.increase(clickEvent());
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(cart.add).toHaveBeenCalledWith('variant-1', 1);
+    await vi.waitFor(() => expect(cart.add).toHaveBeenCalledWith('variant-1', 1));
   });
 
   it('starts a variant whose portion does not divide one at the first quantity the cart accepts', async () => {
@@ -348,10 +345,7 @@ describe('FoodCardComponent: portions and weighed items (ADR 0137)', () => {
     signIn(session);
 
     comp.increase(clickEvent());
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(cart.add).toHaveBeenCalledWith('variant-1', 1.2);
+    await vi.waitFor(() => expect(cart.add).toHaveBeenCalledWith('variant-1', 1.2));
   });
 
   it('writes a half portion with the language’s decimal mark and its portion unit', () => {
