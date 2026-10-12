@@ -178,8 +178,17 @@ public class JdbcCartStore {
 
     // ------------------------------------------------------------------ auto-add (ADR 0158)
 
-    /** Writes a line the cart injected itself, with the rule and version that put it there. */
-    public void insertInjectedLine(
+    /**
+     * Writes a line the cart injected itself, with the rule and version that put it there.
+     *
+     * <p>A plain {@code INSERT} would raise a duplicate key when another request on the same cart injected
+     * the same rule's line between this request's read and its write, and that surfaces as a generic
+     * conflict a client does not retry. {@code ON CONFLICT DO NOTHING} waits for that request to finish and
+     * reports the lost race, so the caller can answer it as the stale version it is.
+     *
+     * @return false when the cart already holds a line under this key, because a concurrent request wrote it
+     */
+    public boolean insertInjectedLine(
             UUID lineId,
             UUID tenantId,
             UUID cartId,
@@ -189,24 +198,26 @@ public class JdbcCartStore {
             UUID ruleId,
             int ruleVersion,
             Instant now) {
-        jdbc.sql("""
+        return jdbc.sql("""
                 INSERT INTO ordering.cart_lines (
                     id, tenant_id, cart_id, line_key, variant_id, quantity,
                     origin, auto_add_rule_id, auto_add_rule_version, customer_adjusted,
                     version, created_at, updated_at)
                 VALUES (:id, :tenantId, :cartId, :lineKey, :variantId, :quantity,
                     'AUTO_ADD', :ruleId, :ruleVersion, false, 1, :now, :now)
+                ON CONFLICT (cart_id, line_key) DO NOTHING
                 """)
-                .param("id", lineId)
-                .param("tenantId", tenantId)
-                .param("cartId", cartId)
-                .param("lineKey", lineKey)
-                .param("variantId", variantId)
-                .param("quantity", quantity)
-                .param("ruleId", ruleId)
-                .param("ruleVersion", ruleVersion)
-                .param("now", utc(now))
-                .update();
+                        .param("id", lineId)
+                        .param("tenantId", tenantId)
+                        .param("cartId", cartId)
+                        .param("lineKey", lineKey)
+                        .param("variantId", variantId)
+                        .param("quantity", quantity)
+                        .param("ruleId", ruleId)
+                        .param("ruleVersion", ruleVersion)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
     }
 
     /**

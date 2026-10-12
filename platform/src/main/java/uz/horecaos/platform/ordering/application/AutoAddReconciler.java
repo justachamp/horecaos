@@ -459,7 +459,7 @@ public class AutoAddReconciler {
             keep.add(key);
             CartLineRow current = existing.get(key);
             if (current == null) {
-                carts.insertInjectedLine(
+                if (!carts.insertInjectedLine(
                         UUID.randomUUID(),
                         cart.tenantId(),
                         cart.cartId(),
@@ -468,7 +468,16 @@ public class AutoAddReconciler {
                         injection.quantity(),
                         rule.ruleId(),
                         rule.version(),
-                        now);
+                        now)) {
+                    // Another request on this cart wrote the rule's line after this one read the lines: the
+                    // basket this edit was built on is gone. A stale version, which a client re-reads and
+                    // retries, and not the duplicate key a plain insert would have raised.
+                    throw new CartService.StaleCartException(
+                            cart.version(),
+                            carts.find(cart.tenantId(), cart.brandId(), cart.cartId())
+                                    .map(CartRow::version)
+                                    .orElse(cart.version()));
+                }
                 count(rule, "fired");
                 changed = true;
                 continue;

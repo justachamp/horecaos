@@ -30,7 +30,9 @@
   (`PricingCommand.Item.autoAdded`, part of the quote's context hash, on the cart and on
   an amendment's repricing), and `PromotionEvaluator.matchingLines` never matches an
   injected line to a promotion that names products, variants or categories, which is
-  open input 2. Proved by `AutoAddEvaluatorTests`, `AutoAddRuleValidatorTests`,
+  open input 2. A request that loses a race to inject the same rule's line is answered
+  `STALE_VERSION`, which a client re-reads and retries, not a generic conflict. Proved by
+  `AutoAddEvaluatorTests`, `AutoAddRuleValidatorTests`,
   `AutoAddRuleEndpointTests`, `AutoAddCartHttpTests`, `AutoAddedLinesPromotionTests`,
   `PromotionEvaluatorRuleEngineTests` and `AggregatorOrderIntakeServiceTests`. Not built: the `OFFER`
   mode (the schema carries it; the first build ships `INJECT` only, as the ADR decided),

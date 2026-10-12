@@ -18,6 +18,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -35,6 +40,8 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -53,6 +60,7 @@ import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchro
 import uz.horecaos.platform.inventory.application.InventoryService;
 import uz.horecaos.platform.ordering.api.CustomerBotOrderingPort;
 import uz.horecaos.platform.ordering.api.OrderingConfigurationKeys;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore;
 import uz.horecaos.platform.reporting.application.DayCloseService;
 import uz.horecaos.platform.support.StubJwtIssuer;
 import uz.horecaos.platform.support.TestDatabase;
@@ -142,6 +150,12 @@ class AutoAddCartHttpTests {
 
     @Autowired
     private CustomerBotOrderingPort bot;
+
+    @Autowired
+    private JdbcCartStore cartStore;
+
+    @Autowired
+    private PlatformTransactionManager transactions;
 
     private int requests;
     private UUID customerAccount;
@@ -886,6 +900,59 @@ class AutoAddCartHttpTests {
     }
 
     @Test
+    @DisplayName("two requests racing to inject the same rule's line: the loser is told STALE_VERSION, which a "
+            + "client retries, and not a generic conflict")
+    void aRacingRequestIsAStaleVersionAndNotAGenericConflict() throws Exception {
+        UUID rule = activeRule(plainRule("cutlery", cutlery, "[\"PICKUP\"]"));
+        publish("STOREFRONT");
+        gate(true, false);
+        UUID cart = openCart("STOREFRONT", "PICKUP");
+        String key = "aa:" + rule;
+        CountDownLatch injected = new CountDownLatch(1);
+        CountDownLatch commit = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            // The winner is another request on the same cart that has injected the rule's line and moved the
+            // cart's version, and has not committed yet.
+            Future<?> winner = pool.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                cartStore.insertInjectedLine(
+                        UUID.randomUUID(), TENANT, cart, key, cutlery, BigDecimal.ONE, rule, 1, Instant.now());
+                cartStore.touchAndInvalidatePricing(TENANT, cart, 1, Instant.now());
+                injected.countDown();
+                try {
+                    commit.await(60, TimeUnit.SECONDS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
+            assertThat(injected.await(60, TimeUnit.SECONDS)).isTrue();
+            Future<MvcResult> loser = pool.submit(() -> rawPut(cart, 1, "burger", burger, "1"));
+            awaitASessionWaitingOnALock();
+            commit.countDown();
+            winner.get(60, TimeUnit.SECONDS);
+
+            MvcResult refused = loser.get(60, TimeUnit.SECONDS);
+
+            assertThat(refused.getResponse().getStatus()).isEqualTo(409);
+            assertThat(JSON.readTree(refused.getResponse().getContentAsString())
+                            .get("code")
+                            .asText())
+                    .as("the version moved under this request: a client re-reads and retries on STALE_VERSION and "
+                            + "does nothing with a generic RESOURCE_CONFLICT")
+                    .isEqualTo("STALE_VERSION");
+            assertThat(count("ordering.cart_lines"))
+                    .as("the loser's own line was rolled back with it; the winner's line is the only one")
+                    .isEqualTo(1);
+            // The retry the client now makes, on the version it re-reads, succeeds and keeps the one line.
+            JsonNode retried = putLine(cart, 2, "burger", burger, "1");
+            assertThat(lineKeys(retried)).containsExactly(key, "burger");
+        } finally {
+            commit.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
     @DisplayName("the operator's composer can take a rule's line off by sending its rule back as declined")
     void theOperatorCanTakeAnAutoAddedLineOff() throws Exception {
         UUID rule = activeRule(plainRule("cutlery", cutlery, "[\"PICKUP\"]", "[\"WEB\",\"CALL_CENTRE\"]"));
@@ -1050,6 +1117,21 @@ class AutoAddCartHttpTests {
                 .as(result.getResponse().getContentAsString())
                 .isEqualTo(200);
         return JSON.readTree(result.getResponse().getContentAsString());
+    }
+
+    /** Waits until another session is parked on a lock, which is the moment a racing request has reached its write. */
+    private void awaitASessionWaitingOnALock() throws InterruptedException {
+        for (int attempt = 0; attempt < 200; attempt++) {
+            Long waiting = jdbc.sql("SELECT count(*) FROM pg_stat_activity "
+                            + "WHERE datname = current_database() AND wait_event_type = 'Lock'")
+                    .query(Long.class)
+                    .single();
+            if (waiting > 0) {
+                return;
+            }
+            Thread.sleep(50);
+        }
+        throw new AssertionError("no session ever waited on a lock");
     }
 
     private MvcResult rawPrice(UUID cart, int version) throws Exception {
