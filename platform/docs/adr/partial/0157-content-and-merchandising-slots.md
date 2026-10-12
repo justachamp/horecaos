@@ -816,7 +816,12 @@ without `content.video.enabled` or `content.editorial.enabled` is refused with
 `INSUFFICIENT_CAPABILITY` and `ENTITLEMENT_REQUIRED` as different codes with different
 remediation and this record does not re-decide that; an empty answer from the gate (an
 unknown key) is read as not entitled. The same checks run, as warnings, on every draft
-save and feed the console's per-item problem list.
+save and feed the console's per-item problem list. Only a *publication* is refused for want
+of the entitlement: every console response carries the item's problems, so on a draft and on
+health a video the plan no longer covers is the warning `CONTENT_VIDEO_NOT_ENTITLED`
+(`ContentGates`), never a 403 -- listing, reading, ordering, withdrawing and archiving an
+item that already carries a video keep working after the entitlement is revoked, which is
+what "nothing is deleted" in the rollback below requires.
 
 ### Staff API (surface `operations`, ADR 0031)
 

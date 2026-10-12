@@ -1073,6 +1073,8 @@ export const marketingEn = {
     'The promotion this card is bound to is not live, so the card is hidden',
   'marketing.content.problem.CONTENT_MEDIA_NOT_RENDERED':
     'The image has not finished rendering, so the item is not shown yet',
+  'marketing.content.problem.CONTENT_VIDEO_NOT_ENTITLED':
+    'The plan no longer includes video, so this item is hidden and cannot be published again',
   'marketing.content.problem.other': 'Needs attention: {detail}',
 
   'marketing.content.media.none': 'No image yet.',

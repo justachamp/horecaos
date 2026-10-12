@@ -35,6 +35,7 @@ describe('content texts', () => {
       'CONTENT_KIND_NOT_ENABLED',
       'CONTENT_PROMOTION_NOT_LIVE',
       'CONTENT_MEDIA_NOT_RENDERED',
+      'CONTENT_VIDEO_NOT_ENTITLED',
     ];
     for (const code of adrCodes) {
       expect(PROBLEM_KEYS[code], code).toBeDefined();

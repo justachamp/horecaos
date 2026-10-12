@@ -1357,6 +1357,98 @@ class ContentEndpointTests {
         assertThat(reordered.change().toString()).doesNotContain("Первый");
     }
 
+    // ======================================================== a revoked video entitlement
+
+    @Test
+    @DisplayName(
+            "a plan that stops including video does not lock the console: the video banner is still listed, read, ordered, flagged, withdrawn and archived; only publishing a video is refused (403)")
+    void aVideoBannerStaysManageableAfterTheEntitlementIsRevoked() throws Exception {
+        fixture.entitle(plans, subscriptions, TENANT, false, true);
+        UUID video = fixture.video(TENANT, BRAND);
+        UUID poster = fixture.goodBanner(TENANT, BRAND);
+        String videoBanner = """
+                {"kind":"BANNER","internalName":"Video offer",
+                 "document":{"texts":{"ru":{"title":"Видео"}},
+                             "media":{"primaryAssetId":"%s","posterAssetId":"%s"}}}""".formatted(video, poster);
+        MvcResult created = post(CONTENT + "/items", OWNER, videoBanner, null);
+        assertThat(status(created))
+                .as(created.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(201);
+        JsonNode live = publish(body(created));
+        String id = live.get("id").stringValue();
+        JsonNode image = publish(body(post(
+                CONTENT + "/items",
+                OWNER,
+                bannerJson(fixture.goodBanner(TENANT, BRAND), "Image offer", "Картинка"),
+                null)));
+
+        // The plan is downgraded: the tenant sits on the catalogue's own safe default, video off.
+        jdbc.sql("TRUNCATE TABLE commercial.subscriptions, commercial.plan_entitlements,"
+                        + " commercial.plan_versions, commercial.plans CASCADE")
+                .update();
+
+        MvcResult listed = read(CONTENT + "/items?placement=HOME_CAROUSEL", OWNER);
+        assertThat(status(listed))
+                .as(
+                        "the placement can still be listed: %s",
+                        listed.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        JsonNode rows = body(listed).get("items");
+        assertThat(rows).hasSize(2);
+        for (JsonNode row : rows) {
+            boolean isVideo = row.get("id").stringValue().equals(id);
+            assertThat(row.get("problems").findValuesAsString("code"))
+                    .as("only the video item is flagged, as a warning")
+                    .isEqualTo(isVideo ? List.of("CONTENT_VIDEO_NOT_ENTITLED") : List.of());
+        }
+
+        MvcResult one = read(CONTENT + "/items/" + id, OWNER);
+        assertThat(status(one)).isEqualTo(200);
+        assertThat(body(one).get("liveRevision").get("revisionNo").intValue()).isEqualTo(1);
+
+        JsonNode health = body(read(CONTENT + "/health", OWNER));
+        assertThat(problemCodes(health, live)).containsExactly("CONTENT_VIDEO_NOT_ENTITLED");
+        assertThat(problemCodes(health, image)).isEmpty();
+
+        // Ordering the placement works with the video item in it.
+        String token = body(listed).get("orderToken").stringValue();
+        MvcResult ordered = putTo(
+                CONTENT + "/placements/HOME_CAROUSEL/order",
+                OWNER,
+                "{\"ids\":[\"%s\",\"%s\"],\"orderToken\":\"%s\"}"
+                        .formatted(image.get("id").stringValue(), id, token),
+                null);
+        assertThat(status(ordered))
+                .as(ordered.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+
+        // A new publication that carries a video is the one thing refused.
+        JsonNode current = item(id);
+        MvcResult edit = putTo(CONTENT + "/items/" + id + "/draft", OWNER, """
+                {"document":{"texts":{"ru":{"title":"Видео 2"}},
+                             "media":{"primaryAssetId":"%s","posterAssetId":"%s"}}}""".formatted(video, poster), etag(current));
+        assertThat(status(edit))
+                .as(
+                        "a draft that keeps its video can still be edited: %s",
+                        edit.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        MvcResult republish = post(CONTENT + "/items/" + id + "/publications", OWNER, null, etag(body(edit)));
+        assertThat(status(republish)).isEqualTo(403);
+        assertThat(body(republish).get("code").stringValue()).isEqualTo("ENTITLEMENT_REQUIRED");
+
+        // Taking it down is never refused.
+        JsonNode beforeTakedown = item(id);
+        MvcResult withdrawn = post(CONTENT + "/items/" + id + "/withdrawals", OWNER, null, etag(beforeTakedown));
+        assertThat(status(withdrawn))
+                .as(withdrawn.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        assertThat(body(withdrawn).get("state").stringValue()).isEqualTo("WITHDRAWN");
+        MvcResult archived = post(CONTENT + "/items/" + id + "/archives", OWNER, null, etag(body(withdrawn)));
+        assertThat(status(archived))
+                .as(archived.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+    }
+
     // ================================================================= policies
 
     @Test

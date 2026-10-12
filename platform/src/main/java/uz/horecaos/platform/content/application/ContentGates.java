@@ -124,13 +124,19 @@ public class ContentGates {
             subject.facts().assets().forEach(use -> assetIds.add(use.assetId()));
         }
         Map<UUID, Creative> creatives = assetIds.isEmpty() ? Map.of() : media.describe(tenantId, assetIds);
-        // A video is a paid feature: refused by entitlement (403), not by a gate code (422), because
-        // ADR 0031 keeps INSUFFICIENT_CAPABILITY and ENTITLEMENT_REQUIRED as different codes with
-        // different remediation. An empty answer from the gate is read as not entitled.
-        if (mode != Mode.HEALTH
-                && creatives.values().stream().anyMatch(c -> c.kind() == MediaCreativeLookup.Kind.VIDEO)
-                && !environment.videoEntitled(tenantId)) {
-            throw ApiException.entitlementRequired(ContentEntitlements.VIDEO_ENABLED);
+        // A video is a paid feature. A new publication of one is refused by entitlement (403), not by a
+        // gate code (422), because ADR 0031 keeps INSUFFICIENT_CAPABILITY and ENTITLEMENT_REQUIRED as
+        // different codes with different remediation. An empty answer from the gate is read as not
+        // entitled. Only a publication is refused: a plan that stops including video must not lock the
+        // console out of an item that already carries one (ADR 0157: "nothing is deleted"), and every
+        // console response carries the item's problems, so a draft and a health read take the same fact
+        // as a warning (CONTENT_VIDEO_NOT_ENTITLED) instead of throwing it.
+        boolean videoEntitled = true;
+        if (creatives.values().stream().anyMatch(c -> c.kind() == MediaCreativeLookup.Kind.VIDEO)) {
+            videoEntitled = environment.videoEntitled(tenantId);
+            if (!videoEntitled && mode == Mode.PUBLISH) {
+                throw ApiException.entitlementRequired(ContentEntitlements.VIDEO_ENABLED);
+            }
         }
 
         // One read of each channel's publication, for the ids every subject names.
@@ -191,7 +197,7 @@ public class ContentGates {
             }
             locale(subject, locales, policy, list);
             channels(subject, contentChannels, list);
-            media(subject, creatives, mode, list);
+            media(subject, creatives, mode, videoEntitled, list);
             targets(subject, contentChannels, productsByChannel, categoriesByChannel, list);
             promotions(subject, existingPromotions, livePromotions, mode, list);
             hosts(subject, allowlist, list);
@@ -254,7 +260,8 @@ public class ContentGates {
 
     // ----------------------------------------------------------------------- media
 
-    private void media(Subject subject, Map<UUID, Creative> creatives, Mode mode, List<FieldProblem> out) {
+    private void media(
+            Subject subject, Map<UUID, Creative> creatives, Mode mode, boolean videoEntitled, List<FieldProblem> out) {
         ContentKind kind = subject.kind();
         if (requiresPrimaryImage(kind) && !hasPrimary(subject)) {
             out.add(new FieldProblem("media.primaryAssetId", Codes.MEDIA_NOT_DISPLAYABLE, "An image is required"));
@@ -283,6 +290,12 @@ public class ContentGates {
                 continue;
             }
             boolean video = creative.kind() == MediaCreativeLookup.Kind.VIDEO;
+            if (video && !videoEntitled) {
+                out.add(new FieldProblem(
+                        use.field(),
+                        Codes.VIDEO_NOT_ENTITLED,
+                        "The plan does not include video, so the storefront does not show this item"));
+            }
             if (use.declaredKind() != null && video != "VIDEO".equals(use.declaredKind())) {
                 out.add(new FieldProblem(
                         use.field(),
