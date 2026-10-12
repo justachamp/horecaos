@@ -87,6 +87,11 @@ export interface FiscalEvidenceLineView {
   readonly discount: Money | null;
   readonly barcode: string | null;
   readonly markingCodeCount: number;
+  /**
+   * The INN this line was filed under (Click's `CommissionInfo`), as sent. Shown beside `seller.tin`, the INN the
+   * document was opened under, so a difference between the two is visible and not resolved in either one's favour.
+   */
+  readonly commissionTin?: string | null;
 }
 
 export interface FiscalEvidenceLinesView {

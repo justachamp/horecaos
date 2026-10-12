@@ -4616,6 +4616,7 @@ export interface OperationsDispatchRulesControllerUsageResponse {
 
 export interface OperationsFiscalEvidenceControllerLineResponse {
   barcode?: string;
+  commissionTin?: string;
   discount?: ApiMoney;
   ikpu?: string;
   kind?: string;

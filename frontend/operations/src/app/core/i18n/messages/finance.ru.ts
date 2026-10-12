@@ -798,6 +798,9 @@ export const financeRu: AreaMessages<typeof financeEn> = {
     'Строки по этому чеку не записаны: либо ещё ничего не отправлено, либо отправленное не сохранилось. Вместо них ничего не показывается.',
   'finance.fiscalEvidence.lines.notReadable':
     'Строки записаны, но их не удаётся открыть. Вместо них ничего не показывается.',
+  'finance.fiscalEvidence.lines.filedUnder': 'Строки поданы под ИНН {tin}.',
+  'finance.fiscalEvidence.lines.filedUnderDiffers':
+    'Строки поданы под ИНН {filed}, а это не тот ИНН, под которым открыт документ ({opened}). Оба показаны как записано; здесь ничего не исправлялось.',
   'finance.fiscalEvidence.lines.marksTransmitted':
     'С этим чеком передано кодов маркировки: {count}. На экране остаётся только число.',
   'finance.fiscalEvidence.correction.state':

@@ -372,4 +372,12 @@ public class PaymentFiscalService {
     public Optional<FiscalDocument> find(UUID tenantId, UUID documentId) {
         return documents.find(tenantId, documentId);
     }
+
+    /**
+     * The taxpayer number the document was opened under (ADR 0166, Decision 3): the snapshot, never
+     * the legal entity's number today and never the order's location resolved again.
+     */
+    public Optional<String> sellerTaxpayerNumber(UUID tenantId, UUID documentId) {
+        return documents.sellerTin(tenantId, documentId);
+    }
 }

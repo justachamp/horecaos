@@ -49,6 +49,14 @@
   customer the same link ADR 0058 already sends them, for the receipts still in force and nothing
   else about them, and the storefront's order page shows it (`storefront-milliy` has no order
   detail page to show it on).
+  The seller a receipt is filed under is the snapshot and nothing else (Decisions 3 and 9):
+  `PartnerFiscalizationBridge` reads `seller_tin` through `payments.fiscal_documents` (V0640 appends
+  the column to the compatibility view) and never resolves the order's location a second time, so a
+  branch that has changed hands or an entity re-registered since the sale does not move the INN a
+  receipt is filed under; a marked order whose document holds no snapshot is not sent at all (nothing
+  is filed under a TIN of zeros), and only a sandbox placeholder may carry the visibly synthetic zero.
+  Each line of the evidence read carries the INN it was filed under (`commissionTin`, as sent), and the
+  console states it beside the INN the document was opened under and says so when the two differ.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides

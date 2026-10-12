@@ -156,7 +156,15 @@ public class FiscalEvidenceService {
     /** The merchant account the submission went through. The reference names it; it does not authenticate. */
     public record MerchantAccount(UUID bindingId, @Nullable String accountReferenceMasked) {}
 
-    /** One line as filed. {@code markingCodeCount} is a number of codes, never a code. */
+    /**
+     * One line as filed. {@code markingCodeCount} is a number of codes, never a code.
+     *
+     * @param commissionTin the seller's TIN the line was sent with (Click's {@code CommissionInfo}), as
+     *     sent: a business identifier. Shown beside {@link Seller#tin()} so the INN a document was opened
+     *     under and the INN its receipt was filed under can be read side by side, and a difference between
+     *     the two is visible and not silently resolved in favour of the snapshot. Null on a provider that
+     *     has no such field, and on a request that predates it
+     */
     public record Line(
             String kind,
             String name,
@@ -169,7 +177,8 @@ public class FiscalEvidenceService {
             int vatPercent,
             @Nullable Money discount,
             @Nullable String barcode,
-            int markingCodeCount) {}
+            int markingCodeCount,
+            @Nullable String commissionTin) {}
 
     /**
      * The lines of a filed receipt.
@@ -372,7 +381,8 @@ public class FiscalEvidenceService {
                         line.vatPercent(),
                         line.discountMinor() == null ? null : new Money(line.discountMinor(), sent.currency()),
                         line.barcode(),
-                        line.markingCodeCount()));
+                        line.markingCodeCount(),
+                        line.commissionTin()));
             }
             return new Lines("AVAILABLE", sent.synthetic(), items, codes);
         } catch (RuntimeException unreadable) {

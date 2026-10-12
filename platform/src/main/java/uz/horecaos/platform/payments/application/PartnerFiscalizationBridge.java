@@ -20,8 +20,6 @@ import uz.horecaos.platform.payments.domain.PaymentProviderType;
 import uz.horecaos.platform.payments.domain.ProviderBinding;
 import uz.horecaos.platform.payments.domain.SomAmount;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentIntentStore;
-import uz.horecaos.platform.tenancy.api.FiscalSeller;
-import uz.horecaos.platform.tenancy.api.LegalEntityDirectory;
 
 /**
  * The other half of ADR 0038's rollout stage 4: {@code fiscal.api}'s consumer-declared
@@ -85,7 +83,6 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
     private final PaymentBindingResolver bindings;
     private final JdbcPaymentIntentStore intents;
     private final OrderDirectory orders;
-    private final LegalEntityDirectory legalEntities;
     private final SyntheticLineGate syntheticLines;
     private final Clock clock;
     private final @Nullable MarkedOrderReceiptProjection markedOrders;
@@ -96,10 +93,9 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
             PaymentBindingResolver bindings,
             JdbcPaymentIntentStore intents,
             OrderDirectory orders,
-            LegalEntityDirectory legalEntities,
             SyntheticLineGate syntheticLines,
             Clock clock) {
-        this(fiscalDocuments, bindings, intents, orders, legalEntities, syntheticLines, clock, null);
+        this(fiscalDocuments, bindings, intents, orders, syntheticLines, clock, null);
     }
 
     /**
@@ -112,7 +108,6 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
             PaymentBindingResolver bindings,
             JdbcPaymentIntentStore intents,
             OrderDirectory orders,
-            LegalEntityDirectory legalEntities,
             SyntheticLineGate syntheticLines,
             Clock clock,
             @Nullable MarkedOrderReceiptProjection markedOrders) {
@@ -120,7 +115,6 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
         this.bindings = bindings;
         this.intents = intents;
         this.orders = orders;
-        this.legalEntities = legalEntities;
         this.syntheticLines = syntheticLines;
         this.clock = clock;
         this.markedOrders = markedOrders;
@@ -167,9 +161,24 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
             // ADR 0161: an order holding a marked line is never given the synthetic aggregate line. Its
             // receipt is projected from the order's lines and the codes scanned at the pass, or nothing is
             // sent at all.
-            MarkedOrderReceiptProjection.Result marked = markedOrders == null
-                    ? new MarkedOrderReceiptProjection.Result.NotMarked()
-                    : markedOrders.project(document, commissionTin(document));
+            MarkedOrderReceiptProjection.Result marked;
+            if (markedOrders == null) {
+                marked = new MarkedOrderReceiptProjection.Result.NotMarked();
+            } else {
+                Optional<String> filedUnder = fiscalDocuments.sellerTaxpayerNumber(tenantId, documentId);
+                if (filedUnder.isEmpty()) {
+                    // ADR 0166, Decision 3 and 9: the seller of a real receipt is the taxpayer the document
+                    // was opened under, and Click files what it is sent. A document with no snapshot has no
+                    // seller to name, and a real receipt with real codes is never filed under a TIN of
+                    // zeros: nothing is built and nothing is sent.
+                    log.warn(
+                            "Fiscal document {} for order {} was not sent: it holds no seller snapshot",
+                            documentId,
+                            document.orderId());
+                    return Outcome.REJECTED;
+                }
+                marked = markedOrders.project(document, filedUnder.get());
+            }
             switch (marked) {
                 case MarkedOrderReceiptProjection.Result.MarksIncomplete incomplete -> {
                     return Outcome.BLOCKED_MARKS;
@@ -235,6 +244,12 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
     }
 
     private FiscalReceiptLine syntheticLine(FiscalDocument document, String fiscalName, SomAmount amount) {
+        // The snapshot, as for a real receipt. The visibly synthetic zero is the fallback for a sandbox
+        // placeholder only (the gate has already refused everywhere else), where it cannot be mistaken
+        // for a sale.
+        String commissionTin = fiscalDocuments
+                .sellerTaxpayerNumber(document.tenantId(), document.id())
+                .orElse(SYNTHETIC_TIN);
         return new FiscalReceiptLine(
                 fiscalName,
                 SYNTHETIC_MXIK_CODE,
@@ -247,26 +262,8 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
                 null,
                 null,
                 List.of(),
-                commissionTin(document),
+                commissionTin,
                 null);
-    }
-
-    /**
-     * Best-effort resolution of the seller's real TIN through the order's own
-     * location, falling back to a visibly synthetic one. {@link LegalEntityDirectory}
-     * answers by location and business date, never by an entity id alone, so this
-     * asks the same question the order's own fiscalization already asked and
-     * accepts the answer only when it names the same entity the document snapshotted
-     * — a location whose assignment changed since must not attribute today's
-     * resolution to yesterday's sale.
-     */
-    private String commissionTin(FiscalDocument document) {
-        return orders.summary(document.tenantId(), document.orderId())
-                .flatMap(
-                        order -> legalEntities.sellerFor(document.tenantId(), order.locationId(), LocalDate.now(clock)))
-                .filter(seller -> seller.legalEntityId().equals(document.legalEntityId()))
-                .map(FiscalSeller::taxpayerNumber)
-                .orElse(SYNTHETIC_TIN);
     }
 
     private static FiscalDocument copyWithLines(FiscalDocument document, List<FiscalReceiptLine> lines) {

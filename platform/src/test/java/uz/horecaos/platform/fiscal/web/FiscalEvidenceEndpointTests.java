@@ -251,6 +251,9 @@ class FiscalEvidenceEndpointTests {
         assertThat(first.path("unitPrice").path("amountMinor").asLong()).isEqualTo(25_000L);
         assertThat(first.path("unitPrice").path("currency").asText()).isEqualTo("UZS");
         assertThat(first.path("vatPercent").asInt()).isEqualTo(12);
+        assertThat(first.path("commissionTin").asText())
+                .as("the INN the line was filed under (Click's CommissionInfo), as sent")
+                .isEqualTo(TIN_A);
 
         JsonNode split = document.path("tenderSplit");
         assertThat(split.path("card").path("amountMinor").asLong())
@@ -263,6 +266,26 @@ class FiscalEvidenceEndpointTests {
         assertThat(body.path("retention").path("provisional").asBoolean())
                 .as("a seven-year default nobody has confirmed says so")
                 .isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "the INN a line was filed under is shown beside the INN the document was opened under, so a difference is visible")
+    void theFiledInnIsShownBesideTheOpeningInn() throws Exception {
+        UUID orderId = seedOrder("E-102");
+        // The document names entity A (snapshot TIN_A) but the request that left carried entity B's INN:
+        // the surface must be able to say so rather than let the snapshot stand for what was filed.
+        issuedClickDocument(orderId, ENTITY_A, lineFiledUnder("Lavash classic", TIN_B));
+
+        JsonNode document = evidence(FINANCE, orderId, null).path("documents").path(0);
+
+        assertThat(document.path("seller").path("tin").asText()).isEqualTo(TIN_A);
+        assertThat(document.path("lines")
+                        .path("items")
+                        .path(0)
+                        .path("commissionTin")
+                        .asText())
+                .isEqualTo(TIN_B);
     }
 
     @Test
@@ -1285,6 +1308,24 @@ class FiscalEvidenceEndpointTests {
                 .param("tenant", TENANT)
                 .query()
                 .listOfRows();
+    }
+
+    private FiscalReceiptLine lineFiledUnder(String name, String commissionTin) {
+        FiscalReceiptLine base = line(name, 1, 25_000L, List.of());
+        return new FiscalReceiptLine(
+                base.fiscalName(),
+                base.mxikCode(),
+                base.packageCode(),
+                base.unitCode(),
+                base.quantity(),
+                base.unitPrice(),
+                base.taxAmount(),
+                base.vatPercent(),
+                base.discount(),
+                base.barcode(),
+                base.markingCodes(),
+                commissionTin,
+                null);
     }
 
     private FiscalReceiptLine line(String name, int quantity, long unitPrice, List<String> markingCodes) {

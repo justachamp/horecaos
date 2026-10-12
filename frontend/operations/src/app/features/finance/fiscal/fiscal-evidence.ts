@@ -471,6 +471,24 @@ export class FiscalEvidence {
     return key ? this.i18n.t(key) : source;
   }
 
+  /** The distinct INNs the lines were filed under, as sent (ADR 0166, Decision 9). Empty when none was recorded. */
+  protected filedTins(document: FiscalEvidenceDocumentView): readonly string[] {
+    const filed = document.lines.items
+      .map((line) => line.commissionTin)
+      .filter((tin): tin is string => !!tin);
+    return [...new Set(filed)];
+  }
+
+  /**
+   * True when the receipt was filed under an INN other than the one the document was opened under. The surface says
+   * so rather than letting the snapshot stand in for what was filed: they are two facts, and an inspector asks for
+   * the second.
+   */
+  protected filedTinDiffers(document: FiscalEvidenceDocumentView): boolean {
+    const filed = this.filedTins(document);
+    return filed.length > 0 && filed.some((tin) => tin !== document.seller.tin);
+  }
+
   /** A line of kind `ITEM` needs no label; the delivery fee and the placeholder are named. */
   protected lineKindLabel(line: FiscalEvidenceLineView): string | null {
     const key = LINE_KIND_KEYS[line.kind];

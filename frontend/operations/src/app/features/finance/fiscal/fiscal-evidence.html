@@ -274,6 +274,24 @@
                 </tbody>
               </table>
             </div>
+            @if (filedTins(document); as filed) {
+              @if (filed.length > 0) {
+                <p class="q-body-sm" data-testid="fiscal-evidence-filed-inn">
+                  {{ 'finance.fiscalEvidence.lines.filedUnder' | t: { tin: filed.join(', ') } }}
+                </p>
+                @if (filedTinDiffers(document)) {
+                  <p
+                    class="q-body-sm evidence__warning"
+                    data-testid="fiscal-evidence-filed-inn-differs"
+                  >
+                    {{
+                      'finance.fiscalEvidence.lines.filedUnderDiffers'
+                        | t: { filed: filed.join(', '), opened: document.seller.tin ?? '—' }
+                    }}
+                  </p>
+                }
+              }
+            }
             @if ((document.lines.markingCodesTransmitted ?? 0) > 0) {
               <p class="q-body-sm" data-testid="fiscal-evidence-codes-sent">
                 {{

@@ -796,6 +796,9 @@ export const financeEn = {
     'No lines were recorded for this receipt: either nothing has been sent yet, or what was sent was not kept. Nothing is shown in their place.',
   'finance.fiscalEvidence.lines.notReadable':
     'The lines were recorded but cannot be opened. Nothing is shown in their place.',
+  'finance.fiscalEvidence.lines.filedUnder': 'The lines were filed under TIN {tin}.',
+  'finance.fiscalEvidence.lines.filedUnderDiffers':
+    'The lines were filed under TIN {filed}, which is not the TIN this document was opened under ({opened}). Both are shown as recorded; nothing here has been corrected.',
   'finance.fiscalEvidence.lines.marksTransmitted':
     '{count} marking codes were sent with this receipt. Only the number is kept on screen.',
   'finance.fiscalEvidence.correction.state':

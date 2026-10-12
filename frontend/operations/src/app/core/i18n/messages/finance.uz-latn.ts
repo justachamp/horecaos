@@ -803,6 +803,9 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
     'Bu chek uchun qatorlar yozilmagan: yo hali hech narsa yuborilmagan, yo yuborilgani saqlanmagan. Oʻrniga hech narsa koʻrsatilmaydi.',
   'finance.fiscalEvidence.lines.notReadable':
     'Qatorlar yozilgan, lekin ularni ochib boʻlmadi. Oʻrniga hech narsa koʻrsatilmaydi.',
+  'finance.fiscalEvidence.lines.filedUnder': 'Qatorlar {tin} STIR ostida topshirilgan.',
+  'finance.fiscalEvidence.lines.filedUnderDiffers':
+    'Qatorlar {filed} STIR ostida topshirilgan, bu hujjat ochilgan STIR ({opened}) emas. Ikkalasi ham yozilganidek koʻrsatilgan; bu yerda hech narsa tuzatilmagan.',
   'finance.fiscalEvidence.lines.marksTransmitted':
     'Bu chek bilan {count} ta markirovka kodi yuborilgan. Ekranda faqat son qoladi.',
   'finance.fiscalEvidence.correction.state':

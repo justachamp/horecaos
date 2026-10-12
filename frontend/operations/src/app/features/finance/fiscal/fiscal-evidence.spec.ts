@@ -262,6 +262,44 @@ describe('FiscalEvidence: the fiscal evidence of one order (row X.2, ADR 0166)',
       expect(textOf(fixture, 'fiscal-evidence-split')).toContain('Cash: 0');
     });
 
+    it('states the INN the lines were filed under, and says nothing of a difference when it is the same', async () => {
+      configure({
+        masked: view([
+          document_({
+            lines: { ...document_().lines, items: [line({ commissionTin: '123456789' })] },
+          }),
+        ]),
+      });
+      const fixture = await render();
+
+      expect(textOf(fixture, 'fiscal-evidence-filed-inn')).toContain('123456789');
+      expect(byTestId(fixture, 'fiscal-evidence-filed-inn-differs')).toBeNull();
+    });
+
+    it('says so when the lines were filed under another INN than the one the document was opened under', async () => {
+      configure({
+        masked: view([
+          document_({
+            lines: { ...document_().lines, items: [line({ commissionTin: '987654321' })] },
+          }),
+        ]),
+      });
+      const fixture = await render();
+
+      expect(textOf(fixture, 'fiscal-evidence-inn')).toContain('123456789');
+      expect(textOf(fixture, 'fiscal-evidence-filed-inn')).toContain('987654321');
+      const differs = textOf(fixture, 'fiscal-evidence-filed-inn-differs');
+      expect(differs).toContain('987654321');
+      expect(differs).toContain('123456789');
+    });
+
+    it('states no filed INN when none was recorded, rather than assuming the document’s', async () => {
+      configure({ masked: view([document_()]) });
+      const fixture = await render();
+
+      expect(byTestId(fixture, 'fiscal-evidence-filed-inn')).toBeNull();
+    });
+
     it('gives the delivery fee its own row, named, with its own ИКПУ and package code', async () => {
       configure({
         masked: view([

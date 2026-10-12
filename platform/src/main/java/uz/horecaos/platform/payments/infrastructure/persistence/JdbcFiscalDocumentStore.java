@@ -91,6 +91,26 @@ public class JdbcFiscalDocumentStore {
     }
 
     /**
+     * The INN this document was opened under: the snapshot V0551's trigger took when the row was
+     * inserted (ADR 0166, Decision 3), read through the compatibility view V0640 widened.
+     *
+     * <p>Empty when the document holds no snapshot (a row from before the snapshot existed whose entity
+     * could not be read), which is a different fact from "the entity's INN is X today": the caller must
+     * not substitute a resolution made now for a sale made then.
+     */
+    public Optional<String> sellerTin(UUID tenantId, UUID documentId) {
+        return jdbc
+                .sql("SELECT seller_tin FROM payments.fiscal_documents WHERE tenant_id = :tenantId AND id = :id")
+                .param("tenantId", tenantId)
+                .param("id", documentId)
+                .query((row, number) -> row.getString("seller_tin"))
+                .list()
+                .stream()
+                .filter(Objects::nonNull)
+                .findFirst();
+    }
+
+    /**
      * Documents that reached {@code ISSUED} in {@code [from, to)}, oldest first (ADR 0154's reconciling
      * sweep). Answers the instant it was issued alongside, which a {@link FiscalDocument} does not carry.
      */

@@ -369,6 +369,10 @@ public class OperationsFiscalEvidenceController {
     public record MerchantAccountResponse(
             UUID bindingId, @Nullable String accountReferenceMasked) {}
 
+    /**
+     * @param commissionTin the INN the line was filed under, as sent; shown beside {@code seller.tin}, the INN
+     *     the document was opened under, so a difference between the two is visible
+     */
     public record LineResponse(
             String kind,
             String name,
@@ -381,7 +385,8 @@ public class OperationsFiscalEvidenceController {
             int vatPercent,
             @Nullable ApiMoney discount,
             @Nullable String barcode,
-            int markingCodeCount) {}
+            int markingCodeCount,
+            @Nullable String commissionTin) {}
 
     /** @param state AVAILABLE, NOT_SENT (nothing was sent, or it was not kept) or NOT_READABLE */
     public record LinesResponse(
@@ -503,7 +508,8 @@ public class OperationsFiscalEvidenceController {
                 line.vatPercent(),
                 line.discount() == null ? null : money(line.discount()),
                 line.barcode(),
-                line.markingCodeCount());
+                line.markingCodeCount(),
+                line.commissionTin());
     }
 
     public record PathEntryResponse(
