@@ -653,7 +653,7 @@ public class PrintConsoleController {
                     row.queuedAt(),
                     row.expiresAt(),
                     row.printedAt(),
-                    row.protectedDocument() == null,
+                    row.documentErased(),
                     row.version());
         }
     }

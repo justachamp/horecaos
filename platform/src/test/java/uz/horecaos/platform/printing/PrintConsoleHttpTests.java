@@ -24,6 +24,7 @@ import tools.jackson.databind.JsonNode;
 import uz.horecaos.platform.printing.PrintingWorld.LineSpec;
 import uz.horecaos.platform.printing.PrintingWorld.SeededOrder;
 import uz.horecaos.platform.printing.application.PrintDocumentCodec;
+import uz.horecaos.platform.printing.application.PrintMaintenance;
 import uz.horecaos.platform.printing.infrastructure.JdbcPrintingStore;
 import uz.horecaos.platform.printing.infrastructure.JdbcPrintingStore.JobRow;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
@@ -42,6 +43,10 @@ class PrintConsoleHttpTests extends PrintingSpringTest {
     @Autowired
     @SuppressWarnings("NullAway")
     private PrintDocumentCodec codec;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private PrintMaintenance maintenance;
 
     @Autowired
     @SuppressWarnings("NullAway")
@@ -670,6 +675,50 @@ class PrintConsoleHttpTests extends PrintingSpringTest {
                         .asString())
                 .isEqualTo("CANCELLED");
         assertThat(Map.of("shown", "never the document")).doesNotContainKey("protectedDocument");
+    }
+
+    @Test
+    @DisplayName(
+            "the queue says a job's document is still there until the maintenance pass erases it, in the list and in the answer to a cancel")
+    void theQueueSaysWhetherTheDocumentIsStillThere() throws Exception {
+        JsonNode counter = agentPrinter("Counter", "counter");
+        route("ORDER_SLIP", null, counter.get("id").asString(), true);
+        confirm(anOrder());
+        assertThat(fake.handleOnce()).as("the slip is printed").hasSize(1);
+        String printed = ok(getAs(PRINT + "/jobs", MANAGER))
+                .get("items")
+                .get(0)
+                .get("id")
+                .asString();
+
+        JsonNode listed = ok(getAs(PRINT + "/jobs", MANAGER)).get("items").get(0);
+        assertThat(listed.get("id").asString()).isEqualTo(printed);
+        assertThat(listed.get("documentErased").asBoolean())
+                .as("a job printed a moment ago still holds its document, so the queue offers its preview")
+                .isFalse();
+        assertThat(ok(getAs(PRINT + "/jobs/" + printed, MANAGER))
+                        .get("documentErased")
+                        .asBoolean())
+                .as("the job read alone says the same")
+                .isFalse();
+
+        String queued = created(
+                        postJson(PRINT + "/printers/" + counter.get("id").asString() + "/test-page", MANAGER, null))
+                .get("id")
+                .asString();
+        assertThat(ok(postJson(PRINT + "/jobs/" + queued + "/cancel", MANAGER, null))
+                        .get("documentErased")
+                        .asBoolean())
+                .as("a cancelled job keeps its document until the pass erases it")
+                .isFalse();
+
+        clock.advance(Duration.ofDays(8));
+        assertThat(maintenance.runOnce().purged()).isEqualTo(2);
+
+        assertThat(ok(getAs(PRINT + "/jobs", MANAGER)).get("items"))
+                .as("seven days on, nothing of the paper is left, and the list says so")
+                .allSatisfy(item ->
+                        assertThat(item.get("documentErased").asBoolean()).isTrue());
     }
 
     @Test
