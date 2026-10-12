@@ -459,18 +459,108 @@ class StaffPreferencesServiceTests {
     // ------------------------------------------------------------------ reset
 
     @Test
-    @DisplayName("a reset deletes the document, and resetting what was never saved is the same quiet no-op")
-    void aResetDeletesTheDocument() {
+    @DisplayName(
+            "a reset empties the document and hides the surface; resetting what was never saved is the same quiet no-op")
+    void aResetEmptiesTheDocument() {
         saveBoard(COOK, LABEL, null);
+        String sealedBefore = rawDocuments(COOK).getFirst();
 
         kit.preferences.reset(StaffKit.TENANT_A, COOK, StaffPreferenceSurface.ORDER_BOARD);
         kit.preferences.reset(StaffKit.TENANT_A, COOK, StaffPreferenceSurface.ORDER_BOARD);
+        kit.preferences.reset(StaffKit.TENANT_A, COOK, StaffPreferenceSurface.SHELL);
 
         assertThat(kit.preferences.readAll(StaffKit.TENANT_A, COOK)).isEmpty();
-        assertThat(rawDocuments(COOK)).isEmpty();
+        assertThat(rawDocuments(COOK))
+                .as("what the person saved is gone from the row, which keeps only a version to count on")
+                .singleElement()
+                .satisfies(sealedAfter -> {
+                    assertThat(sealedAfter).isNotEqualTo(sealedBefore);
+                    assertThat(sealedAfter.length()).isLessThan(sealedBefore.length());
+                });
+        assertThat(kit.jdbc
+                        .sql("SELECT reset_at IS NOT NULL FROM iam.staff_preferences")
+                        .query(Boolean.class)
+                        .single())
+                .isTrue();
         assertThat(saveBoard(COOK, "Fresh start", null).version())
-                .as("a reset starts the document over, as a first write again")
-                .isEqualTo(1);
+                .as("a reset is a write: the version it leaves is the one the next write counts on")
+                .isEqualTo(3);
+        assertThat(kit.preferences.readAll(StaffKit.TENANT_A, COOK))
+                .singleElement()
+                .satisfies(stored -> assertThat(stored.version()).isEqualTo(3));
+    }
+
+    @Test
+    @DisplayName(
+            "a reset does not take the version back to 1: a device that read before it cannot write over what is saved after it")
+    void aResetKeepsTheVersionCounting() {
+        saveBoard(COOK, "Read by the old tablet", null);
+        saveBoard(COOK, "Edited on the laptop", 1L);
+        kit.preferences.reset(StaffKit.TENANT_A, COOK, StaffPreferenceSurface.ORDER_BOARD);
+
+        StoredPreference fresh = saveBoard(COOK, "Fresh start", null);
+
+        assertThat(fresh.version())
+                .as("a document saved after a reset is a newer version than any a device read before it")
+                .isGreaterThan(2);
+        for (long heldByAStaleDevice : new long[] {1L, 2L}) {
+            assertThatThrownBy(() -> saveBoard(COOK, "The old tablet's late write", heldByAStaleDevice))
+                    .as("If-Match %d", heldByAStaleDevice)
+                    .isInstanceOfSatisfying(
+                            ApiException.class,
+                            stale -> assertThat(stale.errorCode()).isEqualTo(ErrorCode.STALE_VERSION));
+        }
+        assertThat(kit.preferences.readAll(StaffKit.TENANT_A, COOK))
+                .singleElement()
+                .satisfies(stored -> assertThat(stored.document()
+                                .get("savedViews")
+                                .get(0)
+                                .get("label")
+                                .asString())
+                        .isEqualTo("Fresh start"));
+    }
+
+    @Test
+    @DisplayName(
+            "after a reset the surface is absent: a write that names a version is stale, one that names none is a first write")
+    void aResetSurfaceIsAbsent() {
+        saveBoard(COOK, "Gone", null);
+        kit.preferences.reset(StaffKit.TENANT_A, COOK, StaffPreferenceSurface.ORDER_BOARD);
+
+        assertThatThrownBy(() -> saveBoard(COOK, "Names the version it read", 1L))
+                .isInstanceOfSatisfying(ApiException.class, stale -> {
+                    assertThat(stale.errorCode()).isEqualTo(ErrorCode.STALE_VERSION);
+                    assertThat(stale.properties()).containsEntry("currentVersion", 0L);
+                });
+        assertThatThrownBy(() -> saveBoard(COOK, "Names the marker's own version", 2L))
+                .as("the version a reset leaves is the platform's to count on, not a document a device can name")
+                .isInstanceOf(ApiException.class);
+
+        assertThat(saveBoard(COOK, "Names none", null).version()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("a surface that was reset does not count against the twelve a person may hold")
+    void aResetSurfaceIsNotCounted() {
+        for (int index = 0; index < StaffPreferenceSchemas.MAX_SURFACES_PER_PERSON - 1; index++) {
+            kit.jdbc
+                    .sql("""
+                            INSERT INTO iam.staff_preferences
+                                (id, tenant_id, principal_subject, surface, protected_document, document_schema)
+                            VALUES (:id, :t, :s, :surface, 'x', 1)
+                            """)
+                    .param("id", UUID.randomUUID())
+                    .param("t", StaffKit.TENANT_A)
+                    .param("s", COOK)
+                    .param("surface", "FUTURE_SURFACE_" + index)
+                    .update();
+        }
+        saveBoard(COOK, "The twelfth", null);
+        kit.preferences.reset(StaffKit.TENANT_A, COOK, StaffPreferenceSurface.ORDER_BOARD);
+
+        assertThat(savedShell(COOK, StaffKit.LOCATION_1))
+                .as("eleven live documents and a marker are eleven, so a twelfth fits")
+                .isNotNull();
     }
 
     // ----------------------------------------------------------- anonymisation
@@ -510,6 +600,24 @@ class StaffPreferencesServiceTests {
             assertThat(change.actionCode()).isEqualTo("staff.member.anonymised");
             assertThat(change.before()).containsEntry("preferences", "set");
             assertThat(change.after()).containsEntry("preferences", null);
+        });
+    }
+
+    @Test
+    @DisplayName("anonymising a member also removes the markers a reset left, and does not call a marker a document")
+    void anonymisationRemovesResetMarkers() {
+        UUID id = kit.store.findBySubject(StaffKit.TENANT_A, COOK).orElseThrow().id();
+        saveBoard(COOK, LABEL, null);
+        kit.preferences.reset(StaffKit.TENANT_A, COOK, StaffPreferenceSurface.ORDER_BOARD);
+        int version = kit.store.find(StaffKit.TENANT_A, id).orElseThrow().version();
+        kit.members.endEmployment(StaffKit.TENANT_A, id, version, null, "Resigned", OWNER, "corr-end");
+
+        kit.inTx(() -> kit.members.anonymise(StaffKit.TENANT_A, id, "retention", "job", "corr-anon"));
+
+        assertThat(rawDocuments(COOK)).isEmpty();
+        assertThat(kit.published).anySatisfy(change -> {
+            assertThat(change.actionCode()).isEqualTo("staff.member.anonymised");
+            assertThat(change.before()).containsEntry("preferences", null);
         });
     }
 

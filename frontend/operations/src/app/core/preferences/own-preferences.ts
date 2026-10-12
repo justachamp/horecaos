@@ -107,7 +107,15 @@ export class OwnPreferences {
   /** The changes applied on screen and not yet written, per surface, oldest first. */
   private readonly pending = new Map<PreferenceSurface, Array<(document: never) => unknown>>();
   private readonly timers = new Map<PreferenceSurface, ReturnType<typeof setTimeout>>();
+
+  /** What is on its way to the platform for a surface, in order: a write and a reset never overtake each other. */
   private readonly inFlight = new Map<PreferenceSurface, Promise<void>>();
+
+  /**
+   * Counts the resets of a surface. A write that began before a reset is superseded by it: when it comes
+   * back it must not put a version, a document or a retry on a surface the person has since emptied.
+   */
+  private readonly resets = new Map<PreferenceSurface, number>();
 
   constructor() {
     // The mirror is read at once when the subject is already known (the console boots signed in), and
@@ -143,33 +151,41 @@ export class OwnPreferences {
     this.update('SHELL', change);
   }
 
-  /** Resets a surface to the code's default: the document goes from the screen, the mirror and the platform. */
+  /**
+   * Resets a surface to the code's default: the document goes from the screen and the mirror at once, and
+   * from the platform after whatever is already on its way to it.
+   *
+   * **Ordered.** A write that is in flight is not overtaken by the reset: the `DELETE` is sent when that
+   * write has landed (or failed), so the platform sees the write first and the reset after it, and the
+   * write cannot bring the document back. The write is also superseded -- it leaves no version behind and
+   * its stale-version retry is not attempted. A reset made before the first read has answered waits for the
+   * read for the same reason: the read would otherwise put the document back on the screen. A change the
+   * person makes after the reset waits for it in turn, and is a first write once it has landed.
+   */
   async reset(surface: PreferenceSurface): Promise<void> {
+    if (this.current()?.status === 'loading') {
+      await this.ensureLoaded();
+    }
     const held = this.current();
     if (held === null) {
       return;
     }
     this.cancelTimer(surface);
     this.pending.delete(surface);
+    this.resets.set(surface, this.resetsOf(surface) + 1);
     const { [surface]: _gone, ...rest } = held.documents;
     void _gone;
-    this.versions.delete(surface);
     this.replace({ ...held, documents: rest });
     const tenantId = this.tenant.tenantId();
     if (tenantId === null || held.status === 'unavailable') {
+      this.versions.delete(surface);
       return;
     }
-    try {
-      await firstValueFrom(
-        this.api.send<undefined, void>(
-          'DELETE',
-          staffPaths.mePreference(tenantId, surface),
-          command(undefined),
-        ),
-      );
-    } catch (error) {
-      this.noteFailure(error);
-    }
+    const removal = (this.inFlight.get(surface) ?? Promise.resolve()).then(() =>
+      this.sendReset(surface, tenantId),
+    );
+    this.inFlight.set(surface, removal);
+    return removal;
   }
 
   /** Writes whatever is waiting for its debounce now, and resolves when it has landed. Sign-out calls it before it leaves. */
@@ -216,6 +232,7 @@ export class OwnPreferences {
     this.pending.clear();
     this.versions.clear();
     this.inFlight.clear();
+    this.resets.clear();
     this.writeFailed.set(false);
     if (removeMirrors) {
       removeEveryMirror();
@@ -309,6 +326,26 @@ export class OwnPreferences {
     return next;
   }
 
+  /** Sends a reset. The platform keeps counting versions through it, so the surface is "never saved" again for this device. */
+  private async sendReset(surface: PreferenceSurface, tenantId: string): Promise<void> {
+    try {
+      await firstValueFrom(
+        this.api.send<undefined, void>(
+          'DELETE',
+          staffPaths.mePreference(tenantId, surface),
+          command(undefined),
+        ),
+      );
+      this.versions.delete(surface);
+    } catch (error) {
+      this.noteFailure(error);
+    }
+  }
+
+  private resetsOf(surface: PreferenceSurface): number {
+    return this.resets.get(surface) ?? 0;
+  }
+
   private async send(surface: PreferenceSurface): Promise<void> {
     const changes = this.pending.get(surface);
     const held = this.current();
@@ -316,8 +353,14 @@ export class OwnPreferences {
     if (changes === undefined || changes.length === 0 || held === null || tenantId === null) {
       return;
     }
+    const resetsBefore = this.resetsOf(surface);
+    // True once the person has reset this surface since this write began: it then touches nothing again.
+    const superseded = (): boolean => this.resetsOf(surface) !== resetsBefore;
     if (held.status === 'loading') {
       await this.ensureLoaded();
+      if (superseded()) {
+        return;
+      }
     }
     this.pending.delete(surface);
     const document = this.current()?.documents[surface] ?? this.emptyOf(surface);
@@ -332,10 +375,15 @@ export class OwnPreferences {
       );
     try {
       const saved = await attempt(document, this.versions.get(surface));
-      this.versions.set(surface, saved.version);
-      this.writeFailed.set(false);
+      if (!superseded()) {
+        this.versions.set(surface, saved.version);
+        this.writeFailed.set(false);
+      }
       return;
     } catch (error) {
+      if (superseded()) {
+        return;
+      }
       if (!(error instanceof ApiError) || error.code !== ApiErrorCode.STALE_VERSION) {
         this.noteFailure(error);
         return;
@@ -346,6 +394,9 @@ export class OwnPreferences {
       const fresh = await firstValueFrom(
         this.api.get<PreferencesResponse>(staffPaths.mePreferences(tenantId)),
       );
+      if (superseded()) {
+        return;
+      }
       const theirs = fresh.value.surfaces?.[surface];
       const merged = this.rebase(surface, theirs?.document, changes);
       if (theirs === undefined || theirs === null) {
@@ -354,12 +405,17 @@ export class OwnPreferences {
         this.versions.set(surface, theirs.version);
       }
       const saved = await attempt(merged, this.versions.get(surface));
+      if (superseded()) {
+        return;
+      }
       this.versions.set(surface, saved.version);
       this.adopt(surface, merged);
       this.writeFailed.set(false);
     } catch (error) {
       // Dropped: the screen keeps what the person sees, and the next load shows the platform's.
-      this.noteFailure(error);
+      if (!superseded()) {
+        this.noteFailure(error);
+      }
     }
   }
 

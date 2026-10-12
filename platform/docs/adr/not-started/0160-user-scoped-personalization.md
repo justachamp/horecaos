@@ -314,12 +314,27 @@ iam.staff_preferences
   version integer not null default 1
   created_at timestamptz not null default now()
   updated_at timestamptz not null default now()
+  reset_at timestamptz null                       -- V0532: set when the person reset the surface; the row is then only a version marker
   fk (tenant_id, principal_subject) -> iam.staff_members (tenant_id, principal_subject)   -- uq_staff_member_subject
   unique (tenant_id, principal_subject, surface)
   check surface ~ '^[A-Z][A-Z0-9_]{1,31}$'
   check version >= 1 and document_schema >= 1
   GRANT SELECT, INSERT, UPDATE, DELETE TO horecaos_application      -- DELETE for reset and for anonymisation
 ```
+
+**A reset keeps the version counting (correction, 2026-10-12).** The first version of this record
+had a reset delete the row. The next first write then began again at version 1, and a device that had
+read version 1 before the reset (a tablet nobody had touched for a week) matched `If-Match: 1` and wrote
+its stale edit over the new document: the rule of decision 7, that a stale version is refused, did not
+hold across a reset. A version fences only while it is never reused for a surface, so a reset now
+overwrites the sealed document with a sealed `{}`, stamps `reset_at` and moves the version on by one, in
+one `UPDATE`. A row with `reset_at` set is a marker: no read returns it, it does not count against the
+twelve surfaces, a write that names a version for it is `STALE_VERSION`, and the first write that names
+none revives it at the marker's version plus one. What the person saved is gone (the ciphertext is
+overwritten) and anonymisation still deletes every row of the person, markers included. The console, for
+its part, sends a reset only after the write in flight for that surface has landed, drops the retry of a
+write the person has since reset, and waits for the first read before it resets, so a late write or read
+cannot put the document back.
 
 There is deliberately no queryable column inside the document: nothing queries it, and a
 filter on a decrypted field would force the protection off. The surface check is a shape
@@ -377,7 +392,7 @@ GET    /api/v1/operations/tenants/{tenantId}/staff/me/preferences
          -> { surfaces: { SHELL: { document, version } | absent, ORDER_BOARD: { ... } | absent } }
 PUT    /api/v1/operations/tenants/{tenantId}/staff/me/preferences/{surface}
          first write: no If-Match; later writes: If-Match: <version>; a second first write answers STALE_VERSION
-DELETE /api/v1/operations/tenants/{tenantId}/staff/me/preferences/{surface}      reset to the default
+DELETE /api/v1/operations/tenants/{tenantId}/staff/me/preferences/{surface}      reset to the default (the version moves on; see «Physical model»)
 ```
 
 All three are `@StaffSelfAuthorized(Capability.STAFF_SELF_MANAGE)`: the row is found by the

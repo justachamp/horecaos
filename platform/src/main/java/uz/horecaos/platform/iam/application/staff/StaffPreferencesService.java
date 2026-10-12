@@ -54,6 +54,13 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * version, and two devices writing first, or writing from the same version, are told {@code
  * STALE_VERSION}: the loser re-reads, re-applies its one change and tries once more (the console's rule).
  * The check is against the database, never the cache.
+ *
+ * <p><strong>A reset keeps counting.</strong> A version is a fence only while it is never reused for the
+ * same surface, so a reset does not delete the row and let the next first write begin again at 1: it
+ * overwrites the document, stamps the row as a marker and moves the version on. A marker is absent to
+ * every read and to the cap on surfaces; a write that names a version for it is stale; the first write that
+ * names none brings it back at the marker's version plus one. A tablet that read version 1 last week
+ * therefore cannot write over a document saved after someone reset the surface.
  */
 @Service
 public class StaffPreferencesService {
@@ -63,6 +70,9 @@ public class StaffPreferencesService {
     static final String TABLE = "iam.staff_preferences";
     static final String COLUMN = "protected_document";
     private static final String PURPOSE = "staff.preferences.read";
+
+    /** What a reset leaves in the row's document: sealed like any other, and holding nothing. */
+    private static final String EMPTY_DOCUMENT = "{}";
 
     private final JdbcStaffPreferencesStore store;
     private final JdbcStaffMemberStore members;
@@ -153,7 +163,10 @@ public class StaffPreferencesService {
         Optional<PreferenceRow> existing = store.find(tenantId, subject, surface.name());
         long expected = expectedVersion == null ? 0 : expectedVersion;
 
-        if (existing.isEmpty()) {
+        if (existing.isEmpty() || existing.get().isReset()) {
+            // Nothing is saved for this surface: only a write that names no version can create it. A reset
+            // marker is "nothing saved" to the caller, so a version named for it is as stale as one named
+            // for no row at all.
             if (expected != 0) {
                 count("stale");
                 throw ApiException.staleVersion(expected, 0);
@@ -165,9 +178,26 @@ public class StaffPreferencesService {
                         "At most %d surfaces".formatted(StaffPreferenceSchemas.MAX_SURFACES_PER_PERSON),
                         Map.of("field", "surface"));
             }
+            if (existing.isPresent()) {
+                PreferenceRow marker = existing.get();
+                if (!store.revive(
+                        tenantId,
+                        subject,
+                        surface.name(),
+                        seal(tenantId, marker.id(), text),
+                        schema,
+                        marker.version(),
+                        now)) {
+                    count("stale");
+                    throw ApiException.staleVersion(0, currentVersion(tenantId, subject, surface));
+                }
+                cache.evictAfterCommit(tenantId, subject);
+                count("created");
+                return new StoredPreference(surface, canonical, schema, marker.version() + 1);
+            }
             UUID id = Ids.newId();
             PreferenceRow row = new PreferenceRow(
-                    id, tenantId, subject, surface.name(), seal(tenantId, id, text), schema, 1, now, now);
+                    id, tenantId, subject, surface.name(), seal(tenantId, id, text), schema, 1, now, now, null);
             if (!store.insertIfAbsent(row)) {
                 count("stale");
                 throw ApiException.staleVersion(0, currentVersion(tenantId, subject, surface));
@@ -193,11 +223,24 @@ public class StaffPreferencesService {
         return new StoredPreference(surface, canonical, schema, current.version() + 1);
     }
 
-    /** Resets one surface to the default. Nothing stored is nothing to do: the answer is the same. */
+    /**
+     * Resets one surface to the default: what the person saved is overwritten and the row stays as a version
+     * marker (see the class comment). Nothing stored, or already reset, is nothing to do: the answer is the
+     * same.
+     */
     @Transactional
     public void reset(UUID tenantId, String subject, StaffPreferenceSurface surface) {
         requireMember(tenantId, subject);
-        if (store.delete(tenantId, subject, surface.name())) {
+        Optional<PreferenceRow> existing = store.find(tenantId, subject, surface.name());
+        if (existing.isEmpty() || existing.get().isReset()) {
+            return;
+        }
+        if (store.markReset(
+                tenantId,
+                subject,
+                surface.name(),
+                seal(tenantId, existing.get().id(), EMPTY_DOCUMENT),
+                clock.instant())) {
             cache.evictAfterCommit(tenantId, subject);
             count("reset");
         }

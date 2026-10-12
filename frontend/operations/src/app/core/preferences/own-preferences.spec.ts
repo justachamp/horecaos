@@ -444,6 +444,89 @@ describe('OwnPreferences (ADR 0160)', () => {
     await settle();
   });
 
+  it('sends a reset only after the write in flight has landed, so that write cannot bring the document back', async () => {
+    const prefs = await load({ ORDER_BOARD: stored({}, 1) });
+    prefs.updateOrderBoard((document) => withColumnShown(document, 'discount', true));
+    await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE_MS);
+    const write = http.expectOne(url(`${BASE}/ORDER_BOARD`));
+    expect(write.request.method).toBe('PUT');
+
+    // The person resets while that write is still on its way.
+    const reset = prefs.reset('ORDER_BOARD');
+    await settle();
+    expect(prefs.orderBoard()).toEqual({});
+    expect(
+      http.match((request) => request.method === 'DELETE'),
+      'the reset waits its turn: the platform must see the write first and the reset after it',
+    ).toHaveLength(0);
+
+    write.flush(stored({ columns: { show: ['discount'] } }, 2));
+    await settle();
+    const removal = http.expectOne((request) => request.method === 'DELETE');
+    removal.flush(null, { status: 204, statusText: 'No Content' });
+    await reset;
+
+    expect(prefs.orderBoard()).toEqual({});
+    // The write that finished after the reset did not leave its version behind: the surface is absent,
+    // so the next write is a first write.
+    prefs.updateOrderBoard((document) => withColumnShown(document, 'courier', false));
+    await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE_MS);
+    const next = http.expectOne(url(`${BASE}/ORDER_BOARD`));
+    expect(next.request.headers.has('If-Match')).toBe(false);
+    next.flush(stored({ columns: { hide: ['courier'] } }, 4));
+    await settle();
+  });
+
+  it('drops the retry of a write that went stale when the person resets in the meantime', async () => {
+    const prefs = await load({ ORDER_BOARD: stored({}, 1) });
+    prefs.updateOrderBoard((document) => withColumnShown(document, 'discount', true));
+    await vi.advanceTimersByTimeAsync(PREFERENCE_WRITE_DEBOUNCE_MS);
+    http
+      .expectOne(url(`${BASE}/ORDER_BOARD`))
+      .flush({ status: 409, code: 'STALE_VERSION' }, { status: 409, statusText: 'x' });
+    await settle();
+    const reread = http.expectOne(url(BASE));
+
+    const reset = prefs.reset('ORDER_BOARD');
+    await settle();
+    reread.flush({ surfaces: { ORDER_BOARD: stored({ columns: { hide: ['customer'] } }, 2) } });
+    await settle();
+
+    expect(
+      http.match((request) => request.method === 'PUT'),
+      'a write the person has since reset is not tried again',
+    ).toHaveLength(0);
+    http
+      .expectOne((request) => request.method === 'DELETE')
+      .flush(null, { status: 204, statusText: 'No Content' });
+    await reset;
+
+    expect(prefs.orderBoard()).toEqual({});
+    expect(prefs.writeFailed()).toBe(false);
+  });
+
+  it('waits for the first read before it resets, so the read cannot bring the document back', async () => {
+    const prefs = preferences();
+    const loaded = prefs.ensureLoaded();
+    await settle();
+    const read = http.expectOne(url(BASE));
+
+    const reset = prefs.reset('ORDER_BOARD');
+    await settle();
+    expect(http.match((request) => request.method === 'DELETE')).toHaveLength(0);
+
+    read.flush({ surfaces: { ORDER_BOARD: stored({ columns: { show: ['discount'] } }, 3) } });
+    await loaded;
+    await settle();
+    http
+      .expectOne((request) => request.method === 'DELETE')
+      .flush(null, { status: 204, statusText: 'No Content' });
+    await reset;
+
+    expect(prefs.orderBoard()).toEqual({});
+    expect(prefs.status()).toBe('ready');
+  });
+
   // ------------------------------------------------------------ a shared PC
 
   it('removes every mirror at sign-out, so the next person on this browser inherits nothing', async () => {
