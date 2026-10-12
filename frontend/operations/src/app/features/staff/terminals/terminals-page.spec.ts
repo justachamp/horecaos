@@ -428,5 +428,49 @@ describe('TerminalsPage', () => {
       expect(byId('terminals-policy-denied')).not.toBeNull();
       expect(byId('terminals-row-tablet-1')).not.toBeNull();
     });
+
+    it('says so when the policy could not be loaded, rather than leaving a titled card with nothing in it', async () => {
+      await render({
+        list: () => Promise.resolve([device()]),
+        policy: () => Promise.reject(new ApiError('INTERNAL_ERROR', 500, null, 'corr-9')),
+      });
+
+      expect(byId('terminals-policy-error')?.textContent).toContain('corr-9');
+      expect(byId('terminals-policy-denied')).toBeNull();
+      expect(byId('terminals-policy-odds')).toBeNull();
+      expect(byId('terminals-row-tablet-1')).not.toBeNull();
+    });
+
+    it('loads the card when the person asks again after a failed load', async () => {
+      const policy = vi
+        .fn()
+        .mockRejectedValueOnce(new ApiError('INTERNAL_ERROR', 500, null, 'corr-9'))
+        .mockResolvedValueOnce(POLICY);
+      await render({ list: () => Promise.resolve([]), policy });
+      expect(byId('terminals-policy-odds')).toBeNull();
+
+      click('terminals-policy-retry');
+      await flush();
+      fixture.detectChanges();
+
+      expect(policy).toHaveBeenCalledTimes(2);
+      expect(byId('terminals-policy-error')).toBeNull();
+      expect(byId('terminals-policy-odds')).not.toBeNull();
+    });
+
+    it('keeps a failed save on the form it belongs to, and does not offer to reload what is on screen', async () => {
+      const savePolicy = vi
+        .fn()
+        .mockReturnValue(throwError(() => new ApiError('INTERNAL_ERROR', 500, null, 'corr-5')));
+      await render({ list: () => Promise.resolve([]), savePolicy });
+
+      click('terminals-policy-save');
+      await flush();
+      fixture.detectChanges();
+
+      expect(byId('terminals-policy-error')?.textContent).toContain('corr-5');
+      expect(byId('terminals-policy-odds')).not.toBeNull();
+      expect(byId('terminals-policy-retry')).toBeNull();
+    });
   });
 });

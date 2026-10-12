@@ -193,6 +193,12 @@ export class TerminalsPage implements OnInit {
     }
   }
 
+  /** The card's own retry after a load that failed; a refusal is not retried, it is explained. */
+  protected async retryPolicy(): Promise<void> {
+    this.policyError.set(null);
+    await this.loadPolicy();
+  }
+
   private adopt(view: TerminalPolicyView): void {
     this.policy.set(view);
     this.draftPinLength.set(view.pinLength.value);

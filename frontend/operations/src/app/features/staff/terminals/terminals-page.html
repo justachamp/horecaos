@@ -147,6 +147,19 @@
             </button>
           }
         </form>
+      } @else if (policyError()) {
+        <!-- A load that failed: the card has no policy to show, and the error would otherwise be said nowhere. -->
+        <p class="q-body-sm terminals__error" role="alert" data-testid="terminals-policy-error">
+          {{ policyError() }}
+        </p>
+        <button
+          type="button"
+          class="secondary"
+          (click)="retryPolicy()"
+          data-testid="terminals-policy-retry"
+        >
+          {{ 'staff.terminals.policy.retry' | t }}
+        </button>
       }
     </section>
 

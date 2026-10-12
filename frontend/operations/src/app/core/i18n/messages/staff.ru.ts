@@ -550,6 +550,7 @@ export const staffRu: AreaMessages<typeof staffEn> = {
   'staff.terminals.policy.defaultMode': 'Новые устройства начинают как',
   'staff.terminals.policy.saved': 'Сохранено.',
   'staff.terminals.policy.saving': 'Сохраняем',
+  'staff.terminals.policy.retry': 'Повторить',
   'staff.terminals.policy.save': 'Сохранить',
   'staff.terminals.active.title': 'Устройства',
   'staff.terminals.active.empty':
