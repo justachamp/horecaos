@@ -30,6 +30,7 @@ describe('reviewPaths (ADR 0159)', () => {
   it('works one case at its own branch: the drawer, the transition, the note and the link', () => {
     const base = '/api/v1/operations/tenants/t1/brands/b1/locations/l1/recovery-cases';
     expect(reviewPaths.locationRecoveryCases(BRAND, 'l1')).toBe(base);
+    expect(reviewPaths.recoveryLocationSummary(BRAND, 'l1')).toBe(`${base}/summary`);
     expect(reviewPaths.recoveryCase(BRAND, 'l1', 'c1')).toBe(`${base}/c1`);
     expect(reviewPaths.recoveryTransitions(BRAND, 'l1', 'c1')).toBe(`${base}/c1/transitions`);
     expect(reviewPaths.recoveryNotes(BRAND, 'l1', 'c1')).toBe(`${base}/c1/notes`);

@@ -200,6 +200,34 @@ export class RecoveryApi {
     );
   }
 
+  /**
+   * One branch's own worklist, for an operator who holds `recovery.case.manage` at that branch and
+   * nowhere wider: the brand route above is `BRAND` scope and refuses her. The branch is in the path,
+   * so `filters.locationId` is never sent.
+   */
+  listAtLocation(
+    scope: BrandScope,
+    locationId: string,
+    state: CursorState,
+    filters: CaseFilters,
+  ): Promise<Page<CaseSummary>> {
+    return firstValueFrom(
+      this.api.page<CaseSummary>(
+        reviewPaths.locationRecoveryCases(scope, locationId),
+        state,
+        toQueryParams({ ...filters, locationId: undefined }),
+      ),
+    );
+  }
+
+  /** One branch's counts, the branch-scope reading of {@link counts}. */
+  async countsAtLocation(scope: BrandScope, locationId: string): Promise<CaseCounts> {
+    const result = await firstValueFrom(
+      this.api.get<CaseCounts>(reviewPaths.recoveryLocationSummary(scope, locationId)),
+    );
+    return result.value;
+  }
+
   async counts(scope: BrandScope, locationId?: string): Promise<CaseCounts> {
     const result = await firstValueFrom(
       this.api.get<CaseCounts>(reviewPaths.recoverySummary(scope), {

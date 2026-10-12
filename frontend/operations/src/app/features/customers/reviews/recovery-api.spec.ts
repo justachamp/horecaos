@@ -57,6 +57,29 @@ describe('RecoveryApi', () => {
     await promise;
   });
 
+  it("lists one branch's worklist on the branch route, with the branch in the path and not in the query", async () => {
+    const promise = api.listAtLocation(SCOPE, 'l1', firstPage(25), {
+      state: 'NEW',
+      slaState: 'AT_RISK',
+    });
+
+    const request = http.expectOne((r) => r.url === url(BRANCH_CASES));
+    expect(request.request.params.get('state')).toBe('NEW');
+    expect(request.request.params.get('slaState')).toBe('AT_RISK');
+    expect(request.request.params.has('locationId')).toBe(false);
+    request.flush({ items: [], nextCursor: null });
+
+    expect((await promise).items).toEqual([]);
+  });
+
+  it("reads one branch's counts on the branch route", async () => {
+    const promise = api.countsAtLocation(SCOPE, 'l1');
+
+    http.expectOne(url(`${BRANCH_CASES}/summary`)).flush({ byState: { NEW: 1 }, bySla: {} });
+
+    expect(await promise).toEqual({ byState: { NEW: 1 }, bySla: {} });
+  });
+
   it('reads the counts, optionally for one branch', async () => {
     const promise = api.counts(SCOPE, 'l1');
 

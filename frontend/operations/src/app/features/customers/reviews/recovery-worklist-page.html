@@ -64,18 +64,22 @@
       }
 
       <div class="filters">
-        <select
-          class="control"
-          [attr.aria-label]="'customers.recovery.filter.location' | t"
-          [value]="locationFilter()"
-          (change)="onLocationFilter($any($event.target).value)"
-          data-testid="recovery-location-filter"
-        >
-          <option value="">{{ 'customers.reviews.filter.allLocations' | t }}</option>
-          @for (location of locations(); track location.id) {
-            <option [value]="location.id">{{ location.displayName }}</option>
-          }
-        </select>
+        @if (showBranchFilter()) {
+          <select
+            class="control"
+            [attr.aria-label]="'customers.recovery.filter.location' | t"
+            [value]="locationFilter()"
+            (change)="onLocationFilter($any($event.target).value)"
+            data-testid="recovery-location-filter"
+          >
+            @if (brandWide()) {
+              <option value="">{{ 'customers.reviews.filter.allLocations' | t }}</option>
+            }
+            @for (location of branchOptions(); track location.id) {
+              <option [value]="location.id">{{ location.displayName }}</option>
+            }
+          </select>
+        }
         <select
           class="control"
           [attr.aria-label]="'customers.recovery.filter.clock' | t"
