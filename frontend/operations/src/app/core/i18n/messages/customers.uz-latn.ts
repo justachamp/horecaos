@@ -303,6 +303,8 @@ export const customersUzLatn: AreaMessages<typeof customersEn> = {
   'customers.reviews.column.comment': 'Izoh',
   'customers.reviews.column.order': 'Buyurtma',
   'customers.reviews.column.customer': 'Mijoz',
+  'customers.reviews.column.recovery': 'Ish',
+  'customers.reviews.recovery.open': 'Ishni ochish',
   'customers.reviews.empty': 'Hozircha sharhlar yoʻq.',
   'customers.address.line2': 'Manzilning ikkinchi qatori',
   'customers.address.postalCode': 'Pochta indeksi',

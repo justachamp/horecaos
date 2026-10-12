@@ -1,7 +1,7 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-import { provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BrandScope } from '../../../core/api/catalog-paths';
@@ -13,6 +13,7 @@ import { BoardColumn } from '../../../shared/ui/board-column/board-column';
 import { LocationsApi, LocationView } from '../../settings/locations/locations-api';
 import { CaseCounts, CaseFilters, CaseState, CaseSummary, RecoveryApi } from './recovery-api';
 import { caseDetail, caseSummary } from './recovery-fixtures.testing';
+import { RecoveryReach, RecoveryReachResolver } from './recovery-reach';
 import { RecoveryWorklistPage } from './recovery-worklist-page';
 
 const SCOPE: BrandScope = { tenantId: 'tenant-1', brandId: 'brand-1' };
@@ -66,33 +67,70 @@ describe('RecoveryWorklistPage', () => {
   let api: {
     list: ReturnType<typeof vi.fn>;
     counts: ReturnType<typeof vi.fn>;
+    listAtLocation: ReturnType<typeof vi.fn>;
+    countsAtLocation: ReturnType<typeof vi.fn>;
     detail: ReturnType<typeof vi.fn>;
     transition: ReturnType<typeof vi.fn>;
   };
+  let locationsApi: { list: ReturnType<typeof vi.fn>; profile: ReturnType<typeof vi.fn> };
+  /** What the next `detail` read fails with, if a spec wants the drawer's read to be refused. */
+  let detailFailure: ApiError | null = null;
+  beforeEach(() => {
+    detailFailure = null;
+  });
+
+  /** The reach a brand-wide operator resolves to; a spec passes its own for a branch manager. */
+  function resolverFor(reach: RecoveryReach | null = { scope: SCOPE, locationIds: null }) {
+    return { resolve: vi.fn().mockResolvedValue(reach) };
+  }
 
   async function render(
     byState: ByState = {},
     counts: CaseCounts = { byState: {}, bySla: {} },
     brand: FakeCurrentBrand = new FakeCurrentBrand(),
+    reach: RecoveryReach | null = { scope: SCOPE, locationIds: null },
+    query: Record<string, string> = {},
   ): Promise<void> {
+    const listing = async (filters: CaseFilters) => {
+      const items = filters.state ? (byState[filters.state] ?? []) : Object.values(byState).flat();
+      return { items, nextCursor: null } satisfies Page<CaseSummary>;
+    };
     api = {
-      list: vi.fn(async (_scope: BrandScope, _state: unknown, filters: CaseFilters) => {
-        const items = filters.state
-          ? (byState[filters.state] ?? [])
-          : Object.values(byState).flat();
-        return { items, nextCursor: null } satisfies Page<CaseSummary>;
-      }),
+      list: vi.fn(async (_scope: BrandScope, _state: unknown, filters: CaseFilters) =>
+        listing(filters),
+      ),
       counts: vi.fn().mockResolvedValue(counts),
-      detail: vi.fn(async () => caseDetail()),
+      listAtLocation: vi.fn(
+        async (_scope: BrandScope, _locationId: string, _state: unknown, filters: CaseFilters) =>
+          listing(filters),
+      ),
+      countsAtLocation: vi.fn().mockResolvedValue(counts),
+      detail: vi.fn(async () => {
+        if (detailFailure) {
+          throw detailFailure;
+        }
+        return caseDetail();
+      }),
       transition: vi.fn().mockResolvedValue({}),
+    };
+    locationsApi = {
+      list: vi.fn().mockResolvedValue([location()]),
+      profile: vi.fn(async (scope: { locationId: string }) =>
+        location({ id: scope.locationId, displayName: `Branch ${scope.locationId}` }),
+      ),
     };
     await TestBed.configureTestingModule({
       imports: [RecoveryWorklistPage],
       providers: [
         provideRouter([]),
         { provide: RecoveryApi, useValue: api },
-        { provide: LocationsApi, useValue: { list: vi.fn().mockResolvedValue([location()]) } },
+        { provide: LocationsApi, useValue: locationsApi },
         { provide: CurrentBrand, useValue: brand },
+        { provide: RecoveryReachResolver, useValue: resolverFor(reach) },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap(query) } },
+        },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -368,6 +406,139 @@ describe('RecoveryWorklistPage', () => {
     expect(host().querySelector('[data-testid="recovery-drawer"]')).not.toBeNull();
   });
 
+  describe('a link from the review list (?case=&location=)', () => {
+    it('opens that case in the drawer, read at the branch the link names', async () => {
+      await render({ NEW: [caseSummary()] }, undefined, undefined, undefined, {
+        case: 'case-9',
+        location: 'location-2',
+      });
+      expect(api.detail).toHaveBeenCalledWith(SCOPE, 'location-2', 'case-9');
+      expect(host().querySelector('[data-testid="recovery-drawer"]')).not.toBeNull();
+    });
+
+    it('opens nothing when the link names no case', async () => {
+      await render({ NEW: [caseSummary()] });
+
+      expect(api.detail).not.toHaveBeenCalled();
+      expect(host().querySelector('[data-testid="recovery-drawer"]')).toBeNull();
+    });
+
+    it('says so in a sentence when the case cannot be read, and still shows the board', async () => {
+      detailFailure = new ApiError(ApiErrorCode.RESOURCE_NOT_FOUND, 404, null, 'corr-1');
+
+      await render({ NEW: [caseSummary()] }, undefined, undefined, undefined, {
+        case: 'case-9',
+        location: 'location-2',
+      });
+
+      expect(host().querySelector('[data-testid="recovery-inline-error"]')).not.toBeNull();
+      expect(host().textContent).not.toContain('RESOURCE_NOT_FOUND');
+      expect(host().querySelectorAll('[data-testid="recovery-card"]')).toHaveLength(1);
+      expect(host().querySelector('[data-testid="recovery-drawer"]')).toBeNull();
+    });
+  });
+
+  describe('a branch manager, who holds the capability at her branch and nowhere wider', () => {
+    const MINE: RecoveryReach = { scope: SCOPE, locationIds: ['location-1'] };
+
+    it('reads her branch’s own worklist and counts, never the brand’s, which would refuse her', async () => {
+      await render({ NEW: [caseSummary()] }, { byState: { NEW: 1 }, bySla: {} }, undefined, MINE);
+
+      expect(api.list).not.toHaveBeenCalled();
+      expect(api.counts).not.toHaveBeenCalled();
+      expect(api.listAtLocation).toHaveBeenCalledTimes(4);
+      for (const state of ['NEW', 'IN_PROGRESS', 'RESOLVED', 'CLOSED_UNRESOLVED']) {
+        expect(api.listAtLocation).toHaveBeenCalledWith(
+          SCOPE,
+          'location-1',
+          { cursor: null, limit: 25 },
+          expect.objectContaining({ state }),
+        );
+      }
+      expect(api.countsAtLocation).toHaveBeenCalledWith(SCOPE, 'location-1');
+      expect(host().querySelectorAll('[data-testid="recovery-card"]')).toHaveLength(1);
+      expect(host().textContent).not.toContain('You do not have access to the recovery worklist.');
+      expect(host().querySelector('[data-testid="count-open"]')?.textContent?.trim()).toBe('1');
+    });
+
+    it('offers no branch filter when she has one branch, and names the branch from its own profile', async () => {
+      await render({ NEW: [caseSummary()] }, undefined, undefined, MINE);
+
+      expect(host().querySelector('[data-testid="recovery-location-filter"]')).toBeNull();
+      expect(locationsApi.list).not.toHaveBeenCalled();
+      expect(host().querySelector('[data-testid="recovery-card"]')?.textContent).toContain(
+        'Branch location-1',
+      );
+    });
+
+    it('lets a manager of two branches pick between them, with no all-branches choice, and reads the picked one', async () => {
+      await render({ NEW: [caseSummary()] }, undefined, undefined, {
+        scope: SCOPE,
+        locationIds: ['location-1', 'location-2'],
+      });
+      const where = host().querySelector(
+        '[data-testid="recovery-location-filter"]',
+      ) as HTMLSelectElement;
+
+      expect([...where.options].map((o) => o.value)).toEqual(['location-1', 'location-2']);
+      expect([...where.options].map((o) => o.textContent?.trim())).toEqual([
+        'Branch location-1',
+        'Branch location-2',
+      ]);
+      api.listAtLocation.mockClear();
+
+      where.value = 'location-2';
+      where.dispatchEvent(new Event('change'));
+      await flush();
+      fixture.detectChanges();
+
+      expect(api.listAtLocation).toHaveBeenCalledWith(
+        SCOPE,
+        'location-2',
+        { cursor: null, limit: 25 },
+        expect.anything(),
+      );
+      expect(api.countsAtLocation).toHaveBeenLastCalledWith(SCOPE, 'location-2');
+      expect(api.list).not.toHaveBeenCalled();
+    });
+
+    it('reads the table, and its next page, from her branch too', async () => {
+      await render({ NEW: [caseSummary()] }, undefined, undefined, MINE);
+      api.listAtLocation.mockClear();
+
+      (host().querySelector('[data-testid="view-table"]') as HTMLButtonElement).click();
+      await flush();
+      fixture.detectChanges();
+
+      expect(api.listAtLocation).toHaveBeenCalledWith(
+        SCOPE,
+        'location-1',
+        { cursor: null, limit: 50 },
+        expect.anything(),
+      );
+      expect(api.list).not.toHaveBeenCalled();
+      expect(host().querySelectorAll('[data-testid="recovery-row"]')).toHaveLength(1);
+    });
+
+    it('still opens the case at its own branch', async () => {
+      await render({ NEW: [caseSummary()] }, undefined, undefined, MINE);
+
+      (host().querySelector('[data-testid="recovery-card"]') as HTMLElement).click();
+      await flush();
+      fixture.detectChanges();
+
+      expect(api.detail).toHaveBeenCalledWith(SCOPE, 'location-1', 'case-1');
+    });
+  });
+
+  it('shows the denied state, with no request, when no grant of hers holds the capability here', async () => {
+    await render({}, { byState: {}, bySla: {} }, undefined, null);
+
+    expect(host().textContent).toContain('You do not have access to the recovery worklist.');
+    expect(api.list).not.toHaveBeenCalled();
+    expect(api.listAtLocation).not.toHaveBeenCalled();
+  });
+
   it('shows the denied state when the operator covers no brand', async () => {
     const denied = new FakeCurrentBrand();
     denied.scope.set(null);
@@ -388,7 +559,7 @@ describe('RecoveryWorklistPage', () => {
         .mockRejectedValue(new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null)),
       detail: vi.fn(),
       transition: vi.fn(),
-    };
+    } as unknown as typeof api;
     await TestBed.configureTestingModule({
       imports: [RecoveryWorklistPage],
       providers: [
@@ -396,6 +567,7 @@ describe('RecoveryWorklistPage', () => {
         { provide: RecoveryApi, useValue: api },
         { provide: LocationsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
         { provide: CurrentBrand, useValue: new FakeCurrentBrand() },
+        { provide: RecoveryReachResolver, useValue: resolverFor() },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -417,7 +589,7 @@ describe('RecoveryWorklistPage', () => {
       counts: vi.fn().mockResolvedValue({ byState: {}, bySla: {} }),
       detail: vi.fn(),
       transition: vi.fn(),
-    };
+    } as unknown as typeof api;
     await TestBed.configureTestingModule({
       imports: [RecoveryWorklistPage],
       providers: [
@@ -425,6 +597,7 @@ describe('RecoveryWorklistPage', () => {
         { provide: RecoveryApi, useValue: api },
         { provide: LocationsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
         { provide: CurrentBrand, useValue: new FakeCurrentBrand() },
+        { provide: RecoveryReachResolver, useValue: resolverFor() },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -443,4 +616,6 @@ describe('RecoveryWorklistPage', () => {
   });
 });
 
-beforeEach(() => TestBed.resetTestingModule());
+beforeEach(() => {
+  TestBed.resetTestingModule();
+});

@@ -14,10 +14,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -50,6 +52,7 @@ import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchro
 import uz.horecaos.platform.ordering.OrderBoardFixtures;
 import uz.horecaos.platform.reviews.application.PublicReviewCache;
 import uz.horecaos.platform.reviews.application.PublicReviewService;
+import uz.horecaos.platform.reviews.application.ReviewCommentVault;
 import uz.horecaos.platform.reviews.application.ReviewsErasureParticipant;
 import uz.horecaos.platform.support.TestDatabase;
 
@@ -122,6 +125,9 @@ class ReviewFeedbackEndpointTests {
 
     @Autowired
     private PublicReviewCache publicCache;
+
+    @Autowired
+    private ReviewCommentVault vault;
 
     @Autowired
     private ReviewsErasureParticipant erasure;
@@ -599,6 +605,81 @@ class ReviewFeedbackEndpointTests {
                             .isEqualTo("Please tell everyone about the plov");
                     assertThat(item.path("rating").asInt()).isEqualTo(5);
                 });
+    }
+
+    @Test
+    @DisplayName(
+            "a customer who shared two comments can take back both, one after the other: the consent evidence is kept per review, not per purpose")
+    void aSecondSharedCommentCanBeTakenBackToo() throws Exception {
+        switchOn("feature.feedback_settings");
+        setBrandSetting("feedback.public_visibility", "stringValue", "\"RATING_AND_COMMENTS\"");
+        UUID first = review(5, "The plov was the best in town", List.of(), true);
+        UUID second = review(4, "The samsa too", List.of(), true);
+        decide(first, "{\"to\":\"PUBLISHED\"}", 1);
+        decide(second, "{\"to\":\"PUBLISHED\"}", 1);
+        assertThat(publicList().path("items")).hasSize(2);
+
+        assertThat(postAs(GUEST, storefront() + "/reviews/" + first + "/public-display/withdrawal", null)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+        MvcResult secondWithdrawn =
+                postAs(GUEST, storefront() + "/reviews/" + second + "/public-display/withdrawal", null);
+        assertThat(secondWithdrawn.getResponse().getStatus())
+                .as(secondWithdrawn.getResponse().getContentAsString())
+                .isEqualTo(200);
+
+        assertThat(publicList().path("items"))
+                .as("both comments are off the page")
+                .isEmpty();
+        var evidence = jdbc.sql("SELECT decision, evidence_reference FROM customer.consent_decisions "
+                        + "WHERE purpose = 'review.public_display' AND decision = 'WITHDRAWN'")
+                .query()
+                .listOfRows();
+        assertThat(evidence)
+                .extracting(row -> row.get("evidence_reference"))
+                .as("each withdrawal is evidence for its own review")
+                .containsExactlyInAnyOrder(first.toString(), second.toString());
+        assertThat(jdbc.sql("SELECT count(DISTINCT withdrawal_decision_id) FROM reviews.review_publications "
+                                + "WHERE withdrawal_decision_id IS NOT NULL")
+                        .query(Long.class)
+                        .single())
+                .as("each publication row points at its own withdrawal decision")
+                .isEqualTo(2L);
+    }
+
+    @Test
+    @DisplayName(
+            "the public list ends at its ceiling: a reader who pages down to the five-hundredth comment is told there is no more, and is not handed the same last page for ever")
+    void thePublicListEndsAtItsCeiling() throws Exception {
+        switchOn("feature.feedback_settings");
+        setBrandSetting("feedback.public_visibility", "stringValue", "\"RATING_AND_COMMENTS\"");
+        seedPublishedComments(PublicReviewService.MAXIMUM_OFFSET + 35);
+        publicCache.evictNow(TENANT, BRAND);
+
+        int seen = 0;
+        int pages = 0;
+        Set<String> distinct = new HashSet<>();
+        String cursor = null;
+        do {
+            JsonNode page =
+                    json(get(storefront() + "/reviews/public?limit=30" + (cursor == null ? "" : "&cursor=" + cursor)));
+            for (JsonNode item : page.path("items")) {
+                seen++;
+                distinct.add(item.path("comment").asText());
+            }
+            JsonNode next = page.path("nextCursor");
+            cursor = next.isMissingNode() || next.isNull() ? null : next.asText();
+            pages++;
+        } while (cursor != null && pages < 40);
+
+        assertThat(cursor)
+                .as("the cursor chain ends instead of cycling at the ceiling")
+                .isNull();
+        assertThat(seen)
+                .as("an anonymous reader reads the first five hundred comments")
+                .isEqualTo(500);
+        assertThat(distinct).as("and no comment twice").hasSize(500);
     }
 
     @Test
@@ -1344,6 +1425,43 @@ class ReviewFeedbackEndpointTests {
 
     private JsonNode publicList() throws Exception {
         return json(get(storefront() + "/reviews/public"));
+    }
+
+    /**
+     * {@code count} published comments of the brand, newest first by their index: written straight to the
+     * tables, because a test of the list ceiling needs five hundred of them and not five hundred requests.
+     */
+    private void seedPublishedComments(int count) {
+        Instant newest = Instant.now().minus(Duration.ofDays(1));
+        UUID customer = OrderBoardFixtures.customerOf(TENANT);
+        for (int i = 0; i < count; i++) {
+            UUID orderId = completedOrderAt(newest.minus(Duration.ofHours(3)));
+            UUID reviewId = UUID.randomUUID();
+            jdbc.sql("""
+                    INSERT INTO reviews.order_reviews (id, tenant_id, brand_id, location_id, order_id,
+                        customer_account_id, rating, comment_protected, submitted_at)
+                    VALUES (:id, :tenant, :brand, :location, :order, :customer, 5, :comment, :at)
+                    """)
+                    .param("id", reviewId)
+                    .param("tenant", TENANT)
+                    .param("brand", BRAND)
+                    .param("location", CHILONZOR)
+                    .param("order", orderId)
+                    .param("customer", customer)
+                    .param("comment", vault.protectComment(TENANT, reviewId, "Comment number " + i))
+                    .param("at", newest.minusSeconds(i).atOffset(ZoneOffset.UTC))
+                    .update();
+            jdbc.sql("""
+                    INSERT INTO reviews.review_publications (tenant_id, review_id, brand_id, location_id,
+                        public_consent, comment_state)
+                    VALUES (:tenant, :review, :brand, :location, true, 'PUBLISHED')
+                    """)
+                    .param("tenant", TENANT)
+                    .param("review", reviewId)
+                    .param("brand", BRAND)
+                    .param("location", CHILONZOR)
+                    .update();
+        }
     }
 
     private JsonNode publicSummary() throws Exception {

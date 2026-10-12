@@ -164,6 +164,58 @@ class ConsentWithdrawalTests {
         assertThat(consent.history(TENANT, account)).hasSize(3);
     }
 
+    @Test
+    @DisplayName(
+            "a purpose granted once per review is withdrawn once per review: a second review's withdrawal is not refused because the first one was withdrawn")
+    void eachGrantKeyedToAnEvidenceReferenceIsWithdrawnOnItsOwn() {
+        consent.recordGrant(TENANT, account, BRAND, PURPOSE, null, "1", "STOREFRONT", "review-a");
+        clock.advance(Duration.ofMinutes(1));
+        consent.recordGrant(TENANT, account, BRAND, PURPOSE, null, "1", "STOREFRONT", "review-b");
+        clock.advance(Duration.ofMinutes(1));
+
+        UUID first = consent.recordWithdrawal(TENANT, account, BRAND, PURPOSE, null, "1", "STOREFRONT", "review-a");
+        clock.advance(Duration.ofMinutes(1));
+        UUID second = consent.recordWithdrawal(TENANT, account, BRAND, PURPOSE, null, "1", "STOREFRONT", "review-b");
+
+        assertThat(second).as("its own evidence row, not the first one's").isNotEqualTo(first);
+        assertThat(consent.history(TENANT, account))
+                .extracting(ConsentHistoryRow::decision)
+                .containsExactlyInAnyOrder("GRANTED", "GRANTED", "WITHDRAWN", "WITHDRAWN");
+        assertThat(evidenceOf(first)).isEqualTo("review-a");
+        assertThat(evidenceOf(second)).isEqualTo("review-b");
+    }
+
+    @Test
+    @DisplayName(
+            "a withdrawal keyed to a review is refused when that review was never granted or was already withdrawn, whatever the purpose's other grants say")
+    void aKeyedWithdrawalNeedsItsOwnLiveGrant() {
+        consent.recordGrant(TENANT, account, BRAND, PURPOSE, null, "1", "STOREFRONT", "review-a");
+        clock.advance(Duration.ofMinutes(1));
+
+        assertThatThrownBy(() ->
+                        consent.recordWithdrawal(TENANT, account, BRAND, PURPOSE, null, "1", "STOREFRONT", "review-b"))
+                .as("review-b was never granted, even though the purpose is granted for review-a")
+                .isInstanceOf(IllegalStateException.class);
+
+        consent.recordWithdrawal(TENANT, account, BRAND, PURPOSE, null, "1", "STOREFRONT", "review-a");
+        clock.advance(Duration.ofMinutes(1));
+        consent.recordGrant(TENANT, account, BRAND, PURPOSE, null, "1", "STOREFRONT", "review-c");
+        clock.advance(Duration.ofMinutes(1));
+
+        assertThatThrownBy(() ->
+                        consent.recordWithdrawal(TENANT, account, BRAND, PURPOSE, null, "1", "STOREFRONT", "review-a"))
+                .as("review-a is already withdrawn, even though a later grant makes the purpose granted again")
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(consent.history(TENANT, account)).hasSize(3);
+    }
+
+    private String evidenceOf(UUID decision) {
+        return jdbc.sql("SELECT evidence_reference FROM customer.consent_decisions WHERE id = :id")
+                .param("id", decision)
+                .query(String.class)
+                .single();
+    }
+
     /** Whether the purpose is permitted now, asked the way the port asks it: no channel. */
     private boolean permitted() {
         return consent.consentFor(TENANT, account, BRAND, PURPOSE, null)

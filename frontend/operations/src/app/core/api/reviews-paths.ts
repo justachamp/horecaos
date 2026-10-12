@@ -53,6 +53,10 @@ export const reviewPaths = {
     return `${OPERATIONS}${tenantBrand(scope)}/locations/${enc(locationId)}/recovery-cases`;
   },
 
+  recoveryLocationSummary(scope: BrandScope, locationId: string): string {
+    return `${this.locationRecoveryCases(scope, locationId)}/summary`;
+  },
+
   recoveryCase(scope: BrandScope, locationId: string, caseId: string): string {
     return `${this.locationRecoveryCases(scope, locationId)}/${enc(caseId)}`;
   },

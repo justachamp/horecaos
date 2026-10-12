@@ -373,3 +373,47 @@ describe('RateOrderComponent -- an order that already has a review', () => {
     expect(host.querySelector('[role="alert"]')).not.toBeNull();
   });
 });
+
+describe('RateOrderComponent -- tag icons', () => {
+  const ICON = '/api/v1/storefront/tenants/t-1/media/a-1';
+
+  it('draws a tag’s icon beside its wording, and a tag without one is its wording alone', async () => {
+    const withIcon: OfferedTag = { ...tag('tasty', 'Mazali'), iconUrl: ICON };
+    const { fixture, host } = await setUp({
+      config: config({ positive: [withIcon, tag('fast', 'Tez')] }),
+    });
+
+    star(host, 5);
+    fixture.detectChanges();
+
+    const [first, second] = Array.from(host.querySelectorAll('[data-testid="tag-chip"]'));
+    const icon = first.querySelector('[data-testid="tag-icon"]');
+    expect(icon?.getAttribute('src')).toBe(ICON);
+    expect(icon?.getAttribute('alt')).toBe('');
+    expect(first.textContent?.trim()).toBe('Mazali');
+    expect(second.querySelector('[data-testid="tag-icon"]')).toBeNull();
+  });
+
+  it('draws the icons of the tags on the customer’s own review', async () => {
+    const { host } = await setUp({
+      mine: [
+        review({
+          tags: [
+            {
+              id: 'tasty',
+              code: 'tasty',
+              category: 'FOOD',
+              sentiment: 'POSITIVE',
+              labels: { 'uz-Latn': 'Mazali' },
+              iconUrl: ICON,
+            },
+          ],
+        }),
+      ],
+    });
+
+    expect(
+      host.querySelector('[data-testid="your-review"] [data-testid="tag-icon"]'),
+    ).not.toBeNull();
+  });
+});

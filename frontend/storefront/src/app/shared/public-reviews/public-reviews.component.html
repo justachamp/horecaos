@@ -51,9 +51,21 @@
                 <div class="flex flex-wrap gap-1.5">
                   @for (tag of item.tags; track tag.code) {
                     <span
-                      class="rounded-full border border-zinc-600 px-2 py-0.5 text-xs text-zinc-300"
-                      >{{ wording(tag) }}</span
+                      class="inline-flex items-center gap-1.5 rounded-full border border-zinc-600 px-2 py-0.5 text-xs text-zinc-300"
                     >
+                      @if (tag.iconUrl) {
+                        <img
+                          class="h-4 w-4 shrink-0"
+                          [src]="tag.iconUrl"
+                          alt=""
+                          width="16"
+                          height="16"
+                          loading="lazy"
+                          data-testid="tag-icon"
+                        />
+                      }
+                      {{ wording(tag) }}
+                    </span>
                   }
                 </div>
               }

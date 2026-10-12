@@ -72,6 +72,12 @@
         />
       </div>
 
+      @if (caseErrorText(); as message) {
+        <div class="error-band" role="alert" data-testid="review-case-error">
+          <span class="q-body-sm">{{ message }}</span>
+        </div>
+      }
+
       <table class="table">
         <thead>
           <tr>
@@ -81,6 +87,7 @@
             <th class="q-caption">{{ 'customers.reviews.column.comment' | t }}</th>
             <th class="q-caption">{{ 'customers.reviews.column.order' | t }}</th>
             <th class="q-caption">{{ 'customers.reviews.column.customer' | t }}</th>
+            <th class="q-caption">{{ 'customers.reviews.column.recovery' | t }}</th>
           </tr>
         </thead>
         <tbody>
@@ -100,10 +107,41 @@
                   review.customerAccountId
                 }}</a>
               </td>
+              <td class="q-body-sm">
+                @if (review.caseId && review.caseState) {
+                  @if (capabilities.has('RECOVERY_CASE_MANAGE')) {
+                    <a
+                      class="link"
+                      routerLink="/customers/reviews/recovery"
+                      [queryParams]="{ case: review.caseId, location: review.locationId }"
+                      data-testid="review-case-link"
+                      >{{ stateKey(review.caseState) | t }}</a
+                    >
+                  } @else {
+                    {{ stateKey(review.caseState) | t }}
+                  }
+                } @else if (capabilities.has('RECOVERY_CASE_MANAGE')) {
+                  <button
+                    type="button"
+                    class="secondary"
+                    [disabled]="opening() !== null"
+                    (click)="openCase(review)"
+                    data-testid="review-open-case"
+                  >
+                    {{
+                      opening() === review.id
+                        ? ('customers.loading' | t)
+                        : ('customers.reviews.recovery.open' | t)
+                    }}
+                  </button>
+                } @else {
+                  —
+                }
+              </td>
             </tr>
           } @empty {
             <tr>
-              <td class="q-body-sm empty" colspan="6">{{ 'customers.reviews.empty' | t }}</td>
+              <td class="q-body-sm empty" colspan="7">{{ 'customers.reviews.empty' | t }}</td>
             </tr>
           }
         </tbody>

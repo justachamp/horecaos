@@ -124,4 +124,34 @@ describe('MyReviewsComponent', () => {
     expect(host.textContent).not.toContain('UNPROCESSABLE_STATE');
     expect(host.querySelector('.hint--error')).not.toBeNull();
   });
+
+  it('draws the icon of a tag on the customer’s own review, and nothing for a tag without one', async () => {
+    const icon = '/api/v1/storefront/tenants/t-1/media/a-1';
+    const { host } = await setUp([
+      review({
+        tags: [
+          {
+            id: 't1',
+            code: 'tasty',
+            category: 'FOOD',
+            sentiment: 'POSITIVE',
+            labels: { en: 'Tasty' },
+            iconUrl: icon,
+          },
+          {
+            id: 't2',
+            code: 'fast',
+            category: 'SERVICE',
+            sentiment: 'POSITIVE',
+            labels: { en: 'Fast' },
+            iconUrl: null,
+          },
+        ],
+      }),
+    ]);
+
+    const icons = host.querySelectorAll('[data-testid="my-review"] [data-testid="tag-icon"]');
+    expect(icons).toHaveLength(1);
+    expect(icons[0].getAttribute('src')).toBe(icon);
+  });
 });

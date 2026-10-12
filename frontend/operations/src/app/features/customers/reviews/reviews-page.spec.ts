@@ -7,8 +7,10 @@ import { BrandScope } from '../../../core/api/catalog-paths';
 import { Page } from '../../../core/api/page';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { CurrentBrand } from '../../../core/auth/current-brand';
+import { Capability, SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { I18n } from '../../../core/i18n/i18n';
 import { LocationsApi, LocationView } from '../../settings/locations/locations-api';
+import { RecoveryApi } from './recovery-api';
 import { ReviewRow, ReviewSummary, ReviewsApi } from './reviews-api';
 import { ReviewsPage } from './reviews-page';
 
@@ -23,6 +25,8 @@ function review(overrides: Partial<ReviewRow> = {}): ReviewRow {
     rating: 5,
     comment: 'Great food, fast delivery',
     submittedAt: '2026-09-05T09:00:00Z',
+    caseId: null,
+    caseState: null,
     ...overrides,
   };
 }
@@ -76,6 +80,7 @@ describe('ReviewsPage', () => {
   let fixture: ComponentFixture<ReviewsPage>;
   let api: { list: ReturnType<typeof vi.fn>; summary: ReturnType<typeof vi.fn> };
   let locationsApi: { list: ReturnType<typeof vi.fn> };
+  let recoveryApi: { open: ReturnType<typeof vi.fn> };
   let brand: FakeCurrentBrand;
 
   async function render(
@@ -83,6 +88,7 @@ describe('ReviewsPage', () => {
     summaryResult: ReviewSummary = summary(),
     currentBrand: FakeCurrentBrand = new FakeCurrentBrand(),
     locations: readonly LocationView[] = [location()],
+    held: readonly Capability[] = [],
   ): Promise<void> {
     brand = currentBrand;
     api = {
@@ -90,6 +96,15 @@ describe('ReviewsPage', () => {
       summary: vi.fn().mockResolvedValue(summaryResult),
     };
     locationsApi = { list: vi.fn().mockResolvedValue(locations) };
+    recoveryApi = {
+      open: vi.fn().mockResolvedValue({
+        id: 'case-new',
+        state: 'NEW',
+        outcomeCode: null,
+        ownerStaffMemberId: null,
+        version: 1,
+      }),
+    };
     await TestBed.configureTestingModule({
       imports: [ReviewsPage],
       providers: [
@@ -97,6 +112,8 @@ describe('ReviewsPage', () => {
         { provide: ReviewsApi, useValue: api },
         { provide: LocationsApi, useValue: locationsApi },
         { provide: CurrentBrand, useValue: brand },
+        { provide: RecoveryApi, useValue: recoveryApi },
+        { provide: SessionCapabilities, useValue: { has: (c: Capability) => held.includes(c) } },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -197,5 +214,94 @@ describe('ReviewsPage', () => {
 
     expect(hrefs).toContain('/orders/order-1');
     expect(hrefs).toContain('/customers/customer-1');
+  });
+
+  describe('service recovery (ADR 0159)', () => {
+    const MANAGE: readonly Capability[] = ['RECOVERY_CASE_MANAGE'];
+
+    async function renderOne(
+      overrides: Partial<ReviewRow> = {},
+      held: readonly Capability[] = MANAGE,
+    ): Promise<void> {
+      await render(
+        { items: [review(overrides)], nextCursor: null },
+        summary(),
+        new FakeCurrentBrand(),
+        [location()],
+        held,
+      );
+    }
+
+    function openButton(): HTMLButtonElement | null {
+      return host().querySelector('[data-testid="review-open-case"]');
+    }
+
+    function caseLink(): HTMLAnchorElement | null {
+      return host().querySelector('[data-testid="review-case-link"]');
+    }
+
+    it('links a review that already has a case to that case in the worklist, naming where it stands', async () => {
+      await renderOne({ caseId: 'case-9', caseState: 'IN_PROGRESS' });
+
+      const link = caseLink();
+      expect(link?.textContent?.trim()).toBe('In progress');
+      expect(link?.getAttribute('href')).toBe(
+        '/customers/reviews/recovery?case=case-9&location=location-1',
+      );
+      expect(openButton()).toBeNull();
+    });
+
+    it('offers to open a case for a review that has none, to an operator who may work cases', async () => {
+      await renderOne();
+
+      expect(openButton()).not.toBeNull();
+      expect(caseLink()).toBeNull();
+    });
+
+    it('opens the case at the review’s own branch, then shows the link instead of the button', async () => {
+      await renderOne({ locationId: 'location-2' });
+
+      openButton()?.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(recoveryApi.open).toHaveBeenCalledTimes(1);
+      expect(recoveryApi.open).toHaveBeenCalledWith(SCOPE, 'location-2', 'review-1');
+      expect(openButton()).toBeNull();
+      expect(caseLink()?.textContent?.trim()).toBe('New');
+      expect(caseLink()?.getAttribute('href')).toBe(
+        '/customers/reviews/recovery?case=case-new&location=location-2',
+      );
+    });
+
+    it('says in a sentence why a case could not be opened, and keeps the button', async () => {
+      await renderOne();
+      recoveryApi.open.mockRejectedValueOnce(
+        new ApiError(ApiErrorCode.RESOURCE_CONFLICT, 409, null, 'corr-1'),
+      );
+
+      openButton()?.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      const alert = host().querySelector('[data-testid="review-case-error"]');
+      expect(alert).not.toBeNull();
+      expect(alert?.textContent).not.toContain('RESOURCE_CONFLICT');
+      expect(openButton()).not.toBeNull();
+    });
+
+    it('offers a reader who may not work cases neither the button nor a link, only where the case stands', async () => {
+      await renderOne({ caseId: 'case-9', caseState: 'RESOLVED' }, []);
+
+      expect(caseLink()).toBeNull();
+      expect(openButton()).toBeNull();
+      expect(host().querySelector('tbody')?.textContent).toContain('Resolved');
+    });
+
+    it('offers that reader no button on a review without a case either', async () => {
+      await renderOne({}, []);
+
+      expect(openButton()).toBeNull();
+    });
   });
 });

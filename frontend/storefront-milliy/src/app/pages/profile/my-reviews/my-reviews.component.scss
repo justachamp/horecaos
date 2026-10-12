@@ -42,6 +42,7 @@
 .tag-chip--static {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   min-height: 28px;
   padding: 0 10px;
   border: 1.5px solid var(--line-subtle);
@@ -49,6 +50,13 @@
   background: var(--surface-raised);
   font: 600 12px/1 var(--font-ui);
   color: var(--text-primary);
+}
+
+.tag-chip--static .tag-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  object-fit: contain;
 }
 
 .my-review__state {

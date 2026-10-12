@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 
-import { CursorState, firstPage, nextPage } from '../../../core/api/page';
+import { CursorState, Page, firstPage, nextPage } from '../../../core/api/page';
+import { BrandScope } from '../../../core/api/catalog-paths';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { CurrentBrand } from '../../../core/auth/current-brand';
 import { formatDateTime } from '../../../core/format/datetime';
@@ -22,6 +24,7 @@ import {
   RecoveryApi,
   SlaState,
 } from './recovery-api';
+import { RecoveryReach, RecoveryReachResolver } from './recovery-reach';
 import {
   isClosed,
   slaKey,
@@ -47,6 +50,12 @@ const TABLE_PAGE_SIZE = 50;
 const SLA_STATES: readonly SlaState[] = ['ON_TRACK', 'AT_RISK', 'BREACHED', 'MET'];
 const FALLBACK_TIME_ZONE = 'Asia/Tashkent';
 
+/** What the branch filter offers: an id and the name to show for it. */
+interface BranchOption {
+  readonly id: string;
+  readonly displayName: string;
+}
+
 function emptyColumns(): Record<CaseState, Column> {
   return {
     NEW: EMPTY_COLUMN,
@@ -67,6 +76,14 @@ function emptyColumns(): Record<CaseState, Column> {
  *
  * <p>Scoped by {@link CurrentBrand}: the brand list is brand scope, and a case is worked at its own
  * location, which the drawer reads from the case itself.
+ *
+ * <p>Two readings of the same list (ADR 0025): an operator who holds the capability at the brand or
+ * above reads the brand's worklist, across every branch; a branch manager, who holds it at her branch
+ * and nowhere wider, is refused by the brand routes, so she reads her own branch's, one branch at a
+ * time, and the filter offers her only the branches she works ({@link RecoveryReachResolver}).
+ *
+ * <p>The Reviews list links here with {@code ?case=&location=} (the case about a review, and the
+ * branch it is worked at); the page opens that case's drawer once, on first load.
  */
 @Component({
   selector: 'q-recovery-worklist-page',
@@ -79,6 +96,8 @@ export class RecoveryWorklistPage {
   private readonly api = inject(RecoveryApi);
   private readonly locationsApi = inject(LocationsApi);
   private readonly brand = inject(CurrentBrand);
+  private readonly reachResolver = inject(RecoveryReachResolver);
+  private readonly route = inject(ActivatedRoute);
   protected readonly i18n = inject(I18n);
 
   protected readonly state = signal<LoadState>('loading');
@@ -87,6 +106,8 @@ export class RecoveryWorklistPage {
   protected readonly notice = signal<string | null>(null);
   protected readonly counts = signal<CaseCounts | null>(null);
   protected readonly locations = signal<readonly LocationView[]>([]);
+  private readonly reach = signal<RecoveryReach | null>(null);
+  private linkHandled = false;
 
   protected readonly locationFilter = signal('');
   protected readonly slaFilter = signal<SlaState | ''>('');
@@ -116,6 +137,27 @@ export class RecoveryWorklistPage {
   });
 
   protected readonly scope = computed(() => this.brand.scope());
+
+  /** Whether the brand's whole worklist answers; false for an operator who works only her own branches. */
+  protected readonly brandWide = computed(() => this.reach()?.locationIds === null);
+
+  /**
+   * The branches the filter offers: every branch of the brand for a brand-wide operator, and for a
+   * branch manager only the ones she works, named where the platform will name them and by id where
+   * it will not.
+   */
+  protected readonly branchOptions = computed<readonly BranchOption[]>(() => {
+    const own = this.reach()?.locationIds ?? null;
+    const known = this.locations();
+    return own === null
+      ? known
+      : own.map((id) => known.find((l) => l.id === id) ?? { id, displayName: id });
+  });
+
+  /** A manager of a single branch has nothing to choose between. */
+  protected readonly showBranchFilter = computed(
+    () => this.brandWide() || this.branchOptions().length > 1,
+  );
 
   constructor() {
     void this.load();
@@ -220,7 +262,7 @@ export class RecoveryWorklistPage {
     }
     this.patchColumn(state, { ...column, loading: true });
     try {
-      const page = await this.api.list(scope, column.cursor, this.filters(state));
+      const page = await this.listPage(scope, column.cursor, this.filters(state));
       const next = nextPage(column.cursor, page);
       this.patchColumn(state, {
         items: [...column.items, ...page.items],
@@ -241,7 +283,7 @@ export class RecoveryWorklistPage {
     }
     this.tableLoading.set(true);
     try {
-      const page = await this.api.list(
+      const page = await this.listPage(
         scope,
         cursor,
         this.filters(this.stateFilter() || undefined),
@@ -286,6 +328,29 @@ export class RecoveryWorklistPage {
 
   // ---------------------------------------------------------------------------------- loading
 
+  /** The one branch a branch manager is reading, or null when the brand's whole worklist answers. */
+  private branchInView(): string | null {
+    return this.brandWide() ? null : this.locationFilter();
+  }
+
+  private listPage(
+    scope: BrandScope,
+    cursor: CursorState,
+    filters: CaseFilters,
+  ): Promise<Page<CaseSummary>> {
+    const branch = this.branchInView();
+    return branch === null
+      ? this.api.list(scope, cursor, filters)
+      : this.api.listAtLocation(scope, branch, cursor, filters);
+  }
+
+  private readCounts(scope: BrandScope): Promise<CaseCounts> {
+    const branch = this.branchInView();
+    return branch === null
+      ? this.api.counts(scope, this.locationFilter() || undefined)
+      : this.api.countsAtLocation(scope, branch);
+  }
+
   private filters(state?: CaseState): CaseFilters {
     return {
       state,
@@ -304,10 +369,21 @@ export class RecoveryWorklistPage {
       return;
     }
     try {
+      const reach = await this.reachResolver.resolve(scope);
+      if (!reach) {
+        this.state.set('denied');
+        return;
+      }
+      this.reach.set(reach);
+      if (reach.locationIds !== null && !reach.locationIds.includes(this.locationFilter())) {
+        // A branch manager always reads one branch: her first until she picks another.
+        this.locationFilter.set(reach.locationIds[0]);
+      }
       await this.refresh();
       if (this.state() === 'loading') {
         this.state.set('ready');
         void this.loadLocationsOnce();
+        void this.openLinkedCase(scope);
       }
     } catch (error) {
       this.fail(error);
@@ -321,10 +397,7 @@ export class RecoveryWorklistPage {
       return;
     }
     try {
-      const [counts] = await Promise.all([
-        this.api.counts(scope, this.locationFilter() || undefined),
-        this.loadList(),
-      ]);
+      const [counts] = await Promise.all([this.readCounts(scope), this.loadList()]);
       this.counts.set(counts);
     } catch (error) {
       this.fail(error);
@@ -340,7 +413,7 @@ export class RecoveryWorklistPage {
       const results = await Promise.all(
         CASE_STATES.map(async (state) => {
           const start = firstPage(COLUMN_PAGE_SIZE);
-          const page = await this.api.list(scope, start, this.filters(state));
+          const page = await this.listPage(scope, start, this.filters(state));
           return [
             state,
             { items: page.items, cursor: nextPage(start, page), loading: false } satisfies Column,
@@ -350,7 +423,7 @@ export class RecoveryWorklistPage {
       this.columns.set(Object.fromEntries(results) as Record<CaseState, Column>);
     } else {
       const start = firstPage(TABLE_PAGE_SIZE);
-      const page = await this.api.list(scope, start, this.filters(this.stateFilter() || undefined));
+      const page = await this.listPage(scope, start, this.filters(this.stateFilter() || undefined));
       this.tableRows.set(page.items);
       this.tableCursor.set(nextPage(start, page));
     }
@@ -360,14 +433,49 @@ export class RecoveryWorklistPage {
     this.columns.update((current) => ({ ...current, [state]: column }));
   }
 
+  /**
+   * Opens the case a link from the review list names, once. The drawer reads the case itself; this
+   * only turns the ids in the link into the summary the drawer is opened with, at the branch the link
+   * names (a case is worked at its own branch, which the brand list does not need to know).
+   */
+  private async openLinkedCase(scope: BrandScope): Promise<void> {
+    if (this.linkHandled) {
+      return;
+    }
+    this.linkHandled = true;
+    const params = this.route.snapshot.queryParamMap;
+    const caseId = params.get('case');
+    const locationId = params.get('location');
+    if (!caseId || !locationId) {
+      return;
+    }
+    try {
+      const detail = await this.api.detail(scope, locationId, caseId);
+      this.open(detail.summary);
+    } catch (error) {
+      this.errorText.set(this.describe(error));
+    }
+  }
+
   private async loadLocationsOnce(): Promise<void> {
     const scope = this.scope();
     if (!scope || this.locations().length > 0) {
       return;
     }
+    const own = this.reach()?.locationIds ?? null;
     try {
-      // `LocationsApi.list` wants a LocationScope but the brand route never reads its locationId.
-      this.locations.set(await this.locationsApi.list({ ...scope, locationId: '' }));
+      if (own === null) {
+        // `LocationsApi.list` wants a LocationScope but the brand route never reads its locationId.
+        this.locations.set(await this.locationsApi.list({ ...scope, locationId: '' }));
+      } else {
+        // The brand's list is refused to a branch manager: each of her branches names itself.
+        const profiles = await Promise.allSettled(
+          own.map((locationId) => this.locationsApi.profile({ ...scope, locationId })),
+        );
+        this.locations.set(
+          profiles.flatMap((profile) => (profile.status === 'fulfilled' ? [profile.value] : [])),
+        );
+      }
     } catch {
       // Non-critical: the board loaded. The location filter shows no options and a card shows its id.
     }

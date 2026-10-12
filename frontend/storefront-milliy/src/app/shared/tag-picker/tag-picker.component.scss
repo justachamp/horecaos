@@ -6,6 +6,9 @@
 }
 
 .tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-height: 40px;
   border: 1.5px solid var(--line-subtle);
   border-radius: var(--radius-pill);
@@ -14,6 +17,13 @@
   font: 600 13px/1 var(--font-ui);
   color: var(--text-primary);
   cursor: pointer;
+
+  .tag-icon {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    object-fit: contain;
+  }
 
   &.is-selected {
     border-color: var(--brand-accent);

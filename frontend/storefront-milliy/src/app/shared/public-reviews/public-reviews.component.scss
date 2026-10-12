@@ -115,11 +115,21 @@
 }
 
 .comment__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 3px 10px;
   border-radius: var(--radius-pill);
   background: var(--surface-sunken);
   font: 600 12px/1.2 var(--font-ui);
   color: var(--text-muted);
+}
+
+.comment__tag .tag-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  object-fit: contain;
 }
 
 .comment__meta {

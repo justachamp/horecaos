@@ -36,7 +36,20 @@
               @if (item.tags.length > 0) {
                 <div class="comment__tags">
                   @for (tag of item.tags; track tag.code) {
-                    <span class="comment__tag">{{ tagLabel(tag) }}</span>
+                    <span class="comment__tag">
+                      @if (tag.iconUrl) {
+                        <img
+                          class="tag-icon"
+                          [src]="tag.iconUrl"
+                          alt=""
+                          width="16"
+                          height="16"
+                          loading="lazy"
+                          data-testid="tag-icon"
+                        />
+                      }
+                      {{ tagLabel(tag) }}
+                    </span>
                   }
                 </div>
               }

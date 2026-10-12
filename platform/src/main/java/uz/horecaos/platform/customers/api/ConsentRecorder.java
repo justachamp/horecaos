@@ -70,10 +70,16 @@ public interface ConsentRecorder {
      * currently granted, because withdrawing nothing would write a decision that never happened. Always
      * dated now, never backdated.
      *
+     * <p>When {@code evidenceReference} is given, "currently granted" means the grant that carries that
+     * same reference: a purpose granted once per review (ADR 0159) is withdrawn once per review, and
+     * withdrawing the first does not make the second look withdrawn. Without a reference it means the
+     * purpose's latest decision in the scope.
+     *
      * @param source must be {@code STOREFRONT}
      * @return the new {@code WITHDRAWN} {@code consent_decisions} row id
      * @throws IllegalArgumentException when {@code source} is not {@code STOREFRONT}
-     * @throws IllegalStateException    when the purpose is not currently granted
+     * @throws IllegalStateException    when the purpose (or, with a reference, that reference's grant) is not
+     *                                  currently granted
      */
     UUID recordWithdrawal(
             UUID tenantId,

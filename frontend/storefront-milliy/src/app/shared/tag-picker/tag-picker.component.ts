@@ -25,6 +25,17 @@ import { tagLabel } from '../../utils/tag-label';
           (click)="toggled.emit(tag)"
           data-testid="tag-chip"
         >
+          @if (tag.iconUrl) {
+            <img
+              class="tag-icon"
+              [src]="tag.iconUrl"
+              alt=""
+              width="16"
+              height="16"
+              loading="lazy"
+              data-testid="tag-icon"
+            />
+          }
           {{ wording(tag) }}
         </button>
       }

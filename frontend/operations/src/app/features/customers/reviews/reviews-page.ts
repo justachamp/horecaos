@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { RouterLink } from '@angular/router';
 
 import { CurrentBrand } from '../../../core/auth/current-brand';
+import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { CursorState, firstPage, nextPage, resetOnFilterChange } from '../../../core/api/page';
 import { ApiError } from '../../../core/api/problem-details';
 import { formatDateTime } from '../../../core/format/datetime';
@@ -9,6 +10,8 @@ import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { LocationsApi, LocationView } from '../../settings/locations/locations-api';
 import { describeApiError } from '../../orders/order-errors';
+import { RecoveryApi } from './recovery-api';
+import { stateKey } from './recovery-presentation';
 import { ReviewFilters, ReviewRow, ReviewSummary, ReviewsApi } from './reviews-api';
 
 type LoadState = 'loading' | 'ready' | 'denied' | 'error';
@@ -41,6 +44,11 @@ const PLACEHOLDER_TIME_ZONE = 'Asia/Tashkent';
  * (`/api/v1/operations/tenants/{tenantId}/brands/{brandId}/reviews`) carries
  * no `{locationId}` segment at all — the same scope resolver
  * `segments-page.ts` already uses for the sibling screen in this section.
+ *
+ * <p>Since ADR 0159 each row says where its service-recovery case stands and links to it in the
+ * worklist; a review the recovery policy did not flag can be taken up by hand ("Open a case") by an
+ * operator who holds `recovery.case.manage`. That is the only write on this screen, and it is a write to
+ * the case, never to the review.
  */
 @Component({
   selector: 'q-reviews-page',
@@ -53,6 +61,8 @@ export class ReviewsPage {
   private readonly api = inject(ReviewsApi);
   private readonly locationsApi = inject(LocationsApi);
   private readonly brand = inject(CurrentBrand);
+  private readonly recovery = inject(RecoveryApi);
+  protected readonly capabilities = inject(SessionCapabilities);
   protected readonly i18n = inject(I18n);
 
   protected readonly state = signal<LoadState>('loading');
@@ -71,6 +81,11 @@ export class ReviewsPage {
   protected readonly loadingMore = signal(false);
 
   protected readonly minRatingOptions = MIN_RATING_OPTIONS;
+  protected readonly stateKey = stateKey;
+
+  /** The review a case is being opened for, so a second click cannot open a second request. */
+  protected readonly opening = signal<string | null>(null);
+  protected readonly caseErrorText = signal<string | null>(null);
 
   constructor() {
     void this.load();
@@ -102,6 +117,32 @@ export class ReviewsPage {
     this.toFilter.set(value);
     this.pageState = resetOnFilterChange(this.pageState);
     void this.load();
+  }
+
+  /**
+   * Opens a service-recovery case about this review, at the review's own branch (a case is worked
+   * where it happened). The server refuses a second case for a review and one while service recovery
+   * is off for the tenant; both come back as a sentence beside the table, and the button stays.
+   */
+  protected async openCase(review: ReviewRow): Promise<void> {
+    const scope = this.brand.scope();
+    if (!scope || this.opening() !== null) {
+      return;
+    }
+    this.opening.set(review.id);
+    this.caseErrorText.set(null);
+    try {
+      const opened = await this.recovery.open(scope, review.locationId, review.id);
+      this.reviews.update((rows) =>
+        rows.map((row) =>
+          row.id === review.id ? { ...row, caseId: opened.id, caseState: opened.state } : row,
+        ),
+      );
+    } catch (error) {
+      this.caseErrorText.set(this.describe(error));
+    } finally {
+      this.opening.set(null);
+    }
   }
 
   protected async loadMore(): Promise<void> {
