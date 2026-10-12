@@ -298,6 +298,37 @@ class OrderMarkingIntegrationTests {
     }
 
     @Test
+    @DisplayName("two orders scanning one unit at once: the loser of the unique index is told it is a duplicate, "
+            + "not handed an error from a transaction Postgres has already aborted")
+    void aCodeTakenOnAnotherOrderBetweenTheCheckAndTheInsertIsStillADuplicate() throws Exception {
+        Order winner = order(OrderStatus.CONFIRMED, line(VODKA, 2, "Vodka"));
+        Order loser = order(OrderStatus.CONFIRMED, line(VODKA, 2, "Vodka"));
+        // The order row lock is per order, so nothing serialises these two. The loser has looked and found the
+        // code free when the winner's whole capture commits; the loser's insert then meets the unique index.
+        ExecutorService threads = Executors.newSingleThreadExecutor();
+        try {
+            marks.afterOwnerCheck = () -> {
+                marks.afterOwnerCheck = () -> {};
+                try {
+                    threads.submit(() -> capture(winner, 0, VODKA_1, MarkEntryMethod.SCANNER))
+                            .get(15, TimeUnit.SECONDS);
+                } catch (Exception failed) {
+                    throw new IllegalStateException("the winner's capture did not commit", failed);
+                }
+            };
+
+            var refused = refusalOf(() -> capture(loser, 0, VODKA_1, MarkEntryMethod.SCANNER));
+
+            assertThat(refused.refusal()).isEqualTo(Refusal.MARKING_CODE_ALREADY_CAPTURED);
+            assertThat(refused.properties()).containsEntry("onThisLine", false);
+        } finally {
+            threads.shutdownNow();
+        }
+        assertThat(liveMarks(winner)).as("the winner holds the unit").isEqualTo(1);
+        assertThat(liveMarks(loser)).as("the loser holds nothing").isZero();
+    }
+
+    @Test
     @DisplayName(
             "the GTIN must be the product's; a classification with no barcode is recorded as unchecked, not refused")
     void productMatch() {
@@ -1077,6 +1108,7 @@ class OrderMarkingIntegrationTests {
         volatile Runnable beforeLock = () -> {};
         volatile Runnable afterLock = () -> {};
         volatile Runnable afterCount = () -> {};
+        volatile Runnable afterOwnerCheck = () -> {};
         final java.util.concurrent.atomic.AtomicInteger lockCalls = new java.util.concurrent.atomic.AtomicInteger();
 
         ObservableMarkStore(JdbcClient jdbc) {
@@ -1090,6 +1122,13 @@ class OrderMarkingIntegrationTests {
             boolean locked = super.lockOrder(tenantId, orderId);
             afterLock.run();
             return locked;
+        }
+
+        @Override
+        public java.util.Optional<LiveCodeOwner> liveOwnerOfCode(UUID tenantId, String codeLookupHash) {
+            java.util.Optional<LiveCodeOwner> owner = super.liveOwnerOfCode(tenantId, codeLookupHash);
+            afterOwnerCheck.run();
+            return owner;
         }
 
         @Override

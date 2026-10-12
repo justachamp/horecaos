@@ -154,7 +154,20 @@ public class JdbcOrderMarkStore {
                 .optional();
     }
 
-    public void insert(NewMark mark) {
+    /**
+     * Inserts one mark, or reports that a live unique index already holds it.
+     *
+     * <p>{@code ON CONFLICT DO NOTHING} rather than a caught {@code DuplicateKeyException}: the order row's lock
+     * serialises scans of one order, not of two, so two orders can scan the same unit at once and the loser
+     * meets the unique index on live codes after its own check found the code free. Postgres aborts the
+     * transaction on a unique violation, and every statement after it, the caller's question "who holds it?"
+     * included, fails with "current transaction is aborted". Skipping the conflict leaves the transaction
+     * usable, so the caller can ask.
+     *
+     * @return {@code true} when the row was written; {@code false} when a live code or a live
+     *     (line, sequence) already held it
+     */
+    public boolean insert(NewMark mark) {
         Map<String, Object> params = new HashMap<>();
         params.put("id", mark.id());
         params.put("tenantId", mark.tenantId());
@@ -170,14 +183,15 @@ public class JdbcOrderMarkStore {
         params.put("actorType", mark.actorType());
         params.put("actorId", mark.actorId());
         params.put("now", utc(mark.capturedAt()));
-        jdbc.sql("""
+        return jdbc.sql("""
                 INSERT INTO ordering.order_line_marks (
                     id, tenant_id, order_id, order_line_id, sequence, gtin, code_encrypted, code_lookup_hash,
                     capture_stage, entry_method, gtin_checked, captured_by_actor_type, captured_by_actor_id,
                     captured_at)
                 VALUES (:id, :tenantId, :orderId, :lineId, :sequence, :gtin, :codeEncrypted, :hash,
                     :stage, :method, :gtinChecked, :actorType, :actorId, :now)
-                """).params(params).update();
+                ON CONFLICT DO NOTHING
+                """).params(params).update() == 1;
     }
 
     /** A live mark of this order, or empty for one that is released, of another order, or of another tenant. */
