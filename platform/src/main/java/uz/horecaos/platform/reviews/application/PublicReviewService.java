@@ -47,7 +47,10 @@ import uz.horecaos.platform.tenancy.api.BranchDirectory;
 @Service
 public class PublicReviewService {
 
-    /** An anonymous caller reads at most this far down a brand's comments. */
+    /**
+     * An anonymous caller reads at most this many of a brand's comments, newest first: the last page is cut
+     * short where the ceiling falls, and the page after it is "no more", never the same page again.
+     */
     public static final int MAXIMUM_OFFSET = 500;
 
     public static final int DEFAULT_LIMIT = 20;
@@ -177,15 +180,30 @@ public class PublicReviewService {
         }
         int offset = offsetOf(cursor);
         int pageSize = limit == null ? DEFAULT_LIMIT : Math.max(1, Math.min(limit, MAXIMUM_LIMIT));
+        int window = windowAt(offset, pageSize);
+        if (window == 0) {
+            return new PublicList(visibility, List.of(), null);
+        }
         return cache.listPage(
-                tenantId,
-                brandId,
-                offset + ":" + pageSize,
-                () -> load(tenantId, brandId, visibility, offset, pageSize));
+                tenantId, brandId, offset + ":" + pageSize, () -> load(tenantId, brandId, visibility, offset, window));
     }
 
-    private PublicList load(UUID tenantId, UUID brandId, PublicVisibility visibility, int offset, int pageSize) {
-        List<PublicRow> rows = publications.publishedComments(tenantId, brandId, offset, pageSize);
+    /** How many comments a page that starts at {@code offset} may read: its size, cut short where the ceiling falls. */
+    static int windowAt(int offset, int pageSize) {
+        return Math.max(0, Math.min(pageSize, MAXIMUM_OFFSET - offset));
+    }
+
+    /**
+     * The cursor after a page that read {@code count} comments of its {@code window}, or null when that was
+     * the end: the brand has no more, or the reader has reached the ceiling.
+     */
+    static @Nullable String cursorAfter(int offset, int window, int count) {
+        int next = offset + count;
+        return count < window || next >= MAXIMUM_OFFSET ? null : Integer.toString(next);
+    }
+
+    private PublicList load(UUID tenantId, UUID brandId, PublicVisibility visibility, int offset, int window) {
+        List<PublicRow> rows = publications.publishedComments(tenantId, brandId, offset, window);
         if (rows.isEmpty()) {
             return new PublicList(visibility, List.of(), null);
         }
@@ -221,8 +239,7 @@ public class PublicReviewService {
                     row.submittedAt().atZone(zoneOf(branch)).toLocalDate(),
                     branch == null ? null : branch.name()));
         }
-        String next = rows.size() < pageSize ? null : Integer.toString(offset + rows.size());
-        return new PublicList(visibility, List.copyOf(items), next);
+        return new PublicList(visibility, List.copyOf(items), cursorAfter(offset, window, rows.size()));
     }
 
     private static int offsetOf(@Nullable String cursor) {
