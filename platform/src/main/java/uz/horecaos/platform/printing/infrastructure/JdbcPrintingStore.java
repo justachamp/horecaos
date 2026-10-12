@@ -245,11 +245,22 @@ public class JdbcPrintingStore {
                 .optional();
     }
 
-    /** What the agent last reported for a printer. Not a version bump: a status is a reading, not an edit. */
+    /**
+     * What the agent last reported for a printer, and since when it has been so. Not a version bump: a status is
+     * a reading, not an edit.
+     *
+     * <p>{@code last_status_at} is the instant the reported status last <em>changed</em>, the start of the
+     * episode the printer is in -- which is what ADR 0154 means by "the status change's {@code last_status_at}"
+     * as the episode of the offline alert. A report that repeats the status leaves it where it was. An agent
+     * polls every few seconds; stamping each poll would hand every sweep of one outage a key of its own, and
+     * the chat would be told again every half minute. (When the agent was last heard from is the advert's
+     * {@code seen_at}.)
+     */
     public void recordPrinterStatus(UUID tenantId, UUID printerId, PrinterStatus status, Instant at) {
         jdbc.sql("""
                 UPDATE printing.printers
-                   SET last_status = :status, last_status_at = :at
+                   SET last_status_at = CASE WHEN last_status IS DISTINCT FROM :status THEN :at ELSE last_status_at END,
+                       last_status = :status
                  WHERE tenant_id = :tenantId AND id = :id
                 """)
                 .param("tenantId", tenantId)
