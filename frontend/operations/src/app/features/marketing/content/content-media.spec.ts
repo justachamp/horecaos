@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { Observable, of } from 'rxjs';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MediaApi, MediaAssetStatus, MediaAssetView } from '../../catalog/media-api';
 import { ContentMedia, MediaNotReadyError, MediaRefusedError } from './content-media';
@@ -157,10 +157,12 @@ describe("ContentMedia (ADR 0157: a creative is public, the brand's and, for an 
   it('fetches a rendition thumbnail for an asset a saved draft names, once', async () => {
     media.ensureThumbnail(SCOPE, 'saved-1');
     media.ensureThumbnail(SCOPE, 'saved-1');
-    await Promise.resolve();
-    await Promise.resolve();
+    // The thumbnail is remembered a runtime-defined number of microtask turns after the
+    // download-URL observable emits; wait for it rather than counting turns.
+    await vi.waitFor(() =>
+      expect(media.thumbnails()['saved-1']).toBe('https://cdn.example/thumb.jpg'),
+    );
 
-    expect(media.thumbnails()['saved-1']).toBe('https://cdn.example/thumb.jpg');
     expect(api.thumbnailAsks).toEqual([
       { brandId: 'b1', assetId: 'saved-1', variant: 'THUMBNAIL' },
     ]);
@@ -170,6 +172,8 @@ describe("ContentMedia (ADR 0157: a creative is public, the brand's and, for an 
     api.downloadFails = true;
 
     media.ensureThumbnail(SCOPE, 'saved-2');
+    // An absence check: a failed fetch leaves nothing to wait for, so this only gives the
+    // rejection handler its turns before looking for a thumbnail that must not be there.
     await Promise.resolve();
     await Promise.resolve();
 

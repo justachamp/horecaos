@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { environment } from '../../../environments/environment';
 import { GrantView, StaffApi, scopeFor } from './staff-api';
@@ -183,14 +183,14 @@ describe('StaffApi', () => {
       { id: 'b2', displayName: 'Second' },
     ]);
     // The per-brand fan-out starts inside the brands promise's own `.then`,
-    // one microtask after `flush` resolves it — never issued in the same
-    // synchronous tick `flush` runs in.
-    await Promise.resolve();
-    await Promise.resolve();
-
-    http
-      .expectOne(url('/api/v1/operations/tenants/t1/brands/b1/locations'))
-      .flush([{ id: 'l1', brandId: 'b1', displayName: 'Chilonzor' }]);
+    // some microtasks after `flush` resolves it — never issued in the same
+    // synchronous tick `flush` runs in. How many turns that takes is the
+    // runtime's, so wait for the first request to appear (the fan-out issues
+    // every brand's request together) instead of counting them.
+    const firstBrandLocations = await vi.waitFor(() =>
+      http.expectOne(url('/api/v1/operations/tenants/t1/brands/b1/locations')),
+    );
+    firstBrandLocations.flush([{ id: 'l1', brandId: 'b1', displayName: 'Chilonzor' }]);
     http
       .expectOne(url('/api/v1/operations/tenants/t1/brands/b2/locations'))
       .flush([{ id: 'l2', brandId: 'b2', displayName: 'Yunusobod' }]);

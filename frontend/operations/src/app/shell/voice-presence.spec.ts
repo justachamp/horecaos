@@ -36,6 +36,16 @@ function card(overrides: Partial<ScreenPopCard> = {}): ScreenPopCard {
   };
 }
 
+/**
+ * Gives a path that must *not* do anything asynchronous a couple of turns in which to
+ * betray itself. It is only for absence checks: waiting for an effect to land is
+ * `vi.waitFor` (or awaiting the operation itself), never a count of turns.
+ */
+async function letPendingWorkRun(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 describe('VoicePresence', () => {
   function setUp(api: Partial<CallCentreApi>, scope: LocationScope | null = SCOPE): VoicePresence {
     TestBed.configureTestingModule({
@@ -61,8 +71,7 @@ describe('VoicePresence', () => {
 
     service.start();
     service.start();
-    await Promise.resolve();
-    await Promise.resolve();
+    await letPendingWorkRun();
 
     expect(currentCall).toHaveBeenCalledTimes(1);
     expect(myPresence).toHaveBeenCalledTimes(1);
@@ -83,8 +92,10 @@ describe('VoicePresence', () => {
     const service = setUp({ currentCall });
 
     service.start();
-    await Promise.resolve();
-    await Promise.resolve();
+    // `currentCall()` is null for a card that has not loaded yet too, so waiting for the
+    // start-up poll by counting turns could pass without ever seeing a card. Polling on
+    // demand awaits a load to its end: once it resolves, the non-ringing card is in.
+    await service.refreshCurrentCall();
 
     expect(service.currentCall()).toBeNull();
   });
@@ -109,8 +120,7 @@ describe('VoicePresence', () => {
     const service = setUp({ currentCall, myPresence }, null);
 
     service.start();
-    await Promise.resolve();
-    await Promise.resolve();
+    await letPendingWorkRun();
 
     expect(currentCall).not.toHaveBeenCalled();
     expect(myPresence).not.toHaveBeenCalled();
