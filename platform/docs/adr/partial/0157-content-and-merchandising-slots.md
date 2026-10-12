@@ -823,6 +823,14 @@ health a video the plan no longer covers is the warning `CONTENT_VIDEO_NOT_ENTIT
 item that already carries a video keep working after the entitlement is revoked, which is
 what "nothing is deleted" in the rollback below requires.
 
+`CONTENT_PLACEMENT_FULL` and `CONTENT_VIDEO_LIMIT` count *other* items (a placement's live
+items, the brand's distinct live videos), which the publishing item's own row lock does not
+cover. Two operators publishing two items at the same moment would both read the committed
+count, both find room and both write. So a publication first takes a transaction-scoped
+advisory lock for its brand (`JdbcContentStore.lockPublications`), before the item's row lock:
+the brand's publications run one after the other and the second reads what the first
+committed. Taken per brand, not per placement, because the video limit spans placements.
+
 ### Staff API (surface `operations`, ADR 0031)
 
 All under `/api/v1/tenants/{tenantId}/brands/{brandId}/content`, brand scope, camelCase,

@@ -12,12 +12,16 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -40,16 +44,20 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.commercial.application.PlanCatalogService;
 import uz.horecaos.platform.commercial.application.SubscriptionService;
 import uz.horecaos.platform.content.ContentFixture;
+import uz.horecaos.platform.content.application.ContentPublicationService;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.web.api.ApiException;
 
 /**
  * A brand's storefront content authored over real HTTP (ADR 0157, Staff API): through the real
@@ -124,6 +132,14 @@ class ContentEndpointTests {
     @Autowired
     @SuppressWarnings("NullAway")
     private SubscriptionService subscriptions;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private ContentPublicationService publications;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private PlatformTransactionManager transactions;
 
     private ContentFixture fixture;
     private UUID publication;
@@ -796,6 +812,134 @@ class ContentEndpointTests {
                         .query(Long.class)
                         .single())
                 .isEqualTo(1L);
+    }
+
+    /**
+     * Publishes {@code first} inside a transaction that is held open, and {@code second} on another thread
+     * while it is, then commits the first.
+     *
+     * <p>This is the interleaving that two operators publishing at the same moment produce, made certain
+     * instead of likely: the second publication starts after the first has written everything and before
+     * it has committed, so a check that only reads committed rows cannot see the first. If the second
+     * completes inside the window, nothing made it wait.
+     *
+     * @return what the second publication threw, or null when it was published
+     */
+    private @Nullable Throwable publishWhileTheOtherIsUncommitted(JsonNode first, JsonNode second) throws Exception {
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            AtomicReference<Future<Throwable>> other = new AtomicReference<>();
+            new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                publications.publish(
+                        TENANT,
+                        BRAND,
+                        OWNER,
+                        UUID.fromString(first.get("id").stringValue()),
+                        first.get("version").longValue(),
+                        null);
+                Future<Throwable> result = pool.submit(() -> {
+                    try {
+                        publications.publish(
+                                TENANT,
+                                BRAND,
+                                OWNER,
+                                UUID.fromString(second.get("id").stringValue()),
+                                second.get("version").longValue(),
+                                null);
+                        return null;
+                    } catch (Throwable refused) {
+                        return refused;
+                    }
+                });
+                other.set(result);
+                try {
+                    result.get(3, TimeUnit.SECONDS);
+                } catch (TimeoutException waiting) {
+                    // The second publication is waiting for the first, which is what it should do.
+                } catch (InterruptedException | java.util.concurrent.ExecutionException failure) {
+                    throw new IllegalStateException(failure);
+                }
+            });
+            return Objects.requireNonNull(other.get()).get(60, TimeUnit.SECONDS);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /** The gate codes a refused publication carries; fails when the second publication was not refused. */
+    private static String refusalOf(@Nullable Throwable refused) {
+        assertThat(refused).as("the second publication was refused").isInstanceOf(ApiException.class);
+        return Objects.toString(
+                ((ApiException) Objects.requireNonNull(refused)).properties().get("errors"));
+    }
+
+    private long publishedInTheCarousel() {
+        return jdbc.sql("SELECT count(*) FROM content.items WHERE tenant_id = :t AND brand_id = :b"
+                        + " AND placement = 'HOME_CAROUSEL' AND state = 'PUBLISHED'")
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .query(Long.class)
+                .single();
+    }
+
+    @Test
+    @DisplayName(
+            "two publications of different items into the last free slot of a placement cannot both succeed: the second waits for the first and is then refused CONTENT_PLACEMENT_FULL")
+    void theLastSlotOfAPlacementGoesToOnePublication() throws Exception {
+        for (int i = 0; i < 9; i++) {
+            publish(createBanner("Live " + i, "Живой " + i));
+        }
+        JsonNode first = createBanner("First", "Первый");
+        JsonNode second = createBanner("Second", "Второй");
+
+        Throwable refused = publishWhileTheOtherIsUncommitted(first, second);
+
+        assertThat(refusalOf(refused)).contains("CONTENT_PLACEMENT_FULL");
+        assertThat(publishedInTheCarousel())
+                .as("the carousel holds ten, not eleven")
+                .isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName(
+            "two publications that would each be the brand's fifth live video cannot both succeed: the second waits for the first and is then refused CONTENT_VIDEO_LIMIT")
+    void theLastLiveVideoGoesToOnePublication() throws Exception {
+        fixture.entitle(plans, subscriptions, TENANT, false, true);
+        for (int i = 0; i < 4; i++) {
+            publish(createVideoBanner("Live video " + i));
+        }
+        JsonNode first = createVideoBanner("First video");
+        JsonNode second = createVideoBanner("Second video");
+
+        Throwable refused = publishWhileTheOtherIsUncommitted(first, second);
+
+        assertThat(refusalOf(refused)).contains("CONTENT_VIDEO_LIMIT");
+        assertThat(jdbc.sql("SELECT count(DISTINCT m.media_asset_id) FROM content.items i"
+                                + " JOIN content.revision_media m ON m.item_id = i.id AND m.revision_no = i.live_revision_no"
+                                + " JOIN media.assets a ON a.asset_id = m.media_asset_id"
+                                + " WHERE i.tenant_id = :t AND i.brand_id = :b AND i.state = 'PUBLISHED'"
+                                + " AND a.declared_content_type = 'video/mp4'")
+                        .param("t", TENANT)
+                        .param("b", BRAND)
+                        .query(Long.class)
+                        .single())
+                .as("a brand has at most five live videos")
+                .isEqualTo(5);
+    }
+
+    private JsonNode createVideoBanner(String name) throws Exception {
+        MvcResult created = post(
+                CONTENT + "/items",
+                OWNER,
+                """
+                {"kind":"BANNER","internalName":"%s",
+                 "document":{"texts":{"ru":{"title":"Видео"}},
+                             "media":{"primaryAssetId":"%s","posterAssetId":"%s"}}}""".formatted(name, fixture.video(TENANT, BRAND), fixture.goodBanner(TENANT, BRAND)),
+                null);
+        assertThat(status(created))
+                .as(created.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(201);
+        return body(created);
     }
 
     // ================================================================== ordering

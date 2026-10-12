@@ -198,6 +198,30 @@ public class JdbcContentStore {
     }
 
     /**
+     * Makes two publications under one brand run one after the other, for the length of the surrounding
+     * transaction ({@code pg_advisory_xact_lock}: released at commit or rollback).
+     *
+     * <p>The limits a publication is held to count <em>other</em> items: how many a placement holds
+     * ({@link #countPublishedInPlacement}) and how many distinct videos the brand has live
+     * ({@link #liveRevisionAssetIds}). The item's own row lock ({@link #lockItem}) does not cover those,
+     * so two operators publishing two different items at the same moment both read the committed count,
+     * both see room for one more, and both write: ten items become eleven, five videos six. Under this
+     * lock the second publication reads what the first committed and is refused by name.
+     *
+     * <p>Taken first, before the item's row lock, by the one caller that publishes, so the order is the
+     * same for everyone and a pair of publications cannot wait on each other. Taken per brand and not per
+     * placement because the video limit spans placements.
+     */
+    public void lockPublications(UUID tenantId, UUID brandId) {
+        String lockKey = "content.publish|%s|%s".formatted(tenantId, brandId);
+        // The row mapper never reads the void column; consuming the one row is what waits for the lock.
+        jdbc.sql("SELECT pg_advisory_xact_lock(hashtextextended(:lockKey, 0))")
+                .param("lockKey", lockKey)
+                .query((row, number) -> Boolean.TRUE)
+                .list();
+    }
+
+    /**
      * Writes a change to the item's own columns, if nobody changed it since {@code expectedVersion}.
      *
      * @return false when the version has moved on

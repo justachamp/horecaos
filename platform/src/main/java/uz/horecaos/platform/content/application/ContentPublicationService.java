@@ -94,6 +94,9 @@ public class ContentPublicationService {
     @Transactional
     public ItemView publish(
             UUID tenantId, UUID brandId, String actor, UUID itemId, long expectedVersion, @Nullable String reason) {
+        // The placement and live-video limits count other items, which this item's row lock does not
+        // cover; serialize the brand's publications before reading either (ADR 0157, Publication gates).
+        store.lockPublications(tenantId, brandId);
         ItemRow item = store.lockItem(tenantId, brandId, itemId).orElseThrow(ContentAuthoringService::noSuchItem);
         AggregateVersion.requireMatch(expectedVersion, item.version());
         if (item.state() == ItemState.ARCHIVED) {
