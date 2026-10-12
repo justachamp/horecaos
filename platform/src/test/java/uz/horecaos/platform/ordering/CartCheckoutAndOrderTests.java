@@ -4687,6 +4687,79 @@ class CartCheckoutAndOrderTests {
                 .satisfies(fact -> assertThat(fact.orderId()).isEqualTo(orderId));
     }
 
+    @Test
+    @DisplayName("a capture in flight is not deadlocked by the lapse sweep: the sweep holds the payment process row "
+            + "while it works, so it must not wait for the order a capture is already moving")
+    void aCaptureInFlightIsNotDeadlockedByTheLapseSweep() throws Exception {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-lapse-lock-order", "CLICK")));
+        UUID orderId = orderIdOf(placed);
+        UUID attempt = reservedAttempt(orderId, PaymentProviderType.CLICK, Duration.ofHours(12));
+        PaymentWindowAuthoringService windows = publishWindow(20, PaymentWindowPolicy.Action.CANCEL);
+        var meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        clock.advance(Duration.ofMinutes(21));
+
+        // The sweep has claimed (and so holds) the order's payment process row, and waits there until the
+        // capture is stuck behind it: the capture moves the order first and settles the process row second, the
+        // sweep the other way round, which is the shape of a deadlock whose victim is the capture.
+        CountDownLatch claimed = new CountDownLatch(1);
+        CountDownLatch captureIsWaiting = new CountDownLatch(1);
+        OrderPaymentProcess sweeping = new OrderPaymentProcess(
+                new JdbcOrderProcessStore(jdbc) {
+                    @Override
+                    public List<ProcessRow> claim(String processName, Instant now, int batchSize) {
+                        List<ProcessRow> rows = super.claim(processName, now, batchSize);
+                        if (!rows.isEmpty()) {
+                            claimed.countDown();
+                            try {
+                                captureIsWaiting.await(60, TimeUnit.SECONDS);
+                            } catch (InterruptedException interrupted) {
+                                Thread.currentThread().interrupt();
+                            }
+                        }
+                        return rows;
+                    }
+                },
+                objectMapper,
+                windows,
+                meters);
+
+        ExecutorService threads = Executors.newFixedThreadPool(2);
+        try {
+            Future<Integer> sweep = threads.submit(() -> tx(() -> sweeping.sweep(
+                    clock.instant(), Duration.ofMinutes(30), Duration.ofMinutes(1), 10, lapseThroughOrderState())));
+            assertThat(claimed.await(60, TimeUnit.SECONDS)).isTrue();
+            Future<?> capture = threads.submit(() -> capturePayment(orderId, attempt));
+            for (int i = 0; i < 600; i++) {
+                if (jdbc.sql("SELECT count(*) FROM pg_locks WHERE NOT granted")
+                                .query(Long.class)
+                                .single()
+                        > 0) {
+                    break;
+                }
+                Thread.sleep(50);
+            }
+            captureIsWaiting.countDown();
+
+            assertThat(capture.get(60, TimeUnit.SECONDS))
+                    .as("the capture is not the deadlock's victim")
+                    .isNull();
+            assertThat(sweep.get(60, TimeUnit.SECONDS)).isEqualTo(1);
+        } finally {
+            captureIsWaiting.countDown();
+            threads.shutdownNow();
+        }
+
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status())
+                .as("the money landed, so the order is not ended for want of it")
+                .isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(orderPaymentProcessStatus(orderId)).isEqualTo("COMPLETED");
+        assertThat(meters.counter("ordering.payment_window", "outcome", "skipped_contended")
+                        .count())
+                .as("the sweep left an order a capture was moving alone and came back to it later")
+                .isEqualTo(1.0);
+    }
+
     private PaymentWindowAuthoringService paymentWindows() {
         var audit = new uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder(jdbc, objectMapper);
         return new PaymentWindowAuthoringService(
