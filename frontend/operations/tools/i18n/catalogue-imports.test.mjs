@@ -20,6 +20,7 @@ const APP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../.
 const SRC = path.join(APP_DIR, 'src');
 const I18N = path.join(SRC, 'app/core/i18n');
 const LOADER = path.join(I18N, 'i18n.ts');
+const LOADERS = path.join(I18N, 'catalogue-loaders.ts');
 
 function sources(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -79,9 +80,9 @@ test('no production file takes a value from a catalogue module; the types are al
   assert.deepEqual(offenders, [], 'only core.ru may be imported as a value, and only by i18n.ts: everything else loads through I18n');
 });
 
-test('the loaders in i18n.ts import every area of every locale but ru/core lazily, and nothing else', () => {
-  const text = fs.readFileSync(LOADER, 'utf8');
-  const source = ts.createSourceFile(LOADER, text, ts.ScriptTarget.Latest, true);
+test('the loaders in catalogue-loaders.ts import every area of every locale but ru/core lazily, and nothing else', () => {
+  const text = fs.readFileSync(LOADERS, 'utf8');
+  const source = ts.createSourceFile(LOADERS, text, ts.ScriptTarget.Latest, true);
   const lazy = new Set();
   const visit = (node) => {
     if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword && ts.isStringLiteral(node.arguments[0])) {
@@ -98,4 +99,51 @@ test('the loaders in i18n.ts import every area of every locale but ru/core lazil
     .filter((specifier) => specifier !== './messages/core.ru')
     .sort();
   assert.deepEqual([...lazy].sort(), modules);
+});
+
+/**
+ * The unit-test builder bundles every spec file as its own esbuild entry point with code splitting
+ * disabled, which inlines each dynamic import into the entry that reaches it. A file that reaches
+ * `catalogue-loaders.ts` therefore carries all fifty-odd catalogue modules (about three megabytes) in
+ * its own bundle; when `i18n.ts` imported them, so did nearly every spec -- 1.08 GB of a 1.19 GB test
+ * bundle and an esbuild peak above ten gigabytes, which got CI's runner killed. So the loaders are
+ * registered with `I18n`, not imported by it: only the app's entry point and the test setup file may
+ * import them.
+ */
+test('only main.ts and the unit-test setup import catalogue-loaders.ts', () => {
+  const allowed = new Set([path.join(SRC, 'main.ts'), path.join(SRC, 'testing/i18n-preload.setup.ts')]);
+  const target = LOADERS.replace(/\.ts$/, '');
+  const everyTs = (dir, out = []) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        everyTs(full, out);
+      } else if (/\.ts$/.test(entry.name)) {
+        out.push(full);
+      }
+    }
+    return out;
+  };
+  const specifierOf = (node) => {
+    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+      return ts.isImportDeclaration(node) && node.importClause?.isTypeOnly ? undefined : node.moduleSpecifier.text;
+    }
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword && ts.isStringLiteral(node.arguments[0])) {
+      return node.arguments[0].text;
+    }
+    return undefined;
+  };
+  const importers = [];
+  for (const file of everyTs(SRC).filter((file) => !allowed.has(file))) {
+    const source = ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
+    const visit = (node) => {
+      const specifier = specifierOf(node);
+      if (specifier?.startsWith('.') && path.resolve(path.dirname(file), specifier) === target) {
+        importers.push(path.relative(APP_DIR, file));
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+  assert.deepEqual(importers, [], "importing catalogue-loaders.ts puts every catalogue into that file's bundle: register the loaders, do not import them");
 });

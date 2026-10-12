@@ -44,91 +44,55 @@ export const ACCOUNT_STORAGE_KEY = 'horecaos.operations.accountLocale';
 /** One area's messages in one locale, as its module exports them. */
 type Messages = Readonly<Record<string, string>>;
 
-type Loader = () => Promise<Messages>;
+export type Loader = () => Promise<Messages>;
 
 /**
- * Dynamic-import loaders: one chunk per area and locale (`messages/<area>.<locale>.ts`).
- *
- * The one entry missing is the one that is not lazy: `ru`'s `core` is imported statically above, so the
- * default locale's first paint needs no network round trip and no await. Every other chunk is fetched
- * the first time something asks for it -- `main.ts` for the persisted locale's `core`, a route's
- * `messagesGuard` for the area it is about to show, a locale switch for the areas already in use.
+ * The dynamic-import loaders of every catalogue area, one per area and locale -- see
+ * `catalogue-loaders.ts`, which holds the real ones. `ru`'s `core` is the one entry that is not lazy:
+ * it is imported statically above.
  */
-const LOADERS: Record<Locale, Partial<Record<MessageArea, Loader>>> = {
-  ru: {
-    auth: () => import('./messages/auth.ru').then((m) => m.authRu),
-    today: () => import('./messages/today.ru').then((m) => m.todayRu),
-    orders: () => import('./messages/orders.ru').then((m) => m.ordersRu),
-    customers: () => import('./messages/customers.ru').then((m) => m.customersRu),
-    inbox: () => import('./messages/inbox.ru').then((m) => m.inboxRu),
-    settings: () => import('./messages/settings.ru').then((m) => m.settingsRu),
-    staff: () => import('./messages/staff.ru').then((m) => m.staffRu),
-    finance: () => import('./messages/finance.ru').then((m) => m.financeRu),
-    marketing: () => import('./messages/marketing.ru').then((m) => m.marketingRu),
-    catalog: () => import('./messages/catalog.ru').then((m) => m.catalogRu),
-    reports: () => import('./messages/reports.ru').then((m) => m.reportsRu),
-    kitchen: () => import('./messages/kitchen.ru').then((m) => m.kitchenRu),
-    delivery: () => import('./messages/delivery.ru').then((m) => m.deliveryRu),
-    couriers: () => import('./messages/couriers.ru').then((m) => m.couriersRu),
-    device: () => import('./messages/device.ru').then((m) => m.deviceRu),
-    wallboard: () => import('./messages/wallboard.ru').then((m) => m.wallboardRu),
-    map: () => import('./messages/map.ru').then((m) => m.mapRu),
-  },
-  'uz-Latn': {
-    core: () => import('./messages/core.uz-latn').then((m) => m.coreUzLatn),
-    auth: () => import('./messages/auth.uz-latn').then((m) => m.authUzLatn),
-    today: () => import('./messages/today.uz-latn').then((m) => m.todayUzLatn),
-    orders: () => import('./messages/orders.uz-latn').then((m) => m.ordersUzLatn),
-    customers: () => import('./messages/customers.uz-latn').then((m) => m.customersUzLatn),
-    inbox: () => import('./messages/inbox.uz-latn').then((m) => m.inboxUzLatn),
-    settings: () => import('./messages/settings.uz-latn').then((m) => m.settingsUzLatn),
-    staff: () => import('./messages/staff.uz-latn').then((m) => m.staffUzLatn),
-    finance: () => import('./messages/finance.uz-latn').then((m) => m.financeUzLatn),
-    marketing: () => import('./messages/marketing.uz-latn').then((m) => m.marketingUzLatn),
-    catalog: () => import('./messages/catalog.uz-latn').then((m) => m.catalogUzLatn),
-    reports: () => import('./messages/reports.uz-latn').then((m) => m.reportsUzLatn),
-    kitchen: () => import('./messages/kitchen.uz-latn').then((m) => m.kitchenUzLatn),
-    delivery: () => import('./messages/delivery.uz-latn').then((m) => m.deliveryUzLatn),
-    couriers: () => import('./messages/couriers.uz-latn').then((m) => m.couriersUzLatn),
-    device: () => import('./messages/device.uz-latn').then((m) => m.deviceUzLatn),
-    wallboard: () => import('./messages/wallboard.uz-latn').then((m) => m.wallboardUzLatn),
-    map: () => import('./messages/map.uz-latn').then((m) => m.mapUzLatn),
-  },
-  en: {
-    core: () => import('./messages/core.en').then((m) => m.coreEn),
-    auth: () => import('./messages/auth.en').then((m) => m.authEn),
-    today: () => import('./messages/today.en').then((m) => m.todayEn),
-    orders: () => import('./messages/orders.en').then((m) => m.ordersEn),
-    customers: () => import('./messages/customers.en').then((m) => m.customersEn),
-    inbox: () => import('./messages/inbox.en').then((m) => m.inboxEn),
-    settings: () => import('./messages/settings.en').then((m) => m.settingsEn),
-    staff: () => import('./messages/staff.en').then((m) => m.staffEn),
-    finance: () => import('./messages/finance.en').then((m) => m.financeEn),
-    marketing: () => import('./messages/marketing.en').then((m) => m.marketingEn),
-    catalog: () => import('./messages/catalog.en').then((m) => m.catalogEn),
-    reports: () => import('./messages/reports.en').then((m) => m.reportsEn),
-    kitchen: () => import('./messages/kitchen.en').then((m) => m.kitchenEn),
-    delivery: () => import('./messages/delivery.en').then((m) => m.deliveryEn),
-    couriers: () => import('./messages/couriers.en').then((m) => m.couriersEn),
-    device: () => import('./messages/device.en').then((m) => m.deviceEn),
-    wallboard: () => import('./messages/wallboard.en').then((m) => m.wallboardEn),
-    map: () => import('./messages/map.en').then((m) => m.mapEn),
-  },
-};
+export type CatalogueLoaders = Record<Locale, Partial<Record<MessageArea, Loader>>>;
+
+const LOADERS_SLOT = Symbol.for('horecaos.operations.i18n.catalogue-loaders');
+type LoadersHost = typeof globalThis & { [LOADERS_SLOT]?: CatalogueLoaders };
+
+/**
+ * Hands `I18n` the loaders it fetches area modules with: `main.ts` registers the real ones before it
+ * bootstraps, and the unit-test setup (`src/testing/i18n-preload.setup.ts`) registers the same ones
+ * before it warms the cache. The first registration wins, so a spec that imports `main.ts` keeps the
+ * loaders it patched with {@link setLoaderForTesting} rather than having them replaced by a fresh copy.
+ *
+ * The loaders live in `catalogue-loaders.ts` and not here so that this module -- imported by nearly
+ * everything -- does not drag every catalogue into the graph of every file that imports it (see that
+ * file's doc comment for what that cost the unit-test bundle). Like the cache in
+ * {@link catalogueCache}, the slot is on `globalThis` because the unit-test builder bundles the setup
+ * file and each spec as separate entry points, each with its own copy of this module.
+ */
+export function registerCatalogueLoaders(loaders: CatalogueLoaders): void {
+  (globalThis as LoadersHost)[LOADERS_SLOT] ??= loaders;
+}
+
+/** `undefined` until registered, which `ensureArea` reports as "no message loader for <locale>/<area>". */
+function catalogueLoaders(): CatalogueLoaders | undefined {
+  return (globalThis as LoadersHost)[LOADERS_SLOT];
+}
 
 /**
  * Test-only: overrides one loader, e.g. to simulate a failed dynamic import without touching the
  * network. `area` defaults to `core`, the one every locale switch needs. Returns a function that
- * restores the real loader; every caller must call it before the test ends, since `LOADERS` -- like
- * the cache in {@link catalogueCache} -- is shared with every other spec bundled into the same entry
- * point (see that function's doc comment).
+ * restores the real loader; every caller must call it before the test ends, since the registered
+ * loaders -- like the cache in {@link catalogueCache} -- are shared with every other spec bundled into
+ * the same entry point (see that function's doc comment).
  */
 export function setLoaderForTesting(
   locale: Locale,
   loader: Loader,
   area: MessageArea = CORE_AREA,
 ): () => void {
-  const loaders = LOADERS[locale];
+  const loaders = catalogueLoaders()?.[locale];
+  if (!loaders) {
+    throw new Error('setLoaderForTesting needs the catalogue loaders registered first');
+  }
   const original = loaders[area];
   loaders[area] = loader;
   return () => {
@@ -213,7 +177,7 @@ function ensureArea(locale: Locale, area: MessageArea): Promise<Messages> {
   const id = `${locale}/${area}`;
   let inFlight = cache.pending.get(id);
   if (!inFlight) {
-    const load = LOADERS[locale][area];
+    const load = catalogueLoaders()?.[locale][area];
     if (!load) {
       return Promise.reject(new Error(`no message loader for ${id}`));
     }
