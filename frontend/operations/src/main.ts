@@ -1,7 +1,13 @@
 import { bootstrapApplication } from '@angular/platform-browser';
 import { appConfig } from './app/app.config';
 import { App } from './app/app';
-import { DEFAULT_LOCALE, peekStoredLocale, preloadLocale } from './app/core/i18n/i18n';
+import { CATALOGUE_LOADERS } from './app/core/i18n/catalogue-loaders';
+import {
+  DEFAULT_LOCALE,
+  peekStoredLocale,
+  preloadLocale,
+  registerCatalogueLoaders,
+} from './app/core/i18n/i18n';
 
 /**
  * Awaits only the persisted locale's `core` messages, not all three locales' and not any feature
@@ -28,5 +34,9 @@ async function bootstrap(): Promise<void> {
   }
   await bootstrapApplication(App, appConfig);
 }
+
+// Before anything can ask `I18n` for an area: `i18n.ts` does not import the loaders itself (see
+// `catalogue-loaders.ts` for why).
+registerCatalogueLoaders(CATALOGUE_LOADERS);
 
 bootstrap().catch((err) => console.error(err));

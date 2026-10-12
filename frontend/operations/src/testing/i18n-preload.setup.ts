@@ -1,4 +1,5 @@
-import { LOCALES, preloadAllAreas } from '../app/core/i18n/i18n';
+import { CATALOGUE_LOADERS } from '../app/core/i18n/catalogue-loaders';
+import { LOCALES, preloadAllAreas, registerCatalogueLoaders } from '../app/core/i18n/i18n';
 import { seedPlatformLocalesForTesting } from '../app/core/i18n/platform-locales';
 import { REGISTRY_FIXTURE } from './platform-locales.fixture';
 
@@ -19,12 +20,18 @@ import { REGISTRY_FIXTURE } from './platform-locales.fixture';
  * one of those specs meaningful without editing each call site: by the time any
  * spec runs, the messages it asks for have already resolved.
  *
+ * This file is also the one place the unit tests get the loaders from: `i18n.ts` does not import
+ * `catalogue-loaders.ts`, so a spec bundle (each spec is its own esbuild entry, with code splitting
+ * disabled) does not carry the catalogues; the real loaders are registered here, once, and every spec's
+ * copy of `I18n` finds them in the shared `globalThis` slot. See `catalogue-loaders.ts`.
+ *
  * This is a real `await` of the real dynamic imports, not a fake timer --
  * `core/i18n/i18n.spec.ts` covers the not-yet-loaded paths directly, with
  * `resetCatalogueCacheForTesting()`, precisely so this file isn't the only
  * thing standing between the suite and a lazy-loading regression that only
  * shows up when an area truly isn't warm yet.
  */
+registerCatalogueLoaders(CATALOGUE_LOADERS);
 await Promise.all(LOCALES.map((locale) => preloadAllAreas(locale)));
 
 /**
