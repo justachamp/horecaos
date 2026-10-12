@@ -378,6 +378,9 @@ public class MxikReferenceImportService {
 
     private RunRow applyInTransaction(
             UUID runId, int expectedVersion, @Nullable Integer acknowledgedWithdrawals, String actorSubject) {
+        // One apply at a time, before anything is read: what follows judges the list as the previous apply left
+        // it, and a second apply waits here for that apply to commit.
+        store.lockApply();
         RunRow run = store.findRunForUpdate(runId).orElseThrow(() -> notFound(runId));
         if (run.version() != expectedVersion) {
             throw ApiException.staleVersion(expectedVersion, run.version());
@@ -393,9 +396,23 @@ public class MxikReferenceImportService {
                             .formatted(run.rowsWithdrawn(), run.withdrawalThresholdPercent()),
                     Map.of("findingCode", "WITHDRAWAL_ACKNOWLEDGEMENT_REQUIRED", "withdrawals", run.rowsWithdrawn()));
         }
+        boolean full = "FULL_SNAPSHOT".equals(run.mode());
         Optional<JdbcMxikImportStore.StateRow> state = store.state();
         if (state.isPresent() && !state.get().importedAt().isBefore(run.createdAt())) {
             // The list moved after this run was looked at; the counts the administrator read are stale.
+            throw refused("RUN_IS_STALE", "The list changed after this run was validated; upload the file again");
+        }
+        // The timestamps above are the start of two transactions, not the moment either one's writes became
+        // visible: an apply that began before this run was validated and committed after it leaves a state
+        // that looks older than the run. What the administrator was shown is the counts, so the counts are
+        // what is compared, against the list as it stands now that no other apply is running. A full snapshot
+        // that would withdraw the codes another run added is stopped here.
+        Diff now = store.diff(runId, full);
+        if (now.created() != run.rowsNew()
+                || now.changed() != run.rowsChanged()
+                || now.unchanged() != run.rowsUnchanged()
+                || now.withdrawn() != run.rowsWithdrawn()
+                || now.reinstated() != run.rowsReinstated()) {
             throw refused("RUN_IS_STALE", "The list changed after this run was validated; upload the file again");
         }
         if (!store.transition(runId, List.of("VALIDATED", "HELD_FOR_REVIEW"), "APPLYING", expectedVersion)) {
@@ -404,7 +421,6 @@ public class MxikReferenceImportService {
 
         int datasetVersion =
                 state.map(JdbcMxikImportStore.StateRow::datasetVersion).orElse(0) + 1;
-        boolean full = "FULL_SNAPSHOT".equals(run.mode());
         int rows = writeRows(runId, datasetVersion);
         Diff applied = new Diff(run.rowsNew(), run.rowsChanged(), run.rowsUnchanged(), 0, run.rowsReinstated());
         int withdrawn = full

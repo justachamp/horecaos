@@ -78,7 +78,7 @@ curl -sS -X POST "$BASE/api/v1/control-plane/fiscal-reference/mxik/imports/$RUN/
   -d '{"acknowledgedWithdrawals": 0}'   # for a held run, the exact rowsWithdrawn count
 ```
 
-`If-Match` is the run's version from the dry run. `422 RUN_IS_STALE` means the list changed after you validated: upload again. `422 WITHDRAWAL_ACKNOWLEDGEMENT_REQUIRED` means the count you named is not the count you were shown.
+`If-Match` is the run's version from the dry run. `422 RUN_IS_STALE` means the list changed after you validated, whether another run was applied or the counts you were shown no longer hold: upload again. Applies run one at a time, so a second administrator applying while yours is running waits for it and is then answered this way. `422 WITHDRAWAL_ACKNOWLEDGEMENT_REQUIRED` means the count you named is not the count you were shown.
 
 **Check:** `status: APPLIED`, `datasetVersion` one higher than before, and the status read now says `loaded: true` with `validRows`, `withdrawnRows`, `sourcePublishedOn` and `ageDays: 0`. The two incidents `FISCAL_REFERENCE_NOT_LOADED` and `FISCAL_REFERENCE_STALE` resolve themselves.
 

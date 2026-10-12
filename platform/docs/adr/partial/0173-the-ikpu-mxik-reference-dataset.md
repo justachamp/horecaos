@@ -14,7 +14,10 @@
   code, a partial run withdraws nothing, a run that would withdraw more than
   `catalog.mxik_import_withdrawal_threshold_percent` is held until the exact count is
   acknowledged, the raw file is kept under its hash in the object store and a large file
-  goes through a signed upload. `MxikValidity` is the one validity definition used by
+  goes through a signed upload. Applies run one at a time (a transaction-scoped advisory
+  lock taken before anything is read), and an apply recounts its diff against the list as
+  it then stands and is refused `RUN_IS_STALE` when the counts the administrator read have
+  moved, so a stale full snapshot cannot withdraw the codes another run added. `MxikValidity` is the one validity definition used by
   the search, `knownMxikCodes`, the validator and the coverage read;
   `FISCAL_MXIK_CODE_WITHDRAWN` and `FISCAL_PACKAGE_CODE_NOT_LISTED_FOR_MXIK` are
   warnings that stay silent while the list is empty; the status read gained its fields
