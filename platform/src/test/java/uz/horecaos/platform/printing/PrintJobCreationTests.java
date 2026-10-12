@@ -209,6 +209,64 @@ class PrintJobCreationTests extends PrintingSpringTest {
     }
 
     @Test
+    @DisplayName(
+            "an order that moves on after its slip was printed is not printed again: the key is the confirmation, not the order's live version")
+    void aLaterTransitionDoesNotMakeAnotherSlip() {
+        route(PrintDocumentType.ORDER_SLIP, null, counter, 1, true);
+        SeededOrder order = anOrder();
+        commitAndPublish(PrintingSteps.confirmed(TENANT, BRAND, LOCATION, order.orderId(), 3, clock.instant()));
+        assertThat(jobs())
+                .as("the listener printed the slip at the confirmation")
+                .hasSize(1);
+
+        // The kitchen sets PREPARING, then READY: each bumps the order's version exactly as
+        // JdbcOrderStore.transition does, and neither is a confirmation.
+        for (String status : List.of("PREPARING", "READY")) {
+            jdbc.sql("""
+                            UPDATE ordering.orders SET status = :status, version = version + 1
+                             WHERE tenant_id = :tenantId AND id = :orderId
+                            """)
+                    .param("status", status)
+                    .param("tenantId", TENANT)
+                    .param("orderId", order.orderId())
+                    .update();
+            assertThat(sweep().jobsCreated())
+                    .as("the order is %s; the sweeper finds the slip of its confirmation", status)
+                    .isZero();
+        }
+
+        assertThat(jobs()).as("one slip for one confirmation").hasSize(1);
+    }
+
+    @Test
+    @DisplayName(
+            "an order born confirmed (no transition, no event) is found by the sweeper once, and not again however far it moves on")
+    void anOrderBornConfirmedIsSweptOnce() {
+        route(PrintDocumentType.ORDER_SLIP, null, counter, 1, true);
+        SeededOrder order = world.bornConfirmedOrder(LOCATION, "D-001", LineSpec.of("Plov", 1, 50_000));
+
+        assertThat(sweep().jobsCreated())
+                .as("nothing else ever prints it: no event was published")
+                .isEqualTo(1);
+        assertThat(jobs().getFirst().sourceRevision())
+                .as("its confirmation is its creation")
+                .isEqualTo(1);
+
+        for (String status : List.of("PREPARING", "READY", "FULFILLING")) {
+            jdbc.sql("""
+                            UPDATE ordering.orders SET status = :status, version = version + 1
+                             WHERE tenant_id = :tenantId AND id = :orderId
+                            """)
+                    .param("status", status)
+                    .param("tenantId", TENANT)
+                    .param("orderId", order.orderId())
+                    .update();
+            assertThat(sweep().jobsCreated()).as("the order is %s", status).isZero();
+        }
+        assertThat(jobs()).hasSize(1);
+    }
+
+    @Test
     @DisplayName("a route with auto-print off makes no job, and a document with no route prints nowhere")
     void nothingPrintsByDefault() {
         route(PrintDocumentType.ORDER_SLIP, null, counter, 1, false);

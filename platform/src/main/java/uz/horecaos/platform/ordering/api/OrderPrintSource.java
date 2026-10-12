@@ -41,7 +41,11 @@ public interface OrderPrintSource {
      */
     List<ConfirmedOrder> confirmedBetween(UUID tenantId, UUID locationId, Instant from, Instant to, int limit);
 
-    /** The confirmation a sweeper keys an order slip on: the order and the version it was confirmed at. */
+    /**
+     * The confirmation a sweeper keys an order slip on: the order and the version it was confirmed at -- the
+     * same number {@code OrderConfirmed.orderVersion} carries, and not the order's version now, which moves
+     * with every later status change.
+     */
     record ConfirmedOrder(UUID orderId, int version, Instant confirmedAt) {}
 
     /**
