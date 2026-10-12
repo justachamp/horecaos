@@ -5,10 +5,13 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -45,10 +48,12 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * Paper on request (ADR 0154, Decisions 7 and 10): a test page, a reprint of an order's slip, receipt or
  * kitchen ticket, and the preview bitmap of what a job would print.
  *
- * <p><strong>A reprint is a new job, regenerated from the current facts and marked as a copy</strong> -- not
- * replayed from stored bytes -- linked to the first print of the same document, naming the person who asked
- * and a reason code, and written to the activity log as a {@code BUSINESS} fact. A reprinted kitchen ticket
- * after an amendment shows the order as it is now.
+ * <p><strong>A reprint is a new job, regenerated from the current facts</strong> -- not replayed from stored
+ * bytes -- linked to the first print of the same document, naming the person who asked and a reason code, and
+ * written to the activity log as a {@code BUSINESS} fact. A reprinted kitchen ticket after an amendment shows
+ * the order as it is now. <strong>It says it is a copy when an earlier print of the document is out or on its
+ * way</strong> (Decision 5: every print after the first); the first paper there is of a document -- what a
+ * cashier gets who presses «Печать» where nothing prints by itself -- is the original.
  *
  * <p>A browser printer's job is recorded as {@code HANDED_OFF}, which is all the platform can know about
  * paper it did not send: the workstation prints the preview bitmap at the roll's width. An agent printer's is
@@ -68,6 +73,10 @@ public class PrintOnDemandService {
         TEST,
         OTHER
     }
+
+    /** A job in one of these states has put the document in somebody's hand, or is about to. */
+    private static final Set<JobStatus> PAPER_OUT_OR_COMING =
+            EnumSet.of(JobStatus.QUEUED, JobStatus.CLAIMED, JobStatus.PRINTED, JobStatus.HANDED_OFF);
 
     private final TenantRlsSession rls;
     private final JdbcPrintingStore store;
@@ -152,14 +161,16 @@ public class PrintOnDemandService {
         switch (type) {
             case ORDER_SLIP -> {
                 PrinterRow printer = chosen != null ? chosen : routePrinter(tenantId, locationId, type, null);
-                Built built = documents.orderSlip(printer, orderId, true);
+                Built built =
+                        documents.orderSlip(printer, orderId, paperExists(tenantId, type, "ORDER", orderId, null));
                 made.add(manual(
                         printer, type, "ORDER", orderId, order.version(), null, built, reason, actorSubject, now));
             }
             case FISCAL_RECEIPT -> {
                 UUID documentId = receiptDocumentOf(tenantId, orderId);
                 PrinterRow printer = chosen != null ? chosen : routePrinter(tenantId, locationId, type, null);
-                Built built = documents.fiscalReceipt(printer, documentId, true);
+                Built built = documents.fiscalReceipt(
+                        printer, documentId, paperExists(tenantId, type, "FISCAL_DOCUMENT", documentId, null));
                 made.add(manual(
                         printer, type, "FISCAL_DOCUMENT", documentId, 0, null, built, reason, actorSubject, now));
             }
@@ -180,7 +191,11 @@ public class PrintOnDemandService {
                     PrinterRow printer =
                             chosen != null ? chosen : routePrinter(tenantId, locationId, type, station.id());
                     Built built = documents.kitchenTicket(
-                            printer, ticket.ticketId(), station.id(), true, ticket.amendmentRevision());
+                            printer,
+                            ticket.ticketId(),
+                            station.id(),
+                            paperExists(tenantId, type, "KITCHEN_TICKET", ticket.ticketId(), station.id()),
+                            ticket.amendmentRevision());
                     made.add(manual(
                             printer,
                             type,
@@ -217,9 +232,10 @@ public class PrintOnDemandService {
     /**
      * Prints the document of a job in the queue again (ADR 0154, "Print queue ... with reprint and cancel"): a dead
      * job, an expired kitchen ticket, a paper jam. It is a new job, regenerated from the facts as they are now,
-     * marked as a copy, linked to the first print of that document and recorded with the person and the reason; it
-     * never resurrects the old job. Without {@code printerId} the document goes to the printer the old job was
-     * for, which must still be active.
+     * linked to the first print of that document and recorded with the person and the reason; it never resurrects
+     * the old job. It is marked as a copy unless no earlier print of the document ever made paper: a job that was
+     * cancelled, expired or died put nothing in anybody's hand. Without {@code printerId} the document goes to the
+     * printer the old job was for, which must still be active.
      *
      * <p>The job names its source (an order, a kitchen ticket and station, a fiscal document), so the queue can
      * reprint a document whose order the queue does not know. A fiscal receipt is rebuilt through the same
@@ -265,7 +281,8 @@ public class PrintOnDemandService {
                 OrderSummary order = orders.summary(tenantId, sourceId)
                         .filter(found -> found.locationId().equals(locationId))
                         .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such order"));
-                Built built = documents.orderSlip(printer, sourceId, true);
+                Built built = documents.orderSlip(
+                        printer, sourceId, paperExists(tenantId, old.documentType(), "ORDER", sourceId, null));
                 made = manual(
                         printer,
                         old.documentType(),
@@ -279,7 +296,10 @@ public class PrintOnDemandService {
                         now);
             }
             case FISCAL_RECEIPT -> {
-                Built built = documents.fiscalReceipt(printer, sourceId, true);
+                Built built = documents.fiscalReceipt(
+                        printer,
+                        sourceId,
+                        paperExists(tenantId, old.documentType(), "FISCAL_DOCUMENT", sourceId, null));
                 made = manual(
                         printer,
                         old.documentType(),
@@ -306,7 +326,12 @@ public class PrintOnDemandService {
                             "That kitchen job names no station",
                             Map.of("reason", "JOB_NOT_REPRINTABLE"));
                 }
-                Built built = documents.kitchenTicket(printer, sourceId, stationId, true, ticket.amendmentRevision());
+                Built built = documents.kitchenTicket(
+                        printer,
+                        sourceId,
+                        stationId,
+                        paperExists(tenantId, old.documentType(), "KITCHEN_TICKET", sourceId, stationId),
+                        ticket.amendmentRevision());
                 made = manual(
                         printer,
                         old.documentType(),
@@ -387,9 +412,7 @@ public class PrintOnDemandService {
             Instant now) {
         UUID firstPrint = sourceId == null
                 ? null
-                : store.jobsOfSource(printer.tenantId(), sourceType, sourceId).stream()
-                        .filter(job ->
-                                job.documentType() == type && java.util.Objects.equals(job.stationId(), stationId))
+                : earlierJobs(printer.tenantId(), type, sourceType, sourceId, stationId).stream()
                         .min(Comparator.comparing(JobRow::queuedAt))
                         .map(JobRow::id)
                         .orElse(null);
@@ -422,6 +445,26 @@ public class PrintOnDemandService {
             metrics.jobEnded(JobStatus.HANDED_OFF, type);
         }
         return job;
+    }
+
+    /** Every job made so far of one document: the same source, the same type and, for a ticket, the same station. */
+    private List<JobRow> earlierJobs(
+            UUID tenantId, PrintDocumentType type, String sourceType, UUID sourceId, @Nullable UUID stationId) {
+        return store.jobsOfSource(tenantId, sourceType, sourceId).stream()
+                .filter(job -> job.documentType() == type && Objects.equals(job.stationId(), stationId))
+                .toList();
+    }
+
+    /**
+     * Whether the print about to be made is not the first paper of its document, so that it must say it is a copy
+     * (ADR 0154, Decision 5: every print after the first carries the marker). The customer may hold an earlier
+     * print that is out or on its way; they cannot hold one that was cancelled, expired or died. Marking the first
+     * paper there is as a copy would put «КОПИЯ» on the only receipt a customer gets.
+     */
+    private boolean paperExists(
+            UUID tenantId, PrintDocumentType type, String sourceType, UUID sourceId, @Nullable UUID stationId) {
+        return earlierJobs(tenantId, type, sourceType, sourceId, stationId).stream()
+                .anyMatch(job -> PAPER_OUT_OR_COMING.contains(job.status()));
     }
 
     private PrinterRow activePrinter(UUID tenantId, UUID locationId, UUID printerId) {
