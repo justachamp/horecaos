@@ -86,6 +86,12 @@ public final class VideoProbe {
             return reader.read();
         } catch (Malformed malformed) {
             return new Rejected(MALFORMED, String.valueOf(malformed.getMessage()));
+        } catch (ArithmeticException | IndexOutOfBoundsException hostile) {
+            // The contract is a verdict: the verification worker that calls this has nothing to settle a
+            // thrown exception with, so the asset would stay UPLOADED and be retried for good. Every
+            // number in a header is the uploader's, and one the arithmetic above did not foresee is
+            // still a header the platform will not serve.
+            return new Rejected(MALFORMED, "A number in the header is outside what the probe can read");
         }
     }
 
@@ -249,7 +255,12 @@ public final class VideoProbe {
             if (timescale <= 0 || duration < 0) {
                 throw new Malformed("The movie header states an impossible timescale or duration");
             }
-            durationMs = Math.multiplyExact(duration, 1000L) / timescale;
+            // Whole seconds, then the part-second: duration * 1000 itself overflows for a 64-bit
+            // duration an uploader chose, and a file that long is TOO_LONG, not an exception. The sum
+            // saturates for the same reason.
+            long seconds = duration / timescale;
+            long fraction = (duration % timescale) * 1000L / timescale;
+            durationMs = seconds > (Long.MAX_VALUE - fraction) / 1000L ? Long.MAX_VALUE : seconds * 1000L + fraction;
         }
 
         private void parseTrak(Box trak) {
@@ -341,7 +352,9 @@ public final class VideoProbe {
             if (size < header) {
                 throw new Malformed("A box states a size smaller than its own header");
             }
-            if (offset + size > parentEnd) {
+            // Compared as a remainder, not as offset + size: a 64-bit size near the top of the range
+            // makes that sum wrap negative, and the box would then look like it ends before it starts.
+            if (size > parentEnd - offset) {
                 throw new Malformed("A box is larger than the bytes remaining");
             }
             return new Box(type, at, at + header, offset + size, depth);

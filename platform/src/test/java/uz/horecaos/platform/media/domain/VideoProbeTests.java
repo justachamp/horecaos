@@ -142,6 +142,51 @@ class VideoProbeTests {
 
     @Test
     @DisplayName(
+            "VIDEO_TOO_LONG: a 64-bit duration too large to turn into milliseconds is a refusal by name, not an exception thrown past the probe")
+    void anAbsurdDuration() {
+        // A file that states Long.MAX_VALUE ticks would overflow the arithmetic that makes milliseconds
+        // of them. The probe's only contract is a verdict, and the verification worker that calls it has
+        // nothing to settle a thrown exception with: the asset would sit UPLOADED and be retried for good.
+        for (long timescale : new long[] {1, 1000, 90_000, 4_294_967_295L}) {
+            for (long duration : new long[] {Long.MAX_VALUE, Long.MAX_VALUE / 1000 + 1, Long.MAX_VALUE / 1000}) {
+                byte[] file = withMoov(Mp4.mvhdV1(timescale, duration), video("avc1", 1280, 720));
+                assertThat(probe(file))
+                        .as("timescale %d, duration %d", timescale, duration)
+                        .isInstanceOfSatisfying(
+                                Rejected.class,
+                                rejection -> assertThat(rejection.code()).isEqualTo(VideoProbe.TOO_LONG));
+            }
+        }
+        // The exact edge still counts in whole milliseconds, with the remainder of a second kept.
+        assertThat(accepted(withMoov(Mp4.mvhdV1(3, 59), video("avc1", 1280, 720)))
+                        .durationMs())
+                .isEqualTo(19_666);
+        refused(withMoov(Mp4.mvhdV1(3, 61), video("avc1", 1280, 720)), VideoProbe.TOO_LONG);
+    }
+
+    @Test
+    @DisplayName(
+            "VIDEO_MALFORMED: a 64-bit box size near the top of the range is a refusal, not an overflow that walks the parser out of its buffer")
+    void anAbsurdBoxSize() {
+        refused(concat(ftyp("isom"), largeBoxClaiming(Long.MAX_VALUE, "free")), VideoProbe.MALFORMED);
+        refused(concat(ftyp("isom"), largeBoxClaiming(Long.MAX_VALUE - 20, "free")), VideoProbe.MALFORMED);
+        refused(
+                withMoov(mvhd(1000, 5_000), largeBoxClaiming(Long.MAX_VALUE - 10, "trak"), video("avc1", 1280, 720)),
+                VideoProbe.MALFORMED);
+        refused(concat(ftyp("isom"), largeBoxClaiming(-1L, "free")), VideoProbe.MALFORMED);
+    }
+
+    /** A box whose 64-bit size field says {@code size} and which is only a header. */
+    private static byte[] largeBoxClaiming(long size, String type) {
+        java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocate(16);
+        buffer.putInt(1);
+        buffer.put(type.getBytes(StandardCharsets.ISO_8859_1));
+        buffer.putLong(size);
+        return buffer.array();
+    }
+
+    @Test
+    @DisplayName(
             "VIDEO_TOO_LARGE: more than 12 MiB as the store reports it, whatever the header says; exactly 12 MiB is accepted")
     void size() {
         byte[] header = valid();
