@@ -274,11 +274,10 @@ describe('AuthLoginComponent Continue with Telegram', () => {
     telegram.pollOnce.mockResolvedValue(true);
 
     await comp.continueWithTelegram();
-    // FakeOrdersService.poll runs the source synchronously-but-async on subscribe.
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(navigateSpy).toHaveBeenCalledWith(['/locations']);
+    // FakeOrdersService.poll runs the source on subscribe, but the number of microtask
+    // turns between it and the navigation is the runtime's (it differed between Node 22
+    // on CI and Node 24 here); wait for the call rather than counting turns.
+    await vi.waitFor(() => expect(navigateSpy).toHaveBeenCalledWith(['/locations']));
   });
 
   it('batch 14: a guest signed in through Telegram from a table QR returns to their table, not /locations', async () => {
@@ -292,10 +291,7 @@ describe('AuthLoginComponent Continue with Telegram', () => {
     telegram.pollOnce.mockResolvedValue(true);
 
     await comp.continueWithTelegram();
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(navigateSpy).toHaveBeenCalledWith(['/dine-in/table']);
+    await vi.waitFor(() => expect(navigateSpy).toHaveBeenCalledWith(['/dine-in/table']));
     expect(navigateSpy).not.toHaveBeenCalledWith(['/locations']);
   });
 
