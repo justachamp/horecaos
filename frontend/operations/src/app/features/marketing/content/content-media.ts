@@ -28,7 +28,9 @@ export interface UploadedVideo {
 /**
  * The content editor's uploads (ADR 0157, Decision 8 and the media section).
  *
- * Every creative is allocated **`PUBLIC`**, owned by the brand, and -- for an image -- with the
+ * Every creative goes through the brand's own media routes (`MediaApi.uploadForBrand`), because a
+ * brand manager holds `media.upload` at her brand only and the tenant routes would refuse her. It is
+ * allocated **`PUBLIC`**, owned by the brand, and -- for an image -- with the
  * `CREATIVE` rendition profile, which is what makes the platform render the extra `HERO` size a
  * home banner needs. The storefront redirect answers 404 for anything that is not public and
  * displayable, and never says which, so a private asset would pass the screen and show every
@@ -74,7 +76,9 @@ export class ContentMedia {
       return;
     }
     this.requested.add(assetId);
-    firstValueFrom(this.media.downloadUrl(scope.tenantId, assetId, 'THUMBNAIL')).then(
+    firstValueFrom(
+      this.media.brandDownloadUrl(scope.tenantId, scope.brandId, assetId, 'THUMBNAIL'),
+    ).then(
       (url) => this.remember(assetId, url),
       () => undefined,
     );
@@ -86,7 +90,7 @@ export class ContentMedia {
     profile: 'CREATIVE' | undefined,
   ): Promise<string> {
     const uploaded = await firstValueFrom(
-      this.media.upload(scope.tenantId, 'BRAND', scope.brandId, 'PUBLIC', file, profile),
+      this.media.uploadForBrand(scope.tenantId, scope.brandId, 'PUBLIC', file, profile),
     );
     return uploaded.assetId;
   }
@@ -98,7 +102,9 @@ export class ContentMedia {
     attempts: number,
   ): Promise<void> {
     for (let attempt = 0; attempt < attempts; attempt++) {
-      const view = await firstValueFrom(this.media.asset(scope.tenantId, assetId));
+      const view = await firstValueFrom(
+        this.media.brandAsset(scope.tenantId, scope.brandId, assetId),
+      );
       if (view.status === 'AVAILABLE') {
         return;
       }

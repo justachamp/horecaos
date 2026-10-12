@@ -1449,6 +1449,94 @@ class ContentEndpointTests {
                 .isEqualTo(200);
     }
 
+    // ================================================ the creative a brand manager uploads
+
+    @Test
+    @DisplayName(
+            "a brand manager, who holds content.author and content.publish at her brand, can also upload, finalize, poll and preview a creative for that brand -- and for no other (the media routes under the brand)")
+    void aBrandManagerUploadsTheCreativeForHerOwnBrandOnly() throws Exception {
+        String own = "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/media/assets";
+        String other = "/api/v1/tenants/" + TENANT + "/brands/" + OTHER_BRAND + "/media/assets";
+        String image = """
+                {"visibility":"PUBLIC","contentType":"image/jpeg","sizeBytes":120000,
+                 "filename":"autumn.jpg","renditionProfile":"CREATIVE"}""";
+
+        MvcResult requested = post(own + "/upload-requests", BRAND_MANAGER, image, null);
+        assertThat(status(requested))
+                .as(requested.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        UUID asset = UUID.fromString(body(requested).get("assetId").stringValue());
+        Map<String, Object> row = jdbc.sql("SELECT owner_scope, owner_id, visibility, rendition_profile, status"
+                        + " FROM media.assets WHERE asset_id = :id")
+                .param("id", asset)
+                .query()
+                .singleRow();
+        assertThat(row.get("owner_scope"))
+                .as("owned by the brand the route names")
+                .isEqualTo("BRAND");
+        assertThat(row.get("owner_id")).isEqualTo(BRAND);
+        assertThat(row.get("visibility")).isEqualTo("PUBLIC");
+        assertThat(row.get("rendition_profile")).isEqualTo("CREATIVE");
+
+        // Her brand only: the same call under another brand of the same tenant, and under another tenant.
+        MvcResult elsewhere = post(other + "/upload-requests", BRAND_MANAGER, image, null);
+        assertThat(status(elsewhere)).isEqualTo(403);
+        assertThat(body(elsewhere).get("code").stringValue()).isEqualTo("INSUFFICIENT_CAPABILITY");
+        assertThat(status(post(own + "/upload-requests", STRANGER, image, null)))
+                .as("another tenant's owner")
+                .isEqualTo(403);
+        assertThat(status(post(own + "/upload-requests", LOCATION_MANAGER, image, null)))
+                .as("a location role holds no media capability")
+                .isEqualTo(403);
+        assertThat(status(post(own + "/upload-requests", FINANCE, image, null)))
+                .as("finance holds no media capability")
+                .isEqualTo(403);
+        // A grant above the brand covers the brand's route.
+        MvcResult byAdmin = post(other + "/upload-requests", ADMIN, image, null);
+        assertThat(status(byAdmin))
+                .as(byAdmin.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        UUID othersAsset = UUID.fromString(body(byAdmin).get("assetId").stringValue());
+
+        // A video is the plan's: refused until the entitlement is on, then allocated like an image.
+        String video = """
+                {"visibility":"PUBLIC","contentType":"video/mp4","sizeBytes":5000000,"filename":"a.mp4"}""";
+        MvcResult refused = post(own + "/upload-requests", BRAND_MANAGER, video, null);
+        assertThat(status(refused)).isEqualTo(403);
+        assertThat(body(refused).get("code").stringValue()).isEqualTo("ENTITLEMENT_REQUIRED");
+        fixture.entitle(plans, subscriptions, TENANT, false, true);
+        assertThat(status(post(own + "/upload-requests", BRAND_MANAGER, video, null)))
+                .isEqualTo(200);
+
+        // Finalize and poll: hers, and only hers.
+        MvcResult finalized = post(own + "/" + asset + "/finalize", BRAND_MANAGER, null, null);
+        assertThat(status(finalized))
+                .as(finalized.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        assertThat(body(finalized).get("status").stringValue()).isEqualTo("UPLOADED");
+        assertThat(status(post(own + "/" + othersAsset + "/finalize", BRAND_MANAGER, null, null)))
+                .as("another brand's asset is not found under this brand's route")
+                .isEqualTo(404);
+        MvcResult polled = read(own + "/" + asset, BRAND_MANAGER);
+        assertThat(status(polled)).isEqualTo(200);
+        assertThat(body(polled).get("status").stringValue()).isEqualTo("UPLOADED");
+        assertThat(status(read(own + "/" + othersAsset, BRAND_MANAGER))).isEqualTo(404);
+
+        // Preview: an available creative of her brand gets a signed URL, another brand's does not.
+        UUID mine = fixture.goodBanner(TENANT, BRAND);
+        UUID theirs = fixture.goodBanner(TENANT, OTHER_BRAND);
+        MvcResult preview = read(own + "/" + mine + "/download-url?variant=THUMBNAIL", BRAND_MANAGER);
+        assertThat(status(preview))
+                .as(preview.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        assertThat(body(preview).get("url").stringValue()).isNotBlank();
+        assertThat(status(read(own + "/" + theirs + "/download-url?variant=THUMBNAIL", BRAND_MANAGER)))
+                .isEqualTo(404);
+        assertThat(status(read(other + "/" + theirs + "/download-url?variant=THUMBNAIL", BRAND_MANAGER)))
+                .as("and she cannot name the other brand in the path to reach it")
+                .isEqualTo(403);
+    }
+
     // ================================================================= policies
 
     @Test

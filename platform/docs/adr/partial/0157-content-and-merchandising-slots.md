@@ -922,6 +922,13 @@ Four code-owned capabilities, all at brand scope: `content.read`, `content.autho
 `content.publish`, `content.manage`. Bundles: tenant owner, tenant administrator and
 brand manager hold the first three; owner and administrator also hold `content.manage`;
 no location role holds any. A platform administrator already holds every capability.
+A brand manager who may author and publish must also be able to put the picture there, so
+her bundle holds `media.read` and `media.upload` (brand scope) as well, and the console
+uploads a creative through the brand-scoped media routes (`BrandMediaController`,
+`/tenants/{tenantId}/brands/{brandId}/media/assets/...`): a grant covers downward only, so
+her brand grant never covered the tenant routes. Those routes allocate only assets owned by
+the brand in the path and answer 404 for another brand's asset; the tenant routes stay as
+they were, for the owner and the administrator.
 `EndpointCapabilityDeclarationTests` and the role-bundle tests enforce the table. The
 storefront reads declare no capability, like the menu, and are opened to anonymous callers
 on purpose in `SecurityConfiguration.apiSecurity`, which permits storefront `GET`s one path
