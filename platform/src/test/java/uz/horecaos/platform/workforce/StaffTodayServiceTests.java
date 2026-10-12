@@ -86,6 +86,44 @@ class StaffTodayServiceTests {
     }
 
     @Test
+    @DisplayName(
+            "hours a manager records after the entry was swept as missed turn the row from MISSED_TODAY to CLOSED, and the shift is on it")
+    void aLateRecordedShiftClearsTheMiss() {
+        Person cook = kit.cook("cook");
+        publish(cook, "2026-10-08T03:00:00Z", "2026-10-08T07:00:00Z");
+        kit.clock.set(Instant.parse("2026-10-08T07:10:00Z"));
+        kit.sweepMissed();
+        assertThat(statusOf(cook)).isEqualTo(TodayStatus.MISSED_TODAY);
+        kit.clock.set(Instant.parse("2026-10-08T09:00:00Z"));
+
+        var opened = kit.shifts.openFor(
+                WorkforceKit.branch(),
+                cook.memberId(),
+                Instant.parse("2026-10-08T03:00:00Z"),
+                ReasonCode.FORGOT_CLOCK_IN,
+                MANAGER,
+                "m1");
+        kit.shifts.closeFor(
+                WorkforceKit.branch(),
+                opened.shift().id(),
+                opened.shift().version(),
+                Instant.parse("2026-10-08T07:00:00Z"),
+                null,
+                ReasonCode.FORGOT_CLOCK_OUT,
+                MANAGER,
+                "m2");
+
+        Row row = kit.today.today(WorkforceKit.branch(), false).rows().stream()
+                .filter(candidate -> candidate.memberId().equals(cook.memberId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(row.status())
+                .as("a closed shift beside a coverage miss would say both that he worked and that he did not")
+                .isEqualTo(TodayStatus.CLOSED);
+        assertThat(row.shiftId()).isEqualTo(opened.shift().id());
+    }
+
+    @Test
     @DisplayName("an entry on a later day never renders as missed or late today, and yesterday's is not today's list")
     void aFutureDayIsNeverMissed() {
         Person cook = kit.cook("cook");

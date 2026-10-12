@@ -75,6 +75,41 @@ public class JdbcStaffRosterStore {
                 .update();
     }
 
+    /**
+     * As {@link #insert}, but an entry that would overlap a live one of the same person is not an error:
+     * it is not written and the answer is {@code false}.
+     *
+     * <p>The overlap is the exclusion constraint {@code ex_staff_roster_no_overlap}. A statement that
+     * fails inside a transaction aborts it, so a caller that tried an insert, caught the violation and
+     * went on would find every later statement refused ({@code 25P02}); {@code ON CONFLICT DO NOTHING}
+     * (no target: it covers exclusion constraints too) lets the database say "not written" without an
+     * error, and the transaction stays usable. A caller that wants the overlap as an error uses {@link
+     * #insert}.
+     *
+     * @return {@code true} when the entry was written
+     */
+    public boolean insertIfFree(EntryRow entry) {
+        return jdbc.sql("""
+                        INSERT INTO workforce.staff_roster_entries (
+                            id, tenant_id, brand_id, location_id, staff_member_id, status, planned_start,
+                            planned_end, planned_break_minutes, created_by)
+                        VALUES (:id, :tenantId, :brandId, :locationId, :memberId, 'DRAFT', :start, :end,
+                                :break, :createdBy)
+                        ON CONFLICT DO NOTHING
+                        """)
+                        .param("id", entry.id())
+                        .param("tenantId", entry.tenantId())
+                        .param("brandId", entry.brandId())
+                        .param("locationId", entry.locationId())
+                        .param("memberId", entry.memberId())
+                        .param("start", utc(entry.plannedStart()))
+                        .param("end", utc(entry.plannedEnd()))
+                        .param("break", entry.plannedBreakMinutes())
+                        .param("createdBy", entry.createdBy())
+                        .update()
+                == 1;
+    }
+
     public Optional<EntryRow> find(UUID tenantId, UUID locationId, UUID entryId) {
         return jdbc.sql("SELECT " + COLUMNS + """
                          FROM workforce.staff_roster_entries
@@ -197,15 +232,21 @@ public class JdbcStaffRosterStore {
     }
 
     /**
-     * The published entry of this person and branch whose start is nearest {@code startedAt} within
-     * {@code windowMinutes} (ADR 0156, Lifecycle and arithmetic).
+     * The entry of this person and branch whose start is nearest {@code startedAt} within {@code
+     * windowMinutes} and that no shift has covered yet (ADR 0156, Lifecycle and arithmetic).
+     *
+     * <p>"Not covered yet" is {@code PUBLISHED} <em>or {@code MISSED}</em>. The sweeper marks an entry
+     * {@code MISSED} minutes after its end, so hours a manager records after the fact -- the usual way
+     * a forgotten clock-in is put right -- meet an entry that is already {@code MISSED}. Leaving it out
+     * would give the shift no plan, no variance and so no approval however many hours were recorded,
+     * and would leave a coverage miss standing beside the shift that covers it.
      */
-    public Optional<EntryRow> nearestPublished(
+    public Optional<EntryRow> nearestUncovered(
             UUID tenantId, UUID locationId, UUID memberId, Instant startedAt, int windowMinutes) {
         return jdbc.sql("SELECT " + COLUMNS + """
                          FROM workforce.staff_roster_entries
                         WHERE tenant_id = :tenantId AND location_id = :locationId AND staff_member_id = :memberId
-                          AND status = 'PUBLISHED'
+                          AND status IN ('PUBLISHED', 'MISSED')
                           AND planned_start BETWEEN :from AND :to
                         ORDER BY abs(extract(epoch FROM (planned_start - CAST(:at AS timestamptz)))), id
                         LIMIT 1
@@ -247,12 +288,15 @@ public class JdbcStaffRosterStore {
                 .list();
     }
 
-    /** Set when a shift opens against the entry; conditional on it still being PUBLISHED. */
+    /**
+     * Set when a shift opens against the entry; conditional on it not being covered yet, which is
+     * PUBLISHED or, for hours recorded after the sweeper ran, MISSED.
+     */
     public int markConsumed(UUID tenantId, UUID entryId) {
         return jdbc.sql("""
                         UPDATE workforce.staff_roster_entries
                            SET status = 'CONSUMED', version = version + 1, updated_at = now()
-                         WHERE tenant_id = :tenantId AND id = :id AND status = 'PUBLISHED'
+                         WHERE tenant_id = :tenantId AND id = :id AND status IN ('PUBLISHED', 'MISSED')
                         """).param("tenantId", tenantId).param("id", entryId).update();
     }
 

@@ -302,8 +302,9 @@ class StaffRosterServiceTests {
                         leaver.name(),
                         "ENDED"));
 
-        var result = kit.rota.copyWeek(
-                WorkforceKit.branch(), LocalDate.of(2026, 10, 5), LocalDate.of(2026, 10, 12), MANAGER, "copy");
+        // In one transaction, as the service runs in production: a statement that fails inside it aborts it.
+        var result = kit.inTransaction(() -> kit.rota.copyWeek(
+                WorkforceKit.branch(), LocalDate.of(2026, 10, 5), LocalDate.of(2026, 10, 12), MANAGER, "copy"));
 
         assertThat(result.created()).as("cook's Monday, a week on").isEqualTo(1);
         assertThat(result.skipped())
@@ -318,6 +319,37 @@ class StaffRosterServiceTests {
                     assertThat(copy.status()).isEqualTo(RosterStatus.DRAFT);
                     assertThat(copy.plannedBreakMinutes()).isEqualTo(30);
                 });
+    }
+
+    @Test
+    @DisplayName(
+            "an overlap met early in a copy does not abort the transaction: the entries after it are still copied, and the copy is audited")
+    void anOverlapDoesNotAbortTheRestOfTheCopy() {
+        Person cook = kit.cook("cook");
+        Person waiter = kit.cook("waiter");
+        // The target week already holds cook's Monday and Tuesday (a published one and a draft), so the
+        // first two source entries to be copied collide, and waiter's Wednesday still has to be copied.
+        draft(cook, "2026-10-05T03:00:00Z", "2026-10-05T11:00:00Z", 0);
+        draft(cook, "2026-10-06T03:00:00Z", "2026-10-06T11:00:00Z", 0);
+        draft(waiter, "2026-10-07T03:00:00Z", "2026-10-07T11:00:00Z", 0);
+        draft(cook, "2026-10-12T05:00:00Z", "2026-10-12T09:00:00Z", 0);
+        draft(cook, "2026-10-13T03:00:00Z", "2026-10-13T11:00:00Z", 0);
+        kit.rotaPublish(Instant.parse("2026-10-13T03:00:00Z"));
+
+        var result = kit.inTransaction(() -> kit.rota.copyWeek(
+                WorkforceKit.branch(), LocalDate.of(2026, 10, 5), LocalDate.of(2026, 10, 12), MANAGER, "copy"));
+
+        assertThat(result.created()).as("waiter's Wednesday").isEqualTo(1);
+        assertThat(result.skipped()).as("cook's Monday and Tuesday").isEqualTo(2);
+        assertThat(kit.rotaWeek(LocalDate.of(2026, 10, 14)))
+                .extracting(EntryView::plannedStart)
+                .containsExactly(
+                        Instant.parse("2026-10-12T05:00:00Z"),
+                        Instant.parse("2026-10-13T03:00:00Z"),
+                        Instant.parse("2026-10-14T03:00:00Z"));
+        assertThat(kit.auditFacts("workforce.roster.drafted"))
+                .as("the five drafts of the setup, and the copy")
+                .hasSize(5 + 1);
     }
 
     @Test

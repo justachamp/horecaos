@@ -352,11 +352,12 @@ public class StaffRosterService {
                     1,
                     now,
                     now);
-            try {
-                roster.insert(copy);
+            // Not a try/catch around insert(): a violation inside this transaction would abort it, and
+            // every statement after it (the next copy, the audit fact) would be refused. An overlap here
+            // means the target week already holds something for this person at that time.
+            if (roster.insertIfFree(copy)) {
                 created++;
-            } catch (DataIntegrityViolationException overlap) {
-                // The target week already holds something for this person at that time.
+            } else {
                 skipped++;
             }
         }

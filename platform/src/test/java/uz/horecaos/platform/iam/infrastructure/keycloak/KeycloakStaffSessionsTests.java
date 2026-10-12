@@ -80,6 +80,30 @@ class KeycloakStaffSessionsTests {
     }
 
     @Test
+    @DisplayName(
+            "a client id Keycloak holds no client for is unavailable, never an empty list: the 404 for the client is not the 404 for the account")
+    void aStaleClientIdIsNotAnEmptyList() throws Exception {
+        realm = FakeKeycloakMfaRealm.start(Clock.systemUTC());
+        User cook = realm.addUser("998900000009", "pw", "cook9@example.test");
+        realm.adapters().login().signIn("998900000009", "pw", null);
+        RestClient client = RestClient.builder().baseUrl(realm.baseUrl()).build();
+        KeycloakStaffSessions stale =
+                new KeycloakStaffSessions(client, "horecaos", UUID.randomUUID().toString());
+
+        assertThatThrownBy(() -> stale.list(cook.id))
+                .as(
+                        "a confident empty list would tell a person who is signed in on a device that there is nothing to end")
+                .isInstanceOf(SessionsUnavailableException.class)
+                .hasMessageNotContaining(cook.id);
+        assertThat(stale.list(UUID.randomUUID().toString()))
+                .as("an account Keycloak does not know has none, whatever the client id")
+                .isEmpty();
+        assertThat(new KeycloakStaffSessions(client, "horecaos", FakeKeycloakMfaRealm.LOGIN_CLIENT_UUID).list(cook.id))
+                .as("with the right client id the same account lists its session")
+                .hasSize(1);
+    }
+
+    @Test
     @DisplayName("ending a session ends that one only; ending one that is gone answers false, not an error")
     void endsOneSession() throws Exception {
         realm = FakeKeycloakMfaRealm.start(Clock.systemUTC());

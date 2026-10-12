@@ -390,6 +390,84 @@ class StaffShiftServiceTests {
 
     @Test
     @DisplayName(
+            "hours a manager records after the sweeper marked the entry missed still meet that entry: it is consumed, its plan is the variance's, and over the threshold the shift waits for a person who looked")
+    void hoursRecordedAfterTheEntryWasSweptStillMeetTheirEntry() {
+        Person cook = kit.cook("cook");
+        UUID entry = publishedEntry(cook, "2026-10-08T04:00:00Z", "2026-10-08T10:00:00Z", 0);
+        // The cook worked eight hours of a six-hour entry and nobody clocked: the sweeper gets there first.
+        kit.clock.set(Instant.parse("2026-10-08T10:10:00Z"));
+        assertThat(kit.sweepMissed()).isEqualTo(1);
+        assertThat(status(entry)).isEqualTo(RosterStatus.MISSED);
+        kit.clock.set(Instant.parse("2026-10-08T12:10:00Z"));
+
+        ShiftView opened = kit.shifts.openFor(
+                WorkforceKit.branch(),
+                cook.memberId(),
+                Instant.parse("2026-10-08T04:00:00Z"),
+                ReasonCode.FORGOT_CLOCK_IN,
+                MANAGER,
+                "m1");
+        ShiftRow waiting = kit.shifts
+                .closeFor(
+                        WorkforceKit.branch(),
+                        opened.shift().id(),
+                        opened.shift().version(),
+                        Instant.parse("2026-10-08T12:00:00Z"),
+                        0,
+                        ReasonCode.FORGOT_CLOCK_OUT,
+                        MANAGER,
+                        "m2")
+                .shift();
+
+        assertThat(opened.shift().rosterEntryId())
+                .as("a late record meets the plan it is the fact of")
+                .isEqualTo(entry);
+        assertThat(status(entry)).as("no longer a coverage miss").isEqualTo(RosterStatus.CONSUMED);
+        assertThat(waiting.plannedSeconds()).isEqualTo(21_600L);
+        assertThat(waiting.varianceSeconds())
+                .as("eight hours paid against six planned")
+                .isEqualTo(7_200L);
+        assertThat(waiting.status())
+                .as("two hours over the thirty-minute threshold: a person looks before it is paid")
+                .isEqualTo(ShiftStatus.AWAITING_APPROVAL);
+        assertThat(kit.factSource.closedShiftsOn(WorkforceKit.TENANT, LocalDate.of(2026, 10, 8)))
+                .as("not a payroll fact until approved")
+                .isEmpty();
+        assertThat(kit.sweepMissed()).as("nothing left for the sweeper").isZero();
+    }
+
+    @Test
+    @DisplayName("voiding the late-recorded shift gives the entry back to the sweeper, which marks it missed again")
+    void voidingALateRecordedShiftLeavesTheEntryMissedAgain() {
+        Person cook = kit.cook("cook");
+        UUID entry = publishedEntry(cook, "2026-10-08T04:00:00Z", "2026-10-08T10:00:00Z", 0);
+        kit.clock.set(Instant.parse("2026-10-08T10:10:00Z"));
+        kit.sweepMissed();
+        kit.clock.set(Instant.parse("2026-10-08T12:10:00Z"));
+        ShiftView opened = kit.shifts.openFor(
+                WorkforceKit.branch(),
+                cook.memberId(),
+                Instant.parse("2026-10-08T04:00:00Z"),
+                ReasonCode.FORGOT_CLOCK_IN,
+                MANAGER,
+                "m1");
+        assertThat(status(entry)).isEqualTo(RosterStatus.CONSUMED);
+
+        kit.shifts.voidShift(
+                WorkforceKit.branch(),
+                opened.shift().id(),
+                opened.shift().version(),
+                ReasonCode.ENTERED_IN_ERROR,
+                MANAGER,
+                "m2");
+
+        assertThat(status(entry)).as("a plan again").isEqualTo(RosterStatus.PUBLISHED);
+        assertThat(kit.sweepMissed()).isEqualTo(1);
+        assertThat(status(entry)).isEqualTo(RosterStatus.MISSED);
+    }
+
+    @Test
+    @DisplayName(
             "a correction is a conditional write whose fact holds the old and new times; a stale version changes nothing")
     void aCorrectionLeavesTheOldAndNewTimes() {
         Person cook = kit.cook("cook");
@@ -749,6 +827,13 @@ class StaffShiftServiceTests {
                 "roster");
         kit.rotaPublish(Instant.parse(start));
         return entry.id();
+    }
+
+    private RosterStatus status(UUID entry) {
+        return kit.rosterStore
+                .findById(WorkforceKit.TENANT, entry)
+                .orElseThrow()
+                .status();
     }
 
     private int count(String sql) {
