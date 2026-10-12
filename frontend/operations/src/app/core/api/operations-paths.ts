@@ -1474,6 +1474,28 @@ export const mediaPaths = {
   downloadUrl(tenantId: string, assetId: string): string {
     return `${this.asset(tenantId, assetId)}/download-url`;
   },
+
+  /**
+   * The same lifecycle under one brand (`BrandMediaController`, ADR 0157): declared at brand scope
+   * and owned by the brand in the path, so a brand manager -- whose `media.upload` is a brand grant
+   * and never covers the tenant routes above -- can upload the creative she publishes.
+   */
+  brandUploadRequests(tenantId: string, brandId: string): string {
+    return `/api/v1/tenants/${encodeURIComponent(tenantId)}/brands/${encodeURIComponent(brandId)}/media/assets/upload-requests`;
+  },
+
+  /** One of the brand's assets: its status. */
+  brandAsset(tenantId: string, brandId: string, assetId: string): string {
+    return `/api/v1/tenants/${encodeURIComponent(tenantId)}/brands/${encodeURIComponent(brandId)}/media/assets/${encodeURIComponent(assetId)}`;
+  },
+
+  brandFinalize(tenantId: string, brandId: string, assetId: string): string {
+    return `${this.brandAsset(tenantId, brandId, assetId)}/finalize`;
+  },
+
+  brandDownloadUrl(tenantId: string, brandId: string, assetId: string): string {
+    return `${this.brandAsset(tenantId, brandId, assetId)}/download-url`;
+  },
 } as const;
 
 /**

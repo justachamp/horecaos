@@ -875,6 +875,14 @@ export interface BrandStaffInvitationRequest {
   validUntil?: string;
 }
 
+export interface BrandUploadRequest {
+  contentType: string;
+  filename?: string;
+  renditionProfile?: string;
+  sizeBytes?: number;
+  visibility: "PUBLIC" | "PRIVATE";
+}
+
 export interface BrandView {
   bannerAssetId?: string;
   code?: string;
@@ -10177,6 +10185,10 @@ export interface Operations {
   "listSuppressions": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/suppressions"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { activeOnly?: boolean } } }; responses: { "200": Array<SuppressionListItemResponse> } };
   "suppress": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/suppressions"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: SuppressionRequest }; responses: { "200": SuppressionResponse } };
   "liftSuppression": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/suppressions/{suppressionId}/lifts"; request: { parameters: { path: { brandId: string; suppressionId: string; tenantId: string } }; body: OperationsMarketingControllerReasonRequest }; responses: { "200": LiftSuppressionResponse } };
+  "requestBrandUpload": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/media/assets/upload-requests"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: BrandUploadRequest }; responses: { "200": UploadTicketResponse } };
+  "getBrandAsset": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/media/assets/{assetId}"; request: { parameters: { path: { assetId: string; brandId: string; tenantId: string } } }; responses: { "200": AssetResponse } };
+  "brandDownloadUrl": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/media/assets/{assetId}/download-url"; request: { parameters: { path: { assetId: string; brandId: string; tenantId: string }; query: { variant?: "THUMBNAIL" | "CARD" | "DETAIL" | "HERO" } } }; responses: { "200": DownloadResponse } };
+  "finalizeBrandUpload": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/media/assets/{assetId}/finalize"; request: { parameters: { path: { assetId: string; brandId: string; tenantId: string } } }; responses: { "200": AssetResponse } };
   "bindings_1": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-routing/bindings"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<TelegramRoutingControllerBindingResponse> } };
   "setSubscription": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-routing/bindings/{bindingId}/subscriptions"; request: { parameters: { path: { bindingId: string; brandId: string; tenantId: string } }; body: RoutingSubscriptionRequest }; responses: { "200": unknown } };
   "changeTopic": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-routing/bindings/{bindingId}/topic"; request: { parameters: { path: { bindingId: string; brandId: string; tenantId: string } }; body: TopicRequest }; responses: { "200": unknown } };

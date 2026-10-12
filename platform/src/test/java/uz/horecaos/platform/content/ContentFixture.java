@@ -210,6 +210,29 @@ public final class ContentFixture {
         return asset;
     }
 
+    /**
+     * A public MP4 the way a verified upload leaves it: a 3:1 frame, twelve seconds, no renditions (a
+     * video has none; its poster is a separate image asset).
+     */
+    public UUID video(UUID tenant, UUID brand) {
+        UUID asset = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO media.assets
+                    (asset_id, tenant_id, owner_scope, owner_id, object_key, bucket, status, visibility,
+                     declared_content_type, declared_size_bytes, verified_content_type, verified_size_bytes,
+                     verified_checksum_sha256, width_px, height_px, duration_ms, available_at, rendition_profile)
+                VALUES (:id, :t, 'BRAND', :b, :key, 'content-test', 'AVAILABLE', 'PUBLIC',
+                        'video/mp4', 5000000, 'video/mp4', 5000000, :checksum, 1800, 600, 12000, now(), 'CREATIVE')
+                """)
+                .param("id", asset)
+                .param("t", tenant)
+                .param("b", brand)
+                .param("key", "content/" + asset)
+                .param("checksum", "c".repeat(64))
+                .update();
+        return asset;
+    }
+
     /** A public, available image with the usual renditions up to 800 px. */
     public UUID goodBanner(UUID tenant, UUID brand) {
         return image(

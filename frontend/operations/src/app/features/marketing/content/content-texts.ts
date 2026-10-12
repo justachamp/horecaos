@@ -60,6 +60,7 @@ export const PROBLEM_KEYS: Readonly<Record<string, MessageKey>> = {
   CONTENT_KIND_NOT_ENABLED: 'marketing.content.problem.CONTENT_KIND_NOT_ENABLED',
   CONTENT_PROMOTION_NOT_LIVE: 'marketing.content.problem.CONTENT_PROMOTION_NOT_LIVE',
   CONTENT_MEDIA_NOT_RENDERED: 'marketing.content.problem.CONTENT_MEDIA_NOT_RENDERED',
+  CONTENT_VIDEO_NOT_ENTITLED: 'marketing.content.problem.CONTENT_VIDEO_NOT_ENTITLED',
 };
 
 export type Translate = (

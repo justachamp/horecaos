@@ -78,3 +78,50 @@ describe('MediaApi.requestUpload (ADR 0157: a content creative asks for the HERO
     request.flush({});
   });
 });
+
+describe('MediaApi under a brand (ADR 0157: a brand manager holds media.upload at her brand only)', () => {
+  let api: MediaApi;
+  let http: HttpTestingController;
+  const brand = `${environment.apiBaseUrl}/api/v1/tenants/t1/brands/b1/media/assets`;
+  const file = new File([new Uint8Array(8)], 'banner.jpg', { type: 'image/jpeg' });
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting(), MediaApi],
+    });
+    api = TestBed.inject(MediaApi);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  it('requests the upload under the brand and names no owner: the brand in the path is the owner', () => {
+    api.requestBrandUpload('t1', 'b1', 'PUBLIC', file, 'CREATIVE').subscribe();
+
+    const request = http.expectOne(`${brand}/upload-requests`);
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      visibility: 'PUBLIC',
+      contentType: 'image/jpeg',
+      sizeBytes: 8,
+      filename: 'banner.jpg',
+      renditionProfile: 'CREATIVE',
+    });
+    request.flush({});
+  });
+
+  it('finalizes, reads the status and asks for a rendition under the brand, never the tenant routes', () => {
+    api.finalizeBrand('t1', 'b1', 'a1').subscribe();
+    http.expectOne(`${brand}/a1/finalize`).flush({ assetId: 'a1', status: 'UPLOADED' });
+
+    let status: string | undefined;
+    api.brandAsset('t1', 'b1', 'a1').subscribe((view) => (status = view.status));
+    http.expectOne(`${brand}/a1`).flush({ assetId: 'a1', status: 'AVAILABLE' });
+    expect(status).toBe('AVAILABLE');
+
+    let url: string | undefined;
+    api.brandDownloadUrl('t1', 'b1', 'a1', 'THUMBNAIL').subscribe((value) => (url = value));
+    const download = http.expectOne((r) => r.url === `${brand}/a1/download-url`);
+    expect(download.request.params.get('variant')).toBe('THUMBNAIL');
+    download.flush({ url: 'https://cdn.example/thumb.jpg' });
+    expect(url).toBe('https://cdn.example/thumb.jpg');
+  });
+});

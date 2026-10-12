@@ -816,7 +816,20 @@ without `content.video.enabled` or `content.editorial.enabled` is refused with
 `INSUFFICIENT_CAPABILITY` and `ENTITLEMENT_REQUIRED` as different codes with different
 remediation and this record does not re-decide that; an empty answer from the gate (an
 unknown key) is read as not entitled. The same checks run, as warnings, on every draft
-save and feed the console's per-item problem list.
+save and feed the console's per-item problem list. Only a *publication* is refused for want
+of the entitlement: every console response carries the item's problems, so on a draft and on
+health a video the plan no longer covers is the warning `CONTENT_VIDEO_NOT_ENTITLED`
+(`ContentGates`), never a 403 -- listing, reading, ordering, withdrawing and archiving an
+item that already carries a video keep working after the entitlement is revoked, which is
+what "nothing is deleted" in the rollback below requires.
+
+`CONTENT_PLACEMENT_FULL` and `CONTENT_VIDEO_LIMIT` count *other* items (a placement's live
+items, the brand's distinct live videos), which the publishing item's own row lock does not
+cover. Two operators publishing two items at the same moment would both read the committed
+count, both find room and both write. So a publication first takes a transaction-scoped
+advisory lock for its brand (`JdbcContentStore.lockPublications`), before the item's row lock:
+the brand's publications run one after the other and the second reads what the first
+committed. Taken per brand, not per placement, because the video limit spans placements.
 
 ### Staff API (surface `operations`, ADR 0031)
 
@@ -917,6 +930,13 @@ Four code-owned capabilities, all at brand scope: `content.read`, `content.autho
 `content.publish`, `content.manage`. Bundles: tenant owner, tenant administrator and
 brand manager hold the first three; owner and administrator also hold `content.manage`;
 no location role holds any. A platform administrator already holds every capability.
+A brand manager who may author and publish must also be able to put the picture there, so
+her bundle holds `media.read` and `media.upload` (brand scope) as well, and the console
+uploads a creative through the brand-scoped media routes (`BrandMediaController`,
+`/tenants/{tenantId}/brands/{brandId}/media/assets/...`): a grant covers downward only, so
+her brand grant never covered the tenant routes. Those routes allocate only assets owned by
+the brand in the path and answer 404 for another brand's asset; the tenant routes stay as
+they were, for the owner and the administrator.
 `EndpointCapabilityDeclarationTests` and the role-bundle tests enforce the table. The
 storefront reads declare no capability, like the menu, and are opened to anonymous callers
 on purpose in `SecurityConfiguration.apiSecurity`, which permits storefront `GET`s one path
@@ -1036,6 +1056,15 @@ at the same asset, so they are asked too. `content`'s own probe answers from
 extracted by the same extractor that fills `revision_media` at publish (at most 500 drafts
 per brand). Until Release 3 nothing is released, and superseded creatives are metered by
 the storage entitlement.
+
+A pass makes at most `batchSize` release requests, and an asset some module still uses is a
+request that changes nothing and stays a candidate. So a pass that runs out of budget
+remembers where it stopped in that tenant's candidates (oldest first) and the next goes on
+from there; the tenants take turns, the next pass starting after the one the last spent its
+budget in; and a tenant whose candidates have all been looked at starts again from the
+oldest, because what held an asset back may be gone. Without that, the oldest `batchSize`
+held-back assets would spend every pass for good and their tenant would keep every other
+waiting. The position is kept in memory, so a restart begins again from the oldest.
 
 ### Caching and performance (ADR 0033)
 

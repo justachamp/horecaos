@@ -30,8 +30,12 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.content.application.ContentAuthoringService;
+import uz.horecaos.platform.content.application.ContentEnvironment;
+import uz.horecaos.platform.content.application.ContentMetrics;
 import uz.horecaos.platform.content.application.ContentRevisionMediaSweeper;
+import uz.horecaos.platform.content.infrastructure.persistence.JdbcContentStore;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
+import uz.horecaos.platform.media.api.MediaCreativeLookup;
 import uz.horecaos.platform.media.api.MediaRelease;
 import uz.horecaos.platform.media.api.MediaUsageProbe;
 import uz.horecaos.platform.support.TestDatabase;
@@ -107,6 +111,22 @@ class ContentMediaRetentionTests {
     @SuppressWarnings("NullAway")
     private MovableClock clock;
 
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private JdbcContentStore store;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private MediaCreativeLookup mediaLookup;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private ContentEnvironment environment;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private ContentMetrics metrics;
+
     private ContentFixture fixture;
 
     @BeforeEach
@@ -134,12 +154,16 @@ class ContentMediaRetentionTests {
 
     /** A banner whose revisions were published on the given days before {@link #NOW}, each using the given assets. */
     private UUID banner(Map<Integer, List<UUID>> daysAgoToAssets) {
+        return banner(TENANT, BRAND, daysAgoToAssets);
+    }
+
+    private UUID banner(UUID tenant, UUID brand, Map<Integer, List<UUID>> daysAgoToAssets) {
         UUID item = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO content.items (id, tenant_id, brand_id, kind, placement, internal_name, display_title,
                                            state, sort_key, version, created_by)
                 VALUES (:id, :t, :b, 'BANNER', 'HOME_CAROUSEL', 'banner', '', 'DRAFT', 10, 1, 'test')
-                """).param("id", item).param("t", TENANT).param("b", BRAND).update();
+                """).param("id", item).param("t", tenant).param("b", brand).update();
         int number = 0;
         for (var entry : daysAgoToAssets.entrySet().stream()
                 .sorted(Map.Entry.<Integer, List<UUID>>comparingByKey().reversed())
@@ -152,8 +176,8 @@ class ContentMediaRetentionTests {
                     """)
                     .param("item", item)
                     .param("n", number)
-                    .param("t", TENANT)
-                    .param("b", BRAND)
+                    .param("t", tenant)
+                    .param("b", brand)
                     .param("hash", String.format("%064x", number))
                     .param("at", java.sql.Timestamp.from(NOW.minus(Duration.ofDays(entry.getKey()))))
                     .update();
@@ -164,7 +188,7 @@ class ContentMediaRetentionTests {
                         """)
                         .param("item", item)
                         .param("n", number)
-                        .param("t", TENANT)
+                        .param("t", tenant)
                         .param("asset", asset)
                         .update();
             }
@@ -267,6 +291,92 @@ class ContentMediaRetentionTests {
                 .as("the released asset is seen and left alone")
                 .isEqualTo(1);
         assertThat(releaseAudits(old)).isEqualTo(1);
+    }
+
+    // ======================================================= a pass is bounded, and fair
+
+    private ContentRevisionMediaSweeper sweeperWithABudgetOf(int releases) {
+        return new ContentRevisionMediaSweeper(store, mediaLookup, release, environment, metrics, clock, releases);
+    }
+
+    /** What a product still showing the asset does: the release is asked for, and some module says no. */
+    private void heldBackByAProduct(UUID tenant, UUID brand, UUID asset) {
+        jdbc.sql("""
+                INSERT INTO catalog.media_relations (tenant_id, brand_id, entity_type, entity_id, media_asset_id, role)
+                VALUES (:t, :b, 'PRODUCT', :entity, :asset, 'PRIMARY')
+                """)
+                .param("t", tenant)
+                .param("b", brand)
+                .param("entity", UUID.randomUUID())
+                .param("asset", asset)
+                .update();
+    }
+
+    @Test
+    @DisplayName(
+            "assets another module holds back are probed in turn and do not use up every pass: with a budget of two, the free asset behind two held-back ones is released by the second pass")
+    void heldBackAssetsDoNotStarveTheOnesBehindThem() {
+        ContentRevisionMediaSweeper small = sweeperWithABudgetOf(2);
+        UUID live = asset();
+        UUID heldOne = asset();
+        UUID heldTwo = asset();
+        UUID heldThree = asset();
+        UUID free = asset();
+        // Superseded 250, 240, 230 and 220 days ago: the three held-back assets are the oldest candidates.
+        banner(Map.of(300, List.of(heldOne), 250, List.of(live)));
+        banner(Map.of(290, List.of(heldTwo), 240, List.of(live)));
+        banner(Map.of(280, List.of(heldThree), 230, List.of(live)));
+        banner(Map.of(270, List.of(free), 220, List.of(live)));
+        List.of(heldOne, heldTwo, heldThree).forEach(held -> heldBackByAProduct(TENANT, BRAND, held));
+
+        var first = small.sweepOnce();
+        assertThat(first.kept())
+                .as("the first pass spends its budget on the two oldest")
+                .isEqualTo(2);
+        assertThat(status(free)).isEqualTo("AVAILABLE");
+
+        var second = small.sweepOnce();
+
+        assertThat(second.released())
+                .as("the second pass goes on from where the first stopped, not back to the same two")
+                .isEqualTo(1);
+        assertThat(status(free)).isEqualTo("DELETION_REQUESTED");
+        assertThat(List.of(status(heldOne), status(heldTwo), status(heldThree))).containsOnly("AVAILABLE");
+    }
+
+    @Test
+    @DisplayName(
+            "a tenant whose candidates fill the budget does not keep every other tenant waiting: the passes take the tenants in turn and each tenant goes on from where it stopped")
+    void oneTenantDoesNotStarveTheOthers() {
+        ContentRevisionMediaSweeper small = sweeperWithABudgetOf(2);
+        UUID live = asset();
+        UUID otherLive = fixture.goodBanner(OTHER_TENANT, FOREIGN_BRAND);
+        UUID[] held = new UUID[4];
+        UUID[] free = new UUID[2];
+        for (int i = 0; i < 2; i++) {
+            held[i] = asset();
+            held[2 + i] = fixture.goodBanner(OTHER_TENANT, FOREIGN_BRAND);
+            heldBackByAProduct(TENANT, BRAND, held[i]);
+            heldBackByAProduct(OTHER_TENANT, FOREIGN_BRAND, held[2 + i]);
+            banner(TENANT, BRAND, Map.of(300 - i, List.of(held[i]), 250 - i, List.of(live)));
+            banner(OTHER_TENANT, FOREIGN_BRAND, Map.of(300 - i, List.of(held[2 + i]), 250 - i, List.of(otherLive)));
+        }
+        free[0] = asset();
+        free[1] = fixture.goodBanner(OTHER_TENANT, FOREIGN_BRAND);
+        banner(TENANT, BRAND, Map.of(270, List.of(free[0]), 220, List.of(live)));
+        banner(OTHER_TENANT, FOREIGN_BRAND, Map.of(270, List.of(free[1]), 220, List.of(otherLive)));
+
+        for (int pass = 0; pass < 3; pass++) {
+            small.sweepOnce();
+        }
+
+        assertThat(status(free[0]))
+                .as("the first tenant's free asset, behind two held back")
+                .isEqualTo("DELETION_REQUESTED");
+        assertThat(status(free[1]))
+                .as("the second tenant's, which waited its turn")
+                .isEqualTo("DELETION_REQUESTED");
+        assertThat(java.util.Arrays.stream(held).map(this::status)).containsOnly("AVAILABLE");
     }
 
     // ============================================================ who else uses it

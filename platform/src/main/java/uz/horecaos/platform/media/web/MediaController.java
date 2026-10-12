@@ -10,9 +10,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import java.net.URI;
 import java.time.Instant;
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
@@ -25,7 +23,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
-import uz.horecaos.platform.iam.api.EntitlementGate;
 import uz.horecaos.platform.media.api.MediaAssetId;
 import uz.horecaos.platform.media.api.MediaAssetStatus;
 import uz.horecaos.platform.media.application.MediaAssetService;
@@ -49,20 +46,14 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 @Tag(name = "Media", description = "Presigned upload lifecycle for catalog and brand imagery")
 public class MediaController {
 
-    /**
-     * The commercial entitlement that admits video (ADR 0157). Named as a string, as {@code content}
-     * does, so media takes no edge to {@code commercial}.
-     */
-    private static final String VIDEO_ENTITLEMENT = "content.video.enabled";
-
     private final MediaAssetService media;
     private final CurrentActor currentActor;
-    private final List<EntitlementGate> entitlements;
+    private final VideoUploadEntitlement videoEntitlement;
 
-    public MediaController(MediaAssetService media, CurrentActor currentActor, List<EntitlementGate> entitlements) {
+    MediaController(MediaAssetService media, CurrentActor currentActor, VideoUploadEntitlement videoEntitlement) {
         this.media = media;
         this.currentActor = currentActor;
-        this.entitlements = List.copyOf(entitlements);
+        this.videoEntitlement = videoEntitlement;
     }
 
     @PostMapping("/upload-requests")
@@ -75,7 +66,7 @@ public class MediaController {
             @PathVariable UUID tenantId, @Valid @RequestBody UploadRequest request) {
         MediaOwner owner = new MediaOwner(request.ownerScope(), request.ownerId());
         if (MediaAssetService.VIDEO_MP4.equalsIgnoreCase(request.contentType().strip())) {
-            requireVideoEntitlement(tenantId);
+            videoEntitlement.require(tenantId);
         }
 
         MediaAssetService.UploadTicket ticket;
@@ -146,25 +137,6 @@ public class MediaController {
                         variant == null
                                 ? "No such media asset, or it is not available"
                                 : "No such media asset, it is not available, or that rendition has not rendered yet"));
-    }
-
-    /**
-     * Video is off until the platform owner grants it to the tenant (ADR 0157). Asked of
-     * {@code checkGranted}: the plain feature check answers yes for a feature nobody granted under the
-     * meter-only default, which is the wrong answer for a switch that is off by default. An unknown key
-     * or no gate at all reads as not entitled.
-     */
-    private void requireVideoEntitlement(UUID tenantId) {
-        for (EntitlementGate gate : entitlements) {
-            Optional<EntitlementGate.Answer> answer = gate.checkGranted(tenantId, VIDEO_ENTITLEMENT);
-            if (answer.isPresent()) {
-                if (answer.get().entitled()) {
-                    return;
-                }
-                break;
-            }
-        }
-        throw ApiException.entitlementRequired(VIDEO_ENTITLEMENT);
     }
 
     /**

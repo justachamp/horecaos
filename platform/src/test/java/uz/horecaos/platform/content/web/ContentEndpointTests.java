@@ -12,12 +12,16 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -40,16 +44,20 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.commercial.application.PlanCatalogService;
 import uz.horecaos.platform.commercial.application.SubscriptionService;
 import uz.horecaos.platform.content.ContentFixture;
+import uz.horecaos.platform.content.application.ContentPublicationService;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.support.AuditTrail;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.web.api.ApiException;
 
 /**
  * A brand's storefront content authored over real HTTP (ADR 0157, Staff API): through the real
@@ -124,6 +132,14 @@ class ContentEndpointTests {
     @Autowired
     @SuppressWarnings("NullAway")
     private SubscriptionService subscriptions;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private ContentPublicationService publications;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private PlatformTransactionManager transactions;
 
     private ContentFixture fixture;
     private UUID publication;
@@ -798,6 +814,134 @@ class ContentEndpointTests {
                 .isEqualTo(1L);
     }
 
+    /**
+     * Publishes {@code first} inside a transaction that is held open, and {@code second} on another thread
+     * while it is, then commits the first.
+     *
+     * <p>This is the interleaving that two operators publishing at the same moment produce, made certain
+     * instead of likely: the second publication starts after the first has written everything and before
+     * it has committed, so a check that only reads committed rows cannot see the first. If the second
+     * completes inside the window, nothing made it wait.
+     *
+     * @return what the second publication threw, or null when it was published
+     */
+    private @Nullable Throwable publishWhileTheOtherIsUncommitted(JsonNode first, JsonNode second) throws Exception {
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            AtomicReference<Future<Throwable>> other = new AtomicReference<>();
+            new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                publications.publish(
+                        TENANT,
+                        BRAND,
+                        OWNER,
+                        UUID.fromString(first.get("id").stringValue()),
+                        first.get("version").longValue(),
+                        null);
+                Future<Throwable> result = pool.submit(() -> {
+                    try {
+                        publications.publish(
+                                TENANT,
+                                BRAND,
+                                OWNER,
+                                UUID.fromString(second.get("id").stringValue()),
+                                second.get("version").longValue(),
+                                null);
+                        return null;
+                    } catch (Throwable refused) {
+                        return refused;
+                    }
+                });
+                other.set(result);
+                try {
+                    result.get(3, TimeUnit.SECONDS);
+                } catch (TimeoutException waiting) {
+                    // The second publication is waiting for the first, which is what it should do.
+                } catch (InterruptedException | java.util.concurrent.ExecutionException failure) {
+                    throw new IllegalStateException(failure);
+                }
+            });
+            return Objects.requireNonNull(other.get()).get(60, TimeUnit.SECONDS);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /** The gate codes a refused publication carries; fails when the second publication was not refused. */
+    private static String refusalOf(@Nullable Throwable refused) {
+        assertThat(refused).as("the second publication was refused").isInstanceOf(ApiException.class);
+        return Objects.toString(
+                ((ApiException) Objects.requireNonNull(refused)).properties().get("errors"));
+    }
+
+    private long publishedInTheCarousel() {
+        return jdbc.sql("SELECT count(*) FROM content.items WHERE tenant_id = :t AND brand_id = :b"
+                        + " AND placement = 'HOME_CAROUSEL' AND state = 'PUBLISHED'")
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .query(Long.class)
+                .single();
+    }
+
+    @Test
+    @DisplayName(
+            "two publications of different items into the last free slot of a placement cannot both succeed: the second waits for the first and is then refused CONTENT_PLACEMENT_FULL")
+    void theLastSlotOfAPlacementGoesToOnePublication() throws Exception {
+        for (int i = 0; i < 9; i++) {
+            publish(createBanner("Live " + i, "Живой " + i));
+        }
+        JsonNode first = createBanner("First", "Первый");
+        JsonNode second = createBanner("Second", "Второй");
+
+        Throwable refused = publishWhileTheOtherIsUncommitted(first, second);
+
+        assertThat(refusalOf(refused)).contains("CONTENT_PLACEMENT_FULL");
+        assertThat(publishedInTheCarousel())
+                .as("the carousel holds ten, not eleven")
+                .isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName(
+            "two publications that would each be the brand's fifth live video cannot both succeed: the second waits for the first and is then refused CONTENT_VIDEO_LIMIT")
+    void theLastLiveVideoGoesToOnePublication() throws Exception {
+        fixture.entitle(plans, subscriptions, TENANT, false, true);
+        for (int i = 0; i < 4; i++) {
+            publish(createVideoBanner("Live video " + i));
+        }
+        JsonNode first = createVideoBanner("First video");
+        JsonNode second = createVideoBanner("Second video");
+
+        Throwable refused = publishWhileTheOtherIsUncommitted(first, second);
+
+        assertThat(refusalOf(refused)).contains("CONTENT_VIDEO_LIMIT");
+        assertThat(jdbc.sql("SELECT count(DISTINCT m.media_asset_id) FROM content.items i"
+                                + " JOIN content.revision_media m ON m.item_id = i.id AND m.revision_no = i.live_revision_no"
+                                + " JOIN media.assets a ON a.asset_id = m.media_asset_id"
+                                + " WHERE i.tenant_id = :t AND i.brand_id = :b AND i.state = 'PUBLISHED'"
+                                + " AND a.declared_content_type = 'video/mp4'")
+                        .param("t", TENANT)
+                        .param("b", BRAND)
+                        .query(Long.class)
+                        .single())
+                .as("a brand has at most five live videos")
+                .isEqualTo(5);
+    }
+
+    private JsonNode createVideoBanner(String name) throws Exception {
+        MvcResult created = post(
+                CONTENT + "/items",
+                OWNER,
+                """
+                {"kind":"BANNER","internalName":"%s",
+                 "document":{"texts":{"ru":{"title":"Видео"}},
+                             "media":{"primaryAssetId":"%s","posterAssetId":"%s"}}}""".formatted(name, fixture.video(TENANT, BRAND), fixture.goodBanner(TENANT, BRAND)),
+                null);
+        assertThat(status(created))
+                .as(created.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(201);
+        return body(created);
+    }
+
     // ================================================================== ordering
 
     @Test
@@ -1355,6 +1499,186 @@ class ContentEndpointTests {
         assertThat(reordered.after(a.get("id").stringValue()).stringValue()).isEqualTo("2");
         assertThat(reordered.after(b.get("id").stringValue()).stringValue()).isEqualTo("1");
         assertThat(reordered.change().toString()).doesNotContain("Первый");
+    }
+
+    // ======================================================== a revoked video entitlement
+
+    @Test
+    @DisplayName(
+            "a plan that stops including video does not lock the console: the video banner is still listed, read, ordered, flagged, withdrawn and archived; only publishing a video is refused (403)")
+    void aVideoBannerStaysManageableAfterTheEntitlementIsRevoked() throws Exception {
+        fixture.entitle(plans, subscriptions, TENANT, false, true);
+        UUID video = fixture.video(TENANT, BRAND);
+        UUID poster = fixture.goodBanner(TENANT, BRAND);
+        String videoBanner = """
+                {"kind":"BANNER","internalName":"Video offer",
+                 "document":{"texts":{"ru":{"title":"Видео"}},
+                             "media":{"primaryAssetId":"%s","posterAssetId":"%s"}}}""".formatted(video, poster);
+        MvcResult created = post(CONTENT + "/items", OWNER, videoBanner, null);
+        assertThat(status(created))
+                .as(created.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(201);
+        JsonNode live = publish(body(created));
+        String id = live.get("id").stringValue();
+        JsonNode image = publish(body(post(
+                CONTENT + "/items",
+                OWNER,
+                bannerJson(fixture.goodBanner(TENANT, BRAND), "Image offer", "Картинка"),
+                null)));
+
+        // The plan is downgraded: the tenant sits on the catalogue's own safe default, video off.
+        jdbc.sql("TRUNCATE TABLE commercial.subscriptions, commercial.plan_entitlements,"
+                        + " commercial.plan_versions, commercial.plans CASCADE")
+                .update();
+
+        MvcResult listed = read(CONTENT + "/items?placement=HOME_CAROUSEL", OWNER);
+        assertThat(status(listed))
+                .as(
+                        "the placement can still be listed: %s",
+                        listed.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        JsonNode rows = body(listed).get("items");
+        assertThat(rows).hasSize(2);
+        for (JsonNode row : rows) {
+            boolean isVideo = row.get("id").stringValue().equals(id);
+            assertThat(row.get("problems").findValuesAsString("code"))
+                    .as("only the video item is flagged, as a warning")
+                    .isEqualTo(isVideo ? List.of("CONTENT_VIDEO_NOT_ENTITLED") : List.of());
+        }
+
+        MvcResult one = read(CONTENT + "/items/" + id, OWNER);
+        assertThat(status(one)).isEqualTo(200);
+        assertThat(body(one).get("liveRevision").get("revisionNo").intValue()).isEqualTo(1);
+
+        JsonNode health = body(read(CONTENT + "/health", OWNER));
+        assertThat(problemCodes(health, live)).containsExactly("CONTENT_VIDEO_NOT_ENTITLED");
+        assertThat(problemCodes(health, image)).isEmpty();
+
+        // Ordering the placement works with the video item in it.
+        String token = body(listed).get("orderToken").stringValue();
+        MvcResult ordered = putTo(
+                CONTENT + "/placements/HOME_CAROUSEL/order",
+                OWNER,
+                "{\"ids\":[\"%s\",\"%s\"],\"orderToken\":\"%s\"}"
+                        .formatted(image.get("id").stringValue(), id, token),
+                null);
+        assertThat(status(ordered))
+                .as(ordered.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+
+        // A new publication that carries a video is the one thing refused.
+        JsonNode current = item(id);
+        MvcResult edit = putTo(CONTENT + "/items/" + id + "/draft", OWNER, """
+                {"document":{"texts":{"ru":{"title":"Видео 2"}},
+                             "media":{"primaryAssetId":"%s","posterAssetId":"%s"}}}""".formatted(video, poster), etag(current));
+        assertThat(status(edit))
+                .as(
+                        "a draft that keeps its video can still be edited: %s",
+                        edit.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        MvcResult republish = post(CONTENT + "/items/" + id + "/publications", OWNER, null, etag(body(edit)));
+        assertThat(status(republish)).isEqualTo(403);
+        assertThat(body(republish).get("code").stringValue()).isEqualTo("ENTITLEMENT_REQUIRED");
+
+        // Taking it down is never refused.
+        JsonNode beforeTakedown = item(id);
+        MvcResult withdrawn = post(CONTENT + "/items/" + id + "/withdrawals", OWNER, null, etag(beforeTakedown));
+        assertThat(status(withdrawn))
+                .as(withdrawn.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        assertThat(body(withdrawn).get("state").stringValue()).isEqualTo("WITHDRAWN");
+        MvcResult archived = post(CONTENT + "/items/" + id + "/archives", OWNER, null, etag(body(withdrawn)));
+        assertThat(status(archived))
+                .as(archived.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+    }
+
+    // ================================================ the creative a brand manager uploads
+
+    @Test
+    @DisplayName(
+            "a brand manager, who holds content.author and content.publish at her brand, can also upload, finalize, poll and preview a creative for that brand -- and for no other (the media routes under the brand)")
+    void aBrandManagerUploadsTheCreativeForHerOwnBrandOnly() throws Exception {
+        String own = "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/media/assets";
+        String other = "/api/v1/tenants/" + TENANT + "/brands/" + OTHER_BRAND + "/media/assets";
+        String image = """
+                {"visibility":"PUBLIC","contentType":"image/jpeg","sizeBytes":120000,
+                 "filename":"autumn.jpg","renditionProfile":"CREATIVE"}""";
+
+        MvcResult requested = post(own + "/upload-requests", BRAND_MANAGER, image, null);
+        assertThat(status(requested))
+                .as(requested.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        UUID asset = UUID.fromString(body(requested).get("assetId").stringValue());
+        Map<String, Object> row = jdbc.sql("SELECT owner_scope, owner_id, visibility, rendition_profile, status"
+                        + " FROM media.assets WHERE asset_id = :id")
+                .param("id", asset)
+                .query()
+                .singleRow();
+        assertThat(row.get("owner_scope"))
+                .as("owned by the brand the route names")
+                .isEqualTo("BRAND");
+        assertThat(row.get("owner_id")).isEqualTo(BRAND);
+        assertThat(row.get("visibility")).isEqualTo("PUBLIC");
+        assertThat(row.get("rendition_profile")).isEqualTo("CREATIVE");
+
+        // Her brand only: the same call under another brand of the same tenant, and under another tenant.
+        MvcResult elsewhere = post(other + "/upload-requests", BRAND_MANAGER, image, null);
+        assertThat(status(elsewhere)).isEqualTo(403);
+        assertThat(body(elsewhere).get("code").stringValue()).isEqualTo("INSUFFICIENT_CAPABILITY");
+        assertThat(status(post(own + "/upload-requests", STRANGER, image, null)))
+                .as("another tenant's owner")
+                .isEqualTo(403);
+        assertThat(status(post(own + "/upload-requests", LOCATION_MANAGER, image, null)))
+                .as("a location role holds no media capability")
+                .isEqualTo(403);
+        assertThat(status(post(own + "/upload-requests", FINANCE, image, null)))
+                .as("finance holds no media capability")
+                .isEqualTo(403);
+        // A grant above the brand covers the brand's route.
+        MvcResult byAdmin = post(other + "/upload-requests", ADMIN, image, null);
+        assertThat(status(byAdmin))
+                .as(byAdmin.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        UUID othersAsset = UUID.fromString(body(byAdmin).get("assetId").stringValue());
+
+        // A video is the plan's: refused until the entitlement is on, then allocated like an image.
+        String video = """
+                {"visibility":"PUBLIC","contentType":"video/mp4","sizeBytes":5000000,"filename":"a.mp4"}""";
+        MvcResult refused = post(own + "/upload-requests", BRAND_MANAGER, video, null);
+        assertThat(status(refused)).isEqualTo(403);
+        assertThat(body(refused).get("code").stringValue()).isEqualTo("ENTITLEMENT_REQUIRED");
+        fixture.entitle(plans, subscriptions, TENANT, false, true);
+        assertThat(status(post(own + "/upload-requests", BRAND_MANAGER, video, null)))
+                .isEqualTo(200);
+
+        // Finalize and poll: hers, and only hers.
+        MvcResult finalized = post(own + "/" + asset + "/finalize", BRAND_MANAGER, null, null);
+        assertThat(status(finalized))
+                .as(finalized.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        assertThat(body(finalized).get("status").stringValue()).isEqualTo("UPLOADED");
+        assertThat(status(post(own + "/" + othersAsset + "/finalize", BRAND_MANAGER, null, null)))
+                .as("another brand's asset is not found under this brand's route")
+                .isEqualTo(404);
+        MvcResult polled = read(own + "/" + asset, BRAND_MANAGER);
+        assertThat(status(polled)).isEqualTo(200);
+        assertThat(body(polled).get("status").stringValue()).isEqualTo("UPLOADED");
+        assertThat(status(read(own + "/" + othersAsset, BRAND_MANAGER))).isEqualTo(404);
+
+        // Preview: an available creative of her brand gets a signed URL, another brand's does not.
+        UUID mine = fixture.goodBanner(TENANT, BRAND);
+        UUID theirs = fixture.goodBanner(TENANT, OTHER_BRAND);
+        MvcResult preview = read(own + "/" + mine + "/download-url?variant=THUMBNAIL", BRAND_MANAGER);
+        assertThat(status(preview))
+                .as(preview.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        assertThat(body(preview).get("url").stringValue()).isNotBlank();
+        assertThat(status(read(own + "/" + theirs + "/download-url?variant=THUMBNAIL", BRAND_MANAGER)))
+                .isEqualTo(404);
+        assertThat(status(read(other + "/" + theirs + "/download-url?variant=THUMBNAIL", BRAND_MANAGER)))
+                .as("and she cannot name the other brand in the path to reach it")
+                .isEqualTo(403);
     }
 
     // ================================================================= policies

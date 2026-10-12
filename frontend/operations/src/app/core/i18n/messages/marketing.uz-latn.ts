@@ -1094,6 +1094,8 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
     'Kartochka bogʻlangan aksiya amalda emas, shuning uchun kartochka yashirilgan',
   'marketing.content.problem.CONTENT_MEDIA_NOT_RENDERED':
     'Rasm hali qayta ishlanmoqda, shuning uchun element hali koʻrsatilmayapti',
+  'marketing.content.problem.CONTENT_VIDEO_NOT_ENTITLED':
+    'Tarif endi videoni oʻz ichiga olmaydi, shuning uchun element yashirilgan va uni qayta chop etib boʻlmaydi',
   'marketing.content.problem.other': 'Eʻtibor kerak: {detail}',
 
   'marketing.content.media.none': 'Hozircha rasm yoʻq.',

@@ -1074,6 +1074,8 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
     'Акция, к которой привязана карточка, не действует, поэтому карточка скрыта',
   'marketing.content.problem.CONTENT_MEDIA_NOT_RENDERED':
     'Изображение ещё обрабатывается, поэтому элемент пока не показывается',
+  'marketing.content.problem.CONTENT_VIDEO_NOT_ENTITLED':
+    'Тариф больше не включает видео, поэтому элемент скрыт и его нельзя опубликовать снова',
   'marketing.content.problem.other': 'Требует внимания: {detail}',
 
   'marketing.content.media.none': 'Изображения пока нет.',

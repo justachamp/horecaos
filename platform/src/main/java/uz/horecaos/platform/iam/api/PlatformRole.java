@@ -878,6 +878,12 @@ public enum PlatformRole {
                     CONTENT_READ,
                     CONTENT_AUTHOR,
                     CONTENT_PUBLISH,
+                    // ADR 0157: and uploads the picture or video it publishes. Held at the brand, so
+                    // it reaches only the brand-scoped media routes (BrandMediaController), where the
+                    // asset is owned by the brand in the path; the tenant routes stay the owner's and
+                    // the administrator's.
+                    MEDIA_READ,
+                    MEDIA_UPLOAD,
                     REPORTING_READ,
                     // ADR 0154: a brand manager sees its branches' printing and reprints; changing a printer is the
                     // branch manager's and a brand's receipt profile is the tenant administrator's.

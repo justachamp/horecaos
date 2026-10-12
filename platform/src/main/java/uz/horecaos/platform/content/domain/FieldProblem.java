@@ -34,6 +34,14 @@ public record FieldProblem(String field, String code, String message) {
         /** A kind the brand has not switched on (entitlement and policy both must say yes). */
         public static final String KIND_NOT_ENABLED = "CONTENT_KIND_NOT_ENABLED";
 
+        /**
+         * A warning on a draft and on health, never a refusal of a read or a takedown: the item carries a video and the
+         * tenant's plan no longer includes {@code content.video.enabled}. The storefront stops returning the item, and a
+         * new publication of it is refused with {@code ENTITLEMENT_REQUIRED} (403); everything else about it -- listing,
+         * reading, ordering, withdrawing, archiving -- keeps working so the console is never locked out of its own item.
+         */
+        public static final String VIDEO_NOT_ENTITLED = "CONTENT_VIDEO_NOT_ENTITLED";
+
         /** Health only: a live item bound to a promotion that is not live, so the storefront drops it. */
         public static final String PROMOTION_NOT_LIVE = "CONTENT_PROMOTION_NOT_LIVE";
 

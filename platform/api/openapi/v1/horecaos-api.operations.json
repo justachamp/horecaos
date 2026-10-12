@@ -2819,6 +2819,33 @@
         "required" : [ "firstName", "lastName", "phone", "reason", "roleCode" ],
         "type" : "object"
       },
+      "BrandUploadRequest" : {
+        "properties" : {
+          "contentType" : {
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "filename" : {
+            "type" : "string"
+          },
+          "renditionProfile" : {
+            "pattern" : "CREATIVE",
+            "type" : "string"
+          },
+          "sizeBytes" : {
+            "exclusiveMinimum" : 0,
+            "format" : "int64",
+            "maximum" : 12582912,
+            "type" : "integer"
+          },
+          "visibility" : {
+            "enum" : [ "PUBLIC", "PRIVATE" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "contentType", "visibility" ],
+        "type" : "object"
+      },
       "BrandView" : {
         "properties" : {
           "bannerAssetId" : {
@@ -64344,6 +64371,195 @@
         "tags" : [ "Marketing" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/media/assets/upload-requests" : {
+      "post" : {
+        "description" : "As the tenant route, for an asset owned by the brand in the path. The returned URL is signed for exactly this key, content type, and size, and expires shortly. Upload to it directly, then call finalize.",
+        "operationId" : "requestBrandUpload",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BrandUploadRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UploadTicketResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Allocate a brand-owned asset and return a constrained upload URL",
+        "tags" : [ "Media" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/media/assets/{assetId}" : {
+      "get" : {
+        "operationId" : "getBrandAsset",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "assetId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AssetResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Read a brand asset's status",
+        "tags" : [ "Media" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/media/assets/{assetId}/download-url" : {
+      "get" : {
+        "description" : "As the tenant route: only an AVAILABLE asset yields a URL, `variant` asks for a rendition, and a 404 covers an asset the brand does not own.",
+        "operationId" : "brandDownloadUrl",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "assetId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "variant",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "THUMBNAIL", "CARD", "DETAIL", "HERO" ],
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DownloadResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Return a short-lived signed URL for a brand asset",
+        "tags" : [ "Media" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/media/assets/{assetId}/finalize" : {
+      "post" : {
+        "description" : "As the tenant route; a 404 for an asset the brand does not own.",
+        "operationId" : "finalizeBrandUpload",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "assetId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AssetResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record that a brand asset's upload is complete and queue verification",
+        "tags" : [ "Media" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-routing/bindings" : {
       "get" : {
         "description" : "Active and retired bindings both list, so an operator can see why a chat stopped receiving rather than finding it simply gone.",
@@ -71248,6 +71464,9 @@
   }, {
     "description" : "Why the assistant said what it said",
     "name" : "Assistant turns"
+  }, {
+    "description" : "Presigned upload lifecycle for a brand's own imagery and video",
+    "name" : "Media"
   }, {
     "description" : "ADR 0070: which registered storefront apps this brand has authorised",
     "name" : "Brand storefront apps"

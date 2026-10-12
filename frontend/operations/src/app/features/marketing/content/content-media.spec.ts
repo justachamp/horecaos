@@ -9,38 +9,43 @@ const SCOPE = { tenantId: 't1', brandId: 'b1' };
 
 class FakeMediaApi {
   readonly uploads: {
-    ownerScope: string;
-    ownerId: string;
+    brandId: string;
     visibility: string;
     name: string;
     profile: string | undefined;
   }[] = [];
+  readonly thumbnailAsks: { brandId: string; assetId: string; variant: string | undefined }[] = [];
   /** The statuses `asset()` answers, in order; the last repeats. */
   statuses: MediaAssetStatus[] = ['UPLOADED', 'AVAILABLE'];
   private looks = 0;
   private counter = 0;
   downloadFails = false;
 
-  upload(
+  uploadForBrand(
     _tenantId: string,
-    ownerScope: string,
-    ownerId: string,
+    brandId: string,
     visibility: string,
     file: File,
     profile?: string,
   ): Observable<MediaAssetView> {
-    this.uploads.push({ ownerScope, ownerId, visibility, name: file.name, profile });
+    this.uploads.push({ brandId, visibility, name: file.name, profile });
     this.counter += 1;
     return of({ assetId: `asset-${this.counter}`, status: 'UPLOADED' });
   }
 
-  asset(_tenantId: string, assetId: string): Observable<MediaAssetView> {
+  brandAsset(_tenantId: string, _brandId: string, assetId: string): Observable<MediaAssetView> {
     const status = this.statuses[Math.min(this.looks, this.statuses.length - 1)];
     this.looks += 1;
     return of({ assetId, status });
   }
 
-  downloadUrl(): Observable<string> {
+  brandDownloadUrl(
+    _tenantId: string,
+    brandId: string,
+    assetId: string,
+    variant?: string,
+  ): Observable<string> {
+    this.thumbnailAsks.push({ brandId, assetId, variant });
     return this.downloadFails
       ? new Observable<string>((subscriber) => subscriber.error(new Error('404')))
       : of('https://cdn.example/thumb.jpg');
@@ -72,7 +77,7 @@ describe("ContentMedia (ADR 0157: a creative is public, the brand's and, for an 
     URL.createObjectURL = () => 'blob:local';
   });
 
-  it('uploads an image PUBLIC, owned by the brand, with the CREATIVE rendition profile', async () => {
+  it('uploads an image PUBLIC, through the brand’s own media routes, with the CREATIVE rendition profile', async () => {
     const id = await media.uploadImage(
       SCOPE,
       new File(['x'], 'banner.jpg', { type: 'image/jpeg' }),
@@ -81,8 +86,7 @@ describe("ContentMedia (ADR 0157: a creative is public, the brand's and, for an 
     expect(id).toBe('asset-1');
     expect(api.uploads).toEqual([
       {
-        ownerScope: 'BRAND',
-        ownerId: 'b1',
+        brandId: 'b1',
         visibility: 'PUBLIC',
         name: 'banner.jpg',
         profile: 'CREATIVE',
@@ -157,6 +161,9 @@ describe("ContentMedia (ADR 0157: a creative is public, the brand's and, for an 
     await Promise.resolve();
 
     expect(media.thumbnails()['saved-1']).toBe('https://cdn.example/thumb.jpg');
+    expect(api.thumbnailAsks).toEqual([
+      { brandId: 'b1', assetId: 'saved-1', variant: 'THUMBNAIL' },
+    ]);
   });
 
   it('leaves no thumbnail, and no error, when the rendition has not rendered', async () => {
