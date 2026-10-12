@@ -311,6 +311,46 @@ class WorkforceEndpointTests {
         assertThat(json(get(BRANCH + "/shifts", FINANCE)).get("items")).hasSize(1);
     }
 
+    // ================================================================================== the rota
+
+    @Test
+    @DisplayName(
+            "copying a week onto one that is partly occupied copies the free days and counts the others, through the real transaction")
+    void copyingOntoAPartlyOccupiedWeek() throws Exception {
+        enable();
+        UUID cook = memberId(COOK);
+        // The 05th to the 08th are copied a week on. The target week already holds the 13th and the 15th,
+        // which clash with the copies of the 06th and the 08th: the copy meets an overlap between two
+        // entries and another after the last one, and must go on past the first and finish after the second.
+        for (String day : List.of("05", "06", "07", "08", "13", "15")) {
+            MvcResult drafted = post(BRANCH + "/roster/entries", entry(cook, day), MANAGER);
+            assertThat(drafted.getResponse().getStatus()).isEqualTo(201);
+        }
+
+        MvcResult copied =
+                post(BRANCH + "/roster/copies", "{\"fromWeek\":\"2026-10-05\",\"toWeek\":\"2026-10-12\"}", MANAGER);
+
+        assertThat(copied.getResponse().getStatus())
+                .as(copied.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        assertThat(json(copied).get("created").asInt())
+                .as("the 05th and the 07th, a week on")
+                .isEqualTo(2);
+        assertThat(json(copied).get("skipped").asInt())
+                .as("the 06th and the 08th")
+                .isEqualTo(2);
+        assertThat(jdbc.sql("SELECT count(*) FROM workforce.staff_roster_entries WHERE planned_start >= :from")
+                        .param("from", java.time.OffsetDateTime.parse("2026-10-12T00:00:00Z"))
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(4L);
+        assertThat(jdbc.sql("SELECT count(*) FROM audit.audit_events WHERE action_code = 'workforce.roster.drafted'")
+                        .query(Long.class)
+                        .single())
+                .as("the six drafts and the one fact for the copy")
+                .isEqualTo(7L);
+    }
+
     // ============================================================================ the timesheet
 
     @Test
@@ -398,6 +438,12 @@ class WorkforceEndpointTests {
                 + "\"from\":\"2026-10-01T00:00:00Z\",\"to\":\"2026-10-08T00:00:00Z\","
                 + "\"purpose\":\"endpoint test\"}";
         return post("/api/v1/tenants/" + TENANT + "/reporting/exports", body, subject);
+    }
+
+    /** A draft for {@code member} on the given day of October 2026, 08:00 to 16:00 in Tashkent. */
+    private static String entry(UUID member, String day) {
+        return "{\"memberId\":\"" + member + "\",\"plannedStart\":\"2026-10-" + day + "T03:00:00Z\","
+                + "\"plannedEnd\":\"2026-10-" + day + "T11:00:00Z\"}";
     }
 
     private static String clockIn(UUID location) {

@@ -15,9 +15,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.iam.api.AuthorizationService;
@@ -126,6 +129,15 @@ final class WorkforceKit {
 
     static WorkforceKit over(TestDatabase.Handle db, Instant start) {
         return new WorkforceKit(db, start);
+    }
+
+    /**
+     * Runs {@code call} in one database transaction, as the {@code @Transactional} service methods run in
+     * production. The kit wires the services by hand, so a bare call commits each statement on its own
+     * and hides anything that only fails once an earlier statement's error has aborted the transaction.
+     */
+    <T> T inTransaction(Supplier<T> call) {
+        return new TransactionTemplate(new DataSourceTransactionManager(dataSource)).execute(status -> call.get());
     }
 
     static Branch branch() {

@@ -75,6 +75,41 @@ public class JdbcStaffRosterStore {
                 .update();
     }
 
+    /**
+     * As {@link #insert}, but an entry that would overlap a live one of the same person is not an error:
+     * it is not written and the answer is {@code false}.
+     *
+     * <p>The overlap is the exclusion constraint {@code ex_staff_roster_no_overlap}. A statement that
+     * fails inside a transaction aborts it, so a caller that tried an insert, caught the violation and
+     * went on would find every later statement refused ({@code 25P02}); {@code ON CONFLICT DO NOTHING}
+     * (no target: it covers exclusion constraints too) lets the database say "not written" without an
+     * error, and the transaction stays usable. A caller that wants the overlap as an error uses {@link
+     * #insert}.
+     *
+     * @return {@code true} when the entry was written
+     */
+    public boolean insertIfFree(EntryRow entry) {
+        return jdbc.sql("""
+                        INSERT INTO workforce.staff_roster_entries (
+                            id, tenant_id, brand_id, location_id, staff_member_id, status, planned_start,
+                            planned_end, planned_break_minutes, created_by)
+                        VALUES (:id, :tenantId, :brandId, :locationId, :memberId, 'DRAFT', :start, :end,
+                                :break, :createdBy)
+                        ON CONFLICT DO NOTHING
+                        """)
+                        .param("id", entry.id())
+                        .param("tenantId", entry.tenantId())
+                        .param("brandId", entry.brandId())
+                        .param("locationId", entry.locationId())
+                        .param("memberId", entry.memberId())
+                        .param("start", utc(entry.plannedStart()))
+                        .param("end", utc(entry.plannedEnd()))
+                        .param("break", entry.plannedBreakMinutes())
+                        .param("createdBy", entry.createdBy())
+                        .update()
+                == 1;
+    }
+
     public Optional<EntryRow> find(UUID tenantId, UUID locationId, UUID entryId) {
         return jdbc.sql("SELECT " + COLUMNS + """
                          FROM workforce.staff_roster_entries
