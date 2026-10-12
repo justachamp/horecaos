@@ -103,6 +103,13 @@ public final class EventCatalog {
     public static final String CUSTOMERS_EVENTS_TOPIC = KafkaTopicCatalog.CUSTOMERS_EVENTS;
 
     /**
+     * ADR 0159 review facts. Its own topic: a consumer of "a case breached its clock" should not read
+     * ordering's volume to find it, and the producer is the reviews module. Nothing on it carries a
+     * comment, a case note, a tag label or a name.
+     */
+    public static final String REVIEWS_EVENTS_TOPIC = KafkaTopicCatalog.REVIEWS_EVENTS;
+
+    /**
      * ADR 0018 pricing facts. Its own topic rather than a share of {@code
      * tenancy.events}: nothing that reads price-book activations should have to
      * filter out tenant and brand creations to get them, and the two have
@@ -117,6 +124,12 @@ public final class EventCatalog {
      * activations. Nothing on it carries a contact value or a rendered message.
      */
     public static final String MARKETING_EVENTS_TOPIC = KafkaTopicCatalog.MARKETING_EVENTS;
+
+    /**
+     * ADR 0157 content facts. Its own topic: nothing about a banner being published has anything in
+     * common with a scenario decision per guest per step, and nothing on it carries text or a URL.
+     */
+    public static final String CONTENT_EVENTS_TOPIC = KafkaTopicCatalog.CONTENT_EVENTS;
 
     /**
      * ADR 0012's durable scheduler. A command, not a fact: {@code PosSyncRequested}
@@ -385,6 +398,16 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "Nobody decided before the approval deadline."),
             new EventContract(
+                    "OrderPaymentLapsed",
+                    1,
+                    "ordering",
+                    ORDERING_EVENTS_TOPIC,
+                    "orderId",
+                    "events/ordering.events/OrderPaymentLapsed.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "An unpaid order's window elapsed and it ended as PAYMENT_FAILED."),
+            new EventContract(
                     "OrderCancelled",
                     1,
                     "ordering",
@@ -461,6 +484,17 @@ public final class EventCatalog {
                     Retention.BUSINESS_FACT,
                     Classification.INTERNAL,
                     "A raised callback was cleared."),
+            // ADR 0161: counts only, never a marking code; a nudge the fiscal module re-reads the counts on.
+            new EventContract(
+                    "OrderMarksCompleted",
+                    1,
+                    "ordering",
+                    ORDERING_EVENTS_TOPIC,
+                    "orderId",
+                    "events/ordering.events/OrderMarksCompleted.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "Every marked line of the order holds all its scanned units. A nudge, counts only."),
             // ADR 0007's reconciliation command and its settled answer. Both key
             // on the delivery operation whose outcome is unknown, not on the
             // reconciliation: two reconciliations for one operation must not
@@ -550,6 +584,19 @@ public final class EventCatalog {
                             + "Symmetric — active carries the direction — and identifiers and "
                             + "stable codes only, never a product name or free text."),
             new EventContract(
+                    "InventoryStockDisposed",
+                    1,
+                    "inventory",
+                    INVENTORY_EVENTS_TOPIC,
+                    "orderId",
+                    "events/inventory.events/InventoryStockDisposed.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "Stock an order no longer needs was given back or written off (ADR 0169): a line "
+                            + "removed from or lowered on a confirmed order, or an order cancelled after its "
+                            + "stock was committed. Per line, the units released from a hold, returned to stock, "
+                            + "written off or left untouched. Identifiers, stable codes and counts only."),
+            new EventContract(
                     "LeadRegistered",
                     1,
                     "customers",
@@ -593,6 +640,63 @@ public final class EventCatalog {
                     Classification.INTERNAL,
                     "A lead became the order or the reservation it was for (ADR 0111): exactly one of the "
                             + "two ids."),
+            new EventContract(
+                    "ReviewSubmitted",
+                    1,
+                    "reviews",
+                    REVIEWS_EVENTS_TOPIC,
+                    "orderId",
+                    "events/reviews.events/ReviewSubmitted.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A customer rated a completed order (ADR 0159): the rating, whether there is a comment "
+                            + "and how many tags -- never the comment or the tags' wording."),
+            new EventContract(
+                    "ReviewCommentModerated",
+                    1,
+                    "reviews",
+                    REVIEWS_EVENTS_TOPIC,
+                    "orderId",
+                    "events/reviews.events/ReviewCommentModerated.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A review's comment moved between publication states (ADR 0159): a moderator's decision, "
+                            + "the customer's withdrawal or an erasure. Two states, a reason code and who "
+                            + "acted; a rating is never moderated."),
+            new EventContract(
+                    "RecoveryCaseOpened",
+                    1,
+                    "reviews",
+                    REVIEWS_EVENTS_TOPIC,
+                    "orderId",
+                    "events/reviews.events/RecoveryCaseOpened.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A service-recovery case opened about a review (ADR 0159), with its source, the rating "
+                            + "and the two clocks' due times."),
+            new EventContract(
+                    "RecoveryCaseStateChanged",
+                    1,
+                    "reviews",
+                    REVIEWS_EVENTS_TOPIC,
+                    "orderId",
+                    "events/reviews.events/RecoveryCaseStateChanged.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A service-recovery case moved between states (ADR 0159): NEW, IN_PROGRESS, RESOLVED, "
+                            + "CLOSED_UNRESOLVED, with the outcome code and the owner as a non-personal "
+                            + "display reference such as S-0142."),
+            new EventContract(
+                    "RecoveryCaseSlaBreached",
+                    1,
+                    "reviews",
+                    REVIEWS_EVENTS_TOPIC,
+                    "orderId",
+                    "events/reviews.events/RecoveryCaseSlaBreached.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "An open service-recovery case passed its first-response or resolution clock (ADR 0159). "
+                            + "Published once per clock, and only while the case was open."),
             new EventContract(
                     "MarketplaceAvailabilityPushed",
                     1,
@@ -691,6 +795,30 @@ public final class EventCatalog {
                     "An offer version was put in front of campaigns (ADR 0112). The offer, its brand "
                             + "and its version number; never the promotion or rule it references, which a "
                             + "consumer reads through the authorized offers API."),
+            new EventContract(
+                    "ContentItemPublished",
+                    1,
+                    "content",
+                    CONTENT_EVENTS_TOPIC,
+                    "itemId",
+                    "events/content.events/ContentItemPublished.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "An item of brand-authored storefront content was published, or its next revision was "
+                            + "(ADR 0157). Ids, the kind, the placement, the revision number, the schedule and the "
+                            + "channel codes -- never the text, which is in the revision, and never a URL."),
+            new EventContract(
+                    "ContentItemWithdrawn",
+                    1,
+                    "content",
+                    CONTENT_EVENTS_TOPIC,
+                    "itemId",
+                    "events/content.events/ContentItemWithdrawn.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "An item of storefront content was taken out of front of customers (ADR 0157), by a "
+                            + "withdrawal or by archiving it while live. Ids, the kind, the placement and the reason "
+                            + "code; every revision is kept."),
             // ADR 0012's durable scheduler command. The claim that decided this
             // command should exist happened in PostgreSQL, under FOR UPDATE SKIP
             // LOCKED, in the same transaction that advanced the schedule's

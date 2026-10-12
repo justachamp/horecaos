@@ -232,6 +232,9 @@ ADR 0043 facts and a code-owned export, not pay.**
    manager, who edits the entry. `CONSUMED` is set when a shift opens against the
    entry; `MISSED` is set by a sweeper after `planned_end` with no shift, and the
    console words it as a coverage fact and not a disciplinary one, as ADR 0042 does.
+   (Correction, 2026-10-12: hours a manager records after the sweeper ran are the fact
+   of that plan, so a `MISSED` entry is still matched and becomes `CONSUMED`. See
+   Lifecycle and arithmetic.)
    A person cannot hold two live entries that overlap, at any branch, by a database
    exclusion constraint.
 
@@ -402,6 +405,7 @@ a log line, a metric, an event or an audit fact.
 
 ```text
 roster entry:  DRAFT -> PUBLISHED -> CONSUMED | MISSED | CANCELLED        DRAFT -> CANCELLED
+               MISSED -> CONSUMED                                          (hours recorded after the sweeper ran)
 shift:         OPEN -> CLOSED
                OPEN -> AWAITING_APPROVAL -> CLOSED                          (|variance| over threshold)
                any non-VOIDED -> VOIDED                                     (reason; never deleted)
@@ -416,9 +420,19 @@ business_date    = the tenant's business date of started_at                 (ADR
 
 A shift matches the entry of the same person and branch whose `planned_start` is
 nearest to `started_at` within `workforce.roster.match_window_minutes` (default 240)
-and that is still `PUBLISHED`; the entry becomes `CONSUMED` in the same transaction.
-The closing paths that need variance read the entry through the shift's own
-`roster_entry_id`, never by re-searching.
+and that no shift has covered yet, which is `PUBLISHED` or `MISSED`; the entry becomes
+`CONSUMED` in the same transaction. The closing paths that need variance read the entry
+through the shift's own `roster_entry_id`, never by re-searching.
+
+Correction, 2026-10-12: this paragraph said "still `PUBLISHED`". The sweeper marks an
+entry `MISSED` minutes after `planned_end`, and the usual way a forgotten clock-in is put
+right is a manager recording the hours afterwards, so a `PUBLISHED`-only match never found
+the entry for exactly those shifts: they carried no plan, so no variance and no approval
+however many hours were recorded (Decision 8's control bypassed), and the day's list kept
+`MISSED_TODAY` beside a closed shift. `JdbcStaffRosterStore.nearestUncovered` and
+`markConsumed` take both statuses; voiding the shift returns the entry to `PUBLISHED` and
+the sweeper marks it `MISSED` again. This restates the intent of Decisions 3 and 8; it
+decides nothing new.
 
 ### Physical model
 

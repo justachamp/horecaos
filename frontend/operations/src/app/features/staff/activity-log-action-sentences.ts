@@ -200,6 +200,101 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       'uz-Latn': 'Tasdiqlash soʻralindi',
     },
     'audit.read': { en: 'Audit read', ru: 'Журнал просмотр', 'uz-Latn': 'Jurnal koʻrish' },
+    'catalog.autoAddRule.activated': {
+      en: 'Auto-add rule activated',
+      ru: 'Правило автодобавления активировано',
+      'uz-Latn': 'Avtomatik qoʻshish qoidasi faollashtirildi',
+    },
+    'catalog.autoAddRule.archived': {
+      en: 'Auto-add rule archived',
+      ru: 'Правило автодобавления архивировано',
+      'uz-Latn': 'Avtomatik qoʻshish qoidasi arxivlandi',
+    },
+    'catalog.autoAddRule.created': {
+      en: 'Auto-add rule created',
+      ru: 'Правило автодобавления создано',
+      'uz-Latn': 'Avtomatik qoʻshish qoidasi yaratildi',
+    },
+    'catalog.autoAddRule.updated': {
+      en: 'Auto-add rule changed',
+      ru: 'Правило автодобавления изменено',
+      'uz-Latn': 'Avtomatik qoʻshish qoidasi oʻzgartirildi',
+    },
+    'catalog.ingredient.archived': {
+      en: 'Ingredient archived',
+      ru: 'Ингредиент архивирован',
+      'uz-Latn': 'Tarkibiy qism arxivlandi',
+    },
+    'catalog.ingredient.created': {
+      en: 'Ingredient created',
+      ru: 'Ингредиент создан',
+      'uz-Latn': 'Tarkibiy qism yaratildi',
+    },
+    'catalog.ingredient.updated': {
+      en: 'Ingredient changed',
+      ru: 'Ингредиент изменён',
+      'uz-Latn': 'Tarkibiy qism oʻzgartirildi',
+    },
+    'catalog.mxikReference.import-applied': {
+      en: 'IKPU/MXIK reference import applied',
+      ru: 'Загрузка справочника ИКПУ/MXIK применена',
+      'uz-Latn': 'IKPU/MXIK maʻlumotnomasini yuklash qoʻllandi',
+    },
+    'catalog.mxikReference.import-failed': {
+      en: 'IKPU/MXIK reference import failed',
+      ru: 'Загрузка справочника ИКПУ/MXIK не удалась',
+      'uz-Latn': 'IKPU/MXIK maʻlumotnomasini yuklash muvaffaqiyatsiz',
+    },
+    'catalog.mxikReference.import-held': {
+      en: 'IKPU/MXIK reference import held for review',
+      ru: 'Загрузка справочника ИКПУ/MXIK задержана для проверки',
+      'uz-Latn': 'IKPU/MXIK maʻlumotnomasini yuklash tekshiruv uchun toʻxtatildi',
+    },
+    'catalog.mxikReference.import-rejected': {
+      en: 'IKPU/MXIK reference import rejected',
+      ru: 'Загрузка справочника ИКПУ/MXIK отклонена',
+      'uz-Latn': 'IKPU/MXIK maʻlumotnomasini yuklash rad etildi',
+    },
+    'catalog.mxikReference.import-validated': {
+      en: 'IKPU/MXIK reference file checked (dry run)',
+      ru: 'Файл справочника ИКПУ/MXIK проверен (пробный прогон)',
+      'uz-Latn': 'IKPU/MXIK maʻlumotnomasi fayli tekshirildi (sinov)',
+    },
+    'catalog.product.ingredients-set': {
+      en: 'Product ingredients set',
+      ru: 'Состав товара задан',
+      'uz-Latn': 'Mahsulot tarkibi belgilandi',
+    },
+    'catalog.product.tags-set': {
+      en: 'Product tags set',
+      ru: 'Теги товара заданы',
+      'uz-Latn': 'Mahsulot teglari belgilandi',
+    },
+    'catalog.tag.archived': {
+      en: 'Tag archived',
+      ru: 'Тег архивирован',
+      'uz-Latn': 'Teg arxivlandi',
+    },
+    'catalog.tag.created': {
+      en: 'Tag created',
+      ru: 'Тег создан',
+      'uz-Latn': 'Teg yaratildi',
+    },
+    'catalog.tag.updated': {
+      en: 'Tag changed',
+      ru: 'Тег изменён',
+      'uz-Latn': 'Teg oʻzgartirildi',
+    },
+    'inventory.stock.disposed': {
+      en: 'Stock put back or written off after a sale',
+      ru: 'Остаток возвращён на склад или списан после продажи',
+      'uz-Latn': 'Sotuvdan keyin zaxira omborga qaytarildi yoki hisobdan chiqarildi',
+    },
+    'ordering.order.line-removed': {
+      en: 'Item removed from a confirmed order',
+      ru: 'Позиция убрана из подтверждённого заказа',
+      'uz-Latn': 'Tasdiqlangan buyurtmadan pozitsiya olib tashlandi',
+    },
     'catalog.channelMediaOverride.replaced': {
       en: 'Photos shown on a channel replaced',
       ru: 'Фото для канала заменены',
@@ -610,6 +705,36 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Коммерция кошелёк перевод зафиксировано',
       'uz-Latn': 'Tijorat hamyon oʻtkazma qayd etildi',
     },
+    'content.host.allowed': {
+      en: 'A link address was allowed in storefront content',
+      ru: 'Разрешён адрес для ссылок в контенте витрины',
+      'uz-Latn': 'Vitrina kontentida havolalar uchun manzil ruxsat etildi',
+    },
+    'content.host.removed': {
+      en: 'A link address was removed from storefront content',
+      ru: 'Адрес для ссылок убран из контента витрины',
+      'uz-Latn': 'Vitrina kontentidagi havolalar manzili olib tashlandi',
+    },
+    'content.item.archived': {
+      en: 'Storefront content archived',
+      ru: 'Контент витрины перенесён в архив',
+      'uz-Latn': 'Vitrina kontenti arxivlandi',
+    },
+    'content.item.published': {
+      en: 'Storefront content published',
+      ru: 'Контент витрины опубликован',
+      'uz-Latn': 'Vitrina kontenti eʼlon qilindi',
+    },
+    'content.item.withdrawn': {
+      en: 'Storefront content taken down',
+      ru: 'Контент витрины снят с публикации',
+      'uz-Latn': 'Vitrina kontenti eʼlondan olindi',
+    },
+    'content.placement.reordered': {
+      en: 'Storefront content reordered',
+      ru: 'Изменён порядок контента витрины',
+      'uz-Latn': 'Vitrina kontenti tartibi oʻzgartirildi',
+    },
     'conversation.closed': {
       en: 'Conversation closed',
       ru: 'Переписка закрыто',
@@ -980,6 +1105,21 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Фискальный терминал зарегистрировано',
       'uz-Latn': 'Fiskal terminal roʻyxatdan oʻtkazildi',
     },
+    'fiscal.correction.attached': {
+      en: 'Fiscal agent’s correction reference attached',
+      ru: 'Приложена ссылка фискального агента на коррекцию чека',
+      'uz-Latn': 'Fiskal agentning tuzatish havolasi biriktirildi',
+    },
+    'fiscal.correction.closed': {
+      en: 'Fiscal receipt correction request closed without a receipt',
+      ru: 'Запрос на коррекцию чека закрыт без чека',
+      'uz-Latn': 'Chekni tuzatish soʻrovi chek chiqarilmasdan yopildi',
+    },
+    'fiscal.correction.requested': {
+      en: 'Fiscal receipt correction or void requested',
+      ru: 'Запрошена коррекция или аннулирование чека',
+      'uz-Latn': 'Chekni tuzatish yoki bekor qilish soʻraldi',
+    },
     'fiscal.document.retry': {
       en: 'Fiscal document retry',
       ru: 'Фискальный документ повтор',
@@ -989,6 +1129,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Fiscal document unblock',
       ru: 'Фискальный документ разблокировка',
       'uz-Latn': 'Fiskal hujjat blokdan chiqarish',
+    },
+    'fiscal.evidence.revealed': {
+      en: 'Fiscal receipt identifiers opened in full',
+      ru: 'Идентификаторы фискального чека открыты целиком',
+      'uz-Latn': 'Fiskal chek identifikatorlari toʻliq ochildi',
     },
     'fulfillment.delivery.cost-subsidy': {
       en: 'Fulfillment delivery cost subsidy',
@@ -1014,6 +1159,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'IAM identity drift detected',
       ru: 'Доступ личность расхождение обнаружено',
       'uz-Latn': 'Huquq shaxs farq aniqlandi',
+    },
+    'iam.staff_session.terminated_all': {
+      en: 'A staff member signed out of every device (sessions ended, count only)',
+      ru: 'Сотрудник вышел на всех устройствах (завершены сеансы, только число)',
+      'uz-Latn': 'Xodim barcha qurilmalardan chiqdi (seanslar yakunlandi, faqat soni)',
+    },
+    'iam.staff_session.terminated': {
+      en: 'A staff member ended one of their own sessions',
+      ru: 'Сотрудник завершил один из своих сеансов',
+      'uz-Latn': 'Xodim oʻz seanslaridan birini yakunladi',
     },
     'iam.location_contact.updated': {
       en: 'Branch contact persons changed',
@@ -1230,6 +1385,26 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Правило начисления баллов выведено из действия',
       'uz-Latn': 'Ballar hisoblash qoidasi bekor qilindi',
     },
+    'loyalty.pos_sync.held': {
+      en: 'Loyalty points earned at the till held for review',
+      ru: 'Баллы, начисленные на кассе, задержаны до проверки',
+      'uz-Latn': 'Kassada hisoblangan ballar tekshiruvgacha ushlab qolindi',
+    },
+    'loyalty.pos_sync.imported': {
+      en: 'Loyalty movements from the till imported',
+      ru: 'Движения баллов с кассы загружены',
+      'uz-Latn': 'Kassadagi ballar harakatlari yuklandi',
+    },
+    'loyalty.pos_sync.matched': {
+      en: 'Till customer matched to a loyalty account',
+      ru: 'Клиент кассы сопоставлен со счётом баллов',
+      'uz-Latn': 'Kassadagi mijoz ball hisobiga bogʻlandi',
+    },
+    'loyalty.pos_sync.resolved': {
+      en: 'Difference between the till and the loyalty ledger settled',
+      ru: 'Расхождение между кассой и счётом баллов урегулировано',
+      'uz-Latn': 'Kassa va ball hisobi orasidagi farq hal qilindi',
+    },
     'loyalty.redemption_policy.activated': {
       en: 'Loyalty redemption policy activated',
       ru: 'Активированы правила списания баллов',
@@ -1254,6 +1429,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Media asset ingested',
       ru: 'Медиа файл загружено',
       'uz-Latn': 'Media fayl yuklandi',
+    },
+    'media.asset.released': {
+      en: 'Media asset released',
+      ru: 'Медиа файл освобождён',
+      'uz-Latn': 'Media fayl boʻshatildi',
     },
     'notification.template.created': {
       en: 'Notification template created',
@@ -1305,6 +1485,21 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Записан вес весовой позиции, заказ пересчитан',
       'uz-Latn':
         'Ogʻirlik boʻyicha sotiladigan pozitsiya ogʻirligi yozildi, buyurtma qayta hisoblandi',
+    },
+    'ordering.order.line_mark_captured': {
+      en: 'A unit of a marked item scanned at the pass',
+      ru: 'Отсканирована единица маркированного товара',
+      'uz-Latn': 'Markirlangan mahsulot birligi skanerlandi',
+    },
+    'ordering.order.line_mark_removed': {
+      en: 'A scanned unit of a marked item taken back',
+      ru: 'Отсканированная единица маркированного товара возвращена',
+      'uz-Latn': 'Skanerlangan markirlangan mahsulot birligi bekor qilindi',
+    },
+    'ordering.order.marks_released': {
+      en: 'Scanned marking codes released with the cancelled order',
+      ru: 'Отсканированные коды маркировки освобождены вместе с отменённым заказом',
+      'uz-Latn': 'Bekor qilingan buyurtma bilan skanerlangan markirovka kodlari boʻshatildi',
     },
     'ordering.order.promotion_requoted': {
       en: 'Promotions of a scheduled order checked again, the order unchanged',
@@ -1410,6 +1605,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Payment merchant binding secret rotated',
       ru: 'Платёж продавец привязка секрет обновлено',
       'uz-Latn': 'Toʻlov sotuvchi bogʻlanish sir yangilandi',
+    },
+    'payments.document.marking_codes_disclosed': {
+      en: 'Marking codes written onto a fiscal receipt',
+      ru: 'Коды маркировки записаны в фискальный чек',
+      'uz-Latn': 'Markirovka kodlari fiskal chekka yozildi',
     },
     'payments.remedy.verify': {
       en: 'Payments remedy verify',
@@ -1696,6 +1896,76 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Компания сотрудник приглашение отправлено повторно',
       'uz-Latn': 'Kompaniya xodim taklifnoma qayta yuborildi',
     },
+    'kiosk.device.enrolled': {
+      en: 'Kiosk paired',
+      ru: 'Киоск подключён',
+      'uz-Latn': 'Kiosk ulandi',
+    },
+    'kiosk.device.rebound': {
+      en: 'Kiosk moved to another sales channel',
+      ru: 'Киоск переведён на другой канал продаж',
+      'uz-Latn': 'Kiosk boshqa savdo kanaliga oʻtkazildi',
+    },
+    'kiosk.device.revoked': {
+      en: 'Kiosk revoked',
+      ru: 'Киоск отключён',
+      'uz-Latn': 'Kiosk oʻchirildi',
+    },
+    'terminal.device.configured': {
+      en: 'Terminal name or sign-in mode changed',
+      ru: 'Изменено название терминала или способ входа',
+      'uz-Latn': 'Terminal nomi yoki kirish usuli oʻzgartirildi',
+    },
+    'terminal.device.revoked': {
+      en: 'Terminal revoked',
+      ru: 'Терминал отключён',
+      'uz-Latn': 'Terminal oʻchirildi',
+    },
+    'terminal.policy.changed': {
+      en: 'Terminal PIN policy changed',
+      ru: 'Изменены настройки PIN для терминалов',
+      'uz-Latn': 'Terminallar uchun PIN sozlamalari oʻzgartirildi',
+    },
+    'terminal.pin.activation_issued': {
+      en: 'PIN activation code issued',
+      ru: 'Выдан код активации PIN',
+      'uz-Latn': 'PIN faollashtirish kodi berildi',
+    },
+    'terminal.pin.set': {
+      en: 'PIN set with an activation code',
+      ru: 'PIN задан по коду активации',
+      'uz-Latn': 'PIN faollashtirish kodi bilan belgilandi',
+    },
+    'terminal.pin.changed': {
+      en: 'PIN changed at a terminal',
+      ru: 'PIN сменён на терминале',
+      'uz-Latn': 'PIN terminalda almashtirildi',
+    },
+    'terminal.pin.reset': {
+      en: 'PIN reset',
+      ru: 'PIN сброшен',
+      'uz-Latn': 'PIN tiklandi',
+    },
+    'terminal.pin.locked': {
+      en: 'PIN locked after wrong tries',
+      ru: 'PIN заблокирован после неверных попыток',
+      'uz-Latn': 'PIN notoʻgʻri urinishlardan keyin bloklandi',
+    },
+    'terminal.session.opened': {
+      en: 'Terminal unlocked by a person',
+      ru: 'Терминал разблокирован человеком',
+      'uz-Latn': 'Terminalni odam ochdi',
+    },
+    'terminal.session.ended': {
+      en: 'Terminal session ended',
+      ru: 'Сеанс на терминале завершён',
+      'uz-Latn': 'Terminaldagi seans tugadi',
+    },
+    'terminal.unlock.refused': {
+      en: 'Terminal unlock refused',
+      ru: 'Разблокировка терминала отклонена',
+      'uz-Latn': 'Terminalni ochish rad etildi',
+    },
     'voice.presence.changed': {
       en: 'Voice presence changed',
       ru: 'Голос присутствие изменено',
@@ -1705,5 +1975,80 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       en: 'Voice screen pop caller number revealed',
       ru: 'Голос экран всплытие звонящий номер раскрыто',
       'uz-Latn': 'Ovoz ekran chiqib kelish qoʻngʻiroq qiluvchi raqam ochib berildi',
+    },
+    'workforce.roster.cancelled': {
+      en: 'A shift was taken off the rota',
+      ru: 'Смена снята с графика',
+      'uz-Latn': 'Smena jadvaldan olib tashlandi',
+    },
+    'workforce.roster.drafted': {
+      en: 'A shift was added to the rota as a draft',
+      ru: 'Смена добавлена в график черновиком',
+      'uz-Latn': 'Smena jadvalga qoralama sifatida qoʻshildi',
+    },
+    'workforce.roster.published': {
+      en: 'Rota shifts were published',
+      ru: 'Смены графика опубликованы',
+      'uz-Latn': 'Jadval smenalari eʼlon qilindi',
+    },
+    'workforce.roster.revised': {
+      en: 'A rota shift was changed',
+      ru: 'Смена в графике изменена',
+      'uz-Latn': 'Jadvaldagi smena oʻzgartirildi',
+    },
+    'workforce.shift.approved': {
+      en: 'A shift was approved after a variance from the plan',
+      ru: 'Смена подтверждена после отклонения от плана',
+      'uz-Latn': 'Rejadan farq qilgan smena tasdiqlandi',
+    },
+    'workforce.shift.closed': {
+      en: 'A shift was closed',
+      ru: 'Смена закрыта',
+      'uz-Latn': 'Smena yopildi',
+    },
+    'workforce.shift.corrected': {
+      en: 'The hours of a shift were corrected',
+      ru: 'Часы смены исправлены',
+      'uz-Latn': 'Smena soatlari tuzatildi',
+    },
+    'workforce.shift.opened': {
+      en: 'A shift was started',
+      ru: 'Смена начата',
+      'uz-Latn': 'Smena boshlandi',
+    },
+    'workforce.shift.voided': {
+      en: 'A shift was voided',
+      ru: 'Смена аннулирована',
+      'uz-Latn': 'Smena bekor qilindi',
+    },
+    'courier.run-pay.changed': {
+      en: 'The pay for a run of several orders was changed',
+      ru: 'Оплата за рейс из нескольких заказов изменена',
+      'uz-Latn': 'Bir necha buyurtmali reys uchun toʻlov oʻzgartirildi',
+    },
+    'fulfillment.grouping.dropoff-revealed': {
+      en: 'A drop-off was read to group orders into a run',
+      ru: 'Адрес доставки прочитан для объединения заказов в рейс',
+      'uz-Latn': 'Buyurtmalarni reysga birlashtirish uchun yetkazish manzili oʻqildi',
+    },
+    'kitchen.paid_hold.published': {
+      en: 'The hold-for-payment policy was published',
+      ru: 'Опубликована политика удержания до оплаты',
+      'uz-Latn': 'Toʻlovgacha ushlab turish siyosati eʻlon qilindi',
+    },
+    'kitchen.station_productivity.published': {
+      en: 'The cook pace per station was published',
+      ru: 'Опубликована скорость поваров по станциям',
+      'uz-Latn': 'Stansiyalar boʻyicha oshpaz tezligi eʻlon qilindi',
+    },
+    'kitchen.ticket.payment_hold.override': {
+      en: 'A ticket held for payment was fired anyway',
+      ru: 'Тикет, удержанный до оплаты, всё равно запущен',
+      'uz-Latn': 'Toʻlovgacha ushlab turilgan tiket baribir ishga tushirildi',
+    },
+    'ordering.order.payment-window-lapsed': {
+      en: 'An unpaid order ended when its payment window ran out',
+      ru: 'Неоплаченный заказ завершён по истечении окна оплаты',
+      'uz-Latn': 'Toʻlanmagan buyurtma toʻlov oynasi tugagach yakunlandi',
     },
   };

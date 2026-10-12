@@ -11,15 +11,15 @@ import { TaxProfile } from '../../catalog/catalog-domain';
 import { MxikPicker } from '../../catalog/mxik-picker';
 import { PricingApi } from '../../catalog/pricing-api';
 import { describeApiError } from '../../orders/order-errors';
+import { FiscalEvidenceApi, FiscalPaymentTypeView } from '../../finance/fiscal/fiscal-evidence-api';
 import {
   PAYMENT_METHOD_RESPONSIBILITIES,
   PaymentMethodResponsibility,
-  PaymentMethodView,
-  PaymentMethodsApi,
 } from '../payment-methods/payment-methods-api';
 import { FiscalBackfillEditor, isMissingCodes } from './fiscal-backfill-editor';
 import {
   ClassifyDeliveryFeeRequest,
+  FiscalBackfillOutcome,
   FiscalCoverageNode,
   FiscalCoverageSummary,
   FiscalizationApi,
@@ -47,10 +47,14 @@ export interface VatDefaultRow {
   readonly legalEntities: readonly string[];
 }
 
-/** The payment methods the registry records under one fiscal responsibility (ADR 0038). */
+/**
+ * The payment types the fiscal evidence model derives under one fiscal responsibility (ADR 0038,
+ * ADR 0166): the registry says who is responsible, the merchant accounts and the fiscal terminals say
+ * whether that responsibility can be discharged today.
+ */
 export interface ResponsibilityGroup {
   readonly responsibility: PaymentMethodResponsibility;
-  readonly methods: readonly PaymentMethodView[];
+  readonly methods: readonly FiscalPaymentTypeView[];
 }
 
 const TERMINAL_KINDS: readonly FiscalTerminalKind[] = [
@@ -89,7 +93,7 @@ const TERMINAL_KINDS: readonly FiscalTerminalKind[] = [
 export class FiscalizationPage {
   private readonly api = inject(FiscalizationApi);
   private readonly pricing = inject(PricingApi);
-  private readonly paymentMethodsApi = inject(PaymentMethodsApi);
+  private readonly evidenceApi = inject(FiscalEvidenceApi);
   private readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
 
@@ -155,8 +159,8 @@ export class FiscalizationPage {
   // Read-only references on Tab 3 (settings.md §10.7): VAT defaults and who issues the receipt.
   protected readonly taxProfiles = signal<readonly TaxProfile[]>([]);
   protected readonly taxProfilesState = signal<ReferenceState>('loading');
-  protected readonly paymentMethods = signal<readonly PaymentMethodView[]>([]);
-  protected readonly paymentMethodsState = signal<ReferenceState>('loading');
+  protected readonly paymentTypes = signal<readonly FiscalPaymentTypeView[]>([]);
+  protected readonly paymentTypesState = signal<ReferenceState>('loading');
 
   /** Each tax profile with the legal entities (Tab 1) whose VAT treatment it is. */
   protected readonly vatDefaults = computed<readonly VatDefaultRow[]>(() =>
@@ -189,16 +193,20 @@ export class FiscalizationPage {
   });
 
   /**
-   * The registry of payment methods (10.6) grouped by the responsibility each was registered
-   * under, in ADR 0038's order. Only a method that can still be tendered is listed: a disabled one
-   * fiscalizes nothing. Every responsibility is drawn, an empty one included: «no method
-   * fiscalizes through a terminal» is a fact an owner reads here, not a gap in the list.
+   * The payment types the fiscal evidence model derives (`GET .../fiscal/payment-types`, the same read
+   * the Payments screen's table draws), grouped by the responsibility each was registered under, in
+   * ADR 0038's order. Only a method that can still be tendered is listed: a disabled one fiscalizes
+   * nothing. Every responsibility is drawn, an empty one included: «no method fiscalizes through a
+   * terminal» is a fact an owner reads here, not a gap in the list.
+   *
+   * It is a projection and not a setting. Whether a method's receipt can be issued today is derived from
+   * the merchant accounts and the terminals, and nothing on this screen can say otherwise.
    */
   protected readonly responsibilityGroups = computed<readonly ResponsibilityGroup[]>(() =>
     PAYMENT_METHOD_RESPONSIBILITIES.map((responsibility) => ({
       responsibility,
-      methods: this.paymentMethods().filter(
-        (method) => method.responsibility === responsibility && method.status === 'ACTIVE',
+      methods: this.paymentTypes().filter(
+        (type) => type.responsibility === responsibility && type.methodStatus === 'ACTIVE',
       ),
     })),
   );
@@ -574,6 +582,78 @@ export class FiscalizationPage {
     return nodes.filter((node) => !isMissingCodes(node));
   }
 
+  // ADR 0173: the codes the national list has withdrawn, and the click that moves them to the named successor.
+
+  /** The classified nodes whose code the list has withdrawn; nothing here stops a sale or a publication. */
+  protected readonly withdrawnNodes = computed(() => this.coverage()?.withdrawnNodes ?? []);
+
+  /** The ones the list names a successor for: only these can be moved by a click. */
+  protected readonly replaceableNodes = computed(() =>
+    this.withdrawnNodes().filter((node) => !!node.mxikReplacedBy),
+  );
+
+  /** Which replacement waits for a second click: `all`, one node's id, or none. */
+  protected readonly pendingReplacement = signal<string | null>(null);
+  protected readonly replacing = signal(false);
+  protected readonly replacementOutcome = signal<{ replaced: number; left: number } | null>(null);
+  protected readonly replacementError = signal<string | null>(null);
+
+  protected askToReplace(target: 'all' | string): void {
+    this.replacementOutcome.set(null);
+    this.replacementError.set(null);
+    this.pendingReplacement.set(target);
+  }
+
+  protected cancelReplacement(): void {
+    this.pendingReplacement.set(null);
+  }
+
+  /** How many nodes the pending replacement would touch. */
+  protected pendingReplacementCount(): number {
+    const pending = this.pendingReplacement();
+    if (pending === null) {
+      return 0;
+    }
+    return pending === 'all'
+      ? this.replaceableNodes().length
+      : this.replaceableNodes().filter((node) => node.nodeId === pending).length;
+  }
+
+  protected async confirmReplacement(): Promise<void> {
+    const scope = this.location.scope();
+    const pending = this.pendingReplacement();
+    if (!scope || pending === null || this.replacing()) {
+      return;
+    }
+    const targets = this.replaceableNodes().filter(
+      (node) => pending === 'all' || node.nodeId === pending,
+    );
+    if (targets.length === 0) {
+      this.pendingReplacement.set(null);
+      return;
+    }
+    this.replacing.set(true);
+    this.replacementError.set(null);
+    try {
+      const outcomes: readonly FiscalBackfillOutcome[] = await this.api.replaceWithdrawnCodes(
+        scope,
+        targets.map((node) => ({
+          nodeType: node.nodeType,
+          nodeId: node.nodeId,
+          successorCode: node.mxikReplacedBy as string,
+        })),
+      );
+      const replaced = outcomes.filter((outcome) => outcome.status === 'CLASSIFIED').length;
+      this.replacementOutcome.set({ replaced, left: outcomes.length - replaced });
+      this.pendingReplacement.set(null);
+      await this.reloadCoverage(scope);
+    } catch (error) {
+      this.replacementError.set(this.describe(error));
+    } finally {
+      this.replacing.set(false);
+    }
+  }
+
   /** The backfill applied at least one row: reload, so the headline and both lists follow it. */
   protected async onBackfillSaved(): Promise<void> {
     const scope = this.location.scope();
@@ -627,6 +707,25 @@ export class FiscalizationPage {
     return this.i18n.t(`settings.paymentMethods.responsibility.${responsibility}` as MessageKey);
   }
 
+  /** Whether a receipt for this payment type can be issued today, nothing is owed, or nobody can issue one. */
+  protected typeState(type: FiscalPaymentTypeView): 'live' | 'notApplicable' | 'noPath' {
+    if (type.live) {
+      return 'live';
+    }
+    return type.path === 'NOT_A_FISCAL_PATH' ? 'notApplicable' : 'noPath';
+  }
+
+  protected typeStateLabel(type: FiscalPaymentTypeView): string {
+    switch (this.typeState(type)) {
+      case 'live':
+        return this.i18n.t('settings.fiscalization.responsibility.state.live');
+      case 'notApplicable':
+        return this.i18n.t('settings.fiscalization.responsibility.state.notApplicable');
+      case 'noPath':
+        return this.i18n.t('settings.fiscalization.responsibility.state.noPath');
+    }
+  }
+
   /**
    * The two reads Tab 3 only draws: the brand's VAT rates (Catalog → Prices) and the tenant's
    * payment-method registry (10.6). Neither is edited here, and neither is a reason to hold up the
@@ -639,7 +738,7 @@ export class FiscalizationPage {
       return;
     }
     this.taxProfilesState.set('loading');
-    this.paymentMethodsState.set('loading');
+    this.paymentTypesState.set('loading');
     await Promise.all([
       this.readReference(
         () => firstValueFrom(this.pricing.taxProfiles(scope)),
@@ -647,9 +746,9 @@ export class FiscalizationPage {
         (state) => this.taxProfilesState.set(state),
       ),
       this.readReference(
-        () => this.paymentMethodsApi.list(scope),
-        (methods) => this.paymentMethods.set(methods),
-        (state) => this.paymentMethodsState.set(state),
+        () => this.evidenceApi.paymentTypes(scope.tenantId),
+        (types) => this.paymentTypes.set(types),
+        (state) => this.paymentTypesState.set(state),
       ),
     ]);
   }

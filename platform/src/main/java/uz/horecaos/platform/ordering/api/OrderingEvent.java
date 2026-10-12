@@ -22,6 +22,7 @@ public sealed interface OrderingEvent
                 OrderConfirmed,
                 OrderRejected,
                 OrderExpired,
+                OrderPaymentLapsed,
                 OrderCancelled,
                 OrderCompleted,
                 OrderAmendmentProposed,
@@ -29,7 +30,8 @@ public sealed interface OrderingEvent
                 OrderAmendmentRejected,
                 OrderRevisionCreated,
                 OrderCallbackRequested,
-                OrderCallbackResolved {
+                OrderCallbackResolved,
+                OrderMarksCompleted {
 
     UUID eventId();
 

@@ -1,50 +1,260 @@
 <h1 class="q-title">{{ i18n.t('fiscalReference.title') }}</h1>
 <p class="q-body-sm lead">{{ i18n.t('fiscalReference.lead') }}</p>
 
-@if (loaded() === false) {
-  <p class="q-body-sm warningNotice">{{ i18n.t('fiscalReference.notLoaded') }}</p>
+@if (status(); as current) {
+  @if (!current.loaded) {
+    <p class="q-body-sm warningNotice" data-notice="notLoaded">
+      {{ i18n.t('fiscalReference.notLoaded') }}
+    </p>
+  } @else {
+    <section class="statusBlock" data-block="status">
+      <h2 class="q-heading">{{ i18n.t('fiscalReference.status.title') }}</h2>
+      @if (current.datasetVersion !== null) {
+        <p class="q-body-sm" data-status="dataset">
+          {{
+            i18n.t('fiscalReference.status.dataset', {
+              version: current.datasetVersion,
+              importedAt: current.importedAt === null ? '' : i18n.day(asDate(current.importedAt)),
+            })
+          }}
+        </p>
+      }
+      <p class="q-body-sm" data-status="counts">
+        {{
+          i18n.t('fiscalReference.status.counts', {
+            valid: current.validRows,
+            withdrawn: current.withdrawnRows,
+          })
+        }}
+      </p>
+      @if (current.sourcePublishedOn !== null) {
+        <p class="q-body-sm muted">
+          {{ i18n.t('fiscalReference.status.source', { date: current.sourcePublishedOn }) }}
+        </p>
+      }
+      @if (current.stale) {
+        <p class="q-body-sm warningNotice" data-notice="stale">
+          {{
+            i18n.t('fiscalReference.status.stale', {
+              days: current.ageDays ?? 0,
+              max: current.maxAgeDays ?? 0,
+            })
+          }}
+        </p>
+      }
+    </section>
+  }
 }
 
-<form class="picker" (submit)="search($event)">
-  <label class="q-caption">{{ i18n.t('fiscalReference.query') }}</label>
-  <input
-    class="q-body-sm"
-    type="text"
-    [value]="query()"
-    (input)="query.set($any($event.target).value)"
-  />
-  <button type="submit" [disabled]="query().trim().length < 2">
-    {{ i18n.t('entitlements.load') }}
-  </button>
-</form>
+<section class="importBlock" data-block="import">
+  <h2 class="q-heading">{{ i18n.t('fiscalReference.import.title') }}</h2>
+  <p class="q-body-sm muted">{{ i18n.t('fiscalReference.import.lead') }}</p>
+  <form class="importForm" (submit)="dryRun($event)">
+    <label class="q-caption">{{ i18n.t('fiscalReference.import.file') }}</label>
+    <input class="fileInput" type="file" accept=".xlsx,.csv" (change)="chooseFile($event)" />
+    <label class="q-caption">{{ i18n.t('fiscalReference.import.mode') }}</label>
+    <select class="modeSelect" [value]="mode()" (change)="mode.set($any($event.target).value)">
+      <option value="FULL_SNAPSHOT">
+        {{ i18n.t('fiscalReference.import.mode.FULL_SNAPSHOT') }}
+      </option>
+      <option value="PARTIAL">{{ i18n.t('fiscalReference.import.mode.PARTIAL') }}</option>
+    </select>
+    <label class="q-caption">{{ i18n.t('fiscalReference.import.publishedOn') }}</label>
+    <input
+      class="dateInput"
+      type="date"
+      [value]="publishedOn()"
+      (input)="publishedOn.set($any($event.target).value)"
+    />
+    <button class="validateButton" type="submit" [disabled]="file() === null || working()">
+      {{
+        working()
+          ? i18n.t('fiscalReference.import.working')
+          : i18n.t('fiscalReference.import.validate')
+      }}
+    </button>
+  </form>
 
-@if (loading()) {
-  <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
-} @else if (loadError(); as message) {
-  <p class="q-body-sm state error">{{ message }}</p>
-} @else if (searched()) {
-  @if (results().length === 0) {
-    <p class="q-body-sm state">{{ i18n.t('fiscalReference.empty') }}</p>
-  } @else {
-    <table class="table">
-      <thead>
-        <tr>
-          <th class="q-caption">{{ i18n.t('fiscalReference.column.code') }}</th>
-          <th class="q-caption">{{ i18n.t('fiscalReference.column.labelRu') }}</th>
-          <th class="q-caption">{{ i18n.t('fiscalReference.column.labelUz') }}</th>
-          <th class="q-caption">{{ i18n.t('fiscalReference.column.packages') }}</th>
-        </tr>
-      </thead>
+  @if (importError(); as message) {
+    <p class="q-body-sm state error" data-error="import">{{ message }}</p>
+  }
+
+  @if (run(); as current) {
+    <div class="runBlock" data-block="run" [attr.data-status]="current.status">
+      <h3 class="q-heading">
+        {{ i18n.t('fiscalReference.run.title') }}: {{ current.sourceFileName }}
+        <span class="runStatus">{{ i18n.t(statusKey(current.status)) }}</span>
+      </h3>
+      <p class="q-body-sm" data-run="counts">
+        {{
+          i18n.t('fiscalReference.run.counts', {
+            total: current.rowsTotal,
+            added: current.rowsNew,
+            changed: current.rowsChanged,
+            unchanged: current.rowsUnchanged,
+            withdrawn: current.rowsWithdrawn,
+            reinstated: current.rowsReinstated,
+            errors: current.rowsError,
+          })
+        }}
+      </p>
+      @if (current.labelsBorrowed > 0) {
+        <p class="q-body-sm muted" data-run="borrowed">
+          {{ i18n.t('fiscalReference.run.borrowed', { count: current.labelsBorrowed }) }}
+        </p>
+      }
+      <p class="q-body-sm muted" data-run="lengths">
+        {{ i18n.t('fiscalReference.run.lengths', { lengths: lengths() }) }}
+      </p>
+      @if (current.mode === 'PARTIAL') {
+        <p class="q-body-sm muted">{{ i18n.t('fiscalReference.run.partialNote') }}</p>
+      }
+
+      @if (held()) {
+        <div class="warningNotice" data-notice="held">
+          <p class="q-body-sm">
+            {{
+              i18n.t('fiscalReference.run.held', {
+                count: current.rowsWithdrawn,
+                percent: current.withdrawalThresholdPercent,
+              })
+            }}
+          </p>
+          <label class="q-caption">
+            {{ i18n.t('fiscalReference.run.acknowledge', { count: current.rowsWithdrawn }) }}
+          </label>
+          <input
+            class="ackInput"
+            type="text"
+            inputmode="numeric"
+            [value]="acknowledgement()"
+            (input)="acknowledgement.set($any($event.target).value)"
+          />
+        </div>
+      }
+
+      @if (decidable()) {
+        <div class="decide">
+          <button class="applyButton" type="button" [disabled]="!canApply()" (click)="apply()">
+            {{ i18n.t('fiscalReference.run.apply') }}
+          </button>
+          <button class="rejectButton" type="button" [disabled]="working()" (click)="reject()">
+            {{ i18n.t('fiscalReference.run.reject') }}
+          </button>
+        </div>
+      }
+
+      @if (outcome(); as key) {
+        <p class="q-body-sm outcome" data-run="outcome">
+          {{ i18n.t(key, { version: current.datasetVersion ?? 0 }) }}
+        </p>
+      }
+
+      @if (findings().length > 0) {
+        <h4 class="q-caption">{{ i18n.t('fiscalReference.findings.title') }}</h4>
+        <table class="table" data-table="findings">
+          <tbody>
+            @for (finding of findings(); track $index) {
+              <tr [attr.data-kind]="finding.kind">
+                <td class="q-body-sm">{{ i18n.t(kindKey(finding.kind)) }}</td>
+                <td class="q-body-sm q-tnum">{{ finding.code ?? '' }}</td>
+                <td class="q-body-sm muted">{{ finding.detailCode }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        @if (findingsCursor() !== null) {
+          <button class="moreButton" type="button" (click)="moreFindings()">
+            {{ i18n.t('fiscalReference.findings.more') }}
+          </button>
+        }
+      }
+    </div>
+  }
+
+  @if (recent().length > 0) {
+    <h3 class="q-heading">{{ i18n.t('fiscalReference.recent.title') }}</h3>
+    <table class="table" data-table="recent">
       <tbody>
-        @for (row of results(); track row.code) {
+        @for (item of recent(); track item.runId) {
           <tr>
-            <td class="q-body-sm q-tnum">{{ row.code }}</td>
-            <td class="q-body-sm">{{ row.labelRu }}</td>
-            <td class="q-body-sm">{{ row.labelUz }}</td>
-            <td class="q-body-sm muted">{{ row.defaultPackageCodes.join(', ') }}</td>
+            <td class="q-body-sm">{{ item.sourceFileName }}</td>
+            <td class="q-body-sm muted">{{ i18n.dateTime(asDate(item.createdAt)) }}</td>
+            <td class="q-body-sm">{{ i18n.t(statusKey(item.status)) }}</td>
+            <td class="q-body-sm">
+              <button class="linkButton" type="button" (click)="open(item.runId)">
+                {{ i18n.t('fiscalReference.recent.open') }}
+              </button>
+            </td>
           </tr>
         }
       </tbody>
     </table>
   }
-}
+</section>
+
+<section class="browseBlock" data-block="browse">
+  <h2 class="q-heading">{{ i18n.t('fiscalReference.browse.title') }}</h2>
+  <form class="picker" (submit)="search($event)">
+    <label class="q-caption">{{ i18n.t('fiscalReference.query') }}</label>
+    <input
+      class="queryInput q-body-sm"
+      type="text"
+      [value]="query()"
+      (input)="query.set($any($event.target).value)"
+    />
+    <label class="q-caption inline">
+      <input
+        class="withdrawnToggle"
+        type="checkbox"
+        [checked]="includeWithdrawn()"
+        (change)="includeWithdrawn.set($any($event.target).checked)"
+      />
+      {{ i18n.t('fiscalReference.browse.includeWithdrawn') }}
+    </label>
+    <button class="searchButton" type="submit" [disabled]="query().trim().length < 2">
+      {{ i18n.t('entitlements.load') }}
+    </button>
+  </form>
+
+  @if (loading()) {
+    <p class="q-body-sm state">{{ i18n.t('tenants.loading') }}</p>
+  } @else if (loadError(); as message) {
+    <p class="q-body-sm state error">{{ message }}</p>
+  } @else if (searched()) {
+    @if (results().length === 0) {
+      <p class="q-body-sm state">{{ i18n.t('fiscalReference.empty') }}</p>
+    } @else {
+      <table class="table" data-table="results">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ i18n.t('fiscalReference.column.code') }}</th>
+            <th class="q-caption">{{ i18n.t('fiscalReference.column.labelRu') }}</th>
+            <th class="q-caption">{{ i18n.t('fiscalReference.column.labelUz') }}</th>
+            <th class="q-caption">{{ i18n.t('fiscalReference.column.packages') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of results(); track row.code) {
+            <tr [class.withdrawnRow]="row.withdrawn === true" [attr.data-code]="row.code">
+              <td class="q-body-sm q-tnum">{{ row.code }}</td>
+              <td class="q-body-sm">{{ row.labelRu }}</td>
+              <td class="q-body-sm">{{ row.labelUz }}</td>
+              <td class="q-body-sm muted">
+                {{ row.defaultPackageCodes.join(', ') }}
+                @if (row.withdrawn === true && row.validUntil !== null) {
+                  <span class="withdrawnNote">
+                    {{ i18n.t('fiscalReference.browse.withdrawn', { date: row.validUntil }) }}
+                    @if (row.replacedByCode !== null) {
+                      {{ i18n.t('fiscalReference.browse.successor', { code: row.replacedByCode }) }}
+                    }
+                  </span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  }
+</section>

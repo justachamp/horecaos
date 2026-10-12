@@ -1,0 +1,25 @@
+:host {
+  display: block;
+}
+
+.links__list {
+  margin: 0;
+  padding: 8px 24px 4px;
+  gap: 8px;
+  list-style: none;
+}
+
+.link {
+  display: block;
+  flex-shrink: 0;
+  padding: 9px 18px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font: 600 13px/1 var(--font-display);
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--brand-accent-deep);
+  outline-offset: 2px;
+}

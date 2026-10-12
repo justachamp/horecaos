@@ -99,6 +99,19 @@ export const kitchenEn = {
     'A reason is required — this pushes the fire time past the ticket’s own promise',
   'kitchen.buffer.edit.save': 'Save',
   'kitchen.buffer.edit.cancel': 'Cancel',
+  'kitchen.buffer.hold.awaitingPayment': 'Awaiting payment',
+  'kitchen.buffer.hold.blockedOnPayment': 'Blocked on payment',
+  'kitchen.buffer.hold.stuckOnPayment': 'Stuck: payment overdue',
+  'kitchen.buffer.hold.releaseDisabled':
+    'Held until the order is paid. Use “Release anyway” with a reason.',
+  'kitchen.buffer.override.action': 'Release anyway',
+  'kitchen.buffer.override.lead':
+    'This ticket is held because its order is not paid. Firing it anyway is recorded under your name.',
+  'kitchen.buffer.override.reason': 'Why',
+  'kitchen.buffer.override.confirm': 'Release anyway',
+  'kitchen.buffer.override.reason.PAYMENT_PROMISED_AT_COUNTER': 'Payment promised at the counter',
+  'kitchen.buffer.override.reason.CUSTOMER_KNOWN_TO_BRANCH': 'The customer is known to the branch',
+  'kitchen.buffer.override.reason.MANAGER_DECISION': 'Manager’s decision',
 
   'kitchen.expo.handOver': 'Hand over',
   'kitchen.expo.empty': 'Nothing ready for handover',
@@ -107,6 +120,7 @@ export const kitchenEn = {
   'kitchen.item.weight.estimate': '≈ {weight} (estimate)',
   'kitchen.item.weight.weighed': '{weight} weighed',
   'kitchen.expo.weighFirst': 'Weigh the items sold by weight before handing this over.',
+  'kitchen.expo.scanFirst': 'Scan every unit of the marked items before handing this over.',
 
   'kitchen.stopList.tab.all': 'All',
   'kitchen.stopList.tab.available': 'Available',
@@ -200,9 +214,7 @@ export const kitchenEn = {
   'kitchen.capacity.edit.cancel': 'Cancel',
   'kitchen.capacity.delete.button': 'Delete',
   'kitchen.capacity.delete.confirm': 'Delete this throughput ceiling?',
-  'kitchen.capacity.card2.title': 'Cook headcount output',
-  'kitchen.capacity.card2.body':
-    'Not built. Computing how many cooks a shift needs takes a demand forecast and a portions-per-cook policy, and neither exists anywhere in this platform yet — see frontend-information-architecture.md §2.6 and ADR 0041.',
+  'kitchen.capacity.card2.title': 'Cooks needed',
   'kitchen.capacity.weekday.1': 'Monday',
   'kitchen.capacity.weekday.2': 'Tuesday',
   'kitchen.capacity.weekday.3': 'Wednesday',
@@ -210,6 +222,64 @@ export const kitchenEn = {
   'kitchen.capacity.weekday.5': 'Friday',
   'kitchen.capacity.weekday.6': 'Saturday',
   'kitchen.capacity.weekday.7': 'Sunday',
+  // Cook headcount plan and pace (ADR 0163, row 2.6a)
+  'kitchen.headcount.notARota':
+    'A planning aid, not a rota. It divides the portions this branch fired on its last same-weekday dates by the pace you state for each station. It names no person, schedules no one, and changes no ticket, release time or ceiling.',
+  'kitchen.headcount.weekday': 'Weekday',
+  'kitchen.headcount.loading': 'Loading the plan',
+  'kitchen.headcount.denied': 'No access to the cook headcount plan for this branch',
+  'kitchen.headcount.loadError': 'Could not load the cook headcount plan',
+  'kitchen.headcount.noPolicy.title': 'No cook pace stated yet',
+  'kitchen.headcount.noPolicy.body':
+    'The platform supplies no figure. State how many portions one cook produces in an hour at each station, and the cooks needed per hour appear here.',
+  'kitchen.headcount.empty':
+    'No station fired anything on the sampled dates, so there is nothing to plan.',
+  'kitchen.headcount.tooFewDates':
+    'Only {count} usable dates for this weekday so far; at least 3 are needed before a number is shown. The portions fired on each are listed below.',
+  'kitchen.headcount.sampleDates': 'Built from the portions fired on {dates}.',
+  'kitchen.headcount.column.station': 'Station',
+  'kitchen.headcount.column.hour': 'Hour',
+  'kitchen.headcount.column.date': 'Date',
+  'kitchen.headcount.column.portions': 'Portions',
+  'kitchen.headcount.hoursNote':
+    'Times are wall-clock, counted from the start of the business day (a day that starts at 09:00 runs past midnight). The small number is the cooks needed at the top of the forecast band.',
+  'kitchen.headcount.cell.detail':
+    '{portions} portions expected ({low}–{high}); {bandCooks} cooks at the top of the band',
+  'kitchen.headcount.cell.noPolicy': 'no pace',
+  'kitchen.headcount.peak':
+    'Busiest hour {hour}: {cooks} cooks, {bandCooks} at the top of the band',
+  'kitchen.headcount.plantLimited':
+    'Station limit: {station} can cook at most {ceiling} portions an hour at {hour}, below the top of the forecast band, so more cooks will not help.',
+  'kitchen.headcount.withoutFigure':
+    'No pace stated for {stations}; they are left out of the totals.',
+  'kitchen.headcount.history.title': 'Portions fired on each date',
+  'kitchen.pace.title': 'Cook pace',
+  'kitchen.pace.lead':
+    'How many portions one cook produces in an hour, by station. You state it; the platform supplies no figure.',
+  'kitchen.pace.field': 'Portions per cook-hour',
+  'kitchen.pace.none': 'None stated',
+  'kitchen.pace.scope': 'Set for',
+  'kitchen.pace.scope.location': 'This branch',
+  'kitchen.pace.scope.brand': 'This brand',
+  'kitchen.pace.scope.tenant': 'The whole business',
+  'kitchen.pace.replaces':
+    'A document at this level replaces the one above it as a whole; it does not add to it.',
+  'kitchen.pace.byRole': 'By station role',
+  'kitchen.pace.byStation': 'By station (overrides the role)',
+  'kitchen.pace.role.HOT': 'Hot line',
+  'kitchen.pace.role.COLD': 'Cold line',
+  'kitchen.pace.role.GRILL': 'Grill',
+  'kitchen.pace.role.BAR': 'Bar',
+  'kitchen.pace.role.BAKERY': 'Bakery',
+  'kitchen.pace.role.PACKING': 'Packing',
+  'kitchen.pace.reason': 'Why you are changing it',
+  'kitchen.pace.save': 'Save',
+  'kitchen.pace.saving': 'Saving…',
+  'kitchen.pace.cancel': 'Cancel',
+  'kitchen.pace.invalid': 'Each figure is a whole number from 1 to 1000, and a reason is required.',
+  'kitchen.pace.stale':
+    'Someone else changed these figures while you were editing. Close this and open it again to start from theirs.',
+  'kitchen.pace.saved': 'Cook pace saved',
 
   // Kitchen devices (row 2/X.2, ADR 0079) — wave P17
   'kitchen.devices.title': 'Kitchen devices',
@@ -268,4 +338,30 @@ export const kitchenEn = {
   'kitchen.stopList.why.cutoff': 'Remaining is at or below the channel’s cut-off',
   'kitchen.stopList.why.off': 'Stops are switched off',
   'kitchen.stopList.why.close': 'Close',
+  'kitchen.paidHold.title': 'Hold for payment',
+  'kitchen.paidHold.lead':
+    'Whether a ticket in the buffer waits for money its order requires and has not received. A person with the right can still fire a held ticket, naming a reason.',
+  'kitchen.paidHold.field': 'Hold policy',
+  'kitchen.paidHold.summary': '{mode} · stuck after {minutes} min',
+  'kitchen.paidHold.trial':
+    'In trial: the kitchen counts the tickets it would have held and holds none.',
+  'kitchen.paidHold.mode': 'Mode',
+  'kitchen.paidHold.mode.SHADOW': 'Trial (count only)',
+  'kitchen.paidHold.mode.HOLD_UNTIL_PAID': 'Hold until paid',
+  'kitchen.paidHold.mode.OFF': 'Off',
+  'kitchen.paidHold.overdue': 'Treated as stuck after (minutes past the fire time)',
+  'kitchen.paidHold.scope': 'Applies to',
+  'kitchen.paidHold.scope.location': 'This branch',
+  'kitchen.paidHold.scope.brand': 'This brand',
+  'kitchen.paidHold.scope.tenant': 'The whole company',
+  'kitchen.paidHold.replaces': 'A policy at this level replaces the one above it as a whole.',
+  'kitchen.paidHold.reason': 'Why are you changing it?',
+  'kitchen.paidHold.invalid':
+    'Minutes are a whole number from 1 to 1440, and a reason is required.',
+  'kitchen.paidHold.stale':
+    'Someone changed this policy while you were editing it. Cancel and open it again.',
+  'kitchen.paidHold.save': 'Save',
+  'kitchen.paidHold.saving': 'Saving…',
+  'kitchen.paidHold.cancel': 'Cancel',
+  'kitchen.paidHold.saved': 'Hold policy saved',
 } as const;

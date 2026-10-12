@@ -108,6 +108,33 @@ public enum ErrorCode {
      */
     APPROVAL_POLICY_REQUIRED(HttpStatus.CONFLICT, "Approval policy required"),
 
+    /**
+     * ADR 0168: a buffered ticket is held because its order's payment is required and has not arrived.
+     * Firing it by hand needs {@code kitchen.ticket.release.override} and a reason code from the closed
+     * registry. Distinct from {@link #RESOURCE_CONFLICT}: the remedy is not to re-read, it is to wait for
+     * the customer, or to say, by name and by code, that the kitchen starts anyway.
+     */
+    PAYMENT_HOLD(HttpStatus.CONFLICT, "Held for payment"),
+
+    /**
+     * ADR 0170: a dispatch rule asks for grouping while the {@code courier.compensation} document resolved at
+     * its scope has not decided how a run of several orders is paid ({@code runPayMode} is null). Grouping
+     * changes what a courier earns for the same kilometres, so it is never switched on by omission.
+     */
+    RUN_PAY_MODE_UNDECIDED(HttpStatus.UNPROCESSABLE_ENTITY, "Run pay mode undecided"),
+
+    /**
+     * ADR 0170: a dispatch rule's grouping names a wait above zero. The bounded wait is deferred until a month
+     * of ranking-only offers says how often a groupable courier existed; grouping is a ranking bias only.
+     */
+    GROUPING_WAIT_NOT_AVAILABLE(HttpStatus.UNPROCESSABLE_ENTITY, "Grouping wait not available"),
+
+    /**
+     * ADR 0170: an unpaid-order window that cancels is at least fifteen minutes. A shorter one ends orders
+     * whose customer is still on the provider's payment page.
+     */
+    PAYMENT_WINDOW_TOO_SHORT_FOR_CANCEL(HttpStatus.UNPROCESSABLE_ENTITY, "Payment window too short to cancel"),
+
     /** ADR 0018: the quote's inputs changed; never silently charge the difference. */
     PRICE_CHANGED(HttpStatus.CONFLICT, "Price changed"),
 
@@ -147,6 +174,59 @@ public enum ErrorCode {
      * or declined request.
      */
     SECOND_APPROVER_REQUIRED(HttpStatus.UNPROCESSABLE_ENTITY, "Second approver required"),
+
+    /**
+     * ADR 0162: a pairing code asked to be one class of device and the approval named another, or came to an
+     * endpoint that approves a different family of device. Distinct from {@link #VALIDATION_FAILED}: the
+     * request is well formed, the code is real, and the answer names both classes so the approver can see
+     * which screen they are really in front of.
+     */
+    DEVICE_CLASS_MISMATCH(HttpStatus.UNPROCESSABLE_ENTITY, "Device class mismatch"),
+
+    /**
+     * ADR 0162: the channel a kiosk is paired or moved to is not a KIOSK channel of this tenant, or is not
+     * active at the branch. One answer for all of them, so a channel id of another tenant is not an oracle.
+     */
+    KIOSK_CHANNEL_NOT_AVAILABLE(HttpStatus.UNPROCESSABLE_ENTITY, "Kiosk channel not available"),
+
+    /**
+     * ADR 0155: a terminal refused an unlock, and says no more than that. A wrong PIN, an unknown member and an
+     * ineligible person answer alike; only a lock is distinguished ({@link #TERMINAL_PIN_LOCKED}), because the
+     * legitimate person needs to know to wait.
+     */
+    TERMINAL_UNLOCK_REFUSED(HttpStatus.FORBIDDEN, "Unlock refused"),
+
+    /** ADR 0155: that person is locked on this device (five wrong PINs) or their credential is locked (twelve in a day). */
+    TERMINAL_PIN_LOCKED(HttpStatus.LOCKED, "PIN locked"),
+
+    /** ADR 0155: the device is in {@code PERSON_REQUIRED} mode and the request carried no live terminal session. */
+    TERMINAL_UNLOCK_REQUIRED(HttpStatus.FORBIDDEN, "Terminal unlock required"),
+
+    /**
+     * ADR 0155: the terminal session is live and the device holds the capability, and the person it names does
+     * not hold it at this location (any more). The intersection of device and person is the authorization.
+     */
+    TERMINAL_PERSON_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "Person not authorized at this terminal"),
+
+    /**
+     * ADR 0155: a terminal session was presented that is not live -- idle-locked, past its maximum, superseded, ended
+     * or never issued to this device. The shell shows the lock; nothing was done.
+     */
+    TERMINAL_SESSION_ENDED(HttpStatus.FORBIDDEN, "Terminal session ended"),
+
+    /** ADR 0155: an activation code that is unknown, spent, expired or burned, or a PIN refused by the entry rules. */
+    TERMINAL_ACTIVATION_REFUSED(HttpStatus.UNPROCESSABLE_ENTITY, "Activation refused"),
+
+    /**
+     * ADR 0166, ADR 0029: opening protected evidence in full needs a declared purpose, one of a
+     * closed set, and the caller sent none or one this deployment does not know.
+     *
+     * <p>422 and not {@link #VALIDATION_FAILED}: the request is well-formed and the caller holds the
+     * capability; what is missing is the reason the platform requires on the record before it
+     * answers, and the remedy is to state it, not to repair a field. Distinct from
+     * {@link #INSUFFICIENT_CAPABILITY}, which says the caller may not look at all.
+     */
+    PURPOSE_REQUIRED(HttpStatus.UNPROCESSABLE_ENTITY, "A declared purpose is required"),
 
     RATE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "Rate limit exceeded"),
 
@@ -203,6 +283,27 @@ public enum ErrorCode {
      * {@link #UNAUTHENTICATED}: the caller is signed in.
      */
     MFA_CONFIRMATION_CODE_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "Confirmation code invalid"),
+
+    /**
+     * ADR 0176: the identity provider could not be asked, so a session the person asked to end is
+     * not known to have ended. Distinct from a generic 500 because the console must say, in words,
+     * that nothing was ended: a falsely reassuring "done" is the one failure that matters here.
+     */
+    IDENTITY_PROVIDER_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Identity provider unavailable"),
+
+    /**
+     * ADR 0156: a payroll export range holds a shift that is still open or awaiting approval, so
+     * the file would carry hours nobody has settled. Refused before the request is queued, with
+     * the count, unless the caller asks to include unresolved shifts.
+     */
+    ATTENDANCE_UNRESOLVED_SHIFTS(HttpStatus.UNPROCESSABLE_ENTITY, "Attendance has unresolved shifts"),
+
+    /**
+     * ADR 0156: a payroll export range is over the report's row ceiling. Refused with the count
+     * and the ceiling and never truncated: a payroll file whose total quietly stops short is the
+     * one outcome worse than no file.
+     */
+    ATTENDANCE_EXPORT_TOO_LARGE(HttpStatus.UNPROCESSABLE_ENTITY, "Attendance export too large"),
 
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal error"),
 

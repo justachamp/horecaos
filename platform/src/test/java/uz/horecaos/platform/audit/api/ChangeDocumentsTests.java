@@ -171,7 +171,14 @@ class ChangeDocumentsTests {
     @Test
     void everyProtectedStaffFieldKeyIsRedacted() {
         for (String key : new String[] {
-            "firstName", "lastName", "phone", "employeeNumber", "emergencyContacts", "emergencyContactName"
+            "firstName",
+            "lastName",
+            "phone",
+            "employeeNumber",
+            "emergencyContacts",
+            "emergencyContactName",
+            // ADR 0156: the payroll export's two identity columns.
+            "staffName"
         }) {
             assertThat(ChangeDocuments.isProtected(key)).as(key).isTrue();
             assertThat(asMap(ChangeDocuments.sanitize(ChangeDocuments.created(Map.of(key, "a value")))
@@ -191,9 +198,56 @@ class ChangeDocumentsTests {
             "spokenLanguages",
             "contactCount",
             "relationships",
-            "photo"
+            "photo",
+            // ADR 0156: the keys the staff-hours facts use are readable; only identity is not.
+            "staffRef",
+            "startedAt",
+            "endedAt",
+            "breakSeconds",
+            "workedSeconds",
+            "paidSeconds",
+            "plannedStart",
+            "plannedEnd",
+            "plannedBreakMinutes",
+            "varianceSeconds",
+            "reasonCode",
+            "entryCount",
+            "source"
         }) {
             assertThat(ChangeDocuments.isProtected(key)).as(key).isFalse();
         }
+    }
+
+    /**
+     * ADR 0155: a staff PIN, its digest, an activation code and a session token are redacted from every change document.
+     * The fields that hold them are named for what they hold, and the shared redaction set turns each into a marker if a
+     * caller ever writes one -- the fact that a PIN changed is evidence, the PIN is not.
+     */
+    @Test
+    void redactsAStaffPinItsDigestAnActivationCodeAndASessionToken() {
+        Map<String, Object> raw = new LinkedHashMap<>();
+        for (String field : new String[] {
+            "currentPin", "newPin", "pinDigest", "activationCode", "codeDigest", "sessionToken", "tokenDigest", "pepper"
+        }) {
+            raw.putAll(ChangeDocuments.change(field, "123456", "654321"));
+        }
+        raw.putAll(ChangeDocuments.change("pinStatus", "NOT_SET", "ACTIVE"));
+        raw.putAll(ChangeDocuments.change("digits", null, 6));
+
+        Map<String, Object> sanitized = ChangeDocuments.sanitize(raw);
+
+        for (String field : new String[] {
+            "currentPin", "newPin", "pinDigest", "activationCode", "codeDigest", "sessionToken", "tokenDigest", "pepper"
+        }) {
+            assertThat(asMap(sanitized.get(field)))
+                    .as(field)
+                    .containsEntry("before", ChangeDocuments.REDACTED)
+                    .containsEntry("after", ChangeDocuments.REDACTED);
+        }
+        assertThat(asMap(sanitized.get("pinStatus")))
+                .as("the credential's state is evidence and is not secret")
+                .containsEntry("before", "NOT_SET")
+                .containsEntry("after", "ACTIVE");
+        assertThat(asMap(sanitized.get("digits"))).containsEntry("after", 6);
     }
 }

@@ -1,0 +1,238 @@
+<section class="panel" data-testid="prompt-policy">
+  <header class="panel__head">
+    <h2 class="q-subhead">{{ 'customers.feedback.prompt.title' | t }}</h2>
+    <p class="q-body-sm muted">{{ 'customers.feedback.prompt.hint' | t }}</p>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.feedback.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm muted">{{ 'customers.feedback.denied' | t }}</p>
+    }
+    @case ('error') {
+      <div class="band band--error" role="alert">
+        <span class="q-body-sm">{{ errorText() }}</span>
+      </div>
+    }
+    @case ('ready') {
+      @if (provenance(); as key) {
+        <p class="q-body-sm band band--info" data-testid="prompt-provenance">{{ key | t }}</p>
+      }
+      @if (errorText(); as message) {
+        <div class="band band--error" role="alert" data-testid="prompt-error">
+          <span class="q-body-sm">{{ message }}</span>
+        </div>
+      }
+      @if (notice(); as message) {
+        <div class="band band--info" role="status" data-testid="prompt-saved">
+          <span class="q-body-sm">{{ message }}</span>
+        </div>
+      }
+
+      <form class="form" (submit)="$event.preventDefault(); save()">
+        <fieldset class="group" [disabled]="!canWrite()">
+          <legend class="q-emphasis">{{ 'customers.feedback.prompt.window.title' | t }}</legend>
+          <label class="inline">
+            <input
+              type="radio"
+              name="window"
+              value="any"
+              [checked]="windowMode() === 'any'"
+              (change)="onWindowMode('any')"
+              data-testid="prompt-window-any"
+            />
+            <span class="q-body-sm">{{ 'customers.feedback.prompt.window.any' | t }}</span>
+          </label>
+          <label class="inline">
+            <input
+              type="radio"
+              name="window"
+              value="custom"
+              [checked]="windowMode() === 'custom'"
+              (change)="onWindowMode('custom')"
+              data-testid="prompt-window-custom"
+            />
+            <span class="q-body-sm">{{ 'customers.feedback.prompt.window.custom' | t }}</span>
+          </label>
+          @if (windowMode() === 'custom') {
+            <div class="inline">
+              <label class="field">
+                <span class="q-caption">{{ 'customers.feedback.prompt.window.from' | t }}</span>
+                <input
+                  class="control"
+                  type="time"
+                  [value]="windowFrom()"
+                  (input)="windowFrom.set($any($event.target).value)"
+                  data-testid="prompt-window-from"
+                />
+              </label>
+              <label class="field">
+                <span class="q-caption">{{ 'customers.feedback.prompt.window.to' | t }}</span>
+                <input
+                  class="control"
+                  type="time"
+                  [value]="windowTo()"
+                  (input)="windowTo.set($any($event.target).value)"
+                  data-testid="prompt-window-to"
+                />
+              </label>
+            </div>
+            <p class="q-caption muted">{{ 'customers.feedback.prompt.window.hint' | t }}</p>
+          }
+        </fieldset>
+
+        <label class="field">
+          <span class="q-caption">{{ 'customers.feedback.prompt.inline' | t }}</span>
+          <input
+            class="control control--narrow"
+            type="number"
+            min="1"
+            max="90"
+            [value]="inlineDays()"
+            [disabled]="!canWrite()"
+            (input)="onInlineDays($any($event.target).value)"
+            data-testid="prompt-inline-days"
+          />
+        </label>
+
+        <div>
+          <h3 class="q-emphasis">{{ 'customers.feedback.prompt.matrix.title' | t }}</h3>
+          <p class="q-caption muted">{{ 'customers.feedback.prompt.matrix.hint' | t }}</p>
+          <p class="q-caption muted">{{ 'customers.feedback.prompt.smsWarning' | t }}</p>
+          <table class="table">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'customers.feedback.prompt.matrix.mode' | t }}</th>
+                <th class="q-caption">{{ 'customers.feedback.prompt.matrix.channel' | t }}</th>
+                <th class="q-caption">{{ 'customers.feedback.prompt.matrix.enabled' | t }}</th>
+                <th class="q-caption">{{ 'customers.feedback.prompt.matrix.delay' | t }}</th>
+                <th class="q-caption">{{ 'customers.feedback.prompt.matrix.giveUp' | t }}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of rows(); track $index) {
+                <tr data-testid="prompt-row">
+                  <td>
+                    <select
+                      class="control"
+                      [value]="row.fulfillmentMode"
+                      [disabled]="!canWrite()"
+                      (change)="patchRow($index, { fulfillmentMode: $any($event.target).value })"
+                      data-testid="prompt-row-mode"
+                    >
+                      @for (mode of modes; track mode) {
+                        <option [value]="mode" [selected]="mode === row.fulfillmentMode">
+                          {{ modeKey(mode) | t }}
+                        </option>
+                      }
+                    </select>
+                  </td>
+                  <td>
+                    <select
+                      class="control"
+                      [value]="row.channel"
+                      [disabled]="!canWrite()"
+                      (change)="patchRow($index, { channel: $any($event.target).value })"
+                      data-testid="prompt-row-channel"
+                    >
+                      @for (channel of channels; track channel) {
+                        <option [value]="channel" [selected]="channel === row.channel">
+                          {{ channelKey(channel) | t }}
+                        </option>
+                      }
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      type="checkbox"
+                      [checked]="row.enabled"
+                      [disabled]="!canWrite()"
+                      (change)="patchRow($index, { enabled: $any($event.target).checked })"
+                      [attr.aria-label]="'customers.feedback.prompt.matrix.enabled' | t"
+                      data-testid="prompt-row-enabled"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      class="control control--narrow"
+                      type="number"
+                      min="0"
+                      max="1440"
+                      [value]="row.delayMinutes"
+                      [disabled]="!canWrite()"
+                      (input)="onRowDelay($index, $any($event.target).value)"
+                      data-testid="prompt-row-delay"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      class="control control--narrow"
+                      type="number"
+                      min="1"
+                      max="72"
+                      [value]="row.giveUpAfterHours"
+                      [disabled]="!canWrite()"
+                      (input)="onRowGiveUp($index, $any($event.target).value)"
+                      data-testid="prompt-row-give-up"
+                    />
+                  </td>
+                  <td>
+                    @if (canWrite()) {
+                      <button
+                        type="button"
+                        class="secondary"
+                        (click)="removeRow($index)"
+                        data-testid="prompt-row-remove"
+                      >
+                        {{ 'customers.feedback.prompt.matrix.remove' | t }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td class="q-body-sm muted" colspan="6">
+                    {{ 'customers.feedback.prompt.matrix.empty' | t }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          @if (canWrite()) {
+            <button type="button" class="secondary" (click)="addRow()" data-testid="prompt-row-add">
+              {{ 'customers.feedback.prompt.matrix.add' | t }}
+            </button>
+          }
+        </div>
+
+        @if (!valid()) {
+          <p class="q-caption band--warn" data-testid="prompt-invalid">
+            {{ 'customers.feedback.prompt.invalid' | t }}
+          </p>
+        }
+
+        @if (canWrite()) {
+          <label class="field">
+            <span class="q-caption">{{ 'customers.feedback.reason.label' | t }}</span>
+            <input
+              class="control"
+              type="text"
+              maxlength="1000"
+              [value]="reason()"
+              (input)="reason.set($any($event.target).value)"
+              data-testid="prompt-reason"
+            />
+          </label>
+          <div>
+            <button type="submit" class="primary" [disabled]="!canSave()" data-testid="prompt-save">
+              {{ 'customers.feedback.save' | t }}
+            </button>
+          </div>
+        }
+      </form>
+    }
+  }
+</section>

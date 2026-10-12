@@ -109,7 +109,8 @@ public final class SourcingPlanner {
                 .thenComparing(RANKING);
     }
 
-    private static boolean isGroupable(FleetCandidate candidate, Grouping grouping) {
+    /** Whether this candidate would be ranked as groupable under the rule: measured, within the radius and under the run ceiling. */
+    public static boolean isGroupable(FleetCandidate candidate, Grouping grouping) {
         Integer metres = candidate.groupableWithMetres();
         return metres != null
                 && metres <= grouping.mergeRadiusMeters()

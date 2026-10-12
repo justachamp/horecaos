@@ -136,6 +136,17 @@
         >
           {{ 'staff.detail.tab.contacts' | t }}
         </button>
+        @if (showsShifts()) {
+          <button
+            type="button"
+            class="tab"
+            [class.tab--on]="activeTab() === 'shifts'"
+            (click)="selectTab('shifts')"
+            data-testid="staff-detail-tab-shifts"
+          >
+            {{ 'staff.detail.tab.shifts' | t }}
+          </button>
+        }
       }
       <button
         type="button"
@@ -359,6 +370,10 @@
           (versionChanged)="onContactsVersion($event)"
         />
       </div>
+    } @else if (activeTab() === 'shifts' && member(); as person) {
+      <div class="tab-panel" data-testid="staff-detail-shifts">
+        <q-person-shifts-tab [memberId]="person.memberId" />
+      </div>
     } @else {
       <div class="tab-panel">
         <dl class="card__fields">
@@ -438,6 +453,12 @@
             [tenantId]="tenantId() ?? ''"
             [memberId]="person.memberId"
             [memberVersion]="person.version"
+            [isOwnAccount]="person.principalSubject === ownSubject()"
+          />
+          <!-- ADR 0155: the state of the terminal PIN, an activation code and a reset; never a PIN. -->
+          <q-staff-pin-panel
+            [tenantId]="tenantId() ?? ''"
+            [memberId]="person.memberId"
             [isOwnAccount]="person.principalSubject === ownSubject()"
           />
         }

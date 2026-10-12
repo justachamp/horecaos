@@ -378,6 +378,9 @@ services:
       HORECAOS_OIDC_AUDIENCE: horecaos-api
       HORECAOS_KEYCLOAK_BASE_URL: http://keycloak:8080
       HORECAOS_KEYCLOAK_REALM: horecaos
+      # ADR 0176: the sign-in client's internal id, printed by create-staff-login-client.sh.
+      # Empty is safe: the sessions card then lists the platform's own record only.
+      HORECAOS_KEYCLOAK_STAFF_LOGIN_CLIENT_UUID: ${HORECAOS_KEYCLOAK_STAFF_LOGIN_CLIENT_UUID:-}
       # ADR 0097: the platform's own email (owner invitations first). With no
       # host set, invitations wait and the control plane says mail is not
       # configured. The password is never a value here: the reference names it
@@ -433,6 +436,15 @@ services:
       HORECAOS_MEDIA_ACCESS_KEY_REF: horecaos:${HORECAOS_ENVIRONMENT:-production}:object_storage:platform:media-access-key
       HORECAOS_MEDIA_SECRET_KEY_REF: horecaos:${HORECAOS_ENVIRONMENT:-production}:object_storage:platform:media-secret-key
       HORECAOS_HANDOVER_PEPPER_REF: horecaos:${HORECAOS_ENVIRONMENT:-production}:data_encryption:platform:handover-pepper
+      # ADR 0155's terminal PIN pepper. application.yml gives this reference no default (it carries the environment
+      # segment the secret path is built from), so a platform-app started without it fails with a placeholder error
+      # and restarts in a loop. Compose forwards nothing from --env-file except what is listed here, which is why it is
+      # listed: the reference follows HORECAOS_ENVIRONMENT like every other one, and an operator rotating the pepper
+      # (terminals-and-kiosks.md) overrides the three variables in production.env. ProductionComposeSecretReferenceTests
+      # fails when a reference application.yml will not default is missing from this block.
+      HORECAOS_TERMINAL_PIN_PEPPER_REF: ${HORECAOS_TERMINAL_PIN_PEPPER_REF:-horecaos:${HORECAOS_ENVIRONMENT:-production}:data_encryption:platform:terminal-pin-pepper}
+      HORECAOS_TERMINAL_PIN_PEPPER_VERSION: ${HORECAOS_TERMINAL_PIN_PEPPER_VERSION:-1}
+      HORECAOS_TERMINAL_PIN_PEPPER_PREVIOUS_REF: ${HORECAOS_TERMINAL_PIN_PEPPER_PREVIOUS_REF:-}
       # Keycloak subject ids to grant PLATFORM scope on startup (ADR 0025's
       # PlatformAdminBootstrapReconciler). This is the ONLY way a deployment gets
       # its first platform administrator -- the alternative is a hand-written SQL

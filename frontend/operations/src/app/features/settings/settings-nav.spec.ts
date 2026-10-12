@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { Capability } from '../../core/auth/session-capabilities';
 import { visibleSettings } from './settings-nav';
 
 describe('settings navigation behind a feature flag (ADR 0082)', () => {
@@ -25,5 +26,39 @@ describe('settings navigation behind a feature flag (ADR 0082)', () => {
       candidate.items.some((item) => item.path === 'approvals'),
     );
     expect(group?.label).toBe('settings.nav.group.selling');
+  });
+});
+
+describe('settings navigation by what the operator holds (ADR 0162)', () => {
+  const KIOSKS = 'channel-setup/kiosks';
+  const flagOn = (flag: string): boolean => flag === 'feature.kiosk_devices';
+  const paths = (held: readonly Capability[], isOn = flagOn) =>
+    visibleSettings(isOn, (capability) => held.includes(capability)).flatMap((group) =>
+      group.items.map((item) => item.path),
+    );
+
+  it('offers a tenant reader the tenant’s settings, and kiosks only when she can also pair them', () => {
+    expect(paths(['TENANT_READ'])).toContain('brand');
+    expect(paths(['TENANT_READ'])).not.toContain(KIOSKS);
+    expect(paths(['TENANT_READ', 'KIOSK_DEVICE_MANAGE'])).toContain(KIOSKS);
+    expect(paths(['TENANT_READ', 'KIOSK_DEVICE_MANAGE'])).toContain('brand');
+  });
+
+  it('offers a branch manager who pairs kiosks the kiosks entry and none of the tenant’s settings', () => {
+    expect(paths(['KIOSK_DEVICE_MANAGE', 'IAM_GRANT_MANAGE'])).toEqual([KIOSKS]);
+  });
+
+  it('keeps the kiosks entry dark for a tenant reader while the flag is off', () => {
+    expect(paths(['TENANT_READ', 'KIOSK_DEVICE_MANAGE'], () => false)).not.toContain(KIOSKS);
+  });
+
+  it('does not let a flag she cannot read hide the kiosks entry from a branch manager (ADR 0082)', () => {
+    // Flags are read with tenant.read; without it every flag reads as off, which is not the same as the flag being off.
+    expect(paths(['KIOSK_DEVICE_MANAGE'], () => false)).toEqual([KIOSKS]);
+  });
+
+  it('leaves no group behind that has nothing left to show', () => {
+    const groups = visibleSettings(flagOn, (capability) => capability === 'KIOSK_DEVICE_MANAGE');
+    expect(groups.map((group) => group.label)).toEqual(['settings.nav.group.selling']);
   });
 });

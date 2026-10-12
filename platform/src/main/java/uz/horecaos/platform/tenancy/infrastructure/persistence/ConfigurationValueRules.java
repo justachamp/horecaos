@@ -6,6 +6,8 @@ import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.iam.api.mfa.MfaRequirementMode;
 import uz.horecaos.platform.tenancy.api.ConfigurationKey;
+import uz.horecaos.platform.tenancy.api.PlatformLocale.Tier;
+import uz.horecaos.platform.tenancy.api.PlatformLocales;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 
@@ -42,15 +44,82 @@ public final class ConfigurationValueRules {
      */
     static final int DISCLOSURE_TEXT_MAXIMUM_CHARACTERS = 500;
 
-    private static final Map<String, Consumer<Object>> RULES = Map.of(
-            "ordering.late_colour", ConfigurationValueRules::requireBlankOrHexColour,
-            "ordering.at_risk_before_minutes", ConfigurationValueRules::requireMinutesWithinADay,
-            "iam.staff_mfa_requirement", ConfigurationValueRules::requireMfaRequirementMode,
-            "ordering.late_order_threshold_minutes", ConfigurationValueRules::requireLateOrderThreshold,
-            "kitchen.display.not_seen_after_minutes", ConfigurationValueRules::requireNotSeenAfterMinutes,
-            "assistant.disclosure_text_en", value -> requirePlainShortText("assistant.disclosure_text_en", value),
-            "assistant.disclosure_text_ru", value -> requirePlainShortText("assistant.disclosure_text_ru", value),
-            "assistant.disclosure_text_uz", value -> requirePlainShortText("assistant.disclosure_text_uz", value));
+    /**
+     * The languages a printed document can be written in (ADR 0154): the ones the language registry has
+     * live for messages (ADR 0149), the same list {@code printing.api.PrintingConfigurationKeys} reads;
+     * {@code PrintingConfigurationKeyTests} holds the two together.
+     */
+    static final java.util.List<String> PRINT_DOCUMENT_LOCALES = PlatformLocales.activeTags(Tier.MESSAGES);
+
+    private static final Map<String, Consumer<Object>> RULES = Map.ofEntries(
+            Map.entry("ordering.late_colour", ConfigurationValueRules::requireBlankOrHexColour),
+            Map.entry("ordering.at_risk_before_minutes", ConfigurationValueRules::requireMinutesWithinADay),
+            Map.entry("iam.staff_mfa_requirement", ConfigurationValueRules::requireMfaRequirementMode),
+            Map.entry("ordering.late_order_threshold_minutes", ConfigurationValueRules::requireLateOrderThreshold),
+            Map.entry("kitchen.display.not_seen_after_minutes", ConfigurationValueRules::requireNotSeenAfterMinutes),
+            Map.entry(
+                    "assistant.disclosure_text_en",
+                    value -> requirePlainShortText("assistant.disclosure_text_en", value)),
+            Map.entry(
+                    "assistant.disclosure_text_ru",
+                    value -> requirePlainShortText("assistant.disclosure_text_ru", value)),
+            Map.entry(
+                    "assistant.disclosure_text_uz",
+                    value -> requirePlainShortText("assistant.disclosure_text_uz", value)),
+            Map.entry("printing.document_locale", ConfigurationValueRules::requirePrintDocumentLocale),
+            Map.entry(
+                    "printing.kitchen_ticket.expire_minutes",
+                    value -> requireWholeMinutes("printing.kitchen_ticket.expire_minutes", value, 5, 240)),
+            Map.entry(
+                    "printing.late_marker_minutes",
+                    value -> requireWholeMinutes("printing.late_marker_minutes", value, 1, MAXIMUM_MINUTES)),
+            // ADR 0155: the five terminal policy values. Refused here, at the one place every writer passes through, so
+            // a PIN length of 5 or a session of 40 hours is never stored for a reader to trip over.
+            Map.entry("terminal.pin.length", value -> requireOneOf("terminal.pin.length", value, 4, 6)),
+            Map.entry(
+                    "terminal.auto_lock_seconds",
+                    value -> requireBetween("terminal.auto_lock_seconds", value, 30, 3_600)),
+            Map.entry(
+                    "terminal.session.max_hours", value -> requireBetween("terminal.session.max_hours", value, 1, 16)),
+            Map.entry(
+                    "terminal.roster.display",
+                    value -> requireText("terminal.roster.display", value, "NAME_INITIAL", "REFERENCE")),
+            Map.entry(
+                    "terminal.attribution.default",
+                    value -> requireText(
+                            "terminal.attribution.default",
+                            value,
+                            "DEVICE_ONLY",
+                            "PERSON_OPTIONAL",
+                            "PERSON_REQUIRED")),
+            // ADR 0176: a sign-in row is kept thirty days to two years; past either end it is a typo.
+            Map.entry("iam.staff_sign_in_retention_days", integerBetween("iam.staff_sign_in_retention_days", 30, 730)),
+            // ADR 0156: the working-time keys. Each range is the record's own.
+            Map.entry(
+                    "workforce.shift.variance_threshold_minutes",
+                    integerBetween("workforce.shift.variance_threshold_minutes", 5, 240)),
+            Map.entry(
+                    "workforce.shift.retroactive_edit_days",
+                    integerBetween("workforce.shift.retroactive_edit_days", 0, 60)),
+            Map.entry("workforce.shift.max_open_hours", integerBetween("workforce.shift.max_open_hours", 4, 16)),
+            Map.entry(
+                    "workforce.roster.late_after_minutes",
+                    integerBetween("workforce.roster.late_after_minutes", 1, 120)),
+            Map.entry(
+                    "workforce.roster.match_window_minutes",
+                    integerBetween("workforce.roster.match_window_minutes", 30, 480)),
+            // ADR 0159: a mistyped visibility must be refused, never quietly read as NONE, and the minimum
+            // count is a count a person can read off the public page.
+            Map.entry("feedback.public_visibility", ConfigurationValueRules::requirePublicVisibility),
+            Map.entry("feedback.public_minimum_reviews", ConfigurationValueRules::requirePublicMinimumReviews));
+
+    /**
+     * A second table beside {@link #RULES} (which is a {@code Map.of} at its ten-entry limit):
+     * the rules ADR 0175 and ADR 0161 added, kept apart so neither edits the other's lines.
+     */
+    private static final Map<String, Consumer<Object>> TELEPHONY_AND_MARKING_RULES = Map.of(
+            "voice.ring_time_ceiling_seconds", ConfigurationValueRules::requireRingTimeCeiling,
+            "fiscal.marking.structure_check", ConfigurationValueRules::requireMarkingStructureCheck);
 
     private ConfigurationValueRules() {}
 
@@ -62,6 +131,9 @@ public final class ConfigurationValueRules {
             return;
         }
         Consumer<Object> rule = RULES.get(key.code());
+        if (rule == null) {
+            rule = TELEPHONY_AND_MARKING_RULES.get(key.code());
+        }
         if (rule != null) {
             rule.accept(value);
         }
@@ -70,6 +142,23 @@ public final class ConfigurationValueRules {
     /** Whether {@code candidate} is a colour that may be served to a stylesheet. */
     public static boolean isHexColour(@Nullable String candidate) {
         return candidate != null && HEX_COLOUR.matcher(candidate).matches();
+    }
+
+    /** ADR 0175: a ceiling of zero would reject every ring sample, and past a day it is not a ceiling. */
+    private static void requireRingTimeCeiling(Object value) {
+        int seconds = ((Number) value).intValue();
+        if (seconds < 1 || seconds > 86_400) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "voice.ring_time_ceiling_seconds must be between 1 and 86400");
+        }
+    }
+
+    /** ADR 0161: a mistyped check mode must be refused, never quietly read as the strict or the lax one. */
+    private static void requireMarkingStructureCheck(Object value) {
+        String mode = String.valueOf(value);
+        if (!mode.equals("GS1") && !mode.equals("NONE")) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "fiscal.marking.structure_check must be GS1 or NONE");
+        }
     }
 
     /** ADR 0148: a mistyped mode must be refused, never quietly read as "OFF". */
@@ -111,6 +200,59 @@ public final class ConfigurationValueRules {
         }
     }
 
+    private static void requireOneOf(String code, Object value, int... allowed) {
+        int number = ((Number) value).intValue();
+        for (int candidate : allowed) {
+            if (candidate == number) {
+                return;
+            }
+        }
+        throw new ApiException(
+                ErrorCode.VALIDATION_FAILED,
+                code + " must be one of " + java.util.Arrays.toString(allowed),
+                Map.of("field", code));
+    }
+
+    private static void requireBetween(String code, Object value, int minimum, int maximum) {
+        int number = ((Number) value).intValue();
+        if (number < minimum || number > maximum) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "%s must be between %d and %d".formatted(code, minimum, maximum),
+                    Map.of("field", code));
+        }
+    }
+
+    private static void requireText(String code, Object value, String... allowed) {
+        String text = String.valueOf(value);
+        for (String candidate : allowed) {
+            if (candidate.equals(text)) {
+                return;
+            }
+        }
+        throw new ApiException(
+                ErrorCode.VALIDATION_FAILED,
+                code + " must be one of " + String.join(", ", allowed),
+                Map.of("field", code));
+    }
+
+    private static void requirePublicVisibility(Object value) {
+        String text = String.valueOf(value);
+        if (!"NONE".equals(text) && !"RATING_ONLY".equals(text) && !"RATING_AND_COMMENTS".equals(text)) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "feedback.public_visibility must be NONE, RATING_ONLY or RATING_AND_COMMENTS");
+        }
+    }
+
+    private static void requirePublicMinimumReviews(Object value) {
+        int count = ((Number) value).intValue();
+        if (count < 0 || count > 1000) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "feedback.public_minimum_reviews must be between 0 and 1000");
+        }
+    }
+
     private static void requireMinutesWithinADay(Object value) {
         int minutes = ((Number) value).intValue();
         if (minutes < 0 || minutes > MAXIMUM_MINUTES) {
@@ -135,6 +277,23 @@ public final class ConfigurationValueRules {
         }
     }
 
+    /** ADR 0154: a mistyped language is refused, never printed as a half-translated slip. */
+    private static void requirePrintDocumentLocale(Object value) {
+        if (!PRINT_DOCUMENT_LOCALES.contains(String.valueOf(value))) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "printing.document_locale must be one of " + PRINT_DOCUMENT_LOCALES);
+        }
+    }
+
+    /** ADR 0154: a window that is a typo (zero, or a week) is a control that does nothing or everything. */
+    private static void requireWholeMinutes(String code, Object value, int minimum, int maximum) {
+        int minutes = ((Number) value).intValue();
+        if (minutes < minimum || minutes > maximum) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "%s must be between %d and %d".formatted(code, minimum, maximum));
+        }
+    }
+
     /** At least a minute (a wall stamps its read at most once a minute) and at most a day. */
     private static void requireNotSeenAfterMinutes(Object value) {
         int minutes = ((Number) value).intValue();
@@ -143,5 +302,16 @@ public final class ConfigurationValueRules {
                     ErrorCode.VALIDATION_FAILED,
                     "kitchen.display.not_seen_after_minutes must be between 1 and " + MAXIMUM_MINUTES);
         }
+    }
+
+    /** A whole number inside the record's stated range; the key's own type already refuses a string. */
+    private static Consumer<Object> integerBetween(String code, int minimum, int maximum) {
+        return value -> {
+            long number = ((Number) value).longValue();
+            if (number < minimum || number > maximum) {
+                throw new ApiException(
+                        ErrorCode.VALIDATION_FAILED, "%s must be between %d and %d".formatted(code, minimum, maximum));
+            }
+        };
     }
 }

@@ -2,6 +2,7 @@ package uz.horecaos.platform.iam.web;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -77,8 +78,9 @@ public class StaffMfaController {
             description = "Registers the credential with Keycloak, proves it with a real sign-in, and deletes "
                     + "it again if the code does not verify. 204 with a session; 201 with the new session "
                     + "when the enrolment began from a ticket.")
-    public ResponseEntity<StaffSessionResponse> confirmControlPlane(@Valid @RequestBody ConfirmEnrolmentRequest body) {
-        return confirm(body);
+    public ResponseEntity<StaffSessionResponse> confirmControlPlane(
+            @Valid @RequestBody ConfirmEnrolmentRequest body, HttpServletRequest request) {
+        return confirm(body, request);
     }
 
     @GetMapping("/api/v1/control-plane/auth/mfa/authenticators")
@@ -112,8 +114,9 @@ public class StaffMfaController {
     @Operation(
             summary = "Confirm an authenticator with its first code (operations)",
             description = "As on the control plane: 204 with a session, 201 with the new session from a ticket.")
-    public ResponseEntity<StaffSessionResponse> confirmOperations(@Valid @RequestBody ConfirmEnrolmentRequest body) {
-        return confirm(body);
+    public ResponseEntity<StaffSessionResponse> confirmOperations(
+            @Valid @RequestBody ConfirmEnrolmentRequest body, HttpServletRequest request) {
+        return confirm(body, request);
     }
 
     @GetMapping("/api/v1/operations/auth/mfa/authenticators")
@@ -138,10 +141,17 @@ public class StaffMfaController {
         return mfa.begin(caller.subject(), caller.viaTicket(), body.password());
     }
 
-    private ResponseEntity<StaffSessionResponse> confirm(ConfirmEnrolmentRequest body) {
+    private ResponseEntity<StaffSessionResponse> confirm(ConfirmEnrolmentRequest body, HttpServletRequest request) {
         Caller caller = caller(body.enrolmentTicket());
         Confirmation confirmation = mfa.confirm(
-                caller.subject(), caller.viaTicket(), body.sealedSecret(), body.code(), body.password(), body.label());
+                caller.subject(),
+                caller.viaTicket(),
+                body.sealedSecret(),
+                body.code(),
+                body.password(),
+                body.label(),
+                // Read only to be reduced to a closed device label (ADR 0176); never stored or logged.
+                request.getHeader("User-Agent"));
         StaffSession session = confirmation.session();
         if (session == null) {
             return ResponseEntity.noContent().build();

@@ -158,6 +158,12 @@ class ClickFakeProviderRoundTripTests {
     @Autowired
     private PartnerFiscalizationPort partnerFiscalization;
 
+    @Autowired
+    private uz.horecaos.platform.tenancy.api.PolicyAuthor policyAuthor;
+
+    @Autowired
+    private uz.horecaos.platform.iam.api.protection.FieldProtection protection;
+
     private UUID orderId;
     private UUID intentId;
 
@@ -168,6 +174,11 @@ class ClickFakeProviderRoundTripTests {
         jdbc.sql("TRUNCATE TABLE payments.payment_attempts CASCADE").update();
         jdbc.sql("TRUNCATE TABLE payments.payment_intents CASCADE").update();
         jdbc.sql("TRUNCATE TABLE ordering.orders CASCADE").update();
+        // The story now runs more than once per class, so what each run seeds must be cleared.
+        jdbc.sql("TRUNCATE TABLE ordering.carts CASCADE").update();
+        jdbc.sql("TRUNCATE TABLE pricing.quotes CASCADE").update();
+        jdbc.sql("TRUNCATE TABLE catalog.publications, catalog.catalogs CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE payments.merchant_bindings CASCADE").update();
         jdbc.sql("TRUNCATE TABLE tenant.location_fiscal_assignments CASCADE").update();
         jdbc.sql("TRUNCATE TABLE tenant.legal_entities CASCADE").update();
@@ -182,16 +193,23 @@ class ClickFakeProviderRoundTripTests {
         assertThat(partnerFiscalization.isWired()).isTrue();
 
         seedTenancy();
+        // ADR 0166, Decision 6: the placeholder line is filed only in a sandbox and only when the
+        // platform has said so. This story proves the wire against a fake, which is exactly that.
+        // Authored after the truncation above, which takes tenant.policies with it.
+        policyAuthor.author(
+                uz.horecaos.platform.fiscal.api.FiscalEvidencePolicies.SYNTHETIC_LINES_ALLOWED,
+                uz.horecaos.platform.iam.api.ResourceScope.platform(),
+                new uz.horecaos.platform.fiscal.api.FiscalEvidencePolicies.SyntheticLines(true),
+                uz.horecaos.platform.audit.api.ActorRef.user("platform-admin", "Platform"),
+                "round-trip test: prove the wire against the fake provider");
         seedClickProviderPointedAtTheFake();
         seedLegalEntityAndBinding();
         orderId = seedOrder();
         intentId = seedIntent(orderId);
     }
 
-    @Test
-    @DisplayName("checkout, a fake CLICK payment, and fiscalization through the real fake provider "
-            + "and the real bridge, end to end")
-    void theWholeStory() {
+    /** Checkout, a fake customer's payment, and the order completing: everything before the receipt. */
+    private void payAndCompleteTheOrder() {
         // ---------------------------------------------------------- checkout
         var session = checkout.openOrRePresent(TENANT, orderId, ACCOUNT, PresentationRequest.link());
         assertThat(session.checkoutUrl()).startsWith("https://my.click.uz/services/pay/?");
@@ -235,6 +253,13 @@ class ClickFakeProviderRoundTripTests {
                 .param("t", TENANT)
                 .param("o", orderId)
                 .update();
+    }
+
+    @Test
+    @DisplayName("checkout, a fake CLICK payment, and fiscalization through the real fake provider "
+            + "and the real bridge, end to end")
+    void theWholeStory() {
+        payAndCompleteTheOrder();
 
         // ------------------------------------------- the sweeper resolves it, for real
         // Called directly rather than waited on @Scheduled's wall clock, per
@@ -256,6 +281,67 @@ class ClickFakeProviderRoundTripTests {
         assertThat(evidence.fiscalSign()).startsWith("FAKESIGN");
         assertThat(evidence.externalReceiptId()).isNotBlank();
         assertThat(evidence.registeredAt()).isNotNull();
+
+        // ADR 0166: what was filed is kept, so an incorrect receipt is explicable later.
+        var sent = jdbc.sql("""
+                        SELECT lines_synthetic, protected_request_reference, sent_tender_split_reference,
+                               merchant_binding_id, seller_tin, seller_snapshot_source
+                          FROM fiscal.fiscal_documents WHERE order_id = :o
+                        """).param("o", orderId).query().singleRow();
+        assertThat(sent.get("lines_synthetic"))
+                .as("the one-line stand-in says it was a stand-in")
+                .isEqualTo(true);
+        assertThat(sent.get("merchant_binding_id"))
+                .as("the merchant account it went through")
+                .isNotNull();
+        assertThat(sent.get("seller_snapshot_source")).isEqualTo("OPENING");
+
+        String linesJson = protection.reveal(
+                TENANT,
+                uz.horecaos.platform.iam.api.protection.ProtectedValue.deserialize(
+                        java.util.Objects.requireNonNull((String) sent.get("protected_request_reference"))),
+                uz.horecaos.platform.fiscal.api.SentReceiptEvidence.requestRecord(document.id()),
+                "test");
+        assertThat(linesJson)
+                .contains("\"synthetic\":true")
+                .contains("\"kind\":\"SYNTHETIC\"")
+                .contains("\"ikpu\":\"00000000000000000\"")
+                .contains("\"unitPriceMinor\":" + AMOUNT_SOM);
+        String splitJson = protection.reveal(
+                TENANT,
+                uz.horecaos.platform.iam.api.protection.ProtectedValue.deserialize(
+                        java.util.Objects.requireNonNull((String) sent.get("sent_tender_split_reference"))),
+                uz.horecaos.platform.fiscal.api.SentReceiptEvidence.splitRecord(document.id()),
+                "test");
+        assertThat(splitJson)
+                .as("Click was told the whole amount was received by card")
+                .contains("\"receivedCardMinor\":" + AMOUNT_SOM)
+                .contains("\"receivedCashMinor\":0");
+    }
+
+    @Test
+    @DisplayName("the same story in a production environment files nothing: the document is blocked as lines-not-built")
+    void aProductionEnvironmentFilesNoPlaceholder() {
+        payAndCompleteTheOrder();
+        // The same fake, now declared production: the placeholder may not be filed there, whatever
+        // the platform's flag says.
+        jdbc.sql("UPDATE integration.provider_environments SET is_production = true"
+                        + " WHERE code = 'click-roundtrip-fake'")
+                .update();
+
+        sweeper.openObligations();
+        sweeper.submitCapturedObligations();
+
+        var row = jdbc.sql("""
+                        SELECT status, reason_code, lines_synthetic, protected_request_reference, attempt_count
+                          FROM fiscal.fiscal_documents WHERE order_id = :o
+                        """).param("o", orderId).query().singleRow();
+        assertThat(row.get("status")).isEqualTo("BLOCKED");
+        assertThat(row.get("reason_code")).isEqualTo("LINES_NOT_BUILT");
+        assertThat(row.get("lines_synthetic")).isEqualTo(false);
+        assertThat(row.get("protected_request_reference"))
+                .as("nothing was sent, so nothing is recorded as sent")
+                .isNull();
     }
 
     // ------------------------------------------------------------------- fixtures

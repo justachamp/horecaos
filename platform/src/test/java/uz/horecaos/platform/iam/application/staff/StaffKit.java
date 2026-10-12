@@ -37,6 +37,7 @@ import uz.horecaos.platform.iam.infrastructure.authorization.JdbcAuthorizationSe
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.iam.infrastructure.persistence.JdbcStaffEmergencyContactStore;
 import uz.horecaos.platform.iam.infrastructure.persistence.JdbcStaffMemberStore;
+import uz.horecaos.platform.iam.infrastructure.persistence.JdbcStaffPreferencesStore;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.support.TestProtection;
 import uz.horecaos.platform.tenancy.application.PlatformLocaleVocabulary;
@@ -75,7 +76,14 @@ final class StaffKit {
     final JdbcStaffMemberStore store;
     final JdbcStaffEmergencyContactStore contactStore;
     final StaffMemberCodec codec;
+    final ConcurrentMapCacheManager caches;
     final StaffNameCache cache;
+    final JdbcStaffPreferencesStore preferenceStore;
+    final StaffPreferencesCache preferenceCache;
+    final StaffPreferenceSchemas preferenceSchemas;
+    final StaffPreferencesService preferences;
+    final io.micrometer.core.instrument.simple.SimpleMeterRegistry meters =
+            new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
     final TransactionTemplate tx;
     final JdbcAuthorizationService authorization;
     final GrantManagementService grants;
@@ -130,8 +138,12 @@ final class StaffKit {
         store = new JdbcStaffMemberStore(jdbc);
         contactStore = new JdbcStaffEmergencyContactStore(jdbc);
         codec = new StaffMemberCodec(TestProtection.envelope());
-        ConcurrentMapCacheManager caches = new ConcurrentMapCacheManager(CacheRegistry.STAFF_DISPLAY_NAMES.cacheName());
+        caches = new ConcurrentMapCacheManager(
+                CacheRegistry.STAFF_DISPLAY_NAMES.cacheName(), CacheRegistry.STAFF_PREFERENCES.cacheName());
         cache = new StaffNameCache(caches);
+        preferenceStore = new JdbcStaffPreferencesStore(jdbc);
+        preferenceCache = new StaffPreferencesCache(caches);
+        preferenceSchemas = new StaffPreferenceSchemas();
         members = new StaffMemberService(
                 store,
                 codec,
@@ -142,7 +154,11 @@ final class StaffKit {
                 photos,
                 tx,
                 clock,
-                new PlatformLocaleVocabulary());
+                new PlatformLocaleVocabulary(),
+                preferenceStore,
+                preferenceCache);
+        preferences = new StaffPreferencesService(
+                preferenceStore, store, preferenceSchemas, preferenceCache, TestProtection.envelope(), meters, clock);
         emergency = new StaffEmergencyContactService(store, contactStore, TestProtection.envelope(), publisher, clock);
         directory = new StaffDirectoryService(store, codec, cache, accounts);
         cards = new StaffMemberCardService(store, codec);
@@ -180,6 +196,14 @@ final class StaffKit {
                     .update();
         }
         published.clear();
+        // An in-process cache outlives a test unless it is told not to: a stale entry of the last test is a
+        // person's preferences that were never written in this one.
+        caches.getCacheNames().forEach(name -> {
+            org.springframework.cache.Cache cache = caches.getCache(name);
+            if (cache != null) {
+                cache.clear();
+            }
+        });
         accounts.clear();
         photos.clear();
         revoking.failOn = 0;

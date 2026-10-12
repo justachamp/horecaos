@@ -152,3 +152,14 @@
   height: 40px;
   background: var(--q-surface-1);
 }
+
+/* ADR 0168: a ticket held for money its order requires and has not received. */
+.buffer__hold {
+  border: 1px solid var(--q-warning-text);
+  color: var(--q-warning-text);
+}
+
+.buffer__hold--stuck {
+  background: var(--q-warning-text);
+  color: var(--q-canvas);
+}

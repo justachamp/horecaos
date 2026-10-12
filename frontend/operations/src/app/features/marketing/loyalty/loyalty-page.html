@@ -28,182 +28,230 @@
       </div>
     }
 
-    @if (ownLiability(); as liability) {
-      <div class="loyalty__liability" data-testid="loyalty-liability">
-        <span class="q-caption">{{ 'marketing.loyalty.liability.label' | t }}</span>
-        <span class="q-body loyalty__liability-value">{{
-          formatLiabilityMoney(liability.outstanding)
-        }}</span>
-        @if (liability.held.amountMinor > 0) {
-          <span class="q-caption loyalty__liability-held">
-            {{
-              'marketing.loyalty.liability.held'
-                | t: { amount: formatLiabilityMoney(liability.held) }
-            }}
-          </span>
-        }
-      </div>
+    <div class="loyalty__tabs" role="tablist" data-testid="loyalty-tabs">
+      <button
+        type="button"
+        role="tab"
+        class="loyalty__tab"
+        [class.loyalty__tab--active]="tab() === 'programme'"
+        [attr.aria-selected]="tab() === 'programme'"
+        data-testid="loyalty-tab-programme"
+        (click)="tab.set('programme')"
+      >
+        {{ 'marketing.loyalty.tab.programme' | t }}
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="loyalty__tab"
+        [class.loyalty__tab--active]="tab() === 'posSync'"
+        [attr.aria-selected]="tab() === 'posSync'"
+        data-testid="loyalty-tab-pos-sync"
+        (click)="tab.set('posSync')"
+      >
+        {{ 'marketing.loyalty.tab.posSync' | t }}
+      </button>
+    </div>
+
+    @if (tab() === 'posSync') {
+      <q-loyalty-pos-sync />
+    } @else {
+      @if (ownLiability(); as liability) {
+        <div class="loyalty__liability" data-testid="loyalty-liability">
+          <span class="q-caption">{{ 'marketing.loyalty.liability.label' | t }}</span>
+          <span class="q-body loyalty__liability-value">{{
+            formatLiabilityMoney(liability.outstanding)
+          }}</span>
+          @if (liability.held.amountMinor > 0) {
+            <span class="q-caption loyalty__liability-held">
+              {{
+                'marketing.loyalty.liability.held'
+                  | t: { amount: formatLiabilityMoney(liability.held) }
+              }}
+            </span>
+          }
+          @if (liability.tillAbsorbed; as absorbed) {
+            @if (absorbed.amountMinor > 0) {
+              <span
+                class="q-caption loyalty__liability-held"
+                data-testid="loyalty-liability-till-absorbed"
+              >
+                {{
+                  'marketing.loyalty.liability.tillAbsorbed'
+                    | t: { amount: formatLiabilityMoney(absorbed) }
+                }}
+              </span>
+            }
+          }
+        </div>
+      }
+
+      <section class="loyalty__section">
+        <div class="loyalty__section-head">
+          <h2 class="q-body loyalty__section-title">{{ 'marketing.loyalty.accrual.title' | t }}</h2>
+          <button type="button" class="loyalty__create" (click)="openAccrualForm()">
+            {{ 'marketing.loyalty.accrual.create.action' | t }}
+          </button>
+        </div>
+        <p class="q-caption loyalty__section-hint">{{ 'marketing.loyalty.accrual.hint' | t }}</p>
+
+        <table class="loyalty__table">
+          <thead>
+            <tr>
+              <th>{{ 'marketing.loyalty.column.scope' | t }}</th>
+              <th>{{ 'marketing.loyalty.accrual.column.rate' | t }}</th>
+              <th>{{ 'marketing.loyalty.accrual.column.cap' | t }}</th>
+              <th>{{ 'marketing.loyalty.accrual.column.earnDelay' | t }}</th>
+              <th>{{ 'marketing.loyalty.accrual.column.lotLifetime' | t }}</th>
+              <th>{{ 'marketing.loyalty.column.status' | t }}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (rule of accrualRules(); track rule.id) {
+              <tr class="loyalty-row" data-testid="accrual-rule-row">
+                <td>{{ scopeLabel(rule) }}</td>
+                <td class="q-tnum">{{ ratePercentLabel(rule) }}</td>
+                <td class="q-tnum">
+                  {{
+                    rule.maxAccrualMinor === null
+                      ? ('marketing.loyalty.uncapped' | t)
+                      : formatWhole(rule.maxAccrualMinor)
+                  }}
+                </td>
+                <td class="q-tnum">
+                  {{ 'marketing.loyalty.hours' | t: { count: rule.earnDelayHours } }}
+                </td>
+                <td class="q-tnum">
+                  {{ 'marketing.loyalty.days' | t: { count: rule.lotLifetimeDays } }}
+                </td>
+                <td>
+                  <span class="status-badge" [class.status-badge--live]="rule.status === 'ACTIVE'">
+                    {{ statusLabelKey(rule.status) | t }}
+                  </span>
+                </td>
+                <td class="loyalty__action-col">
+                  @if (rule.status === 'DRAFT') {
+                    <button
+                      type="button"
+                      [disabled]="actingRuleId() === rule.id"
+                      (click)="activateAccrualRule(rule)"
+                    >
+                      {{ 'marketing.loyalty.action.activate' | t }}
+                    </button>
+                  }
+                  @if (rule.status !== 'RETIRED') {
+                    <button
+                      type="button"
+                      [disabled]="actingRuleId() === rule.id"
+                      (click)="retireAccrualRule(rule)"
+                    >
+                      {{ 'marketing.loyalty.action.retire' | t }}
+                    </button>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="7">
+                  <p class="q-body-sm" data-testid="accrual-rules-empty">
+                    {{ 'marketing.loyalty.accrual.empty' | t }}
+                  </p>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </section>
+
+      <section class="loyalty__section">
+        <div class="loyalty__section-head">
+          <h2 class="q-body loyalty__section-title">
+            {{ 'marketing.loyalty.redemption.title' | t }}
+          </h2>
+          <button type="button" class="loyalty__create" (click)="openRedemptionForm()">
+            {{ 'marketing.loyalty.redemption.create.action' | t }}
+          </button>
+        </div>
+        <p class="q-caption loyalty__section-hint">{{ 'marketing.loyalty.redemption.hint' | t }}</p>
+
+        <table class="loyalty__table">
+          <thead>
+            <tr>
+              <th>{{ 'marketing.loyalty.redemption.column.share' | t }}</th>
+              <th>{{ 'marketing.loyalty.redemption.column.minOrder' | t }}</th>
+              <th>{{ 'marketing.loyalty.redemption.column.excludesFee' | t }}</th>
+              <th>{{ 'marketing.loyalty.column.status' | t }}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (policy of redemptionPolicies(); track policy.id) {
+              <tr class="loyalty-row" data-testid="redemption-policy-row">
+                <td class="q-tnum">{{ sharePercentLabel(policy) }}</td>
+                <td class="q-tnum">{{ formatWhole(policy.minOrderMinor) }}</td>
+                <td>
+                  {{
+                    policy.excludesDeliveryFee
+                      ? ('marketing.loyalty.yes' | t)
+                      : ('marketing.loyalty.no' | t)
+                  }}
+                </td>
+                <td>
+                  <span
+                    class="status-badge"
+                    [class.status-badge--live]="policy.status === 'ACTIVE'"
+                  >
+                    {{ statusLabelKey(policy.status) | t }}
+                  </span>
+                </td>
+                <td class="loyalty__action-col">
+                  @if (policy.status === 'DRAFT') {
+                    <button
+                      type="button"
+                      [disabled]="actingPolicyId() === policy.id"
+                      (click)="activateRedemptionPolicy(policy)"
+                    >
+                      {{ 'marketing.loyalty.action.activate' | t }}
+                    </button>
+                  }
+                  @if (policy.status !== 'RETIRED') {
+                    <button
+                      type="button"
+                      [disabled]="actingPolicyId() === policy.id"
+                      (click)="retireRedemptionPolicy(policy)"
+                    >
+                      {{ 'marketing.loyalty.action.retire' | t }}
+                    </button>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="5">
+                  <p class="q-body-sm" data-testid="redemption-policies-empty">
+                    {{ 'marketing.loyalty.redemption.empty' | t }}
+                  </p>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </section>
+
+      <section
+        class="loyalty__section loyalty__not-built"
+        data-testid="loyalty-deposit-not-offered"
+      >
+        <h2 class="q-body loyalty__section-title">{{ 'marketing.loyalty.deposit.title' | t }}</h2>
+        <p class="q-body-sm" data-testid="loyalty-deposit-sentence">
+          {{ 'marketing.loyalty.deposit.body' | t }}
+        </p>
+        <p class="q-caption" data-testid="loyalty-deposit-revisit">
+          {{ 'marketing.loyalty.deposit.revisit' | t }}
+        </p>
+      </section>
     }
-
-    <section class="loyalty__section">
-      <div class="loyalty__section-head">
-        <h2 class="q-body loyalty__section-title">{{ 'marketing.loyalty.accrual.title' | t }}</h2>
-        <button type="button" class="loyalty__create" (click)="openAccrualForm()">
-          {{ 'marketing.loyalty.accrual.create.action' | t }}
-        </button>
-      </div>
-      <p class="q-caption loyalty__section-hint">{{ 'marketing.loyalty.accrual.hint' | t }}</p>
-
-      <table class="loyalty__table">
-        <thead>
-          <tr>
-            <th>{{ 'marketing.loyalty.column.scope' | t }}</th>
-            <th>{{ 'marketing.loyalty.accrual.column.rate' | t }}</th>
-            <th>{{ 'marketing.loyalty.accrual.column.cap' | t }}</th>
-            <th>{{ 'marketing.loyalty.accrual.column.earnDelay' | t }}</th>
-            <th>{{ 'marketing.loyalty.accrual.column.lotLifetime' | t }}</th>
-            <th>{{ 'marketing.loyalty.column.status' | t }}</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (rule of accrualRules(); track rule.id) {
-            <tr class="loyalty-row" data-testid="accrual-rule-row">
-              <td>{{ scopeLabel(rule) }}</td>
-              <td class="q-tnum">{{ ratePercentLabel(rule) }}</td>
-              <td class="q-tnum">
-                {{
-                  rule.maxAccrualMinor === null
-                    ? ('marketing.loyalty.uncapped' | t)
-                    : formatWhole(rule.maxAccrualMinor)
-                }}
-              </td>
-              <td class="q-tnum">
-                {{ 'marketing.loyalty.hours' | t: { count: rule.earnDelayHours } }}
-              </td>
-              <td class="q-tnum">
-                {{ 'marketing.loyalty.days' | t: { count: rule.lotLifetimeDays } }}
-              </td>
-              <td>
-                <span class="status-badge" [class.status-badge--live]="rule.status === 'ACTIVE'">
-                  {{ statusLabelKey(rule.status) | t }}
-                </span>
-              </td>
-              <td class="loyalty__action-col">
-                @if (rule.status === 'DRAFT') {
-                  <button
-                    type="button"
-                    [disabled]="actingRuleId() === rule.id"
-                    (click)="activateAccrualRule(rule)"
-                  >
-                    {{ 'marketing.loyalty.action.activate' | t }}
-                  </button>
-                }
-                @if (rule.status !== 'RETIRED') {
-                  <button
-                    type="button"
-                    [disabled]="actingRuleId() === rule.id"
-                    (click)="retireAccrualRule(rule)"
-                  >
-                    {{ 'marketing.loyalty.action.retire' | t }}
-                  </button>
-                }
-              </td>
-            </tr>
-          } @empty {
-            <tr>
-              <td colspan="7">
-                <p class="q-body-sm" data-testid="accrual-rules-empty">
-                  {{ 'marketing.loyalty.accrual.empty' | t }}
-                </p>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </section>
-
-    <section class="loyalty__section">
-      <div class="loyalty__section-head">
-        <h2 class="q-body loyalty__section-title">
-          {{ 'marketing.loyalty.redemption.title' | t }}
-        </h2>
-        <button type="button" class="loyalty__create" (click)="openRedemptionForm()">
-          {{ 'marketing.loyalty.redemption.create.action' | t }}
-        </button>
-      </div>
-      <p class="q-caption loyalty__section-hint">{{ 'marketing.loyalty.redemption.hint' | t }}</p>
-
-      <table class="loyalty__table">
-        <thead>
-          <tr>
-            <th>{{ 'marketing.loyalty.redemption.column.share' | t }}</th>
-            <th>{{ 'marketing.loyalty.redemption.column.minOrder' | t }}</th>
-            <th>{{ 'marketing.loyalty.redemption.column.excludesFee' | t }}</th>
-            <th>{{ 'marketing.loyalty.column.status' | t }}</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (policy of redemptionPolicies(); track policy.id) {
-            <tr class="loyalty-row" data-testid="redemption-policy-row">
-              <td class="q-tnum">{{ sharePercentLabel(policy) }}</td>
-              <td class="q-tnum">{{ formatWhole(policy.minOrderMinor) }}</td>
-              <td>
-                {{
-                  policy.excludesDeliveryFee
-                    ? ('marketing.loyalty.yes' | t)
-                    : ('marketing.loyalty.no' | t)
-                }}
-              </td>
-              <td>
-                <span class="status-badge" [class.status-badge--live]="policy.status === 'ACTIVE'">
-                  {{ statusLabelKey(policy.status) | t }}
-                </span>
-              </td>
-              <td class="loyalty__action-col">
-                @if (policy.status === 'DRAFT') {
-                  <button
-                    type="button"
-                    [disabled]="actingPolicyId() === policy.id"
-                    (click)="activateRedemptionPolicy(policy)"
-                  >
-                    {{ 'marketing.loyalty.action.activate' | t }}
-                  </button>
-                }
-                @if (policy.status !== 'RETIRED') {
-                  <button
-                    type="button"
-                    [disabled]="actingPolicyId() === policy.id"
-                    (click)="retireRedemptionPolicy(policy)"
-                  >
-                    {{ 'marketing.loyalty.action.retire' | t }}
-                  </button>
-                }
-              </td>
-            </tr>
-          } @empty {
-            <tr>
-              <td colspan="5">
-                <p class="q-body-sm" data-testid="redemption-policies-empty">
-                  {{ 'marketing.loyalty.redemption.empty' | t }}
-                </p>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </section>
-
-    <section class="loyalty__section loyalty__not-built" data-testid="loyalty-deposit-not-built">
-      <h2 class="q-body loyalty__section-title">{{ 'marketing.loyalty.deposit.title' | t }}</h2>
-      <p class="q-body-sm">{{ 'marketing.loyalty.deposit.body' | t }}</p>
-    </section>
-
-    <section class="loyalty__section loyalty__not-built" data-testid="loyalty-pos-sync-not-built">
-      <h2 class="q-body loyalty__section-title">{{ 'marketing.loyalty.posSync.title' | t }}</h2>
-      <p class="q-body-sm">{{ 'marketing.loyalty.posSync.body' | t }}</p>
-    </section>
   }
 
   @if (showAccrualForm()) {

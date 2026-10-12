@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -17,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.pricing.api.PromotionRedemptionSource;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayAggregate;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayKey;
@@ -24,6 +26,7 @@ import uz.horecaos.platform.reporting.application.ReportingFacts.CallHourFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.OrderFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.OrderLineFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.RefundFact;
+import uz.horecaos.platform.reporting.application.ReportingFacts.StaffShiftFact;
 import uz.horecaos.platform.reporting.application.ReportingFacts.TenderFact;
 import uz.horecaos.platform.reporting.domain.BusinessDayBoundary;
 import uz.horecaos.platform.reporting.domain.MetricRegistry;
@@ -33,7 +36,12 @@ import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingSt
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceOrder;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceRefund;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore.SourceTender;
+import uz.horecaos.platform.reviews.api.RecoveryFactSource;
+import uz.horecaos.platform.reviews.api.ReviewFactSource;
+import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
+import uz.horecaos.platform.voice.api.VoiceConfigurationKeys;
 import uz.horecaos.platform.web.api.Quantities;
+import uz.horecaos.platform.workforce.api.StaffShiftFactSource;
 
 /**
  * Builds a business day's facts, and later checks that they were right
@@ -48,7 +56,9 @@ import uz.horecaos.platform.web.api.Quantities;
  *
  * <p>{@link #recut} re-derives the same day after the settle window and
  * <em>compares</em>. It writes divergence rows and touches neither the facts nor
- * the aggregates. That is the ADR's rule and it is worth being explicit about why
+ * the aggregates. (The one thing it repeats is the customer funnel's count capture, ADR 0167:
+ * a count of activity and not a financial snapshot, idempotent, and unable to replace a recorded
+ * count with "not recorded".) That is the ADR's rule and it is worth being explicit about why
  * a self-correcting projection is the wrong design here: the correction hides the
  * bug that caused the drift, and — the operational half of the same argument —
  * somebody has already acted on the earlier figure. A manager who ordered stock
@@ -64,16 +74,75 @@ public class DayCloseService {
     private final SubjectPseudonym pseudonym;
     private final Clock clock;
     private final @Nullable PromotionRedemptionSource promotionRedemptions;
+    private final @Nullable StaffShiftFactSource staffShifts;
+    private final @Nullable ReviewFactSource reviewFacts;
+    private final @Nullable RecoveryFactSource recoveryFacts;
+    private final @Nullable FunnelCaptureService funnelCapture;
+    private final @Nullable ConfigurationResolver configuration;
 
     public DayCloseService(
             JdbcReportingStore store, BusinessDayService businessDays, SubjectPseudonym pseudonym, Clock clock) {
-        this(store, businessDays, pseudonym, clock, null);
+        this(store, businessDays, pseudonym, clock, null, null, null, null, null, null);
+    }
+
+    public DayCloseService(
+            JdbcReportingStore store,
+            BusinessDayService businessDays,
+            SubjectPseudonym pseudonym,
+            Clock clock,
+            @Nullable PromotionRedemptionSource promotionRedemptions) {
+        this(store, businessDays, pseudonym, clock, promotionRedemptions, null, null, null, null, null);
+    }
+
+    /** The close with the promotion and the workforce sources wired and no review, recovery or funnel source. */
+    public DayCloseService(
+            JdbcReportingStore store,
+            BusinessDayService businessDays,
+            SubjectPseudonym pseudonym,
+            Clock clock,
+            @Nullable PromotionRedemptionSource promotionRedemptions,
+            @Nullable StaffShiftFactSource staffShifts) {
+        this(store, businessDays, pseudonym, clock, promotionRedemptions, staffShifts, null, null, null, null);
+    }
+
+    /** The close with the promotion source and the customer funnel wired and nothing else. */
+    public DayCloseService(
+            JdbcReportingStore store,
+            BusinessDayService businessDays,
+            SubjectPseudonym pseudonym,
+            Clock clock,
+            @Nullable PromotionRedemptionSource promotionRedemptions,
+            @Nullable FunnelCaptureService funnelCapture) {
+        this(store, businessDays, pseudonym, clock, promotionRedemptions, null, null, null, funnelCapture, null);
+    }
+
+    /** The close with the promotion and the review and recovery sources wired and no workforce source. */
+    public DayCloseService(
+            JdbcReportingStore store,
+            BusinessDayService businessDays,
+            SubjectPseudonym pseudonym,
+            Clock clock,
+            @Nullable PromotionRedemptionSource promotionRedemptions,
+            @Nullable ReviewFactSource reviewFacts,
+            @Nullable RecoveryFactSource recoveryFacts) {
+        this(store, businessDays, pseudonym, clock, promotionRedemptions, null, reviewFacts, recoveryFacts, null, null);
     }
 
     /**
      * @param promotionRedemptions ADR 0140: where the redemption fact (7.9) comes from, read
      *        through the {@code pricing.api} port and never from pricing's tables (ADR 0023);
      *        null builds no promotion facts, which is what a close with no pricing wired does
+     * @param staffShifts ADR 0156: where the staff-hours fact comes from, read through the {@code
+     *        workforce.api} port and never from workforce's tables (ADR 0023); null builds no staff
+     *        shift facts, which is what a close with no workforce wired does
+     * @param reviewFacts ADR 0159: where the review and tag facts come from, read through the
+     *        {@code reviews.api} port; null builds none
+     * @param recoveryFacts ADR 0159: where the service-recovery case fact comes from, through the
+     *        same module's other port; null builds none
+     * @param funnelCapture ADR 0167 (7.6c): the customer funnel's daily counts, captured inside the
+     *        close's own transaction; null captures none, which is what a close with no funnel wired does
+     * @param configuration ADR 0175: where the tenant's {@code voice.ring_time_ceiling_seconds}
+     *        comes from, read once per close; null uses the declared default
      */
     @Autowired
     public DayCloseService(
@@ -81,12 +150,22 @@ public class DayCloseService {
             BusinessDayService businessDays,
             SubjectPseudonym pseudonym,
             Clock clock,
-            @Nullable PromotionRedemptionSource promotionRedemptions) {
+            @Nullable PromotionRedemptionSource promotionRedemptions,
+            @Nullable StaffShiftFactSource staffShifts,
+            @Nullable ReviewFactSource reviewFacts,
+            @Nullable RecoveryFactSource recoveryFacts,
+            @Nullable FunnelCaptureService funnelCapture,
+            @Nullable ConfigurationResolver configuration) {
         this.store = store;
         this.businessDays = businessDays;
         this.pseudonym = pseudonym;
         this.clock = clock;
         this.promotionRedemptions = promotionRedemptions;
+        this.staffShifts = staffShifts;
+        this.reviewFacts = reviewFacts;
+        this.recoveryFacts = recoveryFacts;
+        this.funnelCapture = funnelCapture;
+        this.configuration = configuration;
     }
 
     /**
@@ -123,6 +202,20 @@ public class DayCloseService {
                         .map(ReportingFacts.PromotionRedemptionFact::redemptionId)
                         .toList(),
                 businessDate);
+        // The review fact is keyed by review alone, for the same reason.
+        store.clearMisfiledReviews(
+                tenantId,
+                derived.reviews().stream()
+                        .map(ReportingFacts.ReviewFact::reviewId)
+                        .toList(),
+                businessDate);
+
+        // ADR 0156: a shift whose start was corrected onto another business date leaves the day it was
+        // filed under before this day is written, or its hours would count twice.
+        store.clearMisfiledStaffShifts(
+                tenantId,
+                derived.staffShifts().stream().map(StaffShiftFact::shiftId).toList(),
+                businessDate);
 
         derived.orders().forEach(store::insertOrderFact);
         // P39: the tender producer, right beside the order-fact write and inside
@@ -154,13 +247,31 @@ public class DayCloseService {
         // ADR 0140 (7.9): the promotion redemption fact, in the same transaction for the
         // same "a day is written whole or not at all" reason.
         derived.promotionRedemptions().forEach(store::insertPromotionRedemptionFact);
+        // ADR 0156: closed staff shifts, in the same transaction for the same reason.
+        derived.staffShifts().forEach(store::insertStaffShiftFact);
+        // ADR 0159 (5.4/5.5): the review facts with the day, the case fact upserted because a case is
+        // opened on one day and closed on another. The same "written whole or not at all" reason.
+        derived.reviews().forEach(store::insertReviewFact);
+        derived.reviewTags().forEach(store::insertReviewTagFact);
+        derived.recoveryCases().forEach(store::upsertRecoveryCaseFact);
+        // ADR 0163 (Decision 1): the portions each station fired, in the same transaction for the same "a
+        // day is written whole or not at all" reason. This extends the close job's one stated exception
+        // ("reads ordering and payments") by one source, kitchen, exactly as ADR 0115 did for tenders.
+        derived.stationLoads().forEach(store::insertStationLoadFact);
+        // ADR 0167 (7.6c): the customer funnel's daily counts, in the same transaction for the same
+        // "a day is written whole or not at all" reason -- and read from the live carts here because
+        // the retention sweeper deletes them, so this is the one moment the basket count can be had.
+        if (funnelCapture != null) {
+            funnelCapture.capture(tenantId, businessDate, boundary, derived.orders());
+        }
 
         store.completeRun(runId, derived.orders().size(), derived.lines().size(), 0, clock.instant());
 
         log.info(
                 "Closed business day {} for tenant {}: {} orders, {} lines, {} tenders, {} refunds, "
                         + "{} call-hours, {} deliveries, {} fee resolutions, {} external-delivery costs, "
-                        + "{} promotion redemptions",
+                        + "{} promotion redemptions, {} staff shifts, {} reviews, {} recovery cases, "
+                        + "{} station-hours",
                 businessDate,
                 tenantId,
                 derived.orders().size(),
@@ -171,7 +282,11 @@ public class DayCloseService {
                 derived.deliveries().size(),
                 derived.feeResolutions().size(),
                 derived.externalDeliveryCosts().size(),
-                derived.promotionRedemptions().size());
+                derived.promotionRedemptions().size(),
+                derived.staffShifts().size(),
+                derived.reviews().size(),
+                derived.recoveryCases().size(),
+                derived.stationLoads().size());
 
         return new CloseResult(
                 runId,
@@ -255,8 +370,20 @@ public class DayCloseService {
         }
 
         comparePromotionFacts(divergences, tenantId, businessDate, derived.promotionRedemptions());
+        compareStaffShifts(divergences, tenantId, businessDate, derived.staffShifts());
+        compareReviewFacts(divergences, tenantId, businessDate, derived.reviews());
+        compareRecoveryFacts(divergences, tenantId, businessDate, derived.recoveryCases());
         comparePaymentMix(divergences, tenantId, businessDate, derived.tenders());
+        compareStationLoad(divergences, tenantId, businessDate, derived.stationLoads());
+        compareCallFacts(divergences, tenantId, businessDate, derived.callHours());
         compareDeliveries(divergences, tenantId, businessDate, derived.deliveries());
+
+        // ADR 0167: the funnel is a count of activity and not a financial snapshot, so the recut
+        // repeats its capture rather than reporting a divergence from it. Idempotent, and it leaves a
+        // count already recorded alone for a day whose carts the sweeper has since deleted.
+        if (funnelCapture != null) {
+            funnelCapture.capture(tenantId, businessDate, boundary, derived.orders());
+        }
 
         for (Divergence divergence : divergences) {
             store.insertDivergence(
@@ -272,7 +399,10 @@ public class DayCloseService {
         }
         store.completeRun(runId, derived.orders().size(), derived.lines().size(), divergences.size(), clock.instant());
 
-        if (!divergences.isEmpty()) {
+        long unexpected = divergences.stream()
+                .filter(divergence -> !isExpectedLateProvenanceDrift(divergence))
+                .count();
+        if (unexpected > 0) {
             // Logged at warn and not error: the stored figure is still what every
             // surface shows, deliberately, so this is something a person has to
             // decide about rather than an outage.
@@ -281,7 +411,15 @@ public class DayCloseService {
                             + "the stored figures were left alone (ADR 0043)",
                     businessDate,
                     tenantId,
-                    divergences.size());
+                    unexpected);
+        }
+        if (divergences.size() > unexpected) {
+            log.info(
+                    "Recut of {} for tenant {} found {} higher call-to-order conversion count(s): provenance "
+                            + "written after the day closed, which ADR 0175 expects",
+                    businessDate,
+                    tenantId,
+                    divergences.size() - unexpected);
         }
         return new CloseResult(
                 runId,
@@ -290,6 +428,20 @@ public class DayCloseService {
                 derived.refunds().size(),
                 derived.callHours().size(),
                 divergences);
+    }
+
+    /**
+     * ADR 0175: the tenant's {@code voice.ring_time_ceiling_seconds}, read once per close through the
+     * ADR 0030 resolver. A close wired without the resolver, or a stored value that is not a positive
+     * number, uses the declared default rather than failing the day.
+     */
+    private int ringTimeCeilingSeconds(UUID tenantId) {
+        if (configuration == null) {
+            return DayAggregator.DEFAULT_RING_TIME_CEILING_SECONDS;
+        }
+        Integer seconds =
+                configuration.value(VoiceConfigurationKeys.RING_TIME_CEILING_SECONDS, ResourceScope.tenant(tenantId));
+        return seconds == null || seconds < 1 ? DayAggregator.DEFAULT_RING_TIME_CEILING_SECONDS : seconds;
     }
 
     // ------------------------------------------------------------ derivation
@@ -360,7 +512,8 @@ public class DayCloseService {
                 boundary.zone(),
                 sourceCallEvents,
                 boundary.version(),
-                MetricRegistry.CALCULATION_VERSION);
+                MetricRegistry.CALCULATION_VERSION,
+                ringTimeCeilingSeconds(tenantId));
 
         // T11 / ADR 0125. Read by the same [from, to) instant range every
         // order-side source above uses, against the earning's own
@@ -477,6 +630,97 @@ public class DayCloseService {
                                                 source.redeemedAt()))
                                 .toList();
 
+        // ADR 0156: the closed shifts whose business date is this day, through the workforce port. The
+        // fact carries the non-personal display reference and no name.
+        List<StaffShiftFact> staffShiftFacts = staffShifts == null
+                ? List.of()
+                : staffShifts.closedShiftsOn(tenantId, businessDate).stream()
+                        .map(source -> new StaffShiftFact(
+                                tenantId,
+                                businessDate,
+                                source.shiftId(),
+                                boundary.version(),
+                                MetricRegistry.CALCULATION_VERSION,
+                                source.brandId(),
+                                source.locationId(),
+                                source.staffMemberId(),
+                                source.staffDisplayReference(),
+                                source.plannedSeconds(),
+                                source.workedSeconds(),
+                                source.breakSeconds(),
+                                source.paidSeconds(),
+                                source.varianceSeconds(),
+                                source.approvalStatus().name(),
+                                source.hadRosterEntry(),
+                                source.startedAt(),
+                                source.endedAt()))
+                        .toList();
+        // ADR 0159 (5.4/5.5): the reviews submitted in the window and the cases opened or closed in it,
+        // through the reviews.api ports. The customer becomes the ADR 0029 keyed pseudonym here and
+        // never travels as an account id; no comment, note, tag label or courier crosses the port.
+        List<ReportingFacts.ReviewFact> reviewFactList = new ArrayList<>();
+        List<ReportingFacts.ReviewTagFact> reviewTagFactList = new ArrayList<>();
+        if (reviewFacts != null) {
+            for (ReviewFactSource.ReviewFact source : reviewFacts.submittedBetween(tenantId, from, to)) {
+                reviewFactList.add(new ReportingFacts.ReviewFact(
+                        tenantId,
+                        source.reviewId(),
+                        businessDate,
+                        boundary.version(),
+                        MetricRegistry.CALCULATION_VERSION,
+                        source.brandId(),
+                        source.locationId(),
+                        source.orderId(),
+                        pseudonym.of(tenantId, source.customerAccountId()),
+                        source.rating(),
+                        source.hasComment(),
+                        source.tags().size()));
+                for (ReviewFactSource.TagFact tag : source.tags()) {
+                    reviewTagFactList.add(new ReportingFacts.ReviewTagFact(
+                            tenantId,
+                            source.reviewId(),
+                            tag.tagId(),
+                            businessDate,
+                            boundary.version(),
+                            MetricRegistry.CALCULATION_VERSION,
+                            source.brandId(),
+                            source.locationId(),
+                            tag.category(),
+                            tag.sentiment()));
+                }
+            }
+        }
+        List<ReportingFacts.RecoveryCaseFact> recoveryCaseFacts = new ArrayList<>();
+        if (recoveryFacts != null) {
+            for (RecoveryFactSource.CaseFact source : recoveryFacts.touchedBetween(tenantId, from, to)) {
+                Instant closedAt = source.closedAt();
+                recoveryCaseFacts.add(new ReportingFacts.RecoveryCaseFact(
+                        tenantId,
+                        source.caseId(),
+                        boundary.dateOf(source.openedAt()),
+                        closedAt == null ? null : boundary.dateOf(closedAt),
+                        boundary.version(),
+                        MetricRegistry.CALCULATION_VERSION,
+                        source.brandId(),
+                        source.locationId(),
+                        source.orderId(),
+                        source.reviewId(),
+                        source.rating(),
+                        source.state(),
+                        source.outcomeCode(),
+                        seconds(source.openedAt(), source.firstResponseAt()),
+                        seconds(source.openedAt(), closedAt),
+                        source.firstResponseBreached(),
+                        source.resolutionBreached(),
+                        source.compensationCount(),
+                        source.remedyMoneyMinor(),
+                        source.remedyMoneyMinor() > 0 ? source.remedyCurrency() : null));
+            }
+        }
+        // ADR 0163: the portions each station fired, at the instant the ticket fired, in the same
+        // [from, to) range as every source read above.
+        List<ReportingFacts.StationLoadFact> stationLoads = stationLoadsOf(tenantId, businessDate, boundary);
+
         return new DerivedDay(
                 orders,
                 lines,
@@ -488,7 +732,114 @@ public class DayCloseService {
                 deliveries,
                 feeResolutions,
                 externalDeliveryCosts,
-                promotionFacts);
+                promotionFacts,
+                staffShiftFacts,
+                reviewFactList,
+                reviewTagFactList,
+                recoveryCaseFacts,
+                stationLoads);
+    }
+
+    private static @Nullable Long seconds(Instant from, @Nullable Instant to) {
+        return to == null ? null : Duration.between(from, to).toSeconds();
+    }
+
+    private List<ReportingFacts.StationLoadFact> stationLoadsOf(
+            UUID tenantId, LocalDate businessDate, BusinessDayBoundary boundary) {
+        return store
+                .readSourceStationLoad(tenantId, boundary.startOf(businessDate), boundary.endOf(businessDate))
+                .stream()
+                .map(source -> new ReportingFacts.StationLoadFact(
+                        tenantId,
+                        businessDate,
+                        source.locationId(),
+                        source.stationId(),
+                        source.stationCode(),
+                        source.stationRole(),
+                        source.operatingHour(),
+                        source.portions(),
+                        source.tickets(),
+                        boundary.version(),
+                        MetricRegistry.CALCULATION_VERSION))
+                .toList();
+    }
+
+    /**
+     * ADR 0163 Decision 1, the fact-scoped rebuild: deletes and rewrites {@code reporting.fact_station_load}
+     * for one business date, calls no {@code clearDay}, and touches no other fact and no aggregate, so no
+     * figure a manager acted on moves.
+     *
+     * <p>It is allowed because the fact is new: a closed day has no earlier figure for anybody to have acted
+     * on, which is the reason ADR 0043 gives for the recut's rule that it never writes. It takes the boundary
+     * version the day closed under (recorded on that date's {@code CLOSE} run) and refuses a date whose
+     * version differs from the tenant's current one ({@link RebuildStatus#BOUNDARY_CHANGED}), leaving the
+     * date without rows, which the headcount plan skips as a non-qualifying date. Only the one-time backfill
+     * calls it; no schedule does. Re-running it over unchanged tickets reproduces byte-identical rows.
+     */
+    @Transactional
+    public StationLoadRebuild rebuildStationLoad(UUID tenantId, LocalDate businessDate) {
+        BusinessDayBoundary boundary = businessDays.boundaryFor(tenantId);
+        Optional<Integer> closedUnder = store.closedUnderBoundaryVersion(tenantId, businessDate);
+        if (closedUnder.isEmpty()) {
+            // A date that was never closed has no day for the fact to belong to; the close writes it.
+            return new StationLoadRebuild(businessDate, RebuildStatus.NOT_CLOSED, 0);
+        }
+        if (closedUnder.get() != boundary.version()) {
+            return new StationLoadRebuild(businessDate, RebuildStatus.BOUNDARY_CHANGED, 0);
+        }
+        List<ReportingFacts.StationLoadFact> facts = stationLoadsOf(tenantId, businessDate, boundary);
+        store.deleteStationLoad(tenantId, businessDate);
+        facts.forEach(store::insertStationLoadFact);
+        log.info(
+                "Rebuilt the station-load fact of {} for tenant {}: {} station-hours",
+                businessDate,
+                tenantId,
+                facts.size());
+        return new StationLoadRebuild(businessDate, RebuildStatus.REBUILT, facts.size());
+    }
+
+    /**
+     * ADR 0163: the portions each station fired in the day, per location and station, in thousandths of a
+     * portion (exact: {@code portions} has three decimals and the divergence columns are {@code bigint}),
+     * against the rows the close stored. A difference is a divergence row and nothing else: the recut
+     * never writes this fact.
+     *
+     * <p>A date with no stored rows at all is not compared. The fact starts on the close that first wrote
+     * it, and a day closed before that has nothing to disagree with; a day closed after it that fired any
+     * ticket always has rows, so a ticket that fires, or is struck, after the close is still reported.
+     */
+    private void compareStationLoad(
+            List<Divergence> into,
+            UUID tenantId,
+            LocalDate businessDate,
+            List<ReportingFacts.StationLoadFact> derived) {
+        List<ReportingFacts.StationLoadFact> storedFacts = store.readStationLoadFacts(tenantId, businessDate);
+        if (storedFacts.isEmpty()) {
+            return;
+        }
+        Map<String, Long> stored = new LinkedHashMap<>();
+        for (var fact : storedFacts) {
+            stored.merge(stationDimension(fact.locationId(), fact.stationId()), fact.thousandths(), Long::sum);
+        }
+        Map<String, Long> fresh = new LinkedHashMap<>();
+        for (var fact : derived) {
+            fresh.merge(stationDimension(fact.locationId(), fact.stationId()), fact.thousandths(), Long::sum);
+        }
+        java.util.Set<String> slices = new java.util.LinkedHashSet<>(stored.keySet());
+        slices.addAll(fresh.keySet());
+        for (String slice : slices) {
+            compare(
+                    into,
+                    slice,
+                    "kitchen_station_portions",
+                    1,
+                    stored.getOrDefault(slice, 0L),
+                    fresh.getOrDefault(slice, 0L));
+        }
+    }
+
+    private static String stationDimension(UUID locationId, UUID stationId) {
+        return "location=%s;station=%s".formatted(locationId, stationId);
     }
 
     /**
@@ -641,7 +992,10 @@ public class DayCloseService {
                 line.comboSelectionId(),
                 line.comboContainerVariantId(),
                 line.comboQuantity(),
-                line.comboName());
+                line.comboName(),
+                // ADR 0158 (V0538): which lines a rule added to the basket.
+                line.lineOrigin(),
+                line.autoAddRuleId());
     }
 
     private static @Nullable Integer elapsed(@Nullable Instant from, @Nullable Instant to) {
@@ -702,6 +1056,104 @@ public class DayCloseService {
     }
 
     /**
+     * ADR 0156: the closed staff shifts of a day, per branch, against what the close stored: the shift
+     * count and the worked and paid seconds. A shift edited after its day closed (a corrected clock-out, a
+     * void, an approval that arrived late) leaves the stored fact behind the timesheet; the recut is the
+     * one place that says so, and nothing rewrites the stored row.
+     */
+    private void compareStaffShifts(
+            List<Divergence> into, UUID tenantId, LocalDate businessDate, List<StaffShiftFact> derived) {
+        Map<UUID, long[]> stored = new LinkedHashMap<>();
+        store.readStaffShiftDayTotals(tenantId, businessDate)
+                .forEach(total -> stored.put(
+                        total.locationId(), new long[] {total.shifts(), total.workedSeconds(), total.paidSeconds()}));
+        Map<UUID, long[]> fresh = new LinkedHashMap<>();
+        for (StaffShiftFact fact : derived) {
+            long[] totals = fresh.computeIfAbsent(fact.locationId(), location -> new long[3]);
+            totals[0]++;
+            totals[1] += fact.workedSeconds();
+            totals[2] += fact.paidSeconds();
+        }
+        java.util.Set<UUID> locations = new java.util.LinkedHashSet<>(stored.keySet());
+        locations.addAll(fresh.keySet());
+        long[] none = new long[3];
+        for (UUID location : locations) {
+            long[] before = stored.getOrDefault(location, none);
+            long[] after = fresh.getOrDefault(location, none);
+            String dimension = "location=%s".formatted(location);
+            compare(into, dimension, "staff_hours.shifts", 1, before[0], after[0]);
+            compare(into, dimension, "staff_hours.worked", 1, before[1], after[1]);
+            compare(into, dimension, "staff_hours.paid", 1, before[2], after[2]);
+        }
+    }
+
+    /**
+     * ADR 0159: the review count, the sum of ratings and the tag count per brand, against the rows
+     * the close stored. A review is final once submitted, but an erasure or a repair of a row after
+     * the day closed is a divergence for recut to report, not a silent rewrite.
+     */
+    private void compareReviewFacts(
+            List<Divergence> into, UUID tenantId, LocalDate businessDate, List<ReportingFacts.ReviewFact> derived) {
+        Map<UUID, long[]> stored = new LinkedHashMap<>();
+        store.readReviewDayTotals(tenantId, businessDate)
+                .forEach(total ->
+                        stored.put(total.brandId(), new long[] {total.reviews(), total.ratingSum(), total.tags()}));
+        Map<UUID, long[]> fresh = new LinkedHashMap<>();
+        for (var fact : derived) {
+            long[] totals = fresh.computeIfAbsent(fact.brandId(), brand -> new long[3]);
+            totals[0]++;
+            totals[1] += fact.rating();
+            totals[2] += fact.tagCount();
+        }
+        java.util.Set<UUID> brands = new java.util.LinkedHashSet<>(stored.keySet());
+        brands.addAll(fresh.keySet());
+        long[] none = new long[3];
+        for (UUID brand : brands) {
+            long[] before = stored.getOrDefault(brand, none);
+            long[] after = fresh.getOrDefault(brand, none);
+            String dimension = "brand=%s".formatted(brand);
+            compare(into, dimension, "reviews.count", 1, before[0], after[0]);
+            compare(into, dimension, "reviews.rating_sum", 1, before[1], after[1]);
+            compare(into, dimension, "reviews.tagged", 1, before[2], after[2]);
+        }
+    }
+
+    /**
+     * ADR 0159: the cases opened on the day and the cases closed on it, per brand. A case that
+     * closes after its opening day closed does not diverge that day: it is opened there, and it is
+     * counted as closed on the later day, which is what the close of that day stores.
+     */
+    private void compareRecoveryFacts(
+            List<Divergence> into,
+            UUID tenantId,
+            LocalDate businessDate,
+            List<ReportingFacts.RecoveryCaseFact> derived) {
+        Map<UUID, long[]> stored = new LinkedHashMap<>();
+        store.readRecoveryDayTotals(tenantId, businessDate)
+                .forEach(total -> stored.put(total.brandId(), new long[] {total.opened(), total.closed()}));
+        Map<UUID, long[]> fresh = new LinkedHashMap<>();
+        for (var fact : derived) {
+            long[] totals = fresh.computeIfAbsent(fact.brandId(), brand -> new long[2]);
+            if (businessDate.equals(fact.openedBusinessDate())) {
+                totals[0]++;
+            }
+            if (businessDate.equals(fact.closedBusinessDate())) {
+                totals[1]++;
+            }
+        }
+        java.util.Set<UUID> brands = new java.util.LinkedHashSet<>(stored.keySet());
+        brands.addAll(fresh.keySet());
+        long[] none = new long[2];
+        for (UUID brand : brands) {
+            long[] before = stored.getOrDefault(brand, none);
+            long[] after = fresh.getOrDefault(brand, none);
+            String dimension = "brand=%s".formatted(brand);
+            compare(into, dimension, "recovery.cases_opened", 1, before[0], after[0]);
+            compare(into, dimension, "recovery.cases_closed", 1, before[1], after[1]);
+        }
+    }
+
+    /**
      * ADR 0115 ({@code payment_mix.amount.v1}): the net tendered amount per (branch, legal
      * entity, payment method), over the tenders the metric's inclusion rule counts, against the
      * rows the close stored.
@@ -742,6 +1194,70 @@ public class DayCloseService {
                     stored.getOrDefault(slice, 0L),
                     fresh.getOrDefault(slice, 0L));
         }
+    }
+
+    /** The metric name of a call-to-order conversion divergence; see {@link #compareCallFacts}. */
+    static final String CALL_CONVERTED_METRIC = "call.converted";
+
+    /** The metric name of a ring-sample divergence; see {@link #compareCallFacts}. */
+    static final String CALL_RING_SAMPLES_METRIC = "call.ring_samples";
+
+    /**
+     * ADR 0175: converted calls and ring samples per (branch, hour, operator), against the rows the
+     * close stored. Rows closed before the measure existed (a {@code NULL} count) are skipped: they
+     * are "not measured", so there is nothing stored to disagree with.
+     *
+     * <p>A conversion is an order whose provenance was written after the day closed (the console
+     * writes it within seconds of placing the order, but a day can close in between), so a recut
+     * finding more conversions than stored is the expected shape of drift and is reported as
+     * information, not as a warning; see {@link #isExpectedLateProvenanceDrift}.
+     */
+    private void compareCallFacts(
+            List<Divergence> into, UUID tenantId, LocalDate businessDate, List<CallHourFact> derived) {
+        Map<String, CallHourFact> storedByKey = new LinkedHashMap<>();
+        for (CallHourFact stored : store.readCallHourFactsForDay(tenantId, businessDate)) {
+            storedByKey.put(callHourDimension(stored), stored);
+        }
+        Map<String, CallHourFact> freshByKey = new LinkedHashMap<>();
+        derived.forEach(fact -> freshByKey.put(callHourDimension(fact), fact));
+
+        java.util.Set<String> slices = new java.util.LinkedHashSet<>(storedByKey.keySet());
+        slices.addAll(freshByKey.keySet());
+        for (String slice : slices) {
+            CallHourFact before = storedByKey.get(slice);
+            CallHourFact after = freshByKey.get(slice);
+            if (before != null && before.answeredCallCount() == null) {
+                continue;
+            }
+            compare(
+                    into,
+                    slice,
+                    CALL_CONVERTED_METRIC,
+                    1,
+                    before == null ? 0 : orZero(before.convertedCount()),
+                    after == null ? 0 : orZero(after.convertedCount()));
+            compare(
+                    into,
+                    slice,
+                    CALL_RING_SAMPLES_METRIC,
+                    1,
+                    before == null ? 0 : orZero(before.ringSampleCount()),
+                    after == null ? 0 : orZero(after.ringSampleCount()));
+        }
+    }
+
+    private static long orZero(@Nullable Integer value) {
+        return value == null ? 0 : value;
+    }
+
+    private static String callHourDimension(CallHourFact fact) {
+        return "location=%s;hour=%d;operator=%s"
+                .formatted(fact.locationId(), fact.hourOfDay(), fact.operatorPrincipalId());
+    }
+
+    /** ADR 0175: a higher recut conversion count is late provenance, which the record expects. */
+    public static boolean isExpectedLateProvenanceDrift(Divergence divergence) {
+        return CALL_CONVERTED_METRIC.equals(divergence.metricName()) && divergence.difference() > 0;
     }
 
     /**
@@ -810,7 +1326,24 @@ public class DayCloseService {
             List<uz.horecaos.platform.reporting.application.ReportingFacts.ExternalDeliveryCostFact>
                     externalDeliveryCosts,
             List<uz.horecaos.platform.reporting.application.ReportingFacts.PromotionRedemptionFact>
-                    promotionRedemptions) {}
+                    promotionRedemptions,
+            List<StaffShiftFact> staffShifts,
+            List<ReportingFacts.ReviewFact> reviews,
+            List<ReportingFacts.ReviewTagFact> reviewTags,
+            List<ReportingFacts.RecoveryCaseFact> recoveryCases,
+            List<ReportingFacts.StationLoadFact> stationLoads) {}
+
+    /** What a fact-scoped station-load rebuild did for one date. */
+    public enum RebuildStatus {
+        /** The date's rows were deleted and rewritten from the tickets. */
+        REBUILT,
+        /** The date closed under another boundary regime than the tenant's current one: left without rows. */
+        BOUNDARY_CHANGED,
+        /** The date was never closed, so there is no day for the fact to belong to. */
+        NOT_CLOSED
+    }
+
+    public record StationLoadRebuild(LocalDate businessDate, RebuildStatus status, int rows) {}
 
     /**
      * One slice whose re-derived figure disagrees with the stored one.
@@ -840,5 +1373,16 @@ public class DayCloseService {
             int linesWritten,
             int refundsWritten,
             int callsWritten,
-            List<Divergence> divergences) {}
+            List<Divergence> divergences) {
+
+        /**
+         * The divergences that are not the late-provenance drift ADR 0175 expects: what an alert
+         * on the recut should count.
+         */
+        public long unexpectedDivergenceCount() {
+            return divergences.stream()
+                    .filter(divergence -> !isExpectedLateProvenanceDrift(divergence))
+                    .count();
+        }
+    }
 }

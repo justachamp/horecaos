@@ -8,7 +8,14 @@ import { mediaPaths } from '../../core/api/operations-paths';
 
 export type MediaOwnerScope = 'TENANT' | 'BRAND' | 'LOCATION';
 export type MediaVisibility = 'PUBLIC' | 'PRIVATE';
-export type MediaAssetStatus = 'PENDING' | 'AVAILABLE' | 'REJECTED';
+/** `UPLOADED` is what finalize answers: verification is asynchronous, so `AVAILABLE` or `REJECTED` follows. */
+export type MediaAssetStatus = 'PENDING' | 'PENDING_UPLOAD' | 'UPLOADED' | 'AVAILABLE' | 'REJECTED';
+
+/**
+ * `CREATIVE` asks for the extra `HERO` rendition (1600 px) a home-screen banner needs (ADR 0157); it
+ * is set only by the content editor's upload, so a product photo is never rendered a fourth time.
+ */
+export type MediaRenditionProfile = 'CREATIVE';
 
 export interface UploadRequestResult {
   readonly assetId: string;
@@ -51,6 +58,7 @@ export class MediaApi {
     ownerId: string,
     visibility: MediaVisibility,
     file: File,
+    renditionProfile?: MediaRenditionProfile,
   ): Observable<UploadRequestResult> {
     return this.api.post<
       {
@@ -60,6 +68,7 @@ export class MediaApi {
         contentType: string;
         sizeBytes: number;
         filename: string;
+        renditionProfile?: MediaRenditionProfile;
       },
       UploadRequestResult
     >(
@@ -71,6 +80,7 @@ export class MediaApi {
         contentType: file.type || 'application/octet-stream',
         sizeBytes: file.size,
         filename: file.name,
+        ...(renditionProfile ? { renditionProfile } : {}),
       }),
     );
   }
@@ -94,8 +104,16 @@ export class MediaApi {
     ownerId: string,
     visibility: MediaVisibility,
     file: File,
+    renditionProfile?: MediaRenditionProfile,
   ): Observable<MediaAssetView> {
-    return this.requestUpload(tenantId, ownerScope, ownerId, visibility, file).pipe(
+    return this.requestUpload(
+      tenantId,
+      ownerScope,
+      ownerId,
+      visibility,
+      file,
+      renditionProfile,
+    ).pipe(
       switchMap((requested) => this.putBytes(requested, file).pipe(map(() => requested))),
       switchMap((requested) => this.finalize(tenantId, requested.assetId)),
     );
@@ -105,6 +123,80 @@ export class MediaApi {
     return this.api
       .get<MediaAssetView>(mediaPaths.asset(tenantId, assetId))
       .pipe(map((result) => result.value));
+  }
+
+  // ---- The brand's own routes (ADR 0157, `BrandMediaController`) --------------------------------
+  //
+  // The tenant routes above need a tenant grant; a brand manager's `media.upload` is a brand grant
+  // and covers only these. The owner is the brand in the path, so none of these takes an owner, and a
+  // tenant owner or administrator is covered by the same routes.
+
+  requestBrandUpload(
+    tenantId: string,
+    brandId: string,
+    visibility: MediaVisibility,
+    file: File,
+    renditionProfile?: MediaRenditionProfile,
+  ): Observable<UploadRequestResult> {
+    return this.api.post<
+      {
+        visibility: MediaVisibility;
+        contentType: string;
+        sizeBytes: number;
+        filename: string;
+        renditionProfile?: MediaRenditionProfile;
+      },
+      UploadRequestResult
+    >(
+      mediaPaths.brandUploadRequests(tenantId, brandId),
+      command({
+        visibility,
+        contentType: file.type || 'application/octet-stream',
+        sizeBytes: file.size,
+        filename: file.name,
+        ...(renditionProfile ? { renditionProfile } : {}),
+      }),
+    );
+  }
+
+  finalizeBrand(tenantId: string, brandId: string, assetId: string): Observable<MediaAssetView> {
+    return this.api.post<undefined, MediaAssetView>(
+      mediaPaths.brandFinalize(tenantId, brandId, assetId),
+      command(undefined),
+    );
+  }
+
+  /** The whole flow under a brand: request → upload the bytes → finalize. */
+  uploadForBrand(
+    tenantId: string,
+    brandId: string,
+    visibility: MediaVisibility,
+    file: File,
+    renditionProfile?: MediaRenditionProfile,
+  ): Observable<MediaAssetView> {
+    return this.requestBrandUpload(tenantId, brandId, visibility, file, renditionProfile).pipe(
+      switchMap((requested) => this.putBytes(requested, file).pipe(map(() => requested))),
+      switchMap((requested) => this.finalizeBrand(tenantId, brandId, requested.assetId)),
+    );
+  }
+
+  brandAsset(tenantId: string, brandId: string, assetId: string): Observable<MediaAssetView> {
+    return this.api
+      .get<MediaAssetView>(mediaPaths.brandAsset(tenantId, brandId, assetId))
+      .pipe(map((result) => result.value));
+  }
+
+  brandDownloadUrl(
+    tenantId: string,
+    brandId: string,
+    assetId: string,
+    variant?: MediaDerivativeVariant,
+  ): Observable<string> {
+    return this.api
+      .get<DownloadUrlResponse>(mediaPaths.brandDownloadUrl(tenantId, brandId, assetId), {
+        params: variant ? { variant } : {},
+      })
+      .pipe(map((result) => result.value.url));
   }
 
   /**

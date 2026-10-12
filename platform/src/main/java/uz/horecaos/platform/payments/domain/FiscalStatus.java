@@ -49,9 +49,32 @@ public enum FiscalStatus {
      * module because both modules read the same column, and
      * {@code ck_fiscal_document_status} is the one definition of what it may hold.
      */
-    BLOCKED;
+    BLOCKED,
+
+    /**
+     * The four states an issued receipt moves to once somebody asks for it to be corrected or
+     * voided (ADR 0166, written by the {@code fiscal} module only).
+     *
+     * <p>Read here for the reason {@link #BLOCKED} is: both modules read one column, and a row in
+     * one of these must load rather than fail to map. In every one of them the receipt exists and
+     * its evidence is on the row, so {@code recordEvidence} refuses to rewrite it exactly as it
+     * refuses an {@link #ISSUED} one.
+     */
+    CORRECTION_REQUESTED,
+    VOID_REQUESTED,
+    CORRECTED,
+    VOIDED;
 
     public boolean owesAReceipt() {
         return this == PENDING || this == SUBMITTED || this == FAILED || this == BLOCKED;
+    }
+
+    /** Whether a receipt exists and its identifiers must not be rewritten. */
+    public boolean holdsAReceipt() {
+        return this == ISSUED
+                || this == CORRECTION_REQUESTED
+                || this == VOID_REQUESTED
+                || this == CORRECTED
+                || this == VOIDED;
     }
 }

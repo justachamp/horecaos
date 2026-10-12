@@ -420,6 +420,55 @@ public final class OrderingConfigurationKeys {
                     + "is kept before it is deleted outright.")
             .build();
 
+    /** The code both declarations share. */
+    public static final String AUTO_ADD_ENABLED_CODE = "ordering.auto_add_enabled";
+
+    /**
+     * ADR 0158's rollout gate: whether the cart evaluates auto-add rules for this brand. With it off the
+     * cart neither adds nor removes anything. A policy and not a deploy: rollback is setting it false.
+     * Not {@code tenantVisible()}: the rollout is the platform administrator's, brand by brand.
+     */
+    public static final ConfigurationKey<Boolean> AUTO_ADD_ENABLED = ConfigurationKey.of(
+                    AUTO_ADD_ENABLED_CODE, Boolean.class)
+            .defaultValue(false)
+            .ownedBy("ordering")
+            .settableAt(ScopeType.BRAND)
+            .describedAs("Whether the cart evaluates auto-add rules (packaging, cutlery and the like) for this "
+                    + "brand. Off means the cart neither adds nor removes anything.")
+            .build();
+
+    /** The code both declarations share. */
+    public static final String AUTO_ADD_SHADOW_ENABLED_CODE = "ordering.auto_add_shadow_enabled";
+
+    /**
+     * ADR 0158's shadow mode: while {@link #AUTO_ADD_ENABLED} is off, count what would have fired
+     * ({@code horecaos.autoadd.rules{outcome=shadow}}) without writing a line, so the owner can read the
+     * numbers against what staff add by hand before turning the rule set on.
+     */
+    public static final ConfigurationKey<Boolean> AUTO_ADD_SHADOW_ENABLED = ConfigurationKey.of(
+                    AUTO_ADD_SHADOW_ENABLED_CODE, Boolean.class)
+            .defaultValue(false)
+            .ownedBy("ordering")
+            .settableAt(ScopeType.BRAND)
+            .describedAs("While auto-add is off, count what the rules would have added without adding it.")
+            .build();
+
+    /** The code both declarations share. */
+    public static final String AMENDMENT_LINE_REMOVAL_ENABLED_CODE = "ordering.amendment_line_removal_enabled";
+
+    /**
+     * ADR 0169's rollout gate: whether an operator may remove a line from, or lower a line's quantity on, a
+     * confirmed order. With it off the amendment is refused as it always was.
+     */
+    public static final ConfigurationKey<Boolean> AMENDMENT_LINE_REMOVAL_ENABLED = ConfigurationKey.of(
+                    AMENDMENT_LINE_REMOVAL_ENABLED_CODE, Boolean.class)
+            .defaultValue(false)
+            .ownedBy("ordering")
+            .settableAt(ScopeType.BRAND)
+            .describedAs("Whether an operator may remove a line from, or lower a quantity on, a confirmed order "
+                    + "by amendment. Off means the command is refused.")
+            .build();
+
     /** Wave 10 (gap map rows {@code 1.2c}/{@code 2.1d}): the ADR 0039 amendment cut point. */
     public static final String AMENDMENT_CUT_POINT_STATUS_CODE = "ordering.amendment_cut_point_status";
 

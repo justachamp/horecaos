@@ -434,6 +434,39 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.customers.rfm.frequency.F2_FEW': '2–3 ta buyurtma',
   'reports.customers.rfm.frequency.F3_FREQUENT': '4+ buyurtma',
 
+  // ---------------------------------------------------------------- reports 7.6c customer funnel and acquisition source (ADR 0167)
+  'reports.customers.funnel.title': 'Mijozlar voronkasi',
+  'reports.customers.funnel.intro':
+    'Platforma roʻyxatdan oʻtishlar, savatlar, rasmiylashtirishlar va buyurtmalardan oladigan kundalik hisoblar. Bu har kuni boʻlgan alohida hodisalar soni, kogorta emas: ikki bosqich nisbati faollik tezligi, bitta odam oxirigacha yetib borish ehtimoli emas.',
+  'reports.customers.funnel.stage.VISITS': 'Tashriflar',
+  'reports.customers.funnel.stage.REGISTERED': 'Roʻyxatdan oʻtdi',
+  'reports.customers.funnel.stage.BASKET_STARTED': 'Savat boshladi',
+  'reports.customers.funnel.stage.CHECKOUT_STARTED': 'Rasmiylashtirishga yetdi',
+  'reports.customers.funnel.stage.ORDERED': 'Buyurtma berdi',
+  'reports.customers.funnel.visits.notMeasured':
+    'Tashriflar: oʻlchanmaydi. Bu hisobot uchun brauzerdan, ilovadan yoki botdan hech narsa yigʻilmaydi, shuning uchun tashriflar nol deb koʻrsatilmaydi va taxmin qilinmaydi. Tashriflarni xohlagan restoran ularni oʻzining Google Analytics orqali oʻqiy oladi.',
+  'reports.customers.funnel.reason.NOT_BY_CHANNEL':
+    'Roʻyxatdan oʻtishlarning savdo kanali yoʻq, shuning uchun kanal kesimi ularni qamramaydi.',
+  'reports.customers.funnel.unrecorded':
+    '{stage}: yozilmagan kunlar — {days}. Hisob olinganda ularning savatlari allaqachon oʻchirilgan edi, shuning uchun jami toʻliq emas.',
+  'reports.customers.funnel.empty': 'Bu davr uchun voronka hisoblari hali yozilmagan.',
+  'reports.customers.funnel.error': 'Voronkani yuklab boʻlmadi.',
+  'reports.customers.acquisition.title': 'Jalb qilish manbasi',
+  'reports.customers.acquisition.intro':
+    'Akkaunt qanday yaratilganiga koʻra roʻyxatdan oʻtishlar, shu restoranning jalb qilish havolalari boʻyicha oʻtishlar va savdo kanallari boʻyicha buyurtmalar — yonma-yon.',
+  'reports.customers.acquisition.noAttribution':
+    'Bu mijozni yoki buyurtmani havolaga bogʻlamaydi: havolani necha kishi ochgani va necha kishi roʻyxatdan oʻtgani yonma-yon koʻrsatiladi, ammo bir-biriga bogʻlanmagan.',
+  'reports.customers.acquisition.registrations': 'Kelib chiqishi boʻyicha roʻyxatdan oʻtishlar',
+  'reports.customers.acquisition.clicks': 'Jalb qilish havolalari boʻyicha oʻtishlar',
+  'reports.customers.acquisition.orders': 'Savdo kanallari boʻyicha buyurtmalar',
+  'reports.customers.acquisition.empty': 'Bu davrda koʻrsatadigan narsa yoʻq.',
+  'reports.customers.acquisition.archivedLink': '{label} (arxivda)',
+  'reports.customers.acquisition.origin.SELF_SERVICE': 'Oʻzlari roʻyxatdan oʻtgan',
+  'reports.customers.acquisition.origin.OPERATOR': 'Xodim yaratgan',
+  'reports.customers.acquisition.origin.IMPORT': 'Import qilingan',
+  'reports.customers.acquisition.origin.AGGREGATOR': 'Marketpleys',
+  'reports.customers.acquisition.origin.MIGRATION': 'Koʻchirilgan',
+
   // ---------------------------------------------------------------- reports 7.5/7.5a/7.5b staff (T12)
   'reports.staff.title': 'Xodimlar boʻyicha hisobotlar',
   'reports.staff.loading': 'Yuklanmoqda…',
@@ -474,12 +507,21 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.staff.telephony.column.answerRate': 'Javob ulushi',
   'reports.staff.telephony.column.missed': 'Oʻtkazib yuborilgan',
   'reports.staff.telephony.column.transferred': 'Uzatilgan',
-  'reports.staff.telephony.column.talkTime': 'Suhbat vaqti',
+  'reports.staff.telephony.column.answerSpeed': 'Javob tezligi',
+  'reports.staff.telephony.column.conversion': 'Konversiya',
+  'reports.staff.telephony.column.callLength': 'Qoʻngʻiroq davomiyligi',
   'reports.staff.telephony.rangeCapped': 'Uzunroq davrning dastlabki {days} kuni koʻrsatilmoqda.',
-  'reports.staff.telephony.answerSpeedNotBuilt':
-    'Javob tezligi koʻrsatilmaydi: hozircha qoʻngʻiroqni kutish vaqti ustuni yoʻq (V0149).',
-  'reports.staff.telephony.conversionNotBuilt':
-    'Qoʻngʻiroqdan buyurtmaga aylanish koʻrsatilmaydi: buning uchun 1.6 taʻminlaydigan call-provenance bogʻlanishi kerak (hali yaratilmagan).',
+  'reports.staff.telephony.help':
+    'Javob tezligi — qoʻngʻiroq kelganidan birinchi javobgacha boʻlgan vaqt, shuning uchun unga ovozli menyu va navbat ham kiradi. Konversiya — buyurtma (istalgan holatda) rasmiylashtirilgan javob berilgan qoʻngʻiroqlar ulushi; bu quyi chegara: kun yopilgandan keyin bogʻlangan buyurtma faqat kun qayta hisoblanganda hisobga olinadi. Qoʻngʻiroq davomiyligi — qoʻngʻiroqning birinchi hodisasidan oxirigacha, javobni kutish ham kiradi. Oʻlchanmagan koʻrsatkich nol emas, chiziqcha bilan koʻrsatiladi.',
+  'reports.staff.telephony.notMeasured': 'oʻlchanmagan',
+  'reports.staff.telephony.measuredOn':
+    'javob berilgan {m} ta qoʻngʻiroqning {n} tasi boʻyicha oʻlchangan',
+  'reports.staff.telephony.convertedOf': 'javob berilgan {m} ta qoʻngʻiroqdan {n} tasi',
+  'reports.staff.telephony.speedValue': '{avg} s (maks. {max} s)',
+  'reports.staff.telephony.unattributed': 'Biriktirilmagan',
+  'reports.staff.telephony.branchTotal': 'Filial boʻyicha jami',
+  'reports.staff.telephony.nextClose':
+    'Bugungi qoʻngʻiroqlar biznes-kun yopilgandan keyin, taxminan {time} da paydo boʻladi.',
 
   // ---------------------------------------------------------------- reports 7.9 marketing (T15)
   'reports.marketing.title': 'Marketing hisobotlari',
@@ -629,4 +671,28 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.geography.section.pins': 'Bugungi buyurtmalar nuqtalar sifatida',
   'reports.geography.pins.intro':
     'Shu filialning bugungi yetkazib berish buyurtmalari qayerga ketayotgani, har bir buyurtma uchun bitta nuqta: toʻplanishlar va chetga chiqqanlarni koʻrish uchun. Bu yetkazib berish manzillarini ochadi, shuning uchun qayd etiladi va dispetcherlar hamda filial menejerlarida bor; yuqoridagi hisobotga kirmaydi.',
+  // ------------------------------------------- staff hours export (ADR 0156)
+  'reports.exportCentre.reportOption.staffAttendance': 'Xodimlar soatlari (ish haqi uchun)',
+  'reports.exportCentre.piiGroupLabel.staff':
+    'Ismlar va tabel raqamlari (staff.shift.export kerak)',
+  'reports.exportCentre.piiGroupHidden.staff':
+    'Ism va tabel raqami ustunlari yashirilgan — sizda staff.shift.export huquqi yoʻq',
+  'reports.exportCentre.includeUnresolved':
+    'Hali davom etayotgan yoki tasdiq kutayotgan smenalarni qoʻshish (belgilangan, toʻlanadigan soatsiz)',
+  'reports.exportCentre.error.unresolvedShifts':
+    'Bu davrda hali davom etayotgan yoki tasdiq kutayotgan smenalar bor. Avval ularni hal qiling yoki belgilab qoʻshish uchun katakchani tanlang.',
+  'reports.exportCentre.error.tooLarge':
+    'Bu davrda bitta faylga sigʻadiganidan (20 000) koʻp qator bor. Qisqaroq davrni tanlang: fayl hech qachon kesilmaydi.',
+  'reports.exportCentre.column.staffDisplayReference': 'Xodim raqami',
+  'reports.exportCentre.column.plannedSeconds': 'Reja (soniya)',
+  'reports.exportCentre.column.workedSeconds': 'Ishlangan (soniya)',
+  'reports.exportCentre.column.breakSeconds': 'Tanaffus (soniya)',
+  'reports.exportCentre.column.paidSeconds': 'Toʻlanadi (soniya)',
+  'reports.exportCentre.column.varianceSeconds': 'Rejaga nisbatan (soniya)',
+  'reports.exportCentre.column.approvalStatus': 'Tasdiqlash',
+  'reports.exportCentre.column.startedAt': 'Boshlanishi',
+  'reports.exportCentre.column.endedAt': 'Tugashi',
+  'reports.exportCentre.column.timezone': 'Vaqt zonasi',
+  'reports.exportCentre.column.employeeNumber': 'Tabel raqami',
+  'reports.exportCentre.column.staffName': 'Ism',
 };

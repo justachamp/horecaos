@@ -17,12 +17,14 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import uz.horecaos.platform.iam.api.terminals.TerminalAttribution;
 import uz.horecaos.platform.kitchen.domain.ReleaseMode;
 import uz.horecaos.platform.kitchen.domain.RoutingLevel;
 import uz.horecaos.platform.kitchen.domain.StationRole;
 import uz.horecaos.platform.kitchen.domain.TicketItemStatus;
 import uz.horecaos.platform.kitchen.domain.TicketStatus;
 import uz.horecaos.platform.web.api.Quantities;
+import uz.horecaos.platform.web.authorization.TerminalAttributionContext;
 
 /**
  * Kitchen persistence (ADR 0041).
@@ -779,6 +781,7 @@ public class JdbcKitchenStore {
         // afterwards carries it.
         return jdbc.sql(SELECT_TICKET + """
                  WHERE status = 'HELD' AND release_at IS NOT NULL AND release_at <= :now
+                   AND hold_reason IS NULL
                  ORDER BY release_at
                  FOR UPDATE SKIP LOCKED
                  LIMIT :batchSize
@@ -813,7 +816,18 @@ public class JdbcKitchenStore {
                                     WHEN :to = 'IN_PRODUCTION' THEN NULL
                                     ELSE ready_at END,
                     handed_over_at = CASE WHEN :to = 'HANDED_OVER' THEN :now
-                                          ELSE handed_over_at END
+                                          ELSE handed_over_at END,
+                    -- ADR 0168: a fired ticket carries no payment hold (food already started is never
+                    -- recalled), so firing one clears it in the same statement. A VOIDED ticket keeps
+                    -- what it had, so a cancelled payment-held pre-order still tells how it ended.
+                    hold_reason = CASE WHEN :to = 'VOIDED' THEN hold_reason ELSE NULL END,
+                    hold_since = CASE WHEN :to = 'VOIDED' THEN hold_since ELSE NULL END,
+                    hold_policy_id = CASE WHEN :to = 'VOIDED' THEN hold_policy_id ELSE NULL END,
+                    hold_policy_version = CASE WHEN :to = 'VOIDED' THEN hold_policy_version ELSE NULL END,
+                    hold_blocked_notified_at =
+                        CASE WHEN :to = 'VOIDED' THEN hold_blocked_notified_at ELSE NULL END,
+                    hold_overdue_notified_at =
+                        CASE WHEN :to = 'VOIDED' THEN hold_overdue_notified_at ELSE NULL END
                 WHERE tenant_id = :tenantId AND id = :id AND status = :from
                 RETURNING version
                 """)
@@ -833,7 +847,7 @@ public class JdbcKitchenStore {
      * started is a fire time for food that is already cooking.
      */
     public Optional<Integer> rescheduleRelease(
-            UUID tenantId, UUID ticketId, ReleaseMode mode, Instant releaseAt, Instant now) {
+            UUID tenantId, UUID ticketId, ReleaseMode mode, @Nullable Instant releaseAt, Instant now) {
         Map<String, Object> params = new HashMap<>();
         params.put("tenantId", tenantId);
         params.put("id", ticketId);
@@ -890,6 +904,72 @@ public class JdbcKitchenStore {
                 .list();
     }
 
+    /**
+     * The ticket's items still to be made or made, in the order they were routed: a struck item
+     * (cancelled by an amendment) is not on paper (ADR 0154).
+     */
+    public List<TicketItemRow> liveItemsOf(UUID tenantId, UUID ticketId) {
+        return jdbc.sql(SELECT_ITEM + """
+                 WHERE tenant_id = :tenantId AND ticket_id = :ticketId AND status <> 'CANCELLED'
+                 ORDER BY created_at, id
+                """)
+                .param("tenantId", tenantId)
+                .param("ticketId", ticketId)
+                .query(JdbcKitchenStore::mapItem)
+                .list();
+    }
+
+    /** How many amendments changed this ticket after it was created (V0523). Zero for a ticket that never was. */
+    public int amendmentRevisionOf(UUID tenantId, UUID ticketId) {
+        return jdbc.sql("SELECT amendment_revision FROM kitchen.tickets WHERE tenant_id = :tenantId AND id = :id")
+                .param("tenantId", tenantId)
+                .param("id", ticketId)
+                .query(Integer.class)
+                .optional()
+                .orElse(0);
+    }
+
+    /** Counts one more amendment on the ticket and answers the new count. */
+    public int bumpAmendmentRevision(UUID tenantId, UUID ticketId) {
+        return jdbc.sql("""
+                UPDATE kitchen.tickets
+                   SET amendment_revision = amendment_revision + 1
+                 WHERE tenant_id = :tenantId AND id = :id
+                RETURNING amendment_revision
+                """)
+                .param("tenantId", tenantId)
+                .param("id", ticketId)
+                .query(Integer.class)
+                .single();
+    }
+
+    /** Tickets of one location released in {@code [from, to)}, oldest first (ADR 0154's reconciling sweep). */
+    public List<ReleasedTicketRow> releasedBetween(
+            UUID tenantId, UUID locationId, Instant from, Instant to, int limit) {
+        return jdbc.sql("""
+                SELECT id, order_id, amendment_revision, released_at
+                  FROM kitchen.tickets
+                 WHERE tenant_id = :tenantId AND location_id = :locationId
+                   AND released_at IS NOT NULL AND released_at >= :from AND released_at < :to
+                 ORDER BY released_at, id
+                 LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .param("limit", limit)
+                .query((row, number) -> new ReleasedTicketRow(
+                        row.getObject("id", UUID.class),
+                        row.getObject("order_id", UUID.class),
+                        row.getInt("amendment_revision"),
+                        row.getObject("released_at", java.time.OffsetDateTime.class)
+                                .toInstant()))
+                .list();
+    }
+
+    public record ReleasedTicketRow(UUID ticketId, UUID orderId, int amendmentRevision, Instant releasedAt) {}
+
     public Optional<TicketItemRow> findItem(UUID tenantId, UUID itemId) {
         return jdbc.sql(SELECT_ITEM + " WHERE tenant_id = :tenantId AND id = :id")
                 .param("tenantId", tenantId)
@@ -932,6 +1012,104 @@ public class JdbcKitchenStore {
                 .optional();
     }
 
+    // ------------------------------------------------------------ payment hold (ADR 0168)
+
+    /**
+     * Places the hold: conditional on the ticket still being {@code HELD} with no hold, so the amendment
+     * listener and the sweep arriving together place one, once.
+     *
+     * @return the new version, or empty when the ticket moved or is already held
+     */
+    public Optional<Integer> placePaymentHold(
+            UUID tenantId, UUID ticketId, @Nullable UUID policyId, @Nullable Integer policyVersion, Instant now) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("tenantId", tenantId);
+        params.put("id", ticketId);
+        params.put("policyId", policyId);
+        params.put("policyVersion", policyVersion);
+        params.put("now", utc(now));
+        return jdbc.sql("""
+                UPDATE kitchen.tickets
+                SET hold_reason = 'PAYMENT', hold_since = :now,
+                    hold_policy_id = :policyId, hold_policy_version = :policyVersion,
+                    hold_blocked_notified_at = NULL, hold_overdue_notified_at = NULL,
+                    version = version + 1, updated_at = :now
+                WHERE tenant_id = :tenantId AND id = :id AND status = 'HELD' AND hold_reason IS NULL
+                RETURNING version
+                """).params(params).query(Integer.class).optional();
+    }
+
+    /**
+     * Clears the hold, conditional on the ticket still being {@code HELD} with one. The ticket keeps its
+     * release mode and its {@code release_at}: it is back on its own schedule, not fired by this.
+     *
+     * @return the new version, or empty when there was nothing to clear
+     */
+    public Optional<Integer> clearPaymentHold(UUID tenantId, UUID ticketId, Instant now) {
+        return jdbc.sql("""
+                UPDATE kitchen.tickets
+                SET hold_reason = NULL, hold_since = NULL, hold_policy_id = NULL, hold_policy_version = NULL,
+                    hold_blocked_notified_at = NULL, hold_overdue_notified_at = NULL,
+                    version = version + 1, updated_at = :now
+                WHERE tenant_id = :tenantId AND id = :id AND status = 'HELD' AND hold_reason IS NOT NULL
+                RETURNING version
+                """)
+                .param("tenantId", tenantId)
+                .param("id", ticketId)
+                .param("now", utc(now))
+                .query(Integer.class)
+                .optional();
+    }
+
+    /** Records, once per hold, that {@code release_at} arrived with the money still absent. */
+    public boolean markHoldBlockedNotified(UUID tenantId, UUID ticketId, Instant now) {
+        return jdbc.sql("""
+                UPDATE kitchen.tickets
+                SET hold_blocked_notified_at = :now, version = version + 1, updated_at = :now
+                WHERE tenant_id = :tenantId AND id = :id AND hold_reason IS NOT NULL
+                  AND hold_blocked_notified_at IS NULL
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", ticketId)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
+    /** Records, once per hold, that the money stayed absent for the policy's overdue minutes. */
+    public boolean markHoldOverdueNotified(UUID tenantId, UUID ticketId, Instant now) {
+        return jdbc.sql("""
+                UPDATE kitchen.tickets
+                SET hold_overdue_notified_at = :now, version = version + 1, updated_at = :now
+                WHERE tenant_id = :tenantId AND id = :id AND hold_reason IS NOT NULL
+                  AND hold_overdue_notified_at IS NULL
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", ticketId)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
+    /** Every ticket currently held for payment, oldest hold first: the sweep's read (V0547's index). */
+    public List<TicketRow> findPaymentHeld(int limit) {
+        return jdbc.sql(SELECT_TICKET + """
+                 WHERE hold_reason IS NOT NULL AND status = 'HELD'
+                 ORDER BY hold_since
+                 LIMIT :limit
+                """)
+                .param("limit", limit)
+                .query(JdbcKitchenStore::mapTicket)
+                .list();
+    }
+
+    /** How many tickets are held for payment right now, platform-wide: a gauge, never per tenant. */
+    public long countPaymentHeld() {
+        return jdbc.sql("SELECT count(*) FROM kitchen.tickets WHERE hold_reason IS NOT NULL AND status = 'HELD'")
+                .query(Long.class)
+                .single();
+    }
+
     // -------------------------------------------------------------------- events
 
     public void recordEvent(
@@ -957,6 +1135,16 @@ public class JdbcKitchenStore {
         params.put("trigger", trigger);
         params.put("actorType", actorType);
         params.put("actorId", actorId);
+        // ADR 0155: an action taken at a shared terminal by an unlocked person names both -- the person (actor_id) and
+        // the
+        // screen (via_device_id). Only an event whose actor IS the unlocked person is tagged; a scheduler's or another
+        // person's event written during the same request is not an action taken at that screen.
+        params.put(
+                "viaDeviceId",
+                TerminalAttributionContext.current()
+                        .filter(via -> via.personSubject().equals(actorId))
+                        .map(TerminalAttribution::deviceId)
+                        .orElse(null));
         params.put("reasonCode", reasonCode);
         params.put("correlationId", correlationId);
         params.put("occurredAt", utc(occurredAt));
@@ -964,9 +1152,9 @@ public class JdbcKitchenStore {
         jdbc.sql("""
                 INSERT INTO kitchen.ticket_events (
                     id, tenant_id, ticket_id, ticket_item_id, from_status, to_status,
-                    trigger, actor_type, actor_id, reason_code, occurred_at, correlation_id)
+                    trigger, actor_type, actor_id, reason_code, occurred_at, correlation_id, via_device_id)
                 VALUES (:id, :tenantId, :ticketId, :itemId, :fromStatus, :toStatus,
-                    :trigger, :actorType, :actorId, :reasonCode, :occurredAt, :correlationId)
+                    :trigger, :actorType, :actorId, :reasonCode, :occurredAt, :correlationId, :viaDeviceId)
                 """).params(params).update();
     }
 
@@ -1026,7 +1214,9 @@ public class JdbcKitchenStore {
             SELECT id, tenant_id, brand_id, location_id, order_id, sequence_label,
                    fulfilment_mode, channel_code, status, release_mode, release_at,
                    released_at, prep_estimate_seconds, target_ready_at, started_at,
-                   ready_at, handed_over_at, routing_version, version, created_at
+                   ready_at, handed_over_at, routing_version, version, created_at,
+                   hold_reason, hold_since, hold_policy_id, hold_policy_version,
+                   hold_blocked_notified_at, hold_overdue_notified_at
             FROM kitchen.tickets
             """;
 
@@ -1078,7 +1268,13 @@ public class JdbcKitchenStore {
                 instant(row, "handed_over_at"),
                 row.getInt("routing_version"),
                 row.getInt("version"),
-                row.getObject("created_at", OffsetDateTime.class).toInstant());
+                row.getObject("created_at", OffsetDateTime.class).toInstant(),
+                row.getString("hold_reason"),
+                instant(row, "hold_since"),
+                row.getObject("hold_policy_id", UUID.class),
+                row.getObject("hold_policy_version", Integer.class),
+                instant(row, "hold_blocked_notified_at"),
+                instant(row, "hold_overdue_notified_at"));
     }
 
     private static TicketItemRow mapItem(ResultSet row, int number) throws SQLException {
@@ -1237,7 +1433,70 @@ public class JdbcKitchenStore {
             @Nullable Instant handedOverAt,
             int routingVersion,
             int version,
-            Instant createdAt) {}
+            Instant createdAt,
+            @Nullable String holdReason,
+            @Nullable Instant holdSince,
+            @Nullable UUID holdPolicyId,
+            @Nullable Integer holdPolicyVersion,
+            @Nullable Instant holdBlockedNotifiedAt,
+            @Nullable Instant holdOverdueNotifiedAt) {
+
+        /** A ticket that carries no payment hold, which is every ticket before ADR 0168. */
+        public TicketRow(
+                UUID id,
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                UUID orderId,
+                String sequenceLabel,
+                String fulfilmentMode,
+                String channelCode,
+                TicketStatus status,
+                ReleaseMode releaseMode,
+                @Nullable Instant releaseAt,
+                @Nullable Instant releasedAt,
+                @Nullable Integer prepEstimateSeconds,
+                @Nullable Instant targetReadyAt,
+                @Nullable Instant startedAt,
+                @Nullable Instant readyAt,
+                @Nullable Instant handedOverAt,
+                int routingVersion,
+                int version,
+                Instant createdAt) {
+            this(
+                    id,
+                    tenantId,
+                    brandId,
+                    locationId,
+                    orderId,
+                    sequenceLabel,
+                    fulfilmentMode,
+                    channelCode,
+                    status,
+                    releaseMode,
+                    releaseAt,
+                    releasedAt,
+                    prepEstimateSeconds,
+                    targetReadyAt,
+                    startedAt,
+                    readyAt,
+                    handedOverAt,
+                    routingVersion,
+                    version,
+                    createdAt,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
+        }
+
+        /** Whether the ticket is currently held for payment (ADR 0168). */
+        public boolean heldForPayment() {
+            return holdReason != null;
+        }
+    }
 
     /** {@link #counts}'s own aggregate — gap map row 2.1's exact, server-side tab badges. */
     public record TicketCountsRow(long total, long delivery, long pickup, long dineIn, long aggregator) {}

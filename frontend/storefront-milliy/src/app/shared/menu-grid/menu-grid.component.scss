@@ -23,6 +23,21 @@
   }
 }
 
+.chips--tags {
+  padding-top: 0;
+}
+
+.chip--clear {
+  background: transparent;
+  text-decoration: underline;
+}
+
+.empty {
+  margin: 16px 24px;
+  color: var(--text-secondary);
+  font: 400 13px/1.5 var(--font-ui);
+}
+
 .section {
   padding: 12px 24px 0;
 }

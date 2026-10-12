@@ -100,12 +100,16 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
   'delivery.rules.start.READY': 'Когда блюда готовы',
   'delivery.rules.start.offset': 'Сдвиг (минуты)',
   'delivery.rules.grouping': 'Объединять заказы в один рейс',
-  'delivery.rules.grouping.locked':
-    'Пока недоступно: оплата курьера за рейс с несколькими заказами ещё не решена.',
+  'delivery.rules.grouping.locked': 'Отключено в этой установке.',
+  'delivery.rules.grouping.payUndecided':
+    'Объединение меняет то, сколько курьер зарабатывает за те же километры, поэтому сначала решите, как оплачивается рейс из нескольких заказов.',
+  'delivery.rules.grouping.payUndecided.link': 'Решить оплату рейса',
   'delivery.rules.grouping.enable': 'Предпочитать курьера, который уже едет в ту сторону',
   'delivery.rules.grouping.radius': 'Радиус объединения (метры)',
   'delivery.rules.grouping.orders': 'Заказов в рейсе',
   'delivery.rules.grouping.wait': 'Максимальное ожидание (секунды)',
+  'delivery.rules.grouping.waitNotAvailable':
+    'Ожидание курьера, который едет в ту сторону, недоступно: объединение только ранжирует курьеров, ожидание остаётся нулевым.',
   'delivery.rules.reason': 'Почему вы меняете правила?',
   'delivery.rules.reasonRequired': 'Укажите причину изменения правил.',
   'delivery.rules.publish': 'Опубликовать',
@@ -167,6 +171,20 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
     'Нет доступных партнёров: заказ могут взять только свои курьеры.',
   'delivery.rules.sim.note.WINNER_DECIDED_BY_QUOTES':
     'Победителя определят цены, названные при заказе.',
+  'delivery.rules.sim.note.GROUPING_CEILING_BELOW_RUN':
+    'Ни один тип курьеров этой компании не может везти столько заказов, сколько объединяет это правило, поэтому рейс не сложится.',
+  'delivery.rules.sim.note.GROUPING_NEEDS_A_PLAN_TO_MEASURE':
+    'Выберите недавний заказ, чтобы увидеть, каких курьеров измерят: у набранного вручную сценария нет адреса.',
+  'delivery.rules.sim.note.FLEET_NOT_MEASURABLE': 'Курьеров здесь измерить не удалось.',
+  'delivery.rules.sim.note.GROUPING_SWITCHED_OFF':
+    'Объединение выключено для всей платформы, поэтому заказы предлагаются по одному и курьеры не измеряются.',
+  'delivery.rules.sim.grouping.heading': 'Курьеры, измеренные для объединения',
+  'delivery.rules.sim.grouping.empty': 'Нет курьеров на смене, которых можно измерить.',
+  'delivery.rules.sim.grouping.carrying': 'везёт {n} из {max}',
+  'delivery.rules.sim.grouping.metres': '{metres} м до адреса, который он везёт',
+  'delivery.rules.sim.grouping.notGroupable': 'не подходит для объединения',
+  'delivery.rules.sim.grouping.basis.DIRECT': 'получит заказ по своей оплате',
+  'delivery.rules.sim.grouping.basis.RUN_INCREMENT': 'получит его с оплатой за дополнительный путь',
   'delivery.rules.sim.note.NO_ZONE_EVIDENCE':
     'У заказа нет зоны, поэтому правила по зоне ему не подходят.',
   'delivery.rules.sim.violations': 'Этот черновик нельзя опубликовать в таком виде:',
@@ -192,8 +210,10 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
   'delivery.paymentWindow.action': 'После этого',
   'delivery.paymentWindow.action.FLAG_ONLY': 'Отметить заказ для сотрудника',
   'delivery.paymentWindow.action.CANCEL': 'Отменить заказ',
-  'delivery.paymentWindow.cancelLocked':
-    'Отмена неоплаченного заказа недоступна, пока это не решит продукт.',
+  'delivery.paymentWindow.cancelNote':
+    'Отмена завершает заказ как «Отменён: не оплачен»: товар и промокод возвращаются, страница оплаты закрывается. Платёж, пришедший позже, заказ не оживляет; финансы получают уведомление, что нужен возврат.',
+  'delivery.paymentWindow.cancelTooShort':
+    'Срок, после которого заказ отменяется, не меньше 15 минут.',
   'delivery.paymentWindow.save': 'Опубликовать срок',
   'delivery.paymentWindow.saved': 'Опубликовано как версия {version}.',
   'delivery.dialog.cancel': 'Отмена',
@@ -677,6 +697,17 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
   'delivery.policy.overridden': 'Переопределено',
   'delivery.policy.inherited': 'Наследуется: {value}',
   'delivery.policy.policyIdentity': 'Политика {id} · в{version}',
+  'delivery.policy.runPayMode': 'Оплата за заезд с несколькими заказами',
+  'delivery.policy.runPayMode.UNDECIDED': 'Не решено (каждый заказ оплачивается полностью)',
+  'delivery.policy.runPayMode.PER_ORDER': 'Каждый заказ полностью',
+  'delivery.policy.runPayMode.FIRST_FULL_THEN_INCREMENT':
+    'Первый заказ полностью, остальные — по дополнительному расстоянию',
+  'delivery.policy.runPayMode.acknowledge':
+    'Подтверждаю: условия работы с нашими курьерами допускают оплату, зависящую от заезда. HorecaOS ничего не утверждает о наших договорах.',
+  'delivery.policy.runPayMode.pendingApproval':
+    'Отправлено на вторую подпись (запрос {request}). Пока её нет, ничего не меняется; после одобрения опубликуйте тот же документ ещё раз.',
+  'delivery.policy.consequence.runPayMode':
+    'Определяет, сколько получает курьер, когда один заезд везёт несколько заказов к соседним адресам. «Первый полностью» платит каждому следующему заказу ставку за заказ и минимум полностью, а за километры — только расстояние сверх предыдущей точки; курьер видит сумму до принятия. Правило диспетчеризации не включит группировку, пока это не решено.',
   'delivery.policy.shiftEnforcement': 'Контроль смены',
   'delivery.policy.shiftEnforcement.ENFORCED': 'Строгий',
   'delivery.policy.shiftEnforcement.ADVISORY': 'Рекомендательный',

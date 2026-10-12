@@ -43,7 +43,7 @@ import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
  * application services directly and never goes through MockMvc, the
  * capability filter, or either controller class. That left both untested at
  * exactly the two properties an HTTP caller actually depends on: refusal
- * without the endpoint's own capability, and archive/click/send's inline
+ * without the endpoint's own capability, and archive/send's inline
  * {@code link.brandId().equals(brandId)} / {@code
  * broadcast.brandId().equals(brandId)} check — the only guard standing
  * between a caller holding a grant on their own brand and a sibling brand's
@@ -149,19 +149,6 @@ class AttributionLinkAndCourierBroadcastControllerEndpointTests {
                 .as("FULL holds MARKETING_LINK_MANAGE on OTHER_BRAND too, so only the controller's "
                         + "own brandId check can be refusing this")
                 .isEqualTo(404);
-        assertThat(result.getResponse().getContentAsString()).contains("RESOURCE_NOT_FOUND");
-    }
-
-    @Test
-    void clickRefusesALinkBelongingToAnotherBrand() throws Exception {
-        UUID linkId = insertAttributionLink(BRAND);
-
-        MvcResult result = mvc.perform(post(attributionLinksPath(OTHER_BRAND) + "/" + linkId + "/clicks")
-                        .with(tokenFor(FULL))
-                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "click-cross-brand-1"))
-                .andReturn();
-
-        assertThat(result.getResponse().getStatus()).isEqualTo(404);
         assertThat(result.getResponse().getContentAsString()).contains("RESOURCE_NOT_FOUND");
     }
 

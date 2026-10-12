@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { Capability, SessionCapabilities } from '../../core/auth/session-capabilities';
 import { FeatureFlags } from '../../core/feature-flags';
 import { I18n } from '../../core/i18n/i18n';
 import { BrandView } from './brand-profile/brand-profile-api';
@@ -74,6 +75,7 @@ describe('SettingsShell', () => {
           useValue: { isOn: () => false, ensureLoaded: () => Promise.resolve() },
         },
         { provide: SettingsScope, useValue: scope },
+        { provide: SessionCapabilities, useValue: { has: () => true } },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -122,5 +124,54 @@ describe('SettingsShell', () => {
     fixture.detectChanges();
 
     expect(scope.tenantWide()).toBe(false);
+  });
+});
+
+describe('SettingsShell for a branch manager who pairs kiosks (ADR 0162)', () => {
+  let fixture: ComponentFixture<SettingsShell>;
+
+  async function railFor(held: readonly Capability[]): Promise<string[]> {
+    await TestBed.configureTestingModule({
+      imports: [SettingsShell],
+      providers: [
+        provideRouter([]),
+        {
+          provide: FeatureFlags,
+          useValue: {
+            isOn: (flag: string) => flag === 'feature.kiosk_devices',
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+        { provide: SettingsScope, useValue: new FakeSettingsScope() },
+        {
+          provide: SessionCapabilities,
+          useValue: { has: (capability: Capability) => held.includes(capability) },
+        },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(SettingsShell);
+    fixture.detectChanges();
+    return [...(fixture.nativeElement as HTMLElement).querySelectorAll('.settings__item')].map(
+      (link) => link.textContent?.trim() ?? '',
+    );
+  }
+
+  it('offers her the kiosks entry and none of the tenant’s settings she cannot read', async () => {
+    expect(await railFor(['KIOSK_DEVICE_MANAGE', 'IAM_GRANT_MANAGE'])).toEqual(['Kiosks']);
+  });
+
+  it('offers her no scope bar: the screens she is given work the branch she is in, and read none of it', async () => {
+    await railFor(['KIOSK_DEVICE_MANAGE', 'IAM_GRANT_MANAGE']);
+
+    expect(fixture.nativeElement.querySelector('q-scope-bar')).toBeNull();
+  });
+
+  it('offers the owner the whole rail, kiosks among it, and the scope bar', async () => {
+    const rail = await railFor(['TENANT_READ', 'KIOSK_DEVICE_MANAGE']);
+
+    expect(rail).toContain('Kiosks');
+    expect(rail).toContain('Brand profile');
+    expect(fixture.nativeElement.querySelector('q-scope-bar')).not.toBeNull();
   });
 });

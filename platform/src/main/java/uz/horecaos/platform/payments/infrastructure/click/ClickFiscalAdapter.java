@@ -20,6 +20,7 @@ import uz.horecaos.platform.payments.domain.PaymentAttempt;
 import uz.horecaos.platform.payments.domain.PaymentAttemptStatus;
 import uz.horecaos.platform.payments.domain.PaymentProviderType;
 import uz.horecaos.platform.payments.domain.ProviderBinding;
+import uz.horecaos.platform.payments.domain.SentReceipt;
 import uz.horecaos.platform.payments.domain.SomAmount;
 import uz.horecaos.platform.payments.domain.TiyinAmount;
 import uz.horecaos.platform.payments.infrastructure.click.ClickMerchantApi.ClickResponse;
@@ -71,6 +72,12 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
     @Override
     public PaymentProviderType providerType() {
         return PaymentProviderType.CLICK;
+    }
+
+    /** Click's {@code Items[].Labels} carries a marking code per unit (ADR 0161). */
+    @Override
+    public boolean carriesMarkingCodes() {
+        return true;
     }
 
     @Override
@@ -135,23 +142,33 @@ public class ClickFiscalAdapter implements FiscalReceiptPort {
         ClickResponse submitted =
                 click.submitItems(binding, paymentId.get(), items, TiyinAmount.of(settled), zero, zero);
 
+        // From here the request has left, whatever Click answers, so whatever it answers is
+        // returned with what was sent (ADR 0166). The split is the sum of the lines, all of it
+        // received by card: HorecaOS does not split tender inside one Click payment.
+        SomAmount none = new SomAmount(0, settled.currency());
+        SentReceipt sent = new SentReceipt(document.lines(), settled, none, none);
+
         if (submitted.uncertain()) {
             Optional<FiscalSubmission> issued = readBack(binding, paymentId.get(), now);
-            return issued.orElseGet(() ->
-                    FiscalSubmission.uncertain("submit_items did not answer; read back before any resubmission", now));
+            return issued.orElseGet(() -> FiscalSubmission.uncertain(
+                            "submit_items did not answer; read back before any resubmission", now))
+                    .withSent(sent);
         }
         if (!submitted.successful()) {
             // A non-zero status is the evidence that there is no receipt. Which
             // non-zero one cannot be said: the error_code enumeration is
             // unpublished, so the code travels verbatim for a human.
             return FiscalSubmission.rejected(
-                    String.valueOf(submitted.body().get("error_code")), submitted.describe(), now);
+                            String.valueOf(submitted.body().get("error_code")), submitted.describe(), now)
+                    .withSent(sent);
         }
 
         // Accepted. The receipt itself comes from the OFD, and Click does not say
         // how long that round trip takes, so an empty read here means "not yet"
         // rather than "never" and the document waits in SUBMITTED.
-        return readBack(binding, paymentId.get(), now).orElseGet(() -> FiscalSubmission.accepted(now));
+        return readBack(binding, paymentId.get(), now)
+                .orElseGet(() -> FiscalSubmission.accepted(now))
+                .withSent(sent);
     }
 
     /**

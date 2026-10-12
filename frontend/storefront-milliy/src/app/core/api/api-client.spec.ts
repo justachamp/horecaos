@@ -5,6 +5,7 @@ import {
   ApiClient,
   ANONYMOUS,
   PLATFORM_API_REQUEST,
+  SILENT_FAILURE,
   versionFromETag,
   weakETag,
 } from './api-client';
@@ -198,6 +199,22 @@ describe('ApiClient.get', () => {
     await promise;
   });
 
+  it('marks a read whose failure the customer is not to be told about, and only when asked', async () => {
+    const { client, httpMock } = setUp();
+
+    const quiet = client.get('/content', { anonymous: true, silent: true });
+    const quietReq = httpMock.expectOne('/api/v1/content');
+    expect(quietReq.request.context.get(SILENT_FAILURE)).toBe(true);
+    quietReq.flush({});
+    await quiet;
+
+    const loud = client.get('/me');
+    const loudReq = httpMock.expectOne('/api/v1/me');
+    expect(loudReq.request.context.get(SILENT_FAILURE)).toBe(false);
+    loudReq.flush({});
+    await loud;
+  });
+
   it('sends If-None-Match when an etag is supplied, and omits it otherwise', async () => {
     const { client, httpMock } = setUp();
 
@@ -300,5 +317,48 @@ describe('ApiClient per-call headers', () => {
     expect(req.request.headers.get('Idempotency-Key')).toBe('the-real-key');
     req.flush({});
     await promise;
+  });
+});
+
+describe('ApiClient.report: an anonymous counter', () => {
+  afterEach(() => {
+    TestBed.inject(HttpTestingController).verify();
+  });
+
+  it('POSTs with no Idempotency-Key and no body when there is none to send', async () => {
+    const { client, httpMock } = setUp();
+
+    const promise = client.report('/storefront/x/attribution-links/tok/clicks');
+    const req = httpMock.expectOne('/api/v1/storefront/x/attribution-links/tok/clicks');
+
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toBeNull();
+    expect(req.request.headers.has('Idempotency-Key')).toBe(false);
+    req.flush(null, { status: 202, statusText: 'Accepted' });
+    await promise;
+  });
+
+  it('is a platform call that is anonymous and silent', async () => {
+    const { client, httpMock } = setUp();
+
+    const promise = client.report('/storefront/x/attribution-links/tok/clicks');
+    const req = httpMock.expectOne('/api/v1/storefront/x/attribution-links/tok/clicks');
+
+    expect(req.request.context.get(PLATFORM_API_REQUEST)).toBe(true);
+    expect(req.request.context.get(ANONYMOUS)).toBe(true);
+    expect(req.request.context.get(SILENT_FAILURE)).toBe(true);
+    req.flush(null, { status: 202, statusText: 'Accepted' });
+    await promise;
+  });
+
+  it('hands the rejection to the caller, who decides to swallow it', async () => {
+    const { client, httpMock } = setUp();
+
+    const promise = client.report('/storefront/x/attribution-links/tok/clicks');
+    httpMock
+      .expectOne('/api/v1/storefront/x/attribution-links/tok/clicks')
+      .flush('boom', { status: 500, statusText: 'Server Error' });
+
+    await expect(promise).rejects.toBeTruthy();
   });
 });

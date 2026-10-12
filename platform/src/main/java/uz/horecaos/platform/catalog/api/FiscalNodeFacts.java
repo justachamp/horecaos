@@ -1,7 +1,9 @@
 package uz.horecaos.platform.catalog.api;
 
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What the catalog states about a priceable node that other modules must obey
@@ -50,4 +52,22 @@ public interface FiscalNodeFacts {
     default boolean requiresMarkingCapablePayment(UUID tenantId, UUID brandId, Set<UUID> priceableIds) {
         return !markedNodes(tenantId, brandId, priceableIds).isEmpty();
     }
+
+    /**
+     * What the catalog says about each marked node among these, for the module that captures marks at the
+     * pass (ADR 0161): today only the classification's {@code barcode}, which a scanned code's GTIN must
+     * match once left-padded to fourteen digits.
+     *
+     * <p>A node that is not marked is absent, so this answers the same question as {@link #markedNodes}
+     * with more detail; a marked node whose classification has no barcode is present with a null barcode,
+     * which the caller records as an unchecked GTIN rather than as a mismatch.
+     *
+     * <p>Defaulted to empty so the hand-written test doubles that predate marking need no change.
+     */
+    default Map<UUID, MarkedNode> markedNodeDetails(UUID tenantId, UUID brandId, Set<UUID> priceableIds) {
+        return Map.of();
+    }
+
+    /** @param barcode the classification's EAN-8, UPC-A or EAN-13 as stored, or null when it states none */
+    record MarkedNode(@Nullable String barcode) {}
 }

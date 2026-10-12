@@ -6,6 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 
 import { ConfigurationResolutionView, EditableScopeType } from '../../core/api/configuration';
 import { LocationScope } from '../../core/api/operations-paths';
@@ -19,12 +20,18 @@ import { MoneyInput } from '../../shared/ui/money-input';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { describeApiError } from '../orders/order-errors';
 import { ConfigurationApi } from '../settings/configuration-api';
-import { CourierPolicyView, CourierPolicyWriteInput, CouriersApi } from '../couriers/couriers-api';
+import {
+  CourierPolicyView,
+  CourierPolicyWriteInput,
+  CouriersApi,
+  RunPayMode,
+} from '../couriers/couriers-api';
 
 /** couriers.md §16's own ladder — "resolution scope selector at the top (tenant → brand → location)". */
 export type PolicyResolutionScope = 'TENANT' | 'BRAND' | 'LOCATION';
 
-type PolicyFieldKind = 'shiftEnforcement' | 'money' | 'count' | 'boolean' | 'revealTiming' | 'gps';
+type PolicyFieldKind =
+  'shiftEnforcement' | 'money' | 'count' | 'boolean' | 'revealTiming' | 'gps' | 'runPayMode';
 
 interface PolicyFieldSpec {
   readonly key: string;
@@ -114,6 +121,15 @@ const POLICY_FIELDS: readonly PolicyFieldSpec[] = [
     consequenceKey: 'delivery.policy.consequence.onlineWithinMinutes',
     kind: 'count',
     raw: (p) => p.onlineWithinMinutes,
+  },
+  {
+    // ADR 0170. "Not decided" is a real value, not an absence: it pays every order in full, and a
+    // grouping rule cannot be published while the resolved document says it.
+    key: 'runPayMode',
+    labelKey: 'delivery.policy.runPayMode',
+    consequenceKey: 'delivery.policy.consequence.runPayMode',
+    kind: 'runPayMode',
+    raw: (p) => p.runPayMode ?? 'UNDECIDED',
   },
   {
     key: 'kitchenReadyOnly',
@@ -232,6 +248,8 @@ export class CourierPolicyPage implements OnInit {
   private readonly api = inject(CouriersApi);
   private readonly configApi = inject(ConfigurationApi);
   private readonly location = inject(CurrentLocation);
+  /** Optional: a spec without a router still renders the page; only the dispatch-rules hint link carries a query. */
+  private readonly route = inject(ActivatedRoute, { optional: true });
   protected readonly i18n = inject(I18n);
 
   protected readonly scopeLevels: readonly PolicyResolutionScope[] = [
@@ -297,7 +315,23 @@ export class CourierPolicyPage implements OnInit {
   protected readonly draftRevealTiming =
     signal<CourierPolicyView['revealCustomerLocationTiming']>('AFTER_ACCEPT');
   protected readonly draftPostDeliveryPaymentCheckRequired = signal(false);
+  /** ADR 0170: `UNDECIDED` is sent as null. */
+  protected readonly draftRunPayMode = signal<'UNDECIDED' | RunPayMode>('UNDECIDED');
+  protected readonly draftAcknowledgesEngagementTerms = signal(false);
+  protected readonly pendingApproval = signal<string | null>(null);
   protected readonly draftReason = signal('');
+
+  /**
+   * Moving the pay mode to «first order in full, the rest by the extra distance» changes what a courier
+   * earns for the same kilometres, so it needs the tenant's explicit statement that their engagement terms
+   * allow it (the platform asserts nothing about the tenant's contracts). Not asked again while the mode
+   * already is that, so an unrelated edit does not re-ask.
+   */
+  protected readonly needsAcknowledgement = computed(
+    () =>
+      this.draftRunPayMode() === 'FIRST_FULL_THEN_INCREMENT' &&
+      this.policy()?.runPayMode !== 'FIRST_FULL_THEN_INCREMENT',
+  );
 
   // ------------------------------------------------------ out-of-zone card
 
@@ -330,6 +364,27 @@ export class CourierPolicyPage implements OnInit {
     await Promise.all([this.resolve(), this.resolveOutOfZone()]);
   }
 
+  /**
+   * ADR 0170: the dispatch-rules editor sends an operator here, with `?prefill=FIRST_FULL_THEN_INCREMENT`, when a
+   * rule cannot group because the pay for a run is undecided. The editor opens with that mode chosen, so the one
+   * thing left to do is state the engagement terms and say why. Once, and only while nothing is decided: it never
+   * replaces a decision an operator already made.
+   */
+  private applyPrefill(policy: CourierPolicyView): void {
+    if (this.prefilled || policy.runPayMode) {
+      return;
+    }
+    this.prefilled = true;
+    const requested = this.route?.snapshot.queryParamMap.get('prefill');
+    if (requested !== 'FIRST_FULL_THEN_INCREMENT') {
+      return;
+    }
+    this.startEditing();
+    this.draftRunPayMode.set('FIRST_FULL_THEN_INCREMENT');
+  }
+
+  private prefilled = false;
+
   /** The scope-selector click handler — re-resolves at the newly chosen level. */
   protected selectScope(level: PolicyResolutionScope): void {
     if (level === this.resolutionScope()) {
@@ -354,6 +409,7 @@ export class CourierPolicyPage implements OnInit {
       this.policy.set(policy);
       this.parentPolicy.set(parent);
       this.denied.set(false);
+      this.applyPrefill(policy);
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
         this.denied.set(true);
@@ -400,6 +456,8 @@ export class CourierPolicyPage implements OnInit {
         return this.revealTimingLabel(String(raw));
       case 'gps':
         return this.gpsLabel(String(raw));
+      case 'runPayMode':
+        return this.runPayModeLabel(String(raw));
     }
   }
 
@@ -425,6 +483,23 @@ export class CourierPolicyPage implements OnInit {
         return this.i18n.t('delivery.policy.shiftEnforcement.OFF');
       default:
         return value;
+    }
+  }
+
+  /** `UNDECIDED` is a choice in the form and an absence on the wire: null leaves the mode undecided. */
+  private runPayModeToSend(): RunPayMode | null {
+    const draft = this.draftRunPayMode();
+    return draft === 'UNDECIDED' ? null : draft;
+  }
+
+  protected runPayModeLabel(value: string): string {
+    switch (value) {
+      case 'PER_ORDER':
+        return this.i18n.t('delivery.policy.runPayMode.PER_ORDER');
+      case 'FIRST_FULL_THEN_INCREMENT':
+        return this.i18n.t('delivery.policy.runPayMode.FIRST_FULL_THEN_INCREMENT');
+      default:
+        return this.i18n.t('delivery.policy.runPayMode.UNDECIDED');
     }
   }
 
@@ -477,6 +552,9 @@ export class CourierPolicyPage implements OnInit {
     this.draftKitchenReadyOnly.set(current.kitchenReadyOnly);
     this.draftRevealTiming.set(current.revealCustomerLocationTiming);
     this.draftPostDeliveryPaymentCheckRequired.set(current.postDeliveryPaymentCheckRequired);
+    this.draftRunPayMode.set(current.runPayMode ?? 'UNDECIDED');
+    this.draftAcknowledgesEngagementTerms.set(false);
+    this.pendingApproval.set(null);
     this.draftReason.set('');
     this.saveError.set(null);
     this.editing.set(true);
@@ -487,7 +565,12 @@ export class CourierPolicyPage implements OnInit {
   }
 
   protected canPublish(): boolean {
-    return !this.saving() && this.draftReason().trim().length > 0 && this.gpsRadiiAreValid();
+    return (
+      !this.saving() &&
+      this.draftReason().trim().length > 0 &&
+      this.gpsRadiiAreValid() &&
+      (!this.needsAcknowledgement() || this.draftAcknowledgesEngagementTerms())
+    );
   }
 
   /**
@@ -545,6 +628,8 @@ export class CourierPolicyPage implements OnInit {
         kitchenReadyOnly: this.draftKitchenReadyOnly(),
         revealCustomerLocationTiming: this.draftRevealTiming(),
         postDeliveryPaymentCheckRequired: this.draftPostDeliveryPaymentCheckRequired(),
+        runPayMode: this.runPayModeToSend(),
+        acknowledgeEngagementTerms: this.needsAcknowledgement() ? true : null,
         reason: this.draftReason().trim(),
       };
       const level = this.resolutionScope();
@@ -557,6 +642,9 @@ export class CourierPolicyPage implements OnInit {
       );
       this.policy.set(updated);
       this.editing.set(false);
+      // A second signature is required: the document in force is unchanged and the same publication
+      // succeeds once the request is approved.
+      this.pendingApproval.set(updated.pendingApprovalRequestId ?? null);
       // The parent comparison may now disagree with what is on screen (a
       // publish at LOCATION changes only this level, but the row-level
       // "overridden" flag compares against BRAND) — re-read it rather than

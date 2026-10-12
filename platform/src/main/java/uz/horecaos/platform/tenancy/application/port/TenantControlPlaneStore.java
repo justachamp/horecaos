@@ -58,7 +58,8 @@ public interface TenantControlPlaneStore {
             uz.horecaos.platform.tenancy.domain.TenantStatus status,
             Instant createdAt,
             String countryCode,
-            String businessType) {}
+            String businessType,
+            boolean deliveriesConsole) {}
 
     /**
      * The tenant holding this slug, if any.

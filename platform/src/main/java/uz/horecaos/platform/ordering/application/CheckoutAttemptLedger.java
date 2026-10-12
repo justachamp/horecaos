@@ -107,6 +107,51 @@ class CheckoutAttemptLedger {
         return CheckoutResult.rejected(code, detail, warnings());
     }
 
+    /**
+     * Settles the attempt against an inventory refusal, dropping the lines a rule added first (ADR 0158).
+     *
+     * <p>A reservation that fails for an injected line must never become a refusal that names a line the
+     * customer did not choose: the line is dropped in this transaction, the cart is left unpriced at a newer
+     * version, and the customer meets the existing {@code PRICE_CHANGED} re-quote. Where customer lines are
+     * also short, those alone are named. A stock-tracked packaging variant can therefore run out under a
+     * basket and the order still goes through on the next attempt.
+     */
+    CheckoutResult settleUnavailable(
+            UUID attemptId, AvailabilityDecision decision, CheckoutEligibilityGuard.Eligible eligible, Instant now) {
+        List<JdbcCartStore.CartLineRow> injected = eligible.cartLines().stream()
+                .filter(JdbcCartStore.CartLineRow::injected)
+                .toList();
+        java.util.Set<UUID> customerVariants = eligible.cartLines().stream()
+                .filter(line -> !line.injected())
+                .map(JdbcCartStore.CartLineRow::variantId)
+                .collect(Collectors.toSet());
+        java.util.Set<UUID> injectedVariants =
+                injected.stream().map(JdbcCartStore.CartLineRow::variantId).collect(Collectors.toSet());
+        List<AvailabilityDecision.Unavailable> customerItems = decision.unavailableItems().stream()
+                .filter(item ->
+                        customerVariants.contains(item.variantId()) || !injectedVariants.contains(item.variantId()))
+                .toList();
+        List<JdbcCartStore.CartLineRow> dropped = injected.stream()
+                .filter(line -> decision.unavailableItems().stream()
+                        .anyMatch(item -> item.variantId().equals(line.variantId())))
+                .toList();
+        if (dropped.isEmpty()) {
+            return settleUnavailable(attemptId, decision, now);
+        }
+        CartRow cart = eligible.cart();
+        dropped.forEach(line -> carts.deleteLine(cart.tenantId(), cart.cartId(), line.lineKey()));
+        carts.touchAndInvalidatePricing(cart.tenantId(), cart.cartId(), cart.version(), now);
+        if (customerItems.isEmpty()) {
+            return settle(
+                    attemptId,
+                    null,
+                    "PRICE_CHANGED",
+                    "The basket changed while it was being checked out; request a new quote",
+                    now);
+        }
+        return settleUnavailable(attemptId, AvailabilityDecision.blockedBy(customerItems), now);
+    }
+
     /** Settles the attempt against an inventory refusal, naming every unavailable item. */
     CheckoutResult settleUnavailable(UUID attemptId, AvailabilityDecision decision, Instant now) {
         String detail = decision.unavailableItems().stream()

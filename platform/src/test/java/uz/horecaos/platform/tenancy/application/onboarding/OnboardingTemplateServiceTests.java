@@ -144,6 +144,16 @@ class OnboardingTemplateServiceTests {
     }
 
     @Test
+    void aCourierServiceIsRecommendedTheDeliveriesConsoleAndNobodyElseIsRecommendedAnything() {
+        // ADR 0164: a recommendation the operator may offer, never a grant, and only for the kind the
+        // module shapes. Whether a template matched is a separate question and does not move it.
+        assertThat(service.suggestedFor("COURIER_SERVICE").recommendedModule()).isEqualTo("deliveries-console");
+        assertThat(service.suggestedFor("RESTAURANT").recommendedModule()).isNull();
+        assertThat(service.suggestedFor("DARK_KITCHEN").recommendedModule()).isNull();
+        assertThat(service.suggestedFor(null).recommendedModule()).isNull();
+    }
+
+    @Test
     void aTemplateCannotClaimABusinessTypeNoTenantCanHave() {
         assertThatThrownBy(() -> jdbc.sql("""
                         INSERT INTO tenant.onboarding_templates

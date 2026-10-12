@@ -1,3 +1,4 @@
+import type { Capability } from '../../core/auth/session-capabilities';
 import { MessageKey } from '../../core/i18n/messages.en';
 
 /**
@@ -22,6 +23,14 @@ export interface SettingsNavItem {
   readonly builtRoute: boolean;
   /** Shown only while this feature flag is on for the tenant (ADR 0082). */
   readonly featureFlag?: string;
+  /**
+   * What the operator must hold, at any of their scopes, to be offered this entry. An entry without one is the
+   * tenant's settings and is offered to whoever holds `TENANT_READ`, which is who the section admitted before an
+   * entry like this existed (`navigation.ts`). An entry that names a capability is offered to its holders whether or
+   * not they hold `TENANT_READ`: it is a screen a narrower role works (ADR 0162: a branch manager and her kiosks), and
+   * the server still refuses everything else under /settings to her.
+   */
+  readonly capability?: Capability;
 }
 
 export interface SettingsNavGroup {
@@ -61,6 +70,17 @@ export const SETTINGS_NAVIGATION: readonly SettingsNavGroup[] = [
         label: 'settings.nav.channelSetup',
         description: 'settings.home.description.channelSetup',
         builtRoute: false,
+      },
+      {
+        // ADR 0162: the branch's kiosks and *Pair a kiosk*. The KIOSK card also sits in each KIOSK channel's setup hub, but
+        // that hub reads the channel (`channel.read`, which a branch manager does not hold), so this is the door a person
+        // who pairs kiosks at her own branch is given. Dark behind `feature.kiosk_devices`, like the card.
+        path: 'channel-setup/kiosks',
+        label: 'settings.nav.kiosks',
+        description: 'settings.home.description.kiosks',
+        builtRoute: true,
+        featureFlag: 'feature.kiosk_devices',
+        capability: 'KIOSK_DEVICE_MANAGE',
       },
       {
         path: 'order-policy',
@@ -124,6 +144,15 @@ export const SETTINGS_NAVIGATION: readonly SettingsNavGroup[] = [
         label: 'settings.nav.fiscalization',
         description: 'settings.home.description.fiscalization',
         builtRoute: true,
+      },
+      {
+        // 10.14 Printing and receipts (ADR 0154): printers, what prints where, the brand's receipt footer and
+        // the print queue. Dark behind `feature.printing`: a tenant that has not been switched on sees no door.
+        path: 'printing',
+        label: 'settings.nav.printing',
+        description: 'settings.home.description.printing',
+        builtRoute: true,
+        featureFlag: 'feature.printing',
       },
     ],
   },
@@ -206,10 +235,30 @@ export const SETTINGS_NAV_ITEMS: readonly SettingsNavItem[] = SETTINGS_NAVIGATIO
   (group) => group.items,
 );
 
-/** The navigation with every flagged item whose flag is off taken out, and any group left empty. */
-export function visibleSettings(isOn: (flag: string) => boolean): readonly SettingsNavGroup[] {
+/**
+ * The navigation with every flagged item whose flag is off taken out, every item whose capability the operator does not
+ * hold taken out, and any group left empty.
+ *
+ * `holds` answers for the operator at any of their scopes (`SessionCapabilities.has`). An item that names no capability
+ * is the tenant's settings and needs `TENANT_READ`; one that names a capability needs that.
+ *
+ * A flag is read with `tenant.read` (ADR 0082), so an operator without it cannot see one: every flag reads as off for
+ * her. An item that is hers by a narrower capability is therefore not hidden by its flag, and its screen leaves the gate
+ * to the server (`kioskOffered` in `kiosk/kiosk-api.ts`).
+ */
+export function visibleSettings(
+  isOn: (flag: string) => boolean,
+  holds: (capability: Capability) => boolean = () => true,
+): readonly SettingsNavGroup[] {
+  const readsFlags = holds('TENANT_READ');
   return SETTINGS_NAVIGATION.map((group) => ({
     ...group,
-    items: group.items.filter((item) => item.featureFlag === undefined || isOn(item.featureFlag)),
+    items: group.items.filter(
+      (item) =>
+        holds(item.capability ?? 'TENANT_READ') &&
+        (item.featureFlag === undefined ||
+          isOn(item.featureFlag) ||
+          (item.capability !== undefined && !readsFlags)),
+    ),
   })).filter((group) => group.items.length > 0);
 }

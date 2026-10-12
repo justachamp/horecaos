@@ -342,17 +342,25 @@ class DispatchRulesValidatorTests {
     }
 
     @Test
-    @DisplayName("grouping is refused until the pay treatment for a run is decided, and validated once it is allowed")
+    @DisplayName(
+            "grouping is refused while the deployment has not enabled it or the courier pay for a run is undecided, and validated once both hold")
     void groupingIsGatedAndBounded() {
         Action grouped = new Action(
-                SourcingMode.FLEET_FIRST, PartnerSet.bindingOrder(), Start.lead(), new Grouping(700, 3, 120), null);
+                SourcingMode.FLEET_FIRST, PartnerSet.bindingOrder(), Start.lead(), new Grouping(700, 3, 0), null);
         DispatchRulesDocument document = document(rule("r", any(), grouped));
 
+        // The platform's kill switch (ADR 0142) is separate from the tenant's pay decision (ADR 0170).
         assertThat(DispatchRulesValidator.violations(document, context(false)))
                 .singleElement()
                 .asString()
-                .contains("how a courier is paid for one run of several orders has to be decided first");
-        assertThat(DispatchRulesValidator.violations(document, context(true))).isEmpty();
+                .contains("grouping is not enabled on this deployment");
+        assertThat(DispatchRulesValidator.violations(document, context(true, false)))
+                .singleElement()
+                .asString()
+                .contains("RUN_PAY_MODE_UNDECIDED");
+        assertThat(DispatchRulesValidator.violations(document, context(true, true)))
+                .as("enabled and decided: nothing left to refuse")
+                .isEmpty();
 
         Action wild = new Action(
                 SourcingMode.FLEET_FIRST, PartnerSet.bindingOrder(), Start.lead(), new Grouping(10, 9, 5_000), null);
@@ -360,11 +368,30 @@ class DispatchRulesValidatorTests {
                 .hasSize(3);
 
         Action partnersOnly = new Action(
-                SourcingMode.PARTNER_ONLY, PartnerSet.bindingOrder(), Start.lead(), new Grouping(700, 3, 120), null);
+                SourcingMode.PARTNER_ONLY, PartnerSet.bindingOrder(), Start.lead(), new Grouping(700, 3, 0), null);
         assertThat(DispatchRulesValidator.violations(document(rule("p", any(), partnersOnly)), context(true)))
                 .singleElement()
                 .asString()
                 .contains("biases the in-house fleet");
+    }
+
+    @Test
+    @DisplayName(
+            "a wait for a grouped courier is refused at any length above zero until a month of ranking-only data exists")
+    void aGroupingWaitAboveZeroIsRefused() {
+        Action oneSecond = new Action(
+                SourcingMode.FLEET_FIRST, PartnerSet.bindingOrder(), Start.lead(), new Grouping(700, 3, 1), null);
+        Action twoMinutes = new Action(
+                SourcingMode.FLEET_FIRST, PartnerSet.bindingOrder(), Start.lead(), new Grouping(700, 3, 120), null);
+
+        assertThat(DispatchRulesValidator.violations(document(rule("a", any(), oneSecond)), context(true)))
+                .singleElement()
+                .asString()
+                .contains("GROUPING_WAIT_NOT_AVAILABLE");
+        assertThat(DispatchRulesValidator.violations(document(rule("b", any(), twoMinutes)), context(true)))
+                .singleElement()
+                .asString()
+                .contains("GROUPING_WAIT_NOT_AVAILABLE");
     }
 
     // ------------------------------------------------------ ranges and windows
@@ -416,13 +443,18 @@ class DispatchRulesValidatorTests {
     }
 
     private static Context context(boolean groupingAllowed) {
+        return context(groupingAllowed, true);
+    }
+
+    private static Context context(boolean groupingAllowed, boolean runPayModeDecided) {
         return new Context(
                 Set.of(YANDEX, NOOR),
                 Set.of(FAR_ZONE),
                 Set.of(CHANNEL),
                 Set.of(BRANCH),
                 DeliverySourcingPolicy.DEFAULTS,
-                groupingAllowed);
+                groupingAllowed,
+                runPayModeDecided);
     }
 
     private static DispatchRulesDocument document(Rule... rules) {

@@ -47,9 +47,10 @@ import uz.horecaos.platform.web.idempotency.Idempotent;
  * Reading needs the configuration-read grant the order-policy card already uses; writing needs its own,
  * {@link Capability#ORDER_PAYMENT_WINDOW_MANAGE}.
  *
- * <p>{@code CANCEL} is a named action and is refused at publish with {@code VALIDATION_FAILED}: whether an
- * unpaid order should be cancelled at all is ADR 0019's open product input, and until it is answered the
- * window only controls when an order reaches the stuck list.
+ * <p>{@code CANCEL} is publishable at a window of fifteen minutes or more (ADR 0170) and ends an unpaid order
+ * as {@code PAYMENT_FAILED}; {@code FLAG_ONLY}, which only moves the order to the stuck list, stays the
+ * default. Whether the sweep acts on a published {@code CANCEL} or only counts what it would have ended is
+ * the deployment's own switch, {@code horecaos.ordering.payment-window.cancel.mode}.
  */
 @RestController
 @RequestMapping("/api/v1/operations/tenants/{tenantId}/payment-window")
@@ -100,11 +101,12 @@ public class OperationsPaymentWindowController {
     @Idempotent
     @Operation(
             summary = "Publish the next version of the unpaid-order window at exactly one scope",
-            description = "Whole-document replace. windowMinutes is one minute to a day. action FLAG_ONLY is the "
-                    + "only one available: CANCEL is refused with VALIDATION_FAILED until product answers ADR "
-                    + "0019's open question on checkout payment timing and cancellation. Requires If-Match "
-                    + "carrying the version the GET at this same scope returned, or the write is refused with "
-                    + "STALE_VERSION naming both versions.")
+            description = "Whole-document replace. windowMinutes is one minute to a day. action is FLAG_ONLY (the "
+                    + "default: the order reaches the stuck list) or CANCEL (ADR 0170: the order ends as "
+                    + "PAYMENT_FAILED, 'Cancelled: not paid', with its stock and promo released and the provider's "
+                    + "side closed). CANCEL needs a window of at least 15 minutes, or the write is refused with "
+                    + "PAYMENT_WINDOW_TOO_SHORT_FOR_CANCEL. Requires If-Match carrying the version the GET at this "
+                    + "same scope returned, or the write is refused with STALE_VERSION naming both versions.")
     public ResponseEntity<WindowResponse> write(
             @PathVariable UUID tenantId,
             @RequestParam(required = false) @Nullable UUID brandId,

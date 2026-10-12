@@ -14,6 +14,7 @@ import { MediaUploader } from '../../../shared/ui/media-uploader';
 import { DineInApi, DineInSettingsView, QrMode } from '../locations/dinein-api';
 import { LocationView, LocationsApi } from '../locations/locations-api';
 import { InstallationView, IntegrationsApi } from '../integrations/integrations-api';
+import { KioskCard } from '../kiosk/kiosk-card';
 import { ChannelView, SalesChannelsApi } from '../sales-channels/sales-channels-api';
 import {
   CHANNEL_PAGE_SLUGS,
@@ -44,11 +45,12 @@ interface LocationQrMode {
  * ChannelSetupService}'s own doc for why this hub does not add a
  * channel-scoped field that would contradict that decision — and (e) is
  * honestly locked: no kiosk device pairing exists yet (settings.md 10.5's
- * own KIOSK section declines the hardware/device integration for now).
+ * own KIOSK section declines the hardware/device integration for now) -- until ADR 0162, when the KIOSK card
+ * ({@link KioskCard}) lists the branch's kiosks and pairs, moves and revokes them behind the dark flag.
  */
 @Component({
   selector: 'q-channel-setup-page',
-  imports: [TPipe, RouterLink, MediaUploader],
+  imports: [TPipe, RouterLink, MediaUploader, KioskCard],
   templateUrl: './channel-setup-page.html',
   styleUrl: './channel-setup-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -119,6 +121,10 @@ export class ChannelSetupPage {
   protected readonly locationQrModes = signal<readonly LocationQrMode[]>([]);
 
   protected readonly version = computed(() => this.channel()?.version ?? 0);
+
+  // --------------------------------------------------------- (e) kiosk
+  /** The working branch, for the KIOSK card (ADR 0162): a kiosk is paired to a branch, so the card reads that branch's. */
+  protected readonly kioskScope = computed(() => this.location.scope());
 
   constructor() {
     void this.load();

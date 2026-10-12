@@ -101,6 +101,28 @@ public class SecurityConfiguration {
                                 // publication rows, never authoring tables, so
                                 // there is no path from here to a draft.
                                 "/api/v1/storefront/tenants/*/brands/*/locations/*/menu",
+                                // ADR 0157: the brand's home content -- banners, promo cards,
+                                // product groups, and from later releases stories, a promo grid and
+                                // a pop-up. The same document for every visitor of a brand, a
+                                // channel and a language, with no personal data in it: ADR 0112's
+                                // personalised offers stay a separate, authenticated read and never
+                                // enter it. Without this line an anonymous visitor is answered 401
+                                // whatever the edge does. Listed one path at a time like the menu.
+                                "/api/v1/storefront/tenants/*/brands/*/content/home",
+                                // ADR 0157, Release 5: the editorial tier. The routes exist for a
+                                // brand only when the content.editorial.enabled entitlement and the
+                                // brand's content.editorial policy both say yes; opened here so that
+                                // an anonymous visitor reads them, and answered 404 by the service
+                                // when either does not.
+                                "/api/v1/storefront/tenants/*/brands/*/content/features",
+                                "/api/v1/storefront/tenants/*/brands/*/content/news",
+                                "/api/v1/storefront/tenants/*/brands/*/content/news/*",
+                                "/api/v1/storefront/tenants/*/brands/*/content/gallery",
+                                "/api/v1/storefront/tenants/*/brands/*/content/gallery/*",
+                                "/api/v1/storefront/tenants/*/brands/*/content/recipes",
+                                "/api/v1/storefront/tenants/*/brands/*/content/recipes/*",
+                                "/api/v1/storefront/tenants/*/brands/*/content/careers",
+                                "/api/v1/storefront/tenants/*/brands/*/content/careers/*",
                                 // Rows 4.4c/4.4d: whether one variant is orderable
                                 // here right now, and its remaining count where
                                 // QUANTITY tracking applies -- StorefrontInventoryController's
@@ -197,11 +219,30 @@ public class SecurityConfiguration {
                                 // thing a storefront paints. The staff surfaces' twins stay
                                 // behind a session.
                                 "/api/v1/storefront/locales",
+                                // ADR 0159: the tags a customer is offered with a rating, a brand's rating
+                                // summary and its published comments. Off until the tenant switches them on
+                                // (an empty answer, not a refusal), cached and rate limited by the
+                                // handler, and carrying no name, customer, order number, review id or time
+                                // of day -- a comment appears only when its author said yes and a
+                                // moderator did too. See StorefrontPublicReviewController's own doc.
+                                "/api/v1/storefront/tenants/*/brands/*/feedback/config",
+                                "/api/v1/storefront/tenants/*/brands/*/reviews/public",
+                                "/api/v1/storefront/tenants/*/brands/*/reviews/public/summary",
                                 // ADR 0047: the guest's own running bill. Outside
                                 // the resource server's principal model on purpose
                                 // — see the POST pair below — and authorised by the
                                 // X-Dine-In-Token the handler resolves to a row.
                                 "/api/v1/storefront/dine-in/sessions/*")
+                        .permitAll()
+                        // ADR 0157, Release 2: anonymous per-day counters (impressions, clicks,
+                        // dismissals, story completions) reported by the storefront in batches of
+                        // at most twenty. A mutating endpoint with no principal, opened by exact
+                        // path; it stores no identifier of any kind, takes no Idempotency-Key
+                        // (IdempotencyInterceptor scopes a key by the calling subject and an
+                        // anonymous caller has none, and the counters are client-reported and
+                        // inflatable by anyone -- a retried batch counting twice is inside what
+                        // is already accepted), and is rate-limited per IP at the edge.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/storefront/tenants/*/brands/*/content/events")
                         .permitAll()
                         // ADR 0037's delivery-fee companion, moved from GET to POST on
                         // 2026-09-21 (audit follow-up (b)) so the customer's coordinate
@@ -213,6 +254,16 @@ public class SecurityConfiguration {
                         // nor an idempotency key.
                         .requestMatchers(
                                 HttpMethod.POST, "/api/v1/storefront/tenants/*/brands/*/locations/*/delivery-fee")
+                        .permitAll()
+                        // ADR 0167 Decision 4/5: a ?ref= landing counts one click on the link its token
+                        // names. Nobody to authorise and nothing to protect behind a token -- it can only
+                        // add one to a counter, answers every token alike (so it cannot be used to probe
+                        // which exist), records no address, agent or cookie, and is rate limited per token
+                        // and visitor in the ADR 0033 limiter. Exactly this path, as every exemption here.
+                        // EndpointCapabilityDeclarationTests names it for the same reason it names the
+                        // delivery-fee preview above.
+                        .requestMatchers(
+                                HttpMethod.POST, "/api/v1/storefront/tenants/*/brands/*/attribution-links/*/clicks")
                         .permitAll()
                         // ADR 0023: the on-box probe evaluates every alert
                         // threshold from this scrape, and it cannot hold a bearer

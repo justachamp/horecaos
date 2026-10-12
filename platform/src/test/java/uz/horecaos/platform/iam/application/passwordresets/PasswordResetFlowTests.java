@@ -13,6 +13,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -77,6 +79,7 @@ class PasswordResetFlowTests {
     private RecordingSender mailer;
     private List<StaffSecurityFact> facts;
     private JdbcPasswordResetStore store;
+    private uz.horecaos.platform.iam.application.sessions.StaffSessionLedger ledger;
     private TransactionTemplate transactions;
     private PasswordResetService resets;
     private PasswordResetRelay relay;
@@ -98,14 +101,20 @@ class PasswordResetFlowTests {
     void setUp() {
         jdbc = JdbcClient.create(db.dataSource());
         jdbc.sql("TRUNCATE TABLE iam.password_resets").update();
+        jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         clock = new MovableClock(Instant.parse("2026-09-11T09:00:00Z"));
         accounts = new FakeAccounts();
         mailer = new RecordingSender();
         facts = Collections.synchronizedList(new ArrayList<>());
         store = new JdbcPasswordResetStore(jdbc);
+        ledger = new uz.horecaos.platform.iam.application.sessions.StaffSessionLedger(
+                new uz.horecaos.platform.iam.infrastructure.persistence.JdbcStaffSignInStore(jdbc),
+                new uz.horecaos.platform.iam.application.sessions.DeviceLabelParser(),
+                clock,
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
         transactions = new TransactionTemplate(new DataSourceTransactionManager(db.dataSource()));
         resets = new PasswordResetService(
-                store, accounts, facts::add, transactions, clock, new PlatformLocaleVocabulary());
+                store, accounts, facts::add, transactions, clock, new PlatformLocaleVocabulary(), ledger);
         relay = new PasswordResetRelay(
                 store,
                 accounts,
@@ -656,6 +665,114 @@ class PasswordResetFlowTests {
                 .extracting(StaffSecurityFact::actionCode)
                 .as("a credential changed and the sessions it was changed because of are still live: alertable")
                 .contains("iam.password_reset.sessions_not_ended");
+    }
+
+    // ------------------------------------------------------------------ the sign-in history (ADR 0176)
+
+    @Test
+    @DisplayName("a reset that ended the sessions marks every tenant's rows of that person PASSWORD_RESET")
+    void aResetThatEndedTheSessionsSaysSoInTheHistory() {
+        UUID tenantA = tenantWithMember("reset-a", "org-reset-a", "S-0001");
+        UUID tenantB = tenantWithMember("reset-b", "org-reset-b", "S-0001");
+        ledger.recordSignIn(
+                SUBJECT, Set.of("org-reset-a", "org-reset-b"), "kc-reset-1", "Mozilla/5.0 (Windows) Chrome/126");
+        ledger.recordSignIn(SUBJECT, Set.of("org-reset-a"), "kc-reset-2", "Mozilla/5.0 (iPhone) Mobile Safari/604.1");
+        String token = linkToken();
+
+        boolean ended = resets.accept(token, "a-long-enough-passphrase", "corr");
+
+        assertThat(ended).isTrue();
+        assertThat(endReasons(tenantA)).containsExactlyInAnyOrder("PASSWORD_RESET", "PASSWORD_RESET");
+        assertThat(endReasons(tenantB)).containsExactly("PASSWORD_RESET");
+    }
+
+    @Test
+    @DisplayName(
+            "a reset whose session end failed leaves every row open, still answers false and never calls the ledger")
+    void aResetWhoseLogoutFailedLeavesTheHistoryAlone() {
+        tenantWithMember("reset-c", "org-reset-c", "S-0001");
+        ledger.recordSignIn(SUBJECT, Set.of("org-reset-c"), "kc-reset-3", null);
+        accounts.logoutFails = true;
+
+        boolean ended = resets.accept(linkToken(), "a-long-enough-passphrase", "corr");
+
+        assertThat(ended).isFalse();
+        assertThat(jdbc.sql("SELECT count(*) FROM iam.staff_sign_ins WHERE ended_at IS NULL")
+                        .query(Integer.class)
+                        .single())
+                .as("the history must not claim an end Keycloak did not perform")
+                .isEqualTo(1);
+        assertThat(fact("iam.password_reset.accepted").after()).containsEntry("sessionsEnded", false);
+        assertThat(facts).extracting(StaffSecurityFact::actionCode).contains("iam.password_reset.sessions_not_ended");
+    }
+
+    @Test
+    @DisplayName("a ledger that throws after a successful logout changes neither the answer nor the fact")
+    void aLedgerThatThrowsChangesNothing() {
+        tenantWithMember("reset-d", "org-reset-d", "S-0001");
+        uz.horecaos.platform.iam.infrastructure.persistence.JdbcStaffSignInStore broken = org.mockito.Mockito.mock(
+                uz.horecaos.platform.iam.infrastructure.persistence.JdbcStaffSignInStore.class);
+        org.mockito.Mockito.when(broken.endAllEverywhere(
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new IllegalStateException("boom"));
+        PasswordResetService withBrokenLedger = new PasswordResetService(
+                store,
+                accounts,
+                facts::add,
+                transactions,
+                clock,
+                new PlatformLocaleVocabulary(),
+                new uz.horecaos.platform.iam.application.sessions.StaffSessionLedger(
+                        broken,
+                        new uz.horecaos.platform.iam.application.sessions.DeviceLabelParser(),
+                        clock,
+                        new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
+
+        boolean ended = withBrokenLedger.accept(linkToken(), "a-long-enough-passphrase", "corr");
+
+        assertThat(ended).isTrue();
+        assertThat(fact("iam.password_reset.accepted").after()).containsEntry("sessionsEnded", true);
+        assertThat(facts)
+                .extracting(StaffSecurityFact::actionCode)
+                .doesNotContain("iam.password_reset.sessions_not_ended");
+    }
+
+    private String linkToken() {
+        resets.request("dilnoza", StaffConsole.OPERATIONS, "ru", "corr");
+        relay.runOnce();
+        return tokenIn(mailer.last().text());
+    }
+
+    private UUID tenantWithMember(String slug, String organization, String reference) {
+        UUID tenantId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO tenant.tenants (id, slug, legal_name, display_name, default_currency,
+                    default_timezone, status, version, keycloak_organization_id)
+                VALUES (:id, :slug, 'Legal', 'Display', 'UZS', 'Asia/Tashkent', 'ACTIVE', 0, :org)
+                """)
+                .param("id", tenantId)
+                .param("slug", slug)
+                .param("org", organization)
+                .update();
+        jdbc.sql("""
+                INSERT INTO iam.staff_members (id, tenant_id, principal_subject, display_reference, employment_status)
+                VALUES (:id, :tenant, :subject, :reference, 'ACTIVE')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenant", tenantId)
+                .param("subject", SUBJECT)
+                .param("reference", reference)
+                .update();
+        return tenantId;
+    }
+
+    private List<String> endReasons(UUID tenantId) {
+        return jdbc.sql("SELECT coalesce(end_reason, '<open>') FROM iam.staff_sign_ins WHERE tenant_id = :t")
+                .param("t", tenantId)
+                .query(String.class)
+                .list();
     }
 
     /**

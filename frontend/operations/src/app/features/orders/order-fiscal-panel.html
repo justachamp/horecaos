@@ -120,5 +120,14 @@
         }
       </tbody>
     </table>
+
+    <!-- The evidence per document (row X.2, ADR 0166): the INN, the lines as filed, the split, the
+         marks count, identifiers masked until a purpose is given. Drawn only once there is a document
+         to be about, so the denied and error states above are not said twice. -->
+    <q-fiscal-evidence
+      [tenantId]="tenantId()"
+      [orderId]="orderId()"
+      [refreshKey]="evidenceRefresh()"
+    />
   }
 </div>

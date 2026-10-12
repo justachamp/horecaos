@@ -1,0 +1,95 @@
+@if (summary(); as current) {
+  @if (current.ready) {
+    <section class="flex flex-col gap-4" data-testid="public-reviews">
+      <h2 class="text-lg font-bold text-text-primary">{{ 'publicReviews.title' | t }}</h2>
+
+      <div class="flex items-center gap-5">
+        <div class="flex min-w-[84px] flex-col items-center">
+          <span class="text-4xl font-extrabold text-text-primary" data-testid="public-average">{{
+            average()
+          }}</span>
+          <span class="text-xs text-zinc-400" data-testid="public-count">{{
+            'publicReviews.count' | t: { count: current.count ?? 0 }
+          }}</span>
+        </div>
+        <ul class="flex flex-1 flex-col gap-1" [attr.aria-label]="'publicReviews.distribution' | t">
+          @for (bar of bars(); track bar.stars) {
+            <li class="flex items-center gap-2 text-xs text-zinc-400" data-testid="public-bar">
+              <span class="w-3 text-center" data-testid="bar-label">{{ bar.stars }}</span>
+              <span
+                class="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-raised"
+                aria-hidden="true"
+              >
+                <span
+                  class="block h-full bg-brand-accent"
+                  [style.width.%]="bar.percent"
+                  data-testid="bar-fill"
+                ></span>
+              </span>
+              <span class="w-7 text-end" data-testid="bar-count">{{ bar.count }}</span>
+            </li>
+          }
+        </ul>
+      </div>
+
+      @if (showsComments() && comments().length > 0) {
+        <ul class="flex flex-col gap-3">
+          @for (item of comments(); track $index) {
+            <li
+              class="flex flex-col gap-1.5 rounded-xl bg-surface-raised p-4"
+              data-testid="public-comment"
+            >
+              <div class="flex gap-0.5 text-brand-accent" [attr.aria-label]="item.rating + ' / 5'">
+                @for (filled of stars(item.rating); track filled) {
+                  <span aria-hidden="true">★</span>
+                }
+              </div>
+              <p class="whitespace-pre-wrap break-words text-sm text-text-primary">
+                {{ item.comment }}
+              </p>
+              @if (item.tags.length > 0) {
+                <div class="flex flex-wrap gap-1.5">
+                  @for (tag of item.tags; track tag.code) {
+                    <span
+                      class="inline-flex items-center gap-1.5 rounded-full border border-zinc-600 px-2 py-0.5 text-xs text-zinc-300"
+                    >
+                      @if (tag.iconUrl) {
+                        <img
+                          class="h-4 w-4 shrink-0"
+                          [src]="tag.iconUrl"
+                          alt=""
+                          width="16"
+                          height="16"
+                          loading="lazy"
+                          data-testid="tag-icon"
+                        />
+                      }
+                      {{ wording(tag) }}
+                    </span>
+                  }
+                </div>
+              }
+              <span class="text-xs text-zinc-400"
+                >{{ day(item.date) }}
+                @if (item.branchName) {
+                  · {{ item.branchName }}
+                }
+              </span>
+            </li>
+          }
+        </ul>
+        @if (nextCursor() !== null) {
+          <button
+            type="button"
+            class="self-center rounded-lg bg-surface-raised px-5 py-3 text-sm font-semibold text-text-primary disabled:opacity-50"
+            [disabled]="loadingMore()"
+            (click)="loadMore()"
+            data-testid="public-more"
+          >
+            {{ (loadingMore() ? 'common.loading' : 'publicReviews.more') | t }}
+          </button>
+        }
+      }
+    </section>
+  }
+}

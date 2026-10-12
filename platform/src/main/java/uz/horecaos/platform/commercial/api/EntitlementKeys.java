@@ -316,6 +316,51 @@ public final class EntitlementKeys {
             .describedAs("Assistant turns answered by the language model in the plan's billing period.")
             .build();
 
+    /**
+     * ADR 0157: whether a tenant's brands may run the editorial tier -- news, gallery albums,
+     * recipes and a vacancy listing -- at all. The platform owner's switch per tenant.
+     *
+     * <p>{@code safeDefault(FALSE)}, matching {@link #TELEGRAM_DIGESTS_ENABLED} and
+     * {@link #ASSISTANT_ANSWERING_ENABLED}: a tenant that was never sold it must not grow a news
+     * section. The tenant's own choice of which of the four kinds to run is the brand-scoped
+     * {@code content.editorial} policy; both must say yes. Gated by name through
+     * {@code iam.api.EntitlementGate}, so {@code content} has no edge to this module.
+     */
+    public static final EntitlementKey<Boolean> CONTENT_EDITORIAL_ENABLED = EntitlementKey.feature(
+                    "content.editorial.enabled")
+            .safeDefault(Boolean.FALSE)
+            .ownedBy("content")
+            .describedAs("Whether the tenant's brands may publish news, gallery albums, recipes and a vacancy "
+                    + "listing on their storefronts (ADR 0157).")
+            .build();
+
+    /**
+     * ADR 0157, Release 3: video upload and playback in storefront content. {@code safeDefault(FALSE)}:
+     * video is the expensive medium (storage, egress, a decoder on the customer's phone), so it is
+     * opt-in per tenant by the platform owner and counted by the existing storage entitlement.
+     */
+    public static final EntitlementKey<Boolean> CONTENT_VIDEO_ENABLED = EntitlementKey.feature("content.video.enabled")
+            .safeDefault(Boolean.FALSE)
+            .ownedBy("content")
+            .describedAs("Whether the tenant's brands may upload and play video in storefront content (ADR 0157).")
+            .build();
+
+    /**
+     * ADR 0164: whether the operations console opens as a deliveries console for this tenant --
+     * landing on the dispatch board, with Kitchen, Marketing and Inbox put away. A shape is a
+     * presentation of the one console, granted commercially by the {@code deliveries-console}
+     * module, never by the tenant's business type and never a source of capability.
+     *
+     * <p>{@code safeDefault(FALSE)}, like the Telegram family: a feature a tenant has because a
+     * module says so, and a tenant that bought nothing keeps the console it always had.
+     */
+    public static final EntitlementKey<Boolean> DELIVERY_DELIVERIES_CONSOLE_ENABLED = EntitlementKey.feature(
+                    "delivery.deliveries_console.enabled")
+            .safeDefault(Boolean.FALSE)
+            .ownedBy("fulfillment")
+            .describedAs("Whether the operations console opens as a deliveries console (ADR 0164).")
+            .build();
+
     private static final Map<String, EntitlementKey<?>> BY_CODE = index(List.of(
             BRANDS_MAX_COUNT,
             LOCATIONS_MAX_COUNT,
@@ -337,7 +382,10 @@ public final class EntitlementKeys {
             TELEGRAM_CONVERSATIONS_ENABLED,
             TELEGRAM_BROADCASTS_ENABLED,
             ASSISTANT_ANSWERING_ENABLED,
-            ASSISTANT_TURNS_MONTHLY_INCLUDED));
+            ASSISTANT_TURNS_MONTHLY_INCLUDED,
+            CONTENT_EDITORIAL_ENABLED,
+            CONTENT_VIDEO_ENABLED,
+            DELIVERY_DELIVERIES_CONSOLE_ENABLED));
 
     private EntitlementKeys() {}
 

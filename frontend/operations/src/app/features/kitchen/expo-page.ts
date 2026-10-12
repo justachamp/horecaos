@@ -21,6 +21,7 @@ import { OrderTableChip } from '../../shared/ui/order-table-chip/order-table-chi
 import { OrderDetailResponse, OrderLine } from '../orders/order-detail';
 import { ChallengeState } from '../orders/order-handover-api';
 import { OrderHandoverPanel } from '../orders/order-handover-panel';
+import { OrderMarkingPanel } from '../orders/order-marking-panel';
 import { OrderWeighingPanel } from '../orders/order-weighing-panel';
 import { KitchenApi, StationResponse, TicketItemView, TicketResponse } from './kitchen-api';
 import { TicketItemRow, ticketItemRows } from './kitchen-ticket';
@@ -58,7 +59,7 @@ const POLL_INTERVAL_MS = 10_000;
  */
 @Component({
   selector: 'q-expo-page',
-  imports: [TPipe, OrderHandoverPanel, OrderTableChip, OrderWeighingPanel],
+  imports: [TPipe, OrderHandoverPanel, OrderTableChip, OrderWeighingPanel, OrderMarkingPanel],
   templateUrl: './expo-page.html',
   styleUrl: './expo-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -135,7 +136,10 @@ export class ExpoPage implements OnInit {
       for (const ticket of board.tickets) {
         // An order still waiting to be weighed is read again each poll: another screen may have
         // weighed it, and this one would otherwise hold the handover for ever.
-        void this.ensureOrderLoaded(ticket.orderId, this.hasUnweighedLine(ticket.orderId));
+        void this.ensureOrderLoaded(
+          ticket.orderId,
+          this.hasUnweighedLine(ticket.orderId) || this.hasUnscannedLine(ticket.orderId),
+        );
       }
       this.denied.set(false);
       this.lastError.set(null);
@@ -212,6 +216,43 @@ export class ExpoPage implements OnInit {
       return 'unknown';
     }
     return order.value.lines.some((line) => line.catchweight?.provisional) ? 'pending' : 'done';
+  }
+
+  /**
+   * ADR 0161: whether the order may leave the pass as far as marked goods go. `unknown` until the order has
+   * been read, for the same reason {@link weighingState} fails closed: a ticket handed over while a marked line
+   * is short of scans leaves the order itself on the pass, because the platform refuses its completion
+   * (`MARKS_INCOMPLETE`).
+   */
+  protected marksState(ticket: TicketResponse): 'unknown' | 'pending' | 'done' {
+    const order = this.ordersById().get(ticket.orderId);
+    if (!order) {
+      return 'unknown';
+    }
+    return order.value.lines.some(
+      (line) => line.marking != null && line.marking.captured < line.marking.required,
+    )
+      ? 'pending'
+      : 'done';
+  }
+
+  /** Whether the order has any marked line at all -- what decides if the scanning panel is drawn. */
+  protected hasMarkedLines(ticket: TicketResponse): boolean {
+    return (
+      this.ordersById()
+        .get(ticket.orderId)
+        ?.value.lines.some((line) => line.marking != null) ?? false
+    );
+  }
+
+  private hasUnscannedLine(orderId: string): boolean {
+    return (
+      this.ordersById()
+        .get(orderId)
+        ?.value.lines.some(
+          (line) => line.marking != null && line.marking.captured < line.marking.required,
+        ) ?? false
+    );
   }
 
   private hasUnweighedLine(orderId: string): boolean {
@@ -358,7 +399,8 @@ export class ExpoPage implements OnInit {
     return (
       this.isPacked(ticket) &&
       this.canHandOverProof(ticket) &&
-      this.weighingState(ticket) === 'done'
+      this.weighingState(ticket) === 'done' &&
+      this.marksState(ticket) === 'done'
     );
   }
 

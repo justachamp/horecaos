@@ -10,6 +10,13 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
+import uz.horecaos.platform.catalog.domain.AutoAddFindings;
+import uz.horecaos.platform.catalog.domain.AutoAddRules;
+import uz.horecaos.platform.catalog.domain.AutoAddRules.AutoAddRule;
+import uz.horecaos.platform.catalog.domain.AutoAddRules.Band;
+import uz.horecaos.platform.catalog.domain.AutoAddRules.Kind;
+import uz.horecaos.platform.catalog.domain.AutoAddRules.Mode;
+import uz.horecaos.platform.catalog.domain.AutoAddRules.Trigger;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Category;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.EntityType;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Fee;
@@ -25,8 +32,10 @@ import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboComponent;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ComboGroup;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.ModifierAttachment;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
+import uz.horecaos.platform.catalog.domain.MxikFacts;
 import uz.horecaos.platform.catalog.domain.PhysicalAttributes;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
+import uz.horecaos.platform.catalog.domain.Vocabularies;
 import uz.horecaos.platform.media.api.MediaAssetId;
 
 /**
@@ -69,6 +78,9 @@ public class CatalogValidator {
         validateOfferings(snapshot, findings);
         validateFiscalClassification(snapshot, findings);
         validatePhysicalAttributes(snapshot, findings);
+        validateAutoAdd(snapshot, findings);
+        validateMarkedGoods(snapshot, findings);
+        validateVocabulary(snapshot, findings);
 
         return new ValidationFinding.Report(List.copyOf(findings));
     }
@@ -198,6 +210,240 @@ public class CatalogValidator {
     }
 
     /**
+     * The cart-injection rules (ADR 0158): what a rule would put in a customer's basket has to be a
+     * line the cart can actually sell, must not duplicate what a hidden modifier or a promotion's gift
+     * already does, and a rule the customer cannot decline is gated behind a legal switch.
+     *
+     * <p>Only active rules are looked at: a draft reaches no customer. Errors block publication and
+     * name the rule; the two warnings (a portion band that counts nothing, a gap between bands) do not.
+     */
+    private void validateAutoAdd(Snapshot snapshot, List<ValidationFinding> findings) {
+        AutoAddContext autoAdd = snapshot.autoAdd();
+        if (autoAdd.rules().isEmpty()) {
+            return;
+        }
+        Map<UUID, Status> variantStatuses = new java.util.HashMap<>();
+        snapshot.variants().forEach(variant -> variantStatuses.put(variant.id(), variant.status()));
+        Map<UUID, Status> productStatuses = new java.util.HashMap<>();
+        snapshot.products().forEach(product -> productStatuses.put(product.id(), product.status()));
+        Map<UUID, Status> categoryStatuses = new java.util.HashMap<>();
+        snapshot.categories().forEach(category -> categoryStatuses.put(category.id(), category.status()));
+        Map<UUID, Set<String>> hiddenModesByVariant = hiddenPackagingVariants(snapshot);
+        boolean anyPortions = snapshot.physicalByVariant().values().stream()
+                .anyMatch(physical -> physical.portionsPerUnit() != null
+                        && physical.portionsPerUnit().signum() > 0);
+
+        for (AutoAddRule rule : autoAdd.rules()) {
+            for (UUID added : rule.addedVariantIds()) {
+                boolean onMenu = variantStatuses.get(added) == Status.ACTIVE;
+                boolean priced =
+                        !snapshot.pricingWired() || snapshot.pricedVariantIds().contains(added);
+                if (!onMenu || !priced) {
+                    findings.add(autoAddBlocker(
+                            AutoAddFindings.AUTO_ADD_VARIANT_NOT_SELLABLE,
+                            rule,
+                            !onMenu
+                                    ? "The variant this rule adds (%s) is not an active variant on this menu"
+                                            .formatted(added)
+                                    : "The variant this rule adds (%s) has no active price".formatted(added)));
+                }
+                Set<String> hiddenModes = hiddenModesByVariant.get(added);
+                if (hiddenModes != null && intersects(hiddenModes, rule.fulfillmentModes())) {
+                    findings.add(autoAddBlocker(
+                            AutoAddFindings.AUTO_ADD_DUPLICATES_HIDDEN_PACKAGING,
+                            rule,
+                            "A hidden modifier already charges variant %s in the same fulfilment modes; a per-product box stays a hidden modifier, a per-order or per-portion line is a rule"
+                                    .formatted(added)));
+                }
+                if (autoAdd.promotionGiftVariantIds().contains(added)) {
+                    String detail =
+                            "Variant %s is the gift of an active FREE_ITEM promotion; a rule cannot read the money the promotion's condition reads, so an injected gift would be charged in full whenever the promotion does not fire"
+                                    .formatted(added);
+                    findings.add(
+                            rule.mode() == Mode.INJECT
+                                    ? autoAddBlocker(AutoAddFindings.AUTO_ADD_VARIANT_IS_PROMOTION_GIFT, rule, detail)
+                                    : ValidationFinding.warning(
+                                            AutoAddFindings.AUTO_ADD_VARIANT_IS_PROMOTION_GIFT,
+                                            EntityType.AUTO_ADD_RULE,
+                                            rule.id(),
+                                            rule.code(),
+                                            detail + "; as an offer the customer taps, so this only warns"));
+                }
+            }
+            if (rule.kind() == Kind.PRODUCT_TRIGGERED
+                    && rule.triggers().stream()
+                            .noneMatch(trigger ->
+                                    triggerIsLive(trigger, variantStatuses, productStatuses, categoryStatuses))) {
+                findings.add(
+                        autoAddBlocker(
+                                AutoAddFindings.AUTO_ADD_TRIGGER_MISSING,
+                                rule,
+                                "A product-triggered rule needs at least one trigger whose product, variant or category is not archived"));
+            }
+            if (rule.mandatory() && !autoAdd.mandatoryAllowed()) {
+                findings.add(
+                        autoAddBlocker(
+                                AutoAddFindings.AUTO_ADD_MANDATORY_NOT_ALLOWED,
+                                rule,
+                                "A line the customer cannot remove is a charge the customer did not choose; mandatory rules are blocked until a platform administrator turns catalog.auto_add_mandatory_allowed on"));
+            }
+            if (rule.mandatory()
+                    && !snapshot.hasTranslation(EntityType.AUTO_ADD_RULE, rule.id(), snapshot.defaultLocale())) {
+                findings.add(
+                        autoAddBlocker(
+                                AutoAddFindings.AUTO_ADD_MANDATORY_UNDISCLOSED,
+                                rule,
+                                "A mandatory rule shows the customer why the line is there; it needs customer text in the brand's default language"));
+            }
+            if (rule.kind() == Kind.PORTION_BAND) {
+                if (!anyPortions) {
+                    findings.add(ValidationFinding.warning(
+                            AutoAddFindings.AUTO_ADD_PORTION_BAND_COUNTS_NOTHING,
+                            EntityType.AUTO_ADD_RULE,
+                            rule.id(),
+                            rule.code(),
+                            "No variant of this brand states portions per unit, so this rule never fires"));
+                }
+                List<Band> ordered = rule.bands().stream()
+                        .sorted(java.util.Comparator.comparing(Band::portionsFrom))
+                        .toList();
+                for (int index = 1; index < ordered.size(); index++) {
+                    java.math.BigDecimal previousEnd = ordered.get(index - 1).portionsTo();
+                    if (previousEnd != null
+                            && previousEnd.compareTo(ordered.get(index).portionsFrom()) < 0) {
+                        findings.add(ValidationFinding.warning(
+                                AutoAddFindings.AUTO_ADD_BAND_GAP,
+                                EntityType.AUTO_ADD_RULE,
+                                rule.id(),
+                                rule.code(),
+                                "A basket worth %s to %s portions falls between two bands and injects nothing"
+                                        .formatted(
+                                                previousEnd.toPlainString(),
+                                                ordered.get(index)
+                                                        .portionsFrom()
+                                                        .toPlainString())));
+                    }
+                }
+            }
+        }
+
+        List<AutoAddRule> rules = autoAdd.rules();
+        for (int i = 0; i < rules.size(); i++) {
+            for (int j = i + 1; j < rules.size(); j++) {
+                AutoAddRule first = rules.get(i);
+                AutoAddRule second = rules.get(j);
+                if (intersects(first.addedVariantIds(), second.addedVariantIds())
+                        && intersects(first.fulfillmentModes(), second.fulfillmentModes())
+                        && intersects(first.channelSystemTypes(), second.channelSystemTypes())
+                        && locationsOverlap(first, second)) {
+                    findings.add(autoAddBlocker(
+                            AutoAddFindings.AUTO_ADD_RULES_OVERLAP,
+                            second,
+                            "Rules %s and %s add the same variant in overlapping fulfilment modes, channel types and locations"
+                                    .formatted(first.code(), second.code())));
+                }
+            }
+        }
+    }
+
+    private static ValidationFinding autoAddBlocker(String code, AutoAddRule rule, String detail) {
+        return ValidationFinding.blocker(code, EntityType.AUTO_ADD_RULE, rule.id(), rule.code(), detail);
+    }
+
+    private static <T> boolean intersects(Set<T> left, Set<T> right) {
+        return left.stream().anyMatch(right::contains);
+    }
+
+    private static boolean locationsOverlap(AutoAddRule first, AutoAddRule second) {
+        // No rows means every location of the brand.
+        return first.locationIds().isEmpty()
+                || second.locationIds().isEmpty()
+                || intersects(first.locationIds(), second.locationIds());
+    }
+
+    private static boolean triggerIsLive(
+            Trigger trigger,
+            Map<UUID, Status> variantStatuses,
+            Map<UUID, Status> productStatuses,
+            Map<UUID, Status> categoryStatuses) {
+        if (trigger.variantId() != null) {
+            Status status = variantStatuses.get(trigger.variantId());
+            return status != null && status != Status.ARCHIVED;
+        }
+        if (trigger.productId() != null) {
+            Status status = productStatuses.get(trigger.productId());
+            return status != null && status != Status.ARCHIVED;
+        }
+        Status status = categoryStatuses.get(trigger.categoryId());
+        return status != null && status != Status.ARCHIVED;
+    }
+
+    /**
+     * The variants a hidden, auto-selected modifier group already charges (ADR 0136), with the fulfilment modes
+     * it applies in: the linked variant of every active option of every hidden attachment. A hidden attachment
+     * with no mode list applies in all three.
+     */
+    private static Map<UUID, Set<String>> hiddenPackagingVariants(Snapshot snapshot) {
+        Map<UUID, Set<String>> byVariant = new java.util.HashMap<>();
+        CompositeContext composite = snapshot.composite();
+        for (ModifierAttachment attachment : composite.attachments()) {
+            if (!attachment.hidden()) {
+                continue;
+            }
+            Set<String> modes = attachment.modes() == null
+                    ? AutoAddRules.FULFILLMENT_MODES
+                    : attachment.modes().stream().map(Enum::name).collect(Collectors.toCollection(LinkedHashSet::new));
+            for (ModifierOption option : composite.activeOptionsOf(attachment.modifierGroupId())) {
+                if (option.linkedVariantId() != null) {
+                    byVariant
+                            .computeIfAbsent(option.linkedVariantId(), id -> new LinkedHashSet<>())
+                            .addAll(modes);
+                }
+            }
+        }
+        return byVariant;
+    }
+
+    /**
+     * The tags and ingredients the menu's products carry (ADR 0174), loaded with the rest of the snapshot.
+     *
+     * @param tags                 the active tags some product of this catalog carries, by id
+     * @param ingredients          the same for ingredients
+     * @param tagIdsByProduct      each product's ordered, active tags
+     * @param ingredientIdsByProduct each product's ordered, active ingredients
+     */
+    public record VocabularyContext(
+            Map<UUID, Vocabularies.Entry> tags,
+            Map<UUID, Vocabularies.Entry> ingredients,
+            Map<UUID, List<UUID>> tagIdsByProduct,
+            Map<UUID, List<UUID>> ingredientIdsByProduct) {
+
+        public static VocabularyContext empty() {
+            return new VocabularyContext(Map.of(), Map.of(), Map.of(), Map.of());
+        }
+    }
+
+    /**
+     * Everything the auto-add rules need (ADR 0158), loaded with the rest of the snapshot.
+     *
+     * @param rules                   the brand's active rules; a draft reaches no customer
+     * @param promotionGiftVariantIds variants named by an active {@code FREE_ITEM} promotion, contributed
+     *                                by pricing through a port
+     * @param mandatoryAllowed        {@code catalog.auto_add_mandatory_allowed} for the tenant
+     */
+    public record AutoAddContext(List<AutoAddRule> rules, Set<UUID> promotionGiftVariantIds, boolean mandatoryAllowed) {
+
+        public AutoAddContext {
+            rules = List.copyOf(rules);
+            promotionGiftVariantIds = Set.copyOf(promotionGiftVariantIds);
+        }
+
+        public static AutoAddContext empty() {
+            return new AutoAddContext(List.of(), Set.of(), false);
+        }
+    }
+
+    /**
      * The marking exclusion, restated from the physical side (ADR 0137, ADR 0038).
      *
      * <p>ADR 0038 already decided that a marked good "forces integer quantity and
@@ -234,6 +480,70 @@ public class CatalogValidator {
                                         .formatted(physical.catchweight() ? "catchweight" : "splittable")
                                 + "one per physical unit, so the unit cannot be weighed at handover or split "
                                 + "into portions"));
+            }
+        }
+    }
+
+    /**
+     * The two blockers ADR 0161 puts on marked goods at publication.
+     *
+     * <p>{@code MARKED_GOODS_NOT_ENABLED}: while {@code feature.marked_goods} is off for the tenant, a variant
+     * (or any node) whose classification says {@code marking_required} cannot be published. This closes the
+     * hazard the record names: a tenant administrator could already set {@code marking_required} through the
+     * classification endpoint and sell it, with no capture, to a customer paying through Payme. The flag is
+     * turned on by the platform only once the payment exclusion, the real receipt line and the Click sandbox
+     * check exist, so the first marked SKU is published only after it.
+     *
+     * <p>{@code MARKED_MODIFIER_UNSUPPORTED}: a modifier option and the delivery fee are refused whatever
+     * the flag says, because a modifier row has a quantity and no line of its own to hold a mark. Marking is
+     * a property of a variant, which has its own order line.
+     */
+    private void validateMarkedGoods(Snapshot snapshot, List<ValidationFinding> findings) {
+        boolean enabled = snapshot.fiscal().markedGoodsEnabled();
+        for (Variant variant : snapshot.variants()) {
+            if (variant.status() == Status.ACTIVE
+                    && !enabled
+                    && snapshot.effectiveClassification(variant).markingRequired()) {
+                findings.add(ValidationFinding.blocker(
+                        "MARKED_GOODS_NOT_ENABLED",
+                        EntityType.VARIANT,
+                        variant.id(),
+                        variant.sku(),
+                        "This variant is classified as a marked good (marking_required) but marked-goods capture "
+                                + "is not enabled for this tenant, so a unit would be sold with no code scanned "
+                                + "(feature.marked_goods is off)"));
+            }
+        }
+        for (ModifierGroup group : snapshot.modifierGroups()) {
+            if (group.status() != Status.ACTIVE) {
+                continue;
+            }
+            for (ModifierOption option : snapshot.optionsByGroup().getOrDefault(group.id(), List.of())) {
+                if (option.status() == Status.ACTIVE
+                        && snapshot.effectiveClassification(option).markingRequired()
+                        && option.linkedVariantId() == null) {
+                    findings.add(ValidationFinding.blocker(
+                            "MARKED_MODIFIER_UNSUPPORTED",
+                            EntityType.MODIFIER_OPTION,
+                            option.id(),
+                            option.code(),
+                            "A modifier option cannot be a marked good: it has a quantity and no order line of its "
+                                    + "own to hold a scanned code. Mark the variant it adds instead"));
+                }
+            }
+        }
+        for (Fee fee : snapshot.fiscal().fees()) {
+            if (fee.status() != Status.ARCHIVED
+                    && snapshot.fiscal()
+                            .byNode()
+                            .getOrDefault(fee.id(), FiscalClassification.unclassified())
+                            .markingRequired()) {
+                findings.add(ValidationFinding.blocker(
+                        "MARKED_MODIFIER_UNSUPPORTED",
+                        EntityType.FEE,
+                        fee.id(),
+                        fee.code(),
+                        "A fee cannot be a marked good: it is a charge and has no unit to scan"));
             }
         }
     }
@@ -309,16 +619,52 @@ public class CatalogValidator {
         if (!snapshot.fiscal().referenceLoaded() || fiscal.mxikCode() == null) {
             return;
         }
-        if (!snapshot.fiscal().referenceCodes().contains(fiscal.mxikCode())) {
+        String code = fiscal.mxikCode();
+        MxikFacts facts = snapshot.fiscal().referenceFacts().get(code);
+        if (snapshot.fiscal().referenceCodes().contains(code)) {
+            // Valid on the date. The list's own package codes are evidence for a person, never a rule: a list
+            // that may not be exhaustive cannot refuse a code a tenant typed (ADR 0173 Decision 8).
+            if (facts != null
+                    && !facts.defaultPackageCodes().isEmpty()
+                    && fiscal.packageCode() != null
+                    && !facts.defaultPackageCodes().contains(fiscal.packageCode())) {
+                findings.add(ValidationFinding.warning(
+                        "FISCAL_PACKAGE_CODE_NOT_LISTED_FOR_MXIK",
+                        type,
+                        entityId,
+                        entityCode,
+                        "Package code %s is not among the package codes the official list names for ИКПУ/MXIK %s (%s). "
+                                        .formatted(
+                                                fiscal.packageCode(),
+                                                code,
+                                                String.join(", ", facts.defaultPackageCodes()))
+                                + "The list may not be exhaustive, so this is for a person to check, not a refusal"));
+            }
+            return;
+        }
+        if (facts != null && facts.withdrawnOn(snapshot.fiscal().validationDate())) {
+            // Warns and never blocks (ADR 0173 Decision 7): an issued receipt keeps the code it went out under,
+            // and a menu is not to stop selling on the day the authority retires a code.
+            String successor = facts.replacedByCode() == null
+                    ? ""
+                    : "; the list names " + facts.replacedByCode() + " as its successor";
             findings.add(ValidationFinding.warning(
-                    "FISCAL_MXIK_CODE_UNKNOWN",
+                    "FISCAL_MXIK_CODE_WITHDRAWN",
                     type,
                     entityId,
                     entityCode,
-                    "ИКПУ/MXIK %s is not in the imported reference list. A code the tax ".formatted(fiscal.mxikCode())
-                            + "authority does not recognise is a classification error on a "
-                            + "legal document, and it is most often a transcription slip"));
+                    "ИКПУ/MXIK %s was withdrawn from the official list on %s%s"
+                            .formatted(code, facts.validUntil(), successor)));
+            return;
         }
+        findings.add(ValidationFinding.warning(
+                "FISCAL_MXIK_CODE_UNKNOWN",
+                type,
+                entityId,
+                entityCode,
+                "ИКПУ/MXIK %s is not in the imported reference list. A code the tax ".formatted(code)
+                        + "authority does not recognise is a classification error on a "
+                        + "legal document, and it is most often a transcription slip"));
     }
 
     /** Names the missing fields rather than the fact that some are missing. */
@@ -730,6 +1076,53 @@ public class CatalogValidator {
      * menu a {ru, en} brand had named completely in its own default language: its
      * editor offers no {@code uz} tab to satisfy it with.
      */
+    /**
+     * The tags and ingredients the products carry, and the variant names a size picker needs (ADR 0174).
+     *
+     * <p>A referenced tag or ingredient with no name in the brand's default locale is a blocker, as a product
+     * with no name is: the storefront would print its code. A variant with no name where its product has two or
+     * more active variants is a WARNING for one release (every existing menu was published without one), because
+     * the customer is shown the unit code instead and can still order.
+     */
+    private void validateVocabulary(Snapshot snapshot, List<ValidationFinding> findings) {
+        String locale = snapshot.defaultLocale();
+        String reason = snapshot.fallbackLocale().equals(locale)
+                ? "No name in the brand default locale " + locale
+                : "No name in the brand default locale " + locale + " or the catalog's " + snapshot.fallbackLocale();
+        VocabularyContext vocabulary = snapshot.vocabulary();
+        for (Vocabularies.Entry tag : vocabulary.tags().values()) {
+            if (!tag.names().containsKey(locale) && !tag.names().containsKey(snapshot.fallbackLocale())) {
+                findings.add(
+                        ValidationFinding.blocker("TAG_NAME_MISSING", EntityType.TAG, tag.id(), tag.code(), reason));
+            }
+        }
+        for (Vocabularies.Entry ingredient : vocabulary.ingredients().values()) {
+            if (!ingredient.names().containsKey(locale) && !ingredient.names().containsKey(snapshot.fallbackLocale())) {
+                findings.add(ValidationFinding.blocker(
+                        "INGREDIENT_NAME_MISSING", EntityType.INGREDIENT, ingredient.id(), ingredient.code(), reason));
+            }
+        }
+        for (Product product : snapshot.products()) {
+            List<Variant> orderable = snapshot.variantsByProduct().getOrDefault(product.id(), List.of()).stream()
+                    .filter(variant -> variant.status() == Status.ACTIVE)
+                    .toList();
+            if (product.status() != Status.ACTIVE || orderable.size() < 2) {
+                continue;
+            }
+            for (Variant variant : orderable) {
+                if (!snapshot.hasName(EntityType.VARIANT, variant.id())) {
+                    findings.add(ValidationFinding.warning(
+                            "VARIANT_NAME_MISSING",
+                            EntityType.VARIANT,
+                            variant.id(),
+                            variant.sku(),
+                            "This product has several variants and this one has no name to show beside the others. "
+                                    + reason));
+                }
+            }
+        }
+    }
+
     private void validateTranslations(Snapshot snapshot, List<ValidationFinding> findings) {
         String locale = snapshot.defaultLocale();
         String reason = snapshot.fallbackLocale().equals(locale)
@@ -834,7 +1227,103 @@ public class CatalogValidator {
             FiscalContext fiscal,
             boolean pricingWired,
             CompositeContext composite,
-            Map<UUID, PhysicalAttributes> physicalByVariant) {
+            Map<UUID, PhysicalAttributes> physicalByVariant,
+            AutoAddContext autoAdd,
+            VocabularyContext vocabulary) {
+
+        /** A snapshot with auto-add rules (ADR 0158) and no tags or ingredients (ADR 0174). */
+        public Snapshot(
+                String defaultLocale,
+                String fallbackLocale,
+                List<Product> products,
+                List<Variant> variants,
+                Map<UUID, List<Variant>> variantsByProduct,
+                List<Category> categories,
+                Map<UUID, Category> categoriesById,
+                Map<UUID, List<UUID>> productIdsByCategory,
+                Map<UUID, List<UUID>> modifierGroupIdsByProduct,
+                List<ModifierGroup> modifierGroups,
+                Map<UUID, List<ModifierOption>> optionsByGroup,
+                Map<String, LocalizedText> translations,
+                Map<MediaAssetId, Set<UUID>> mediaReferences,
+                Set<MediaAssetId> displayableMedia,
+                Set<UUID> pricedVariantIds,
+                Set<UUID> offeredVariantIds,
+                FiscalContext fiscal,
+                boolean pricingWired,
+                CompositeContext composite,
+                Map<UUID, PhysicalAttributes> physicalByVariant,
+                AutoAddContext autoAdd) {
+            this(
+                    defaultLocale,
+                    fallbackLocale,
+                    products,
+                    variants,
+                    variantsByProduct,
+                    categories,
+                    categoriesById,
+                    productIdsByCategory,
+                    modifierGroupIdsByProduct,
+                    modifierGroups,
+                    optionsByGroup,
+                    translations,
+                    mediaReferences,
+                    displayableMedia,
+                    pricedVariantIds,
+                    offeredVariantIds,
+                    fiscal,
+                    pricingWired,
+                    composite,
+                    physicalByVariant,
+                    autoAdd,
+                    VocabularyContext.empty());
+        }
+
+        /** A snapshot with composite products and physical attributes and no auto-add rules (ADR 0158). */
+        public Snapshot(
+                String defaultLocale,
+                String fallbackLocale,
+                List<Product> products,
+                List<Variant> variants,
+                Map<UUID, List<Variant>> variantsByProduct,
+                List<Category> categories,
+                Map<UUID, Category> categoriesById,
+                Map<UUID, List<UUID>> productIdsByCategory,
+                Map<UUID, List<UUID>> modifierGroupIdsByProduct,
+                List<ModifierGroup> modifierGroups,
+                Map<UUID, List<ModifierOption>> optionsByGroup,
+                Map<String, LocalizedText> translations,
+                Map<MediaAssetId, Set<UUID>> mediaReferences,
+                Set<MediaAssetId> displayableMedia,
+                Set<UUID> pricedVariantIds,
+                Set<UUID> offeredVariantIds,
+                FiscalContext fiscal,
+                boolean pricingWired,
+                CompositeContext composite,
+                Map<UUID, PhysicalAttributes> physicalByVariant) {
+            this(
+                    defaultLocale,
+                    fallbackLocale,
+                    products,
+                    variants,
+                    variantsByProduct,
+                    categories,
+                    categoriesById,
+                    productIdsByCategory,
+                    modifierGroupIdsByProduct,
+                    modifierGroups,
+                    optionsByGroup,
+                    translations,
+                    mediaReferences,
+                    displayableMedia,
+                    pricedVariantIds,
+                    offeredVariantIds,
+                    fiscal,
+                    pricingWired,
+                    composite,
+                    physicalByVariant,
+                    AutoAddContext.empty());
+        }
 
         /**
          * A snapshot with no composite products (ADR 0136) and no variant carrying
@@ -1070,14 +1559,76 @@ public class CatalogValidator {
      *                            unrecognised codes are different problems with
      *                            different owners
      * @param referenceCodes      the subset of this catalog's codes the reference
-     *                            recognises
+     *                            lists and that is valid on {@code validationDate}
+     * @param referenceFacts      what the list says about each of this catalog's codes it
+     *                            lists at all, valid or not (ADR 0173): the window, the
+     *                            default package codes, a named successor
+     * @param validationDate      the date the codes were judged on
+     * @param markedGoodsEnabled  ADR 0161: whether {@code feature.marked_goods} is on for the
+     *                            tenant; while it is off a node classified as marked cannot be
+     *                            published
      */
     public record FiscalContext(
             Map<UUID, FiscalClassification> byNode,
             List<Fee> fees,
             boolean brandOffersDelivery,
             boolean referenceLoaded,
-            Set<String> referenceCodes) {
+            Set<String> referenceCodes,
+            Map<String, MxikFacts> referenceFacts,
+            java.time.LocalDate validationDate,
+            boolean markedGoodsEnabled) {
+
+        /**
+         * The context before the list carried withdrawal and before ADR 0161's flag: codes are "known" or
+         * not, on no particular date, and marked goods are not restricted.
+         */
+        public FiscalContext(
+                Map<UUID, FiscalClassification> byNode,
+                List<Fee> fees,
+                boolean brandOffersDelivery,
+                boolean referenceLoaded,
+                Set<String> referenceCodes) {
+            this(byNode, fees, brandOffersDelivery, referenceLoaded, referenceCodes, true);
+        }
+
+        /** The context before the list carried withdrawal, with ADR 0161's flag stated. */
+        public FiscalContext(
+                Map<UUID, FiscalClassification> byNode,
+                List<Fee> fees,
+                boolean brandOffersDelivery,
+                boolean referenceLoaded,
+                Set<String> referenceCodes,
+                boolean markedGoodsEnabled) {
+            this(
+                    byNode,
+                    fees,
+                    brandOffersDelivery,
+                    referenceLoaded,
+                    referenceCodes,
+                    Map.of(),
+                    java.time.LocalDate.EPOCH,
+                    markedGoodsEnabled);
+        }
+
+        /** The context with the list's facts and a validation date, and marked goods not restricted. */
+        public FiscalContext(
+                Map<UUID, FiscalClassification> byNode,
+                List<Fee> fees,
+                boolean brandOffersDelivery,
+                boolean referenceLoaded,
+                Set<String> referenceCodes,
+                Map<String, MxikFacts> referenceFacts,
+                java.time.LocalDate validationDate) {
+            this(
+                    byNode,
+                    fees,
+                    brandOffersDelivery,
+                    referenceLoaded,
+                    referenceCodes,
+                    referenceFacts,
+                    validationDate,
+                    true);
+        }
 
         /** For a test or a caller with nothing fiscal to say. */
         public static FiscalContext empty() {

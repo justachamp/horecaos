@@ -2,6 +2,13 @@ package uz.horecaos.platform.ordering.web;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static uz.horecaos.platform.ordering.OrderBoardFixtures.order;
@@ -349,6 +356,102 @@ class OperationsBrandOrderBoardHttpTests {
         assertThat(stale.getResponse().getStatus())
                 .as("a window cut for one filter set says nothing about another")
                 .isEqualTo(400);
+    }
+
+    // ------------------------------------------------------- who took the order
+
+    /**
+     * ADR 0160: the board's optional «Создал» and «Принял» columns draw a name, and the name is the
+     * tenant's own record of the staff member (ADR 0139), resolved with one batch per page -- not one
+     * lookup per row -- for the {@code USER} actors on it.
+     */
+    @Test
+    @DisplayName("each board row names who took and who accepted the order, from one directory batch per page")
+    void theBoardNamesTheStaffActorsInOneBatch() throws Exception {
+        when(staffDirectory.namesOf(eq(TENANT), anyCollection()))
+                .thenReturn(Map.of("cook-a", "Shahlo Tursunova", "manager-9", "Madina Yusupova"));
+        UUID byA = fixtures.insertOrder(order("HT-N1")
+                .at(TENANT, BRAND, CHILONZOR)
+                .createdByActorId("cook-a")
+                .acceptedByActorId("manager-9"));
+        UUID byAAgain = fixtures.insertOrder(order("HT-N2")
+                .at(TENANT, BRAND, YUNUSOBOD)
+                .createdByActorId("cook-a")
+                .acceptedByActorId("manager-9"));
+        UUID byUnnamed = fixtures.insertOrder(order("HT-N3")
+                .at(TENANT, BRAND, CHILONZOR)
+                .createdByActorId("cook-b-the-tenant-has-no-name-for")
+                .acceptedByActorId("manager-9"));
+
+        for (String path : List.of(BRAND_BOARD, CHILONZOR_BOARD)) {
+            org.mockito.Mockito.clearInvocations(staffDirectory);
+            JsonNode board = ok(get(path).with(tokenFor(path.equals(BRAND_BOARD) ? BRAND_SUPERVISOR : BRANCH_MANAGER)));
+
+            Map<UUID, JsonNode> rows = rowsByOrder(board);
+            assertThat(row(rows, byA).get("createdByDisplayName").asString())
+                    .as(path)
+                    .isEqualTo("Shahlo Tursunova");
+            assertThat(row(rows, byA).get("acceptedByDisplayName").asString()).isEqualTo("Madina Yusupova");
+            assertThat(row(rows, byUnnamed).get("createdByDisplayName").isNull())
+                    .as("a subject the tenant has no name for is a null, never the raw subject")
+                    .isTrue();
+            assertThat(row(rows, byUnnamed).get("acceptedByDisplayName").asString())
+                    .isEqualTo("Madina Yusupova");
+            assertThat(row(rows, byUnnamed).get("createdByActorId").asString())
+                    .as("the subject stays on the row for a caller that still wants it")
+                    .isEqualTo("cook-b-the-tenant-has-no-name-for");
+
+            @SuppressWarnings("unchecked")
+            org.mockito.ArgumentCaptor<java.util.Collection<String>> asked =
+                    org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+            verify(staffDirectory, times(1)).namesOf(eq(TENANT), asked.capture());
+            assertThat(asked.getValue())
+                    .as("one batch for the whole page, each subject once, in this tenant")
+                    .containsExactlyInAnyOrder("cook-a", "cook-b-the-tenant-has-no-name-for", "manager-9");
+            if (path.equals(BRAND_BOARD)) {
+                assertThat(row(rows, byAAgain).get("createdByDisplayName").asString())
+                        .isEqualTo("Shahlo Tursunova");
+            }
+        }
+    }
+
+    @Test
+    @DisplayName(
+            "an order nobody keyed in -- a provider, a job -- is never looked up as if its id were a staff subject")
+    void aNonStaffActorHasNoName() throws Exception {
+        when(staffDirectory.namesOf(eq(TENANT), anyCollection()))
+                .thenReturn(Map.of("provider-callback", "Somebody Else", "manager-1", "Madina Yusupova"));
+        UUID byProvider = fixtures.insertOrder(
+                order("HT-N4").at(TENANT, BRAND, CHILONZOR).createdBy("PROVIDER", "provider-callback"));
+
+        JsonNode row = row(rowsByOrder(ok(get(CHILONZOR_BOARD).with(tokenFor(BRANCH_MANAGER)))), byProvider);
+
+        assertThat(row.get("createdByDisplayName").isNull()).isTrue();
+        assertThat(row.get("acceptedByDisplayName").asString()).isEqualTo("Madina Yusupova");
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<java.util.Collection<String>> asked =
+                org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(staffDirectory).namesOf(eq(TENANT), asked.capture());
+        assertThat(asked.getValue()).containsExactly("manager-1");
+    }
+
+    @Test
+    @DisplayName("a page with nobody to name asks the directory nothing")
+    void anEmptyBoardAsksNothing() throws Exception {
+        ok(get(CHILONZOR_BOARD).with(tokenFor(BRANCH_MANAGER)));
+
+        verify(staffDirectory, never()).namesOf(any(), anyCollection());
+    }
+
+    private static JsonNode row(Map<UUID, JsonNode> rows, UUID orderId) {
+        return Objects.requireNonNull(rows.get(orderId), "the board did not return order " + orderId);
+    }
+
+    private static Map<UUID, JsonNode> rowsByOrder(JsonNode page) {
+        Map<UUID, JsonNode> rows = new java.util.HashMap<>();
+        page.get("items")
+                .forEach(item -> rows.put(UUID.fromString(item.get("orderId").asString()), item));
+        return rows;
     }
 
     // --------------------------------------------------------------- actions[]

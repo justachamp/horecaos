@@ -48,6 +48,12 @@ function daysAgo(from: Date, days: number): Date {
 export class DateRangePicker {
   readonly start = input<string | null>(null);
   readonly end = input<string | null>(null);
+  /**
+   * The reporting presets -- today, yesterday, the last seven days, this month -- are on by default.
+   * A host choosing dates in the future (a content schedule, ADR 0157) turns them off: "yesterday"
+   * is not a window anything can be scheduled for.
+   */
+  readonly showPresets = input(true);
 
   readonly rangeChange = output<DateRange>();
 

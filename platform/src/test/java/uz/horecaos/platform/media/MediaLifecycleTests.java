@@ -61,6 +61,7 @@ import uz.horecaos.platform.media.domain.ImageProbe;
 import uz.horecaos.platform.media.domain.MediaDerivative;
 import uz.horecaos.platform.media.domain.MediaOwner;
 import uz.horecaos.platform.media.domain.MediaVisibility;
+import uz.horecaos.platform.media.domain.Mp4;
 import uz.horecaos.platform.media.domain.ProbedImage;
 import uz.horecaos.platform.media.infrastructure.imaging.ImageIoDerivativeRenderer;
 import uz.horecaos.platform.media.infrastructure.persistence.JdbcDerivativeJobStore;
@@ -690,8 +691,143 @@ class MediaLifecycleTests {
         var again = derivatives.renderMissing(TENANT_A, assetId);
 
         assertThat(again.created()).isEmpty();
-        assertThat(again.alreadyPresent()).hasSize(DerivativeVariant.values().length);
-        assertThat(derivatives.findAll(TENANT_A, assetId)).hasSize(DerivativeVariant.values().length);
+        assertThat(again.alreadyPresent()).hasSize(DerivativeVariant.standard().size());
+        assertThat(derivatives.findAll(TENANT_A, assetId))
+                .hasSize(DerivativeVariant.standard().size());
+    }
+
+    @Test
+    @DisplayName("a creative is also rendered at HERO and a catalogue upload is not (ADR 0157)")
+    void onlyACreativeGetsAHeroRendition() throws Exception {
+        byte[] wide = encode("jpg", 1800, 600);
+        MediaAssetId creative = anAvailableAsset("image/jpeg", wide, "CREATIVE");
+        MediaAssetId catalogue = anAvailableAsset("image/jpeg", wide, null);
+        assertThat(media.find(TENANT_A, creative).orElseThrow().creative()).isTrue();
+        assertThat(media.find(TENANT_A, catalogue).orElseThrow().creative()).isFalse();
+
+        var forTheCreative = derivatives.renderMissing(TENANT_A, creative);
+        var forTheCatalogue = derivatives.renderMissing(TENANT_A, catalogue);
+
+        // Four for the creative; exactly the three that predate HERO for everything else. A loop over
+        // DerivativeVariant.values() would have given the catalogue photograph a fourth JPEG.
+        assertThat(forTheCreative.created())
+                .containsExactlyInAnyOrder(
+                        DerivativeVariant.THUMBNAIL,
+                        DerivativeVariant.CARD,
+                        DerivativeVariant.DETAIL,
+                        DerivativeVariant.HERO);
+        assertThat(forTheCatalogue.created())
+                .containsExactlyInAnyOrder(
+                        DerivativeVariant.THUMBNAIL, DerivativeVariant.CARD, DerivativeVariant.DETAIL);
+        assertThat(derivativeRows.find(TENANT_A, catalogue, DerivativeVariant.HERO))
+                .isEmpty();
+
+        MediaDerivative hero =
+                derivativeRows.find(TENANT_A, creative, DerivativeVariant.HERO).orElseThrow();
+        assertThat(hero.widthPx()).isEqualTo(1600);
+        assertThat(hero.heightPx()).isEqualTo(533);
+        assertThat(hero.objectKey()).endsWith("-w1600.jpg");
+        assertThat(get(media.downloadUrl(TENANT_A, creative, DerivativeVariant.HERO)
+                        .orElseThrow()))
+                .isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("HERO is never an upscale: a creative narrower than 1600 px gets a HERO as wide as itself")
+    void aHeroIsNotEnlarged() throws Exception {
+        MediaAssetId creative = anAvailableAsset("image/jpeg", encode("jpg", 1000, 333), "CREATIVE");
+
+        derivatives.renderMissing(TENANT_A, creative);
+
+        assertThat(derivativeRows
+                        .find(TENANT_A, creative, DerivativeVariant.HERO)
+                        .orElseThrow()
+                        .widthPx())
+                .isEqualTo(1000);
+    }
+
+    @Test
+    @DisplayName("a rendition profile the platform does not know is refused before anything is allocated")
+    void anUnknownRenditionProfileIsRefused() {
+        assertThatThrownBy(() -> media.requestUpload(
+                        TENANT_A,
+                        MediaOwner.brand(BRAND),
+                        MediaVisibility.PUBLIC,
+                        "image/jpeg",
+                        JPEG.length,
+                        "x.jpg",
+                        null,
+                        "HUGE"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(jdbc.sql("SELECT count(*) FROM media.assets")
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "the migration admits HERO and still refuses a variant nobody declared; the rollback statement deletes only HERO rows")
+    void theVariantConstraintAdmitsHeroAndTheRollbackIsScoped() throws Exception {
+        MediaAssetId creative = anAvailableAsset("image/jpeg", encode("jpg", 1800, 600), "CREATIVE");
+        MediaAssetId catalogue = anAvailableAsset("image/jpeg", encode("jpg", 1800, 600), null);
+        derivatives.renderMissing(TENANT_A, creative);
+        derivatives.renderMissing(TENANT_A, catalogue);
+
+        String definition = jdbc.sql("""
+                SELECT pg_get_constraintdef(oid) FROM pg_constraint
+                WHERE conname = 'ck_media_derivative_variant' AND conrelid = 'media.derivatives'::regclass
+                """).query(String.class).single();
+        assertThat(definition)
+                .contains("HERO")
+                .contains("THUMBNAIL")
+                .contains("CARD")
+                .contains("DETAIL");
+        assertThatThrownBy(() -> jdbc.sql("UPDATE media.derivatives SET variant = 'HUGE'")
+                        .update())
+                .as("the widened check is a closed set, not a free-for-all")
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+
+        // The statement ADR 0157's rollback runs before redeploying an image that cannot read HERO.
+        int deleted =
+                jdbc.sql("DELETE FROM media.derivatives WHERE variant = 'HERO'").update();
+
+        assertThat(deleted).isEqualTo(1);
+        assertThat(derivativeCount())
+                .isEqualTo(2L * DerivativeVariant.standard().size());
+    }
+
+    @Test
+    @DisplayName(
+            "the creative lookup reports pixels, visibility and which renditions exist, and shows another tenant nothing")
+    void theCreativeLookupDescribesAnAssetForItsTenantOnly() throws Exception {
+        MediaAssetId creative = anAvailableAsset("image/jpeg", encode("jpg", 1800, 600), "CREATIVE");
+        derivatives.renderMissing(TENANT_A, creative);
+        MediaAssetId unrendered = anAvailableAsset("image/jpeg", JPEG);
+        var lookup = new uz.horecaos.platform.media.application.MediaCreativeLookupAdapter(
+                new JdbcMediaAssetStore(jdbc), derivativeRows);
+
+        var described = lookup.describe(TENANT_A, Set.of(creative.value(), unrendered.value(), UUID.randomUUID()));
+
+        assertThat(described).containsOnlyKeys(creative.value(), unrendered.value());
+        var one = java.util.Objects.requireNonNull(described.get(creative.value()));
+        assertThat(one.status()).isEqualTo(MediaAssetStatus.AVAILABLE);
+        assertThat(one.visibility()).isEqualTo(uz.horecaos.platform.media.api.MediaCreativeLookup.Visibility.PUBLIC);
+        assertThat(one.servable()).isTrue();
+        assertThat(one.kind()).isEqualTo(uz.horecaos.platform.media.api.MediaCreativeLookup.Kind.IMAGE);
+        assertThat(one.widthPx()).isEqualTo(1800);
+        assertThat(one.heightPx()).isEqualTo(600);
+        assertThat(one.renditions())
+                .extracting(r -> r.code() + ":" + r.widthPx())
+                .containsExactly("thumb:200", "w400:400", "w800:800", "w1600:1600");
+        assertThat(java.util.Objects.requireNonNull(described.get(unrendered.value()))
+                        .renditions())
+                .as("an asset whose renditions have not rendered lists none; it is not an error")
+                .isEmpty();
+
+        assertThat(lookup.describe(TENANT_B, Set.of(creative.value())))
+                .as("another tenant's id is indistinguishable from one that does not exist")
+                .isEmpty();
     }
 
     @Test
@@ -819,7 +955,7 @@ class MediaLifecycleTests {
         assertThat(derivatives.findAll(TENANT_A, assetId))
                 .extracting(MediaDerivative::objectKey)
                 .containsExactlyElementsOf(firstKeys);
-        assertThat(derivativeCount()).isEqualTo(DerivativeVariant.values().length);
+        assertThat(derivativeCount()).isEqualTo(DerivativeVariant.standard().size());
     }
 
     @Test
@@ -1180,7 +1316,137 @@ class MediaLifecycleTests {
      * reached AVAILABLE the way a real one does: through the worker, not by
      * calling {@code verifyUpload} directly from a test.
      */
+    // ===================================================================== video (ADR 0157)
+
+    @Test
+    @DisplayName(
+            "an MP4 is verified from its own header: available with its size and duration, owed no rendition, served on a 30-minute signature")
+    void anMp4VideoBecomesAvailableWithItsDuration() throws Exception {
+        byte[] video = Mp4.valid();
+        MediaAssetId id = anAvailableAsset("video/mp4", video);
+
+        var asset = media.find(TENANT_A, id).orElseThrow();
+        assertThat(asset.verifiedContentType()).isEqualTo("video/mp4");
+        assertThat(asset.widthPx()).isEqualTo(1280);
+        assertThat(asset.heightPx()).isEqualTo(720);
+        assertThat(asset.durationMs()).isEqualTo(10_000);
+        assertThat(asset.verifiedSizeBytes()).isEqualTo((long) video.length);
+
+        assertThat(jdbc.sql("SELECT count(*) FROM media.derivative_jobs WHERE asset_id = :id")
+                        .param("id", id.value())
+                        .query(Long.class)
+                        .single())
+                .as("the platform does not transcode and renders nothing from a video")
+                .isZero();
+
+        // A browser plays a video by range requests against the final URL; a five-minute signature would
+        // lapse mid-play. An image keeps the five minutes.
+        URI videoUrl = media.downloadUrl(TENANT_A, id).orElseThrow();
+        assertThat(videoUrl.getQuery()).contains("X-Amz-Expires=1800");
+        assertThat(get(videoUrl)).isEqualTo(video);
+        MediaAssetId image = anAvailableAsset("image/jpeg", JPEG);
+        assertThat(media.downloadUrl(TENANT_A, image).orElseThrow().getQuery()).contains("X-Amz-Expires=300");
+
+        var lookup = new uz.horecaos.platform.media.application.MediaCreativeLookupAdapter(
+                new JdbcMediaAssetStore(jdbc), derivativeRows);
+        var described = java.util.Objects.requireNonNull(
+                lookup.describe(TENANT_A, Set.of(id.value())).get(id.value()));
+        assertThat(described.kind()).isEqualTo(uz.horecaos.platform.media.api.MediaCreativeLookup.Kind.VIDEO);
+        assertThat(described.durationMs()).isEqualTo(10_000);
+        assertThat(described.renditions()).isEmpty();
+    }
+
+    @Test
+    @DisplayName(
+            "a video the platform will not serve is rejected by name on its own header, never decoded: HEVC, and a movie box after the media data")
+    void aRefusedVideoIsRejectedByName() throws Exception {
+        byte[] hevc = Mp4.withMoov(Mp4.mvhd(1000, 10_000), Mp4.video("hvc1", 1280, 720));
+        byte[] slowStart = Mp4.concat(
+                Mp4.ftyp("isom"), Mp4.mdat(1000), Mp4.moov(Mp4.mvhd(1000, 10_000), Mp4.video("avc1", 1280, 720)));
+
+        assertThat(rejectedVideoCode(hevc)).isEqualTo("VIDEO_CODEC_NOT_ACCEPTED");
+        assertThat(rejectedVideoCode(slowStart)).isEqualTo("VIDEO_NOT_FASTSTART");
+    }
+
+    @Test
+    @DisplayName("a file that is not an MP4 at all is rejected even when it arrives labelled video/mp4")
+    void aVideoLabelIsNotEvidence() throws Exception {
+        assertThat(rejectedVideoCode(HTML)).isEqualTo("VIDEO_TYPE_NOT_ALLOWED");
+    }
+
+    @Test
+    @DisplayName("a video over the cap never gets an upload URL, and says which cap; an image keeps its own")
+    void aVideoOverTheCapIsRefusedBeforeUpload() {
+        long cap = 12L * 1024 * 1024;
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> media.requestUpload(
+                        TENANT_A,
+                        MediaOwner.brand(BRAND),
+                        MediaVisibility.PUBLIC,
+                        "video/mp4",
+                        cap + 1,
+                        "promo.mp4",
+                        null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("VIDEO_TOO_LARGE");
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> media.requestUpload(
+                        TENANT_A,
+                        MediaOwner.brand(BRAND),
+                        MediaVisibility.PUBLIC,
+                        "image/jpeg",
+                        11L * 1024 * 1024,
+                        "big.jpg",
+                        null)))
+                .as("an image is still capped at 10 MiB")
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(media.requestUpload(
+                                TENANT_A,
+                                MediaOwner.brand(BRAND),
+                                MediaVisibility.PUBLIC,
+                                "video/mp4",
+                                cap,
+                                "promo.mp4",
+                                null)
+                        .uploadUrl())
+                .as("exactly the cap is allowed")
+                .isNotNull();
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> media.requestUpload(
+                        TENANT_A,
+                        MediaOwner.brand(BRAND),
+                        MediaVisibility.PUBLIC,
+                        "video/mp4",
+                        1024,
+                        "promo.mp4",
+                        null,
+                        "CREATIVE")))
+                .as("a video has no rendition profile")
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private String rejectedVideoCode(byte[] content) throws Exception {
+        var ticket = media.requestUpload(
+                TENANT_A,
+                MediaOwner.brand(BRAND),
+                MediaVisibility.PUBLIC,
+                "video/mp4",
+                content.length,
+                "promo.mp4",
+                null);
+        assertThat(put(ticket.uploadUrl(), ticket.requiredHeaders(), content)).isEqualTo(200);
+        assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.UPLOADED);
+        assertThat(verificationWorker.verifyOnce()).isEqualTo(1);
+        assertThat(media.find(TENANT_A, ticket.assetId()).orElseThrow().status())
+                .isEqualTo(MediaAssetStatus.REJECTED);
+        assertThat(media.downloadUrl(TENANT_A, ticket.assetId())).isEmpty();
+        return rejectionCode(ticket.assetId());
+    }
+
     private MediaAssetId anAvailableAsset(String contentType, byte[] content) throws Exception {
+        return anAvailableAsset(contentType, content, null);
+    }
+
+    /** {@link #anAvailableAsset(String, byte[])} with the rendition profile a content upload would set. */
+    private MediaAssetId anAvailableAsset(String contentType, byte[] content, @Nullable String renditionProfile)
+            throws Exception {
         var ticket = media.requestUpload(
                 TENANT_A,
                 MediaOwner.brand(BRAND),
@@ -1188,7 +1454,8 @@ class MediaLifecycleTests {
                 contentType,
                 content.length,
                 "dish" + contentType.hashCode(),
-                null);
+                null,
+                renditionProfile);
         assertThat(put(ticket.uploadUrl(), ticket.requiredHeaders(), content)).isEqualTo(200);
         assertThat(media.finalizeUpload(TENANT_A, ticket.assetId())).isEqualTo(MediaAssetStatus.UPLOADED);
         assertThat(verificationWorker.verifyOnce()).isEqualTo(1);

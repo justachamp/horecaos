@@ -19,6 +19,41 @@
   }
 </nav>
 
+@if (filterOptions().length > 0) {
+  <nav
+    class="rail chips chips--tags"
+    [attr.aria-label]="'menu.filter.title' | t"
+    data-testid="tag-filter"
+  >
+    @for (tag of filterOptions(); track tag.id) {
+      <button
+        type="button"
+        class="chip"
+        [class.is-active]="selectedTags().has(tag.id)"
+        [attr.aria-pressed]="selectedTags().has(tag.id)"
+        [attr.data-tag]="tag.code"
+        (click)="toggleTag(tag.id)"
+      >
+        {{ tag.name }}
+      </button>
+    }
+    @if (selectedTags().size > 0) {
+      <button
+        type="button"
+        class="chip chip--clear"
+        data-testid="tag-filter-clear"
+        (click)="clearTags()"
+      >
+        {{ 'menu.filter.clear' | t }}
+      </button>
+    }
+  </nav>
+}
+
+@if (nothingMatches()) {
+  <p class="empty" data-testid="tag-filter-empty">{{ 'menu.filter.empty' | t }}</p>
+}
+
 @for (section of visible(); track section.id) {
   <section class="section">
     <h2 class="section__title">{{ section.name }}</h2>

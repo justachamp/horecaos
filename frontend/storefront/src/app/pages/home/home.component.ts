@@ -16,10 +16,19 @@ import { SectionHeaderComponent } from '../../shared/section-header/section-head
 import { FoodCarouselComponent } from '../../shared/food-carousel/food-carousel.component';
 import { FoodCardComponent } from '../../shared/food-card/food-card.component';
 import { TopBarComponent } from '../../shared/top-bar/top-bar.component';
+import { PublicReviewsComponent } from '../../shared/public-reviews/public-reviews.component';
+import { ContentEntryComponent } from '../../shared/content-entry/content-entry.component';
+import { ContentCarouselComponent } from '../../shared/content-carousel/content-carousel.component';
+import { ContentGroupsComponent } from '../../shared/content-groups/content-groups.component';
+import { ContentPopupComponent } from '../../shared/content-popup/content-popup.component';
+import { ContentPromoGridComponent } from '../../shared/content-promo-grid/content-promo-grid.component';
+import { ContentStoriesComponent } from '../../shared/content-stories/content-stories.component';
 import { CartHintBadgeComponent } from '../../shared/cart-hint-badge/cart-hint-badge.component';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { TranslateService } from '../../services/translate.service';
 import { MenuService } from '../../services/menu.service';
+import { ContentService } from '../../services/content.service';
+import { EditorialService } from '../../services/editorial.service';
 import { DeliverySelectionService } from '../../services/delivery-selection.service';
 import { FavouritesService } from '../../services/favourites.service';
 import { LangService } from '../../services/lang.service';
@@ -75,12 +84,23 @@ function persistMode(mode: UiMode): void {
     FoodCardComponent,
     TopBarComponent,
     CartHintBadgeComponent,
+    PublicReviewsComponent,
+    ContentCarouselComponent,
+    ContentEntryComponent,
+    ContentGroupsComponent,
+    ContentPopupComponent,
+    ContentPromoGridComponent,
+    ContentStoriesComponent,
     TranslatePipe,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class HomeComponent implements OnInit {
   private readonly menuService = inject(MenuService);
+  /** The brand's own banners, stories, groups and pop-up (ADR 0157): a read of its own. */
+  protected readonly content = inject(ContentService);
+  /** Which editorial pages (news, gallery, recipes, careers) the brand turned on. */
+  private readonly editorial = inject(EditorialService);
   private readonly favourites = inject(FavouritesService);
   private readonly langService = inject(LangService);
   private readonly cartService = inject(UiCartService);
@@ -171,6 +191,14 @@ export class HomeComponent implements OnInit {
   /** Offer data for banner section (from API) */
   readonly offerData = signal<CustomerUiResponse['offer']>(null);
 
+  /**
+   * The menu's categories by id and name, for content links: a banner that points at a category
+   * hands the category page its name the same way the section headers below do.
+   */
+  protected readonly contentCategories = computed(() =>
+    this.menuCategoryItems().map(({ id, name }) => ({ id, name })),
+  );
+
   readonly topBarAddressValue = computed(() => {
     this.translate.current();
     return this.cartService.deliveryAddressName() || this.translate.get('cart.addressNotSelected');
@@ -197,6 +225,14 @@ export class HomeComponent implements OnInit {
       })
       .catch(() => this.error.set(this.translate.get('errors.generic')))
       .finally(() => this.loading.set(false));
+
+    // The brand's content is a read of its own, issued beside the menu's and never awaited by it:
+    // it cannot reject, and a failure of it renders no content and leaves everything else as it
+    // was (ADR 0157, Decision 9). Public, like the menu.
+    void this.content.load();
+    // Which editorial kinds are on decides whether the entry links are drawn; a failed read means
+    // none are, and nothing else on the page depends on it.
+    void this.editorial.loadFeatures();
 
     // Public, like the menu -- choosing a mode to browse in must not require
     // an account. Best effort: a failed read leaves `modes()` null, which

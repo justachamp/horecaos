@@ -59,6 +59,26 @@ public class JdbcOrderProcessStore {
     }
 
     /**
+     * Records the ledger movement a disposal wrote for an order's outcome (ADR 0169).
+     *
+     * <p>{@code ordering.order_outcomes} is append-only for the application role, with the one exception V0542
+     * grants: this column, which is null when the outcome is written and is filled once, by the process that
+     * carries the stock consequence out. It names the first movement of the disposal; the rest are found by the
+     * order and the disposal's key. Never overwritten: a repeat finds the column set and writes nothing.
+     */
+    public void recordOutcomeMovement(UUID tenantId, UUID orderId, UUID movementId) {
+        jdbc.sql("""
+                UPDATE ordering.order_outcomes
+                   SET inventory_movement_id = :movementId
+                 WHERE tenant_id = :tenantId AND order_id = :orderId AND inventory_movement_id IS NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .param("movementId", movementId)
+                .update();
+    }
+
+    /**
      * Claims runnable work for one process.
      *
      * <p>{@code FOR UPDATE SKIP LOCKED} so two workers never run one order's
@@ -88,6 +108,83 @@ public class JdbcOrderProcessStore {
                         row.getInt("attempt_count"),
                         row.getInt("version")))
                 .list();
+    }
+
+    /**
+     * Takes, without waiting, the row locks that ending an unpaid order needs and that a payment capture for
+     * the same order also takes (ADR 0170 Decisions 13 to 17).
+     *
+     * <p><strong>Lock order.</strong> A capture takes the payment attempt row first, then the settlement,
+     * then moves the order, then settles this order's process row. The sweep holds the process row from the
+     * moment it claims it, and ending the order then asks for the order and the settlement, which is the
+     * opposite way round: left to wait, the two meet in a cycle and the database ends one of them, and the
+     * one it ends is as likely to be the capture, whose money has already moved at the provider. So the
+     * sweep never waits. It takes the attempt rows the capture takes first and the order row next, both with
+     * {@code SKIP LOCKED}, and when either is held by someone else it does not end the order on this tick:
+     * a capture in flight is about to resolve the order itself, and whatever else holds it can be waited
+     * for by the next tick, which is not holding a lock on anything.
+     *
+     * <p>Holding the attempt rows is also what keeps a capture that begins <em>after</em> this point from
+     * getting ahead of the sweep: it waits at the first row it needs, with nothing of the sweep's held, and
+     * finds the order ended when it resumes (the late-capture path, ADR 0170 Decision 17).
+     *
+     * @return true when every payment attempt of the order, and the order itself, are now held by this
+     *         transaction until it ends; false when another transaction holds any of them
+     */
+    public boolean tryLockForLapse(UUID tenantId, UUID orderId) {
+        long attemptsHeldByOthers = jdbc.sql("""
+                        WITH locked AS MATERIALIZED (
+                            SELECT a.id
+                            FROM payments.payment_attempts a
+                            JOIN payments.payment_intents i ON i.id = a.intent_id AND i.tenant_id = a.tenant_id
+                            WHERE i.tenant_id = :tenantId AND i.order_id = :orderId
+                            FOR UPDATE OF a SKIP LOCKED
+                        )
+                        SELECT count(*)
+                        FROM payments.payment_attempts a
+                        JOIN payments.payment_intents i ON i.id = a.intent_id AND i.tenant_id = a.tenant_id
+                        WHERE i.tenant_id = :tenantId AND i.order_id = :orderId
+                          AND a.id NOT IN (SELECT id FROM locked)
+                        """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query(Long.class)
+                .single();
+        if (attemptsHeldByOthers > 0) {
+            return false;
+        }
+        return jdbc.sql("""
+                        SELECT id FROM ordering.orders
+                        WHERE tenant_id = :tenantId AND id = :orderId
+                        FOR UPDATE SKIP LOCKED
+                        """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query(UUID.class)
+                .optional()
+                .isPresent();
+    }
+
+    /**
+     * Whether any payment attempt on the order is {@code UNCERTAIN} (ADR 0170 Decision 15, ADR 0007).
+     *
+     * <p>A question about money is owned by its resolver, and an unpaid order is never ended over an
+     * unanswered one: the attempt may have been captured at the provider with the answer lost. Reads
+     * {@code payments.*} directly, the established crossing {@code JdbcOrderStore}'s own order search already
+     * makes for the same two tables, and only a status: no amount, no provider reference.
+     */
+    public boolean hasUncertainPaymentAttempt(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                        SELECT count(*)
+                        FROM payments.payment_attempts a
+                        JOIN payments.payment_intents i ON i.id = a.intent_id AND i.tenant_id = a.tenant_id
+                        WHERE i.tenant_id = :tenantId AND i.order_id = :orderId AND a.status = 'UNCERTAIN'
+                        """)
+                        .param("tenantId", tenantId)
+                        .param("orderId", orderId)
+                        .query(Long.class)
+                        .single()
+                > 0;
     }
 
     public Optional<ProcessRow> find(UUID orderId, String processName) {

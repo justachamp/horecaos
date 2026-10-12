@@ -11,7 +11,7 @@ import { I18n } from '../../../core/i18n/i18n';
 import { CatalogApi } from '../../catalog/catalog-api';
 import { TaxProfile } from '../../catalog/catalog-domain';
 import { PricingApi } from '../../catalog/pricing-api';
-import { PaymentMethodView, PaymentMethodsApi } from '../payment-methods/payment-methods-api';
+import { FiscalEvidenceApi, FiscalPaymentTypeView } from '../../finance/fiscal/fiscal-evidence-api';
 import {
   FiscalCoverageSummary,
   FiscalizationApi,
@@ -81,33 +81,45 @@ const VAT_PROFILE: TaxProfile = {
   version: 1,
 };
 
-function method(
+function paymentType(
   code: string,
   displayName: string,
-  responsibility: PaymentMethodView['responsibility'],
-  status: PaymentMethodView['status'] = 'ACTIVE',
-): PaymentMethodView {
+  responsibility: FiscalPaymentTypeView['responsibility'],
+  options: Partial<FiscalPaymentTypeView> = {},
+): FiscalPaymentTypeView {
   return {
-    id: `method-${code}`,
     code,
     displayName,
-    localizedNames: {},
+    methodStatus: 'ACTIVE',
     responsibility,
-    settlesFromBalance: false,
-    status,
-    icon: null,
-    sortOrder: 0,
-    providerInstallationId: null,
-    contractReference: null,
-    version: 1,
+    path: 'PARTNER_ACCOUNT',
+    live: true,
+    reasonCode: null,
+    note: null,
+    entries: [],
+    ...options,
   };
 }
 
-const METHODS: readonly PaymentMethodView[] = [
-  method('CASH', 'Cash', 'OPERATOR'),
-  method('CLICK', 'Click', 'PARTNER'),
-  method('PAYME', 'Payme', 'PARTNER'),
-  method('EXPRESS24', 'Express24', 'MARKETPLACE', 'DISABLED'),
+/**
+ * What `GET .../fiscal/payment-types` answers: derived from the registry, the merchant accounts and the
+ * terminals. Cash is registered as an OPERATOR method and has no path, which the screen must say rather
+ * than leave looking fiscalized; Click has a live merchant account; Payme is registered and has none.
+ */
+const PAYMENT_TYPES: readonly FiscalPaymentTypeView[] = [
+  paymentType('CASH', 'Cash', 'OPERATOR', {
+    path: 'NONE',
+    live: false,
+    reasonCode: 'NO_FISCAL_PATH',
+    note: 'OPERATOR_RESPONSIBILITY_UNIMPLEMENTED',
+  }),
+  paymentType('CLICK', 'Click', 'PARTNER'),
+  paymentType('PAYME', 'Payme', 'PARTNER', { live: false, reasonCode: 'NO_FISCAL_PATH' }),
+  paymentType('EXPRESS24', 'Express24', 'MARKETPLACE', {
+    methodStatus: 'DISABLED',
+    path: 'AGGREGATOR',
+    live: false,
+  }),
 ];
 
 class FakeCurrentLocation {
@@ -141,9 +153,10 @@ describe('FiscalizationPage', () => {
     fiscalCoverage: ReturnType<typeof vi.fn>;
     classifyDeliveryFee: ReturnType<typeof vi.fn>;
     backfillCodes: ReturnType<typeof vi.fn>;
+    replaceWithdrawnCodes: ReturnType<typeof vi.fn>;
   };
   let taxProfiles: ReturnType<typeof vi.fn>;
-  let paymentMethods: ReturnType<typeof vi.fn>;
+  let paymentTypes: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     api = {
@@ -172,10 +185,19 @@ describe('FiscalizationPage', () => {
           status: 'CLASSIFIED',
         })),
       ),
+      replaceWithdrawnCodes: vi
+        .fn()
+        .mockImplementation(async (_scope, items: { nodeId: string }[]) =>
+          items.map((item) => ({
+            nodeType: 'VARIANT',
+            nodeId: item.nodeId,
+            status: 'CLASSIFIED',
+          })),
+        ),
     };
 
     taxProfiles = vi.fn(() => of([VAT_PROFILE]));
-    paymentMethods = vi.fn().mockResolvedValue(METHODS);
+    paymentTypes = vi.fn().mockResolvedValue(PAYMENT_TYPES);
 
     await TestBed.configureTestingModule({
       imports: [FiscalizationPage],
@@ -183,7 +205,7 @@ describe('FiscalizationPage', () => {
         provideRouter([]),
         { provide: FiscalizationApi, useValue: api },
         { provide: PricingApi, useValue: { taxProfiles } },
-        { provide: PaymentMethodsApi, useValue: { list: paymentMethods } },
+        { provide: FiscalEvidenceApi, useValue: { paymentTypes } },
         // The official ИКПУ list has never been imported: every lookup answers with nothing.
         { provide: CatalogApi, useValue: { searchMxikReference: () => of([]) } },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
@@ -543,6 +565,154 @@ describe('FiscalizationPage', () => {
     });
   });
 
+  // ------------------------------------------- ADR 0173: codes the national list has withdrawn
+
+  describe('the withdrawn codes on Tab 3 (ADR 0173)', () => {
+    const WITHDRAWN_COVERAGE: FiscalCoverageSummary = {
+      totalNodes: 3,
+      unclassifiedCount: 0,
+      nodes: [],
+      categoryDefaults: [],
+      withdrawnCount: 2,
+      withdrawnNodes: [
+        {
+          nodeType: 'VARIANT',
+          nodeId: 'plov',
+          name: 'Plov',
+          categoryName: 'Mains',
+          locationCount: 2,
+          mxikCode: '10706001001000007',
+          packageCode: '1500316',
+          mxikWithdrawnOn: '2026-10-01',
+          mxikReplacedBy: '10706001001000008',
+        },
+        {
+          nodeType: 'VARIANT',
+          nodeId: 'samsa',
+          name: 'Samsa',
+          categoryName: 'Snacks',
+          locationCount: 1,
+          mxikCode: '10706001001000011',
+          packageCode: '1500316',
+          mxikWithdrawnOn: '2026-10-01',
+          mxikReplacedBy: null,
+        },
+      ],
+    };
+
+    async function openClassification(coverage: FiscalCoverageSummary): Promise<void> {
+      api.fiscalCoverage.mockResolvedValue(coverage);
+      selectTab(2);
+      await flushMicrotasks();
+      fixture.detectChanges();
+    }
+
+    function textOf(testId: string): string {
+      return (
+        fixture.nativeElement.querySelector(`[data-testid="${testId}"]`)?.textContent ?? ''
+      ).replace(/\s+/g, ' ');
+    }
+
+    function click(testId: string): void {
+      (
+        fixture.nativeElement.querySelector(`[data-testid="${testId}"]`) as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+    }
+
+    it('lists a classified node whose code was withdrawn, with the date and the successor the list names', async () => {
+      await openClassification(WITHDRAWN_COVERAGE);
+
+      const plov = fixture.nativeElement.querySelector('[data-testid="fiscal-withdrawn-plov"]');
+      expect(plov.textContent).toContain('10706001001000007');
+      expect(plov.textContent).toContain('2026-10-01');
+      expect(plov.textContent).toContain('10706001001000008');
+      const samsa = fixture.nativeElement.querySelector('[data-testid="fiscal-withdrawn-samsa"]');
+      expect(samsa.textContent).toContain('none named');
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="fiscal-withdrawn-replace-samsa"]'),
+        'a node the list names no successor for has nothing to click',
+      ).toBeNull();
+    });
+
+    it('draws nothing when no classified node holds a withdrawn code', async () => {
+      await openClassification({ ...COVERAGE, withdrawnCount: 0, withdrawnNodes: [] });
+
+      expect(fixture.nativeElement.querySelector('[data-testid="fiscal-withdrawn"]')).toBeNull();
+    });
+
+    it('replaces one code with its successor only after a second, confirming click', async () => {
+      await openClassification(WITHDRAWN_COVERAGE);
+
+      click('fiscal-withdrawn-replace-plov');
+      expect(api.replaceWithdrawnCodes, 'the first click only asks').not.toHaveBeenCalled();
+      expect(text()).toContain('Replace the ИКПУ on 1 item(s)');
+
+      api.fiscalCoverage.mockResolvedValue({
+        ...WITHDRAWN_COVERAGE,
+        withdrawnCount: 1,
+        withdrawnNodes: [WITHDRAWN_COVERAGE.withdrawnNodes![1]],
+      });
+      click('fiscal-withdrawn-confirm-yes');
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(api.replaceWithdrawnCodes).toHaveBeenCalledWith(SCOPE, [
+        { nodeType: 'VARIANT', nodeId: 'plov', successorCode: '10706001001000008' },
+      ]);
+      expect(
+        api.fiscalCoverage,
+        'the coverage is read again so the list follows',
+      ).toHaveBeenCalledTimes(2);
+      expect(textOf('fiscal-withdrawn-outcome')).toContain('Replaced: 1. Left as they were: 0.');
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="fiscal-withdrawn-plov"]'),
+      ).toBeNull();
+    });
+
+    it('offers no bulk action while only one node has a named successor', async () => {
+      await openClassification(WITHDRAWN_COVERAGE);
+
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="fiscal-withdrawn-replace-all"]'),
+      ).toBeNull();
+    });
+
+    it('offers the bulk action when several have one, and cancelling writes nothing', async () => {
+      await openClassification({
+        ...WITHDRAWN_COVERAGE,
+        withdrawnNodes: WITHDRAWN_COVERAGE.withdrawnNodes!.map((node) => ({
+          ...node,
+          mxikReplacedBy: node.mxikReplacedBy ?? '10706001001000012',
+        })),
+      });
+
+      click('fiscal-withdrawn-replace-all');
+      expect(text()).toContain('Replace the ИКПУ on 2 item(s)');
+      findButton('Cancel').click();
+      fixture.detectChanges();
+
+      expect(api.replaceWithdrawnCodes).not.toHaveBeenCalled();
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="fiscal-withdrawn-confirm"]'),
+      ).toBeNull();
+    });
+
+    it('says how many the platform refused when the list no longer agrees with the screen', async () => {
+      api.replaceWithdrawnCodes.mockResolvedValue([
+        { nodeType: 'VARIANT', nodeId: 'plov', status: 'CONFLICT' },
+      ]);
+      await openClassification(WITHDRAWN_COVERAGE);
+
+      click('fiscal-withdrawn-replace-plov');
+      click('fiscal-withdrawn-confirm-yes');
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(textOf('fiscal-withdrawn-outcome')).toContain('Replaced: 0. Left as they were: 1.');
+    });
+  });
+
   // -------------------------------------- read-only references on Tab 3 (settings.md §10.7)
 
   describe('the read-only references on Tab 3', () => {
@@ -633,14 +803,52 @@ describe('FiscalizationPage', () => {
       expect(normalised('fiscal-vat-defaults')).toContain('Exclusive');
     });
 
-    it('groups the registry’s payment methods by the responsibility each was registered under', async () => {
+    it('groups the derived payment types by the responsibility each was registered under', async () => {
       await openClassification();
 
-      expect(paymentMethods).toHaveBeenCalledWith(SCOPE);
+      expect(paymentTypes).toHaveBeenCalledWith(SCOPE.tenantId);
       expect(normalised('fiscal-resp-PARTNER')).toContain('Click');
       expect(normalised('fiscal-resp-PARTNER')).toContain('Payme');
       expect(normalised('fiscal-resp-OPERATOR')).toContain('Cash');
       expect(normalised('fiscal-resp-PARTNER')).not.toContain('Cash');
+    });
+
+    it('says, beside each method, whether a receipt can be issued today or nobody can issue one', async () => {
+      await openClassification();
+
+      expect(byTestId('fiscal-resp-state-CLICK')?.getAttribute('data-state')).toBe('live');
+      expect(normalised('fiscal-resp-state-CLICK')).toBe('receipt can be issued');
+      expect(byTestId('fiscal-resp-state-PAYME')?.getAttribute('data-state')).toBe('noPath');
+      expect(normalised('fiscal-resp-state-PAYME')).toBe('no fiscal path');
+      expect(
+        normalised('fiscal-resp-state-CASH'),
+        'cash is registered under a responsibility nothing implements, and must not read as fiscalized',
+      ).toBe('no fiscal path');
+    });
+
+    it('says that a balance tender has nothing to receipt, rather than that it has no path', async () => {
+      paymentTypes.mockResolvedValue([
+        paymentType('POINTS', 'Loyalty points', 'OPERATOR', {
+          path: 'NOT_A_FISCAL_PATH',
+          live: false,
+          note: 'BALANCE_IS_A_LINE_DISCOUNT',
+        }),
+      ]);
+      await openClassification();
+
+      expect(byTestId('fiscal-resp-state-POINTS')?.getAttribute('data-state')).toBe(
+        'notApplicable',
+      );
+      expect(normalised('fiscal-resp-state-POINTS')).toBe('nothing to receipt');
+    });
+
+    it('states that the projection is read from the derived model and cannot be set', async () => {
+      await openClassification();
+
+      expect(normalised('fiscal-responsibility-lead')).toContain(
+        'same model as the Payments screen',
+      );
+      expect(normalised('fiscal-responsibility-lead')).toContain('cannot be set here');
     });
 
     it('draws every responsibility, an empty one included, and leaves a disabled method out', async () => {
@@ -661,7 +869,7 @@ describe('FiscalizationPage', () => {
       taxProfiles.mockReturnValue(
         throwError(() => new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null)),
       );
-      paymentMethods.mockRejectedValue(new ApiError('INTERNAL_ERROR', 500, null, null));
+      paymentTypes.mockRejectedValue(new ApiError('INTERNAL_ERROR', 500, null, null));
       await openClassification();
 
       expect(byTestId('fiscal-vat-denied')).not.toBeNull();
@@ -671,12 +879,12 @@ describe('FiscalizationPage', () => {
 
     it('reads the references when the classification tab is opened, not before', async () => {
       expect(taxProfiles).not.toHaveBeenCalled();
-      expect(paymentMethods).not.toHaveBeenCalled();
+      expect(paymentTypes).not.toHaveBeenCalled();
 
       await openClassification();
 
       expect(taxProfiles).toHaveBeenCalledTimes(1);
-      expect(paymentMethods).toHaveBeenCalledTimes(1);
+      expect(paymentTypes).toHaveBeenCalledTimes(1);
     });
   });
 });

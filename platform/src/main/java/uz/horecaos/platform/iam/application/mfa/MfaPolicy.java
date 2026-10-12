@@ -106,7 +106,14 @@ public class MfaPolicy {
     }
 
     private static boolean isStaffRole(PlatformRole role) {
-        return role != PlatformRole.KITCHEN_DEVICE && !role.supportSessionOnly();
+        // A device is not a person and signs in with a client credential, never a password and a second
+        // factor (ADR 0079, ADR 0148 leaves device principals outside the policy); the print agent (ADR 0154)
+        // and the kiosk (ADR 0162) join the kitchen displays in not being asked.
+        return role != PlatformRole.KITCHEN_DEVICE
+                && role != PlatformRole.KITCHEN_VDU_DEVICE
+                && role != PlatformRole.PRINT_AGENT
+                && role != PlatformRole.KIOSK_DEVICE
+                && !role.supportSessionOnly();
     }
 
     private static Requirement stricter(Requirement left, Requirement right) {

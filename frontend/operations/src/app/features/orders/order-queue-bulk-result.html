@@ -10,12 +10,38 @@
           | t: { applied: result().appliedCount, failed: result().failedCount }
       }}
     </p>
+  }
+
+  <!-- ADR 0172: an applied assignment may carry a note (it overrode a dispatch rule, the courier is
+       outside the type's distance band) which the operator should see beside the row. -->
+  @if (appliedWithNotes().length > 0) {
+    <ul class="order-queue__bulk-result-items" data-testid="order-queue-bulk-result-notes">
+      @for (item of appliedWithNotes(); track item.orderId) {
+        <li data-testid="order-queue-bulk-result-applied-note">
+          <span class="q-mono">{{ bulkResultItemLabel(item.orderId) }}</span>
+          — {{ bulkNoteLabel(item.note) }}
+          @if (overrodeRuleId(item); as ruleId) {
+            <span class="q-caption q-mono" data-testid="order-queue-bulk-result-rule">{{
+              'orders.queue.bulk.result.rule' | t: { rule: ruleId }
+            }}</span>
+          }
+        </li>
+      }
+    </ul>
+  }
+
+  @if (result().failedCount > 0) {
     <ul class="order-queue__bulk-result-items">
       @for (item of result().items; track item.orderId) {
         @if (item.itemStatus === 'FAILED') {
           <li data-testid="order-queue-bulk-result-item">
             <span class="q-mono">{{ bulkResultItemLabel(item.orderId) }}</span>
             — {{ bulkProblemLabel(item.itemProblemCode) }}
+            @if (item.note) {
+              <span class="q-caption" data-testid="order-queue-bulk-result-item-note"
+                >({{ bulkNoteLabel(item.note) }})</span
+              >
+            }
           </li>
         }
       }

@@ -1,0 +1,41 @@
+.link-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.link-picker__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.link-picker__select,
+.link-picker__input {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.link-picker__chosen {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.link-picker__clear {
+  border: none;
+  background: none;
+  color: var(--q-ink-muted);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.link-picker__warn {
+  margin: 0;
+  color: var(--q-warning-text, var(--q-ink-muted));
+}

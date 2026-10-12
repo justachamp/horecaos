@@ -1,0 +1,27 @@
+:host {
+  display: block;
+}
+
+.group {
+  padding: 12px 0 4px;
+}
+
+.group__title {
+  margin: 0 24px 12px;
+  font: 800 20px/1.1 var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+.group__rail {
+  margin: 0;
+  padding: 0 24px 4px;
+  gap: 12px;
+  list-style: none;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 24px;
+}
+
+.group__card {
+  flex: 0 0 min(86%, 320px);
+  scroll-snap-align: start;
+}

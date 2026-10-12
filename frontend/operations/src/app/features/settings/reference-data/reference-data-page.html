@@ -94,6 +94,88 @@
     </table>
   </section>
 
+  <section class="card" id="removal-reasons">
+    <div class="card__header">
+      <h2 class="q-subhead">{{ 'settings.referenceData.removal.title' | t }}</h2>
+      <button type="button" class="q-body-sm link" (click)="openCreateForm('LINE_REMOVAL')">
+        {{ 'settings.referenceData.add' | t }}
+      </button>
+    </div>
+    <p class="q-body-sm lead">{{ 'settings.referenceData.removal.lead' | t }}</p>
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="q-caption">{{ 'settings.referenceData.field.order' | t }}</th>
+          <th class="q-caption">{{ 'settings.referenceData.field.internalName' | t }}</th>
+          <th class="q-caption">{{ 'settings.referenceData.field.customerText' | t }}</th>
+          <th class="q-caption">{{ 'settings.referenceData.field.systemCategory' | t }}</th>
+          <th class="q-caption">{{ 'settings.referenceData.field.stockDisposition' | t }}</th>
+          <th class="q-caption">{{ 'settings.referenceData.field.liabilityParty' | t }}</th>
+          <th class="q-caption">{{ 'settings.referenceData.field.status' | t }}</th>
+          <th class="q-caption"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (reason of removalReasons(); track reason.id; let i = $index) {
+          <tr
+            draggable="true"
+            data-testid="reason-row-LINE_REMOVAL"
+            (dragstart)="onReasonDragStart('LINE_REMOVAL', i, $event)"
+            (dragover)="onReasonDragOver($event)"
+            (drop)="onReasonDrop('LINE_REMOVAL', i, $event)"
+            (dragend)="onReasonDragEnd()"
+          >
+            <td class="q-body-sm reorder-cell">
+              <button
+                type="button"
+                class="reorder-btn"
+                [attr.aria-label]="'settings.referenceData.moveUp' | t"
+                [disabled]="i === 0"
+                data-testid="reason-move-up-LINE_REMOVAL"
+                (click)="moveReasonUp('LINE_REMOVAL', i)"
+              >
+                ▲
+              </button>
+              <button
+                type="button"
+                class="reorder-btn"
+                [attr.aria-label]="'settings.referenceData.moveDown' | t"
+                [disabled]="i === removalReasons().length - 1"
+                data-testid="reason-move-down-LINE_REMOVAL"
+                (click)="moveReasonDown('LINE_REMOVAL', i)"
+              >
+                ▼
+              </button>
+            </td>
+            <td class="q-body-sm">{{ reason.internalName }}</td>
+            <td class="q-body-sm">{{ reason.customerTexts['ru'] }}</td>
+            <td class="q-body-sm">{{ reason.systemCategory }}</td>
+            <td class="q-body-sm">{{ reason.stockDisposition }}</td>
+            <td class="q-body-sm">{{ reason.liabilityParty }}</td>
+            <td class="q-body-sm">
+              <q-status-pill
+                [label]="statusLabel(reason.status)"
+                [tone]="reason.status === 'ACTIVE' ? 'success' : 'none'"
+              />
+            </td>
+            <td class="q-body-sm row-actions">
+              <button type="button" class="q-body-sm link" (click)="openEditForm(reason)">
+                {{ 'settings.referenceData.edit' | t }}
+              </button>
+              <button type="button" class="q-body-sm link" (click)="archive(reason)">
+                {{ 'settings.referenceData.disable' | t }}
+              </button>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td class="q-body-sm empty" colspan="8">{{ 'settings.referenceData.empty' | t }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
   <section class="card" id="completion-reasons">
     <div class="card__header">
       <h2 class="q-subhead">{{ 'settings.referenceData.completion.title' | t }}</h2>
@@ -186,7 +268,9 @@
           {{
             kind === 'CANCELLATION'
               ? ('settings.referenceData.cancellation.add' | t)
-              : ('settings.referenceData.completion.add' | t)
+              : kind === 'LINE_REMOVAL'
+                ? ('settings.referenceData.removal.add' | t)
+                : ('settings.referenceData.completion.add' | t)
           }}
         </h2>
 
@@ -212,10 +296,7 @@
           (change)="newSystemCategory.set($any($event.target).value)"
           [disabled]="createSubmitting()"
         >
-          @for (
-            category of kind === 'CANCELLATION' ? cancellationCategories() : completionCategories();
-            track category
-          ) {
+          @for (category of categoriesOf(kind); track category) {
             <option [value]="category">{{ category }}</option>
           }
         </select>
@@ -256,7 +337,7 @@
           [disabled]="createSubmitting()"
         />
 
-        @if (kind === 'CANCELLATION') {
+        @if (kind !== 'COMPLETION') {
           <label class="q-caption" for="reason-stock">{{
             'settings.referenceData.field.stockDisposition' | t
           }}</label>
@@ -266,11 +347,15 @@
             [value]="newStockDisposition()"
             (change)="newStockDisposition.set($any($event.target).value)"
           >
-            <option value="RELEASE">RELEASE</option>
-            <option value="RETURN_TO_STOCK">RETURN_TO_STOCK</option>
-            <option value="WRITE_OFF">WRITE_OFF</option>
-            <option value="NO_EFFECT">NO_EFFECT</option>
+            @for (disposition of dispositionsOf(kind); track disposition) {
+              <option [value]="disposition">{{ disposition }}</option>
+            }
           </select>
+          @if (unavailableCannotReturn(kind, newSystemCategory(), newStockDisposition())) {
+            <p class="q-caption hint" role="alert" data-testid="reason-unavailable-hint">
+              {{ 'settings.referenceData.removal.unavailableCannotReturn' | t }}
+            </p>
+          }
 
           <label class="q-caption" for="reason-liability">{{
             'settings.referenceData.field.liabilityParty' | t
@@ -287,19 +372,21 @@
             <option value="PLATFORM">PLATFORM</option>
           </select>
 
-          <label class="q-caption" for="reason-refund">{{
-            'settings.referenceData.field.customerRefund' | t
-          }}</label>
-          <select
-            id="reason-refund"
-            class="q-body field"
-            [value]="newCustomerRefund()"
-            (change)="newCustomerRefund.set($any($event.target).value)"
-          >
-            <option value="FULL">FULL</option>
-            <option value="NONE">NONE</option>
-            <option value="DISCRETIONARY">DISCRETIONARY</option>
-          </select>
+          @if (kind === 'CANCELLATION') {
+            <label class="q-caption" for="reason-refund">{{
+              'settings.referenceData.field.customerRefund' | t
+            }}</label>
+            <select
+              id="reason-refund"
+              class="q-body field"
+              [value]="newCustomerRefund()"
+              (change)="newCustomerRefund.set($any($event.target).value)"
+            >
+              <option value="FULL">FULL</option>
+              <option value="NONE">NONE</option>
+              <option value="DISCRETIONARY">DISCRETIONARY</option>
+            </select>
+          }
         } @else {
           <span class="q-caption">{{
             'settings.referenceData.field.allowedFulfillmentModes' | t
@@ -386,12 +473,7 @@
         (change)="editSystemCategory.set($any($event.target).value)"
         [disabled]="editSubmitting()"
       >
-        @for (
-          category of reason.kind === 'CANCELLATION'
-            ? cancellationCategories()
-            : completionCategories();
-          track category
-        ) {
+        @for (category of categoriesOf(reason.kind); track category) {
           <option [value]="category">{{ category }}</option>
         }
       </select>
@@ -432,7 +514,7 @@
         [disabled]="editSubmitting()"
       />
 
-      @if (reason.kind === 'CANCELLATION') {
+      @if (reason.kind !== 'COMPLETION') {
         <label class="q-caption" for="edit-stock">{{
           'settings.referenceData.field.stockDisposition' | t
         }}</label>
@@ -442,11 +524,15 @@
           [value]="editStockDisposition()"
           (change)="editStockDisposition.set($any($event.target).value)"
         >
-          <option value="RELEASE">RELEASE</option>
-          <option value="RETURN_TO_STOCK">RETURN_TO_STOCK</option>
-          <option value="WRITE_OFF">WRITE_OFF</option>
-          <option value="NO_EFFECT">NO_EFFECT</option>
+          @for (disposition of dispositionsOf(reason.kind); track disposition) {
+            <option [value]="disposition">{{ disposition }}</option>
+          }
         </select>
+        @if (unavailableCannotReturn(reason.kind, editSystemCategory(), editStockDisposition())) {
+          <p class="q-caption hint" role="alert" data-testid="reason-unavailable-hint">
+            {{ 'settings.referenceData.removal.unavailableCannotReturn' | t }}
+          </p>
+        }
 
         <label class="q-caption" for="edit-liability">{{
           'settings.referenceData.field.liabilityParty' | t
@@ -463,19 +549,21 @@
           <option value="PLATFORM">PLATFORM</option>
         </select>
 
-        <label class="q-caption" for="edit-refund">{{
-          'settings.referenceData.field.customerRefund' | t
-        }}</label>
-        <select
-          id="edit-refund"
-          class="q-body field"
-          [value]="editCustomerRefund()"
-          (change)="editCustomerRefund.set($any($event.target).value)"
-        >
-          <option value="FULL">FULL</option>
-          <option value="NONE">NONE</option>
-          <option value="DISCRETIONARY">DISCRETIONARY</option>
-        </select>
+        @if (reason.kind === 'CANCELLATION') {
+          <label class="q-caption" for="edit-refund">{{
+            'settings.referenceData.field.customerRefund' | t
+          }}</label>
+          <select
+            id="edit-refund"
+            class="q-body field"
+            [value]="editCustomerRefund()"
+            (change)="editCustomerRefund.set($any($event.target).value)"
+          >
+            <option value="FULL">FULL</option>
+            <option value="NONE">NONE</option>
+            <option value="DISCRETIONARY">DISCRETIONARY</option>
+          </select>
+        }
       } @else {
         <span class="q-caption">{{
           'settings.referenceData.field.allowedFulfillmentModes' | t

@@ -122,6 +122,20 @@
               {{ 'kitchen.expo.weighFirst' | t }}
             </p>
           }
+          @if (hasMarkedLines(ticket) && orderFor(ticket); as order) {
+            <q-order-marking-panel
+              [scope]="expoScope()"
+              [orderId]="ticket.orderId"
+              [status]="order.value.summary.status"
+              [lines]="order.value.lines"
+              (marksChanged)="onOrderChanged(ticket.orderId)"
+            />
+          }
+          @if (marksState(ticket) === 'pending') {
+            <p class="q-caption expo__weigh-first" data-testid="expo-scan-first">
+              {{ 'kitchen.expo.scanFirst' | t }}
+            </p>
+          }
 
           <label class="ticket__packing">
             <input

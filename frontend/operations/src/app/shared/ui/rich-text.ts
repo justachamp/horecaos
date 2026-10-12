@@ -9,7 +9,18 @@ import {
   signal,
 } from '@angular/core';
 
+import { BlockDocument } from './block-document';
+import { RichTextBlockLabels, RichTextBlocks, RichTextImageUpload } from './rich-text-blocks';
 import { sanitizeRichHtml } from './rich-text-sanitizer';
+
+export type { RichTextBlockLabels, RichTextImageUpload } from './rich-text-blocks';
+export type { BlockDocument } from './block-document';
+
+/**
+ * What `q-rich-text` authors: `html` is the sanitized-HTML block editor the terms pages use; `blocks`
+ * is the typed block document of ADR 0157 (Decision 6), the only form editorial text is ever stored in.
+ */
+export type RichTextMode = 'html' | 'blocks';
 
 export type RichTextBlockKind = 'paragraph' | 'heading' | 'bullet' | 'numbered';
 
@@ -180,6 +191,7 @@ function serializeBlocks(blocks: readonly RichTextBlock[]): string {
  */
 @Component({
   selector: 'q-rich-text',
+  imports: [RichTextBlocks],
   templateUrl: './rich-text.html',
   styleUrl: './rich-text.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -190,8 +202,24 @@ export class RichText {
   readonly disabled = input(false, { transform: booleanAttribute });
   /** Shown on an empty block. Already translated. */
   readonly placeholder = input<string | null>(null);
-  /** Already translated — this component never looks a key up (`q-action-menu`'s own rule for itself). */
-  readonly kindLabels = input.required<RichTextBlockKindLabels>();
+  /**
+   * Already translated — this component never looks a key up (`q-action-menu`'s own rule for itself).
+   * Required of the `html` mode; the `blocks` mode takes {@link blockLabels} instead.
+   */
+  readonly kindLabels = input<RichTextBlockKindLabels | null>(null);
+
+  /** `html` (the default, so every current host is unchanged) or `blocks` (ADR 0157, Decision 6). */
+  readonly mode = input<RichTextMode>('html');
+  /** `blocks` mode: the document being edited. */
+  readonly blockDocument = input<BlockDocument | null>(null);
+  /** `blocks` mode: every label the block editor shows, already translated. */
+  readonly blockLabels = input<RichTextBlockLabels | null>(null);
+  /** `blocks` mode: the host's upload for an image block; with none, the image block is not offered. */
+  readonly imageUpload = input<RichTextImageUpload | null>(null);
+  /** `blocks` mode: URLs to show images by, keyed by asset id. */
+  readonly imagePreviews = input<Readonly<Record<string, string>>>({});
+  /** `blocks` mode: the compacted document on every change. Never an HTML string. */
+  readonly documentChange = output<BlockDocument>();
   readonly blockTypeLabel = input('Block type');
   readonly addBlockLabel = input('Add block');
   readonly removeBlockLabel = input('Remove block');
@@ -203,7 +231,7 @@ export class RichText {
 
   protected readonly blocks = signal<readonly RichTextBlock[]>(emptyDocument());
   protected readonly kindEntries = computed(
-    () => Object.entries(this.kindLabels()) as [RichTextBlockKind, string][],
+    () => Object.entries(this.kindLabels() ?? {}) as [RichTextBlockKind, string][],
   );
 
   /**

@@ -1,0 +1,79 @@
+@if (summary(); as current) {
+  @if (current.ready) {
+    <section class="reviews" data-testid="public-reviews">
+      <h2 class="reviews__title">{{ 'reviews.public.title' | t }}</h2>
+
+      <div class="summary">
+        <div class="summary__score">
+          <span class="summary__average" data-testid="public-average">{{ average() }}</span>
+          <span class="summary__count" data-testid="public-count">
+            {{ 'reviews.public.count' | t: { count: current.count ?? 0 } }}
+          </span>
+        </div>
+        <ul class="bars" [attr.aria-label]="'reviews.public.distribution' | t">
+          @for (bar of bars(); track bar.stars) {
+            <li class="bar" data-testid="public-bar">
+              <span class="bar__label">{{ bar.stars }}</span>
+              <span class="bar__track" aria-hidden="true">
+                <span class="bar__fill" [style.width.%]="bar.percent"></span>
+              </span>
+              <span class="bar__count">{{ bar.count }}</span>
+            </li>
+          }
+        </ul>
+      </div>
+
+      @if (showsComments() && comments().length > 0) {
+        <ul class="comments">
+          @for (item of comments(); track $index) {
+            <li class="comment" data-testid="public-comment">
+              <div class="comment__stars" [attr.aria-label]="item.rating + ' / 5'">
+                @for (filled of stars(item.rating); track filled) {
+                  <app-icon name="star" [size]="14" />
+                }
+              </div>
+              <p class="comment__text">{{ item.comment }}</p>
+              @if (item.tags.length > 0) {
+                <div class="comment__tags">
+                  @for (tag of item.tags; track tag.code) {
+                    <span class="comment__tag">
+                      @if (tag.iconUrl) {
+                        <img
+                          class="tag-icon"
+                          [src]="tag.iconUrl"
+                          alt=""
+                          width="16"
+                          height="16"
+                          loading="lazy"
+                          data-testid="tag-icon"
+                        />
+                      }
+                      {{ tagLabel(tag) }}
+                    </span>
+                  }
+                </div>
+              }
+              <span class="comment__meta">
+                {{ day(item.date) }}
+                @if (item.branchName) {
+                  · {{ item.branchName }}
+                }
+              </span>
+            </li>
+          }
+        </ul>
+        @if (nextCursor() !== null) {
+          <button
+            type="button"
+            class="more"
+            [disabled]="loadingMore()"
+            (click)="loadMore()"
+            data-testid="public-more"
+          >
+            {{ (loadingMore() ? 'common.loading' : 'reviews.public.more') | t }}
+          </button>
+        }
+      }
+    </section>
+  }
+}

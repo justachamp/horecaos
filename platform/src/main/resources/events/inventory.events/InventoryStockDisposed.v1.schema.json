@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/inventory.events/InventoryStockDisposed.v1.schema.json",
+  "title": "InventoryStockDisposed v1 payload",
+  "description": "Stock an order no longer needs was given back or written off (ADR 0169): a line removed from, or lowered on, a confirmed order, or an order cancelled after its stock was committed. disposition is what the removal reason declared for units already sold (RETURN_TO_STOCK, WRITE_OFF or NO_EFFECT); units the kitchen had started or made are written off whatever it says. Per line: units is the whole units the order no longer needed, split into releasedUnits (still a hold, given back), returnedUnits (a RETURN movement), writtenOffUnits (a RETURN and a WASTE movement) and noEffectUnits (nothing moved: an uncounted item, or declared NO_EFFECT). Identifiers, stable codes and counts only: never a customer, an address, a note or a product name (ADR 0029). A consumer resolves names through the authorized catalog API with variantId.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["orderId", "brandId", "locationId", "disposition", "reasonCategory", "lines"],
+  "properties": {
+    "orderId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": "string", "format": "uuid" },
+    "locationId": { "type": "string", "format": "uuid" },
+    "disposition": { "type": "string", "enum": ["RETURN_TO_STOCK", "WRITE_OFF", "NO_EFFECT"] },
+    "reasonCategory": { "type": "string", "maxLength": 64 },
+    "lines": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["variantId", "units", "releasedUnits", "returnedUnits", "writtenOffUnits", "noEffectUnits"],
+        "properties": {
+          "variantId": { "type": "string", "format": "uuid" },
+          "units": { "type": "integer", "minimum": 1 },
+          "releasedUnits": { "type": "integer", "minimum": 0 },
+          "returnedUnits": { "type": "integer", "minimum": 0 },
+          "writtenOffUnits": { "type": "integer", "minimum": 0 },
+          "noEffectUnits": { "type": "integer", "minimum": 0 }
+        }
+      }
+    }
+  }
+}

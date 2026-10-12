@@ -95,25 +95,6 @@ public class AttributionLinkController {
         return ResponseEntity.accepted().build();
     }
 
-    @PostMapping("/{linkId}/clicks")
-    @RequiresCapability(value = Capability.MARKETING_LINK_MANAGE, scope = ScopeType.BRAND, mutating = true)
-    @Operation(
-            summary = "Record one click against a link",
-            description = "Incremented by whichever surface actually serves the link's redirect or "
-                    + "deep link — not yet any surface in this build (see this module's own doc). "
-                    + "A count only, never an event log naming who clicked.")
-    public ResponseEntity<Void> click(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID linkId) {
-
-        AttributionLinkRow link = links.require(tenantId, linkId);
-        if (!link.brandId().equals(brandId)) {
-            throw new ApiException(
-                    ErrorCode.RESOURCE_NOT_FOUND, "No attribution link " + linkId + " belongs to this brand");
-        }
-        links.recordClick(tenantId, linkId);
-        return ResponseEntity.accepted().build();
-    }
-
     private UUID actorId() {
         String subject = currentActor.get().subject();
         try {

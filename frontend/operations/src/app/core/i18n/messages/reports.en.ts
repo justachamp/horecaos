@@ -432,6 +432,39 @@ export const reportsEn = {
   'reports.customers.rfm.frequency.F2_FEW': '2–3 orders',
   'reports.customers.rfm.frequency.F3_FREQUENT': '4+ orders',
 
+  // ---------------------------------------------------------------- reports 7.6c customer funnel and acquisition source (ADR 0167)
+  'reports.customers.funnel.title': 'Customer funnel',
+  'reports.customers.funnel.intro':
+    'Daily counts, taken by the platform from registrations, baskets, checkouts and orders. They are counts of distinct events on each day and not a cohort: a ratio between two stages is a rate of activity, not the probability that one person converts.',
+  'reports.customers.funnel.stage.VISITS': 'Visits',
+  'reports.customers.funnel.stage.REGISTERED': 'Registered',
+  'reports.customers.funnel.stage.BASKET_STARTED': 'Started a basket',
+  'reports.customers.funnel.stage.CHECKOUT_STARTED': 'Reached checkout',
+  'reports.customers.funnel.stage.ORDERED': 'Ordered',
+  'reports.customers.funnel.visits.notMeasured':
+    'Visits: not measured. Nothing is collected from a browser, an app or a bot for this report, so visits are neither shown as zero nor estimated. A restaurant that wants visits can read them from its own Google Analytics.',
+  'reports.customers.funnel.reason.NOT_BY_CHANNEL':
+    'Registrations have no sales channel, so a channel cut leaves them out.',
+  'reports.customers.funnel.unrecorded':
+    '{stage}: {days} days not recorded. Their baskets were already deleted when the counts were taken, so this total is partial.',
+  'reports.customers.funnel.empty': 'No funnel counts have been recorded for this period yet.',
+  'reports.customers.funnel.error': 'The funnel could not be loaded.',
+  'reports.customers.acquisition.title': 'Acquisition source',
+  'reports.customers.acquisition.intro':
+    'Registrations by how the account was created, clicks on this restaurant’s attribution links, and orders by sales channel, side by side.',
+  'reports.customers.acquisition.noAttribution':
+    'This does not attribute a customer or an order to a link: how many people opened a link and how many registered are shown next to each other, not joined.',
+  'reports.customers.acquisition.registrations': 'Registrations by origin',
+  'reports.customers.acquisition.clicks': 'Clicks by attribution link',
+  'reports.customers.acquisition.orders': 'Orders by sales channel',
+  'reports.customers.acquisition.empty': 'Nothing to show in this period.',
+  'reports.customers.acquisition.archivedLink': '{label} (archived)',
+  'reports.customers.acquisition.origin.SELF_SERVICE': 'Signed up themselves',
+  'reports.customers.acquisition.origin.OPERATOR': 'Created by staff',
+  'reports.customers.acquisition.origin.IMPORT': 'Imported',
+  'reports.customers.acquisition.origin.AGGREGATOR': 'Marketplace',
+  'reports.customers.acquisition.origin.MIGRATION': 'Migrated',
+
   // ---------------------------------------------------------------- reports 7.5/7.5a/7.5b staff (T12)
   'reports.staff.title': 'Staff reports',
   'reports.staff.loading': 'Loading…',
@@ -471,12 +504,20 @@ export const reportsEn = {
   'reports.staff.telephony.column.answerRate': 'Answer rate',
   'reports.staff.telephony.column.missed': 'Missed',
   'reports.staff.telephony.column.transferred': 'Transferred',
-  'reports.staff.telephony.column.talkTime': 'Talk time',
+  'reports.staff.telephony.column.answerSpeed': 'Answer speed',
+  'reports.staff.telephony.column.conversion': 'Conversion',
+  'reports.staff.telephony.column.callLength': 'Call length',
   'reports.staff.telephony.rangeCapped': 'Showing the first {days} days of a longer range.',
-  'reports.staff.telephony.answerSpeedNotBuilt':
-    'Answer speed is not shown: there is no ring/wait time column yet (V0149).',
-  'reports.staff.telephony.conversionNotBuilt':
-    'Call-to-order conversion is not shown: it needs the call-provenance wiring that 1.6 supplies (not built yet).',
+  'reports.staff.telephony.help':
+    "Answer speed is the time from a call arriving to its first answer, so any IVR and queue time is inside it. Conversion is the share of answered calls that have an order placed from them, in any status; it is a lower bound, because an order linked after its day closed is counted only when the day is rebuilt. Call length runs from a call's first event to its end, ring time included. A figure that was not measured is shown as a dash, never as zero.",
+  'reports.staff.telephony.notMeasured': 'not measured',
+  'reports.staff.telephony.measuredOn': 'measured on {n} of {m} answered calls',
+  'reports.staff.telephony.convertedOf': '{n} of {m} answered calls',
+  'reports.staff.telephony.speedValue': '{avg} s (max {max} s)',
+  'reports.staff.telephony.unattributed': 'Not attributed',
+  'reports.staff.telephony.branchTotal': 'Branch total',
+  'reports.staff.telephony.nextClose':
+    "Today's calls appear after the business day closes, about {time}.",
 
   // ---------------------------------------------------------------- reports 7.9 marketing (T15)
   'reports.marketing.title': 'Marketing reports',
@@ -624,4 +665,28 @@ export const reportsEn = {
   'reports.geography.section.pins': "Today's orders as pins",
   'reports.geography.pins.intro':
     "Where this branch's delivery orders of the day are going, one pin per order, to see clusters and outliers. This opens doorsteps, so it is recorded and held by dispatchers and branch managers; it is not part of the report above.",
+  // ------------------------------------------- staff hours export (ADR 0156)
+  'reports.exportCentre.reportOption.staffAttendance': 'Staff hours (payroll)',
+  'reports.exportCentre.piiGroupLabel.staff':
+    'Names and employee numbers (needs staff.shift.export)',
+  'reports.exportCentre.piiGroupHidden.staff':
+    'Name and employee-number columns are hidden — you do not hold staff.shift.export',
+  'reports.exportCentre.includeUnresolved':
+    'Include shifts that are still open or awaiting approval (marked, with no paid hours)',
+  'reports.exportCentre.error.unresolvedShifts':
+    'Some shifts in this range are still open or awaiting approval. Settle them first, or tick the box to include them marked as unsettled.',
+  'reports.exportCentre.error.tooLarge':
+    'This range has more rows than one payroll file holds (20,000). Choose a shorter range; the file is never cut short.',
+  'reports.exportCentre.column.staffDisplayReference': 'Staff reference',
+  'reports.exportCentre.column.plannedSeconds': 'Planned (seconds)',
+  'reports.exportCentre.column.workedSeconds': 'Worked (seconds)',
+  'reports.exportCentre.column.breakSeconds': 'Break (seconds)',
+  'reports.exportCentre.column.paidSeconds': 'Paid (seconds)',
+  'reports.exportCentre.column.varianceSeconds': 'Against plan (seconds)',
+  'reports.exportCentre.column.approvalStatus': 'Approval',
+  'reports.exportCentre.column.startedAt': 'Started',
+  'reports.exportCentre.column.endedAt': 'Ended',
+  'reports.exportCentre.column.timezone': 'Time zone',
+  'reports.exportCentre.column.employeeNumber': 'Employee number',
+  'reports.exportCentre.column.staffName': 'Name',
 } as const;

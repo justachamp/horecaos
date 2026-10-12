@@ -252,6 +252,16 @@ public class CourierShiftService {
      * doing it without saying why is not. The hours still need approval if they
      * vary, and an auto-close always does.
      */
+    /**
+     * A courier shift's paid time: wall time less break time, never negative. Staff shifts state the
+     * same arithmetic in {@code workforce.domain.ShiftArithmetic} (ADR 0156, Decision 1: no shared-kernel
+     * class), and {@code shift-arithmetic-vectors.csv} pins both to the same cases, so neither can
+     * drift without a test saying so.
+     */
+    static long paidSecondsOf(long wallSeconds, long breakSeconds) {
+        return Math.max(0, wallSeconds - breakSeconds);
+    }
+
     @Transactional
     public CloseOutcome close(CloseShift command) {
         if (!ShiftTransition.CLOSE.permits(command.actorKind())) {
@@ -268,7 +278,7 @@ public class CourierShiftService {
         shifts.endOpenBreak(command.tenantId(), command.shiftId(), "SHIFT_CLOSE", closedAt);
         long breakSeconds = shifts.breakSeconds(command.tenantId(), command.shiftId(), closedAt);
         long wallSeconds = Duration.between(shift.openedAt(), closedAt).toSeconds();
-        long paidSeconds = Math.max(0, wallSeconds - breakSeconds);
+        long paidSeconds = paidSecondsOf(wallSeconds, breakSeconds);
 
         ShiftStatus status =
                 switch (command.actorKind()) {

@@ -317,7 +317,7 @@ public class FiscalObligationService {
     /**
      * Records what the provider said about a claimed document.
      *
-     * <p>Only two outcomes write anything here, and the reason the other four do not
+     * <p>Only three outcomes write anything here (none of them a provider's answer), and the reason the other four do not
      * is the same in each case: the payments seam has already written what it
      * learned. It holds the evidence — the fiscal sign, the receipt identifiers,
      * the provider's status code — and a second writer for those would be a second
@@ -362,6 +362,39 @@ public class FiscalObligationService {
                         claim.orderId(),
                         claim.legalEntityId(),
                         claim.providerType());
+            }
+            case LINES_NOT_BUILT -> {
+                // Nothing was sent, and a claim over a request that never left would be blocked an
+                // hour later as "the provider did not report" about a provider nobody asked. It is
+                // blocked now, with the reason that is true: there is no real receipt to file and
+                // the placeholder may not be (ADR 0166, Decision 6).
+                documents.blockUnsent(
+                        claim.tenantId(),
+                        claim.documentId(),
+                        FiscalReasonCode.LINES_NOT_BUILT,
+                        "the receipt line builder does not exist and a placeholder receipt may not be filed here",
+                        now);
+                log.warn(
+                        "Fiscal document {} for order {} is BLOCKED: {}.",
+                        claim.documentId(),
+                        claim.orderId(),
+                        FiscalReasonCode.LINES_NOT_BUILT);
+            }
+            case BLOCKED_MARKS -> {
+                // ADR 0161: nothing was built and nothing was sent, so the claim describes a request that
+                // does not exist; the document is blocked for the one reason that names the obstacle, and
+                // is reopened when the marks complete. CLASSIFICATION_MISSING would say a priceable node has
+                // no ИКПУ, which is a different fact.
+                documents.blockUnsent(
+                        claim.tenantId(),
+                        claim.documentId(),
+                        FiscalReasonCode.MARKS_INCOMPLETE,
+                        "a marked line of the order holds fewer scanned units than it has; nothing was sent",
+                        now);
+                log.warn(
+                        "Fiscal document {} for order {} is BLOCKED: a marked line is short of scanned units.",
+                        claim.documentId(),
+                        claim.orderId());
             }
             case ISSUED, ALREADY_ISSUED, REJECTED, UNCERTAIN -> {
                 // Payments wrote the outcome and its evidence as the provider

@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  Injector,
   OnDestroy,
   OnInit,
   computed,
@@ -8,12 +9,13 @@ import {
   signal,
 } from '@angular/core';
 
-import { ApiError } from '../../core/api/problem-details';
+import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
-import { SessionCapabilities } from '../../core/auth/session-capabilities';
+import { Capability, SessionCapabilities } from '../../core/auth/session-capabilities';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { AttendanceStatus } from '../staff/shifts/attendance-status';
 import { ExportColumnChooser, ExportColumnOption } from './export-column-chooser';
 import { ReportExportStatusResponse, ReportingApi } from './reporting-api';
 
@@ -39,6 +41,12 @@ interface ReportOption {
   readonly defaultColumns: readonly string[];
   readonly requiresRange: boolean;
   readonly supportsStatusQuery: boolean;
+  /** The capability that gates this report's PII group; `customer.pii.export` unless the report says. */
+  readonly piiCapability?: Capability;
+  readonly piiLabelKey?: MessageKey;
+  readonly piiHiddenKey?: MessageKey;
+  /** `STAFF_ATTENDANCE` only: offers «include shifts not yet settled». */
+  readonly supportsUnresolved?: boolean;
 }
 
 const CUSTOMER_DIRECTORY_COLUMNS: readonly ExportColumnOption[] = [
@@ -95,6 +103,33 @@ const ORDER_REPORT_SUMMARY_COLUMNS: readonly ExportColumnOption[] = [
   { key: 'netSom', labelKey: 'reports.exportCentre.column.netSom', pii: false },
 ];
 
+/**
+ * ADR 0156 -- the payroll file. One row per closed, settled shift. `employeeNumber` and `staffName` are
+ * the PII group, gated by `staff.shift.export` and not by `customer.pii.export`.
+ */
+const STAFF_ATTENDANCE_COLUMNS: readonly ExportColumnOption[] = [
+  {
+    key: 'staffDisplayReference',
+    labelKey: 'reports.exportCentre.column.staffDisplayReference',
+    pii: false,
+  },
+  { key: 'businessDate', labelKey: 'reports.exportCentre.column.businessDate', pii: false },
+  { key: 'locationId', labelKey: 'reports.exportCentre.column.locationId', pii: false },
+  { key: 'plannedSeconds', labelKey: 'reports.exportCentre.column.plannedSeconds', pii: false },
+  { key: 'workedSeconds', labelKey: 'reports.exportCentre.column.workedSeconds', pii: false },
+  { key: 'breakSeconds', labelKey: 'reports.exportCentre.column.breakSeconds', pii: false },
+  { key: 'paidSeconds', labelKey: 'reports.exportCentre.column.paidSeconds', pii: false },
+  { key: 'varianceSeconds', labelKey: 'reports.exportCentre.column.varianceSeconds', pii: false },
+  { key: 'approvalStatus', labelKey: 'reports.exportCentre.column.approvalStatus', pii: false },
+  { key: 'startedAt', labelKey: 'reports.exportCentre.column.startedAt', pii: false },
+  { key: 'endedAt', labelKey: 'reports.exportCentre.column.endedAt', pii: false },
+  { key: 'timezone', labelKey: 'reports.exportCentre.column.timezone', pii: false },
+  { key: 'employeeNumber', labelKey: 'reports.exportCentre.column.employeeNumber', pii: true },
+  { key: 'staffName', labelKey: 'reports.exportCentre.column.staffName', pii: true },
+];
+
+const STAFF_ATTENDANCE_KEY = 'STAFF_ATTENDANCE';
+
 /** Every report this screen's picker offers, in `ReportExportRegistry`'s own declaration order. */
 const REPORT_OPTIONS: readonly ReportOption[] = [
   {
@@ -143,6 +178,25 @@ const REPORT_OPTIONS: readonly ReportOption[] = [
     ],
     requiresRange: true,
     supportsStatusQuery: false,
+  },
+  {
+    key: STAFF_ATTENDANCE_KEY,
+    labelKey: 'reports.exportCentre.reportOption.staffAttendance',
+    columns: STAFF_ATTENDANCE_COLUMNS,
+    defaultColumns: [
+      'staffDisplayReference',
+      'businessDate',
+      'locationId',
+      'workedSeconds',
+      'breakSeconds',
+      'paidSeconds',
+    ],
+    requiresRange: true,
+    supportsStatusQuery: false,
+    piiCapability: 'STAFF_SHIFT_EXPORT',
+    piiLabelKey: 'reports.exportCentre.piiGroupLabel.staff',
+    piiHiddenKey: 'reports.exportCentre.piiGroupHidden.staff',
+    supportsUnresolved: true,
   },
 ];
 
@@ -202,7 +256,22 @@ export class ExportCentrePage implements OnInit, OnDestroy {
   protected readonly state = signal<ExportCentreState>('loading');
   protected readonly history = signal<readonly ReportExportStatusResponse[]>([]);
 
-  protected readonly reportOptions = REPORT_OPTIONS;
+  private readonly injector = inject(Injector);
+
+  /** Whether the tenant records attendance: the payroll file is offered only then (ADR 0156). */
+  private readonly attendanceOn = signal(false);
+
+  /**
+   * The payroll file is in the picker only when the tenant records attendance and the viewer may read
+   * the hours; to anyone else it does not exist, as it does not on the platform (an unknown report).
+   */
+  protected readonly reportOptions = computed(() =>
+    REPORT_OPTIONS.filter(
+      (option) =>
+        option.key !== STAFF_ATTENDANCE_KEY ||
+        (this.attendanceOn() && this.capabilities.has('STAFF_SHIFT_READ')),
+    ),
+  );
   protected readonly statusOptions = STATUS_OPTIONS;
 
   protected readonly selectedReportKey = signal<string>(DEFAULT_REPORT_KEY);
@@ -217,6 +286,7 @@ export class ExportCentrePage implements OnInit, OnDestroy {
   protected readonly fromDate = signal('');
   protected readonly toDate = signal('');
   protected readonly purpose = signal('');
+  protected readonly includeUnresolved = signal(false);
 
   protected readonly submitting = signal(false);
   protected readonly submitError = signal<string | null>(null);
@@ -225,6 +295,20 @@ export class ExportCentrePage implements OnInit, OnDestroy {
 
   async ngOnInit(): Promise<void> {
     await this.load();
+    await this.loadAttendance();
+  }
+
+  /**
+   * Asks whether attendance is on, but only for a viewer who could use the answer: any other viewer's
+   * screen makes no extra call, and the service is not even constructed for them.
+   */
+  private async loadAttendance(): Promise<void> {
+    if (!this.capabilities.has('STAFF_SHIFT_READ')) {
+      return;
+    }
+    const attendance = this.injector.get(AttendanceStatus);
+    await attendance.ensureLoaded();
+    this.attendanceOn.set(attendance.enabled() === true);
   }
 
   ngOnDestroy(): void {
@@ -268,6 +352,7 @@ export class ExportCentrePage implements OnInit, OnDestroy {
     this.queryFilter.set('');
     this.fromDate.set('');
     this.toDate.set('');
+    this.includeUnresolved.set(false);
     this.submitError.set(null);
   }
 
@@ -319,16 +404,33 @@ export class ExportCentrePage implements OnInit, OnDestroy {
         from,
         to,
         purpose: this.purpose().trim(),
+        includeUnresolved: report.supportsUnresolved ? this.includeUnresolved() : null,
       });
       const queuedStatus = await this.api.exportStatus(scope.tenantId, queued.exportId);
       this.history.update((current) => [queuedStatus, ...current]);
       this.purpose.set('');
       this.startPollingIfNeeded();
-    } catch {
-      this.submitError.set(this.i18n.t('reports.exportCentre.error.generic'));
+    } catch (error) {
+      this.submitError.set(this.i18n.t(this.submitErrorKey(error)));
     } finally {
       this.submitting.set(false);
     }
+  }
+
+  /**
+   * The payroll file is refused, never truncated, and says which refusal it is: unsettled shifts in the
+   * range, or a range over the ceiling. Everything else keeps the one generic sentence.
+   */
+  private submitErrorKey(error: unknown): MessageKey {
+    if (error instanceof ApiError) {
+      if (error.code === ApiErrorCode.ATTENDANCE_UNRESOLVED_SHIFTS) {
+        return 'reports.exportCentre.error.unresolvedShifts';
+      }
+      if (error.code === ApiErrorCode.ATTENDANCE_EXPORT_TOO_LARGE) {
+        return 'reports.exportCentre.error.tooLarge';
+      }
+    }
+    return 'reports.exportCentre.error.generic';
   }
 
   private startPollingIfNeeded(): void {

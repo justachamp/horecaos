@@ -1,0 +1,178 @@
+<div class="card-fields" data-testid="content-card-fields">
+  <label class="card-fields__field">
+    <span class="q-caption">{{ 'marketing.content.card.title' | t }}</span>
+    <input
+      type="text"
+      class="card-fields__input"
+      maxlength="80"
+      [value]="text('title')"
+      [disabled]="disabled()"
+      (input)="setText('title', $any($event.target).value)"
+      data-testid="content-title"
+    />
+  </label>
+
+  @if (isPopup()) {
+    <label class="card-fields__field">
+      <span class="q-caption">{{ 'marketing.content.card.body' | t }}</span>
+      <textarea
+        class="card-fields__input card-fields__input--area"
+        maxlength="240"
+        rows="3"
+        [value]="text('body')"
+        [disabled]="disabled()"
+        (input)="setText('body', $any($event.target).value)"
+        data-testid="content-body"
+      ></textarea>
+    </label>
+  } @else {
+    <label class="card-fields__field">
+      <span class="q-caption">{{ 'marketing.content.card.subtitle' | t }}</span>
+      <input
+        type="text"
+        class="card-fields__input"
+        maxlength="160"
+        [value]="text('subtitle')"
+        [disabled]="disabled()"
+        (input)="setText('subtitle', $any($event.target).value)"
+        data-testid="content-subtitle"
+      />
+    </label>
+  }
+
+  <label class="card-fields__field">
+    <span class="q-caption">{{ 'marketing.content.card.cta' | t }}</span>
+    <input
+      type="text"
+      class="card-fields__input"
+      maxlength="24"
+      [value]="text('ctaLabel')"
+      [disabled]="disabled()"
+      (input)="setText('ctaLabel', $any($event.target).value)"
+      data-testid="content-cta"
+    />
+  </label>
+
+  <label class="card-fields__field">
+    <span class="q-caption">{{ 'marketing.content.card.alt' | t }}</span>
+    <input
+      type="text"
+      class="card-fields__input"
+      maxlength="140"
+      [value]="text('alt')"
+      [disabled]="disabled()"
+      (input)="setText('alt', $any($event.target).value)"
+      data-testid="content-alt"
+    />
+  </label>
+
+  <q-content-media-field
+    [label]="'marketing.content.card.image' | t"
+    [assetId]="primary()"
+    [posterId]="poster()"
+    [ratio]="media().ratio"
+    [exportEdgePx]="media().exportEdgePx"
+    [minWidthPx]="media().minWidthPx"
+    [allowVideo]="allowVideo()"
+    [disabled]="disabled()"
+    (changed)="setPrimary($event)"
+  />
+
+  <details class="card-fields__locale-image">
+    <summary class="q-body-sm">{{ 'marketing.content.card.localeImage' | t }}</summary>
+    <q-content-media-field
+      [assetId]="localeImage()"
+      [ratio]="media().ratio"
+      [exportEdgePx]="media().exportEdgePx"
+      [minWidthPx]="media().minWidthPx"
+      [disabled]="disabled()"
+      (changed)="setLocaleImage($event)"
+    />
+  </details>
+
+  <q-content-link-picker [link]="link()" [disabled]="disabled()" (linkChange)="setLink($event)" />
+
+  @if (isPopup()) {
+    <fieldset class="card-fields__popup" [disabled]="disabled()">
+      <legend class="q-caption">{{ 'marketing.content.popup.settings' | t }}</legend>
+
+      <label class="card-fields__row">
+        <span class="q-body-sm">{{ 'marketing.content.popup.delay' | t }}</span>
+        <q-number-stepper
+          [value]="popup().showAfterSeconds"
+          [min]="3"
+          [max]="60"
+          [ariaLabel]="'marketing.content.popup.delay' | t"
+          [disabled]="disabled()"
+          (valueChange)="setDelay($event)"
+        />
+      </label>
+
+      <label class="card-fields__row">
+        <input
+          type="checkbox"
+          [checked]="popup().daily !== null"
+          [disabled]="disabled()"
+          (change)="setDailyWindow($any($event.target).checked)"
+          data-testid="content-popup-daily"
+        />
+        <span class="q-body-sm">{{ 'marketing.content.popup.dailyWindow' | t }}</span>
+      </label>
+
+      @if (popup().daily; as daily) {
+        <div class="card-fields__row">
+          <q-time-input
+            [value]="daily.from"
+            [ariaLabel]="'marketing.content.popup.from' | t"
+            [disabled]="disabled()"
+            (valueChange)="setDaily({ from: $event })"
+          />
+          <span aria-hidden="true">–</span>
+          <q-time-input
+            [value]="daily.until"
+            [ariaLabel]="'marketing.content.popup.until' | t"
+            [disabled]="disabled()"
+            (valueChange)="setDaily({ until: $event })"
+          />
+        </div>
+        <q-day-of-week-toggle
+          [selected]="dailyDays()"
+          (selectedChange)="setDaily({ days: $event })"
+        />
+        <p class="q-caption card-fields__hint">{{ 'marketing.content.popup.dailyHint' | t }}</p>
+      }
+
+      <label class="card-fields__field">
+        <span class="q-caption">{{ 'marketing.content.popup.cap' | t }}</span>
+        <select
+          class="card-fields__input"
+          [value]="popup().capMode"
+          [disabled]="disabled()"
+          (change)="setCapMode($any($event.target).value)"
+          data-testid="content-popup-cap"
+        >
+          @for (mode of capModes; track mode) {
+            <option [value]="mode" [selected]="mode === popup().capMode">
+              {{ capKey(mode) | t }}
+            </option>
+          }
+        </select>
+      </label>
+
+      @if (popup().capMode === 'EVERY_N_DAYS') {
+        <label class="card-fields__row">
+          <span class="q-body-sm">{{ 'marketing.content.popup.capDays' | t }}</span>
+          <q-number-stepper
+            [value]="popup().capN"
+            [min]="1"
+            [max]="30"
+            [ariaLabel]="'marketing.content.popup.capDays' | t"
+            [disabled]="disabled()"
+            (valueChange)="setCapDays($event)"
+          />
+        </label>
+      }
+      <p class="q-caption card-fields__hint">{{ 'marketing.content.popup.capHint' | t }}</p>
+    </fieldset>
+  }
+</div>

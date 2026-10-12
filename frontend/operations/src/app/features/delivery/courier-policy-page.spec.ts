@@ -1,4 +1,5 @@
-import { signal } from '@angular/core';
+import { Provider, signal } from '@angular/core';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -60,6 +61,7 @@ describe('CourierPolicyPage', () => {
     configApi: Partial<ConfigurationApi> = {
       resolution: () => Promise.resolve(OUT_OF_ZONE_RESOLUTION),
     },
+    extraProviders: Provider[] = [],
   ): Promise<HTMLElement> {
     await TestBed.configureTestingModule({
       imports: [CourierPolicyPage],
@@ -74,6 +76,7 @@ describe('CourierPolicyPage', () => {
         },
         { provide: CouriersApi, useValue: api },
         { provide: ConfigurationApi, useValue: configApi },
+        ...extraProviders,
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -396,6 +399,180 @@ describe('CourierPolicyPage', () => {
   // couriers.md §16 / settings.md §10.13: courier billing mode is refused by
   // ADR 0042, not missing — it must render disabled with its reason, never
   // silently absent.
+  // ADR 0170: how a courier is paid for one run of several orders.
+  describe('the pay mode for a run (ADR 0170)', () => {
+    async function openEditor(api: Partial<CouriersApi>): Promise<HTMLElement> {
+      const host = await render(api);
+      Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+        .find((button) => button.textContent?.trim() === 'Edit')!
+        .click();
+      fixture.detectChanges();
+      return host;
+    }
+
+    function fill(host: HTMLElement, testId: string, value: string, event = 'input'): void {
+      const element = host.querySelector<HTMLInputElement | HTMLSelectElement>(
+        `[data-testid="${testId}"]`,
+      )!;
+      element.value = value;
+      element.dispatchEvent(new Event(event));
+      fixture.detectChanges();
+    }
+
+    const routeWith = (query: Record<string, string>): Provider => ({
+      provide: ActivatedRoute,
+      useValue: { snapshot: { queryParamMap: convertToParamMap(query) } },
+    });
+    const noExtraConfig: Partial<ConfigurationApi> = {
+      resolution: () => Promise.resolve(OUT_OF_ZONE_RESOLUTION),
+    };
+
+    it('opens the editor with first-full-then-increment chosen when the dispatch rules send the operator here to decide', async () => {
+      const host = await render({ policy: () => Promise.resolve(POLICY) }, noExtraConfig, [
+        routeWith({ prefill: 'FIRST_FULL_THEN_INCREMENT' }),
+      ]);
+
+      expect(host.querySelector('[data-testid="policy-publish"]')).not.toBeNull();
+      expect(
+        host.querySelector<HTMLSelectElement>('[data-testid="policy-input-runPayMode"]')!.value,
+      ).toBe('FIRST_FULL_THEN_INCREMENT');
+      expect(
+        host.querySelector('[data-testid="policy-input-acknowledgeEngagementTerms"]'),
+      ).not.toBeNull();
+    });
+
+    it('never overrides a decision already made, and does nothing without the hint', async () => {
+      const decided = await render(
+        { policy: () => Promise.resolve({ ...POLICY, runPayMode: 'PER_ORDER' }) },
+        noExtraConfig,
+        [routeWith({ prefill: 'FIRST_FULL_THEN_INCREMENT' })],
+      );
+      expect(decided.querySelector('[data-testid="policy-publish"]')).toBeNull();
+
+      TestBed.resetTestingModule();
+      const plain = await render({ policy: () => Promise.resolve(POLICY) }, noExtraConfig, [
+        routeWith({}),
+      ]);
+      expect(plain.querySelector('[data-testid="policy-publish"]')).toBeNull();
+    });
+
+    it('shows an undecided pay mode as what it is: every order paid in full', async () => {
+      const host = await render({ policy: () => Promise.resolve(POLICY) });
+
+      expect(host.querySelector('[data-testid="policy-row-runPayMode"]')?.textContent).toContain(
+        'Not decided (every order is paid in full)',
+      );
+    });
+
+    it('shows a decided pay mode by name', async () => {
+      const host = await render({
+        policy: () => Promise.resolve({ ...POLICY, runPayMode: 'FIRST_FULL_THEN_INCREMENT' }),
+      });
+
+      expect(host.querySelector('[data-testid="policy-row-runPayMode"]')?.textContent).toContain(
+        'First order in full, the rest by their extra distance',
+      );
+    });
+
+    it('asks for the engagement-terms statement only when moving to first-full-then-increment, and not otherwise', async () => {
+      const host = await openEditor({ policy: () => Promise.resolve(POLICY) });
+      const publish = (): HTMLButtonElement =>
+        host.querySelector<HTMLButtonElement>('[data-testid="policy-publish"]')!;
+      fill(host, 'policy-input-reason', 'Grouping pilot');
+
+      fill(host, 'policy-input-runPayMode', 'PER_ORDER', 'change');
+      expect(
+        host.querySelector('[data-testid="policy-input-acknowledgeEngagementTerms"]'),
+      ).toBeNull();
+      expect(publish().disabled).toBe(false);
+
+      fill(host, 'policy-input-runPayMode', 'FIRST_FULL_THEN_INCREMENT', 'change');
+      expect(
+        host.querySelector('[data-testid="policy-input-acknowledgeEngagementTerms"]'),
+      ).not.toBeNull();
+      expect(publish().disabled).toBe(true);
+
+      const ack = host.querySelector<HTMLInputElement>(
+        '[data-testid="policy-input-acknowledgeEngagementTerms"]',
+      )!;
+      ack.checked = true;
+      ack.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      expect(publish().disabled).toBe(false);
+    });
+
+    it('does not ask again when the mode already is first-full-then-increment', async () => {
+      const host = await openEditor({
+        policy: () => Promise.resolve({ ...POLICY, runPayMode: 'FIRST_FULL_THEN_INCREMENT' }),
+      });
+
+      expect(
+        host.querySelector('[data-testid="policy-input-acknowledgeEngagementTerms"]'),
+      ).toBeNull();
+    });
+
+    it('publishes the chosen mode with the acknowledgement, and an undecided one as null', async () => {
+      const writePolicy = vi.fn().mockResolvedValue({
+        ...POLICY,
+        runPayMode: 'FIRST_FULL_THEN_INCREMENT',
+        policyVersion: 2,
+      });
+      const host = await openEditor({ policy: () => Promise.resolve(POLICY), writePolicy });
+      fill(host, 'policy-input-reason', 'Grouping pilot');
+      fill(host, 'policy-input-runPayMode', 'FIRST_FULL_THEN_INCREMENT', 'change');
+      const ack = host.querySelector<HTMLInputElement>(
+        '[data-testid="policy-input-acknowledgeEngagementTerms"]',
+      )!;
+      ack.checked = true;
+      ack.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+
+      host.querySelector<HTMLButtonElement>('[data-testid="policy-publish"]')!.click();
+      await flushMicrotasks();
+
+      const [, input] = writePolicy.mock.calls[0];
+      expect(input.runPayMode).toBe('FIRST_FULL_THEN_INCREMENT');
+      expect(input.acknowledgeEngagementTerms).toBe(true);
+
+      const writeUndecided = vi.fn().mockResolvedValue({ ...POLICY, policyVersion: 2 });
+      TestBed.resetTestingModule();
+      const second = await openEditor({
+        policy: () => Promise.resolve(POLICY),
+        writePolicy: writeUndecided,
+      });
+      fill(second, 'policy-input-reason', 'Unrelated edit');
+      second.querySelector<HTMLButtonElement>('[data-testid="policy-publish"]')!.click();
+      await flushMicrotasks();
+
+      const [, undecided] = writeUndecided.mock.calls[0];
+      expect(undecided.runPayMode).toBeNull();
+      expect(undecided.acknowledgeEngagementTerms).toBeNull();
+    });
+
+    it('says a second signature is needed when the platform answers with a pending approval', async () => {
+      const writePolicy = vi
+        .fn()
+        .mockResolvedValue({ ...POLICY, pendingApprovalRequestId: 'req-42' });
+      const host = await openEditor({ policy: () => Promise.resolve(POLICY), writePolicy });
+      fill(host, 'policy-input-reason', 'Grouping pilot');
+      fill(host, 'policy-input-runPayMode', 'FIRST_FULL_THEN_INCREMENT', 'change');
+      const ack = host.querySelector<HTMLInputElement>(
+        '[data-testid="policy-input-acknowledgeEngagementTerms"]',
+      )!;
+      ack.checked = true;
+      ack.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+
+      host.querySelector<HTMLButtonElement>('[data-testid="policy-publish"]')!.click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(host.querySelector('[data-testid="policy-pending-approval"]')?.textContent).toContain(
+        'req-42',
+      );
+    });
+  });
+
   it('renders courier billing mode as a fixed, refused row rather than an editable field', async () => {
     const host = await render({ policy: () => Promise.resolve(POLICY) });
 

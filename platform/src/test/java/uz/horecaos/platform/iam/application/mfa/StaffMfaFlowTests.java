@@ -46,6 +46,7 @@ import uz.horecaos.platform.iam.application.StaffAuthService;
 import uz.horecaos.platform.iam.application.StaffAuthService.StaffSession;
 import uz.horecaos.platform.iam.application.mfa.StaffMfaService.Confirmation;
 import uz.horecaos.platform.iam.application.mfa.StaffMfaService.Enrolment;
+import uz.horecaos.platform.iam.application.sessions.StaffSessionLedger;
 import uz.horecaos.platform.iam.infrastructure.keycloak.FakeKeycloakMfaRealm;
 import uz.horecaos.platform.iam.infrastructure.keycloak.FakeKeycloakMfaRealm.Totp;
 import uz.horecaos.platform.iam.infrastructure.keycloak.FakeKeycloakMfaRealm.User;
@@ -85,6 +86,7 @@ class StaffMfaFlowTests {
     private StaffMfaService mfa;
     private SealedTokens tokens;
     private StaffAccounts accounts;
+    private StaffSessionLedger sessionLedger;
     private ListAppender<ILoggingEvent> logs;
 
     @BeforeEach
@@ -132,8 +134,18 @@ class StaffMfaFlowTests {
         };
         MfaPolicy policy = policy("REQUIRED", accountFacts);
         MfaCodeBudget budget = new MfaCodeBudget(limiter, 5, Duration.ofHours(1));
+        sessionLedger = org.mockito.Mockito.mock(StaffSessionLedger.class);
         auth = new StaffAuthService(
-                adapters.login(), adapters.probe(), limiter, budget, policy, accounts, tokens, metrics, clock);
+                adapters.login(),
+                adapters.probe(),
+                limiter,
+                budget,
+                policy,
+                accounts,
+                tokens,
+                metrics,
+                sessionLedger,
+                clock);
         ConcurrentMapCacheManager caches =
                 new ConcurrentMapCacheManager(CacheRegistry.IAM_STAFF_MFA_CREDENTIALS.cacheName());
         TransactionTemplate transactions = new TransactionTemplate() {
@@ -165,6 +177,7 @@ class StaffMfaFlowTests {
                 accountFacts,
                 metrics,
                 audit,
+                sessionLedger,
                 mail,
                 limiter,
                 caches,
@@ -234,6 +247,55 @@ class StaffMfaFlowTests {
         StaffSession back = auth.signIn(PHONE, PASSWORD, Totp.code(secret, clock.instant()), "address-2");
         assertThat(back.mfaEnrolmentOffered()).isFalse();
         assertThat(back.accessToken()).isNotBlank();
+    }
+
+    @Test
+    @DisplayName(
+            "the sign-in a ticket enrolment ends with is recorded for the sessions card, with the device the request came from")
+    void aTicketEnrolmentSignInIsRecorded() {
+        admin.organizationIds.add("org-mfa-1");
+        ApiException refused = (ApiException) catchThrowable(() -> auth.signIn(PHONE, PASSWORD, null, "address-1"));
+        String subject = mfa.subjectOfTicket((String) refused.properties().get("enrolmentTicket"));
+        Enrolment enrolment = mfa.begin(subject, true, PASSWORD);
+        org.mockito.Mockito.clearInvocations(sessionLedger);
+
+        Confirmation confirmation = mfa.confirm(
+                subject,
+                true,
+                enrolment.sealedSecret(),
+                Totp.code(secretOf(enrolment), clock.instant()),
+                PASSWORD,
+                "my phone",
+                "Mozilla/5.0 (iPhone) Mobile Safari/604.1");
+
+        assertThat(confirmation.session()).isNotNull();
+        List<String> live = realm.liveSessionIds(admin);
+        assertThat(live).as("the session the person arrives in").hasSize(1);
+        org.mockito.Mockito.verify(sessionLedger)
+                .recordSignIn(
+                        org.mockito.ArgumentMatchers.eq(admin.id),
+                        org.mockito.ArgumentMatchers.eq(Set.of("org-mfa-1")),
+                        org.mockito.ArgumentMatchers.eq(live.getFirst()),
+                        org.mockito.ArgumentMatchers.eq("Mozilla/5.0 (iPhone) Mobile Safari/604.1"));
+    }
+
+    @Test
+    @DisplayName(
+            "a confirmation from a signed-in session records no sign-in: the proof grant it opens is revoked on the spot")
+    void aConfirmationFromASessionRecordsNothing() {
+        admin.organizationIds.add("org-mfa-1");
+        Enrolment enrolment = mfa.begin(admin.id, false, PASSWORD);
+
+        mfa.confirm(
+                admin.id,
+                false,
+                enrolment.sealedSecret(),
+                Totp.code(secretOf(enrolment), clock.instant()),
+                PASSWORD,
+                "phone",
+                "Mozilla/5.0 (iPhone) Mobile Safari/604.1");
+
+        org.mockito.Mockito.verifyNoInteractions(sessionLedger);
     }
 
     @Test
@@ -380,6 +442,7 @@ class StaffMfaFlowTests {
                 accounts,
                 tokens,
                 new MfaMetrics(meters),
+                org.mockito.Mockito.mock(uz.horecaos.platform.iam.application.sessions.StaffSessionLedger.class),
                 clock);
 
         StaffSession session = prompting.signIn(PHONE, PASSWORD, null, "address-1");

@@ -49,6 +49,21 @@ public final class CatalogEntities {
          */
         COMBO_COMPONENT,
         /**
+         * An auto-add rule (ADR 0158). Its customer text, shown beside the line it injects,
+         * lives in the translations; it has no media of its own.
+         */
+        AUTO_ADD_RULE,
+        /**
+         * A tag of the tenant-wide badge and filter registry (ADR 0174). It names a publication item and
+         * the target of a finding; its wording lives in {@code catalog.tag_translations}, not in the
+         * brand-keyed {@code catalog.translations}, so no translation row may be written against it.
+         */
+        TAG,
+        /**
+         * An ingredient of the tenant-wide composition registry (ADR 0174), on the same terms as {@link #TAG}.
+         */
+        INGREDIENT,
+        /**
          * A charge that reaches a receipt as an ordinary line without being a
          * catalog item — today only the delivery fee (ADR 0038).
          *

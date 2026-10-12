@@ -10,7 +10,13 @@ import { PromoCodeComponent } from '../../../shared/promo-code/promo-code.compon
 import { TranslatePipe } from '../../../shared/translate/translate.pipe';
 import type { CartResponseComboComponent, CartResponseItem } from '../../../types/cart.types';
 import { presetLabelFor } from '../../../utils/preset-label';
-import { catchweightEstimateGrams, formatQuantity, formatWeight } from '../../../utils/physical';
+import { canStepDown, canStepUp } from '../../../utils/auto-add-line';
+import {
+  catchweightEstimateGrams,
+  formatQuantity,
+  formatWeight,
+  portionStep,
+} from '../../../utils/physical';
 
 @Component({
   selector: 'app-cart-items',
@@ -55,6 +61,15 @@ export class CartItemsComponent implements OnInit {
   }
 
   /** `0,5 порц.`, `3 шт` — the quantity as the customer's language writes it (ADR 0137). */
+  /** ADR 0158: a line a rule added stops at the floor and the ceiling the cart states for it. */
+  canDecrease(item: CartResponseItem): boolean {
+    return canStepDown(item, portionStep(item.physical));
+  }
+
+  canIncrease(item: CartResponseItem): boolean {
+    return canStepUp(item, portionStep(item.physical));
+  }
+
   quantityLabel(item: CartResponseItem): string {
     const unit = this.translate.get(
       item.physical?.splittable ? 'physical.portionsUnit' : 'common.itemsUnit',

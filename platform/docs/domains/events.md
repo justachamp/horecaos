@@ -49,7 +49,9 @@ changing retention is an approved operational migration with a rollback plan.
 | `inventory.events` | 6 | 1 | `PT168H` | `delete` |
 | `pricing.events` | 3 | 1 | `PT168H` | `delete` |
 | `marketing.events` | 3 | 1 | `PT168H` | `delete` |
+| `content.events` | 3 | 1 | `PT168H` | `delete` |
 | `customers.events` | 3 | 1 | `PT168H` | `delete` |
+| `reviews.events` | 3 | 1 | `PT168H` | `delete` |
 | `integration.events` | 3 | 1 | `PT168H` | `delete` |
 | `pos.commands` | 3 | 1 | `PT24H` | `delete` |
 
@@ -135,6 +137,7 @@ holds organization and subject identifiers and applied configuration.
 | `OrderConfirmed` | 1 | `orderId` | [`OrderConfirmed.v1`](../../src/main/resources/events/ordering.events/OrderConfirmed.v1.schema.json) | `orderId`, brand/location, acceptance mode, decision channel, confirmed-at, currency, total, status, version |
 | `OrderRejected` | 1 | `orderId` | [`OrderRejected.v1`](../../src/main/resources/events/ordering.events/OrderRejected.v1.schema.json) | `orderId`, brand/location, decision channel, reason code, status, version |
 | `OrderExpired` | 1 | `orderId` | [`OrderExpired.v1`](../../src/main/resources/events/ordering.events/OrderExpired.v1.schema.json) | `orderId`, brand/location, approval deadline, status, version |
+| `OrderPaymentLapsed` | 1 | `orderId` | [`OrderPaymentLapsed.v1`](../../src/main/resources/events/ordering.events/OrderPaymentLapsed.v1.schema.json) | `orderId`, brand/location, the lapsed window in minutes, status, version |
 | `OrderCancelled` | 1 | `orderId` | [`OrderCancelled.v1`](../../src/main/resources/events/ordering.events/OrderCancelled.v1.schema.json) | `orderId`, brand/location, cancelling actor type, reason code, previous status, status, version |
 | `OrderCompleted` | 1 | `orderId` | [`OrderCompleted.v1`](../../src/main/resources/events/ordering.events/OrderCompleted.v1.schema.json) | `orderId`, brand/location, completed-at, currency, total, version |
 | `OrderAmendmentProposed` | 1 | `orderId` | [`OrderAmendmentProposed.v1`](../../src/main/resources/events/ordering.events/OrderAmendmentProposed.v1.schema.json) | `orderId`, brand/location, `amendmentId`, base revision, command types, amendment status, order version |
@@ -143,6 +146,7 @@ holds organization and subject identifiers and applied configuration.
 | `OrderRevisionCreated` | 1 | `orderId` | [`OrderRevisionCreated.v1`](../../src/main/resources/events/ordering.events/OrderRevisionCreated.v1.schema.json) | `orderId`, brand/location, revision, `amendmentId`, source, currency, total, delta total, order version |
 | `OrderCallbackRequested` | 1 | `orderId` | [`OrderCallbackRequested.v1`](../../src/main/resources/events/ordering.events/OrderCallbackRequested.v1.schema.json) | `orderId`, brand/location, `amendmentId`, order version |
 | `OrderCallbackResolved` | 1 | `orderId` | [`OrderCallbackResolved.v1`](../../src/main/resources/events/ordering.events/OrderCallbackResolved.v1.schema.json) | `orderId`, brand/location, `amendmentId`, order version |
+| `OrderMarksCompleted` | 1 | `orderId` | [`OrderMarksCompleted.v1`](../../src/main/resources/events/ordering.events/OrderMarksCompleted.v1.schema.json) | `orderId`, brand/location, marked line count, marked unit count, completed-at (ADR 0161: counts only, never a marking code) |
 
 These payloads deliberately omit the order lines, the customer, the address, the
 contact details, and every customer note. ADR 0019 says events carry order and
@@ -159,6 +163,11 @@ a discriminator. "The restaurant declined" and "the restaurant never looked" lea
 to different customer wording, different operational follow-up, and different
 quality metrics for the branch, and a single event hides the second inside the
 first.
+
+`OrderPaymentLapsed` is not `OrderCancelled` for the same reason (ADR 0170, ADR 0039): a
+payment that never came is the platform's own commercial fact, and a customer's
+change of mind or an operator's decision is a different one. It carries the
+window that elapsed and nothing about the money.
 
 `OrderCancelled` never follows `OrderConfirmed` in this release: cancellation
 after confirmation is ADR 0039's and the application refuses it.
@@ -207,7 +216,7 @@ synchronous paths (an operator's own withdrawal, and the TTL check inside
 
 | Event | Version | Key | Schema | Version-1 payload |
 |---|---|---|---|---|
-| `MediaAssetAvailable` | 1 | `assetId` | [`MediaAssetAvailable.v1`](../../src/main/resources/events/media.events/MediaAssetAvailable.v1.schema.json) | `assetId`, owner scope/id, visibility, verified content type, size, `widthPx`, `heightPx` |
+| `MediaAssetAvailable` | 1 | `assetId` | [`MediaAssetAvailable.v1`](../../src/main/resources/events/media.events/MediaAssetAvailable.v1.schema.json) | `assetId`, owner scope/id, visibility, verified content type (an image type, or `video/mp4` since ADR 0157), size, `widthPx`, `heightPx` |
 
 The payload deliberately carries **no object key, no signed URL, and no original
 filename**. A topic is read by consumers with no authorization to the bytes, so a
@@ -364,6 +373,36 @@ status and is not published; a conversion publishes `LeadStatusChanged` and `Lea
 both. The contact journal (`customer.contact_attempts`) is not an event stream: it is append-only
 by grant and read through the customer card.
 
+## `reviews.events`
+
+- Producing module: `reviews`
+- Retention class: business fact
+- Classification: `INTERNAL` — no personal data on this topic
+- Key: `orderId`
+
+| Event | Version | Key | Schema | Version-1 payload |
+|---|---|---|---|---|
+| `ReviewSubmitted` | 1 | `orderId` | [`ReviewSubmitted.v1`](../../src/main/resources/events/reviews.events/ReviewSubmitted.v1.schema.json) | `reviewId`, `orderId`, `brandId`, `locationId`, `rating`, `hasComment`, `tagCount`, `submittedAt` |
+| `ReviewCommentModerated` | 1 | `orderId` | [`ReviewCommentModerated.v1`](../../src/main/resources/events/reviews.events/ReviewCommentModerated.v1.schema.json) | `reviewId`, `orderId`, `brandId`, `fromState`, `toState`, `reasonCode`, `actorType` |
+| `RecoveryCaseOpened` | 1 | `orderId` | [`RecoveryCaseOpened.v1`](../../src/main/resources/events/reviews.events/RecoveryCaseOpened.v1.schema.json) | `caseId`, `reviewId`, `orderId`, `brandId`, `locationId`, `source`, `rating`, `firstResponseDueAt`, `resolutionDueAt` |
+| `RecoveryCaseStateChanged` | 1 | `orderId` | [`RecoveryCaseStateChanged.v1`](../../src/main/resources/events/reviews.events/RecoveryCaseStateChanged.v1.schema.json) | `caseId`, `orderId`, `brandId`, `locationId`, `fromState`, `toState`, `outcomeCode?`, `ownerReference?`, `changedAt` |
+| `RecoveryCaseSlaBreached` | 1 | `orderId` | [`RecoveryCaseSlaBreached.v1`](../../src/main/resources/events/reviews.events/RecoveryCaseSlaBreached.v1.schema.json) | `caseId`, `orderId`, `brandId`, `locationId`, `kind`, `dueAt`, `breachedAt` |
+
+ADR 0159. A review is a customer's one rating of one completed order, and a case is the
+service-recovery worklist item about it. These five facts are appended to the outbox in the same
+transaction as the row they describe (`BEFORE_COMMIT`), keyed by the order so one order's review,
+moderation and case facts stay in order. Every payload is identifiers, states, stable codes and
+times: never a comment, a case note, a tag's wording, a customer or a staff member's name, which
+stay envelope-encrypted in `reviews.order_reviews` and `reviews.recovery_case_events` (ADR 0029).
+The owner of a case appears only as the staff member's non-personal `display_reference`
+(`S-0142`, ADR 0139). `ReviewCommentModerated` is published for a moderator's decision, a
+customer's withdrawal and an erasure alike, with the `actorType` that tells them apart; a
+rating is never moderated and no event carries a change to one. `RecoveryCaseSlaBreached` is
+published once per clock, by the worker that marked the breach, and only while the case was open:
+a case dismissed or resolved before the worker reached it publishes nothing. `notifications`
+consumes `RecoveryCaseOpened` and `RecoveryCaseSlaBreached` in-process to raise an operations
+alert when the brand's `reviews.recovery` policy asks for one.
+
 ## `inventory.events`
 
 - Producing module: `inventory`
@@ -375,6 +414,7 @@ by grant and read through the customer card.
 |---|---|---|---|---|
 | `InventoryAvailabilityChanged` | 1 | `variantId` | [`InventoryAvailabilityChanged.v1`](../../src/main/resources/events/inventory.events/InventoryAvailabilityChanged.v1.schema.json) | `variantId`, `locationId`, `available`, `reasonCode` |
 | `InventoryStopChanged` | 1 | `variantId` | [`InventoryStopChanged.v1`](../../src/main/resources/events/inventory.events/InventoryStopChanged.v1.schema.json) | `stopId`, `variantId`, `scopeType`, `locationId?`, `menuId?`, `channelId?`, `source`, `active`, `endsAt?`, `reasonCode` |
+| `InventoryStockDisposed` | 1 | `orderId` | [`InventoryStockDisposed.v1`](../../src/main/resources/events/inventory.events/InventoryStockDisposed.v1.schema.json) | `orderId`, `brandId`, `locationId`, `disposition`, `reasonCategory`, `lines[]` (`variantId`, `units`, `releasedUnits`, `returnedUnits`, `writtenOffUnits`, `noEffectUnits`) |
 
 Symmetric by construction: `available` carries the direction, so a dish going
 off and a dish coming back are the same event type rather than two. `InventoryStopChanged` (ADR
@@ -386,6 +426,13 @@ optional end — identifiers and stable codes only, never a name or free text. N
 product or variant name — a consumer resolves that through the authorized
 catalog API with `variantId` — and never `brandId`, which a consumer holding
 `locationId` can already resolve.
+
+`InventoryStockDisposed` (ADR 0169) is the one inventory fact keyed by an order rather than a variant: a
+removal or a cancellation after commitment disposes of several variants at once, and what a consumer needs
+is to which order it belongs. It says what became of the units the order no longer needed — released from a
+hold, returned to stock, written off, or left untouched — in whole units and never in money (the ledger
+carries no cost), and carries no customer, address, note or product name. The write-off report ADR 0039
+promised is built from it.
 
 ADR 0017 names six further inventory facts — `InventoryPositionChanged`,
 `InventoryReserved`, `InventoryReservationCommitted`,
@@ -468,6 +515,28 @@ high-volume per-request facts whose payload shape and retention deserve their
 own decision rather than riding along with a once-a-day control-plane
 activation — the same restraint `inventory.events` states for its own six
 unpublished siblings.
+
+## `content.events`
+
+- Producing module: `content`
+- Retention class: business fact
+- Classification: `INTERNAL` — no personal data, and no text, on this topic
+- Key: `itemId`
+
+| Event | Version | Key | Schema | Version-1 payload |
+|---|---|---|---|---|
+| `ContentItemPublished` | 1 | `itemId` | [`ContentItemPublished.v1`](../../src/main/resources/events/content.events/ContentItemPublished.v1.schema.json) | `itemId`, `brandId`, `kind`, `placement`, `revisionNo`, `startsAt`, `endsAt`, `channelCodes` |
+| `ContentItemWithdrawn` | 1 | `itemId` | [`ContentItemWithdrawn.v1`](../../src/main/resources/events/content.events/ContentItemWithdrawn.v1.schema.json) | `itemId`, `brandId`, `kind`, `placement`, `reason` (`WITHDRAWN`, `ARCHIVED`) |
+
+ADR 0157's brand-authored storefront content. A publication, a withdrawal and an archiving of a
+live item are each appended in the same `BEFORE_COMMIT` transaction as the change and its audit
+fact (`ContentOutboxEventListener`), so neither commits without the other. Ids, kinds,
+placements and instants only: what a banner said is in its revision (`content.item_revisions`),
+which a consumer reads through the authorized content API, and a URL never rides a shared topic.
+No consumer is specified (the same restraint `PromotionActivated` carries): the storefront read
+model is computed when it is asked for, not event-fed, and `PromotionActivated` and
+`PromotionSuspended` are deliberately not consumed, because the liveness of the promotion a card
+is bound to is one indexed query (`ix_promotions_active`) answered when the response is built.
 
 ## `marketing.events`
 

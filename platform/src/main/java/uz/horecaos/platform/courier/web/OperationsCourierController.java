@@ -41,12 +41,12 @@ import uz.horecaos.platform.courier.application.CourierAccountProvisioningServic
 import uz.horecaos.platform.courier.application.CourierAdjustmentService;
 import uz.horecaos.platform.courier.application.CourierCashService;
 import uz.horecaos.platform.courier.application.CourierEngagementService;
-import uz.horecaos.platform.courier.application.CourierPolicies;
 import uz.horecaos.platform.courier.application.CourierPolicyResolver;
 import uz.horecaos.platform.courier.application.CourierRateCardService;
 import uz.horecaos.platform.courier.application.CourierRosterQueryService;
 import uz.horecaos.platform.courier.application.CourierRosterQueryService.RosterEntry;
 import uz.horecaos.platform.courier.application.CourierRosterService;
+import uz.horecaos.platform.courier.application.CourierRunPayChangeService;
 import uz.horecaos.platform.courier.application.CourierSettlementService;
 import uz.horecaos.platform.courier.application.CourierShiftService;
 import uz.horecaos.platform.courier.application.CourierTypeService;
@@ -65,6 +65,7 @@ import uz.horecaos.platform.courier.domain.RateCard;
 import uz.horecaos.platform.courier.domain.RateComponent;
 import uz.horecaos.platform.courier.domain.RateComponentType;
 import uz.horecaos.platform.courier.domain.RevealTiming;
+import uz.horecaos.platform.courier.domain.RunPayMode;
 import uz.horecaos.platform.courier.domain.SettlementPeriodStatus;
 import uz.horecaos.platform.courier.domain.ShiftActor;
 import uz.horecaos.platform.courier.domain.ShiftEnforcement;
@@ -89,7 +90,6 @@ import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
-import uz.horecaos.platform.tenancy.api.PolicyAuthor;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
@@ -128,9 +128,9 @@ public class OperationsCourierController {
     private final JdbcCourierRateCardStore rateCardStore;
     private final JdbcCourierShiftStore shiftStore;
     private final CourierPolicyResolver policyResolver;
-    private final PolicyAuthor policyAuthor;
     private final JdbcDeliveryCostStore deliveryCostStore;
     private final PlannedShiftService plannedShifts;
+    private final CourierRunPayChangeService runPayChanges;
     private final CurrentActor currentActor;
     private final AuthorizationService authorization;
 
@@ -152,9 +152,9 @@ public class OperationsCourierController {
             JdbcCourierRateCardStore rateCardStore,
             JdbcCourierShiftStore shiftStore,
             CourierPolicyResolver policyResolver,
-            PolicyAuthor policyAuthor,
             JdbcDeliveryCostStore deliveryCostStore,
             PlannedShiftService plannedShifts,
+            CourierRunPayChangeService runPayChanges,
             CurrentActor currentActor,
             AuthorizationService authorization) {
         this.engagements = engagements;
@@ -174,9 +174,9 @@ public class OperationsCourierController {
         this.rateCardStore = rateCardStore;
         this.shiftStore = shiftStore;
         this.policyResolver = policyResolver;
-        this.policyAuthor = policyAuthor;
         this.deliveryCostStore = deliveryCostStore;
         this.plannedShifts = plannedShifts;
+        this.runPayChanges = runPayChanges;
         this.currentActor = currentActor;
         this.authorization = authorization;
     }
@@ -776,8 +776,18 @@ public class OperationsCourierController {
         AggregateVersion.requireMatch(expectedVersion, current.policyVersion());
 
         CourierCompensationPolicy document = body.toDocument();
-        ResolvedPolicy<CourierCompensationPolicy> published =
-                policyAuthor.author(CourierPolicies.COMPENSATION, scope, document, actor(), body.reason());
+
+        // ADR 0170: moving the run pay to first-full-then-increment needs the engagement-terms statement and
+        // passes through the registered approval action, in the transaction that publishes. A pending approval
+        // publishes nothing; the same publication succeeds once it is approved.
+        CourierRunPayChangeService.Published result = runPayChanges.publish(
+                scope, current, document, body.acknowledgeEngagementTerms(), actor(), body.reason());
+        if (result.document() == null) {
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.ETAG, AggregateVersion.toETag(current.policyVersion()))
+                    .body(CourierPolicyResponse.of(current).awaiting(result.approvalRequest()));
+        }
+        ResolvedPolicy<CourierCompensationPolicy> published = result.document();
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, AggregateVersion.toETag(published.policyVersion()))
@@ -2034,9 +2044,36 @@ public class OperationsCourierController {
             String revealCustomerLocationTiming,
             boolean postDeliveryPaymentCheckRequired,
             int onlineWithinMinutes,
+            @Nullable String runPayMode,
+            @Nullable UUID pendingApprovalRequestId,
             String winningScope,
             UUID policyId,
             int policyVersion) {
+
+        /** The document in force, with the second signature a change to it is waiting on. */
+        CourierPolicyResponse awaiting(@Nullable UUID approvalRequestId) {
+            return new CourierPolicyResponse(
+                    reverificationDays,
+                    warningDays,
+                    settlementPeriodDays,
+                    cashCeilingMinor,
+                    penaltyApprovalThresholdMinor,
+                    shiftEnforcement,
+                    graceSeconds,
+                    confirmationPointRetentionDays,
+                    gpsVerificationEnabled,
+                    gpsAcceptRadiusMeters,
+                    gpsStatusChangeRadiusMeters,
+                    kitchenReadyOnly,
+                    revealCustomerLocationTiming,
+                    postDeliveryPaymentCheckRequired,
+                    onlineWithinMinutes,
+                    runPayMode,
+                    approvalRequestId,
+                    winningScope,
+                    policyId,
+                    policyVersion);
+        }
 
         static CourierPolicyResponse of(ResolvedPolicy<CourierCompensationPolicy> resolved) {
             var doc = resolved.document();
@@ -2056,6 +2093,8 @@ public class OperationsCourierController {
                     doc.revealCustomerLocationTiming().name(),
                     doc.postDeliveryPaymentCheckRequired(),
                     doc.onlineWithinMinutes(),
+                    doc.runPayMode() == null ? null : doc.runPayMode().name(),
+                    null,
                     resolved.winningScope().name(),
                     resolved.policyId(),
                     resolved.policyVersion());
@@ -2085,6 +2124,8 @@ public class OperationsCourierController {
             @NotBlank String revealCustomerLocationTiming,
             boolean postDeliveryPaymentCheckRequired,
             @Positive int onlineWithinMinutes,
+            @Nullable String runPayMode,
+            @Nullable Boolean acknowledgeEngagementTerms,
             @NotBlank @Size(max = 500) String reason) {
 
         CourierCompensationPolicy toDocument() {
@@ -2103,7 +2144,19 @@ public class OperationsCourierController {
                     kitchenReadyOnly,
                     parseRevealTiming(),
                     postDeliveryPaymentCheckRequired,
-                    onlineWithinMinutes);
+                    onlineWithinMinutes,
+                    parseRunPayMode());
+        }
+
+        private @Nullable RunPayMode parseRunPayMode() {
+            if (runPayMode == null || runPayMode.isBlank()) {
+                return null;
+            }
+            try {
+                return RunPayMode.valueOf(runPayMode);
+            } catch (IllegalArgumentException unknown) {
+                throw new ApiException(ErrorCode.VALIDATION_FAILED, "Unknown runPayMode \"%s\"".formatted(runPayMode));
+            }
         }
 
         private ShiftEnforcement parseShiftEnforcement() {

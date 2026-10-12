@@ -69,6 +69,10 @@ class MigrationImportSuppressionTests {
             // decided today, and a scenario run replayed from an import would announce itself to
             // every consumer of marketing.events.
             Map.entry("integration/outbox/MarketingOutboxEventListener.java", ExternalEffect.OUTBOX_PUBLICATION),
+            // ADR 0157's content facts, same footing: a brand's legacy storefront content brought in by an
+            // import is the import doing its job, not a publication a consumer of content.events needs
+            // to hear about as if an operator had just made it.
+            Map.entry("integration/outbox/ContentOutboxEventListener.java", ExternalEffect.OUTBOX_PUBLICATION),
             Map.entry("notifications/application/OrderNotificationTrigger.java", ExternalEffect.CUSTOMER_NOTIFICATION),
             // The outbound half, and a different effect from the trigger above for
             // the same reason POS splits its two: not writing an intent is a

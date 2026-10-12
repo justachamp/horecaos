@@ -1,0 +1,71 @@
+<div class="content-page" data-testid="content-page">
+  <header class="content-page__head">
+    <div>
+      <h1 class="q-subhead">{{ 'marketing.content.page.title' | t }}</h1>
+      <p class="q-body-sm content-page__intro">{{ 'marketing.content.page.intro' | t }}</p>
+    </div>
+    @if (unhealthy() > 0) {
+      <button
+        type="button"
+        class="content-page__badge"
+        (click)="tab.set('health')"
+        data-testid="content-health-badge"
+      >
+        {{ 'marketing.content.page.needsAttention' | t: { count: unhealthy() } }}
+      </button>
+    }
+  </header>
+
+  <nav class="content-page__tabs" role="tablist">
+    @for (t of tabs; track t) {
+      <button
+        type="button"
+        role="tab"
+        class="content-page__tab q-body-sm"
+        [class.content-page__tab--active]="tab() === t"
+        [attr.aria-selected]="tab() === t"
+        (click)="tab.set(t)"
+        [attr.data-testid]="'content-page-tab-' + t"
+      >
+        {{ tabLabel(t) | t }}
+      </button>
+    }
+  </nav>
+
+  @switch (tab()) {
+    @case ('items') {
+      <nav class="content-page__views" [attr.aria-label]="'marketing.content.page.views' | t">
+        @for (v of views(); track v.id) {
+          <button
+            type="button"
+            class="content-page__view q-body-sm"
+            [class.content-page__view--active]="v.id === view().id"
+            [attr.aria-pressed]="v.id === view().id"
+            (click)="chooseView(v.id)"
+            [attr.data-testid]="'content-view-' + v.id"
+          >
+            {{ v.label | t }}
+          </button>
+        }
+      </nav>
+      @for (v of [view()]; track v.id) {
+        <q-content-workbench
+          [kinds]="v.kinds"
+          [placement]="v.placement"
+          [focusItemId]="focusItemId()"
+          [videoEntitled]="policies()?.videoEntitled ?? false"
+          (changed)="refreshHealth()"
+        />
+      }
+    }
+    @case ('links') {
+      <q-content-hosts (changed)="onHostsChanged()" />
+    }
+    @case ('settings') {
+      <q-content-policies (policiesChanged)="onPolicies($event)" />
+    }
+    @case ('health') {
+      <q-content-health (open)="openUnhealthy($event)" (counted)="unhealthy.set($event)" />
+    }
+  }
+</div>

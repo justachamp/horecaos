@@ -6,9 +6,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { LocationScope } from '../../core/api/operations-paths';
 import { ApiError } from '../../core/api/problem-details';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { I18n } from '../../core/i18n/i18n';
 import { CapacityApi, CapacityWindowResponse } from './capacity-api';
 import { CapacityPage } from './capacity-page';
+import { HeadcountApi, HeadcountPlan, ProductivityDocument } from './headcount-api';
 import { KitchenApi, StationResponse } from './kitchen-api';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
@@ -28,6 +30,34 @@ function station(overrides: Partial<StationResponse> = {}): StationResponse {
     ...overrides,
   };
 }
+
+const EMPTY_PLAN: HeadcountPlan = {
+  targetDate: '2026-10-09',
+  weekday: 5,
+  status: 'OK',
+  sampleDates: [],
+  generatedFrom: { metricId: 'kitchen_station_portions', calculationVersion: 1 },
+  rows: [],
+  peak: null,
+  stationsWithoutFigure: [],
+  history: [],
+};
+
+const NO_FIGURES: ProductivityDocument = {
+  schema: 1,
+  roles: {},
+  stations: {},
+  isDefault: true,
+  winningScope: null,
+  policyId: null,
+  policyVersion: 0,
+  versionAtScope: 0,
+  levels: [
+    { scopeType: 'LOCATION', authored: false },
+    { scopeType: 'BRAND', authored: false },
+    { scopeType: 'TENANT', authored: false },
+  ],
+};
 
 function window_(overrides: Partial<CapacityWindowResponse> = {}): CapacityWindowResponse {
   return {
@@ -70,6 +100,14 @@ describe('CapacityPage', () => {
         },
         { provide: CapacityApi, useValue: capacityApi },
         { provide: KitchenApi, useValue: kitchenApi },
+        { provide: SessionCapabilities, useValue: { has: () => true } },
+        {
+          provide: HeadcountApi,
+          useValue: {
+            plan: () => Promise.resolve(EMPTY_PLAN),
+            productivity: () => Promise.resolve(NO_FIGURES),
+          },
+        },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -165,10 +203,26 @@ describe('CapacityPage', () => {
     expect(host.querySelector('[data-testid="capacity-form-error"]')).not.toBeNull();
   });
 
-  it('names the cook headcount gap rather than rendering a fabricated number', async () => {
+  it('hosts the cook headcount card beside the ceilings, with its not-a-rota sentence', async () => {
     await render({ list: () => Promise.resolve([]) });
 
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Cook headcount output');
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Not built');
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="headcount-card"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="headcount-not-a-rota"]')?.textContent).toContain(
+      'not a rota',
+    );
+    expect(host.textContent).not.toContain('Not built');
+  });
+
+  it('shows no headcount card where the branch scope is missing', async () => {
+    await render(
+      { list: vi.fn() },
+      { stations: () => Promise.resolve([]) },
+      { scope: null, denied: true },
+    );
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="headcount-card"]'),
+    ).toBeNull();
   });
 });

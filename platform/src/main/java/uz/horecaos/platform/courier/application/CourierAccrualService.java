@@ -1,10 +1,12 @@
 package uz.horecaos.platform.courier.application;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.courier.api.BusinessDayWindows;
@@ -61,6 +63,13 @@ public class CourierAccrualService {
     private final LegalEntityResolver legalEntities;
     private final FieldProtection protection;
     private final BusinessDayWindows businessDays;
+    private @Nullable MeterRegistry meters;
+
+    /** ADR 0170: {@code courier.run_pay.basis} counts what each delivery was paid as. Optional: a hand-wired test has none. */
+    @Autowired(required = false)
+    void setMeters(MeterRegistry meters) {
+        this.meters = meters;
+    }
 
     public CourierAccrualService(
             JdbcCourierLedgerStore ledgerStore,
@@ -118,7 +127,14 @@ public class CourierAccrualService {
                 policies.resolve(ResourceScope.location(command.tenantId(), command.brandId(), command.locationId()));
         int graceSeconds = command.graceSeconds() == null ? policy.graceSeconds() : command.graceSeconds();
 
-        CourierAccrual accrual = AccrualCalculator.forDelivery(card, command.distanceMeters());
+        // ADR 0170 Decision 3: a RUN_INCREMENT order feeds the calculator a shorter distance and nothing else, so the
+        // per-order component and the minimum floor are paid in full and only the per-kilometre part falls. The
+        // earning stores the distance paid beside the order's own, so a statement line shows both and the reason.
+        boolean runIncrement = "RUN_INCREMENT".equals(command.payBasis()) && command.runMergeDistanceMeters() != null;
+        int distancePaid = runIncrement
+                ? CourierOfferQuoteService.distancePaid(command.distanceMeters(), command.runMergeDistanceMeters())
+                : command.distanceMeters();
+        CourierAccrual accrual = AccrualCalculator.forDelivery(card, distancePaid);
         OnTimeOutcome outcome = OnTimeEvaluator.evaluate(
                 command.deliveredAt(),
                 command.promisedDeliveryEnd(),
@@ -150,6 +166,10 @@ public class CourierAccrualService {
         UUID periodId = ledger.currentPeriod(command.tenantId(), command.courierId(), card.currency(), businessDate)
                 .id();
 
+        if (meters != null) {
+            meters.counter("courier.run_pay.basis", "basis", runIncrement ? "run_increment" : "direct")
+                    .increment();
+        }
         boolean inserted = ledgerStore.insertEarning(new EarningRow(
                 earningId,
                 command.tenantId(),
@@ -163,7 +183,7 @@ public class CourierAccrualService {
                 card.id(),
                 card.version(),
                 courierTypeOf(command),
-                command.distanceMeters(),
+                distancePaid,
                 command.distanceSource(),
                 outcome,
                 command.promisedDeliveryEnd(),
@@ -182,7 +202,10 @@ public class CourierAccrualService {
                 protectPoint(command.tenantId(), earningId, "protected_pickup_point", command.pickupPoint()),
                 protectPoint(command.tenantId(), earningId, "protected_delivery_point", command.deliveryPoint()),
                 null,
-                periodId));
+                periodId,
+                runIncrement ? "RUN_INCREMENT" : "DIRECT",
+                runIncrement ? command.runKey() : null,
+                runIncrement ? command.distanceMeters() : null));
 
         if (!inserted) {
             // Somebody else won the race on the attempt's unique constraint.
@@ -327,5 +350,57 @@ public class CourierAccrualService {
             long cashToCollectMinor,
             boolean geoUnverified,
             @Nullable String pickupPoint,
-            @Nullable String deliveryPoint) {}
+            @Nullable String deliveryPoint,
+            String payBasis,
+            @Nullable UUID runKey,
+            @Nullable Integer runMergeDistanceMeters) {
+
+        /** A delivery paid on its own distance: every delivery that is not part of a run. */
+        public DeliveredAssignment(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                UUID courierId,
+                @Nullable UUID shiftId,
+                UUID shipmentId,
+                UUID assignmentAttemptId,
+                int distanceMeters,
+                DistanceSource distanceSource,
+                Instant acceptedAt,
+                Instant deliveredAt,
+                @Nullable Instant promisedDeliveryEnd,
+                @Nullable Integer graceSeconds,
+                int onTimePolicyVersion,
+                @Nullable Instant kitchenHandoverAt,
+                @Nullable Instant pickupWindowEnd,
+                long cashToCollectMinor,
+                boolean geoUnverified,
+                @Nullable String pickupPoint,
+                @Nullable String deliveryPoint) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    courierId,
+                    shiftId,
+                    shipmentId,
+                    assignmentAttemptId,
+                    distanceMeters,
+                    distanceSource,
+                    acceptedAt,
+                    deliveredAt,
+                    promisedDeliveryEnd,
+                    graceSeconds,
+                    onTimePolicyVersion,
+                    kitchenHandoverAt,
+                    pickupWindowEnd,
+                    cashToCollectMinor,
+                    geoUnverified,
+                    pickupPoint,
+                    deliveryPoint,
+                    "DIRECT",
+                    null,
+                    null);
+        }
+    }
 }

@@ -270,6 +270,40 @@ class PaymentCheckoutSurfaceTests {
     }
 
     @Test
+    @DisplayName("an order that lapsed unpaid is voided like any ended order: asked once, never guessed, never twice")
+    void anOrderThatLapsedUnpaidClosesTheProvidersSide() {
+        givenIntent(CLICK_ORDER, PaymentProviderType.CLICK, CLICK_ENTITY);
+        var session = checkout.openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link());
+        transport.answer(uz.horecaos.platform.integration.api.provider.ProviderOutcome.uncertain(
+                "TIMEOUT", "Click did not answer status_by_mti"));
+        var lapsed = new uz.horecaos.platform.ordering.api.OrderPaymentLapsed(
+                UUID.randomUUID(),
+                new uz.horecaos.platform.tenancy.api.TenantId(TENANT),
+                CLICK_ORDER,
+                java.time.Instant.parse("2026-08-25T09:00:00Z"),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                20,
+                "PAYMENT_FAILED",
+                3);
+
+        endedOrders.onOrderPaymentLapsed(lapsed);
+
+        assertThat(attempts.find(TENANT, session.attemptId()).orElseThrow().status())
+                .as("the listener reached the void path: the lookup it ran left the attempt UNCERTAIN, "
+                        + "owned by its resolver")
+                .isEqualTo(PaymentAttemptStatus.UNCERTAIN);
+        assertThat(transport.paths()).hasSize(1);
+        int callsAfterTheFirst = transport.calls().size();
+
+        endedOrders.onOrderPaymentLapsed(lapsed);
+
+        assertThat(transport.calls())
+                .as("a redelivered lapse must not become a second void")
+                .hasSize(callsAfterTheFirst);
+    }
+
+    @Test
     @DisplayName("an attempt that was already uncertain when the order ended is left to its " + "resolver, untouched")
     void anEndedOrderNeverVoidsOnTopOfAnUncertainAttempt() {
         givenIntent(CLICK_ORDER, PaymentProviderType.CLICK, CLICK_ENTITY);

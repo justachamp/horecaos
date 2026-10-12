@@ -10,6 +10,8 @@ interface Inputs {
   bulkAdvanceLabel: string;
   canBulkCancel: boolean;
   bulkCancelUnavailableMessage: string | null;
+  canBulkAssign: boolean;
+  bulkAssignUnavailableMessage: string | null;
   bulkBusy: boolean;
 }
 
@@ -20,6 +22,8 @@ function render(overrides: Partial<Inputs> = {}) {
     bulkAdvanceLabel: 'Start preparing',
     canBulkCancel: true,
     bulkCancelUnavailableMessage: null,
+    canBulkAssign: true,
+    bulkAssignUnavailableMessage: null,
     bulkBusy: false,
     ...overrides,
   };
@@ -97,5 +101,42 @@ describe('OrderQueueBulkBar', () => {
     byTestId('order-queue-bulk-clear')?.click();
 
     expect(requests).toEqual(['advance', 'cancel', 'clear']);
+  });
+
+  it('offers «Assign courier» when every selected order can take one (ADR 0172)', () => {
+    const { byTestId } = render({ canBulkAssign: true });
+
+    expect(byTestId('order-queue-bulk-assign')?.textContent?.trim()).toBe('Assign courier');
+    expect(byTestId('order-queue-bulk-assign-unavailable')).toBeNull();
+  });
+
+  it('says why in place of the button when some selected order cannot take a courier', () => {
+    const { byTestId } = render({
+      canBulkAssign: false,
+      bulkAssignUnavailableMessage: '1 of 3 cannot be given a courier',
+    });
+
+    expect(byTestId('order-queue-bulk-assign')).toBeNull();
+    expect(byTestId('order-queue-bulk-assign-unavailable')?.textContent?.trim()).toBe(
+      '1 of 3 cannot be given a courier',
+    );
+  });
+
+  it('no longer says that bulk courier assignment is unavailable', () => {
+    const { byTestId } = render();
+
+    expect(byTestId('order-queue-bulk-courier-note')).toBeNull();
+  });
+
+  it('raises an assign request and disables the button while a bulk action runs', () => {
+    const { fixture, byTestId } = render();
+    const requests: string[] = [];
+    fixture.componentInstance.assignRequested.subscribe(() => requests.push('assign'));
+
+    byTestId('order-queue-bulk-assign')?.click();
+    expect(requests).toEqual(['assign']);
+
+    const busy = render({ bulkBusy: true });
+    expect((busy.byTestId('order-queue-bulk-assign') as HTMLButtonElement).disabled).toBe(true);
   });
 });

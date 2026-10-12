@@ -384,10 +384,29 @@ class JdbcAuthorizationServiceTests {
                 Capability.DELIVERY_DISPATCH_RULES_READ,
                 Capability.COURIER_POSITION_READ,
                 Capability.KITCHEN_TICKET_READ,
+                // ADR 0163: one branch's cook headcount plan, a forecast a manager reads; it takes nothing out.
+                Capability.KITCHEN_HEADCOUNT_READ,
                 // ADR 0151: the wall's one capability. It reads the same tickets KITCHEN_TICKET_READ
                 // reads, through the same projection, so a suspended tenant's wall keeps showing the
                 // kitchen exactly as its staff's board does; it takes nothing out.
                 Capability.KITCHEN_DISPLAY_READ,
+                // ADR 0154: the printers, routes, queue and previews of a branch. Looking at the paper a
+                // job would produce takes nothing out, so a suspended tenant still sees why its tickets
+                // did not print; every way of asking for paper is a write.
+                Capability.PRINT_READ,
+                // ADR 0162: a kiosk reading its own configuration. A machine-only read of the channel,
+                // branch and matrix rows the tenant itself configured; it takes nothing out.
+                Capability.KIOSK_DEVICE_READ,
+                // ADR 0155: the terminals registry and the tenant's terminal policy -- device names, states
+                // and last-seen times. No credential, PIN or session token is ever in a read.
+                Capability.TERMINAL_READ,
+                // ADR 0157: a brand's storefront content with its drafts, revisions and health; looking at what
+                // a page would show takes nothing out, so a suspended tenant can still read why it went dark.
+                Capability.CONTENT_READ,
+                // ADR 0163: the cook plan -- portions a branch's stations are expected to fire in each hour
+                // and the cooks that implies. Station and hour counts only: no staff name, no order, no
+                // customer, no money. A suspended tenant's manager reading its own plan takes nothing out.
+                Capability.KITCHEN_HEADCOUNT_READ,
                 Capability.RESERVATION_READ,
                 Capability.DINEIN_SESSION_READ,
                 Capability.MARKETPLACE_LIVENESS_READ,
@@ -458,7 +477,11 @@ class JdbcAuthorizationServiceTests {
                 // ADR 0148: whether a person holds a second factor, and when each authenticator was
                 // added. Ids, a name the person typed and dates -- never a secret or a code, which the
                 // platform does not hold -- so a suspended tenant's administrator may still see it.
-                Capability.IAM_STAFF_MFA_READ);
+                Capability.IAM_STAFF_MFA_READ,
+                // ADR 0156: a manager reading the rota and the timesheet, finance reading the hours
+                // that feed payroll. A suspended tenant reading what it already recorded takes
+                // nothing out; the clock, a manager's writes and the payroll export are not reads.
+                Capability.STAFF_SHIFT_READ);
 
         java.util.Set<Capability> classified = java.util.Arrays.stream(Capability.values())
                 .filter(Capability::isRead)

@@ -139,7 +139,9 @@ class EndpointCapabilityDeclarationTests {
                     || isDeviceEnrolmentBootstrapEndpoint(handler)
                     || isScopeResolvedCourierPolicyEndpoint(handler)
                     || isPreAccountPickupLocationSearchEndpoint(handler)
-                    || isDeliveryFeePreviewEndpoint(handler)) {
+                    || isDeliveryFeePreviewEndpoint(handler)
+                    || isContentCounterEndpoint(handler)
+                    || isAttributionLinkClickEndpoint(handler)) {
                 continue;
             }
             if (authorizationDeclarationCount(handler) == 0) {
@@ -269,9 +271,14 @@ class EndpointCapabilityDeclarationTests {
                     || isDeviceEnrolmentBootstrapEndpoint(handler)
                     || isPreAccountPickupLocationSearchEndpoint(handler)
                     || isDeliveryFeePreviewEndpoint(handler)
+                    || isTerminalSecretEndpoint(handler)
+                    || isContentCounterEndpoint(handler)
+                    || isAttributionLinkClickEndpoint(handler)
                     || isDispatchRuleSimulationEndpoint(handler)
                     || isPromotionSimulationEndpoint(handler)
-                    || isGeocodeLookupEndpoint(handler)) {
+                    || isAutoAddSimulationEndpoint(handler)
+                    || isGeocodeLookupEndpoint(handler)
+                    || isPrintPreviewEndpoint(handler)) {
                 continue;
             }
             if (!declaresReplayProtection(handler)) {
@@ -617,6 +624,59 @@ class EndpointCapabilityDeclarationTests {
     }
 
     /**
+     * ADR 0155: the endpoints of the terminal-session family and the two activation-code issuers, whose responses carry a
+     * secret -- a session token, an activation code -- or whose only effect is a timestamp moved forward.
+     *
+     * <p>Each declares an authorization strategy (the device's {@code terminal.unlock}, a person's {@code
+     * staff.self.manage}, a manager's {@code staff.profile.manage}), so the test above still holds them to it; what they are
+     * exempt from is {@code Idempotency-Key}, for the reason the sign-in endpoints are: a stored response would put a bearer
+     * or a code into {@code platform.idempotency_records} for the retention day, and the request body of an unlock holds a
+     * PIN, which a stored hash of the body would turn into a six-digit guessing table. {@code touch} and {@code locks} carry no
+     * secret and are idempotent by nature -- a repeat is identical.
+     *
+     * <p>Matched on exact paths, never a prefix: the next endpoint added under {@code /terminal-session/} is not quietly
+     * exempted along with these five.
+     */
+    private static boolean isTerminalSecretEndpoint(Method handler) {
+        String path = pathOf(handler);
+        String session = "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/terminal-session";
+        String staff = "/api/v1/operations/tenants/{tenantId}";
+        return path.equals(session + "/unlocks")
+                || path.equals(session + "/pin-activations")
+                || path.equals(session + "/pin-changes")
+                || path.equals(session + "/touch")
+                || path.equals(session + "/locks")
+                || path.equals(staff + "/staff/me/pin-activations")
+                || path.equals(staff + "/staff/members/{memberId}/pin-activations")
+                || path.equals(
+                        staff + "/brands/{brandId}/locations/{locationId}/staff/members/{memberId}/pin-activations");
+    }
+
+    @Test
+    void theTerminalSessionExemptionsAreExactAndEveryOtherTerminalSessionEndpointIsHeldToReplayProtection() {
+        // The exemption above is by exact path; this proves its edge: a handler under /terminal-session/ that is not
+        // one of the five is not exempt, and the five are the only ones that exist today.
+        List<String> exempt = new ArrayList<>();
+        List<String> underSession = new ArrayList<>();
+        for (Method handler : mutatingHandlers()) {
+            String path = pathOf(handler);
+            if (path.contains("/terminal-session/")) {
+                underSession.add(path);
+                if (isTerminalSecretEndpoint(handler)) {
+                    exempt.add(path);
+                }
+            }
+        }
+
+        assertThat(underSession).as("a scan that finds none would pass forever").hasSizeGreaterThanOrEqualTo(5);
+        assertThat(exempt).containsExactlyInAnyOrderElementsOf(underSession);
+        assertThat(underSession)
+                .as("exactly the five endpoints the record names, none of them added quietly")
+                .allSatisfy(path -> assertThat(path.substring(path.lastIndexOf('/')))
+                        .isIn("/unlocks", "/pin-activations", "/pin-changes", "/touch", "/locks"));
+    }
+
+    /**
      * ADR 0025/ADR 0042: the courier compensation policy writer, whose scope
      * genuinely varies per request between TENANT, BRAND, and LOCATION — the
      * one thing a single {@code @RequiresCapability(scope = ...)} declaration
@@ -666,7 +726,12 @@ class EndpointCapabilityDeclarationTests {
                 || path.equals(base + "/sourcing-policy")
                 // ADR 0142 Decision 7: the unpaid-order window, an ordering policy shown on the same
                 // screen and authored by the identical scope-resolved shape.
-                || path.equals(base + "/payment-window");
+                || path.equals(base + "/payment-window")
+                // ADR 0168 and ADR 0163: the kitchen's two scope-resolved policy documents, the same shape
+                // again -- one document per scope, brandId/locationId optional request parameters, each
+                // handler calling authorization.require against the scope it resolves.
+                || path.equals(base + "/kitchen-paid-hold")
+                || path.equals(base + "/kitchen-productivity");
     }
 
     /** The side-effect-free {@code POST}: a simulation needs no {@code Idempotency-Key}, there is nothing to replay. */
@@ -691,6 +756,25 @@ class EndpointCapabilityDeclarationTests {
      */
     private static boolean isPreAccountPickupLocationSearchEndpoint(Method handler) {
         return pathOf(handler).equals("/api/v1/storefront/pickup-locations");
+    }
+
+    /**
+     * ADR 0167 Decision 4/5: the public click on an attribution link, {@code POST
+     * .../brands/{brandId}/attribution-links/{token}/clicks}. A {@code ?ref=} landing has no
+     * principal and never will, so there is no capability to declare -- the record says the endpoint
+     * "declares no capability because there is nobody to authorise" -- and it carries no {@code
+     * Idempotency-Key} because it is non-idempotent by design: each open of a link is one click.
+     * What stands in for authorization is that it can only add one to a counter, answers every token
+     * alike, records no address, user agent or cookie, and is rate limited per token and visitor.
+     *
+     * <p>Replay protection is exempt for the reason the delivery-fee preview gives and one more: the
+     * counter is the effect, and a replayed request is another visit. Matched on the exact path, the
+     * discipline every other exemption here keeps, so the staff click this replaced -- removed from the
+     * contract -- cannot come back under the same name without this test noticing.
+     */
+    private static boolean isAttributionLinkClickEndpoint(Method handler) {
+        return pathOf(handler)
+                .equals("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/attribution-links/{token}/clicks");
     }
 
     /**
@@ -723,6 +807,31 @@ class EndpointCapabilityDeclarationTests {
     private static boolean isDeliveryFeePreviewEndpoint(Method handler) {
         return pathOf(handler)
                 .equals("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/delivery-fee");
+    }
+
+    /**
+     * ADR 0157, Release 2: the storefront's anonymous content counters, {@code POST
+     * /api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/events}.
+     *
+     * <p>A mutating endpoint with no principal, exempt from both tests above for the reasons
+     * {@link #isPreAccountIdentityEndpoint} and {@link #isDeliveryFeePreviewEndpoint} give. The caller
+     * is a customer's browser before it has any account and reports that a banner was shown; an ADR
+     * 0025 capability would decide nothing and {@code @CustomerOwned} would be a lie, there being no
+     * row of theirs to own.
+     *
+     * <p>No {@code Idempotency-Key}: {@code IdempotencyInterceptor} scopes a key by the calling
+     * subject and an anonymous caller has none. The counters are client-reported, labelled so, and
+     * inflatable by anyone (ADR 0157, Accepted trade-offs), so a retried batch counting twice is inside
+     * what is already accepted; the controls are the batch cap of twenty in the service and the per-IP
+     * budget on the {@code @storefront_content_events} path in both Caddyfiles. It stores no identifier
+     * of any kind.
+     *
+     * <p>Matched on the exact path and never on a prefix, like every exemption here: the rest of
+     * {@code /content} is read-only on the storefront and the staff surface under
+     * {@code /api/v1/tenants} declares a capability on every handler.
+     */
+    private static boolean isContentCounterEndpoint(Method handler) {
+        return pathOf(handler).equals("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/events");
     }
 
     /**
@@ -794,6 +903,52 @@ class EndpointCapabilityDeclarationTests {
     }
 
     /**
+     * Whether this endpoint is the print preview (ADR 0154): a POST only because its input is a small
+     * document description in a body, and the answer is a PNG.
+     *
+     * <p>It creates nothing, stores nothing and sends nothing to any printer: the same bitmap the browser would
+     * print, returned. There is no effect for an {@code Idempotency-Key} to guard, and a stored replay of a
+     * quarter-megabyte picture would be the only thing the key bought. Exempt from replay protection
+     * <em>only</em>: {@link #thePrintPreviewStillDeclaresItsCapability} holds the other half, so this is not a
+     * way to leave it unauthorized. Matched on the exact path, the discipline every exemption here keeps.
+     */
+    private static boolean isPrintPreviewEndpoint(Method handler) {
+        return pathOf(handler)
+                .equals("/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/print/documents/preview");
+    }
+
+    @Test
+    void thePrintPreviewStillDeclaresItsCapability() {
+        List<String> found = new ArrayList<>();
+        List<String> wrong = new ArrayList<>();
+
+        for (Method handler : allControllerMethods()) {
+            if (!isPrintPreviewEndpoint(handler)) {
+                continue;
+            }
+            String where = handler.getDeclaringClass().getSimpleName() + "#" + handler.getName();
+            found.add(where);
+            RequiresCapability declaration = handler.getAnnotation(RequiresCapability.class);
+            if (declaration == null) {
+                wrong.add(where + " declares no capability");
+                continue;
+            }
+            if (declaration.value() != uz.horecaos.platform.iam.api.Capability.PRINT_READ) {
+                wrong.add(where + " requires " + declaration.value() + ", not print.read");
+            }
+            if (declaration.mutating()) {
+                wrong.add(where + " is marked mutating, which would demand an Idempotency-Key it does not need");
+            }
+            if (declaration.scope() != ScopeType.LOCATION) {
+                wrong.add(where + " requires " + declaration.scope() + " but its path supports LOCATION");
+            }
+        }
+
+        assertThat(found).as("the exemption must name an endpoint that exists").hasSize(1);
+        assertThat(wrong).isEmpty();
+    }
+
+    /**
      * Whether this endpoint is the promotion simulator (ADR 0140): a POST only because
      * its input is a cart, not a query string.
      *
@@ -807,6 +962,20 @@ class EndpointCapabilityDeclarationTests {
      */
     private static boolean isPromotionSimulationEndpoint(Method handler) {
         return pathOf(handler).equals("/api/v1/operations/tenants/{tenantId}/brands/{brandId}/promotions/simulate");
+    }
+
+    /**
+     * Whether this endpoint is the auto-add rule simulator (ADR 0158): a POST only because its input is a
+     * hypothetical basket, not a query string.
+     *
+     * <p>It evaluates the brand's rules over that basket and writes nothing -- no cart, no line, no decline, no
+     * counter -- so there is no effect for a replay key to guard. It is not exempt from authorization: it still
+     * declares {@code CATALOG_READ} at brand scope, which {@link #everyMutatingEndpointDeclaresHowItIsAuthorized}
+     * checks. Matched on the exact path, as every exemption here is.
+     */
+    private static boolean isAutoAddSimulationEndpoint(Method handler) {
+        return pathOf(handler)
+                .equals("/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/auto-add-rules/simulations");
     }
 
     /**

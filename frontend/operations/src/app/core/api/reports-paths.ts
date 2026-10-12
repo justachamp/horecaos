@@ -12,6 +12,14 @@
 const TENANT_REPORTING = (tenantId: string): string =>
   `/api/v1/tenants/${encodeURIComponent(tenantId)}/reporting`;
 
+/**
+ * ADR 0167 (7.6c): the customer funnel and acquisition reads are mounted under the operations
+ * prefix the record names, `/api/v1/operations/tenants/{tenantId}/reporting`, beside (not inside)
+ * `ReportingController`'s `/api/v1/tenants/...` tree. Same capability, `reporting.read` at `TENANT`.
+ */
+const OPERATIONS_TENANT_REPORTING = (tenantId: string): string =>
+  `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/reporting`;
+
 export const reportsPaths = {
   /** The metric dictionary: every definition this build knows, signed or provisional. */
   metrics(tenantId: string): string {
@@ -194,6 +202,16 @@ export const reportsPaths = {
   /** T13 (7.6b): the Recency x Frequency cross-tab, member counts and revenue per cell. */
   customerRfm(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/customer-rfm`;
+  },
+
+  /** ADR 0167 (7.6c): the daily customer funnel, from server-side facts; visits are "not measured". */
+  customerFunnel(tenantId: string): string {
+    return `${OPERATIONS_TENANT_REPORTING(tenantId)}/customer-funnel`;
+  },
+
+  /** ADR 0167 (7.6c): registrations by origin, clicks by attribution link, orders by channel. */
+  acquisitionSources(tenantId: string): string {
+    return `${OPERATIONS_TENANT_REPORTING(tenantId)}/acquisition-sources`;
   },
 
   /**

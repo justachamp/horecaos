@@ -141,7 +141,6 @@ class DeviceEnrolmentServiceTests {
                         begin.userCode(),
                         ResourceScope.location(TENANT, BRAND, LOCATION),
                         DevicePrincipalClass.KITCHEN_KDS,
-                        PlatformRole.KITCHEN_DEVICE.code(),
                         "Line 1 KDS"),
                 "manager-1");
 
@@ -189,7 +188,6 @@ class DeviceEnrolmentServiceTests {
                         begin.userCode(),
                         ResourceScope.location(TENANT, BRAND, LOCATION),
                         DevicePrincipalClass.KITCHEN_KDS,
-                        PlatformRole.KITCHEN_DEVICE.code(),
                         "Line 1"),
                 "manager-1");
 
@@ -235,7 +233,6 @@ class DeviceEnrolmentServiceTests {
                                 begin.userCode(),
                                 ResourceScope.location(TENANT, BRAND, LOCATION),
                                 DevicePrincipalClass.KITCHEN_KDS,
-                                PlatformRole.KITCHEN_DEVICE.code(),
                                 "Line 1"),
                         "manager-1"))
                 .isInstanceOf(ApiException.class)
@@ -251,7 +248,6 @@ class DeviceEnrolmentServiceTests {
                                 "GARBAGE1",
                                 ResourceScope.location(TENANT, BRAND, LOCATION),
                                 DevicePrincipalClass.KITCHEN_KDS,
-                                PlatformRole.KITCHEN_DEVICE.code(),
                                 "Line 1"),
                         "manager-1"))
                 .isInstanceOf(ApiException.class);
@@ -266,7 +262,6 @@ class DeviceEnrolmentServiceTests {
                                 begin.userCode(),
                                 ResourceScope.tenant(TENANT),
                                 DevicePrincipalClass.KITCHEN_KDS,
-                                PlatformRole.KITCHEN_DEVICE.code(),
                                 "Line 1"),
                         "manager-1"))
                 .as("ADR 0079: a device principal is always LOCATION-scoped")
@@ -281,7 +276,6 @@ class DeviceEnrolmentServiceTests {
                         begin.userCode(),
                         ResourceScope.location(TENANT, BRAND, LOCATION),
                         DevicePrincipalClass.KITCHEN_KDS,
-                        PlatformRole.KITCHEN_DEVICE.code(),
                         "Line 1"),
                 "manager-1");
         service.poll(begin.deviceCode(), "caller-a");
@@ -308,7 +302,6 @@ class DeviceEnrolmentServiceTests {
                         begin.userCode(),
                         ResourceScope.location(TENANT, BRAND, LOCATION),
                         DevicePrincipalClass.KITCHEN_KDS,
-                        PlatformRole.KITCHEN_DEVICE.code(),
                         "Line 1"),
                 "manager-1");
 
@@ -326,7 +319,6 @@ class DeviceEnrolmentServiceTests {
                         beginA.userCode(),
                         ResourceScope.location(TENANT, BRAND, LOCATION),
                         DevicePrincipalClass.KITCHEN_KDS,
-                        PlatformRole.KITCHEN_DEVICE.code(),
                         "Line 1"),
                 "manager-1");
 
@@ -336,7 +328,6 @@ class DeviceEnrolmentServiceTests {
                         beginB.userCode(),
                         ResourceScope.location(TENANT, BRAND, SIBLING_LOCATION),
                         DevicePrincipalClass.KITCHEN_KDS,
-                        PlatformRole.KITCHEN_DEVICE.code(),
                         "Sibling KDS"),
                 "manager-2");
 
@@ -354,7 +345,6 @@ class DeviceEnrolmentServiceTests {
                         begin.userCode(),
                         ResourceScope.location(TENANT, BRAND, LOCATION),
                         DevicePrincipalClass.KITCHEN_KDS,
-                        PlatformRole.KITCHEN_DEVICE.code(),
                         "Line 1"),
                 "manager-1");
 
@@ -366,19 +356,16 @@ class DeviceEnrolmentServiceTests {
 
     // ------------------------------------------------ ADR 0151: a class an approval may narrow
 
-    private DevicePrincipalView approveAs(
-            DevicePrincipalClass requested, DevicePrincipalClass approved, PlatformRole role) {
+    private DevicePrincipalView approveAs(DevicePrincipalClass requested, DevicePrincipalClass approved) {
         var begin = service.beginEnrolment(new BeginEnrolment(requested, "wall"), "caller-" + requested);
         return service.approve(
-                new ApproveEnrolment(
-                        begin.userCode(), ResourceScope.location(TENANT, BRAND, LOCATION), approved, role.code(), "TV"),
+                new ApproveEnrolment(begin.userCode(), ResourceScope.location(TENANT, BRAND, LOCATION), approved, "TV"),
                 "manager-1");
     }
 
     @Test
     void aTouchRequestMayBeApprovedAsAWallDisplayAndTheGrantFollowsTheApprovedClass() {
-        DevicePrincipalView device = approveAs(
-                DevicePrincipalClass.KITCHEN_KDS, DevicePrincipalClass.KITCHEN_VDU, PlatformRole.KITCHEN_VDU_DEVICE);
+        DevicePrincipalView device = approveAs(DevicePrincipalClass.KITCHEN_KDS, DevicePrincipalClass.KITCHEN_VDU);
 
         assertThat(device.deviceClass()).isEqualTo(DevicePrincipalClass.KITCHEN_VDU);
         assertThat(device.requestedClass())
@@ -405,7 +392,6 @@ class DeviceEnrolmentServiceTests {
                                 begin.userCode(),
                                 ResourceScope.location(TENANT, BRAND, LOCATION),
                                 DevicePrincipalClass.KITCHEN_KDS,
-                                PlatformRole.KITCHEN_DEVICE.code(),
                                 "TV"),
                         "manager-1"))
                 .isInstanceOfSatisfying(
@@ -428,7 +414,6 @@ class DeviceEnrolmentServiceTests {
                         begin.userCode(),
                         ResourceScope.location(TENANT, BRAND, LOCATION),
                         DevicePrincipalClass.KITCHEN_VDU,
-                        PlatformRole.KITCHEN_VDU_DEVICE.code(),
                         "TV"),
                 "manager-1");
         assertThat(approvedProperly.deviceClass()).isEqualTo(DevicePrincipalClass.KITCHEN_VDU);
@@ -439,11 +424,12 @@ class DeviceEnrolmentServiceTests {
         for (String table : new String[] {"iam.device_enrolment_requests", "iam.device_principals"}) {
             assertThat(jdbc.sql("""
                             SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c
-                             WHERE c.conrelid = CAST(:table AS regclass) AND c.conname LIKE 'ck_device_%class'
+                             WHERE c.conrelid = CAST(:table AS regclass) AND c.conname IN ('ck_device_principal_class', 'ck_device_enrolment_class')
                             """).param("table", table).query(String.class).single())
                     .as(table)
                     .contains("KITCHEN_KDS")
-                    .contains("KITCHEN_VDU");
+                    .contains("KITCHEN_VDU")
+                    .contains("KIOSK");
         }
         assertThatThrownBy(() -> jdbc.sql("""
                         INSERT INTO iam.device_enrolment_requests
@@ -461,8 +447,7 @@ class DeviceEnrolmentServiceTests {
 
     @Test
     void anActiveDeviceIsFoundBySubjectAndAStaffSubjectOrARevokedDeviceIsNot() {
-        DevicePrincipalView device = approveAs(
-                DevicePrincipalClass.KITCHEN_VDU, DevicePrincipalClass.KITCHEN_VDU, PlatformRole.KITCHEN_VDU_DEVICE);
+        DevicePrincipalView device = approveAs(DevicePrincipalClass.KITCHEN_VDU, DevicePrincipalClass.KITCHEN_VDU);
         String subject = jdbc.sql("SELECT principal_subject FROM iam.device_principals WHERE id = :id")
                 .param("id", device.id())
                 .query(String.class)
@@ -489,6 +474,135 @@ class DeviceEnrolmentServiceTests {
 
         clock.advance(Duration.ofMinutes(11));
         assertThat(service.pendingEnrolment(begin.userCode())).isEmpty();
+    }
+
+    // ---------------------------------------------------------------- ADR 0162: the kiosk class
+
+    @Test
+    void aKioskRequestIsApprovedAsAKioskAndHoldsExactlyTheKioskRoleAndNothingItCouldOrderWith() {
+        DevicePrincipalView kiosk = approveAs(DevicePrincipalClass.KIOSK, DevicePrincipalClass.KIOSK);
+
+        assertThat(kiosk.deviceClass()).isEqualTo(DevicePrincipalClass.KIOSK);
+        String subject = jdbc.sql("SELECT principal_subject FROM iam.device_principals WHERE id = :id")
+                .param("id", kiosk.id())
+                .query(String.class)
+                .single();
+        assertThat(jdbc.sql("""
+                        SELECT r.code FROM iam.grants g JOIN iam.roles r ON r.id = g.role_id
+                         WHERE g.principal_subject = :subject
+                        """).param("subject", subject).query(String.class).list())
+                .as("read back from iam.grants: a kiosk holds the kiosk's role and no other")
+                .containsExactly("kiosk-device");
+
+        ResourceScope atLocation = ResourceScope.location(TENANT, BRAND, LOCATION);
+        assertThat(authorization.has(subject, Capability.KIOSK_DEVICE_READ, atLocation))
+                .isTrue();
+        for (Capability refused : new Capability[] {
+            Capability.KITCHEN_TICKET_READ,
+            Capability.KITCHEN_TICKET_ADVANCE,
+            Capability.KITCHEN_DISPLAY_READ,
+            Capability.ORDER_READ,
+            Capability.ORDER_PLACE,
+            Capability.CUSTOMER_READ,
+            Capability.KIOSK_DEVICE_MANAGE,
+            Capability.TERMINAL_UNLOCK
+        }) {
+            assertThat(authorization.has(subject, refused, atLocation))
+                    .as("a customer-facing device is granted nothing it cannot yet use: %s", refused.code())
+                    .isFalse();
+        }
+        assertThat(authorization.has(
+                        subject, Capability.KIOSK_DEVICE_READ, ResourceScope.location(TENANT, BRAND, SIBLING_LOCATION)))
+                .as("its grant does not reach a sibling branch")
+                .isFalse();
+    }
+
+    @Test
+    void aKiosksCodeIsNeverApprovedAsAKitchenDisplayAndAKitchenCodeNeverAsAKioskWithNothingLeftBehind() {
+        var kioskCode = service.beginEnrolment(new BeginEnrolment(DevicePrincipalClass.KIOSK, "lobby"), "caller-k");
+        for (DevicePrincipalClass other :
+                new DevicePrincipalClass[] {DevicePrincipalClass.KITCHEN_KDS, DevicePrincipalClass.KITCHEN_VDU}) {
+            assertThatThrownBy(() -> service.approve(
+                            new ApproveEnrolment(
+                                    kioskCode.userCode(),
+                                    ResourceScope.location(TENANT, BRAND, LOCATION),
+                                    other,
+                                    "Lobby"),
+                            "manager-1"))
+                    .isInstanceOfSatisfying(ApiException.class, refusal -> {
+                        assertThat(refusal.errorCode())
+                                .isEqualTo(uz.horecaos.platform.web.api.ErrorCode.VALIDATION_FAILED);
+                        assertThat(refusal.getMessage()).contains("KIOSK").contains(other.name());
+                    });
+        }
+        for (DevicePrincipalClass asked :
+                new DevicePrincipalClass[] {DevicePrincipalClass.KITCHEN_KDS, DevicePrincipalClass.KITCHEN_VDU}) {
+            var kitchenCode = service.beginEnrolment(new BeginEnrolment(asked, "pass"), "caller-" + asked);
+            assertThatThrownBy(() -> service.approve(
+                            new ApproveEnrolment(
+                                    kitchenCode.userCode(),
+                                    ResourceScope.location(TENANT, BRAND, LOCATION),
+                                    DevicePrincipalClass.KIOSK,
+                                    "Pass"),
+                            "manager-1"))
+                    .isInstanceOfSatisfying(ApiException.class, refusal -> {
+                        assertThat(refusal.errorCode())
+                                .isEqualTo(uz.horecaos.platform.web.api.ErrorCode.VALIDATION_FAILED);
+                        assertThat(refusal.getMessage()).contains(asked.name()).contains("KIOSK");
+                    });
+        }
+
+        assertThat(service.list(TENANT, LOCATION)).isEmpty();
+        assertThat(provisioner.lastCreatedInternalId())
+                .as("refused before a Keycloak client was minted")
+                .isNull();
+        assertThat(jdbc.sql("SELECT count(*) FROM iam.grants").query(Long.class).single())
+                .isZero();
+        assertThat(service.pendingEnrolment(kioskCode.userCode()))
+                .as("the kiosk's request is still pending, to be approved as what it asked for")
+                .isPresent();
+    }
+
+    @Test
+    void theClassToRoleMapIsClosedEachClassHasItsOwnRoleAtLocationScope() {
+        java.util.Set<String> roles = new java.util.HashSet<>();
+        for (DevicePrincipalClass deviceClass : DevicePrincipalClass.values()) {
+            PlatformRole role = DeviceEnrolmentService.roleOf(deviceClass);
+            assertThat(role.scopeType()).as(deviceClass.name()).isEqualTo(ResourceScope.ScopeType.LOCATION);
+            assertThat(roles.add(role.code()))
+                    .as("%s must not share a role with another class", deviceClass)
+                    .isTrue();
+        }
+        assertThat(roles)
+                .containsExactlyInAnyOrder("kitchen-device", "kitchen-vdu-device", "print-agent", "kiosk-device");
+    }
+
+    @Test
+    void lookingAtWhatACodeClaimsIsRateLimitedPerApproverWhetherOrNotTheCodeExists() {
+        var begin = service.beginEnrolment(new BeginEnrolment(DevicePrincipalClass.KIOSK, "lobby"), "caller-k");
+
+        assertThat(service.peek(begin.userCode(), "manager-peek"))
+                .hasValueSatisfying(
+                        pending -> assertThat(pending.requestedClass()).isEqualTo(DevicePrincipalClass.KIOSK));
+        for (int guess = 1; guess < 30; guess++) {
+            assertThat(service.peek("NOPE%04d".formatted(guess), "manager-peek"))
+                    .isEmpty();
+        }
+        assertThatThrownBy(() -> service.peek(begin.userCode(), "manager-peek"))
+                .as("the 31st look in a minute is refused even though this code exists")
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        refusal -> assertThat(refusal.errorCode())
+                                .isEqualTo(uz.horecaos.platform.web.api.ErrorCode.RATE_LIMIT_EXCEEDED));
+        assertThatThrownBy(() -> service.peek("NOPE-9999", "manager-peek"))
+                .as("and a code that does not exist is refused the same way, so the budget is no oracle")
+                .isInstanceOf(ApiException.class);
+        assertThat(service.peek(begin.userCode(), "another-manager"))
+                .as("the budget is the approver's own")
+                .isPresent();
+
+        clock.advance(Duration.ofMinutes(2));
+        assertThat(service.peek(begin.userCode(), "manager-peek")).isPresent();
     }
 
     private void insertHierarchy() {

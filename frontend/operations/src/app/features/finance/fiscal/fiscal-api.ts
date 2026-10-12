@@ -29,6 +29,17 @@ export interface FiscalDocumentView {
   readonly submittedAt: string | null;
   readonly reportingDeadlineAt: string | null;
   readonly blockedAt: string | null;
+  /**
+   * ADR 0161: present on a document blocked `MARKS_INCOMPLETE` -- the units scanned of the units required across
+   * the order's marked lines. Counts; the codes themselves are never on this screen.
+   */
+  readonly marks?: FiscalMarkProgress | null;
+}
+
+/** `FiscalDocumentController.MarkProgressResponse`. */
+export interface FiscalMarkProgress {
+  readonly captured: number;
+  readonly required: number;
 }
 
 /** Mirrors `FiscalDocumentController.BlockedWorklistResponse`. */

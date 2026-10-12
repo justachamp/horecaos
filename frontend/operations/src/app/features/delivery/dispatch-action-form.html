@@ -146,7 +146,7 @@
           <input
             type="checkbox"
             [checked]="action().grouping !== null"
-            [disabled]="!groupingAllowed()"
+            [disabled]="!canSwitchGroupingOn() && action().grouping === null"
             (change)="toggleGrouping($any($event.target).checked)"
             [attr.data-testid]="idPrefix() + '-grouping'"
           />
@@ -156,6 +156,20 @@
       @if (!groupingAllowed()) {
         <p class="q-caption action__muted" [attr.data-testid]="idPrefix() + '-grouping-locked'">
           {{ 'delivery.rules.grouping.locked' | t }}
+        </p>
+      } @else if (!runPayDecided()) {
+        <p
+          class="q-caption action__muted"
+          [attr.data-testid]="idPrefix() + '-grouping-pay-undecided'"
+        >
+          {{ 'delivery.rules.grouping.payUndecided' | t }}
+          <a
+            routerLink="/delivery/courier-policy"
+            [queryParams]="{ prefill: 'FIRST_FULL_THEN_INCREMENT' }"
+            [attr.data-testid]="idPrefix() + '-grouping-decide-pay'"
+          >
+            {{ 'delivery.rules.grouping.payUndecided.link' | t }}
+          </a>
         </p>
       }
       @if (action().grouping; as grouping) {
@@ -186,10 +200,17 @@
               class="q-body field action__narrow"
               type="number"
               [value]="grouping.maxWaitSeconds"
-              [disabled]="!groupingAllowed()"
-              (input)="setGrouping('maxWaitSeconds', $any($event.target).value)"
+              [disabled]="true"
+              [attr.title]="'delivery.rules.grouping.waitNotAvailable' | t"
+              [attr.data-testid]="idPrefix() + '-grouping-wait'"
             />
           </label>
+          <p
+            class="q-caption action__muted"
+            [attr.data-testid]="idPrefix() + '-grouping-wait-note'"
+          >
+            {{ 'delivery.rules.grouping.waitNotAvailable' | t }}
+          </p>
         </div>
       }
     </fieldset>

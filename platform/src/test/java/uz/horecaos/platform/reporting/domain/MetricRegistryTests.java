@@ -321,4 +321,33 @@ class MetricRegistryTests {
     void anOrderThatClosedBeforeItOpenedIsRefusedRatherThanBucketed() {
         assertThatThrownBy(() -> SlaBucketSet.bucketFor(-1)).isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void theCustomerFunnelIsRegisteredAtTheBrandGrainAndPointsAtItsOwnEndpoint() {
+        // ADR 0167 (7.6c): funnel.stage.v1 is a distribution of several stages per slice, one of which is
+        // deliberately "not measured", so /queries cannot answer it and must say which endpoint can.
+        MetricDefinition funnel = MetricRegistry.require("funnel.stage.v1");
+
+        assertThat(funnel.sourceAvailable()).isTrue();
+        assertThat(funnel.grain()).isEqualTo(Grain.DAY_BRAND_CHANNEL);
+        assertThat(funnel.grain().dimensions()).containsExactly(Grain.Dimension.BRAND, Grain.Dimension.CHANNEL);
+        assertThat(funnel.isMoney()).as("a count of activity is never revenue").isFalse();
+        assertThat(funnel.aggregation()).isEqualTo(MetricDefinition.Aggregation.DISTRIBUTION);
+        assertThat(funnel.definition()).contains("not a cohort").contains("not the probability");
+        assertThat(funnel.exclusion())
+                .as("the registry itself says visits are not measured")
+                .contains("Visits")
+                .contains("not measured");
+        assertThat(funnel.openQuestion()).contains("not recorded").contains("never as zero");
+    }
+
+    @Test
+    void theAcquisitionSourceMetricSaysItAttributesNoCustomerToALink() {
+        MetricDefinition acquisition = MetricRegistry.require("acquisition.source.v1");
+
+        assertThat(acquisition.sourceAvailable()).isTrue();
+        assertThat(acquisition.grain()).isEqualTo(Grain.DAY_BRAND_ORIGIN);
+        assertThat(acquisition.definition()).contains("not joined").contains("does not say which link brought");
+        assertThat(acquisition.exclusion()).contains("Per-customer attribution").contains("tier 2");
+    }
 }

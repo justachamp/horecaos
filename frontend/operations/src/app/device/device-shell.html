@@ -1,4 +1,4 @@
-<div class="device-shell">
+<div class="device-shell" (pointerdown)="terminal.noteActivity()">
   @if (!online()) {
     <div class="device-shell__offline" role="status" data-testid="device-offline-banner">
       {{ 'device.offlineBanner' | t }}
@@ -74,6 +74,14 @@
           </button>
           <button
             type="button"
+            class="device-shell__button"
+            (click)="beginEnrolment('KIOSK')"
+            data-testid="device-enrol-begin-kiosk"
+          >
+            {{ 'device.enrol.beginKiosk' | t }}
+          </button>
+          <button
+            type="button"
             class="device-shell__link"
             (click)="showManualSetup()"
             data-testid="device-enrol-manual"
@@ -88,7 +96,7 @@
           @if (enrolment(); as pending) {
             <div class="device-shell__pairing">
               <q-qr-code
-                [value]="pending.userCode"
+                [value]="pairingQrValue()"
                 [size]="220"
                 [label]="'device.enrol.qrLabel' | t"
               />
@@ -101,7 +109,14 @@
                 }}</span>
               </div>
             </div>
-            <p class="device-shell__hint">{{ 'device.enrol.waiting' | t }}</p>
+            <p class="device-shell__hint">
+              {{ (pending.approvalUrl ? 'device.enrol.waitingKiosk' : 'device.enrol.waiting') | t }}
+            </p>
+            @if (pending.approvalUrl) {
+              <p class="device-shell__hint" data-testid="device-pairing-countdown">
+                {{ 'device.enrol.countdown' | t: { time: countdownText() } }}
+              </p>
+            }
           }
         }
         @case ('denied') {
@@ -163,6 +178,35 @@
         {{ 'device.enrol.manual' | t }}
       </button>
     </section>
+  } @else if (isKiosk()) {
+    <section class="device-shell__panel" data-testid="device-kiosk-status">
+      <h1 class="device-shell__title">{{ 'device.kiosk.title' | t }}</h1>
+      @if (kioskChannel(); as channel) {
+        <dl class="device-shell__facts">
+          <div>
+            <dt>{{ 'device.kiosk.channel' | t }}</dt>
+            <dd data-testid="device-kiosk-channel">{{ channel.channelName }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'device.kiosk.branch' | t }}</dt>
+            <dd data-testid="device-kiosk-branch">{{ profile()?.locationName }}</dd>
+          </div>
+        </dl>
+        @if (channel.channelStatus !== 'ACTIVE') {
+          <p class="device-shell__error" data-testid="device-kiosk-channel-down">
+            {{ 'device.kiosk.channelDown' | t }}
+          </p>
+        } @else {
+          <p class="device-shell__hint" data-testid="device-kiosk-ready">
+            {{ 'device.kiosk.ready' | t }}
+          </p>
+        }
+      } @else {
+        <p class="device-shell__error" data-testid="device-kiosk-unbound">
+          {{ 'device.kiosk.unbound' | t }}
+        </p>
+      }
+    </section>
   } @else if (isWall()) {
     <section class="device-shell__wall" data-testid="device-wall">
       <q-vdu-wall
@@ -178,6 +222,43 @@
     </section>
   } @else {
     <section class="device-shell__board" data-testid="device-board">
+      @if (terminal.canUnlock()) {
+        <div class="device-shell__who" data-testid="device-terminal-bar">
+          @if (terminal.person(); as person) {
+            <span class="device-shell__who-name" data-testid="device-terminal-person">{{
+              person.label
+            }}</span>
+            <button
+              type="button"
+              class="device-shell__button device-shell__button--small"
+              (click)="openChangePin()"
+              data-testid="device-terminal-change-pin"
+            >
+              {{ 'device.terminal.changePin' | t }}
+            </button>
+            <button
+              type="button"
+              class="device-shell__button device-shell__button--small"
+              (click)="lockTerminal()"
+              data-testid="device-terminal-lock"
+            >
+              {{ 'device.terminal.lock' | t }}
+            </button>
+          } @else {
+            <span class="device-shell__who-name device-shell__who-name--none">{{
+              'device.terminal.nobody' | t
+            }}</span>
+            <button
+              type="button"
+              class="device-shell__button device-shell__button--small"
+              (click)="openUnlock()"
+              data-testid="device-terminal-unlock"
+            >
+              {{ 'device.terminal.unlock' | t }}
+            </button>
+          }
+        </div>
+      }
       @if (!ticketsLoaded()) {
         <p class="device-shell__hint">{{ 'device.board.loading' | t }}</p>
       } @else if (boardError()) {
@@ -231,7 +312,15 @@
     </section>
   }
 
-  @if (!isWall()) {
+  @if (showUnlock()) {
+    <q-terminal-unlock
+      [flow]="changePinOpen() ? 'change' : 'unlock'"
+      [dismissible]="!terminal.lockRequired()"
+      (closed)="closeUnlock()"
+    />
+  }
+
+  @if (!isWall() && !isKiosk()) {
     <button
       type="button"
       class="device-shell__reset"

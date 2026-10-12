@@ -33,7 +33,39 @@ public enum DevicePrincipalClass {
      * recall a line. Its station is a server-side configuration of the device,
      * not a parameter of the request.
      */
-    KITCHEN_VDU;
+    KITCHEN_VDU,
+
+    /**
+     * A print agent (ADR 0154): a small always-on program at a branch that claims print jobs from the
+     * platform over outbound HTTPS and hands the bytes to a printer it can reach on the branch's own
+     * network. Granted exactly {@code PlatformRole.PRINT_AGENT} -- {@code print.job.claim} and {@code
+     * print.job.report} -- and no read of any order, ticket or receipt: it is a byte pipe. Approved
+     * from the Printing screen by a holder of {@code print.manage} at the branch, never as a kitchen
+     * class and never from one: an enrolment that asked to be an agent cannot be approved as a
+     * display, and a display's cannot be approved as an agent.
+     */
+    PRINT_AGENT,
+
+    /**
+     * A customer-facing kiosk (ADR 0162): bound to one KIOSK sales channel at one branch, paired by a
+     * code the manager confirms, and granted exactly {@code PlatformRole.KIOSK_DEVICE} -- {@code
+     * kiosk.device.read}, and nothing it could order or take money with. Nobody unlocks it with a PIN
+     * ({@link #unlockable()} is false) and a customer is never a staff identity.
+     */
+    KIOSK;
+
+    /**
+     * Whether a person may unlock a device of this class with a staff PIN (ADR 0155). Only the touch
+     * kitchen display at launch: a wall display has no controls, a kiosk is touched by customers and a
+     * print agent is software. Each class added later states this in the record that adds it, together
+     * with the capability set that makes a person eligible.
+     */
+    public boolean unlockable() {
+        return switch (this) {
+            case KITCHEN_KDS -> true;
+            case KITCHEN_VDU, PRINT_AGENT, KIOSK -> false;
+        };
+    }
 
     /**
      * Whether an enrolment that asked to be this class may be approved as {@code approved}
@@ -47,6 +79,14 @@ public enum DevicePrincipalClass {
         return switch (this) {
             case KITCHEN_KDS -> approved == KITCHEN_KDS || approved == KITCHEN_VDU;
             case KITCHEN_VDU -> approved == KITCHEN_VDU;
+            // The class decides which role is granted; a print agent that could be approved as
+            // anything else, or a display approved as an agent, would hand the wrong bundle to a
+            // device on the strength of an approval click.
+            case PRINT_AGENT -> approved == PRINT_AGENT;
+            // ADR 0162: a kiosk's code is approved as a kiosk and as nothing else, and no other class's
+            // code is ever approved as a kiosk -- that is the second line of the rule, because every
+            // other case above names its own targets and none of them is KIOSK.
+            case KIOSK -> approved == KIOSK;
         };
     }
 }

@@ -1,0 +1,30 @@
+.stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stats__note {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+.stats__error {
+  margin: 0;
+  color: var(--q-error-text);
+}
+
+.stats__table {
+  border-collapse: collapse;
+}
+
+.stats__table th,
+.stats__table td {
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+  text-align: end;
+}
+
+.stats__table th:first-child {
+  text-align: start;
+}

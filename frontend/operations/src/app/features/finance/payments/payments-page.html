@@ -105,6 +105,7 @@
               <th class="q-caption">{{ 'finance.payments.tenders.amount' | t }}</th>
               <th class="q-caption">{{ 'finance.payments.tenders.status' | t }}</th>
               <th class="q-caption">{{ 'finance.payments.tenders.refunded' | t }}</th>
+              <th class="q-caption">{{ 'finance.payments.tenders.fiscal' | t }}</th>
             </tr>
           </thead>
           <tbody>
@@ -117,6 +118,23 @@
                   <span class="status-badge">{{ tenderStatusLabel(tender.status) }}</span>
                 </td>
                 <td class="q-body-sm q-mono">{{ money(tender.refunded) }}</td>
+                <td class="q-body-sm" data-testid="tender-fiscal">
+                  @if (fiscalDocumentOf(tender.tenderId); as fiscalDocument) {
+                    <span class="status-badge">{{ fiscalStatusLabel(fiscalDocument.status) }}</span>
+                    <button
+                      type="button"
+                      class="q-body-sm link"
+                      (click)="showFiscalDocument(fiscalDocument.documentId)"
+                      data-testid="tender-fiscal-open"
+                    >
+                      {{ 'finance.payments.tenders.fiscal.open' | t }}
+                    </button>
+                  } @else {
+                    <span class="note" data-testid="tender-fiscal-none">{{
+                      'finance.payments.tenders.fiscal.none' | t
+                    }}</span>
+                  }
+                </td>
               </tr>
             }
           </tbody>
@@ -259,6 +277,14 @@
         }
       } @else {
         <p class="q-body-sm note">{{ 'finance.payments.intent.none' | t }}</p>
+      }
+
+      @if (tenantId(); as evidenceTenant) {
+        <q-fiscal-evidence
+          [tenantId]="evidenceTenant"
+          [orderId]="order.orderId"
+          (loaded)="fiscalDocuments.set($event)"
+        />
       }
 
       <div class="toolbar">
@@ -675,6 +701,79 @@
           } @empty {
             <tr>
               <td class="q-body-sm empty" colspan="6">{{ 'finance.payments.totals.empty' | t }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </section>
+
+  <!-- ====================================================== which payment types are fiscalized (ADR 0166) -->
+  <section class="fiscal-types" data-testid="fiscal-payment-types">
+    <h2 class="q-subhead">{{ 'finance.fiscalEvidence.paymentTypes.title' | t }}</h2>
+    <p class="q-body-sm note">{{ 'finance.fiscalEvidence.paymentTypes.lead' | t }}</p>
+
+    @if (typesLoading()) {
+      <p class="q-body-sm">{{ 'finance.payments.loading' | t }}</p>
+    } @else if (typesDenied()) {
+      <p class="q-body-sm denied" data-testid="fiscal-payment-types-denied">
+        {{ 'finance.fiscalEvidence.paymentTypes.denied' | t }}
+      </p>
+    } @else if (typesError()) {
+      <p class="q-body-sm error" role="alert" data-testid="fiscal-payment-types-error">
+        {{ 'finance.fiscalEvidence.paymentTypes.error' | t }}
+      </p>
+    } @else {
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'finance.fiscalEvidence.paymentTypes.column.method' | t }}</th>
+            <th class="q-caption">
+              {{ 'finance.fiscalEvidence.paymentTypes.column.responsibility' | t }}
+            </th>
+            <th class="q-caption">{{ 'finance.fiscalEvidence.paymentTypes.column.path' | t }}</th>
+            <th class="q-caption">{{ 'finance.fiscalEvidence.paymentTypes.column.state' | t }}</th>
+            <th class="q-caption">
+              {{ 'finance.fiscalEvidence.paymentTypes.column.entities' | t }}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (type of paymentTypes(); track type.code) {
+            <tr [attr.data-testid]="'fiscal-payment-type-' + type.code">
+              <td class="q-body-sm">{{ type.displayName }}</td>
+              <td class="q-body-sm">{{ typeResponsibilityLabel(type) }}</td>
+              <td class="q-body-sm">{{ pathLabel(type) }}</td>
+              <td class="q-body-sm">
+                <span class="status-badge" data-testid="fiscal-payment-type-state">{{
+                  typeStateLabel(type)
+                }}</span>
+                @if (typeNote(type); as note) {
+                  <span class="q-caption note">{{ note }}</span>
+                }
+              </td>
+              <td class="q-body-sm">
+                @for (entry of type.entries; track entry.legalEntityId) {
+                  <span class="entry" data-testid="fiscal-payment-type-entry">
+                    {{ entry.legalName ?? '—' }} ·
+                    <span class="q-mono">{{ entry.tin ?? '—' }}</span>
+                    @if (entry.accountReferenceMasked) {
+                      · <span class="q-mono">{{ entry.accountReferenceMasked }}</span>
+                    }
+                    @if (entry.capableTerminals > 0) {
+                      · {{ terminalsLabel(entry.capableTerminals) }}
+                    }
+                  </span>
+                } @empty {
+                  —
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="q-body-sm empty" colspan="5">
+                {{ 'finance.fiscalEvidence.paymentTypes.empty' | t }}
+              </td>
             </tr>
           }
         </tbody>

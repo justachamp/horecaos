@@ -7,7 +7,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import java.net.URI;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
@@ -72,8 +74,12 @@ public class ReportExportController {
             @PathVariable UUID tenantId, @Valid @RequestBody ReportExportRequest request) {
 
         String subject = currentActor.get().subject();
-        boolean holdsPiiCapability =
-                authorization.has(subject, Capability.CUSTOMER_PII_EXPORT, ResourceScope.tenant(tenantId));
+        if ("STAFF_ATTENDANCE".equals(request.reportKey())) {
+            // A payroll file is hours of named staff. report.export alone opens the export centre; reading
+            // the hours is staff.shift.read, and a caller without it is refused (ADR 0025).
+            authorization.require(subject, Capability.STAFF_SHIFT_READ, ResourceScope.tenant(tenantId));
+        }
+        Set<Capability> heldPiiCapabilities = heldPiiCapabilities(tenantId);
 
         UUID exportId = exports.requestExport(
                 tenantId,
@@ -86,7 +92,8 @@ public class ReportExportController {
                 request.locationId() == null ? List.of() : request.locationId(),
                 request.purpose(),
                 subject,
-                holdsPiiCapability);
+                heldPiiCapabilities,
+                request.includeUnresolved());
 
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ReportExportQueuedResponse(exportId, "QUEUED"));
     }
@@ -102,7 +109,7 @@ public class ReportExportController {
                     + "download URL here, even for their own completed export.")
     public ResponseEntity<ReportExportStatusResponse> reportExportStatus(
             @PathVariable UUID tenantId, @PathVariable UUID id) {
-        return exports.status(tenantId, id, currentActorHoldsPiiCapability(tenantId))
+        return exports.status(tenantId, id, heldPiiCapabilities(tenantId))
                 .map(view -> ResponseEntity.ok(ReportExportStatusResponse.of(view)))
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such report export"));
     }
@@ -117,20 +124,29 @@ public class ReportExportController {
     public ResponseEntity<List<ReportExportStatusResponse>> recentExports(
             @PathVariable UUID tenantId, @RequestParam(defaultValue = "50") int limit) {
         int bounded = Math.clamp(limit, 1, 200);
-        boolean holdsPiiCapability = currentActorHoldsPiiCapability(tenantId);
-        return ResponseEntity.ok(exports.recentExports(tenantId, bounded, holdsPiiCapability).stream()
+        Set<Capability> heldPiiCapabilities = heldPiiCapabilities(tenantId);
+        return ResponseEntity.ok(exports.recentExports(tenantId, bounded, heldPiiCapabilities).stream()
                 .map(ReportExportStatusResponse::of)
                 .toList());
     }
 
     /**
-     * The polling/listing principal's own {@code customer.pii.export} grant — re-checked on
-     * every read because it is never the same principal as the one who queued the export (the
-     * export centre's job history is tenant-wide, not per-requester).
+     * The PII-group capabilities the requesting, polling or listing principal holds -- one {@code
+     * authorization.has} per distinct capability in the registry (two today: {@code customer.pii.export}
+     * and {@code staff.shift.export}). Re-checked on every read because it is never the same principal
+     * as the one who queued the export (the export centre's job history is tenant-wide, not
+     * per-requester), and asked per <em>report</em> because the capability that gates one report's PII
+     * group is not the one that gates another's (ADR 0156, ADR 0131).
      */
-    private boolean currentActorHoldsPiiCapability(UUID tenantId) {
-        return authorization.has(
-                currentActor.get().subject(), Capability.CUSTOMER_PII_EXPORT, ResourceScope.tenant(tenantId));
+    private Set<Capability> heldPiiCapabilities(UUID tenantId) {
+        String subject = currentActor.get().subject();
+        Set<Capability> held = EnumSet.noneOf(Capability.class);
+        for (Capability capability : ReportExportService.piiCapabilities()) {
+            if (authorization.has(subject, capability, ResourceScope.tenant(tenantId))) {
+                held.add(capability);
+            }
+        }
+        return held;
     }
 
     /**
@@ -139,6 +155,9 @@ public class ReportExportController {
      * @param to          {@code ORDER_CRM_LOG}'s own required range end
      * @param locationId  {@code ORDER_CRM_LOG}'s own optional branch filter; absent or empty
      *                    means every branch the caller's tenant-wide grant already covers
+     * @param includeUnresolved {@code STAFF_ATTENDANCE} only (ADR 0156): include shifts still open or
+     *                    awaiting approval, with their status and null paid seconds, instead of being
+     *                    refused with {@code ATTENDANCE_UNRESOLVED_SHIFTS}
      */
     public record ReportExportRequest(
             @NotBlank String reportKey,
@@ -148,7 +167,8 @@ public class ReportExportController {
             @Nullable Instant from,
             @Nullable Instant to,
             @Nullable List<UUID> locationId,
-            @NotBlank String purpose) {}
+            @NotBlank String purpose,
+            @Nullable Boolean includeUnresolved) {}
 
     public record ReportExportQueuedResponse(UUID exportId, String status) {}
 

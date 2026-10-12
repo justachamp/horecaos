@@ -213,6 +213,31 @@ describe('i18n content: the keys the new cart / sale-window / table screens rend
     'errors.reason.modifierMinimum',
     'errors.reason.modifierMaximum',
     'errors.reason.modifierNotOffered',
+    'content.carouselLabel',
+    'content.promoGridLabel',
+    'content.storiesLabel',
+    'content.storyOpen',
+    'content.storyClose',
+    'content.storyNext',
+    'content.storyPrevious',
+    'content.storyProgress',
+    'content.openLink',
+    'content.popupClose',
+    'editorial.homeLabel',
+    'editorial.news',
+    'editorial.gallery',
+    'editorial.recipes',
+    'editorial.careers',
+    'editorial.loadMore',
+    'editorial.empty',
+    'editorial.unavailableTitle',
+    'editorial.unavailableBody',
+    'editorial.branch',
+    'editorial.applyHint',
+    'editorial.employment.FULL_TIME',
+    'editorial.employment.PART_TIME',
+    'editorial.employment.SHIFT',
+    'editorial.employment.INTERNSHIP',
   ] as const;
 
   it.each(RENDERED_KEYS)('%s is a string in every locale', (key) => {
@@ -234,6 +259,9 @@ describe('i18n content: the keys the new cart / sale-window / table screens rend
       expect(getNested(dict, 'dineIn.pickerBetween'), id).toContain('{{max}}');
       expect(getNested(dict, 'dineIn.pickerMissing'), id).toContain('{{groups}}');
       expect(getNested(dict, 'auth.errors.codeRejectedWithTries'), id).toContain('{{count}}');
+      expect(getNested(dict, 'content.storyOpen'), id).toContain('{{title}}');
+      expect(getNested(dict, 'content.storyProgress'), id).toContain('{{current}}');
+      expect(getNested(dict, 'content.storyProgress'), id).toContain('{{total}}');
     }
   });
 });

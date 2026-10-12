@@ -1,5 +1,6 @@
 package uz.horecaos.platform.ordering.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.DueTimerRow;
 
@@ -39,19 +41,26 @@ class OrderProcessWorkerTimerRetryTests {
     private static final Duration RETRY_BACKOFF = Duration.ofSeconds(30);
 
     private static OrderProcessWorker workerFor(JdbcOrderStore orders, OrderStateService state) {
+        return workerFor(orders, state, mock(OrderPaymentProcess.class), "SHADOW");
+    }
+
+    private static OrderProcessWorker workerFor(
+            JdbcOrderStore orders, OrderStateService state, OrderPaymentProcess payments, String cancelMode) {
         return new OrderProcessWorker(
                 orders,
                 state,
                 mock(OrderInventoryProcess.class),
                 mock(OrderFulfillmentProcess.class),
-                mock(OrderPaymentProcess.class),
+                payments,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 50,
                 Duration.ofSeconds(30),
                 Duration.ofMinutes(30),
                 Duration.ofMinutes(1),
                 RETRY_BACKOFF,
-                Duration.ofMinutes(2));
+                Duration.ofMinutes(2),
+                mock(org.springframework.transaction.PlatformTransactionManager.class),
+                cancelMode);
     }
 
     @Test
@@ -98,5 +107,36 @@ class OrderProcessWorkerTimerRetryTests {
         workerFor(orders, state).fireDueTimers();
 
         verify(orders, never()).markTimerFailed(any(), any(), anyInt(), any());
+    }
+
+    // ------------------------------------------------ ADR 0170: shadow, then enforce
+
+    @Test
+    @DisplayName("in SHADOW (the default) the payment sweep is given no lapse handler, so a CANCEL window ends nothing")
+    void shadowGivesTheSweepNoWayToEndAnOrder() {
+        OrderPaymentProcess payments = mock(OrderPaymentProcess.class);
+
+        workerFor(mock(JdbcOrderStore.class), mock(OrderStateService.class), payments, "SHADOW")
+                .sweepStalePayments();
+
+        verify(payments).sweep(any(), any(), any(), anyInt(), isNull());
+    }
+
+    @Test
+    @DisplayName("in ENFORCE the payment sweep is given a lapse handler that ends the order through OrderStateService")
+    void enforceGivesTheSweepALapseHandler() {
+        OrderPaymentProcess payments = mock(OrderPaymentProcess.class);
+        OrderStateService state = mock(OrderStateService.class);
+        when(state.paymentWindowReached(TENANT, ORDER, 20, 3))
+                .thenReturn(new OrderStateService.DecisionResult(true, OrderStatus.PAYMENT_FAILED, 4, null));
+        org.mockito.ArgumentCaptor<OrderPaymentProcess.Lapse> lapse =
+                org.mockito.ArgumentCaptor.forClass(OrderPaymentProcess.Lapse.class);
+
+        workerFor(mock(JdbcOrderStore.class), state, payments, "ENFORCE").sweepStalePayments();
+
+        verify(payments).sweep(any(), any(), any(), anyInt(), lapse.capture());
+        // The transaction manager here is a mock, so the nested template runs the callback against it.
+        assertThat(lapse.getValue().apply(TENANT, ORDER, 20, 3)).isTrue();
+        verify(state).paymentWindowReached(TENANT, ORDER, 20, 3);
     }
 }

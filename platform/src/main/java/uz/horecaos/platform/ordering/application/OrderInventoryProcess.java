@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.inventory.api.InventoryReservationPort;
+import uz.horecaos.platform.inventory.api.StockDisposal;
+import uz.horecaos.platform.inventory.api.StockDisposalCommand;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcessStore.ProcessRow;
 
@@ -39,6 +41,7 @@ public class OrderInventoryProcess {
     private static final Logger log = LoggerFactory.getLogger(OrderInventoryProcess.class);
     private static final String COMMIT = "COMMIT";
     private static final String RELEASE = "RELEASE";
+    private static final String DISPOSE = "DISPOSE";
     private static final int MAX_ATTEMPTS = 8;
     private static final Duration RETRY_BACKOFF = Duration.ofSeconds(30);
 
@@ -66,6 +69,40 @@ public class OrderInventoryProcess {
     /** Called inside the transaction that rejects, expires, or cancels an order. */
     public void enqueueRelease(UUID orderId, UUID tenantId, UUID quoteId, Instant now) {
         processes.enqueue(orderId, tenantId, PROCESS_NAME, checkpoint(RELEASE, quoteId), now);
+    }
+
+    /**
+     * What an order that has been sold, or amended, gives back when it ends (ADR 0169, decision 11).
+     *
+     * <p>A cancellation after the sale used to enqueue a release, which only acts on a {@code HELD} hold and so
+     * left every committed unit sold. The instruction now carries the units the order still holds and the
+     * declared disposition; inventory reads the reservations itself to tell a hold from a sale.
+     *
+     * @param quoteIds every quote that owns a reservation of this order: each revision's, original first
+     * @param disposition {@code RETURN_TO_STOCK}, {@code WRITE_OFF} or {@code NO_EFFECT}
+     * @param reasonCategory the cancellation reason's system category, for the ledger's reason code
+     */
+    public record DisposeInstruction(
+            UUID brandId,
+            UUID locationId,
+            List<UUID> quoteIds,
+            String disposition,
+            String reasonCategory,
+            List<Line> lines) {
+
+        /** The whole units of one variant the order still holds. */
+        public record Line(UUID variantId, int units) {}
+    }
+
+    /** Called inside the transaction that ends an order whose stock may have been sold (ADR 0169). */
+    public void enqueueDispose(UUID orderId, UUID tenantId, UUID quoteId, DisposeInstruction instruction, Instant now) {
+        processes.enqueue(
+                orderId,
+                tenantId,
+                PROCESS_NAME,
+                objectMapper.writeValueAsString(
+                        Map.of("action", DISPOSE, "quoteId", quoteId.toString(), "dispose", instruction)),
+                now);
     }
 
     /**
@@ -120,6 +157,7 @@ public class OrderInventoryProcess {
                 switch (action) {
                     case COMMIT -> inventory.commit(row.tenantId(), quoteId);
                     case RELEASE -> inventory.release(row.tenantId(), quoteId);
+                    case DISPOSE -> dispose(row, checkpoint);
                     default -> throw new IllegalStateException("Unknown inventory process action " + action);
                 };
 
@@ -176,6 +214,35 @@ public class OrderInventoryProcess {
                     null,
                     now);
         }
+    }
+
+    /**
+     * Gives the order's stock back by the declared disposition (ADR 0169). Idempotent on the order: a retry
+     * after a failure past this point finds the first answer and moves nothing.
+     *
+     * @return true: a disposal that cannot be carried out throws, and the row is retried and then flagged
+     */
+    private boolean dispose(ProcessRow row, Map<?, ?> checkpoint) {
+        DisposeInstruction instruction = objectMapper.convertValue(checkpoint.get("dispose"), DisposeInstruction.class);
+        StockDisposal disposal = inventory.dispose(new StockDisposalCommand(
+                row.tenantId(),
+                instruction.brandId(),
+                instruction.locationId(),
+                row.orderId(),
+                instruction.quoteIds(),
+                instruction.lines().stream()
+                        .map(line -> new StockDisposalCommand.Line(line.variantId(), line.units(), 0))
+                        .toList(),
+                StockDisposalCommand.Disposition.valueOf(instruction.disposition()),
+                instruction.reasonCategory(),
+                "SYSTEM_JOB",
+                null,
+                "cancel:" + row.orderId()));
+        List<UUID> movements = disposal.movementIds();
+        if (!movements.isEmpty()) {
+            processes.recordOutcomeMovement(row.tenantId(), row.orderId(), movements.get(0));
+        }
+        return true;
     }
 
     /**

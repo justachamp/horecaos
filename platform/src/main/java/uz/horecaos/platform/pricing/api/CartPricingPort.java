@@ -347,6 +347,11 @@ public interface CartPricingPort {
          * @param actualWeightGrams ADR 0137: the weighed total of this line in grams, once
          *                 captured at pick or handover, or null while the line is still
          *                 priced provisionally. Refused for a variant that is not sold by weight
+         * @param autoAdded ADR 0158 (open input 2): a rule put this line in the basket, the customer did
+         *                 not choose it. Pricing is told this and nothing more about the rule. The line is
+         *                 an ordinary line for every money condition, but it never counts toward the
+         *                 matched quantity or the lines of a promotion that names products, variants or
+         *                 categories, so a bag cannot tip a "three for two". False for every other line
          */
         public record Item(
                 String lineKey,
@@ -355,13 +360,47 @@ public interface CartPricingPort {
                 List<UUID> modifierOptionIds,
                 List<ComboPick> comboPicks,
                 List<NestedModifier> nestedModifiers,
-                @Nullable Integer actualWeightGrams) {
+                @Nullable Integer actualWeightGrams,
+                boolean autoAdded) {
 
             public Item {
                 quantity = Quantities.normalise(quantity);
                 modifierOptionIds = modifierOptionIds == null ? List.of() : List.copyOf(modifierOptionIds);
                 comboPicks = comboPicks == null ? List.of() : List.copyOf(comboPicks);
                 nestedModifiers = nestedModifiers == null ? List.of() : List.copyOf(nestedModifiers);
+            }
+
+            /** A line the customer chose, with or without a captured weight: every line before ADR 0158. */
+            public Item(
+                    String lineKey,
+                    UUID variantId,
+                    BigDecimal quantity,
+                    List<UUID> modifierOptionIds,
+                    List<ComboPick> comboPicks,
+                    List<NestedModifier> nestedModifiers,
+                    @Nullable Integer actualWeightGrams) {
+                this(
+                        lineKey,
+                        variantId,
+                        quantity,
+                        modifierOptionIds,
+                        comboPicks,
+                        nestedModifiers,
+                        actualWeightGrams,
+                        false);
+            }
+
+            /** The same line, marked as one an auto-add rule put in the basket (ADR 0158). */
+            public Item asAutoAdded() {
+                return new Item(
+                        lineKey,
+                        variantId,
+                        quantity,
+                        modifierOptionIds,
+                        comboPicks,
+                        nestedModifiers,
+                        actualWeightGrams,
+                        true);
             }
 
             /** A line not yet weighed, with no combo and no nested selection. */

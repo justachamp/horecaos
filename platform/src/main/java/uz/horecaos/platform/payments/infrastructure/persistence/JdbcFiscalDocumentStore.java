@@ -15,6 +15,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.domain.FiscalDocumentType;
 import uz.horecaos.platform.payments.domain.FiscalStatus;
@@ -89,6 +90,52 @@ public class JdbcFiscalDocumentStore {
                 .query(JdbcFiscalDocumentStore::map)
                 .optional();
     }
+
+    /**
+     * The INN this document was opened under: the snapshot V0551's trigger took when the row was
+     * inserted (ADR 0166, Decision 3), read through the compatibility view V0640 widened.
+     *
+     * <p>Empty when the document holds no snapshot (a row from before the snapshot existed whose entity
+     * could not be read), which is a different fact from "the entity's INN is X today": the caller must
+     * not substitute a resolution made now for a sale made then.
+     */
+    public Optional<String> sellerTin(UUID tenantId, UUID documentId) {
+        return jdbc
+                .sql("SELECT seller_tin FROM payments.fiscal_documents WHERE tenant_id = :tenantId AND id = :id")
+                .param("tenantId", tenantId)
+                .param("id", documentId)
+                .query((row, number) -> row.getString("seller_tin"))
+                .list()
+                .stream()
+                .filter(Objects::nonNull)
+                .findFirst();
+    }
+
+    /**
+     * Documents that reached {@code ISSUED} in {@code [from, to)}, oldest first (ADR 0154's reconciling
+     * sweep). Answers the instant it was issued alongside, which a {@link FiscalDocument} does not carry.
+     */
+    public List<IssuedRow> listIssuedBetween(UUID tenantId, Instant from, Instant to, int limit) {
+        return jdbc.sql("""
+                SELECT id, order_id, issued_at
+                  FROM payments.fiscal_documents
+                 WHERE tenant_id = :tenantId AND status = 'ISSUED' AND issued_at IS NOT NULL
+                   AND issued_at >= :from AND issued_at < :to
+                 ORDER BY issued_at, id
+                 LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .param("limit", limit)
+                .query((row, number) -> new IssuedRow(
+                        row.getObject("id", UUID.class),
+                        row.getObject("order_id", UUID.class),
+                        Objects.requireNonNull(instant(row, "issued_at"), "filtered for non-null above")))
+                .list();
+    }
+
+    public record IssuedRow(UUID documentId, UUID orderId, Instant issuedAt) {}
 
     /** Every document for an order, oldest first. Plural by design. */
     public List<FiscalDocument> listForOrder(UUID tenantId, UUID orderId) {
@@ -165,7 +212,10 @@ public class JdbcFiscalDocumentStore {
                 SET status = :status,
                     reason_code = :reasonCode,
                     submitted_at = :submittedAt,
-                    protected_request_reference = :protectedRequest,
+                    -- Kept when this call has none to give: the sent request is recorded by
+                    -- recordSentEvidence just before the status moves (ADR 0166), and a submission
+                    -- that passes null here is not an instruction to forget it.
+                    protected_request_reference = COALESCE(:protectedRequest, protected_request_reference),
                     version = version + 1,
                     updated_at = :submittedAt
                 WHERE tenant_id = :tenantId AND id = :id
@@ -178,6 +228,74 @@ public class JdbcFiscalDocumentStore {
                 .param("protectedRequest", protectedRequestReference)
                 .param("submittedAt", utc(submittedAt))
                 .update();
+    }
+
+    /**
+     * Keeps what was sent: the protected lines, the protected tender split, whether the lines were
+     * the placeholder, and the merchant account the request went through (ADR 0166).
+     *
+     * <p>The document's own columns hold the <em>latest</em> request, and every request that left is also
+     * added to {@code fiscal.fiscal_sent_requests}, numbered from 1 and never rewritten. A resubmission used
+     * to replace the request outright on the reasoning that the earlier one "is no longer what the provider
+     * holds", which is true of a request the provider refused and false of one whose reply never came: the
+     * provider may well hold it, and the evidence of what was filed then showed only the second.
+     *
+     * <p>Refused once the document holds a receipt, for the reason {@link #recordEvidence} is: what is on
+     * file with the tax authority is not rewritten by a late duplicate, and a refused request is not added to
+     * the history either. Does not touch the status or the version; the status write that follows is the
+     * transition.
+     */
+    public boolean recordSentEvidence(
+            UUID tenantId,
+            UUID documentId,
+            UUID merchantBindingId,
+            boolean linesSynthetic,
+            String protectedRequestReference,
+            String sentTenderSplitReference,
+            Instant sentAt) {
+        boolean recorded = jdbc.sql("""
+                UPDATE payments.fiscal_documents
+                SET protected_request_reference = :request,
+                    sent_tender_split_reference = :split,
+                    lines_synthetic = :synthetic,
+                    merchant_binding_id = :binding
+                WHERE tenant_id = :tenantId AND id = :id
+                  AND status NOT IN ('ISSUED', 'CORRECTION_REQUESTED', 'VOID_REQUESTED',
+                                     'CORRECTED', 'VOIDED')
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", documentId)
+                        .param("request", protectedRequestReference)
+                        .param("split", sentTenderSplitReference)
+                        .param("synthetic", linesSynthetic)
+                        .param("binding", merchantBindingId)
+                        .update()
+                == 1;
+        if (recorded) {
+            // Numbered inside the statement that inserts it, and conflict-tolerant: a second writer racing
+            // for the same number must not poison the surrounding transaction, whose other statements carry
+            // the provider's answer.
+            jdbc.sql("""
+                    INSERT INTO payments.fiscal_sent_requests (
+                        id, tenant_id, document_id, attempt, sent_at, protected_request_reference,
+                        sent_tender_split_reference, lines_synthetic, merchant_binding_id)
+                    SELECT :newId, :tenantId, :id, COALESCE(MAX(attempt), 0) + 1, :sentAt, :request, :split,
+                           :synthetic, :binding
+                      FROM payments.fiscal_sent_requests
+                     WHERE tenant_id = :tenantId AND document_id = :id
+                    ON CONFLICT DO NOTHING
+                    """)
+                    .param("newId", Ids.newId())
+                    .param("tenantId", tenantId)
+                    .param("id", documentId)
+                    .param("sentAt", utc(sentAt))
+                    .param("request", protectedRequestReference)
+                    .param("split", sentTenderSplitReference)
+                    .param("synthetic", linesSynthetic)
+                    .param("binding", merchantBindingId)
+                    .update();
+        }
+        return recorded;
     }
 
     /**
@@ -230,7 +348,9 @@ public class JdbcFiscalDocumentStore {
                     issued_at = CASE WHEN :status = 'ISSUED' THEN :issuedAt ELSE issued_at END,
                     version = version + 1,
                     updated_at = :issuedAt
-                WHERE tenant_id = :tenantId AND id = :id AND status <> 'ISSUED'
+                WHERE tenant_id = :tenantId AND id = :id
+                  AND status NOT IN ('ISSUED', 'CORRECTION_REQUESTED', 'VOID_REQUESTED',
+                                     'CORRECTED', 'VOIDED')
                 """).params(parameters).update();
 
         return updated == 1;

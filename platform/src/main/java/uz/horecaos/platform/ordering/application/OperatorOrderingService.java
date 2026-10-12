@@ -254,7 +254,62 @@ public class OperatorOrderingService {
             @Nullable String overrideReasonCode,
             @Nullable String overrideNote,
             @Nullable UUID dineInSessionId,
-            @Nullable Long cashTenderedMinor) {
+            @Nullable Long cashTenderedMinor,
+            List<UUID> declinedAutoAddRuleIds) {
+
+        public PlaceOrderCommand {
+            declinedAutoAddRuleIds = List.copyOf(declinedAutoAddRuleIds);
+        }
+
+        /**
+         * An order that declines no auto-add rule (ADR 0158): every caller that predates the composer
+         * showing a rule's line and letting the operator take it off.
+         */
+        @SuppressWarnings("checkstyle:ParameterNumber")
+        public PlaceOrderCommand(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                UUID customerAccountId,
+                String channelCode,
+                FulfillmentMode fulfillmentMode,
+                List<OrderLine> lines,
+                @Nullable Destination destination,
+                String paymentMethodCode,
+                @Nullable String promoCode,
+                String idempotencyKey,
+                String operatorSubject,
+                @Nullable String correlationId,
+                @Nullable Instant requestedFor,
+                boolean overrideOutOfHours,
+                @Nullable UUID proposedLocationId,
+                @Nullable String overrideReasonCode,
+                @Nullable String overrideNote,
+                @Nullable UUID dineInSessionId,
+                @Nullable Long cashTenderedMinor) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines,
+                    destination,
+                    paymentMethodCode,
+                    promoCode,
+                    idempotencyKey,
+                    operatorSubject,
+                    correlationId,
+                    requestedFor,
+                    overrideOutOfHours,
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    cashTenderedMinor,
+                    List.of());
+        }
 
         /** An order that names no cash tendered: every caller that predates row 1.3e. */
         @SuppressWarnings("checkstyle:ParameterNumber")
@@ -522,8 +577,23 @@ public class OperatorOrderingService {
         }
     }
 
-    /** A cart opened for the operator's basket, and the quote that prices it. */
-    public record FilledCart(CartRow cart, CartService.PricedCart priced) {}
+    /**
+     * A cart opened for the operator's basket, and the quote that prices it.
+     *
+     * @param autoAdded the lines a rule put in the basket (ADR 0158), by cart line key, with the rule and the
+     *     text to show beside each, so the composer can draw them flagged and offer to take them off
+     */
+    public record FilledCart(
+            CartRow cart, CartService.PricedCart priced, java.util.Map<String, AutoAddReconciler.LineInfo> autoAdded) {
+
+        public FilledCart {
+            autoAdded = java.util.Map.copyOf(autoAdded);
+        }
+
+        public FilledCart(CartRow cart, CartService.PricedCart priced) {
+            this(cart, priced, java.util.Map.of());
+        }
+    }
 
     /**
      * Opens the customer's cart, puts every line, the destination, the promo code and the
@@ -545,6 +615,17 @@ public class OperatorOrderingService {
                 command.fulfillmentMode(),
                 command.customerAccountId(),
                 null);
+
+        if (!command.declinedAutoAddRuleIds().isEmpty()) {
+            // ADR 0158: the rules whose lines the operator took off the basket, remembered before any line
+            // is put in, so they are never evaluated into this cart.
+            carts.declineAutoAddRules(
+                    command.tenantId(),
+                    command.brandId(),
+                    command.customerAccountId(),
+                    cart.cartId(),
+                    command.declinedAutoAddRuleIds());
+        }
 
         int version = cart.version();
         int lineIndex = 0;
@@ -626,7 +707,10 @@ public class OperatorOrderingService {
 
         var priced =
                 carts.price(command.tenantId(), command.brandId(), command.customerAccountId(), cart.cartId(), version);
-        return new FilledCart(cart, priced);
+        var autoAdded = carts.view(command.tenantId(), command.brandId(), command.customerAccountId(), cart.cartId())
+                .map(CartService.CartView::autoAdd)
+                .orElse(java.util.Map.of());
+        return new FilledCart(cart, priced, autoAdded);
     }
 
     /**

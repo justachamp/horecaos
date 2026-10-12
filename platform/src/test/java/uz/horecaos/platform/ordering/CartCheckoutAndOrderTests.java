@@ -361,8 +361,16 @@ class CartCheckoutAndOrderTests {
                 // own producer is covered in LoyaltyLedgerAndSplitTenderTests.
                 event -> {},
                 clock);
+        uz.horecaos.platform.support.InMemoryPlatformPolicies reasonPolicies =
+                new uz.horecaos.platform.support.InMemoryPlatformPolicies();
         loyaltyAdjustments = new uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService(
-                loyaltyStore, ALWAYS_APPROVES, new JdbcAuditRecorder(jdbc, objectMapper), clock, 100_000L);
+                loyaltyStore,
+                ALWAYS_APPROVES,
+                new JdbcAuditRecorder(jdbc, objectMapper),
+                clock,
+                new uz.horecaos.platform.loyalty.application.AdjustmentReasonPolicyService(
+                        reasonPolicies, reasonPolicies, new io.micrometer.core.instrument.simple.SimpleMeterRegistry()),
+                100_000L);
         settlementStore = new JdbcSettlementStore(jdbc);
         intentStore = new JdbcPaymentIntentStore(jdbc);
         paymentAttemptStore = new JdbcPaymentAttemptStore(jdbc);
@@ -551,7 +559,8 @@ class CartCheckoutAndOrderTests {
                         orderStore,
                         org.mockito.Mockito.mock(OrderLatenessPolicyService.class),
                         org.mockito.Mockito.mock(uz.horecaos.platform.ordering.api.MarketplaceBindingLookup.class),
-                        clock));
+                        clock),
+                org.mockito.Mockito.mock(uz.horecaos.platform.iam.api.staff.StaffDirectory.class));
         // ADR 0074, production classes end to end: the real publication reader,
         // the real price lookup pricing implements, and the real InventoryService
         // behind InventoryReservationPort. A stub for any of the three would let
@@ -4429,19 +4438,326 @@ class CartCheckoutAndOrderTests {
     }
 
     @Test
-    @DisplayName("cancelling an unpaid order is refused at publish, so no document can ever carry it")
-    void cancelIsRefusedAtPublish() {
+    @DisplayName("CANCEL is publishable from fifteen minutes and refused below with a code that says why")
+    void cancelIsPublishableFromFifteenMinutes() {
         PaymentWindowAuthoringService windows = paymentWindows();
+        var scope = uz.horecaos.platform.iam.api.ResourceScope.location(TENANT, BRAND, LOCATION);
+        var author = uz.horecaos.platform.audit.api.ActorRef.user("window-author", null);
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> windows.author(
-                        uz.horecaos.platform.iam.api.ResourceScope.location(TENANT, BRAND, LOCATION),
-                        new PaymentWindowPolicy(30, PaymentWindowPolicy.Action.CANCEL),
-                        0,
-                        uz.horecaos.platform.audit.api.ActorRef.user("window-author", null),
-                        "Cancel them",
-                        Duration.ofMinutes(30)))
-                .isInstanceOf(uz.horecaos.platform.web.api.ApiException.class)
-                .hasMessageContaining("ADR 0019");
+        Throwable tooShort = catchThrowable(() -> windows.author(
+                scope,
+                new PaymentWindowPolicy(14, PaymentWindowPolicy.Action.CANCEL),
+                0,
+                author,
+                "Cancel them",
+                Duration.ofMinutes(30)));
+
+        assertThat(tooShort).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) tooShort).errorCode()).isEqualTo(ErrorCode.PAYMENT_WINDOW_TOO_SHORT_FOR_CANCEL);
+
+        var published = windows.author(
+                scope,
+                new PaymentWindowPolicy(15, PaymentWindowPolicy.Action.CANCEL),
+                0,
+                author,
+                "Cancel them",
+                Duration.ofMinutes(30));
+        assertThat(published.document().action()).isEqualTo(PaymentWindowPolicy.Action.CANCEL);
+        assertThat(published.document().windowMinutes()).isEqualTo(15);
+    }
+
+    // ----------------------------------------- ADR 0170: the window that cancels
+
+    @Test
+    @DisplayName("an unpaid order past a CANCEL window ends as PAYMENT_FAILED with its hold released and the "
+            + "payment process settled")
+    void anUnpaidOrderPastACancelWindowEndsAsPaymentFailed() {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-lapse", "CLICK")));
+        UUID orderId = orderIdOf(placed);
+        PaymentWindowAuthoringService windows = publishWindow(20, PaymentWindowPolicy.Action.CANCEL);
+        OrderPaymentProcess sweeping = sweepingWith(windows);
+        published.clear();
+
+        clock.advance(Duration.ofMinutes(21));
+        int checked = tx(() -> sweeping.sweep(
+                clock.instant(), Duration.ofMinutes(30), Duration.ofMinutes(1), 10, lapseThroughOrderState()));
+
+        assertThat(checked).isEqualTo(1);
+        var ended = orderStore.find(TENANT, orderId).orElseThrow();
+        assertThat(ended.status()).isEqualTo(OrderStatus.PAYMENT_FAILED);
+        assertThat(jdbc.sql("""
+                        SELECT kind, system_category, stock_disposition, customer_refund
+                        FROM ordering.order_outcomes WHERE tenant_id = :tenantId AND order_id = :orderId
+                        """)
+                        .param("tenantId", TENANT)
+                        .param("orderId", orderId)
+                        .query()
+                        .singleRow())
+                .containsEntry("kind", "PAYMENT_FAILED")
+                .containsEntry("system_category", "PAYMENT_NOT_RECEIVED")
+                .containsEntry("stock_disposition", "RELEASE")
+                .containsEntry("customer_refund", "NONE");
+        var lastTransition = orderStore.history(TENANT, orderId).getLast();
+        assertThat(lastTransition.fromStatus()).isEqualTo("PAYMENT_AUTHORIZING");
+        assertThat(lastTransition.toStatus()).isEqualTo("PAYMENT_FAILED");
+        assertThat(lastTransition.trigger()).isEqualTo("SYSTEM");
+        assertThat(lastTransition.reasonCode()).isEqualTo("PAYMENT_WINDOW_ELAPSED");
+        assertThat(orderPaymentProcessStatus(orderId))
+                .as("ended, so the payment process is resolved rather than left flagged")
+                .isEqualTo("COMPLETED");
+
+        tx(() -> inventoryProcess.runOnce(10));
+        assertThat(reservationStatus())
+                .as("the hold taken at checkout goes back")
+                .isEqualTo("RELEASED");
+
+        assertThat(published.ordering())
+                .filteredOn(event -> event instanceof uz.horecaos.platform.ordering.api.OrderPaymentLapsed)
+                .singleElement()
+                .satisfies(event -> {
+                    var lapsed = (uz.horecaos.platform.ordering.api.OrderPaymentLapsed) event;
+                    assertThat(lapsed.orderId()).isEqualTo(orderId);
+                    assertThat(lapsed.windowMinutes()).isEqualTo(20);
+                    assertThat(lapsed.status()).isEqualTo("PAYMENT_FAILED");
+                });
+        assertThat(published.ordering())
+                .as("not a cancellation: a payment that never came is its own fact")
+                .noneMatch(event -> event instanceof uz.horecaos.platform.ordering.api.OrderCancelled);
+        assertThat(jdbc.sql("""
+                        SELECT count(*) FROM audit.audit_events
+                        WHERE action_code = 'ordering.order.payment-window-lapsed' AND target_id = :id
+                        """).param("id", orderId).query(Long.class).single())
+                .as("one BUSINESS fact naming the window and the policy version")
+                .isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("in SHADOW a CANCEL window is counted as would_lapse and the order is flagged exactly as FLAG_ONLY "
+            + "would flag it")
+    void shadowCountsWhatItWouldHaveEndedAndEndsNothing() {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-lapse-shadow", "CLICK")));
+        UUID orderId = orderIdOf(placed);
+        PaymentWindowAuthoringService windows = publishWindow(20, PaymentWindowPolicy.Action.CANCEL);
+        var meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        OrderPaymentProcess sweeping =
+                new OrderPaymentProcess(new JdbcOrderProcessStore(jdbc), objectMapper, windows, meters);
+
+        clock.advance(Duration.ofMinutes(21));
+        tx(() -> sweeping.sweep(clock.instant(), Duration.ofMinutes(30), Duration.ofMinutes(1), 10, null));
+
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status())
+                .as("shadow ends nothing")
+                .isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
+        assertThat(orderPaymentProcessStatus(orderId)).isEqualTo("MANUAL_ACTION_REQUIRED");
+        assertThat(meters.counter("ordering.payment_window", "outcome", "would_lapse")
+                        .count())
+                .isEqualTo(1.0);
+        assertThat(meters.counter("ordering.payment_window", "outcome", "lapsed")
+                        .count())
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("an order with an UNCERTAIN payment attempt is flagged and rechecked, never ended over an "
+            + "unanswered question about money")
+    void anUncertainAttemptKeepsTheOrderAlive() {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-lapse-uncertain", "CLICK")));
+        UUID orderId = orderIdOf(placed);
+        UUID attempt = reservedAttempt(orderId, PaymentProviderType.CLICK, Duration.ofHours(12));
+        paymentAttemptStore.markUncertain(
+                TENANT,
+                attempt,
+                uz.horecaos.platform.payments.domain.PaymentAttemptStatus.RESERVED,
+                uz.horecaos.platform.payments.domain.UncertaintyResolver.forProvider(PaymentProviderType.CLICK),
+                clock.instant(),
+                clock.instant().plus(Duration.ofHours(1)),
+                "CLICK_TIMEOUT");
+        PaymentWindowAuthoringService windows = publishWindow(20, PaymentWindowPolicy.Action.CANCEL);
+        var meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        OrderPaymentProcess sweeping =
+                new OrderPaymentProcess(new JdbcOrderProcessStore(jdbc), objectMapper, windows, meters);
+
+        clock.advance(Duration.ofMinutes(21));
+        tx(() -> sweeping.sweep(
+                clock.instant(), Duration.ofMinutes(30), Duration.ofMinutes(1), 10, lapseThroughOrderState()));
+
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status())
+                .as("a question about money is its resolver's; the order is not ended over it")
+                .isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
+        assertThat(orderPaymentProcessStatus(orderId))
+                .as("still a problem on the stuck list, and claimable again on the next tick")
+                .isEqualTo("FAILED_RETRYABLE");
+        assertThat(meters.counter("ordering.payment_window", "outcome", "skipped_uncertain")
+                        .count())
+                .isEqualTo(1.0);
+
+        // The resolver answers: the customer did not pay. The next tick ends the order.
+        paymentAttemptStore.transition(
+                TENANT,
+                attempt,
+                uz.horecaos.platform.payments.domain.PaymentAttemptStatus.UNCERTAIN,
+                uz.horecaos.platform.payments.domain.PaymentAttemptStatus.FAILED,
+                null,
+                null,
+                null,
+                "RESOLVED_NOT_PAID",
+                clock.instant());
+        clock.advance(Duration.ofMinutes(2));
+        tx(() -> sweeping.sweep(
+                clock.instant(), Duration.ofMinutes(30), Duration.ofMinutes(1), 10, lapseThroughOrderState()));
+
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status()).isEqualTo(OrderStatus.PAYMENT_FAILED);
+    }
+
+    @Test
+    @DisplayName("a FLAG_ONLY window and a window not yet elapsed end nothing, whatever the lapse handler is")
+    void onlyAnElapsedCancelWindowEndsAnOrder() {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var flagged = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-lapse-flag-only", "CLICK")));
+        PaymentWindowAuthoringService flagOnly = publishWindow(20, PaymentWindowPolicy.Action.FLAG_ONLY);
+        OrderPaymentProcess sweeping = sweepingWith(flagOnly);
+
+        clock.advance(Duration.ofMinutes(21));
+        tx(() -> sweeping.sweep(
+                clock.instant(), Duration.ofMinutes(30), Duration.ofMinutes(1), 10, lapseThroughOrderState()));
+
+        assertThat(orderStore.find(TENANT, orderIdOf(flagged)).orElseThrow().status())
+                .as("FLAG_ONLY is today's behaviour: flagged for a person")
+                .isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
+        assertThat(orderPaymentProcessStatus(orderIdOf(flagged))).isEqualTo("MANUAL_ACTION_REQUIRED");
+
+        var fresh = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-lapse-fresh", "CLICK")));
+        PaymentWindowAuthoringService cancelling = publishWindow(60, PaymentWindowPolicy.Action.CANCEL, 1);
+        OrderPaymentProcess cancellingSweep = sweepingWith(cancelling);
+        clock.advance(Duration.ofMinutes(10));
+        tx(() -> cancellingSweep.sweep(
+                clock.instant(), Duration.ofMinutes(30), Duration.ofMinutes(1), 10, lapseThroughOrderState()));
+
+        assertThat(orderStore.find(TENANT, orderIdOf(fresh)).orElseThrow().status())
+                .as("ten minutes into a sixty-minute CANCEL window")
+                .isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
+    }
+
+    @Test
+    @DisplayName("a capture that lands first wins the race: the lapse applies nothing and the order stays confirmed")
+    void aCaptureThatLandsFirstWinsTheRace() {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-lapse-race", "CLICK")));
+        UUID orderId = orderIdOf(placed);
+        UUID attempt = reservedAttempt(orderId, PaymentProviderType.CLICK, Duration.ofHours(12));
+        capturePayment(orderId, attempt);
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status()).isEqualTo(OrderStatus.CONFIRMED);
+
+        var result = tx(() -> orderState.paymentWindowReached(TENANT, orderId, 20, 1));
+
+        assertThat(result.applied()).isFalse();
+        assertThat(result.status()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status()).isEqualTo(OrderStatus.CONFIRMED);
+    }
+
+    @Test
+    @DisplayName("a payment captured after the lapse never revives the order: the money is recorded and a refund "
+            + "is raised")
+    void aLateCaptureNeverRevivesALapsedOrder() {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-lapse-late", "CLICK")));
+        UUID orderId = orderIdOf(placed);
+        UUID attempt = reservedAttempt(orderId, PaymentProviderType.CLICK, Duration.ofHours(12));
+        tx(() -> orderState.paymentWindowReached(TENANT, orderId, 20, 1));
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status()).isEqualTo(OrderStatus.PAYMENT_FAILED);
+        published.clear();
+
+        Throwable late = catchThrowable(() -> capturePayment(orderId, attempt));
+
+        assertThat(late).as("late money is recorded, never a crash").isNull();
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status())
+                .as("PAYMENT_FAILED is terminal; the state machine has no edge back out of it")
+                .isEqualTo(OrderStatus.PAYMENT_FAILED);
+        assertThat(published.ordering())
+                .noneMatch(event -> event instanceof OrderConfirmed || event instanceof OrderAwaitingApproval);
+        assertThat(settlementStore.findSettlement(TENANT, orderId))
+                .as("the money stays on the settlement, where a remedy can refund it")
+                .isPresent();
+        assertThat(published.lateCaptures)
+                .as("and a person is told a refund is due")
+                .singleElement()
+                .satisfies(fact -> assertThat(fact.orderId()).isEqualTo(orderId));
+    }
+
+    @Test
+    @DisplayName("a capture in flight is not deadlocked by the lapse sweep: the sweep holds the payment process row "
+            + "while it works, so it must not wait for the order a capture is already moving")
+    void aCaptureInFlightIsNotDeadlockedByTheLapseSweep() throws Exception {
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-lapse-lock-order", "CLICK")));
+        UUID orderId = orderIdOf(placed);
+        UUID attempt = reservedAttempt(orderId, PaymentProviderType.CLICK, Duration.ofHours(12));
+        PaymentWindowAuthoringService windows = publishWindow(20, PaymentWindowPolicy.Action.CANCEL);
+        var meters = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        clock.advance(Duration.ofMinutes(21));
+
+        // The sweep has claimed (and so holds) the order's payment process row, and waits there until the
+        // capture is stuck behind it: the capture moves the order first and settles the process row second, the
+        // sweep the other way round, which is the shape of a deadlock whose victim is the capture.
+        CountDownLatch claimed = new CountDownLatch(1);
+        CountDownLatch captureIsWaiting = new CountDownLatch(1);
+        OrderPaymentProcess sweeping = new OrderPaymentProcess(
+                new JdbcOrderProcessStore(jdbc) {
+                    @Override
+                    public List<ProcessRow> claim(String processName, Instant now, int batchSize) {
+                        List<ProcessRow> rows = super.claim(processName, now, batchSize);
+                        if (!rows.isEmpty()) {
+                            claimed.countDown();
+                            try {
+                                captureIsWaiting.await(60, TimeUnit.SECONDS);
+                            } catch (InterruptedException interrupted) {
+                                Thread.currentThread().interrupt();
+                            }
+                        }
+                        return rows;
+                    }
+                },
+                objectMapper,
+                windows,
+                meters);
+
+        ExecutorService threads = Executors.newFixedThreadPool(2);
+        try {
+            Future<Integer> sweep = threads.submit(() -> tx(() -> sweeping.sweep(
+                    clock.instant(), Duration.ofMinutes(30), Duration.ofMinutes(1), 10, lapseThroughOrderState())));
+            assertThat(claimed.await(60, TimeUnit.SECONDS)).isTrue();
+            Future<?> capture = threads.submit(() -> capturePayment(orderId, attempt));
+            for (int i = 0; i < 600; i++) {
+                if (jdbc.sql("SELECT count(*) FROM pg_locks WHERE NOT granted")
+                                .query(Long.class)
+                                .single()
+                        > 0) {
+                    break;
+                }
+                Thread.sleep(50);
+            }
+            captureIsWaiting.countDown();
+
+            assertThat(capture.get(60, TimeUnit.SECONDS))
+                    .as("the capture is not the deadlock's victim")
+                    .isNull();
+            assertThat(sweep.get(60, TimeUnit.SECONDS)).isEqualTo(1);
+        } finally {
+            captureIsWaiting.countDown();
+            threads.shutdownNow();
+        }
+
+        assertThat(orderStore.find(TENANT, orderId).orElseThrow().status())
+                .as("the money landed, so the order is not ended for want of it")
+                .isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(orderPaymentProcessStatus(orderId)).isEqualTo("COMPLETED");
+        assertThat(meters.counter("ordering.payment_window", "outcome", "skipped_contended")
+                        .count())
+                .as("the sweep left an order a capture was moving alone and came back to it later")
+                .isEqualTo(1.0);
     }
 
     private PaymentWindowAuthoringService paymentWindows() {
@@ -4453,6 +4769,38 @@ class CartCheckoutAndOrderTests {
                 jdbc,
                 audit,
                 clock);
+    }
+
+    /** Publishes an {@code ordering.payment_window} at the test location and returns the store the sweep reads. */
+    private PaymentWindowAuthoringService publishWindow(int minutes, PaymentWindowPolicy.Action action) {
+        return publishWindow(minutes, action, 0);
+    }
+
+    private PaymentWindowAuthoringService publishWindow(int minutes, PaymentWindowPolicy.Action action, int expected) {
+        PaymentWindowAuthoringService windows = paymentWindows();
+        windows.author(
+                uz.horecaos.platform.iam.api.ResourceScope.location(TENANT, BRAND, LOCATION),
+                new PaymentWindowPolicy(minutes, action),
+                expected,
+                uz.horecaos.platform.audit.api.ActorRef.user("window-author", null),
+                "Test window",
+                Duration.ofMinutes(30));
+        return windows;
+    }
+
+    private OrderPaymentProcess sweepingWith(PaymentWindowAuthoringService windows) {
+        return new OrderPaymentProcess(
+                new JdbcOrderProcessStore(jdbc),
+                objectMapper,
+                windows,
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+    }
+
+    /** What the worker passes in ENFORCE mode, minus the savepoint the hand-wired suite has no proxy for. */
+    private OrderPaymentProcess.Lapse lapseThroughOrderState() {
+        return (tenantId, orderId, windowMinutes, policyVersion) -> orderState
+                .paymentWindowReached(tenantId, orderId, windowMinutes, policyVersion)
+                .applied();
     }
 
     @Test
@@ -8239,6 +8587,10 @@ class CartCheckoutAndOrderTests {
 
         private final List<OrderingEvent> events = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
 
+        /** ADR 0170: the in-process facts that a payment landed on an order that had already lapsed. */
+        private final List<uz.horecaos.platform.ordering.api.OrderCapturedAfterLapse> lateCaptures =
+                java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
         /**
          * Stands in for the Spring dispatch a {@code BEFORE_COMMIT} listener gets.
          *
@@ -8270,6 +8622,9 @@ class CartCheckoutAndOrderTests {
             if (event instanceof OrderingEvent ordering) {
                 events.add(ordering);
             }
+            if (event instanceof uz.horecaos.platform.ordering.api.OrderCapturedAfterLapse lateCapture) {
+                lateCaptures.add(lateCapture);
+            }
             if (event instanceof OrderConfirmed confirmed) {
                 onConfirmed.accept(confirmed);
             }
@@ -8294,6 +8649,7 @@ class CartCheckoutAndOrderTests {
 
         void clear() {
             events.clear();
+            lateCaptures.clear();
         }
     }
 

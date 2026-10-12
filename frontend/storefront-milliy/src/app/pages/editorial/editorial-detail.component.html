@@ -1,0 +1,107 @@
+@switch (state()) {
+  @case ('unavailable') {
+    <app-editorial-unavailable />
+  }
+  @case ('loading') {
+    <p class="state" data-testid="editorial-loading">{{ 'common.loading' | t }}</p>
+  }
+  @case ('ready') {
+    @if (entry(); as article) {
+      <article class="article">
+        <a class="back" data-testid="editorial-back" [routerLink]="['/', valid()]">
+          {{ 'common.back' | t }}
+        </a>
+
+        @if (coverPlan(); as cover) {
+          <div class="cover" data-testid="editorial-cover">
+            <app-content-media
+              [plan]="cover"
+              [alt]="article.cover?.alt ?? ''"
+              [aspectRatio]="coverAspect()"
+              [eager]="true"
+              sizes="(min-width: 768px) 720px, 100vw"
+              (failed)="coverFailed()"
+            />
+          </div>
+        }
+
+        <header class="heading" data-testid="editorial-heading" [attr.lang]="titleLang()">
+          <h1 class="heading__title" data-testid="editorial-title">{{ article.title }}</h1>
+          @if (date(); as published) {
+            <time
+              class="heading__date"
+              data-testid="editorial-date"
+              [attr.datetime]="article.publishedAt"
+              >{{ published }}</time
+            >
+          }
+          @if (article.summary) {
+            <p class="heading__summary">{{ article.summary }}</p>
+          }
+        </header>
+
+        @if (article.vacancy; as vacancy) {
+          <section class="vacancy" data-testid="editorial-vacancy">
+            <p class="vacancy__type">{{ 'editorial.employment.' + vacancy.employmentType | t }}</p>
+            @if (vacancy.branch; as branch) {
+              <p class="vacancy__branch" data-testid="editorial-branch">
+                <span class="vacancy__label">{{ 'editorial.branch' | t }}</span>
+                <span>{{ branch.name }}</span>
+                @if (branch.addressLine) {
+                  <span>{{ branch.addressLine }}</span>
+                }
+                @if (branch.city) {
+                  <span>{{ branch.city }}</span>
+                }
+              </p>
+            }
+            @if (contact(); as how) {
+              <p class="vacancy__contact" data-testid="editorial-contact">
+                <span class="vacancy__label">{{ 'editorial.applyHint' | t }}</span>
+                @if (how.href; as href) {
+                  <a
+                    class="vacancy__link"
+                    [href]="href"
+                    [attr.target]="how.external ? '_blank' : null"
+                    [attr.rel]="how.external ? 'noopener noreferrer' : null"
+                    >{{ how.label }}</a
+                  >
+                } @else {
+                  <span class="vacancy__text">{{ how.label }}</span>
+                }
+              </p>
+            }
+          </section>
+        }
+
+        @if (article.blocks.length > 0) {
+          <app-content-blocks [blocks]="article.blocks" [lang]="bodyLang()" />
+        }
+
+        @if (images().length > 0) {
+          <ul class="album" data-testid="editorial-images">
+            @for (image of images(); track image.index) {
+              <li>
+                <figure class="album__figure">
+                  @if (image.plan; as picture) {
+                    <app-content-media
+                      class="album__image"
+                      [plan]="picture"
+                      [alt]="image.alt"
+                      [aspectRatio]="image.aspect"
+                      sizes="(min-width: 768px) 360px, 50vw"
+                      (failed)="imageFailed(image.index)"
+                    />
+                  }
+                  @if (image.caption) {
+                    <figcaption class="album__caption">{{ image.caption }}</figcaption>
+                  }
+                </figure>
+              </li>
+            }
+          </ul>
+        }
+      </article>
+    }
+  }
+}

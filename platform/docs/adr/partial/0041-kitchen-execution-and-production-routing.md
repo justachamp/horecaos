@@ -67,7 +67,7 @@
 - Date decided: 2026-08-21
 - Deciders: Ayubkhon Abbosov (platform architecture), operations (station layout and role bundles), product (entitlement)
 - Depends on: ADR 0014, ADR 0016, ADR 0017, ADR 0019, ADR 0025, ADR 0033, ADR 0035, ADR 0040
-- Supersedes / Superseded by: —
+- Supersedes / Superseded by: — / ADR 0154 for the exit criteria's «no paper tickets» sentence only (a branch may now print its tickets; screens remain the default)
 - Open inputs: Whether the kitchen surface is a metered per-location entitlement under ADR 0021 (product, finance). Handover verification protocols of aggregators other than Yandex Eats are an open input of ADR 0040, which owns the challenge, not of this ADR
 
 ## Context

@@ -49,6 +49,7 @@ export const CONFIGURATION_KEY_ROUTES: Readonly<Record<string, string>> = {
   'telemetry.track_retention_days': 'data-privacy',
   'courier.applicant_retention_months': 'data-privacy',
   'feature.support_visits': 'support-visits',
+  'feature.printing': 'printing',
   'pricing.promotion.approval.percentage_over_bp': 'approvals',
   'pricing.promotion.approval.amount_over_minor': 'approvals',
   'pricing.promotion.approval.always_for_markup': 'approvals',

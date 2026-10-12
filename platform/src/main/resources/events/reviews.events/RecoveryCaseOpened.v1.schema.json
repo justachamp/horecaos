@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/reviews.events/RecoveryCaseOpened.v1.schema.json",
+  "title": "RecoveryCaseOpened v1 payload",
+  "description": "A service-recovery case opened about a review (ADR 0159), with its source, the rating that warranted it and the due times of its two clocks.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "caseId",
+    "reviewId",
+    "orderId",
+    "brandId",
+    "locationId",
+    "source",
+    "rating",
+    "firstResponseDueAt",
+    "resolutionDueAt"
+  ],
+  "properties": {
+    "caseId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "reviewId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "brandId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "locationId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "AUTO",
+        "MANUAL"
+      ]
+    },
+    "rating": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5
+    },
+    "firstResponseDueAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "resolutionDueAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

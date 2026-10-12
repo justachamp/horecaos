@@ -23,7 +23,7 @@
 - Deciders: proposed by Claude and built on the platform owner's instruction
   of 2026-09-11; Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0079, ADR 0062, ADR 0028, ADR 0035, ADR 0025
-- Supersedes / Superseded by: — / —
+- Supersedes / Superseded by: — / [ADR 0162](../partial/0162-kiosk-device-pairing.md) reopens Decision 5's sentence «ADR 0079 keeps a pairing code typed, never scanned, and this component does not reopen that decision» for the `KIOSK` class only: a kiosk's QR carries a link to the console's approval page, scanned by the manager's own phone, and the typed code stays; nothing else in this record changes
 - Open inputs: **Device scope discovery** — whether a future backend
   "whoami"/JWT-claims endpoint replaces the local, per-device manual setup
   step this wave builds, or manual entry stays the permanent answer (owner:

@@ -65,6 +65,9 @@ class OrderBoardQueryTests {
      */
     private static final UUID MARKETPLACE_BINDING = UUID.fromString("018f6f4e-3000-7000-8000-0000000000c1");
 
+    /** ADR 0160: the staff members who took and accepted an order, by name, for the optional board columns. */
+    private static final List<String> STAFF_ACTOR_NAMES = List.of("createdByDisplayName", "acceptedByDisplayName");
+
     /** Every fixture order is placed relative to this, newest last. */
     private static final Instant NOON = Instant.parse("2026-09-10T12:00:00Z");
 
@@ -559,8 +562,12 @@ class OrderBoardQueryTests {
                 .map(RecordComponent::getName)
                 .filter(component -> {
                     String lowered = component.toLowerCase(Locale.ROOT);
-                    // publicOrderNumber is the branch's own counter, not a person.
+                    // publicOrderNumber is the branch's own counter, not a person. The two actor names are the
+                    // tenant's own staff, not a customer (ADR 0160): the board's optional «Создал» and «Принял»
+                    // columns draw them, they are resolved only for a caller order.read already admits, and
+                    // the next test pins that they are the only two.
                     return !lowered.equals("publicordernumber")
+                            && !STAFF_ACTOR_NAMES.contains(component)
                             && forbidden.stream().anyMatch(lowered::contains);
                 })
                 .toList();
@@ -568,6 +575,22 @@ class OrderBoardQueryTests {
         assertThat(offending)
                 .as("orders.md §1.5: the board renders on a screen standing open in a branch all day")
                 .isEmpty();
+    }
+
+    @Test
+    @DisplayName("the only names on the board row are the two staff actors' and nothing else carries one")
+    void theOnlyNamesAreTheStaffActors() {
+        List<String> named = java.util.Arrays.stream(
+                        OperationsOrderController.OrderSummaryResponse.class.getRecordComponents())
+                .map(RecordComponent::getName)
+                .filter(component ->
+                        component.toLowerCase(Locale.ROOT).contains("name") && !component.equals("publicOrderNumber"))
+                .toList();
+
+        assertThat(named)
+                .as("ADR 0160 adds createdByDisplayName and acceptedByDisplayName for the board's optional "
+                        + "columns; a third name on this row is a new decision")
+                .containsExactlyInAnyOrderElementsOf(STAFF_ACTOR_NAMES);
     }
 
     @Test

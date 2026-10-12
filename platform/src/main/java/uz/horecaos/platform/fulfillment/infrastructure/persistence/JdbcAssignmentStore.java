@@ -80,6 +80,9 @@ public class JdbcAssignmentStore {
         params.put("policyVersion", attempt.policyVersion());
         params.put("requestedAt", utc(attempt.now()));
         params.put("expiresAt", utc(attempt.expiresAt()));
+        params.put("payBasis", attempt.payBasis());
+        params.put("runMergeDistance", attempt.runMergeDistanceMeters());
+        params.put("runLeadShipmentId", attempt.runLeadShipmentId());
 
         Optional<Opened> inserted;
         try {
@@ -87,12 +90,14 @@ public class JdbcAssignmentStore {
                     INSERT INTO fulfillment.assignment_attempts (
                         id, tenant_id, delivery_plan_id, sequence_number, source_type,
                         courier_id, provider_binding_id, quote_id, status, idempotency_key,
-                        decision_reason, policy_id, policy_version, requested_at, expires_at)
+                        decision_reason, policy_id, policy_version, requested_at, expires_at,
+                        pay_basis, run_merge_distance_m, run_lead_shipment_id)
                     SELECT :id, :tenantId, :planId,
                            coalesce(max(existing.sequence_number), 0) + 1,
                            :sourceType, :courierId, :bindingId, :quoteId, :status,
                            :idempotencyKey, :reason, :policyId, :policyVersion,
-                           :requestedAt, :expiresAt
+                           :requestedAt, :expiresAt,
+                           :payBasis, :runMergeDistance, :runLeadShipmentId
                     FROM fulfillment.assignment_attempts AS existing
                     WHERE existing.tenant_id = :tenantId AND existing.delivery_plan_id = :planId
                     ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
@@ -242,6 +247,7 @@ public class JdbcAssignmentStore {
         }
         Optional<UUID> shipment = win(
                 new WinningAttempt(tenantId, attemptId, SourceType.INTERNAL, AttemptStatus.OFFERED, null, null, now));
+        shipment.ifPresent(created -> joinRun(tenantId, attemptId, created));
         if (shipment.isEmpty()) {
             // Somebody else is already carrying this order. The offer is closed
             // rather than left OFFERED, because an offer that goes on holding
@@ -251,6 +257,68 @@ public class JdbcAssignmentStore {
         }
         return shipment;
     }
+
+    /**
+     * ADR 0170 Decision 1: a shipment accepted on a {@code RUN_INCREMENT} offer joins the run of the shipment
+     * the offer was measured to, and that shipment is given the run's key at the join if it had none. There is
+     * no trip, no route order and no stored coordinates; a run is just the set of shipments sharing a key.
+     *
+     * <p>Idempotent and quiet: a {@code DIRECT} attempt has nothing to join, and a lead that has since been
+     * cancelled still names a key it can lend (the follower's pay rule at delivery decides whether the run
+     * still counts). One statement per row, inside the accepting transaction.
+     */
+    private void joinRun(UUID tenantId, UUID attemptId, UUID shipmentId) {
+        Optional<RunStamp> stamp = jdbc.sql("""
+                SELECT run_merge_distance_m, run_lead_shipment_id
+                FROM fulfillment.assignment_attempts
+                WHERE tenant_id = :tenantId AND id = :attemptId AND pay_basis = 'RUN_INCREMENT'
+                """)
+                .param("tenantId", tenantId)
+                .param("attemptId", attemptId)
+                .query((row, number) -> new RunStamp(
+                        row.getInt("run_merge_distance_m"), row.getObject("run_lead_shipment_id", UUID.class)))
+                .optional();
+        if (stamp.isEmpty()) {
+            return;
+        }
+        // Offer the lead a key, then read back the one it has. Reading first and writing a key of our own
+        // loses a race that two followers accepted a moment apart always run: both read "no key", both mint
+        // one, the lead keeps the first writer's and the second follower is stamped with a key nobody else
+        // carries, which splits one run in two. The conditional write is what picks the winner (the second
+        // waits for the first to commit, finds the key set and changes nothing), and the read after it
+        // returns the winner's key to both.
+        UUID offered = UUID.randomUUID();
+        jdbc.sql("""
+                UPDATE fulfillment.shipments
+                SET run_key = :runKey
+                WHERE tenant_id = :tenantId AND id = :leadId AND run_key IS NULL
+                """)
+                .param("runKey", offered)
+                .param("tenantId", tenantId)
+                .param("leadId", stamp.get().leadShipmentId())
+                .update();
+        UUID runKey = jdbc.sql("""
+                        SELECT run_key FROM fulfillment.shipments
+                        WHERE tenant_id = :tenantId AND id = :leadId
+                        """)
+                .param("tenantId", tenantId)
+                .param("leadId", stamp.get().leadShipmentId())
+                .query((row, number) -> row.getObject("run_key", UUID.class))
+                .optional()
+                .orElse(offered);
+        jdbc.sql("""
+                UPDATE fulfillment.shipments
+                SET run_key = :runKey, run_merge_distance_m = :distance
+                WHERE tenant_id = :tenantId AND id = :shipmentId
+                """)
+                .param("runKey", runKey)
+                .param("distance", stamp.get().mergeDistanceMeters())
+                .param("tenantId", tenantId)
+                .param("shipmentId", shipmentId)
+                .update();
+    }
+
+    private record RunStamp(int mergeDistanceMeters, UUID leadShipmentId) {}
 
     /** The attempt ended without a shipment. */
     public boolean close(
@@ -369,6 +437,101 @@ public class JdbcAssignmentStore {
     }
 
     // ------------------------------------------------------------------- reads
+
+    /**
+     * The attempt a derived idempotency key names, if one was ever opened (ADR 0172
+     * Decision 8). A bulk item is retried under the same key, and what it finds
+     * here decides whether it carries on with the attempt a crash left behind
+     * (REQUESTED), recognises its own finished work (ACCEPTED) or meets a key that
+     * is already spent.
+     */
+    public Optional<AttemptRef> findAttemptByKey(UUID tenantId, String idempotencyKey) {
+        return jdbc.sql("""
+                SELECT id, delivery_plan_id, courier_id, status, shipment_id
+                FROM fulfillment.assignment_attempts
+                WHERE tenant_id = :tenantId AND idempotency_key = :key
+                """)
+                .param("tenantId", tenantId)
+                .param("key", idempotencyKey)
+                .query((row, number) -> new AttemptRef(
+                        row.getObject("id", UUID.class),
+                        row.getObject("delivery_plan_id", UUID.class),
+                        row.getObject("courier_id", UUID.class),
+                        AttemptStatus.valueOf(row.getString("status")),
+                        row.getObject("shipment_id", UUID.class)))
+                .optional();
+    }
+
+    /**
+     * Whether somebody other than {@code idempotencyKey} holds a live attempt on the
+     * plan: an automated tick's offer, or another dispatcher's click a moment earlier.
+     * Neither is a person's to override.
+     */
+    public boolean hasLiveAttemptOtherThan(UUID tenantId, UUID planId, String idempotencyKey) {
+        return jdbc.sql("""
+                SELECT 1 FROM fulfillment.assignment_attempts
+                WHERE tenant_id = :tenantId AND delivery_plan_id = :planId
+                  AND status IN ('REQUESTED', 'OFFERED') AND idempotency_key <> :key
+                """)
+                .param("tenantId", tenantId)
+                .param("planId", planId)
+                .param("key", idempotencyKey)
+                .query(Integer.class)
+                .optional()
+                .isPresent();
+    }
+
+    /** An attempt whose outcome is unreconciled (ADR 0014: it stops further booking, because two couriers on one order is the failure the single-winner rule exists to prevent). */
+    public boolean hasUncertainAttempt(UUID tenantId, UUID planId) {
+        return jdbc.sql("""
+                SELECT 1 FROM fulfillment.assignment_attempts
+                WHERE tenant_id = :tenantId AND delivery_plan_id = :planId
+                  AND (status = 'UNCERTAIN' OR uncertain_outcome)
+                """)
+                .param("tenantId", tenantId)
+                .param("planId", planId)
+                .query(Integer.class)
+                .optional()
+                .isPresent();
+    }
+
+    /** Whether the tenant has such a courier at all (ordering validates a request's courier before any item runs). */
+    public boolean courierExists(UUID tenantId, UUID courierId) {
+        return jdbc.sql("SELECT 1 FROM fulfillment.couriers WHERE tenant_id = :tenantId AND id = :courierId")
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .query(Integer.class)
+                .optional()
+                .isPresent();
+    }
+
+    /**
+     * Locks the courier's row and counts what the courier is carrying (ADR 0172
+     * Decision 4). ADR 0042 says the ceiling is a conditional update because
+     * count-then-insert races two dispatchers into a third order; the lock is what
+     * makes this count-then-insert safe for two bulks aimed at one courier: the
+     * second waits for the first item's transaction and then counts its committed
+     * shipment. Must run inside the item's transaction.
+     *
+     * <p>Carried means a shipment that is neither {@code DELIVERED} nor
+     * {@code CANCELLED}, the predicate of {@code ix_shipment_courier_open}.
+     */
+    public int lockCourierAndCountCarried(UUID tenantId, UUID courierId) {
+        jdbc.sql("SELECT id FROM fulfillment.couriers WHERE tenant_id = :tenantId AND id = :courierId FOR UPDATE")
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .query(UUID.class)
+                .optional();
+        return jdbc.sql("""
+                SELECT count(*) FROM fulfillment.shipments
+                WHERE tenant_id = :tenantId AND courier_id = :courierId
+                  AND status NOT IN ('DELIVERED', 'CANCELLED')
+                """)
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
+                .query(Integer.class)
+                .single();
+    }
 
     /**
      * One shipment by its own id, whatever its status — the operator-facing
@@ -558,7 +721,45 @@ public class JdbcAssignmentStore {
             @Nullable UUID policyId,
             @Nullable Integer policyVersion,
             @Nullable Instant expiresAt,
-            Instant now) {}
+            Instant now,
+            String payBasis,
+            @Nullable Integer runMergeDistanceMeters,
+            @Nullable UUID runLeadShipmentId) {
+
+        /** An attempt paid on the order's own distance: a partner booking, a manual assignment, a plain offer. */
+        public NewAttempt(
+                UUID tenantId,
+                UUID planId,
+                SourceType sourceType,
+                AttemptStatus status,
+                @Nullable UUID courierId,
+                @Nullable UUID bindingId,
+                @Nullable UUID quoteId,
+                String idempotencyKey,
+                String decisionReason,
+                @Nullable UUID policyId,
+                @Nullable Integer policyVersion,
+                @Nullable Instant expiresAt,
+                Instant now) {
+            this(
+                    tenantId,
+                    planId,
+                    sourceType,
+                    status,
+                    courierId,
+                    bindingId,
+                    quoteId,
+                    idempotencyKey,
+                    decisionReason,
+                    policyId,
+                    policyVersion,
+                    expiresAt,
+                    now,
+                    "DIRECT",
+                    null,
+                    null);
+        }
+    }
 
     /**
      * The attempt being promoted to the plan's winner, and the status it must still hold.
@@ -576,6 +777,14 @@ public class JdbcAssignmentStore {
             Instant now) {}
 
     public record Opened(UUID attemptId, int sequenceNumber, AttemptStatus status, boolean fresh) {}
+
+    /** An attempt as a retried assignment finds it by its derived key. */
+    public record AttemptRef(
+            UUID id,
+            UUID planId,
+            @Nullable UUID courierId,
+            AttemptStatus status,
+            @Nullable UUID shipmentId) {}
 
     public record Shipment(
             UUID id,

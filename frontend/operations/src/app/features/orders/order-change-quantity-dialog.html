@@ -44,6 +44,19 @@
       data-testid="order-change-quantity-dialog-quantity"
     />
   </label>
+  @if (lowering()) {
+    <p
+      class="q-caption change-quantity-dialog__step"
+      data-testid="order-change-quantity-dialog-lowering"
+    >
+      {{ 'orders.dialog.changeQuantity.lowering' | t }}
+    </p>
+    <q-order-removal-reason-picker
+      [reasons]="reasons()"
+      [selectedId]="reasonId()"
+      (pick)="reasonId.set($event)"
+    />
+  }
   @if (splittable()) {
     <p
       class="q-caption change-quantity-dialog__step"

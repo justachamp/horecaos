@@ -1,0 +1,24 @@
+@for (rail of rails(); track rail.group.id) {
+  <section
+    class="group"
+    data-testid="content-group"
+    [appContentImpression]="rail.group"
+    [attr.aria-labelledby]="'content-group-title-' + rail.group.id"
+  >
+    <h2
+      class="group__title"
+      data-testid="content-group-title"
+      [id]="'content-group-title-' + rail.group.id"
+      [attr.lang]="rail.lang"
+    >
+      {{ rail.group.title }}
+    </h2>
+    <ul class="group__rail rail">
+      @for (item of rail.items; track item.id) {
+        <li class="group__card" (click)="clicked(rail.group)">
+          <app-dish-card [item]="item" [currency]="currency()" />
+        </li>
+      }
+    </ul>
+  </section>
+}

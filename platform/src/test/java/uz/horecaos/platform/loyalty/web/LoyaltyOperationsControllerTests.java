@@ -14,6 +14,7 @@ import org.mockito.ArgumentCaptor;
 import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.loyalty.application.AdjustmentReasonPolicyService;
 import uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService;
 import uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService.AdjustmentCommand;
 import uz.horecaos.platform.loyalty.application.LoyaltyQueryService;
@@ -47,8 +48,8 @@ class LoyaltyOperationsControllerTests {
     void theAuditActorIsAlwaysTheAuthenticatedCallerNeverAValueFromTheRequestBody() {
         LoyaltyAdjustmentService adjustments = mock(LoyaltyAdjustmentService.class);
         CurrentActor currentActor = () -> new AuthenticatedActor(AUTHENTICATED_SUBJECT, Set.of(), Map.of());
-        LoyaltyOperationsController controller =
-                new LoyaltyOperationsController(mock(LoyaltyQueryService.class), adjustments, currentActor);
+        LoyaltyOperationsController controller = new LoyaltyOperationsController(
+                mock(LoyaltyQueryService.class), adjustments, mock(AdjustmentReasonPolicyService.class), currentActor);
 
         when(adjustments.adjust(any(AdjustmentCommand.class))).thenReturn(new ApprovalOutcome.NotRequired());
 

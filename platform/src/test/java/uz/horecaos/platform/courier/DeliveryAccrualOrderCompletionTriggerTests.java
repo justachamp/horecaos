@@ -41,8 +41,10 @@ import uz.horecaos.platform.courier.application.CourierRateCardService;
 import uz.horecaos.platform.courier.application.CourierShiftService;
 import uz.horecaos.platform.courier.application.DeliveryAccrualOrderCompletionTrigger;
 import uz.horecaos.platform.courier.application.port.LegalEntityResolver;
+import uz.horecaos.platform.courier.domain.AccrualCalculator;
 import uz.horecaos.platform.courier.domain.LedgerEntryType;
 import uz.horecaos.platform.courier.domain.OnTimeOutcome;
+import uz.horecaos.platform.courier.domain.RateCard;
 import uz.horecaos.platform.courier.domain.RateComponent;
 import uz.horecaos.platform.courier.domain.RateComponentType;
 import uz.horecaos.platform.courier.domain.VerificationMethod;
@@ -456,6 +458,290 @@ class DeliveryAccrualOrderCompletionTriggerTests {
         assertThat(earning.onTimeOutcome()).isEqualTo(OnTimeOutcome.LATE);
     }
 
+    // ----------------------------------------------------- ADR 0170: pay for a run of several orders
+
+    @Test
+    @DisplayName("ADR 0170: the first order of a run accrues as it would alone; a later order keeps its per-order"
+            + " amount and pays per kilometre on the shorter distance, and both distances are on the earning")
+    void aRunsLaterOrderIsPaidOnTheShorterDistance() {
+        UUID run = UUID.randomUUID();
+        Fixture lead = seedAssignedShipment("NOT_REQUIRED", RunSeed.lead(run));
+        Fixture follower = seedAssignedShipment("NOT_REQUIRED", RunSeed.follower(run, lead.shipmentId(), 600));
+
+        trigger.onOrderingEvent(orderCompleted(lead.orderId(), 45_000));
+        trigger.onOrderingEvent(orderCompleted(follower.orderId(), 30_000));
+
+        JdbcCourierLedgerStore.EarningRow first =
+                ledgerStore.findEarningByAttempt(TENANT, lead.attemptId()).orElseThrow();
+        assertThat(first.totalMinor())
+                .as(
+                        "the first order of a run pays byte-identically to an order delivered alone: 3 000 + 4.2 km x 2 000")
+                .isEqualTo(11_400L);
+        assertThat(first.distanceMeters()).isEqualTo(4_200);
+        assertThat(first.payBasis()).isEqualTo("DIRECT");
+        assertThat(first.directDistanceMeters()).isNull();
+        assertThat(first.runKey()).isNull();
+
+        JdbcCourierLedgerStore.EarningRow second =
+                ledgerStore.findEarningByAttempt(TENANT, follower.attemptId()).orElseThrow();
+        assertThat(second.perOrderMinor())
+                .as("the per-order component of a later order is paid in full")
+                .isEqualTo(3_000L);
+        assertThat(second.perKmMinor())
+                .as("only the per-kilometre line falls: 600 m x 2 000 per km")
+                .isEqualTo(1_200L);
+        assertThat(second.totalMinor()).isEqualTo(4_200L);
+        assertThat(second.distanceMeters())
+                .as("distance_meters keeps meaning the distance paid")
+                .isEqualTo(600);
+        assertThat(second.directDistanceMeters())
+                .as("the order's own distance, beside it")
+                .isEqualTo(4_200);
+        assertThat(second.payBasis()).isEqualTo("RUN_INCREMENT");
+        assertThat(second.runKey()).isEqualTo(run);
+
+        // Cash and the cost line stay per order: each order is collected at its own door, and the two cost
+        // lines are the incremental amounts, which sum to what the run cost.
+        assertThat(entriesOfType(LedgerEntryType.CASH_COLLECTED))
+                .extracting(LedgerEntryRow::amountMinor)
+                .containsExactlyInAnyOrder(-45_000L, -30_000L);
+        assertThat(jdbc.sql("""
+                                SELECT amount_minor FROM fulfillment.delivery_cost_lines
+                                 WHERE tenant_id = :t AND shipment_id = :shipment
+                                """)
+                        .param("t", TENANT)
+                        .param("shipment", follower.shipmentId())
+                        .query(Long.class)
+                        .single())
+                .as("the follower's cost line is the incremental amount, not the order's own card")
+                .isEqualTo(4_200L);
+    }
+
+    @Test
+    @DisplayName("ADR 0170: a run of three under a three-band card with a floor pays exactly what the calculator"
+            + " says for each distance paid")
+    void aRunOfThreeUnderAThreeBandCardWithAFloor() {
+        replaceCardWith(List.of(
+                new RateComponent(UUID.randomUUID(), RateComponentType.PER_ORDER, 0, 2_000, null, null, null),
+                new RateComponent(UUID.randomUUID(), RateComponentType.PER_KM_BAND, 0, 1_000, 0, 1_000, null),
+                new RateComponent(UUID.randomUUID(), RateComponentType.PER_KM_BAND, 0, 2_000, 1_000, 3_000, null),
+                new RateComponent(UUID.randomUUID(), RateComponentType.PER_KM_BAND, 0, 3_000, 3_000, null, null),
+                new RateComponent(UUID.randomUUID(), RateComponentType.PER_ORDER_MINIMUM, 0, 5_000, null, null, null)));
+        UUID run = UUID.randomUUID();
+        Fixture lead = seedAssignedShipment("CAPTURED", RunSeed.lead(run));
+        Fixture second = seedAssignedShipment("CAPTURED", RunSeed.follower(run, lead.shipmentId(), 800));
+        Fixture third = seedAssignedShipment("CAPTURED", RunSeed.follower(run, lead.shipmentId(), 300));
+
+        for (Fixture delivered : List.of(lead, second, third)) {
+            trigger.onOrderingEvent(orderCompleted(delivered.orderId(), 20_000));
+        }
+
+        RateCard card = rateCardFor(lead);
+        // 4 200 m under the three bands: 1 000 + 2 000 x 2 + 3 000 x 1.2 = 8 600 per-km, 2 000 per order.
+        assertThat(ledgerStore
+                        .findEarningByAttempt(TENANT, lead.attemptId())
+                        .orElseThrow()
+                        .totalMinor())
+                .isEqualTo(AccrualCalculator.forDelivery(card, 4_200).totalMinor())
+                .isEqualTo(10_600L);
+        // 800 m: 800 per-km + 2 000 = 2 800, lifted to the 5 000 floor, which a later order is still owed in full.
+        JdbcCourierLedgerStore.EarningRow secondEarning =
+                ledgerStore.findEarningByAttempt(TENANT, second.attemptId()).orElseThrow();
+        assertThat(secondEarning.totalMinor())
+                .isEqualTo(AccrualCalculator.forDelivery(card, 800).totalMinor())
+                .isEqualTo(5_000L);
+        assertThat(secondEarning.minimumTopUpMinor()).isEqualTo(2_200L);
+        JdbcCourierLedgerStore.EarningRow thirdEarning =
+                ledgerStore.findEarningByAttempt(TENANT, third.attemptId()).orElseThrow();
+        assertThat(thirdEarning.totalMinor())
+                .isEqualTo(AccrualCalculator.forDelivery(card, 300).totalMinor())
+                .isEqualTo(5_000L);
+        assertThat(thirdEarning.distanceMeters()).isEqualTo(300);
+        assertThat(thirdEarning.directDistanceMeters()).isEqualTo(4_200);
+        assertThat(entriesOfType(LedgerEntryType.CASH_COLLECTED))
+                .as("every order here is prepaid: no cash is collected for any of them")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("ADR 0170: a merge distance longer than the order's own distance never raises the pay")
+    void aLongerMergeDistanceNeverRaisesThePay() {
+        UUID run = UUID.randomUUID();
+        Fixture lead = seedAssignedShipment("NOT_REQUIRED", RunSeed.lead(run));
+        // The plan is 4 200 m; the stamp says 6 000 m (a lead on the far side). min(direct, merge) = direct.
+        Fixture follower = seedAssignedShipment("NOT_REQUIRED", RunSeed.follower(run, lead.shipmentId(), 6_000));
+
+        trigger.onOrderingEvent(orderCompleted(follower.orderId(), 20_000));
+
+        JdbcCourierLedgerStore.EarningRow earning =
+                ledgerStore.findEarningByAttempt(TENANT, follower.attemptId()).orElseThrow();
+        assertThat(earning.distanceMeters()).isEqualTo(4_200);
+        assertThat(earning.totalMinor()).isEqualTo(11_400L);
+        assertThat(earning.directDistanceMeters()).isEqualTo(4_200);
+    }
+
+    @Test
+    @DisplayName("ADR 0170: a lead cancelled before anyone picked it up makes the follower DIRECT -- it only improves")
+    void aLeadCancelledBeforePickupMakesTheFollowerDirect() {
+        UUID run = UUID.randomUUID();
+        Fixture lead = seedAssignedShipment("NOT_REQUIRED", RunSeed.lead(run));
+        Fixture follower = seedAssignedShipment("NOT_REQUIRED", RunSeed.follower(run, lead.shipmentId(), 600));
+        cancelShipment(lead.shipmentId(), null);
+
+        trigger.onOrderingEvent(orderCompleted(follower.orderId(), 20_000));
+
+        JdbcCourierLedgerStore.EarningRow earning =
+                ledgerStore.findEarningByAttempt(TENANT, follower.attemptId()).orElseThrow();
+        assertThat(earning.payBasis()).isEqualTo("DIRECT");
+        assertThat(earning.totalMinor()).as("a run of one is an order alone").isEqualTo(11_400L);
+        assertThat(earning.distanceMeters()).isEqualTo(4_200);
+        assertThat(earning.directDistanceMeters()).isNull();
+        assertThat(earning.runKey()).isNull();
+    }
+
+    @Test
+    @DisplayName("ADR 0170: a lead cancelled after pickup still made a run -- the courier carried its food")
+    void aLeadCancelledAfterPickupStillMadeARun() {
+        UUID run = UUID.randomUUID();
+        Fixture lead = seedAssignedShipment("NOT_REQUIRED", RunSeed.lead(run));
+        Fixture follower = seedAssignedShipment("NOT_REQUIRED", RunSeed.follower(run, lead.shipmentId(), 600));
+        cancelShipment(lead.shipmentId(), NOW.plus(Duration.ofMinutes(20)));
+
+        trigger.onOrderingEvent(orderCompleted(follower.orderId(), 20_000));
+
+        JdbcCourierLedgerStore.EarningRow earning =
+                ledgerStore.findEarningByAttempt(TENANT, follower.attemptId()).orElseThrow();
+        assertThat(earning.payBasis()).isEqualTo("RUN_INCREMENT");
+        assertThat(earning.totalMinor()).isEqualTo(4_200L);
+    }
+
+    @Test
+    @DisplayName("ADR 0170: a lead cancelled after the follower was delivered leaves the follower on its quoted basis")
+    void aLeadCancelledAfterTheFollowerWasDeliveredChangesNothing() {
+        UUID run = UUID.randomUUID();
+        Fixture lead = seedAssignedShipment("NOT_REQUIRED", RunSeed.lead(run));
+        Fixture follower = seedAssignedShipment("NOT_REQUIRED", RunSeed.follower(run, lead.shipmentId(), 600));
+        OrderCompleted delivered = orderCompleted(follower.orderId(), 20_000);
+        trigger.onOrderingEvent(delivered);
+
+        cancelShipment(lead.shipmentId(), null);
+        trigger.onOrderingEvent(delivered);
+
+        JdbcCourierLedgerStore.EarningRow earning =
+                ledgerStore.findEarningByAttempt(TENANT, follower.attemptId()).orElseThrow();
+        assertThat(earning.payBasis()).isEqualTo("RUN_INCREMENT");
+        assertThat(earning.totalMinor()).as("the quote is the pay").isEqualTo(4_200L);
+    }
+
+    @Test
+    @DisplayName("ADR 0170: a manual assignment, a PER_ORDER tenant and an offer made while the bias found nothing"
+            + " are DIRECT and accrue as ever")
+    void everythingWithoutAStampIsDirect() {
+        Fixture plain = seedAssignedShipment("NOT_REQUIRED");
+
+        trigger.onOrderingEvent(orderCompleted(plain.orderId(), 20_000));
+
+        JdbcCourierLedgerStore.EarningRow earning =
+                ledgerStore.findEarningByAttempt(TENANT, plain.attemptId()).orElseThrow();
+        assertThat(earning.payBasis()).isEqualTo("DIRECT");
+        assertThat(earning.totalMinor()).isEqualTo(11_400L);
+        assertThat(earning.directDistanceMeters()).isNull();
+        // A stamp whose shipment never joined a run (the lead had no key to lend, or the key was lost) cannot
+        // reduce pay: with no run there is nothing to be an increment of.
+        Fixture lead = seedAssignedShipment("NOT_REQUIRED");
+        Fixture stampedOnly = seedAssignedShipment("NOT_REQUIRED", RunSeed.stampedOnly(lead.shipmentId(), 600));
+        trigger.onOrderingEvent(orderCompleted(stampedOnly.orderId(), 20_000));
+        assertThat(ledgerStore
+                        .findEarningByAttempt(TENANT, stampedOnly.attemptId())
+                        .orElseThrow()
+                        .totalMinor())
+                .isEqualTo(11_400L);
+    }
+
+    @Test
+    @DisplayName("ADR 0170: a duplicate delivery event for a run order still accrues once")
+    void aReplayedRunDeliveryAccruesOnce() {
+        UUID run = UUID.randomUUID();
+        Fixture lead = seedAssignedShipment("NOT_REQUIRED", RunSeed.lead(run));
+        Fixture follower = seedAssignedShipment("NOT_REQUIRED", RunSeed.follower(run, lead.shipmentId(), 600));
+        OrderCompleted event = orderCompleted(follower.orderId(), 20_000);
+
+        trigger.onOrderingEvent(event);
+        trigger.onOrderingEvent(event);
+
+        assertThat(ledgerStore.entriesOfCourier(TENANT, courierId, 500).stream()
+                        .filter(entry -> entry.entryType() == LedgerEntryType.DELIVERY_EARNING)
+                        .map(LedgerEntryRow::amountMinor))
+                .containsExactly(4_200L);
+        assertThat(entriesOfType(LedgerEntryType.CASH_COLLECTED)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("ADR 0170: the pay stamp on an offer cannot be rewritten once it is made -- the quote is the pay")
+    void aPayStampCannotBeLowered() {
+        UUID run = UUID.randomUUID();
+        Fixture lead = seedAssignedShipment("NOT_REQUIRED", RunSeed.lead(run));
+        Fixture follower = seedAssignedShipment("NOT_REQUIRED", RunSeed.follower(run, lead.shipmentId(), 600));
+        Fixture alone = seedAssignedShipment("NOT_REQUIRED");
+
+        // Lowering a stamped offer, and stamping a plain one after the fact, are both refused by the database.
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.sql("""
+                                UPDATE fulfillment.assignment_attempts SET run_merge_distance_m = 100
+                                 WHERE tenant_id = :t AND id = :id
+                                """)
+                        .param("t", TENANT)
+                        .param("id", follower.attemptId())
+                        .update())
+                .hasMessageContaining("pay stamp");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.sql("""
+                                UPDATE fulfillment.assignment_attempts
+                                   SET pay_basis = 'RUN_INCREMENT', run_merge_distance_m = 100, run_lead_shipment_id = :lead
+                                 WHERE tenant_id = :t AND id = :id
+                                """)
+                        .param("t", TENANT)
+                        .param("id", alone.attemptId())
+                        .param("lead", lead.shipmentId())
+                        .update())
+                .hasMessageContaining("pay stamp");
+        // ... while an ordinary change to the same row (the acceptance, the lapse) is untouched by it.
+        assertThat(jdbc.sql("""
+                                UPDATE fulfillment.assignment_attempts SET decision_reason = 'FLEET_AVAILABLE'
+                                 WHERE tenant_id = :t AND id = :id
+                                """)
+                        .param("t", TENANT)
+                        .param("id", follower.attemptId())
+                        .update())
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("ADR 0170: the earning's own constraints tie the basis to the second distance")
+    void anEarningRowCannotDisagreeWithItsBasis() {
+        UUID run = UUID.randomUUID();
+        Fixture lead = seedAssignedShipment("NOT_REQUIRED", RunSeed.lead(run));
+        Fixture follower = seedAssignedShipment("NOT_REQUIRED", RunSeed.follower(run, lead.shipmentId(), 600));
+        trigger.onOrderingEvent(orderCompleted(follower.orderId(), 20_000));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.sql("""
+                                UPDATE fulfillment.courier_assignment_earnings SET direct_distance_meters = NULL
+                                 WHERE tenant_id = :t AND assignment_attempt_id = :attempt
+                                """)
+                        .param("t", TENANT)
+                        .param("attempt", follower.attemptId())
+                        .update())
+                .as("RUN_INCREMENT without the order's own distance beside it")
+                .hasMessageContaining("ck_earning_direct_distance");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.sql("""
+                                UPDATE fulfillment.courier_assignment_earnings SET direct_distance_meters = 100
+                                 WHERE tenant_id = :t AND assignment_attempt_id = :attempt
+                                """)
+                        .param("t", TENANT)
+                        .param("attempt", follower.attemptId())
+                        .update())
+                .as("a distance paid that exceeds the order's own distance")
+                .hasMessageContaining("ck_earning_distance_paid");
+    }
+
     /** Every method throws: the no-settlement path under test never reaches points. */
     private static uz.horecaos.platform.loyalty.api.PointsRedemptionPort unsupportedPointsPort() {
         return new uz.horecaos.platform.loyalty.api.PointsRedemptionPort() {
@@ -588,6 +874,14 @@ class DeliveryAccrualOrderCompletionTriggerTests {
 
     /** An INTERNAL shipment ASSIGNED (not yet DELIVERED) to the fixture courier, on a real order. */
     private Fixture seedAssignedShipment(String paymentStatusProjection) {
+        return seedAssignedShipment(paymentStatusProjection, RunSeed.NONE);
+    }
+
+    /**
+     * The same, as it stands after the courier accepted an offer made under the ADR 0170 grouping bias: the
+     * attempt carries the pay stamp the offer was made with and the shipment carries the run it joined.
+     */
+    private Fixture seedAssignedShipment(String paymentStatusProjection, RunSeed run) {
         int sequence = ++chainSequence;
         UUID orderId = seedOrder(sequence, paymentStatusProjection);
         UUID planId = UUID.randomUUID();
@@ -621,11 +915,13 @@ class DeliveryAccrualOrderCompletionTriggerTests {
         jdbc.sql("""
                 INSERT INTO fulfillment.shipments (
                     id, tenant_id, brand_id, location_id, order_id, delivery_plan_id, status,
-                    source_type, courier_id, assigned_at)
+                    source_type, courier_id, assigned_at, run_key, run_merge_distance_m)
                 SELECT :id, :tenantId, :brandId, :locationId, :orderId, :planId, 'ASSIGNED',
-                       'INTERNAL', :courierId, anchor + interval '5 minutes'
+                       'INTERNAL', :courierId, anchor + interval '5 minutes', :runKey, :runMergeDistance
                   FROM (SELECT CAST(:anchor AS timestamptz) AS anchor) AS moment
                 """)
+                .param("runKey", run.runKey())
+                .param("runMergeDistance", run.shipmentMergeDistance())
                 .param("id", shipmentId)
                 .param("tenantId", TENANT)
                 .param("brandId", BRAND)
@@ -640,12 +936,16 @@ class DeliveryAccrualOrderCompletionTriggerTests {
                 INSERT INTO fulfillment.assignment_attempts (
                     id, tenant_id, delivery_plan_id, shipment_id, sequence_number, source_type,
                     courier_id, status, idempotency_key, decision_reason, shift_enforcement_mode,
-                    requested_at, accepted_at)
+                    requested_at, accepted_at, pay_basis, run_merge_distance_m, run_lead_shipment_id)
                 SELECT :id, :tenantId, :planId, :shipmentId, 1, 'INTERNAL', :courierId, 'ACCEPTED',
                        :idempotencyKey, 'FLEET_AVAILABLE', 'ADVISORY',
-                       anchor + interval '1 minute', anchor + interval '5 minutes'
+                       anchor + interval '1 minute', anchor + interval '5 minutes',
+                       :payBasis, :attemptMergeDistance, :leadShipmentId
                   FROM (SELECT CAST(:anchor AS timestamptz) AS anchor) AS moment
                 """)
+                .param("payBasis", run.payBasis())
+                .param("attemptMergeDistance", run.attemptMergeDistance())
+                .param("leadShipmentId", run.leadShipmentId())
                 .param("id", attemptId)
                 .param("tenantId", TENANT)
                 .param("planId", planId)
@@ -846,6 +1146,43 @@ class DeliveryAccrualOrderCompletionTriggerTests {
                 .update();
     }
 
+    private RateCard rateCardFor(Fixture fixture) {
+        UUID typeId = jdbc.sql("SELECT courier_type_id FROM fulfillment.couriers WHERE tenant_id = :t AND id = :id")
+                .param("t", TENANT)
+                .param("id", courierId)
+                .query(UUID.class)
+                .single();
+        return new JdbcCourierRateCardStore(jdbc)
+                .resolve(TENANT, BRAND, branch, typeId, NOW)
+                .orElseThrow();
+    }
+
+    /** Archives the standard card and activates one with the given components, so a test can name its own ladder. */
+    private void replaceCardWith(List<RateComponent> components) {
+        jdbc.sql("UPDATE fulfillment.courier_rate_cards SET status = 'ARCHIVED' WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .update();
+        var rateCards = new CourierRateCardService(new JdbcCourierRateCardStore(jdbc), fact -> {}, clock);
+        UUID cardId = rateCards.author(
+                new CourierRateCardService.NewRateCard(TENANT, BRAND, null, null, "STANDARD", 2, UZS, components));
+        rateCards.activate(TENANT, cardId, manager(), "a three-band card for the run test");
+    }
+
+    /** The shipment is cancelled; {@code pickedUpAt} says whether anyone had collected it first. */
+    private void cancelShipment(UUID shipmentId, @Nullable Instant pickedUpAt) {
+        jdbc.sql("""
+                UPDATE fulfillment.shipments
+                   SET status = 'CANCELLED', cancelled_at = :at, picked_up_at = :pickedUpAt,
+                       cancellation_reason_code = 'TEST'
+                 WHERE tenant_id = :t AND id = :id
+                """)
+                .param("at", OffsetDateTime.ofInstant(NOW.plusSeconds(60), ZoneOffset.UTC))
+                .param("pickedUpAt", pickedUpAt == null ? null : OffsetDateTime.ofInstant(pickedUpAt, ZoneOffset.UTC))
+                .param("t", TENANT)
+                .param("id", shipmentId)
+                .update();
+    }
+
     private Map<String, Object> shipmentRow(UUID shipmentId) {
         return jdbc.sql("SELECT status, delivered_at FROM fulfillment.shipments WHERE tenant_id = :t AND id = :id")
                 .param("t", TENANT)
@@ -865,4 +1202,34 @@ class DeliveryAccrualOrderCompletionTriggerTests {
     }
 
     private record Fixture(UUID orderId, UUID shipmentId, UUID attemptId) {}
+
+    /**
+     * What a run leaves on the rows (ADR 0170): the offer's pay stamp on the attempt, and the run a shipment
+     * joined. A lead has a key and no stamp; a follower has the key, the merge distance and the lead it was
+     * measured to.
+     */
+    private record RunSeed(
+            String payBasis,
+            @Nullable Integer attemptMergeDistance,
+            @Nullable UUID leadShipmentId,
+            @Nullable UUID runKey,
+            @Nullable Integer shipmentMergeDistance) {
+
+        static final RunSeed NONE = new RunSeed("DIRECT", null, null, null, null);
+
+        /** The first order of a run: paid exactly as it would be alone, but carrying the run's key. */
+        static RunSeed lead(UUID runKey) {
+            return new RunSeed("DIRECT", null, null, runKey, null);
+        }
+
+        /** A later order of a run, offered with the quote «paid on {@code mergeMetres}». */
+        static RunSeed follower(UUID runKey, UUID leadShipmentId, int mergeMetres) {
+            return new RunSeed("RUN_INCREMENT", mergeMetres, leadShipmentId, runKey, mergeMetres);
+        }
+
+        /** An offer stamped for a run that no shipment ever joined (the lead had no key to lend). */
+        static RunSeed stampedOnly(UUID leadShipmentId, int mergeMetres) {
+            return new RunSeed("RUN_INCREMENT", mergeMetres, leadShipmentId, null, null);
+        }
+    }
 }

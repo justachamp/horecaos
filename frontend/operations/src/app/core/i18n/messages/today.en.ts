@@ -44,7 +44,9 @@ export const todayEn = {
   'myWork.channel.empty': 'No orders of yours yet today',
   'myWork.payment.title': 'Revenue by payment method',
   'myWork.payment.empty': 'No takings recorded yet today',
-  'myWork.locked.title': 'Not available yet',
-  'myWork.locked.ask': 'Interface personalization (saved filters, layout) is not built yet.',
   'myWork.profile.body': 'Your name, phone, photo and languages are edited in your profile.',
+
+  'myWork.interface.body':
+    'Your language, default branch, board columns and saved views are set in your profile.',
+  'myWork.interface.link': 'Set up the interface',
 } as const;

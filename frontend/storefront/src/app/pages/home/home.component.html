@@ -62,8 +62,10 @@
     <!-- Menu browsing, and everything around it, is common to every sold
          mode: PICKUP is a real, orderable mode and must not hide the menu
          the way a "coming soon" placeholder used to. -->
+    <!-- ADR 0112's slot for a personalised offer: renders nothing while `offer` is null. The
+         brand's own banners are the content sections below, a different wire type on purpose. -->
     @if (offerData(); as offer) {
-      <section class="grid grid-cols-[3fr_2fr] gap-3">
+      <section class="grid grid-cols-1 gap-3">
         @if (offer.items.length > 0) {
           <a
             class="relative block w-full min-w-0 aspect-video overflow-hidden rounded-2xl bg-surface-raised bg-cover bg-center bg-no-repeat"
@@ -71,12 +73,13 @@
           >
           </a>
         }
-        <div
-          class="min-w-0 h-full min-h-0 overflow-hidden rounded-2xl bg-cover bg-center bg-no-repeat"
-          style="background-image: url('/assets/home-promo.jpg')"
-        ></div>
       </section>
     }
+
+    <!-- The brand's content (ADR 0157): each section draws nothing until the document has it. -->
+    <app-content-stories [stories]="content.stories()" [categories]="contentCategories()" />
+    <app-content-carousel [items]="content.carousel()" [categories]="contentCategories()" />
+    <app-content-promo-grid [items]="content.promoGrid()" [categories]="contentCategories()" />
 
     <section class="space-y-3">
       <h2 class="text-lg font-semibold">{{ 'home.welcome' | t }}</h2>
@@ -147,6 +150,9 @@
       }
     </nav>
 
+    <app-content-groups [groups]="content.groups()" [menu]="menuCategoryItems()" />
+    <app-content-entry />
+
     <!-- <div class="flex items-center justify-between">
         <h2 class="text-lg font-semibold text-text-primary">Ommabop! 👌</h2>
       </div>
@@ -213,10 +219,17 @@
         </section>
       }
     </div>
+    <div class="mx-auto mt-8 max-w-[420px] px-4">
+      <app-public-reviews></app-public-reviews>
+    </div>
   </div>
   @if (hasCartItems()) {
     <div class="position-relative">
       <app-cart-hint-badge></app-cart-hint-badge>
     </div>
+  }
+  <!-- Behind @defer so a home screen with no pop-up never loads the dialog's code. -->
+  @defer (when content.popup() !== null) {
+    <app-content-popup [popup]="content.popup()" [categories]="contentCategories()" />
   }
 </div>

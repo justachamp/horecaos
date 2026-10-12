@@ -175,6 +175,10 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
   'finance.fiscalDocumentStatus.ISSUED': 'Berilgan',
   'finance.fiscalDocumentStatus.FAILED': 'Rad etilgan',
   'finance.fiscalDocumentStatus.BLOCKED': 'Bloklangan',
+  'finance.fiscalDocumentStatus.CORRECTION_REQUESTED': 'Tuzatish soʻralgan',
+  'finance.fiscalDocumentStatus.VOID_REQUESTED': 'Bekor qilish soʻralgan',
+  'finance.fiscalDocumentStatus.CORRECTED': 'Tuzatilgan',
+  'finance.fiscalDocumentStatus.VOIDED': 'Bekor qilingan',
 
   'finance.entitlementScope.SUBTOTAL': 'Buyurtma summasi',
   'finance.entitlementScope.DELIVERY_FEE': 'Yetkazib berish narxi',
@@ -226,6 +230,7 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
   'finance.fiscal.field.blockedAt': 'Bloklangan vaqti',
   'finance.fiscal.evidence.yes': 'Bor',
   'finance.fiscal.evidence.no': 'Yoʻq',
+  'finance.fiscal.marks.progress': '{required} tadan {captured} tasi skanerlandi',
   'finance.fiscal.action.retry': 'Qayta soʻrash',
   'finance.fiscal.action.retry.reason': 'Nega qayta soʻralmoqda',
   'finance.fiscal.action.retry.submit': 'Qayta soʻrash',
@@ -724,4 +729,186 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
   'finance.subscription.wallet.balances': 'Toʻlangan balans {paid} · bonuslar {bonus}',
   'finance.subscription.statements.paid': 'Toʻlangan',
   'finance.subscription.statements.due': 'Toʻlanishi kerak',
+
+  'finance.fiscalEvidence.title': 'Fiskal maʻlumotlar',
+  'finance.fiscalEvidence.lead':
+    'Bu buyurtma boʻyicha soliq xizmatiga nima yuborilgan: chek qaysi STIR ostida rasmiylashtirilgan, qatorlar yuborilgan holida, toʻlov qanday taqsimlangan va nechta markirovka kodi yuborilgan. HorecaOS yuborilganini qayd etadi; fiskal agent — restoranning oʻz yuridik shaxsi, har qanday tuzatishni ham u chiqaradi. Chek bu yerda chizilmaydi: chek — soliq xizmatining sahifasi.',
+  'finance.fiscalEvidence.loading': 'Yuklanmoqda…',
+  'finance.fiscalEvidence.denied': 'Bu rolga fiskal maʻlumotlarni oʻqishga ruxsat berilmagan.',
+  'finance.fiscalEvidence.error':
+    'Fiskal maʻlumotlarni yuklab boʻlmadi. Birozdan soʻng qayta urinib koʻring.',
+  'finance.fiscalEvidence.empty': 'Bu buyurtma boʻyicha fiskal hujjatlar yoʻq.',
+  'finance.fiscalEvidence.retention': 'Fiskal maʻlumotlar {years} yil saqlanadi.',
+  'finance.fiscalEvidence.retention.provisional': 'Bu muddat vaqtinchalik va hali tasdiqlanmagan.',
+  'finance.fiscalEvidence.marks.counts':
+    'Markirovka kodlari: {required} ta majburiydan {captured} tasi qabul qilingan. Faqat son koʻrsatiladi, kodning oʻzi hech qachon.',
+  'finance.fiscalEvidence.marks.notBuilt':
+    'Markirovka kodlari: kodlar ombori hali qurilmagan, shuning uchun son koʻrsatilmaydi. Markirovka kodi hech bir ekranda koʻrsatilmaydi.',
+  'finance.fiscalEvidence.reveal.purpose': 'Identifikatorlar nega toʻliq kerak?',
+  'finance.fiscalEvidence.reveal.purpose.choose': 'Maqsadni tanlang',
+  'finance.fiscalEvidence.reveal.purpose.TAX_INQUIRY': 'Soliq soʻrovi',
+  'finance.fiscalEvidence.reveal.purpose.CUSTOMER_COMPLAINT': 'Mijoz shikoyati',
+  'finance.fiscalEvidence.reveal.purpose.AUDIT': 'Audit',
+  'finance.fiscalEvidence.reveal.purpose.CORRECTION': 'Tuzatish',
+  'finance.fiscalEvidence.reveal.action': 'Identifikatorlarni toʻliq koʻrsatish',
+  'finance.fiscalEvidence.reveal.revealing': 'Ochilmoqda…',
+  'finance.fiscalEvidence.reveal.recorded':
+    'Identifikatorlar odatda yashirin. Har bir koʻrish maqsadi bilan yoziladi va ikki daqiqadan soʻng yana yashiriladi.',
+  'finance.fiscalEvidence.reveal.active':
+    'Identifikatorlar toʻliq koʻrsatilgan. Maqsad: {purpose}. Koʻrish yozib qoʻyildi.',
+  'finance.fiscalEvidence.reveal.hide': 'Yashirish',
+  'finance.fiscalEvidence.reveal.denied':
+    'Identifikatorlar yashirin. Ularni toʻliq ochish uchun alohida ruxsat kerak, bu rolda esa u yoʻq.',
+  'finance.fiscalEvidence.document.type.SALE': 'Sotuv cheki',
+  'finance.fiscalEvidence.document.type.REFUND': 'Qaytarish cheki',
+  'finance.fiscalEvidence.document.type.CORRECTION': 'Tuzatish cheki',
+  'finance.fiscalEvidence.document.corrects':
+    'Bu hujjat shu buyurtmaning boshqa chekini almashtiradi.',
+  'finance.fiscalEvidence.responsibility.PARTNER': 'Provayderning merchant hisobi orqali berilgan',
+  'finance.fiscalEvidence.responsibility.TERMINAL': 'Restoranning fiskal uskunasi bergan',
+  'finance.fiscalEvidence.responsibility.MARKETPLACE': 'Agregator bergan',
+  'finance.fiscalEvidence.responsibility.OPERATOR': 'Operator bergan',
+  'finance.fiscalEvidence.field.inn': 'Rasmiylashtirilgan STIR (INN)',
+  'finance.fiscalEvidence.seller.source.OPENING': 'Hujjat ochilgan paytdagi holat.',
+  'finance.fiscalEvidence.seller.source.BACKFILL':
+    'Yuborilgan chekdan emas, keyinroq yuridik shaxsdan aniqlangan.',
+  'finance.fiscalEvidence.seller.source.UNRESOLVED':
+    'Hujjatda yuridik shaxs koʻrsatilmagan, shuning uchun STIRni aytib boʻlmaydi.',
+  'finance.fiscalEvidence.field.merchantAccount': 'Merchant hisobi',
+  'finance.fiscalEvidence.field.fiscalSign': 'Fiskal belgi',
+  'finance.fiscalEvidence.field.receiptNumber': 'Chek raqami',
+  'finance.fiscalEvidence.field.terminalId': 'Terminal',
+  'finance.fiscalEvidence.field.receiptLink': 'Soliq xizmatidagi chek',
+  'finance.fiscalEvidence.link.open': 'Chekni soliq xizmatida ochish',
+  'finance.fiscalEvidence.field.registeredAt': 'Roʻyxatdan oʻtgan',
+  'finance.fiscalEvidence.field.tenderSplit': 'Toʻlov qanday taqsimlangan',
+  'finance.fiscalEvidence.split.card': 'Karta',
+  'finance.fiscalEvidence.split.cash': 'Naqd pul',
+  'finance.fiscalEvidence.split.ecash': 'Elektron hamyon',
+  'finance.fiscalEvidence.split.none': 'Bu hujjat uchun toʻlov taqsimoti yozilmagan.',
+  'finance.fiscalEvidence.lines.title': 'Yuborilgan holdagi qatorlar',
+  'finance.fiscalEvidence.lines.column.name': 'Pozitsiya',
+  'finance.fiscalEvidence.lines.column.ikpu': 'IKPU',
+  'finance.fiscalEvidence.lines.column.packageCode': 'Qadoq kodi',
+  'finance.fiscalEvidence.lines.column.quantity': 'Soni',
+  'finance.fiscalEvidence.lines.column.price': 'Narx',
+  'finance.fiscalEvidence.lines.column.vat': 'QQS',
+  'finance.fiscalEvidence.lines.column.discount': 'Chegirma',
+  'finance.fiscalEvidence.lines.column.marks': 'Markalar',
+  'finance.fiscalEvidence.lines.kind.DELIVERY_FEE': 'Yetkazib berish',
+  'finance.fiscalEvidence.lines.kind.SYNTHETIC': 'Vaqtincha',
+  'finance.fiscalEvidence.lines.synthetic':
+    'Bu — ulanishni tekshirish uchun sinov muhiti yuboradigan bir qatorli vaqtincha chek. Undagi nollar sotuv emas.',
+  'finance.fiscalEvidence.lines.notSent':
+    'Bu chek uchun qatorlar yozilmagan: yo hali hech narsa yuborilmagan, yo yuborilgani saqlanmagan. Oʻrniga hech narsa koʻrsatilmaydi.',
+  'finance.fiscalEvidence.lines.notReadable':
+    'Qatorlar yozilgan, lekin ularni ochib boʻlmadi. Oʻrniga hech narsa koʻrsatilmaydi.',
+  'finance.fiscalEvidence.lines.filedUnder': 'Qatorlar {tin} STIR ostida topshirilgan.',
+  'finance.fiscalEvidence.lines.filedUnderDiffers':
+    'Qatorlar {filed} STIR ostida topshirilgan, bu hujjat ochilgan STIR ({opened}) emas. Ikkalasi ham yozilganidek koʻrsatilgan; bu yerda hech narsa tuzatilmagan.',
+  'finance.fiscalEvidence.lines.marksTransmitted':
+    'Bu chek bilan {count} ta markirovka kodi yuborilgan. Ekranda faqat son qoladi.',
+  'finance.fiscalEvidence.earlier.title': 'Shu chek boʻyicha ketgan oldingi soʻrovlar ({count})',
+  'finance.fiscalEvidence.earlier.lead':
+    'Yuqoridagi qatorlar — oxirgi soʻrov. Bular undan oldin yuborilgan va u bilan almashtirilgan. Provayder ularning istalganini olgan boʻlishi mumkin: kelmagan javob nima yetib borganini isbotlamaydi, shuning uchun ular yuborilganidek saqlanadi.',
+  'finance.fiscalEvidence.earlier.attempt': '{attempt}-soʻrov, {at} da yuborilgan',
+  'finance.fiscalEvidence.correction.state':
+    '{kind}: {at} da soʻralgan. Restoranning fiskal agenti hali javob bermagan.',
+  'finance.fiscalEvidence.correction.action': 'Tuzatish yoki bekor qilishni soʻrash',
+  'finance.fiscalEvidence.correction.lead':
+    'HorecaOS soʻrovni qayd etadi; tuzatishni restoranning fiskal agenti sotuv oʻtgan yoʻl bilan chiqaradi. Avval soʻrovni ikkinchi xodim tasdiqlashi kerak.',
+  'finance.fiscalEvidence.correction.kind.label': 'Nimani soʻraymiz',
+  'finance.fiscalEvidence.correction.kind.CORRECTION': 'Chekni tuzatish',
+  'finance.fiscalEvidence.correction.kind.VOID': 'Chekni bekor qilish',
+  'finance.fiscalEvidence.correction.reason.label': 'Sabab',
+  'finance.fiscalEvidence.correction.reason.choose': 'Sababni tanlang',
+  'finance.fiscalEvidence.correction.reason.WRONG_AMOUNT': 'Summa notoʻgʻri',
+  'finance.fiscalEvidence.correction.reason.WRONG_LINES': 'Qatorlar notoʻgʻri',
+  'finance.fiscalEvidence.correction.reason.WRONG_CLASSIFICATION': 'IKPU yoki qadoq kodi notoʻgʻri',
+  'finance.fiscalEvidence.correction.reason.WRONG_SELLER': 'Sotuvchi notoʻgʻri',
+  'finance.fiscalEvidence.correction.reason.DUPLICATE_RECEIPT': 'Chek takrorlangan',
+  'finance.fiscalEvidence.correction.reason.CUSTOMER_REFUND': 'Mijozga qaytarish',
+  'finance.fiscalEvidence.correction.reason.OTHER': 'Boshqa',
+  'finance.fiscalEvidence.correction.note.label': 'Nima notoʻgʻri (255 belgigacha)',
+  'finance.fiscalEvidence.correction.submit': 'Soʻrovni yuborish',
+  'finance.fiscalEvidence.correction.submitting': 'Yuborilmoqda…',
+  'finance.fiscalEvidence.correction.pending':
+    'Ikkinchi tasdiqlovchi kutilmoqda. {id} tasdiq soʻrovi hal qilinmagan; u tasdiqlangach, bu soʻrovni yana yuboring.',
+  'finance.fiscalEvidence.correction.declined':
+    'Ikkinchi tasdiqlovchi {id} tasdiq soʻrovini rad etdi, shuning uchun chek tuzatilmadi.',
+  'finance.fiscalEvidence.correction.requested':
+    'Soʻrov yozildi. Endi restoranning fiskal agenti uni bajarishi kerak; bajargach, agentning havolasini shu yerga biriktiring.',
+  'finance.fiscalEvidence.correction.attach.action': 'Agent havolasini biriktirish',
+  'finance.fiscalEvidence.correction.attach.lead':
+    'Restoranning fiskal agenti qaytargan maʻlumotlarni kiriting. Ikkinchi xodim aynan siz kiritganni tasdiqlaydi va shundan keyingina biriktiriladi; HorecaOS ularni bogʻlangan hujjat sifatida saqlaydi va asl chekni hech qachon oʻzgartirmaydi.',
+  'finance.fiscalEvidence.correction.attach.pending':
+    'Ikkinchi tasdiqlovchi kutilmoqda. {id} tasdiqlash soʻrovi hal etilmagan; u tasdiqlangach maʻlumotlarni aynan kiritilganidek yana biriktiring.',
+  'finance.fiscalEvidence.correction.attach.declined':
+    'Ikkinchi tasdiqlovchi {id} tasdiqlash soʻrovini rad etdi, shuning uchun bu maʻlumotlar biriktirilmadi.',
+  'finance.fiscalEvidence.correction.attach.urlRefused':
+    'Havola soliq organi saytining sahifasiga olib borishi kerak (https, soliq.uz). Chekning oʻzi beradigan havoladan foydalaning.',
+  'finance.fiscalEvidence.correction.attach.url': 'Chek havolasi (https)',
+  'finance.fiscalEvidence.correction.attach.terminal': 'Terminal (ixtiyoriy)',
+  'finance.fiscalEvidence.correction.attach.submit': 'Biriktirish',
+  'finance.fiscalEvidence.correction.attached':
+    'Maʻlumotlar bogʻlangan hujjat sifatida biriktirildi, asl chek esa endi tuzatilgan yoki bekor qilingan deb belgilandi.',
+  'finance.fiscalEvidence.correction.state.ATTACHED':
+    '{kind}: fiskal agentning havolasi bogʻlangan hujjat sifatida biriktirilgan.',
+  'finance.fiscalEvidence.correction.state.DECLINED':
+    '{kind}: yopildi, fiskal agent chiqarishdan bosh tortdi. Chek topshirilganidek qoladi.',
+  'finance.fiscalEvidence.correction.state.CANCELLED':
+    '{kind}: soʻrov qaytarib olindi. Chek topshirilganidek qoladi.',
+  'finance.fiscalEvidence.correction.close.action': 'Soʻrovni chek chiqarmasdan yopish',
+  'finance.fiscalEvidence.correction.close.lead':
+    'Restoranning fiskal agenti chiqarishdan bosh tortgan yoki soʻrov xato yuborilgan boʻlsa shundan foydalaning. Chek topshirilganidek qoladi, soliq organiga hech narsa yuborilmaydi, soʻrov roʻyxatdan chiqadi.',
+  'finance.fiscalEvidence.correction.close.outcome.label': 'Nega yopilmoqda',
+  'finance.fiscalEvidence.correction.close.outcome.choose': 'Sababni tanlang',
+  'finance.fiscalEvidence.correction.close.outcome.DECLINED':
+    'Fiskal agent chiqarishdan bosh tortdi',
+  'finance.fiscalEvidence.correction.close.outcome.CANCELLED':
+    'Xato yuborilgan yoki endi kerak emas',
+  'finance.fiscalEvidence.correction.close.note.label': 'Nima boʻldi (255 belgigacha)',
+  'finance.fiscalEvidence.correction.close.submit': 'Soʻrovni yopish',
+  'finance.fiscalEvidence.correction.closed': 'Soʻrov yopildi. Chek topshirilganidek qoladi.',
+  'finance.fiscalEvidence.paymentTypes.title': 'Fiskallashtiriladigan toʻlov turlari',
+  'finance.fiscalEvidence.paymentTypes.lead':
+    'Toʻlov usullari roʻyxati, merchant hisoblari va fiskal terminallardan olinadi va sozlanmaydi: ulardan farq qiladigan sozlama soliq hujjati haqida yolgʻon maʻlumot boʻlar edi. Yoʻli yoʻq usul — restoranning oʻz chek berilmagan majburiyati; HorecaOS uni fiskallashtirmaydi.',
+  'finance.fiscalEvidence.paymentTypes.column.method': 'Toʻlov usuli',
+  'finance.fiscalEvidence.paymentTypes.column.responsibility': 'Chekni kim beradi',
+  'finance.fiscalEvidence.paymentTypes.column.path': 'Yoʻl',
+  'finance.fiscalEvidence.paymentTypes.column.state': 'Hozir',
+  'finance.fiscalEvidence.paymentTypes.column.entities': 'Yuridik shaxslar va STIR',
+  'finance.fiscalEvidence.paymentTypes.path.PARTNER_ACCOUNT': 'Provayderning merchant hisobi',
+  'finance.fiscalEvidence.paymentTypes.path.TERMINAL': 'Restoranning fiskal terminali',
+  'finance.fiscalEvidence.paymentTypes.path.AGGREGATOR': 'Agregator',
+  'finance.fiscalEvidence.paymentTypes.path.NOT_A_FISCAL_PATH': 'Fiskal yoʻl emas',
+  'finance.fiscalEvidence.paymentTypes.path.NONE': 'Yoʻl yoʻq',
+  'finance.fiscalEvidence.paymentTypes.live': 'Chek berish mumkin',
+  'finance.fiscalEvidence.paymentTypes.noPath': 'Fiskal yoʻl yoʻq',
+  'finance.fiscalEvidence.paymentTypes.notApplicable': 'Chek kerak emas',
+  'finance.fiscalEvidence.paymentTypes.note.AGGREGATOR_CONTRACT_NOT_RECORDED':
+    'Agregator bilan shartnoma yozilmagan, shuning uchun chek restoranning oʻz majburiyati boʻlib qoladi.',
+  'finance.fiscalEvidence.paymentTypes.note.BALANCE_IS_A_LINE_DISCOUNT':
+    'Balans — pul toʻlovi chekidagi qatorlar boʻyicha chegirma, chek beriladigan toʻlov emas.',
+  'finance.fiscalEvidence.paymentTypes.note.OPERATOR_RESPONSIBILITY_UNIMPLEMENTED':
+    'HorecaOS chek bermaydi; ularni restoranning oʻz fiskal uskunasi berishi kerak.',
+  'finance.fiscalEvidence.paymentTypes.terminals': 'Mos terminallar: {count}',
+  'finance.fiscalEvidence.paymentTypes.empty': 'Toʻlov usullari kiritilmagan.',
+  'finance.fiscalEvidence.paymentTypes.denied':
+    'Bu rolga fiskal toʻlov turlarini oʻqishga ruxsat berilmagan.',
+  'finance.fiscalEvidence.paymentTypes.error': 'Fiskal toʻlov turlarini yuklab boʻlmadi.',
+  'finance.payments.tenders.fiscal': 'Fiskal chek',
+  'finance.payments.tenders.fiscal.open': 'Maʻlumotni koʻrsatish',
+  'finance.payments.tenders.fiscal.none': 'Hujjat yoʻq',
+  'finance.fiscalEvidence.requests.title': 'Tuzatish va bekor qilish soʻrovlari',
+  'finance.fiscalEvidence.requests.lead':
+    'Restoranning oʻz fiskal agentidan soʻralgan va hali bajarilmagan; eng uzoq kutayotganlari yuqorida. HorecaOS soʻrovni qayd etadi, tuzatishni esa agent chiqaradi; qonuniy muddat bu yerda nazorat qilinmaydi, shuning uchun faqat kunlar sanaladi.',
+  'finance.fiscalEvidence.requests.empty': 'Fiskal agentni kutayotgan soʻrov yoʻq.',
+  'finance.fiscalEvidence.requests.error': 'Tuzatish soʻrovlarini yuklab boʻlmadi.',
+  'finance.fiscalEvidence.requests.column.kind': 'Nima soʻralgan',
+  'finance.fiscalEvidence.requests.column.reason': 'Sabab',
+  'finance.fiscalEvidence.requests.column.requested': 'Soʻralgan vaqt',
+  'finance.fiscalEvidence.requests.column.waiting': 'Kutmoqda',
+  'finance.fiscalEvidence.requests.days': '{days} kun',
+  'finance.fiscalEvidence.requests.open': 'Buyurtmani ochish',
 };

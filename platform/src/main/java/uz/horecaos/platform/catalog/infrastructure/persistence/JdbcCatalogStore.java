@@ -37,6 +37,8 @@ import uz.horecaos.platform.catalog.domain.CompositeProducts.Visibility;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.FiscalClassification.MarkingScheme;
 import uz.horecaos.platform.catalog.domain.ItemSaleSchedule;
+import uz.horecaos.platform.catalog.domain.MxikFacts;
+import uz.horecaos.platform.catalog.domain.MxikValidity;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.catalog.domain.ValidationFinding;
 import uz.horecaos.platform.configuration.Ids;
@@ -545,9 +547,13 @@ public class JdbcCatalogStore {
                     case MODIFIER_GROUP -> "SELECT 1 FROM catalog.modifier_groups";
                     case MODIFIER_OPTION -> "SELECT 1 FROM catalog.modifier_options";
                     case COMBO_GROUP -> "SELECT 1 FROM catalog.combo_groups";
+                    case AUTO_ADD_RULE -> "SELECT 1 FROM catalog.auto_add_rules";
                     // ADR 0136: a pairing is named by the variant it offers; it has no
                     // translations of its own to write against.
                     case COMBO_COMPONENT -> null;
+                    // ADR 0174: the registries are tenant-wide and keep their wording in their own
+                    // translation tables, so nothing is written against them in catalog.translations.
+                    case TAG, INGREDIENT -> null;
                     // ADR 0038: a fee reaches a receipt as a line without being a catalog
                     // item. It has no row anywhere, and no translations, so there is
                     // nothing to resolve and nothing that may be written against it.
@@ -1003,6 +1009,62 @@ public class JdbcCatalogStore {
         return new FiscalMerge(before, after, conflict);
     }
 
+    /**
+     * Moves a node from a code the national list has withdrawn to the successor the list itself names (ADR 0173,
+     * Decision 7): the one place a stored ИКПУ is replaced behind a person's click.
+     *
+     * <p>Nothing is guessed. The node's stored code must be withdrawn on {@code today}, the list must name {@code
+     * successor} as that code's replacement, and the successor must itself be valid on {@code today}; any other
+     * pairing is a {@link FiscalMerge#conflict() conflict} and writes nothing, so a stale screen or a typed code
+     * cannot rewrite a legal classification. The row is locked first and only {@code mxik_code} changes: the
+     * package code, unit, fiscal name and the constraint columns stay as the tenant set them. A node already on
+     * the successor writes nothing.
+     */
+    public FiscalMerge replaceWithdrawnMxik(
+            UUID tenantId,
+            UUID brandId,
+            PriceableNode node,
+            String successor,
+            java.time.LocalDate today,
+            @Nullable UUID actorId) {
+        FiscalClassification locked = classificationOf(tenantId, brandId, node, true);
+        if (locked == null || locked.mxikCode() == null) {
+            return new FiscalMerge(FiscalClassification.unclassified(), null, true);
+        }
+        if (successor.equals(locked.mxikCode())) {
+            return new FiscalMerge(locked, null, false);
+        }
+        Map<String, MxikFacts> facts = mxikFacts(Set.of(locked.mxikCode(), successor));
+        MxikFacts stored = facts.get(locked.mxikCode());
+        MxikFacts next = facts.get(successor);
+        if (stored == null
+                || !stored.withdrawnOn(today)
+                || !successor.equals(stored.replacedByCode())
+                || next == null
+                || !next.validOn(today)) {
+            return new FiscalMerge(locked, null, true);
+        }
+        FiscalClassification after = jdbc.sql("""
+                UPDATE catalog.fiscal_classifications
+                   SET mxik_code = :successor, source = 'MANUAL', classified_by = :actor,
+                       classified_at = now(), version = version + 1, updated_at = now()
+                 WHERE tenant_id = :tenantId AND brand_id = :brandId
+                   AND priceable_type = :priceableType AND priceable_id = :priceableId
+                RETURNING mxik_code, package_code, fiscal_unit_code, fiscal_name,
+                          barcode, marking_required, marking_scheme, excisable,
+                          alcohol_by_volume_bp, age_restriction_years
+                """)
+                .param("successor", successor)
+                .param("actor", actorId)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("priceableType", node.type().name())
+                .param("priceableId", node.id())
+                .query((row, number) -> mapClassification(row))
+                .single();
+        return new FiscalMerge(locked, after, false);
+    }
+
     /** One node's classification, or {@code null} when it has no row; {@code lock} takes the row {@code FOR UPDATE}. */
     private @Nullable FiscalClassification classificationOf(
             UUID tenantId, UUID brandId, PriceableNode node, boolean lock) {
@@ -1078,6 +1140,61 @@ public class JdbcCatalogStore {
                 .param("ids", priceableIds.toArray(UUID[]::new))
                 .query(UUID.class)
                 .list());
+    }
+
+    /**
+     * The marked nodes among these with the barcode their classification states (ADR 0161), for the
+     * check that a scanned code's GTIN is the product's. The map's value is null for a marked node
+     * with no barcode, which the caller records as an unchecked GTIN rather than as a mismatch.
+     * Reads the same partial index as {@link #markedNodes}.
+     */
+    public Map<UUID, String> markedNodeBarcodes(UUID tenantId, UUID brandId, Set<UUID> priceableIds) {
+        if (priceableIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> byNode = new LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT priceable_id, barcode FROM catalog.fiscal_classifications
+                WHERE tenant_id = :tenantId AND brand_id = :brandId
+                  AND marking_required
+                  AND priceable_id = ANY(:ids)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("ids", priceableIds.toArray(UUID[]::new))
+                .query((row, number) -> {
+                    byNode.put(row.getObject("priceable_id", UUID.class), row.getString("barcode"));
+                    return 0;
+                })
+                .list();
+        return byNode;
+    }
+
+    /**
+     * The classification of each of these nodes, for the module that turns an order into a receipt
+     * (ADR 0161). A node with no classification row is absent.
+     */
+    public Map<UUID, FiscalClassification> classificationsFor(UUID tenantId, UUID brandId, Set<UUID> priceableIds) {
+        if (priceableIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, FiscalClassification> byNode = new LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT priceable_id, mxik_code, package_code, fiscal_unit_code, fiscal_name,
+                       barcode, marking_required, marking_scheme, excisable,
+                       alcohol_by_volume_bp, age_restriction_years
+                FROM catalog.fiscal_classifications
+                WHERE tenant_id = :tenantId AND brand_id = :brandId AND priceable_id = ANY(:ids)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("ids", priceableIds.toArray(UUID[]::new))
+                .query((row, number) -> {
+                    byNode.put(row.getObject("priceable_id", UUID.class), mapClassification(row));
+                    return 0;
+                })
+                .list();
+        return Map.copyOf(byNode);
     }
 
     /**
@@ -1164,7 +1281,7 @@ public class JdbcCatalogStore {
     }
 
     /**
-     * The subset of {@code codes} the imported ИКПУ/MXIK reference recognises.
+     * The subset of {@code codes} the imported ИКПУ/MXIK reference lists and that is valid today.
      *
      * <p>Returns empty when the reference table is empty, which the caller must
      * treat as "the import has not run" rather than as "every code is wrong".
@@ -1172,15 +1289,53 @@ public class JdbcCatalogStore {
      * {@link #mxikReferenceIsLoaded()} exists separately.
      */
     public Set<String> knownMxikCodes(Set<String> codes) {
+        return knownMxikCodes(codes, java.time.LocalDate.now(java.time.ZoneOffset.UTC));
+    }
+
+    /**
+     * The subset of {@code codes} that is valid on {@code on}, by the one definition of valid in
+     * {@link MxikValidity} (ADR 0173): the same predicate the search, the validator and the coverage read use.
+     */
+    public Set<String> knownMxikCodes(Set<String> codes, java.time.LocalDate on) {
         if (codes.isEmpty()) {
             return Set.of();
         }
-        return Set.copyOf(jdbc.sql("""
-                SELECT code FROM catalog.mxik_reference WHERE code = ANY(:codes)
-                """)
+        return Set.copyOf(jdbc.sql("SELECT code FROM catalog.mxik_reference WHERE code = ANY(:codes) AND "
+                        + MxikValidity.SQL_VALID_ON)
                 .param("codes", codes.toArray(String[]::new))
+                .param("on", on)
                 .query(String.class)
                 .list());
+    }
+
+    /**
+     * What the list says about each of these codes, valid or not (ADR 0173): the validity window, the dataset's
+     * own default package codes and a successor it names. A code the list does not contain is absent.
+     */
+    public Map<String, MxikFacts> mxikFacts(Set<String> codes) {
+        if (codes.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, MxikFacts> facts = new java.util.HashMap<>();
+        jdbc.sql("""
+                        SELECT code, valid_from, valid_until, default_package_codes, replaced_by_code
+                          FROM catalog.mxik_reference WHERE code = ANY(:codes)
+                        """)
+                .param("codes", codes.toArray(String[]::new))
+                .query((rs, rowNumber) -> {
+                    facts.put(
+                            rs.getString("code"),
+                            new MxikFacts(
+                                    rs.getDate("valid_from").toLocalDate(),
+                                    rs.getDate("valid_until") == null
+                                            ? null
+                                            : rs.getDate("valid_until").toLocalDate(),
+                                    toStringList(rs.getArray("default_package_codes")),
+                                    rs.getString("replaced_by_code")));
+                    return rowNumber;
+                })
+                .list();
+        return Map.copyOf(facts);
     }
 
     /** Whether the official list has been imported at all. */
@@ -1202,12 +1357,25 @@ public class JdbcCatalogStore {
      * calls it without a {@code tenantId} at all.
      */
     public List<MxikReferenceRow> searchMxikReference(String query, int limit) {
+        return searchMxikReference(query, limit, null);
+    }
+
+    /**
+     * The same browse, as of a date (ADR 0173). Without a date it returns what is valid today and nothing
+     * about withdrawal. With one it also returns codes withdrawn by then, each marked, with the successor the
+     * file names: a picker shows a withdrawn code in muted ink with its date instead of hiding that it existed,
+     * and a receipt builder passes the order's business date.
+     */
+    public List<MxikReferenceRow> searchMxikReference(String query, int limit, java.time.@Nullable LocalDate asOf) {
         String pattern = "%" + query.trim() + "%";
+        boolean dated = asOf != null;
+        java.time.LocalDate on = asOf == null ? java.time.LocalDate.now(java.time.ZoneOffset.UTC) : asOf;
         return jdbc.sql("""
                         SELECT code, parent_code, label_ru, label_uz, label_en,
-                               default_package_codes, default_unit_codes, valid_from, valid_until
+                               default_package_codes, default_unit_codes, valid_from, valid_until, replaced_by_code
                           FROM catalog.mxik_reference
-                         WHERE (valid_until IS NULL OR valid_until >= CURRENT_DATE)
+                         WHERE (""" + (dated ? "valid_from <= :on" : MxikValidity.SQL_VALID_ON) + """
+                               )
                            AND (code ILIKE :pattern OR label_ru ILIKE :pattern
                                 OR label_uz ILIKE :pattern OR label_en ILIKE :pattern)
                          ORDER BY code
@@ -1215,17 +1383,23 @@ public class JdbcCatalogStore {
                         """)
                 .param("pattern", pattern)
                 .param("limit", limit)
-                .query((rs, rowNumber) -> new MxikReferenceRow(
-                        rs.getString("code"),
-                        rs.getString("parent_code"),
-                        rs.getString("label_ru"),
-                        rs.getString("label_uz"),
-                        rs.getString("label_en"),
-                        toStringList(rs.getArray("default_package_codes")),
-                        rs.getDate("valid_from").toLocalDate(),
-                        rs.getDate("valid_until") == null
-                                ? null
-                                : rs.getDate("valid_until").toLocalDate()))
+                .param("on", on)
+                .query((rs, rowNumber) -> {
+                    java.time.LocalDate validUntil = rs.getDate("valid_until") == null
+                            ? null
+                            : rs.getDate("valid_until").toLocalDate();
+                    return new MxikReferenceRow(
+                            rs.getString("code"),
+                            rs.getString("parent_code"),
+                            rs.getString("label_ru"),
+                            rs.getString("label_uz"),
+                            rs.getString("label_en"),
+                            toStringList(rs.getArray("default_package_codes")),
+                            rs.getDate("valid_from").toLocalDate(),
+                            validUntil,
+                            dated ? (validUntil != null && !on.isBefore(validUntil)) : null,
+                            dated ? rs.getString("replaced_by_code") : null);
+                })
                 .list();
     }
 
@@ -1246,7 +1420,23 @@ public class JdbcCatalogStore {
             @Nullable String labelEn,
             List<String> defaultPackageCodes,
             java.time.LocalDate validFrom,
-            java.time.@Nullable LocalDate validUntil) {}
+            java.time.@Nullable LocalDate validUntil,
+            @Nullable Boolean withdrawn,
+            @Nullable String replacedByCode) {
+
+        /** The browse without a date: nothing is said about withdrawal. */
+        public MxikReferenceRow(
+                String code,
+                @Nullable String parentCode,
+                String labelRu,
+                String labelUz,
+                @Nullable String labelEn,
+                List<String> defaultPackageCodes,
+                java.time.LocalDate validFrom,
+                java.time.@Nullable LocalDate validUntil) {
+            this(code, parentCode, labelRu, labelUz, labelEn, defaultPackageCodes, validFrom, validUntil, null, null);
+        }
+    }
 
     // ------------------------------------------------------------------- reads
 
@@ -2791,6 +2981,28 @@ public class JdbcCatalogStore {
                         .param("locationId", locationId)
                         .update()
                 > 0;
+    }
+
+    /**
+     * Which of these ids a publication holds, for one entity type (ADR 0157): one indexed read
+     * however many ids are asked about. Tenant-scoped, so an id of another tenant is absent.
+     */
+    public java.util.Set<UUID> publicationEntityIds(
+            UUID publicationId, UUID tenantId, EntityType entityType, java.util.Collection<UUID> entityIds) {
+        if (entityIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return new java.util.HashSet<>(jdbc.sql("""
+                        SELECT entity_id FROM catalog.publication_items
+                        WHERE publication_id = :publicationId AND tenant_id = :tenantId
+                          AND entity_type = :entityType AND entity_id = ANY(:entityIds)
+                        """)
+                .param("publicationId", publicationId)
+                .param("tenantId", tenantId)
+                .param("entityType", entityType.name())
+                .param("entityIds", entityIds.toArray(UUID[]::new))
+                .query(UUID.class)
+                .list());
     }
 
     /** Reads a published snapshot. The storefront's only source. */

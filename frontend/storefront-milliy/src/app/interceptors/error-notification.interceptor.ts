@@ -3,7 +3,7 @@ import { inject } from '@angular/core';
 import { catchError, throwError } from 'rxjs';
 import { NotificationService } from '../services/notification.service';
 import { TranslateService } from '../services/translate.service';
-import { PLATFORM_API_REQUEST } from '../core/api/api-client';
+import { PLATFORM_API_REQUEST, SILENT_FAILURE } from '../core/api/api-client';
 import { HorecaOSApiError, messageKeyFor } from '../core/api/problem-details';
 
 const FALLBACK_MESSAGE = 'An error occurred';
@@ -41,9 +41,15 @@ export const errorNotificationInterceptor: HttpInterceptorFn = (req, next) => {
   const notification = inject(NotificationService);
   const translate = inject(TranslateService);
   const isPlatform = req.context.get(PLATFORM_API_REQUEST);
+  const silent = req.context.get(SILENT_FAILURE);
 
   return next(req).pipe(
     catchError((err: unknown) => {
+      // A call the page makes on its own and can do without (the home content, ADR 0157): the
+      // caller handles the failure, and the customer is not told.
+      if (silent) {
+        return throwError(() => err);
+      }
       if (isPlatform) {
         // An expired session is not an error to report. The customer is about
         // to be shown a sign-in screen, and a toast saying "something went

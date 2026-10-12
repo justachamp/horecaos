@@ -101,12 +101,16 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.rules.start.READY': 'Taom tayyor boʻlganda',
   'delivery.rules.start.offset': 'Siljitish (daqiqa)',
   'delivery.rules.grouping': 'Buyurtmalarni bitta reysga birlashtirish',
-  'delivery.rules.grouping.locked':
-    'Hozircha mavjud emas: bir necha buyurtmali reys uchun kuryerga toʻlov hali hal qilinmagan.',
+  'delivery.rules.grouping.locked': 'Bu oʻrnatmada oʻchirilgan.',
+  'delivery.rules.grouping.payUndecided':
+    'Birlashtirish kuryer bir xil kilometr uchun topadigan pulni oʻzgartiradi, shuning uchun avval bir necha buyurtmali reys qanday toʻlanishini hal qiling.',
+  'delivery.rules.grouping.payUndecided.link': 'Reys uchun toʻlovni hal qilish',
   'delivery.rules.grouping.enable': 'Allaqachon shu tomonga ketayotgan kuryerni afzal koʻrish',
   'delivery.rules.grouping.radius': 'Birlashtirish radiusi (metr)',
   'delivery.rules.grouping.orders': 'Reysdagi buyurtmalar',
   'delivery.rules.grouping.wait': 'Eng uzoq kutish (soniya)',
+  'delivery.rules.grouping.waitNotAvailable':
+    'Shu tomonga ketayotgan kuryerni kutish mavjud emas: birlashtirish faqat kuryerlarni tartiblaydi, kutish nol boʻlib qoladi.',
   'delivery.rules.reason': 'Qoidalarni nima uchun oʻzgartiryapsiz?',
   'delivery.rules.reasonRequired': 'Qoidalarni oʻzgartirish sababini yozing.',
   'delivery.rules.publish': 'Eʻlon qilish',
@@ -168,6 +172,21 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
     'Mavjud hamkor yoʻq: buyurtmani faqat oʻz kuryerlari olishi mumkin.',
   'delivery.rules.sim.note.WINNER_DECIDED_BY_QUOTES':
     'Gʻolibni bron paytida aytilgan narxlar belgilaydi.',
+  'delivery.rules.sim.note.GROUPING_CEILING_BELOW_RUN':
+    'Bu kompaniyaning hech bir kuryer turi bu qoida birlashtiradigan qadar buyurtma tashiy olmaydi, shuning uchun reys shakllanmaydi.',
+  'delivery.rules.sim.note.GROUPING_NEEDS_A_PLAN_TO_MEASURE':
+    'Qaysi kuryerlar oʻlchanishini koʻrish uchun yaqinda berilgan buyurtmani tanlang: qoʻlda yozilgan stsenariyda manzil yoʻq.',
+  'delivery.rules.sim.note.FLEET_NOT_MEASURABLE': 'Kuryerlarni bu yerda oʻlchab boʻlmadi.',
+  'delivery.rules.sim.note.GROUPING_SWITCHED_OFF':
+    'Birlashtirish butun platforma uchun oʻchirilgan, shuning uchun buyurtmalar birma-bir taklif qilinadi va kuryerlar oʻlchanmaydi.',
+  'delivery.rules.sim.grouping.heading': 'Birlashtirish uchun oʻlchangan kuryerlar',
+  'delivery.rules.sim.grouping.empty': 'Smenada oʻlchanadigan kuryer yoʻq.',
+  'delivery.rules.sim.grouping.carrying': '{max} tadan {n} tasini olib ketmoqda',
+  'delivery.rules.sim.grouping.metres': 'olib ketayotgan manzilidan {metres} m',
+  'delivery.rules.sim.grouping.notGroupable': 'birlashtirishga mos emas',
+  'delivery.rules.sim.grouping.basis.DIRECT': 'buyurtmani oʻz toʻlovi bilan oladi',
+  'delivery.rules.sim.grouping.basis.RUN_INCREMENT':
+    'buyurtmani qoʻshimcha masofa uchun toʻlov bilan oladi',
   'delivery.rules.sim.note.NO_ZONE_EVIDENCE':
     'Buyurtmada zona yoʻq, shuning uchun zona qoidalari mos kelmaydi.',
   'delivery.rules.sim.violations': 'Bu qoralamani bunday holda eʻlon qilib boʻlmaydi:',
@@ -195,8 +214,10 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.paymentWindow.action': 'Shundan keyin',
   'delivery.paymentWindow.action.FLAG_ONLY': 'Buyurtmani xodim uchun belgilash',
   'delivery.paymentWindow.action.CANCEL': 'Buyurtmani bekor qilish',
-  'delivery.paymentWindow.cancelLocked':
-    'Toʻlanmagan buyurtmani bekor qilish mahsulot jamoasi hal qilmaguncha mavjud emas.',
+  'delivery.paymentWindow.cancelNote':
+    'Bekor qilish buyurtmani «Bekor qilindi: toʻlanmagan» deb yakunlaydi: mahsulot va promokod qaytariladi, toʻlov sahifasi yopiladi. Keyin kelgan toʻlov buyurtmani qayta tiklamaydi; moliya qaytarish kerakligi haqida xabar oladi.',
+  'delivery.paymentWindow.cancelTooShort':
+    'Bekor qiladigan muddat kamida 15 daqiqa boʻlishi kerak.',
   'delivery.paymentWindow.save': 'Muddatni eʻlon qilish',
   'delivery.paymentWindow.saved': '{version}-versiya sifatida eʻlon qilindi.',
   'delivery.dialog.cancel': 'Bekor qilish',
@@ -683,6 +704,17 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.policy.overridden': 'Ustunlik berilgan',
   'delivery.policy.inherited': 'Meros qilib olingan: {value}',
   'delivery.policy.policyIdentity': 'Siyosat {id} · v{version}',
+  'delivery.policy.runPayMode': 'Bir necha buyurtmali reys uchun toʻlov',
+  'delivery.policy.runPayMode.UNDECIDED': 'Hal qilinmagan (har bir buyurtma toʻliq toʻlanadi)',
+  'delivery.policy.runPayMode.PER_ORDER': 'Har bir buyurtma toʻliq',
+  'delivery.policy.runPayMode.FIRST_FULL_THEN_INCREMENT':
+    'Birinchisi toʻliq, qolganlari qoʻshimcha masofa boʻyicha',
+  'delivery.policy.runPayMode.acknowledge':
+    'Tasdiqlayman: kuryerlar bilan shartlarimiz reysga bogʻliq toʻlovga ruxsat beradi. HorecaOS shartnomalarimiz haqida hech narsa daʻvo qilmaydi.',
+  'delivery.policy.runPayMode.pendingApproval':
+    'Ikkinchi imzo uchun yuborildi (soʻrov {request}). Tasdiqlanmaguncha hech narsa oʻzgarmaydi; tasdiqdan keyin xuddi shu hujjatni qayta eʻlon qiling.',
+  'delivery.policy.consequence.runPayMode':
+    'Bir reys qoʻshni manzillarga bir necha buyurtma olib borganda kuryer qancha olishini belgilaydi. «Birinchisi toʻliq» keyingi har bir buyurtmaga buyurtma uchun stavka va minimumni toʻliq, kilometr uchun esa faqat oldingi nuqtadan keyingi masofani toʻlaydi; kuryer qabul qilishdan oldin summani koʻradi. Bu hal qilinmaguncha dispetcherlik qoidasi guruhlashni yoqa olmaydi.',
   'delivery.policy.shiftEnforcement': 'Smena nazorati',
   'delivery.policy.shiftEnforcement.ENFORCED': 'Qatʻiy',
   'delivery.policy.shiftEnforcement.ADVISORY': 'Tavsiya xarakterida',

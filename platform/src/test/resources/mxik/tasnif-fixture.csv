@@ -1,0 +1,8 @@
+code,parent code,label ru,label uz,label en,package codes,unit codes,replaced by,level
+01000000000000000,,Продукты питания,Oziq-ovqat mahsulotlari,Food,,,,1
+01100000000000000,01000000000000000,Овощи,Sabzavotlar,Vegetables,,,,2
+01101001001000000,01100000000000000,Картофель свежий,Yangi kartoshka,Fresh potato,1001;1002,166,,3
+01101002001000000,01100000000000000,Лук репчатый,Piyoz,,1001,166,,3
+02000000000000000,,Напитки,Ichimliklar,Beverages,,,,1
+02101001001000000,02000000000000000,Вода питьевая,Ichimlik suvi,Drinking water,1010,796,,2
+02101002001000000,02000000000000000,Сок яблочный,,Apple juice,1010;1011,796,,2

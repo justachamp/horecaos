@@ -6,6 +6,7 @@ import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { FISCAL_DOCUMENT_STATUS_KEYS, isFiscalDocumentStatus } from '../finance/finance-labels';
 import { FiscalApi, FiscalDocumentView, FiscalResolutionView } from '../finance/fiscal/fiscal-api';
+import { FiscalEvidence } from '../finance/fiscal/fiscal-evidence';
 import { describeApiError } from './order-errors';
 
 /**
@@ -56,7 +57,7 @@ const OUTCOME_KEYS: Readonly<Record<string, MessageKey>> = {
  */
 @Component({
   selector: 'q-order-fiscal-panel',
-  imports: [TPipe],
+  imports: [TPipe, FiscalEvidence],
   templateUrl: './order-fiscal-panel.html',
   styleUrl: './order-fiscal-panel.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -78,6 +79,9 @@ export class OrderFiscalPanel {
   protected readonly retrySubmitting = signal(false);
   protected readonly retryError = signal<string | null>(null);
   protected readonly retryResult = signal<FiscalResolutionView | null>(null);
+
+  /** Bumped after a retry has changed a document, so the evidence beneath the table reads it again. */
+  protected readonly evidenceRefresh = signal(0);
 
   constructor() {
     effect(() => {
@@ -149,6 +153,7 @@ export class OrderFiscalPanel {
       );
       this.retryResult.set(result);
       this.retryingDocumentId.set(null);
+      this.evidenceRefresh.update((count) => count + 1);
       await this.load(this.tenantId(), this.orderId());
     } catch (error) {
       if (error instanceof ApiError) {

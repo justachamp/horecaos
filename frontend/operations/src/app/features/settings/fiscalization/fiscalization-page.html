@@ -675,6 +675,132 @@
         </div>
       }
 
+      @if (withdrawnNodes().length > 0 || replacementOutcome()) {
+        <section class="withdrawn" data-testid="fiscal-withdrawn">
+          <h3 class="q-subhead">
+            {{
+              'settings.fiscalization.classification.withdrawn.title'
+                | t: { count: withdrawnNodes().length }
+            }}
+          </h3>
+          <p class="q-body-sm hint">
+            {{ 'settings.fiscalization.classification.withdrawn.lead' | t }}
+          </p>
+          @if (withdrawnNodes().length > 0) {
+            <table class="table">
+              <thead>
+                <tr>
+                  <th class="q-caption">
+                    {{ 'settings.fiscalization.classification.field.name' | t }}
+                  </th>
+                  <th class="q-caption">
+                    {{ 'settings.fiscalization.classification.withdrawn.code' | t }}
+                  </th>
+                  <th class="q-caption">
+                    {{ 'settings.fiscalization.classification.withdrawn.on' | t }}
+                  </th>
+                  <th class="q-caption">
+                    {{ 'settings.fiscalization.classification.withdrawn.successor' | t }}
+                  </th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (node of withdrawnNodes(); track node.nodeId) {
+                  <tr [attr.data-testid]="'fiscal-withdrawn-' + node.nodeId">
+                    <td class="q-body-sm">
+                      {{
+                        node.nodeType === 'FEE'
+                          ? ('settings.fiscalization.classification.deliveryFee.name' | t)
+                          : (node.name ?? '—')
+                      }}
+                    </td>
+                    <td class="q-body-sm q-mono">{{ node.mxikCode }}</td>
+                    <td class="q-body-sm">{{ node.mxikWithdrawnOn }}</td>
+                    <td class="q-body-sm q-mono">
+                      {{
+                        node.mxikReplacedBy ??
+                          ('settings.fiscalization.classification.withdrawn.noSuccessor' | t)
+                      }}
+                    </td>
+                    <td class="q-body-sm">
+                      @if (node.mxikReplacedBy) {
+                        <button
+                          type="button"
+                          class="link"
+                          [attr.data-testid]="'fiscal-withdrawn-replace-' + node.nodeId"
+                          [disabled]="replacing()"
+                          (click)="askToReplace(node.nodeId)"
+                        >
+                          {{
+                            'settings.fiscalization.classification.withdrawn.replace'
+                              | t: { code: node.mxikReplacedBy }
+                          }}
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+            @if (replaceableNodes().length > 1 && pendingReplacement() === null) {
+              <button
+                type="button"
+                class="q-body secondary"
+                data-testid="fiscal-withdrawn-replace-all"
+                [disabled]="replacing()"
+                (click)="askToReplace('all')"
+              >
+                {{
+                  'settings.fiscalization.classification.withdrawn.replaceAll'
+                    | t: { count: replaceableNodes().length }
+                }}
+              </button>
+            }
+          }
+          @if (pendingReplacement() !== null) {
+            <div class="warning" role="alert" data-testid="fiscal-withdrawn-confirm">
+              <p class="q-body-sm">
+                {{
+                  'settings.fiscalization.classification.withdrawn.confirm'
+                    | t: { count: pendingReplacementCount() }
+                }}
+              </p>
+              <div class="form__actions">
+                <button
+                  type="button"
+                  class="q-body secondary"
+                  [disabled]="replacing()"
+                  (click)="cancelReplacement()"
+                >
+                  {{ 'settings.fiscalization.cancel' | t }}
+                </button>
+                <button
+                  type="button"
+                  class="q-body primary"
+                  data-testid="fiscal-withdrawn-confirm-yes"
+                  [disabled]="replacing()"
+                  (click)="confirmReplacement()"
+                >
+                  {{ 'settings.fiscalization.classification.withdrawn.confirmYes' | t }}
+                </button>
+              </div>
+            </div>
+          }
+          @if (replacementError(); as message) {
+            <p class="q-body-sm error" role="alert">{{ message }}</p>
+          }
+          @if (replacementOutcome(); as outcome) {
+            <p class="q-body-sm" data-testid="fiscal-withdrawn-outcome">
+              {{
+                'settings.fiscalization.classification.withdrawn.outcome'
+                  | t: { replaced: outcome.replaced, left: outcome.left }
+              }}
+            </p>
+          }
+        </section>
+      }
+
       <q-fiscal-backfill-editor
         [nodes]="summary.nodes"
         [categoryDefaults]="summary.categoryDefaults ?? []"
@@ -794,7 +920,10 @@
 
       <section class="reference" data-testid="fiscal-responsibility">
         <h3 class="q-subhead">{{ 'settings.fiscalization.responsibility' | t }}</h3>
-        @switch (paymentMethodsState()) {
+        <p class="q-body-sm hint" data-testid="fiscal-responsibility-lead">
+          {{ 'settings.fiscalization.responsibility.lead' | t }}
+        </p>
+        @switch (paymentTypesState()) {
           @case ('loading') {
             <p class="q-body-sm">{{ 'settings.integrations.loading' | t }}</p>
           }
@@ -817,11 +946,16 @@
                 >
                   <dt class="q-body-sm">{{ responsibilityLabel(group.responsibility) }}</dt>
                   <dd class="q-body-sm">
-                    @for (method of group.methods; track method.id) {
-                      <span
-                        class="method"
-                        [attr.data-testid]="'fiscal-resp-method-' + method.code"
-                        >{{ method.displayName }}</span
+                    @for (method of group.methods; track method.code) {
+                      <span class="method" [attr.data-testid]="'fiscal-resp-method-' + method.code"
+                        >{{ method.displayName }}
+                        <span
+                          class="q-caption state"
+                          [class.state--warning]="typeState(method) === 'noPath'"
+                          [attr.data-testid]="'fiscal-resp-state-' + method.code"
+                          [attr.data-state]="typeState(method)"
+                          >{{ typeStateLabel(method) }}</span
+                        ></span
                       >
                     } @empty {
                       <span class="q-caption hint" data-testid="fiscal-resp-none">—</span>

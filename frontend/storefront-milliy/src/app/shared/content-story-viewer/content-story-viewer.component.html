@@ -1,0 +1,83 @@
+<div
+  #dialog
+  class="viewer"
+  data-testid="story-viewer"
+  role="dialog"
+  aria-modal="true"
+  tabindex="-1"
+  [attr.aria-label]="story().title"
+  (keydown)="onKeydown($event)"
+>
+  <ol class="bars" aria-hidden="true">
+    @for (entry of story().slides; track $index) {
+      <li
+        class="bar"
+        data-testid="story-bar"
+        [class.is-done]="$index < index()"
+        [class.is-current]="$index === index()"
+        [style.--story-duration.s]="entry.durationSeconds"
+      >
+        <span class="bar__fill"></span>
+      </li>
+    }
+  </ol>
+
+  <p class="sr-only" data-testid="story-progress-text" aria-live="polite">
+    {{ 'content.storyProgress' | t: { current: index() + 1, total: story().slides.length } }}
+  </p>
+
+  <button
+    #closeButton
+    type="button"
+    class="close"
+    data-testid="story-close"
+    [attr.aria-label]="'content.storyClose' | t"
+    (click)="close()"
+  >
+    <app-icon name="close" [size]="22" />
+  </button>
+
+  <div class="stage">
+    @if (plan(); as shown) {
+      <app-content-media
+        class="stage__media"
+        [plan]="shown"
+        [alt]="slide().media.alt ?? ''"
+        [eager]="true"
+        sizes="100vw"
+        (failed)="mediaFailed()"
+      />
+    }
+  </div>
+
+  <button
+    type="button"
+    class="zone zone--previous"
+    data-testid="story-previous"
+    [attr.aria-label]="'content.storyPrevious' | t"
+    (click)="previous()"
+  ></button>
+  <button
+    type="button"
+    class="zone zone--next"
+    data-testid="story-next"
+    [attr.aria-label]="'content.storyNext' | t"
+    (click)="next()"
+  ></button>
+
+  <div class="foot">
+    @if (slide().caption; as caption) {
+      <p class="caption" data-testid="story-caption" [attr.lang]="lang()">{{ caption }}</p>
+    }
+    @if (hasLink()) {
+      <app-content-link
+        class="cta-wrap"
+        data-testid="story-cta"
+        [link]="slide().link"
+        (activated)="followedLink()"
+      >
+        <span class="cta">{{ 'content.openLink' | t }}</span>
+      </app-content-link>
+    }
+  </div>
+</div>

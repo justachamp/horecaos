@@ -46,13 +46,16 @@ public class JdbcBulkOperationStore {
         params.put("actorType", operation.createdByActorType());
         params.put("actorId", operation.createdByActorId());
         params.put("now", utc(operation.createdAt()));
+        params.put("courierId", operation.courierId());
+        params.put("reasonCode", operation.reasonCode());
 
         jdbc.sql("""
                 INSERT INTO ordering.bulk_operations (
                     id, tenant_id, brand_id, location_id, action_type, requested_count,
-                    idempotency_key, created_by_actor_type, created_by_actor_id, created_at)
+                    idempotency_key, created_by_actor_type, created_by_actor_id, created_at,
+                    courier_id, reason_code)
                 VALUES (:id, :tenantId, :brandId, :locationId, :actionType, :requestedCount,
-                    :idempotencyKey, :actorType, :actorId, :now)
+                    :idempotencyKey, :actorType, :actorId, :now, :courierId, :reasonCode)
                 """).params(params).update();
     }
 
@@ -97,9 +100,24 @@ public class JdbcBulkOperationStore {
 
     public void markItemApplied(
             UUID tenantId, UUID bulkOperationId, UUID orderId, int resultingOrderVersion, Instant now) {
+        markItemApplied(tenantId, bulkOperationId, orderId, resultingOrderVersion, now, null, null, null, null);
+    }
+
+    /** An applied item, with what an assignment produced: the plan, the shipment and any non-fatal note (ADR 0172). */
+    public void markItemApplied(
+            UUID tenantId,
+            UUID bulkOperationId,
+            UUID orderId,
+            int resultingOrderVersion,
+            Instant now,
+            @Nullable UUID planId,
+            @Nullable UUID shipmentId,
+            @Nullable String note,
+            @Nullable String ruleId) {
         jdbc.sql("""
                 UPDATE ordering.bulk_operation_items
-                SET item_status = 'APPLIED', resulting_order_version = :version, decided_at = :now
+                SET item_status = 'APPLIED', resulting_order_version = :version, decided_at = :now,
+                    plan_id = :planId, shipment_id = :shipmentId, item_note = :note, rule_id = :ruleId
                 WHERE tenant_id = :tenantId AND bulk_operation_id = :bulkOperationId AND order_id = :orderId
                   AND item_status = 'PENDING'
                 """)
@@ -108,13 +126,31 @@ public class JdbcBulkOperationStore {
                 .param("orderId", orderId)
                 .param("version", resultingOrderVersion)
                 .param("now", utc(now))
+                .param("planId", planId)
+                .param("shipmentId", shipmentId)
+                .param("note", note)
+                .param("ruleId", ruleId)
                 .update();
     }
 
     public void markItemFailed(UUID tenantId, UUID bulkOperationId, UUID orderId, String problemCode, Instant now) {
+        markItemFailed(tenantId, bulkOperationId, orderId, problemCode, now, null, null, null);
+    }
+
+    /** A failed item; an assignment records the plan it was refused on and the refusal's detail (ADR 0172). */
+    public void markItemFailed(
+            UUID tenantId,
+            UUID bulkOperationId,
+            UUID orderId,
+            String problemCode,
+            Instant now,
+            @Nullable UUID planId,
+            @Nullable String note,
+            @Nullable String ruleId) {
         jdbc.sql("""
                 UPDATE ordering.bulk_operation_items
-                SET item_status = 'FAILED', item_problem_code = :problemCode, decided_at = :now
+                SET item_status = 'FAILED', item_problem_code = :problemCode, decided_at = :now,
+                    plan_id = :planId, item_note = :note, rule_id = :ruleId
                 WHERE tenant_id = :tenantId AND bulk_operation_id = :bulkOperationId AND order_id = :orderId
                   AND item_status = 'PENDING'
                 """)
@@ -123,6 +159,9 @@ public class JdbcBulkOperationStore {
                 .param("orderId", orderId)
                 .param("problemCode", problemCode)
                 .param("now", utc(now))
+                .param("planId", planId)
+                .param("note", note)
+                .param("ruleId", ruleId)
                 .update();
     }
 
@@ -150,12 +189,13 @@ public class JdbcBulkOperationStore {
 
     private static final String SELECT_OPERATION = """
             SELECT id, tenant_id, brand_id, location_id, action_type, requested_count,
-                   idempotency_key, created_by_actor_type, created_by_actor_id, created_at, completed_at
+                   idempotency_key, created_by_actor_type, created_by_actor_id, created_at, completed_at,
+                   courier_id, reason_code
             FROM ordering.bulk_operations""";
 
     private static final String SELECT_ITEM = """
             SELECT bulk_operation_id, order_id, item_status, item_problem_code,
-                   resulting_order_version, decided_at
+                   resulting_order_version, decided_at, plan_id, shipment_id, item_note, rule_id
             FROM ordering.bulk_operation_items""";
 
     private static BulkOperationRow mapOperation(ResultSet row, int number) throws SQLException {
@@ -170,7 +210,9 @@ public class JdbcBulkOperationStore {
                 row.getString("created_by_actor_type"),
                 row.getString("created_by_actor_id"),
                 row.getObject("created_at", OffsetDateTime.class).toInstant(),
-                instantOrNull(row, "completed_at"));
+                instantOrNull(row, "completed_at"),
+                row.getObject("courier_id", UUID.class),
+                row.getString("reason_code"));
     }
 
     private static BulkItemRow mapItem(ResultSet row, int number) throws SQLException {
@@ -180,7 +222,11 @@ public class JdbcBulkOperationStore {
                 BulkItemStatus.valueOf(row.getString("item_status")),
                 row.getString("item_problem_code"),
                 row.getObject("resulting_order_version", Integer.class),
-                instantOrNull(row, "decided_at"));
+                instantOrNull(row, "decided_at"),
+                row.getObject("plan_id", UUID.class),
+                row.getObject("shipment_id", UUID.class),
+                row.getString("item_note"),
+                row.getString("rule_id"));
     }
 
     private static @Nullable Instant instantOrNull(ResultSet row, String column) throws SQLException {
@@ -202,7 +248,37 @@ public class JdbcBulkOperationStore {
             String idempotencyKey,
             String createdByActorType,
             String createdByActorId,
-            Instant createdAt) {}
+            Instant createdAt,
+            @Nullable UUID courierId,
+            @Nullable String reasonCode) {
+
+        /** The two actions that name no courier (ADR 0039). */
+        public NewBulkOperation(
+                UUID id,
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                BulkActionType actionType,
+                int requestedCount,
+                String idempotencyKey,
+                String createdByActorType,
+                String createdByActorId,
+                Instant createdAt) {
+            this(
+                    id,
+                    tenantId,
+                    brandId,
+                    locationId,
+                    actionType,
+                    requestedCount,
+                    idempotencyKey,
+                    createdByActorType,
+                    createdByActorId,
+                    createdAt,
+                    null,
+                    null);
+        }
+    }
 
     public record BulkOperationRow(
             UUID id,
@@ -215,7 +291,9 @@ public class JdbcBulkOperationStore {
             String createdByActorType,
             String createdByActorId,
             Instant createdAt,
-            @Nullable Instant completedAt) {}
+            @Nullable Instant completedAt,
+            @Nullable UUID courierId,
+            @Nullable String reasonCode) {}
 
     public record BulkItemRow(
             UUID bulkOperationId,
@@ -223,5 +301,9 @@ public class JdbcBulkOperationStore {
             BulkItemStatus itemStatus,
             @Nullable String itemProblemCode,
             @Nullable Integer resultingOrderVersion,
-            @Nullable Instant decidedAt) {}
+            @Nullable Instant decidedAt,
+            @Nullable UUID planId,
+            @Nullable UUID shipmentId,
+            @Nullable String note,
+            @Nullable String ruleId) {}
 }

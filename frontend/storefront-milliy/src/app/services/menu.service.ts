@@ -42,11 +42,12 @@ import { preferredSellableVariant } from '../utils/item-availability';
  * **No favourite flag.** There is no favourites backend at all, so every item
  * reports `is_favourite: false`.
  *
- * **No variant name.** A variant carries a `sku` and a `unitCode`, which are
- * authoring identifiers; translations are published for categories, products and
- * modifier groups only. Printing a SKU as a size label would show the customer a
- * database value, so a single-variant product exposes no picker and a
- * multi-variant one falls back to the unit code, which at least means something.
+ * **The variant's name is published (ADR 0174), and falls back.** A variant carries
+ * a `sku` and a `unitCode`, which are authoring identifiers, and, from ADR 0174, the
+ * name its author gave the size or form. A variant nobody named, and a menu published
+ * before names travelled, fall back to the unit code, which at least means something;
+ * a SKU is never printed as a size label, and a single-variant product exposes no
+ * picker.
  *
  * **No preparation time or delivery duration.** Both were on the legacy item and
  * neither is on the publication. Serviceability answers preparation time per
@@ -232,9 +233,10 @@ export class MenuService {
     const variants: MenuItemVariant[] = product.variants.map((variant) => ({
       id: variant.variantId,
       isDefault: variant.isDefault,
-      // Not a name. See the class comment: the wire carries no customer-facing
-      // text for a variant, and a SKU printed as a label is a database value.
-      name: variant.unitCode ?? '',
+      // What the author named this size or form, in the customer's language (ADR 0174). A menu
+      // published before variants were named, and a variant nobody named, still carry none: then the
+      // unit code, which at least means something, and never the SKU, which is a database value.
+      name: variant.name || variant.unitCode || '',
       active: variant.orderable,
       // Absent means an older platform that has no schedules: on sale, never
       // "off-window" -- the failure that would hide a whole menu.
@@ -274,6 +276,19 @@ export class MenuService {
           ]),
         ),
       comboGroups: combos,
+      tags: (product.tags ?? []).map((tag) => ({
+        id: tag.tagId,
+        code: tag.code,
+        icon: tag.icon ?? null,
+        showAsBadge: tag.showAsBadge,
+        showAsFilter: tag.showAsFilter,
+        name: tag.name,
+      })),
+      ingredients: (product.ingredients ?? []).map((ingredient) => ({
+        id: ingredient.ingredientId,
+        code: ingredient.code,
+        name: ingredient.name,
+      })),
     };
   }
 }
@@ -511,6 +526,28 @@ export interface PublishedProduct {
   readonly comboGroupIds?: readonly string[];
   /** ADR 0136: this product's own required/min/max for an attached group, where it overrides the shared group's. */
   readonly modifierGroupPolicies?: readonly PublishedModifierGroupPolicy[];
+  /** ADR 0174: this product's badges and filter options in the author's order; absent on a menu that carries none. */
+  readonly tags?: readonly PublishedTag[];
+  /** ADR 0174: this product's composition labels in the author's order; absent on a menu that carries none. */
+  readonly ingredients?: readonly PublishedIngredient[];
+}
+
+/** `StorefrontCatalogQuery.MenuTag`, transcribed. The name is resolved for the requested language, then the brand's default. */
+export interface PublishedTag {
+  readonly tagId: string;
+  readonly code: string;
+  readonly icon: string | null;
+  readonly showAsBadge: boolean;
+  readonly showAsFilter: boolean;
+  readonly sortOrder: number;
+  readonly name: string;
+}
+
+/** `StorefrontCatalogQuery.MenuIngredient`, transcribed. */
+export interface PublishedIngredient {
+  readonly ingredientId: string;
+  readonly code: string;
+  readonly name: string;
 }
 
 export interface PublishedVariant {
@@ -521,6 +558,8 @@ export interface PublishedVariant {
   readonly modifierGroupPolicies?: readonly PublishedModifierGroupPolicy[];
   readonly sku: string | null;
   readonly unitCode: string | null;
+  /** ADR 0174: the name the author gave this size or form, in the customer's language; null/absent when nobody named it. */
+  readonly name?: string | null;
   readonly isDefault: boolean;
   /** False means shown and sold out, not hidden. The server already dropped what
    * this location does not offer. */

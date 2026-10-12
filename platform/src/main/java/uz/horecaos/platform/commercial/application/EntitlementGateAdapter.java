@@ -23,6 +23,23 @@ public class EntitlementGateAdapter implements EntitlementGate {
         this.entitlements = entitlements;
     }
 
+    /**
+     * The grant itself, read from the resolved snapshot and not from {@code featureEnabled}: a
+     * feature nobody granted resolves to the catalogue's safe default (false) under the default
+     * meter-only mode, and {@code featureEnabled} answers true for it because meter-only never
+     * refuses. {@code DigestScheduler} documents the same trap for the same reason.
+     */
+    @Override
+    public Optional<Answer> checkGranted(UUID tenantId, String entitlementKeyCode) {
+        return EntitlementKeys.find(entitlementKeyCode)
+                .filter(key -> key.valueType() == Boolean.class)
+                .map(key -> new Answer(
+                        Boolean.TRUE.equals(
+                                entitlements.snapshot(tenantId).require(key).featureEnabled()),
+                        key.description(),
+                        "/api/v1/control-plane/plans"));
+    }
+
     @Override
     @SuppressWarnings("unchecked")
     public Optional<Answer> checkFeature(UUID tenantId, String entitlementKeyCode) {

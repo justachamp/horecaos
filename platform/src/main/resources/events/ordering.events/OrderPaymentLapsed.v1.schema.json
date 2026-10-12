@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/ordering.events/OrderPaymentLapsed.v1.schema.json",
+  "title": "OrderPaymentLapsed v1 payload",
+  "description": "An unpaid order's payment window elapsed and the order ended as PAYMENT_FAILED. Deliberately distinct from OrderCancelled: a payment that never came is the platform's own commercial fact, not a customer's change of mind or an operator's decision. Ids, the window and the status only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "orderId",
+    "windowMinutes",
+    "status",
+    "orderVersion"
+  ],
+  "properties": {
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "brandId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "locationId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "windowMinutes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "PAYMENT_FAILED"
+      ]
+    },
+    "orderVersion": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

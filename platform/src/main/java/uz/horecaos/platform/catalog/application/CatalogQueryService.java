@@ -24,6 +24,7 @@ import uz.horecaos.platform.catalog.domain.CatalogEntities.Product;
 import uz.horecaos.platform.catalog.domain.CatalogEntities.Variant;
 import uz.horecaos.platform.catalog.domain.CompositeProducts.Visibility;
 import uz.horecaos.platform.catalog.domain.FiscalClassification;
+import uz.horecaos.platform.catalog.domain.MxikFacts;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.AttachedGroup;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore.MediaRelationRow;
@@ -273,8 +274,8 @@ public class CatalogQueryService {
      * BRAND-scoped path rather than {@code FiscalReferenceController}'s
      * PLATFORM-scoped one, which no tenant principal can call.
      */
-    public List<MxikReferenceRow> searchMxikReference(String query, int limit) {
-        return store.searchMxikReference(query, limit);
+    public List<MxikReferenceRow> searchMxikReference(String query, int limit, java.time.@Nullable LocalDate asOf) {
+        return store.searchMxikReference(query, limit, asOf);
     }
 
     /** A brand's whole modifier group library, shared across its catalogs. */
@@ -490,7 +491,33 @@ public class CatalogQueryService {
                         row.mxikCode(),
                         row.packageCode()))
                 .toList();
-        return new FiscalCoverageSummary(rows.size(), unclassified.size(), unclassified, categoryDefaults(rows));
+        // A node whose code the list has since withdrawn needs attention even when it is fully classified, so it
+        // is counted and listed apart from the unclassified ones (ADR 0173 Decision 7). Nothing blocks on it.
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+        Map<String, MxikFacts> facts = store.mxikFacts(rows.stream()
+                .map(JdbcCatalogStore.FiscalCoverageNodeRow::mxikCode)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet()));
+        List<FiscalCoverageNode> withdrawn = new java.util.ArrayList<>();
+        for (JdbcCatalogStore.FiscalCoverageNodeRow row : rows) {
+            MxikFacts fact = row.mxikCode() == null ? null : facts.get(row.mxikCode());
+            if (fact != null && fact.withdrawnOn(today)) {
+                withdrawn.add(new FiscalCoverageNode(
+                        row.nodeType(),
+                        row.nodeId(),
+                        row.name(),
+                        row.categoryName(),
+                        row.locationCount(),
+                        row.categoryId(),
+                        row.mxikCode(),
+                        row.packageCode(),
+                        fact.validUntil(),
+                        fact.replacedByCode()));
+            }
+        }
+        withdrawn.sort(java.util.Comparator.comparing(node -> node.name() == null ? "" : node.name()));
+        return new FiscalCoverageSummary(
+                rows.size(), unclassified.size(), unclassified, categoryDefaults(rows), withdrawn.size(), withdrawn);
     }
 
     /**
@@ -695,7 +722,18 @@ public class CatalogQueryService {
             int totalNodes,
             int unclassifiedCount,
             List<FiscalCoverageNode> nodes,
-            List<CategoryDefault> categoryDefaults) {}
+            List<CategoryDefault> categoryDefaults,
+            int withdrawnCount,
+            List<FiscalCoverageNode> withdrawnNodes) {
+
+        public FiscalCoverageSummary(
+                int totalNodes,
+                int unclassifiedCount,
+                List<FiscalCoverageNode> nodes,
+                List<CategoryDefault> categoryDefaults) {
+            this(totalNodes, unclassifiedCount, nodes, categoryDefaults, 0, List.of());
+        }
+    }
 
     /**
      * @param categoryId  the category a variant sits in (its first), or null for
@@ -712,7 +750,22 @@ public class CatalogQueryService {
             int locationCount,
             @Nullable UUID categoryId,
             @Nullable String mxikCode,
-            @Nullable String packageCode) {}
+            @Nullable String packageCode,
+            java.time.@Nullable LocalDate mxikWithdrawnOn,
+            @Nullable String mxikReplacedBy) {
+
+        public FiscalCoverageNode(
+                PriceableType nodeType,
+                UUID nodeId,
+                @Nullable String name,
+                @Nullable String categoryName,
+                int locationCount,
+                @Nullable UUID categoryId,
+                @Nullable String mxikCode,
+                @Nullable String packageCode) {
+            this(nodeType, nodeId, name, categoryName, locationCount, categoryId, mxikCode, packageCode, null, null);
+        }
+    }
 
     /**
      * @param agreeingCount how many of the category's classified variants carry

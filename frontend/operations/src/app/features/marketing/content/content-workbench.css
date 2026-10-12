@@ -1,0 +1,120 @@
+:host {
+  display: block;
+}
+
+.workbench {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .workbench {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.workbench__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.workbench__toolbar {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.workbench__title {
+  margin: 0;
+}
+
+.workbench__limit,
+.workbench__hint,
+.workbench__empty {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+.workbench__spacer {
+  flex: 1;
+}
+
+.workbench__link {
+  border: none;
+  background: none;
+  color: var(--q-ink-muted);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.workbench__create {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workbench__button {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.workbench__error {
+  margin: 0;
+  color: var(--q-error-text);
+}
+
+.workbench__entries {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workbench__entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+  text-align: start;
+}
+
+.workbench__entry--selected {
+  border-color: var(--q-primary);
+  background: var(--q-info-tint);
+}
+
+.workbench__entry-title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.workbench__problems {
+  color: var(--q-warning-text, var(--q-ink-muted));
+}
+
+.workbench__editor {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+}

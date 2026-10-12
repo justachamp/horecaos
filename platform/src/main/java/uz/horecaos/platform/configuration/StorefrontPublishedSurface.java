@@ -96,6 +96,15 @@ final class StorefrontPublishedSurface {
             ORDER + "/reorder",
             ORDER + "/review",
             BRAND + "/reviews",
+            // The receipt of a paid order, as its customer may read it (ADR 0166).
+            ORDER + "/receipts",
+            // What is waiting to be rated, the public face a brand may switch on, and the tags offered
+            // with a review (ADR 0159).
+            BRAND + "/reviews/pending",
+            BRAND + "/reviews/public",
+            BRAND + "/reviews/public/summary",
+            BRAND + "/reviews/{reviewId}/public-display/withdrawal",
+            BRAND + "/feedback/config",
             // What the customer earns.
             ROOT + "/loyalty/tenants/{tenantId}/accounts/{accountId}",
             ROOT + "/loyalty/tenants/{tenantId}/accounts/{accountId}/entries",
@@ -103,7 +112,22 @@ final class StorefrontPublishedSurface {
             BRAND + "/referrals/redemptions",
             // The banners the restaurant chose to show this guest, and the guest's own dismissal (ADR 0112).
             BRAND + "/presented-offers",
-            BRAND + "/presented-offers/{presentedOfferId}/dismissals");
+            BRAND + "/presented-offers/{presentedOfferId}/dismissals",
+            // The restaurant's storefront content (ADR 0157): the home page's placements and the editorial
+            // kinds a brand may run. None is bound to one channel, so none is internal (ADR 0070).
+            BRAND + "/content/home",
+            BRAND + "/content/features",
+            BRAND + "/content/news",
+            BRAND + "/content/news/{slug}",
+            BRAND + "/content/recipes",
+            BRAND + "/content/recipes/{slug}",
+            BRAND + "/content/gallery",
+            BRAND + "/content/gallery/{slug}",
+            BRAND + "/content/events",
+            BRAND + "/content/careers",
+            BRAND + "/content/careers/{slug}",
+            // A visit through a campaign link, counted without naming anybody (ADR 0167).
+            BRAND + "/attribution-links/{token}/clicks");
 
     private StorefrontPublishedSurface() {}
 

@@ -37,11 +37,25 @@
     >
   }
 
-  <!-- §2.10: bulk courier assignment is explicitly out of scope — said
-       here rather than offered as a button that would 400. -->
-  <span class="q-caption order-queue__bulk-note" data-testid="order-queue-bulk-courier-note">{{
-    'orders.queue.bulk.courierNote' | t
-  }}</span>
+  <!-- ADR 0172: bulk courier assignment. Offered, not disabled, when every selected row can take
+       it; one line saying why when they cannot. -->
+  @if (canBulkAssign()) {
+    <button
+      type="button"
+      class="order-queue__bulk-action"
+      [disabled]="bulkBusy()"
+      (click)="onBulkAssignClick()"
+      data-testid="order-queue-bulk-assign"
+    >
+      {{ 'orders.queue.bulk.assign' | t }}
+    </button>
+  } @else if (bulkAssignUnavailableMessage(); as message) {
+    <span
+      class="q-caption order-queue__bulk-unavailable"
+      data-testid="order-queue-bulk-assign-unavailable"
+      >{{ message }}</span
+    >
+  }
 
   <button
     type="button"

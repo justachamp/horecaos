@@ -1,0 +1,23 @@
+<app-content-link [link]="item().link" (activated)="clicked()">
+  <figure class="tile" data-testid="content-tile" [appContentImpression]="item()">
+    @if (plan(); as shown) {
+      <app-content-media
+        [plan]="shown"
+        [alt]="item().media.alt ?? ''"
+        [eager]="eager()"
+        [sizes]="sizes()"
+        [aspectRatio]="aspect()"
+        (failed)="failed.emit()"
+      />
+    }
+    <figcaption class="tile__text" [attr.lang]="lang()">
+      <span class="tile__title">{{ item().title }}</span>
+      @if (item().subtitle) {
+        <span class="tile__subtitle">{{ item().subtitle }}</span>
+      }
+      @if (item().ctaLabel && linked()) {
+        <span class="tile__cta" data-testid="content-tile-cta">{{ item().ctaLabel }}</span>
+      }
+    </figcaption>
+  </figure>
+</app-content-link>

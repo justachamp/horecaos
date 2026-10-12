@@ -143,4 +143,10 @@ if [ "${secret}" != "${CLIENT_SECRET}" ]; then
   exit 1
 fi
 
+# ADR 0176: the platform lists a staff account's sessions through the offline-session
+# endpoint, which takes the client's internal id. Reading that id would need view-clients,
+# which the provisioning credential deliberately lacks, so it is configuration. Set this
+# line in the application's environment (the production runbook names where).
+echo "HORECAOS_KEYCLOAK_STAFF_LOGIN_CLIENT_UUID=${client_uuid}"
+
 echo "==> Done"

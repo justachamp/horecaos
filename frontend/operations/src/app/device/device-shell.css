@@ -216,3 +216,50 @@
   font: inherit;
   cursor: pointer;
 }
+
+/* The kiosk's status screen (ADR 0162): which channel and branch it sells for, and whether it can. */
+.device-shell__facts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+}
+
+.device-shell__facts dt {
+  font-size: var(--q-type-body-lg);
+  color: var(--q-ink-subtle);
+}
+
+.device-shell__facts dd {
+  margin: 0;
+  font-size: var(--q-type-headline);
+  font-weight: 600;
+}
+
+/* Who is unlocked at this tablet (ADR 0155): the person's label and the two things they can do to it. */
+.device-shell__who {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.device-shell__who-name {
+  flex: 1;
+  font-size: var(--q-type-title);
+  font-weight: 600;
+}
+
+.device-shell__who-name--none {
+  color: var(--q-ink-subtle);
+  font-weight: 400;
+}
+
+.device-shell__button--small {
+  min-height: 48px;
+  padding: 0 20px;
+  font-size: var(--q-type-body-lg);
+}

@@ -1,0 +1,137 @@
+<div class="min-h-screen bg-surface-base pb-24 text-text-primary">
+  <div class="mx-auto max-w-[420px] px-4 py-6">
+    <header class="flex shrink-0 flex-col gap-2 pb-6">
+      <button
+        type="button"
+        [appBack]="backTo"
+        class="app-back flex items-center gap-2 text-sm transition-opacity hover:opacity-90"
+      >
+        <svg
+          class="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M15 19l-7-7 7-7"
+          />
+        </svg>
+        {{ 'common.back' | t }}
+      </button>
+    </header>
+
+    @switch (state()) {
+      @case ('loading') {
+        <div class="flex justify-center py-10" data-testid="loading">
+          <span
+            class="h-6 w-6 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
+          ></span>
+        </div>
+      }
+      @case ('unavailable') {
+        <div class="space-y-3 py-10 text-center">
+          <p class="text-sm text-zinc-400">{{ 'content.unavailable' | t }}</p>
+          <a routerLink="/home" class="inline-block text-sm text-brand-accent underline">{{
+            'home.goHome' | t
+          }}</a>
+        </div>
+      }
+      @case ('ready') {
+        @if (doc(); as d) {
+          <article class="space-y-4" [attr.lang]="d.textLocale || null">
+            @if (d.cover && !coverFailed()) {
+              <div class="overflow-hidden rounded-2xl bg-surface-raised">
+                <app-content-media
+                  [media]="d.cover"
+                  [eager]="true"
+                  [posterOnly]="true"
+                  sizes="(min-width: 430px) 390px, 100vw"
+                  (failed)="coverFailed.set(true)"
+                />
+              </div>
+            }
+            <div class="space-y-1">
+              <h1 class="text-xl font-bold leading-snug text-text-primary">{{ d.title }}</h1>
+              <p class="text-xs text-zinc-500">
+                <time [attr.datetime]="d.publishedAt">{{ dateLabel(d.publishedAt) }}</time>
+              </p>
+            </div>
+            @if (d.summary) {
+              <p class="text-sm leading-relaxed text-zinc-300">{{ d.summary }}</p>
+            }
+
+            @if (d.vacancy; as v) {
+              <section
+                data-testid="vacancy"
+                class="space-y-2 rounded-2xl bg-surface-raised p-4 text-sm"
+              >
+                @if (v.employmentType; as type) {
+                  <p>
+                    <span class="text-zinc-400">{{ 'content.vacancy.employment' | t }}: </span>
+                    <span>{{ employmentKeys[type] | t }}</span>
+                  </p>
+                }
+                @if (v.branch; as branch) {
+                  <p>
+                    <span class="text-zinc-400">{{ 'content.vacancy.branch' | t }}: </span>
+                    <span>{{ branchLabel(branch) }}</span>
+                  </p>
+                }
+                @if (contact(); as c) {
+                  <p data-testid="vacancy-contact">
+                    <span class="text-zinc-400">{{ 'content.vacancy.contact' | t }}: </span>
+                    @if (c.href) {
+                      <a
+                        [href]="c.href"
+                        [attr.target]="c.external ? '_blank' : null"
+                        [attr.rel]="c.external ? 'noopener noreferrer' : null"
+                        class="text-brand-accent underline"
+                        >{{ c.label }}</a
+                      >
+                    } @else {
+                      <span>{{ c.label }}</span>
+                    }
+                  </p>
+                }
+              </section>
+            }
+
+            <app-content-blocks [blocks]="d.blocks" [locale]="d.bodyLocale ?? ''" />
+
+            @if (visibleImages().length > 0) {
+              <ul
+                data-testid="album"
+                class="grid grid-cols-2 gap-2"
+                [attr.aria-label]="'content.gallery' | t"
+              >
+                @for (entry of visibleImages(); track entry.index) {
+                  <li>
+                    <figure class="m-0 space-y-1">
+                      <div class="aspect-square overflow-hidden rounded-xl bg-surface-raised">
+                        <app-content-media
+                          [media]="entry.image.media"
+                          [posterOnly]="true"
+                          sizes="(min-width: 430px) 190px, 44vw"
+                          (failed)="markImageFailed(entry.index)"
+                        />
+                      </div>
+                      @if (entry.image.caption) {
+                        <figcaption class="text-xs text-zinc-400">
+                          {{ entry.image.caption }}
+                        </figcaption>
+                      }
+                    </figure>
+                  </li>
+                }
+              </ul>
+            }
+          </article>
+        }
+      }
+    }
+  </div>
+</div>

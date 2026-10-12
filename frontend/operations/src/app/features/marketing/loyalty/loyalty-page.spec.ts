@@ -7,7 +7,13 @@ import { CurrentBrand } from '../../../core/auth/current-brand';
 import { I18n } from '../../../core/i18n/i18n';
 import { LocationsApi } from '../../settings/locations/locations-api';
 import { SalesChannelsApi } from '../../settings/sales-channels/sales-channels-api';
-import { AccrualRuleView, LoyaltyApi, RedemptionPolicyView } from './loyalty-api';
+import {
+  AccrualRuleView,
+  LoyaltyApi,
+  LoyaltyLiabilityView,
+  RedemptionPolicyView,
+} from './loyalty-api';
+import { PosSyncApi } from './pos-sync-api';
 import { LoyaltyPage } from './loyalty-page';
 
 const BRAND_SCOPE: BrandScope = { tenantId: 't1', brandId: 'b1' };
@@ -38,6 +44,16 @@ const ACTIVE_POLICY: RedemptionPolicyView = {
   validFrom: '2026-08-24T00:00:00Z',
   validUntil: null,
 };
+
+function liabilityView(tillAbsorbed: number): LoyaltyLiabilityView {
+  return {
+    brandId: BRAND_SCOPE.brandId,
+    outstanding: { amountMinor: 120_000, currency: 'UZS' },
+    held: { amountMinor: 0, currency: 'UZS' },
+    accountCount: 4,
+    tillAbsorbed: { amountMinor: tillAbsorbed, currency: 'UZS' },
+  };
+}
 
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -75,6 +91,19 @@ describe('LoyaltyPage', () => {
           },
         },
         { provide: LoyaltyApi, useValue: api },
+        {
+          provide: PosSyncApi,
+          useValue: {
+            overview: vi.fn().mockResolvedValue({
+              tillKeepsBalance: false,
+              standingNotice: false,
+              openDiscrepancies: 0,
+              bindings: [],
+            }),
+            runs: vi.fn().mockResolvedValue([]),
+            discrepancies: vi.fn().mockResolvedValue([]),
+          },
+        },
         { provide: LocationsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
         { provide: SalesChannelsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
       ],
@@ -101,14 +130,64 @@ describe('LoyaltyPage', () => {
     expect(host.textContent).toContain('50.00%');
   });
 
-  it('always renders the honest not-built panels for deposit accounts and POS balance sync', async () => {
+  it('says a deposit is not offered, in the one sentence ADR 0165 gives, with when it would be reopened', async () => {
     await render(fakeApi());
     const host = fixture.nativeElement as HTMLElement;
 
-    expect(host.querySelector('[data-testid="loyalty-deposit-not-built"]')).not.toBeNull();
-    expect(host.querySelector('[data-testid="loyalty-pos-sync-not-built"]')).not.toBeNull();
-    // ADR 0046's own decision is named, not just "not built".
-    expect(host.textContent).toContain('ADR 0046');
+    expect(host.querySelector('[data-testid="loyalty-deposit-not-built"]')).toBeNull();
+    expect(host.querySelector('[data-testid="loyalty-deposit-not-offered"]')).not.toBeNull();
+    // Decision 8: the same sentence the customer pane, the gap map and a prospect are given.
+    expect(host.querySelector('[data-testid="loyalty-deposit-sentence"]')?.textContent).toContain(
+      'HorecaOS does not hold customer money, so there is no prepaid deposit.',
+    );
+    // Decision 6: what would reopen it, and the ADR 0046 licence condition that narrows.
+    const revisit =
+      host.querySelector('[data-testid="loyalty-deposit-revisit"]')?.textContent ?? '';
+    expect(revisit).toContain('ADR 0165');
+    expect(revisit).toContain('Central Bank authorisation');
+    expect(revisit).toContain('ADR 0046');
+  });
+
+  it('keeps POS balance sync a tab rather than a not-built card', async () => {
+    await render(fakeApi());
+    const host = fixture.nativeElement as HTMLElement;
+
+    // ADR 0171 built the other one: no "not built" card, a tab in its place.
+    expect(host.querySelector('[data-testid="loyalty-pos-sync-not-built"]')).toBeNull();
+    expect(host.querySelector('[data-testid="loyalty-tab-pos-sync"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="loyalty-pos-sync"]')).toBeNull();
+  });
+
+  it('shows the till-balance sync when its tab is chosen, and the programme again when the other is', async () => {
+    await render(fakeApi());
+    const host = fixture.nativeElement as HTMLElement;
+
+    (host.querySelector('[data-testid="loyalty-tab-pos-sync"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="loyalty-pos-sync"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="accrual-rule-row"]')).toBeNull();
+
+    (host.querySelector('[data-testid="loyalty-tab-programme"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="loyalty-pos-sync"]')).toBeNull();
+  });
+
+  it('puts what a brand absorbed from till spends beside the outstanding points when there is some', async () => {
+    await render(fakeApi({ liability: vi.fn().mockResolvedValue([liabilityView(6_000)]) }));
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="loyalty-liability-till-absorbed"]')).not.toBeNull();
+  });
+
+  it('shows no absorbed line when nothing was absorbed', async () => {
+    await render(fakeApi({ liability: vi.fn().mockResolvedValue([liabilityView(0)]) }));
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="loyalty-liability"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="loyalty-liability-till-absorbed"]')).toBeNull();
   });
 
   it('shows the denied state when the brand grant is missing', async () => {

@@ -27,6 +27,9 @@ export const coreRu: AreaMessages<typeof coreEn> = {
   'shell.nav.inbox': 'Чаты',
   'shell.nav.kitchen': 'Кухня',
   'shell.nav.delivery': 'Доставка',
+  'shell.nav.deliveries': 'Доставки',
+  'shell.profile.showAll': 'Показать все',
+  'shell.profile.hideAgain': 'Скрыть лишнее',
   'shell.nav.couriers': 'Курьеры',
   'shell.nav.customers': 'Клиенты',
   'shell.nav.staff': 'Сотрудники и доступ',
@@ -57,7 +60,7 @@ export const coreRu: AreaMessages<typeof coreEn> = {
   'orders.status.RECEIVED': 'Принят',
   'orders.status.PAYMENT_AUTHORIZING': 'Оплата',
   'orders.status.AWAITING_APPROVAL': 'На подтверждении',
-  'orders.status.PAYMENT_FAILED': 'Оплата не прошла',
+  'orders.status.PAYMENT_FAILED': 'Отменён: не оплачен',
   'orders.status.CONFIRMED': 'Подтверждён',
   'orders.status.REJECTED': 'Отклонён',
   'orders.status.EXPIRED': 'Просрочен',
@@ -98,6 +101,7 @@ export const coreRu: AreaMessages<typeof coreEn> = {
   'orders.action.conflict': 'Переход {from} → {to} больше недоступен.',
   'orders.table.chip': 'Стол {tables}',
   'orders.action.catchweightNotReconciled': 'Взвесьте весовые позиции, прежде чем выдавать заказ',
+  'orders.action.marksIncomplete': 'Отсканируйте маркированные позиции, прежде чем выдавать заказ',
 
   'notBuilt.title': 'Ещё не построено',
   'notBuilt.body': 'Раздел описан, но экранов пока нет. Спецификация: {spec}.',
@@ -207,6 +211,21 @@ export const coreRu: AreaMessages<typeof coreEn> = {
   'ui.mediaUploader.confirm': 'Применить кадрирование',
   'ui.mediaUploader.cancel': 'Отмена',
   'ui.mediaUploader.uploading': 'Загрузка…',
+  'ui.mediaUploader.videoNotMp4':
+    'Принимается только видео MP4 — экспортируйте ролик в MP4 (H.264)',
+  'ui.mediaUploader.videoTooLarge': 'Видео больше 12 МБ — экспортируйте его меньшего размера',
+  'ui.mediaUploader.videoTooLong': 'Видео длиннее 20 секунд — обрежьте его',
+  'ui.mediaUploader.videoDimensions':
+    'Длинная сторона видео — не больше 1920 пикселей, короткая — не меньше 480',
+  'ui.mediaUploader.videoUnreadable':
+    'Браузер не может прочитать это видео — экспортируйте его в MP4 с видео H.264',
+  'ui.mediaUploader.videoRejectedByServer':
+    'Платформа отклонила это видео. Экспортируйте его в MP4 с видео H.264 (и звуком AAC или без звука), не больше 12 МБ, 20 секунд и 1920 пикселей, с включённым «быстрым стартом» (оптимизация для веба), и загрузите снова',
+  'ui.mediaUploader.posterFailed': 'Не удалось взять кадр-обложку из этого видео',
+  'ui.mediaUploader.posterHint':
+    'Выберите кадр, который клиенты увидят до начала видео (и вместо него, если на телефоне включено уменьшение движения)',
+  'ui.mediaUploader.posterFrame': 'Кадр-обложка',
+  'ui.mediaUploader.posterConfirm': 'Взять этот кадр',
   'ui.mappingPane.unmappedOnly': 'Показывать только несопоставленные',
   'ui.mappingPane.bulkAutoMatch': 'Сопоставить автоматически по названию',
   'ui.mappingPane.loading': 'Загрузка сопоставления…',
@@ -432,4 +451,17 @@ export const coreRu: AreaMessages<typeof coreEn> = {
   'settings.orderPolicy.field.reason': 'Причина изменения',
   'settings.orderPolicy.publish': 'Опубликовать',
   'settings.orderPolicy.publishing': 'Публикация…',
+
+  'shared.columnPicker.toggle': 'Столбцы',
+  'shared.columnPicker.label': 'Столбцы таблицы',
+  'shared.columnPicker.reset': 'Вернуть столбцы по умолчанию',
+  'shared.columnPicker.saved':
+    'Выбор сохраняется в вашей учётной записи и виден на всех ваших устройствах.',
+  'shared.columnPicker.session': 'Выбор действует только до конца этого сеанса.',
+  'shared.columnPicker.writeFailed':
+    'Последнее изменение не удалось сохранить в вашей учётной записи. Оно действует только на этом экране.',
+  'shell.localeScope.thisDevice': 'Язык выбран только для этого устройства.',
+  'shell.localeScope.allDevices': 'Для всех моих устройств',
+  'shell.localeScope.keep': 'Только на этом устройстве',
+  'shell.localeScope.failed': 'Не удалось сохранить язык. Он остаётся только на этом устройстве.',
 };

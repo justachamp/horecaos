@@ -59,6 +59,13 @@ export class RuleList {
    */
   readonly selectable = input(false);
   readonly selectedId = input<string | null>(null);
+  /**
+   * Whether each row shows its enable switch (ADR 0157, Decision 11). On by default, so every host that
+   * treats the list as a rule engine renders as before. Off for a host whose visibility is decided by
+   * something other than a switch: a content placement is ordered here, but what is live is decided by
+   * publication and a schedule, so a switch there would promise a second, competing way to hide an item.
+   */
+  readonly showToggle = input(true);
   readonly reorder = output<RuleReorder>();
   readonly enabledChange = output<RuleEnabledChange>();
   readonly selected = output<string>();

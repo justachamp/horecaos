@@ -1,0 +1,433 @@
+<div class="terminals">
+  <h1 class="q-subhead">{{ 'staff.terminals.title' | t }}</h1>
+  <p class="q-body-sm terminals__hint">{{ 'staff.terminals.hint' | t }}</p>
+
+  @if (!firstLoadComplete()) {
+    <p class="q-body-sm terminals__state">{{ 'staff.terminals.loading' | t }}</p>
+  } @else if (denied()) {
+    <p class="q-body-sm terminals__state" data-testid="terminals-denied">
+      {{ 'staff.terminals.denied' | t }}
+    </p>
+  } @else if (loadError()) {
+    <p class="q-body-sm terminals__state" data-testid="terminals-error">
+      {{ 'staff.terminals.loadError' | t }}
+    </p>
+  } @else {
+    @if (kiosksLink()) {
+      <p class="q-body-sm terminals__hint" data-testid="terminals-kiosks">
+        <a routerLink="/settings/channel-setup/kiosks" class="terminals__link">{{
+          'staff.terminals.kiosks.manage' | t
+        }}</a>
+      </p>
+    }
+
+    <!-- The Policy card: five values, where each comes from, the odds beside the length. -->
+    <section class="card" data-testid="terminals-policy">
+      <h2 class="q-subhead">{{ 'staff.terminals.policy.title' | t }}</h2>
+      @if (policyDenied()) {
+        <p class="q-body-sm terminals__hint" data-testid="terminals-policy-denied">
+          {{ 'staff.terminals.policy.denied' | t }}
+        </p>
+      } @else if (policy(); as current) {
+        <p class="q-body-sm terminals__hint">{{ 'staff.terminals.policy.hint' | t }}</p>
+        <form class="terminals__form" (submit)="$event.preventDefault(); savePolicy()">
+          <fieldset class="terminals__field">
+            <legend class="q-caption">{{ 'staff.terminals.policy.pinLength' | t }}</legend>
+            @for (length of [4, 6]; track length) {
+              <label class="terminals__radio">
+                <input
+                  type="radio"
+                  name="pin-length"
+                  [checked]="draftPinLength() === length"
+                  [disabled]="!canManage()"
+                  (change)="draftPinLength.set(length)"
+                  [attr.data-testid]="'terminals-policy-length-' + length"
+                />
+                {{ 'staff.terminals.policy.digits' | t: { count: length } }}
+              </label>
+            }
+            <span class="q-caption terminals__hint" data-testid="terminals-policy-odds">
+              {{
+                'staff.terminals.policy.odds'
+                  | t
+                    : {
+                        tries: current.lockout.failuresPerDay,
+                        oneIn: oddsForDraft(),
+                        minutes: current.lockout.lockMinutes,
+                        consecutive: current.lockout.consecutiveFailures,
+                      }
+              }}
+            </span>
+            <span class="q-caption terminals__source">{{
+              sourceLabel(current.pinLength.source)
+            }}</span>
+          </fieldset>
+
+          <label class="terminals__field">
+            <span class="q-caption">{{ 'staff.terminals.policy.autoLock' | t }}</span>
+            <input
+              type="number"
+              min="30"
+              max="3600"
+              [value]="draftAutoLock()"
+              [disabled]="!canManage()"
+              (input)="draftAutoLock.set($any($event.target).value)"
+              data-testid="terminals-policy-autolock"
+            />
+            <span class="q-caption terminals__source">{{
+              sourceLabel(current.autoLockSeconds.source)
+            }}</span>
+          </label>
+
+          <label class="terminals__field">
+            <span class="q-caption">{{ 'staff.terminals.policy.maxHours' | t }}</span>
+            <input
+              type="number"
+              min="1"
+              max="16"
+              [value]="draftMaxHours()"
+              [disabled]="!canManage()"
+              (input)="draftMaxHours.set($any($event.target).value)"
+              data-testid="terminals-policy-maxhours"
+            />
+            <span class="q-caption terminals__source">{{
+              sourceLabel(current.sessionMaxHours.source)
+            }}</span>
+          </label>
+
+          <label class="terminals__field">
+            <span class="q-caption">{{ 'staff.terminals.policy.roster' | t }}</span>
+            <select
+              [value]="draftRoster()"
+              [disabled]="!canManage()"
+              (change)="draftRoster.set($any($event.target).value)"
+              data-testid="terminals-policy-roster"
+            >
+              <option value="NAME_INITIAL">
+                {{ 'staff.terminals.policy.roster.NAME_INITIAL' | t }}
+              </option>
+              <option value="REFERENCE">{{ 'staff.terminals.policy.roster.REFERENCE' | t }}</option>
+            </select>
+            <span class="q-caption terminals__source">{{
+              sourceLabel(current.rosterDisplay.source)
+            }}</span>
+          </label>
+
+          <label class="terminals__field">
+            <span class="q-caption">{{ 'staff.terminals.policy.defaultMode' | t }}</span>
+            <select
+              [value]="draftDefaultMode()"
+              [disabled]="!canManage()"
+              (change)="draftDefaultMode.set($any($event.target).value)"
+              data-testid="terminals-policy-default-mode"
+            >
+              @for (mode of modes; track mode) {
+                <option [value]="mode">{{ modeLabel(mode) }}</option>
+              }
+            </select>
+            <span class="q-caption terminals__source">{{
+              sourceLabel(current.attributionDefault.source)
+            }}</span>
+          </label>
+
+          @if (policySaved()) {
+            <p class="q-caption terminals__ok" data-testid="terminals-policy-saved">
+              {{ 'staff.terminals.policy.saved' | t }}
+            </p>
+          }
+          @if (policyError()) {
+            <p class="q-caption terminals__error" data-testid="terminals-policy-error">
+              {{ policyError() }}
+            </p>
+          }
+          @if (canManage()) {
+            <button
+              type="submit"
+              class="primary"
+              [disabled]="!policyValid() || policySaving()"
+              data-testid="terminals-policy-save"
+            >
+              {{
+                policySaving()
+                  ? ('staff.terminals.policy.saving' | t)
+                  : ('staff.terminals.policy.save' | t)
+              }}
+            </button>
+          }
+        </form>
+      } @else if (policyError()) {
+        <!-- A load that failed: the card has no policy to show, and the error would otherwise be said nowhere. -->
+        <p class="q-body-sm terminals__error" role="alert" data-testid="terminals-policy-error">
+          {{ policyError() }}
+        </p>
+        <button
+          type="button"
+          class="secondary"
+          (click)="retryPolicy()"
+          data-testid="terminals-policy-retry"
+        >
+          {{ 'staff.terminals.policy.retry' | t }}
+        </button>
+      }
+    </section>
+
+    <section class="card">
+      <h2 class="q-subhead">{{ 'staff.terminals.active.title' | t }}</h2>
+
+      @if (activeDevices().length === 0) {
+        <p class="q-body-sm terminals__hint" data-testid="terminals-empty">
+          {{ 'staff.terminals.active.empty' | t }}
+        </p>
+      } @else {
+        <table class="terminals__table" data-testid="terminals-table">
+          <thead>
+            <tr>
+              <th>{{ 'staff.terminals.column.name' | t }}</th>
+              <th>{{ 'staff.terminals.column.class' | t }}</th>
+              <th>{{ 'staff.terminals.column.mode' | t }}</th>
+              <th>{{ 'staff.terminals.column.unlocked' | t }}</th>
+              <th>{{ 'staff.terminals.column.lastSeen' | t }}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (device of activeDevices(); track device.deviceId) {
+              <tr [attr.data-testid]="'terminals-row-' + device.deviceId">
+                <td>
+                  @if (editId() === device.deviceId) {
+                    <input
+                      type="text"
+                      maxlength="120"
+                      [value]="draftName()"
+                      (input)="draftName.set($any($event.target).value)"
+                      [attr.data-testid]="'terminals-edit-name-' + device.deviceId"
+                    />
+                  } @else {
+                    {{ device.displayName }}
+                  }
+                </td>
+                <td [attr.data-testid]="'terminals-class-' + device.deviceId">
+                  {{ classLabel(device.deviceClass) }}
+                </td>
+                <td>
+                  @if (editId() === device.deviceId && device.unlockable) {
+                    <select
+                      [value]="draftMode()"
+                      (change)="draftMode.set($any($event.target).value)"
+                      [attr.data-testid]="'terminals-edit-mode-' + device.deviceId"
+                    >
+                      @for (mode of modes; track mode) {
+                        <option [value]="mode">{{ modeLabel(mode) }}</option>
+                      }
+                    </select>
+                    <label class="terminals__inline">
+                      <span class="q-caption">{{ 'staff.terminals.edit.autoLock' | t }}</span>
+                      <input
+                        type="number"
+                        min="30"
+                        max="3600"
+                        [placeholder]="'staff.terminals.edit.followPolicy' | t"
+                        [value]="draftLock()"
+                        (input)="draftLock.set($any($event.target).value)"
+                        [attr.data-testid]="'terminals-edit-lock-' + device.deviceId"
+                      />
+                    </label>
+                  } @else if (device.unlockable) {
+                    <span [attr.data-testid]="'terminals-mode-' + device.deviceId">{{
+                      modeLabel(device.attributionMode)
+                    }}</span>
+                    <span class="q-caption terminals__hint">
+                      {{
+                        'staff.terminals.lock.after'
+                          | t: { seconds: device.effectiveAutoLockSeconds }
+                      }}
+                    </span>
+                  } @else {
+                    <span class="q-caption terminals__hint">{{
+                      'staff.terminals.mode.notUnlocked' | t
+                    }}</span>
+                  }
+                </td>
+                <td [attr.data-testid]="'terminals-unlocked-' + device.deviceId">
+                  @if (device.unlockedNow; as who) {
+                    {{ who.label }}
+                  } @else {
+                    —
+                  }
+                </td>
+                <td>
+                  <span
+                    [class.terminals__unseen]="unseen(device)"
+                    [attr.data-testid]="'terminals-lastseen-' + device.deviceId"
+                    >{{ lastSeenLabel(device) }}</span
+                  >
+                  @if (device.lastSeenBuild) {
+                    <span class="q-caption terminals__hint">{{ device.lastSeenBuild }}</span>
+                  }
+                </td>
+                <td>
+                  @if (revokeTargetId() === device.deviceId) {
+                    <div class="terminals__revoke">
+                      <input
+                        type="text"
+                        [value]="revokeReason()"
+                        (input)="revokeReason.set($any($event.target).value)"
+                        [placeholder]="'staff.terminals.revoke.reasonPlaceholder' | t"
+                        [attr.data-testid]="'terminals-revoke-reason-' + device.deviceId"
+                      />
+                      <button
+                        type="button"
+                        class="destructive"
+                        [disabled]="!canConfirmRevoke() || revokeSubmitting()"
+                        (click)="confirmRevoke()"
+                        [attr.data-testid]="'terminals-revoke-confirm-' + device.deviceId"
+                      >
+                        {{ 'staff.terminals.revoke.confirm' | t }}
+                      </button>
+                      <button type="button" class="secondary" (click)="cancelRevoke()">
+                        {{ 'staff.terminals.revoke.cancel' | t }}
+                      </button>
+                      @if (revokeError()) {
+                        <p class="q-caption terminals__error" data-testid="terminals-revoke-error">
+                          {{ revokeError() }}
+                        </p>
+                      }
+                    </div>
+                  } @else if (editId() === device.deviceId) {
+                    <button
+                      type="button"
+                      class="primary"
+                      [disabled]="!editValid() || editSaving()"
+                      (click)="saveEdit(device)"
+                      [attr.data-testid]="'terminals-edit-save-' + device.deviceId"
+                    >
+                      {{ 'staff.terminals.edit.save' | t }}
+                    </button>
+                    <button type="button" class="secondary" (click)="cancelEdit()">
+                      {{ 'staff.terminals.edit.cancel' | t }}
+                    </button>
+                    @if (editError()) {
+                      <p class="q-caption terminals__error" data-testid="terminals-edit-error">
+                        {{ editError() }}
+                      </p>
+                    }
+                  } @else {
+                    @if (device.unlockable) {
+                      <button
+                        type="button"
+                        class="secondary"
+                        (click)="toggleHistory(device.deviceId)"
+                        [attr.data-testid]="'terminals-history-toggle-' + device.deviceId"
+                      >
+                        {{ 'staff.terminals.history.toggle' | t }}
+                      </button>
+                    }
+                    @if (canManage()) {
+                      <button
+                        type="button"
+                        class="secondary"
+                        (click)="startEdit(device)"
+                        [attr.data-testid]="'terminals-edit-start-' + device.deviceId"
+                      >
+                        {{ 'staff.terminals.edit.start' | t }}
+                      </button>
+                      <button
+                        type="button"
+                        class="secondary"
+                        (click)="toggleReplaceHint(device.deviceId)"
+                        [attr.data-testid]="'terminals-replace-' + device.deviceId"
+                      >
+                        {{ 'staff.terminals.replace.start' | t }}
+                      </button>
+                      <button
+                        type="button"
+                        class="secondary"
+                        (click)="startRevoke(device.deviceId)"
+                        [attr.data-testid]="'terminals-revoke-start-' + device.deviceId"
+                      >
+                        {{ 'staff.terminals.revoke.start' | t }}
+                      </button>
+                    }
+                    @if (editError() && editId() === null) {
+                      <p class="q-caption terminals__error" data-testid="terminals-edit-error">
+                        {{ editError() }}
+                      </p>
+                    }
+                  }
+                </td>
+              </tr>
+              @if (replaceHintId() === device.deviceId) {
+                <tr class="terminals__sub">
+                  <td colspan="6" class="q-body-sm" data-testid="terminals-replace-hint">
+                    {{ 'staff.terminals.replace.hint' | t }}
+                  </td>
+                </tr>
+              }
+              @if (historyId() === device.deviceId) {
+                <tr class="terminals__sub">
+                  <td colspan="6" [attr.data-testid]="'terminals-history-' + device.deviceId">
+                    <h3 class="q-caption">{{ 'staff.terminals.history.title' | t }}</h3>
+                    @if (history().length === 0 && !historyLoading() && !historyError()) {
+                      <p class="q-body-sm terminals__hint">
+                        {{ 'staff.terminals.history.empty' | t }}
+                      </p>
+                    }
+                    <ul class="terminals__history">
+                      @for (session of history(); track session.sessionId) {
+                        <li class="q-body-sm">
+                          <span>{{ session.who }}</span>
+                          <span class="q-tnum">{{ formattedInstant(session.openedAt) }}</span>
+                          <span class="terminals__hint">{{
+                            reasonLabel(session.endedReason)
+                          }}</span>
+                        </li>
+                      }
+                    </ul>
+                    @if (historyError()) {
+                      <p class="q-caption terminals__error">
+                        {{ 'staff.terminals.history.error' | t }}
+                      </p>
+                    }
+                    @if (historyCursor() !== null) {
+                      <button
+                        type="button"
+                        class="secondary"
+                        [disabled]="historyLoading()"
+                        (click)="moreHistory()"
+                        data-testid="terminals-history-more"
+                      >
+                        {{ 'staff.terminals.history.more' | t }}
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+
+    @if (revokedDevices().length > 0) {
+      <section class="card">
+        <h2 class="q-subhead">{{ 'staff.terminals.revoked.title' | t }}</h2>
+        <table class="terminals__table" data-testid="terminals-revoked-table">
+          <tbody>
+            @for (device of revokedDevices(); track device.deviceId) {
+              <tr [attr.data-testid]="'terminals-revoked-' + device.deviceId">
+                <td>{{ device.displayName }}</td>
+                <td>{{ classLabel(device.deviceClass) }}</td>
+                <td class="q-tnum">
+                  @if (device.revokedAt) {
+                    {{ formattedInstant(device.revokedAt) }}
+                  }
+                </td>
+                <td>{{ device.revokedReason }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </section>
+    }
+  }
+</div>

@@ -54,6 +54,7 @@ import uz.horecaos.platform.ordering.application.BranchResolutionQueryService.Br
 import uz.horecaos.platform.ordering.application.BranchResolutionQueryService.BranchResolution;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
+import uz.horecaos.platform.ordering.application.LineRemovalCoordinator;
 import uz.horecaos.platform.ordering.application.LiveBoardQueryService;
 import uz.horecaos.platform.ordering.application.MyWorkQueryService;
 import uz.horecaos.platform.ordering.application.OperatorCustomerLookupService;
@@ -66,6 +67,7 @@ import uz.horecaos.platform.ordering.application.OrderBoardReadModels;
 import uz.horecaos.platform.ordering.application.OrderBulkActionService;
 import uz.horecaos.platform.ordering.application.OrderCallProvenanceService;
 import uz.horecaos.platform.ordering.application.OrderCountsPeriod;
+import uz.horecaos.platform.ordering.application.OrderMarkService;
 import uz.horecaos.platform.ordering.application.OrderOutcomeReasonService;
 import uz.horecaos.platform.ordering.application.OrderOutcomeService;
 import uz.horecaos.platform.ordering.application.OrderQueryService;
@@ -152,6 +154,8 @@ public class OperationsOrderController {
             // itself declares.
             Capability.DELIVERY_MANUAL_ASSIGN);
 
+    private final @Nullable OrderMarkService marks;
+
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OperationsOrderController(
             OrderQueryService orderQuery,
@@ -175,6 +179,61 @@ public class OperationsOrderController {
             ItemDisplayLookup itemDisplayLookup,
             BranchResolutionQueryService branchResolution,
             BranchOverrideReasonQueryService branchOverrideReasons) {
+        this(
+                orderQuery,
+                orderState,
+                outcomes,
+                amendments,
+                rejectReasons,
+                carts,
+                currentActor,
+                authorization,
+                callProvenance,
+                operatorOrdering,
+                operatorQuotes,
+                customerLookup,
+                bulkActions,
+                liveBoard,
+                aggregatorOrders,
+                deliveryCancellation,
+                myWork,
+                staffDirectory,
+                itemDisplayLookup,
+                branchResolution,
+                branchOverrideReasons,
+                null);
+    }
+
+    /**
+     * @param marks ADR 0161: where an order read gets the {@code marking} of each marked line; null wires a
+     *     controller that reads no marking (every suite that has nothing to say about it)
+     */
+    @org.springframework.beans.factory.annotation.Autowired
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public OperationsOrderController(
+            OrderQueryService orderQuery,
+            OrderStateService orderState,
+            OrderOutcomeService outcomes,
+            OrderAmendmentService amendments,
+            RejectReasonQueryService rejectReasons,
+            JdbcCartStore carts,
+            CurrentActor currentActor,
+            AuthorizationService authorization,
+            OrderCallProvenanceService callProvenance,
+            OperatorOrderingService operatorOrdering,
+            OperatorOrderQuoteService operatorQuotes,
+            OperatorCustomerLookupService customerLookup,
+            OrderBulkActionService bulkActions,
+            LiveBoardQueryService liveBoard,
+            AggregatorOrderIntakeService aggregatorOrders,
+            ShipmentCancellationPort deliveryCancellation,
+            MyWorkQueryService myWork,
+            StaffDirectory staffDirectory,
+            ItemDisplayLookup itemDisplayLookup,
+            BranchResolutionQueryService branchResolution,
+            BranchOverrideReasonQueryService branchOverrideReasons,
+            @Nullable OrderMarkService marks) {
+        this.marks = marks;
         this.orderQuery = orderQuery;
         this.orderState = orderState;
         this.outcomes = outcomes;
@@ -543,7 +602,8 @@ public class OperationsOrderController {
                     body.overrideReasonCode(),
                     body.overrideNote(),
                     body.dineInSessionId(),
-                    body.cashTenderedMinor()));
+                    body.cashTenderedMinor(),
+                    body.declinedAutoAddRuleIds() == null ? List.of() : body.declinedAutoAddRuleIds()));
 
             if (result.outcome() == CheckoutService.CheckoutResult.Outcome.REJECTED) {
                 String rejectionCode =
@@ -627,7 +687,8 @@ public class OperationsOrderController {
                     body.overrideReasonCode(),
                     body.overrideNote(),
                     body.dineInSessionId(),
-                    body.cashTenderedMinor()));
+                    body.cashTenderedMinor(),
+                    body.declinedAutoAddRuleIds() == null ? List.of() : body.declinedAutoAddRuleIds()));
             return ResponseEntity.ok(OrderQuoteResponse.of(quote));
         } catch (CartService.CartRefusedException refused) {
             throw StorefrontOrderingController.refusal(refused);
@@ -881,6 +942,11 @@ public class OperationsOrderController {
         OrderTablesPort.OrderTable table = detail.order().fulfillmentMode() == FulfillmentMode.DINE_IN
                 ? orderQuery.tableFor(tenantId, orderId)
                 : null;
+        // ADR 0161: the marking counts of the marked lines. Empty -- and the read costs nothing -- while
+        // feature.marked_goods is off for the tenant or the order holds no marked line.
+        Map<UUID, OrderMarkService.LineMarking> marking = marks == null
+                ? Map.of()
+                : marks.markingOf(tenantId, detail.order().brandId(), orderId);
         return ResponseEntity.ok()
                 .eTag(AggregateVersion.toETag(detail.order().version()))
                 .body(OrderDetailResponse.of(
@@ -892,7 +958,12 @@ public class OperationsOrderController {
                         presentablePayment,
                         table,
                         staffDirectory,
-                        portionSteps));
+                        portionSteps,
+                        marking,
+                        // ADR 0169: whether this brand has the removal path on, so the console offers "remove a
+                        // line" and a lowered quantity only where the server will carry them out. Asked only of
+                        // an order that can still be amended.
+                        !detail.order().status().terminal() && amendments.lineRemovalEnabled(detail.order())));
     }
 
     @GetMapping("/{orderId}/revisions")
@@ -1093,6 +1164,8 @@ public class OperationsOrderController {
                             "from", illegal.from().name(), "to", illegal.to().name()));
         } catch (OrderStateService.CatchweightNotReconciledException unweighed) {
             throw catchweightNotReconciled(unweighed);
+        } catch (OrderStateService.MarksIncompleteException unscanned) {
+            throw marksIncomplete(unscanned);
         }
     }
 
@@ -1292,6 +1365,8 @@ public class OperationsOrderController {
                             "from", illegal.from().name(), "to", illegal.to().name()));
         } catch (OrderStateService.CatchweightNotReconciledException unweighed) {
             throw catchweightNotReconciled(unweighed);
+        } catch (OrderStateService.MarksIncompleteException unscanned) {
+            throw marksIncomplete(unscanned);
         } catch (OrderOutcomeReasonService.ReasonNotFoundException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
         } catch (IllegalArgumentException refused) {
@@ -1315,6 +1390,21 @@ public class OperationsOrderController {
                         unweighed.lineIds().stream().map(UUID::toString).toList()));
     }
 
+    /**
+     * ADR 0161's {@code MARKS_INCOMPLETE}: a conflict with the order's current state, naming the marked
+     * lines still short of scanned units so the console can take the operator to them. Never a code.
+     */
+    private static ApiException marksIncomplete(OrderStateService.MarksIncompleteException unscanned) {
+        return new ApiException(
+                ErrorCode.RESOURCE_CONFLICT,
+                unscanned.getMessage(),
+                java.util.Map.of(
+                        "reason",
+                        "MARKS_INCOMPLETE",
+                        "orderLineIds",
+                        unscanned.lineIds().stream().map(UUID::toString).toList()));
+    }
+
     // ------------------------------------------------------------ amendments
 
     @PostMapping("/{orderId}/amendments")
@@ -1323,13 +1413,16 @@ public class OperationsOrderController {
             summary = "Amend a live order, appending a new revision",
             description = "An amendment is not an edit. Applying one appends a revision carrying "
                     + "its own complete total and leaves the previous one byte-identical; it "
-                    + "never rewrites a revision and never creates a second order. Eleven of "
-                    + "ADR 0039's twelve commands are built (wave 10 added six financial ones — "
-                    + "ADD_LINES, CHANGE_LINE_QUANTITY increase-only, CHANGE_PAYMENT_METHOD, "
-                    + "CHANGE_DELIVERY_ADDRESS, CHANGE_FULFILLMENT_TIME and CHANGE_CONTACT — "
-                    + "beside the five already built); only REMOVE_LINES is still refused by "
-                    + "name rather than half-performed, pending an ADR 0017 return/write-off "
-                    + "primitive.")
+                    + "never rewrites a revision and never creates a second order. All twelve of "
+                    + "ADR 0039's commands are built. REMOVE_LINES and a CHANGE_LINE_QUANTITY that "
+                    + "lowers the quantity (ADR 0169) take a line off a confirmed order for a removal "
+                    + "reason the tenant authored (removalReasonId, kind LINE_REMOVAL); the reason decides "
+                    + "whether the stock goes back on the shelf or is written off, the kitchen's own "
+                    + "record can only make that more conservative, and the response's stockConsequence "
+                    + "says which before anything is applied. They are behind the brand's "
+                    + "ordering.amendment_line_removal_enabled gate, need the customer's recorded "
+                    + "agreement, and are refused on an order paid through a provider "
+                    + "(PAID_ORDER_DECREASE_NOT_SUPPORTED).")
     public ResponseEntity<AmendmentResponse> amend(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -1456,7 +1549,14 @@ public class OperationsOrderController {
             return ResponseEntity.ok(amendments.forOrder(tenantId, orderId).stream()
                     .filter(row -> row.id().equals(amendmentId))
                     .findFirst()
-                    .map(row -> AmendmentResponse.of(row, List.of(), List.of(), List.of()))
+                    .map(row -> AmendmentResponse.of(
+                            row,
+                            List.of(),
+                            List.of(),
+                            List.of(),
+                            row.removesStock()
+                                    ? amendments.stockConsequence(amendments.commands(tenantId, row.id()))
+                                    : List.of()))
                     .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such amendment")));
         }
     }
@@ -1514,7 +1614,8 @@ public class OperationsOrderController {
                             commandRows.stream()
                                     .map(c -> new AmendmentCommandDetail(
                                             c.commandType().name(), amendments.noteOf(c)))
-                                    .toList());
+                                    .toList(),
+                            row.removesStock() ? amendments.stockConsequence(commandRows) : List.of());
                 })
                 .toList());
     }
@@ -1524,7 +1625,7 @@ public class OperationsOrderController {
     @PostMapping("/bulk-actions")
     @RequiresCapability(value = Capability.ORDER_BULK_ACTION, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
-            summary = "Apply ADVANCE or CANCEL to an operator's own order selection",
+            summary = "Apply ADVANCE, CANCEL or ASSIGN_COURIER to an operator's own order selection",
             description = "ADR 0039. N independent commands under one bulk operation id, never one "
                     + "all-or-nothing transaction: each order is applied through the same "
                     + "single-order service a lone request would use, in its own transaction, so "
@@ -1534,7 +1635,13 @@ public class OperationsOrderController {
                     + "GET .../reject-reasons' sibling, the tenant's outcome-reason registry, "
                     + "exactly like a single cancellation. A resubmission carrying the same "
                     + "Idempotency-Key changes nothing and returns the outcome already recorded, "
-                    + "applied or failed alike — a re-run does not retry the failures.")
+                    + "applied or failed alike — a re-run does not retry the failures. "
+                    + "ASSIGN_COURIER (ADR 0172) names one courierId and a reasonCode, assigns each "
+                    + "selected delivery order to that courier in submission order up to the courier "
+                    + "type's ceiling, and additionally requires delivery.manual_assign: holding "
+                    + "order.bulk-action alone answers 403 for the request. Problem codes are stable "
+                    + "per item; a person's assignment overrides a dispatch rule and says so in the "
+                    + "item's note. Never creates a run.")
     public ResponseEntity<BulkActionResponse> bulkAction(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
@@ -1546,6 +1653,19 @@ public class OperationsOrderController {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw new ApiException(
                     ErrorCode.IDEMPOTENCY_KEY_REQUIRED, "A bulk action carries an Idempotency-Key (ADR 0031)");
+        }
+
+        if (body.actionType() == BulkActionType.ASSIGN_COURIER
+                && !authorization.has(
+                        currentActor.get().subject(),
+                        Capability.DELIVERY_MANUAL_ASSIGN,
+                        ResourceScope.location(tenantId, brandId, locationId))) {
+            // ADR 0172: the declaration above covers order.bulk-action. Assigning is a
+            // second, narrower authority asked for here rather than on the method, because
+            // the same endpoint also advances and cancels and those need no courier grant.
+            throw new ApiException(
+                    ErrorCode.INSUFFICIENT_CAPABILITY,
+                    "A bulk assignment needs delivery.manual_assign as well as order.bulk-action");
         }
 
         try {
@@ -1565,7 +1685,8 @@ public class OperationsOrderController {
                             body.cancelNote(),
                             idempotencyKey,
                             "USER",
-                            currentActor.get().subject()));
+                            currentActor.get().subject(),
+                            body.courierId()));
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(BulkActionResponse.of(result));
         } catch (IllegalArgumentException invalid) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
@@ -1577,6 +1698,8 @@ public class OperationsOrderController {
      *                       {@code FULFILLING}
      * @param reasonCode     required for {@code ADVANCE}, exactly like a single state action
      * @param cancelReasonId required for {@code CANCEL}, from the tenant's outcome-reason registry
+     * @param courierId      required for {@code ASSIGN_COURIER} and refused for the others (ADR 0172);
+     *                       its {@code reasonCode} is then a code of {@code [A-Z0-9_]{1,48}}
      */
     public record BulkActionRequest(
             @NotNull BulkActionType actionType,
@@ -1584,7 +1707,8 @@ public class OperationsOrderController {
             @Nullable OrderStatus targetStatus,
             @Nullable String reasonCode,
             @Nullable UUID cancelReasonId,
-            @Nullable String cancelNote) {}
+            @Nullable String cancelNote,
+            @Nullable UUID courierId) {}
 
     public record BulkOrderRefRequest(
             @NotNull UUID orderId, @NotNull Integer expectedVersion) {}
@@ -1622,14 +1746,31 @@ public class OperationsOrderController {
                     value = DataClass.INTERNAL,
                     reason = "an order's version number; the name heuristic reads «resulTINg» as a tax number")
             @Nullable
-            Integer resultingOrderVersion) {
+            Integer resultingOrderVersion,
+
+            @Nullable UUID planId,
+            @Nullable UUID shipmentId,
+
+            @Classified(
+                    value = DataClass.INTERNAL,
+                    reason = "ADR 0172: stable assignment codes (OVERRODE_DISPATCH_RULE, NO_OPEN_SHIFT, ...), "
+                            + "never free text; the name heuristic reads «note» as a customer's own words")
+            @Nullable
+            String note,
+
+            /** ADR 0172 Decision 6: the dispatch rule the plan matched, which this assignment overrode when noted. */
+            @Nullable String ruleId) {
 
         static BulkActionItemResponse of(OrderBulkActionService.BulkItemOutcome outcome) {
             return new BulkActionItemResponse(
                     outcome.orderId(),
                     outcome.itemStatus().name(),
                     outcome.itemProblemCode(),
-                    outcome.resultingOrderVersion());
+                    outcome.resultingOrderVersion(),
+                    outcome.planId(),
+                    outcome.shipmentId(),
+                    outcome.note(),
+                    outcome.ruleId());
         }
     }
 
@@ -1867,7 +2008,45 @@ public class OperationsOrderController {
             @Nullable @Size(max = 48) String overrideReasonCode,
             @Nullable @Size(max = 500) String overrideNote,
             @Nullable UUID dineInSessionId,
-            @Nullable @PositiveOrZero Long cashTenderedMinor) {}
+            @Nullable @PositiveOrZero Long cashTenderedMinor,
+            // ADR 0158: the rules whose lines the operator took off the basket the last quote showed,
+            // each by the ruleId that quote named. The cart never evaluates them into this order.
+            @Nullable @Size(max = 50) List<UUID> declinedAutoAddRuleIds) {
+
+        /** A request that declines no auto-add rule: every client that predates ADR 0158. */
+        public PlaceOrderRequest(
+                UUID customerAccountId,
+                String channelCode,
+                FulfillmentMode fulfillmentMode,
+                List<OrderLineRequest> lines,
+                @Nullable DestinationRequest destination,
+                String paymentMethodCode,
+                @Nullable String promoCode,
+                @Nullable Instant requestedFor,
+                Boolean overrideOutOfHours,
+                @Nullable UUID proposedLocationId,
+                @Nullable String overrideReasonCode,
+                @Nullable String overrideNote,
+                @Nullable UUID dineInSessionId,
+                @Nullable Long cashTenderedMinor) {
+            this(
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines,
+                    destination,
+                    paymentMethodCode,
+                    promoCode,
+                    requestedFor,
+                    overrideOutOfHours,
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    cashTenderedMinor,
+                    null);
+        }
+    }
 
     /** One line the operator entered into the basket, same shape as a storefront cart line. */
     public record OrderLineRequest(
@@ -2012,7 +2191,11 @@ public class OperationsOrderController {
             @Nullable Long deliveryFreeFromMinor,
             boolean provisional,
             List<QuotedLineResponse> lines,
-            List<QuotedDiscountResponse> discounts) {
+            List<QuotedDiscountResponse> discounts,
+            // ADR 0158: the lines a rule added to the basket, which are not lines of the request. Each says
+            // which rule put it there and the text to show beside it, and a rule's ruleId sent back as
+            // declined takes its line off.
+            List<QuotedAutoAddLineResponse> autoAdded) {
 
         static OrderQuoteResponse of(OperatorOrderQuoteService.OrderQuote quote) {
             return new OrderQuoteResponse(
@@ -2038,9 +2221,38 @@ public class OperationsOrderController {
                     quote.discounts().stream()
                             .map(discount -> new QuotedDiscountResponse(
                                     discount.lineIndex(), discount.type(), discount.code(), discount.amountMinor()))
+                            .toList(),
+                    quote.autoAddedLines().stream()
+                            .map(line -> new QuotedAutoAddLineResponse(
+                                    line.ruleId(),
+                                    line.ruleCode(),
+                                    line.customerText(),
+                                    line.mandatory(),
+                                    line.variantId(),
+                                    line.quantity(),
+                                    line.baseAmountMinor(),
+                                    line.finalAmountMinor(),
+                                    line.taxAmountMinor()))
                             .toList());
         }
     }
+
+    /**
+     * A line an auto-add rule put in the basket (ADR 0158), priced.
+     *
+     * @param ruleId   the rule behind it; sent back in {@code declinedAutoAddRuleIds} to take the line off
+     * @param mandatory true when the rule cannot be declined
+     */
+    public record QuotedAutoAddLineResponse(
+            UUID ruleId,
+            String ruleCode,
+            java.util.Map<String, String> customerText,
+            boolean mandatory,
+            UUID variantId,
+            BigDecimal quantity,
+            long baseAmountMinor,
+            long finalAmountMinor,
+            long taxAmountMinor) {}
 
     /** One line of a quote, by its position in the request. */
     public record QuotedLineResponse(
@@ -2204,7 +2416,47 @@ public class OperationsOrderController {
             // Whether this line takes a fraction is the amendment's decision against the published
             // menu, exactly as the cart's is; here it is only a positive amount the column can hold.
             @DecimalMin(value = "0", inclusive = false) @DecimalMax("999") @Digits(integer = 3, fraction = 3)
-            BigDecimal quantity) {
+            BigDecimal quantity,
+            // ADR 0169: REMOVE_LINES takes whole lines off the order; a combo goes whole, by all its lines.
+            @Size(max = 10) @Nullable List<UUID> orderLineIds,
+            // ADR 0169: the tenant-authored removal reason (kind LINE_REMOVAL) that decides what happens to the
+            // stock. Required for REMOVE_LINES and for a CHANGE_LINE_QUANTITY that lowers the quantity.
+            @Nullable UUID removalReasonId) {
+
+        /** Every request that predates ADR 0169. */
+        public AmendmentCommandRequest(
+                AmendmentCommandType type,
+                String kitchenNote,
+                Boolean callbackRequested,
+                Long cashTenderedMinor,
+                String courierNote,
+                String internalNote,
+                String recipientName,
+                String recipientPhone,
+                Instant promisedAt,
+                String paymentMethodCode,
+                DeliveryAddressRequest deliveryAddress,
+                List<AddLineRequest> lines,
+                UUID orderLineId,
+                BigDecimal quantity) {
+            this(
+                    type,
+                    kitchenNote,
+                    callbackRequested,
+                    cashTenderedMinor,
+                    courierNote,
+                    internalNote,
+                    recipientName,
+                    recipientPhone,
+                    promisedAt,
+                    paymentMethodCode,
+                    deliveryAddress,
+                    lines,
+                    orderLineId,
+                    quantity,
+                    null,
+                    null);
+        }
 
         OrderAmendmentService.AmendmentCommand toCommand() {
             return switch (type) {
@@ -2264,13 +2516,18 @@ public class OperationsOrderController {
                         throw new IllegalArgumentException(
                                 "CHANGE_LINE_QUANTITY carries the line it targets and the new quantity");
                     }
-                    yield OrderAmendmentService.AmendmentCommand.changeLineQuantity(orderLineId, quantity);
+                    yield OrderAmendmentService.AmendmentCommand.changeLineQuantity(
+                            orderLineId, quantity, removalReasonId);
                 }
-                // Declared by ADR 0039 and not built. Refused here as well as in
-                // the service, so the failure arrives before anything is written.
-                default ->
-                    throw new OrderAmendmentService.AmendmentNotPermittedException(
-                            "%s is declared by ADR 0039 and not built in this release".formatted(type));
+                // ADR 0169. Whether the brand has the removal path on is the service's decision, asked once the
+                // order is known; here the request only has to say which lines.
+                case REMOVE_LINES -> {
+                    if (orderLineIds == null || orderLineIds.isEmpty()) {
+                        throw new IllegalArgumentException(
+                                "REMOVE_LINES carries the order lines to take off and a removal reason");
+                    }
+                    yield OrderAmendmentService.AmendmentCommand.removeLines(orderLineIds, removalReasonId);
+                }
             };
         }
     }
@@ -2419,10 +2676,55 @@ public class OperationsOrderController {
             Instant createdAt,
             String createdByActorType,
             @Nullable String createdByActorId,
-            List<String> actions) {
+            List<String> actions,
+            List<StockConsequenceLine> stockConsequence) {
+
+        /** Every response before ADR 0169, none of which takes stock off the order. */
+        public AmendmentResponse(
+                UUID amendmentId,
+                UUID orderId,
+                String status,
+                int baseRevision,
+                Integer appliedRevision,
+                long deltaTotalMinor,
+                boolean requiresApproval,
+                String confirmationChannel,
+                Instant expiresAt,
+                int amendmentVersion,
+                int orderVersion,
+                List<String> commands,
+                List<String> warnings,
+                boolean replayed,
+                List<AmendmentCommandDetail> commandDetails,
+                Instant createdAt,
+                String createdByActorType,
+                @Nullable String createdByActorId,
+                List<String> actions) {
+            this(
+                    amendmentId,
+                    orderId,
+                    status,
+                    baseRevision,
+                    appliedRevision,
+                    deltaTotalMinor,
+                    requiresApproval,
+                    confirmationChannel,
+                    expiresAt,
+                    amendmentVersion,
+                    orderVersion,
+                    commands,
+                    warnings,
+                    replayed,
+                    commandDetails,
+                    createdAt,
+                    createdByActorType,
+                    createdByActorId,
+                    actions,
+                    List.of());
+        }
 
         static AmendmentResponse of(OrderAmendmentService.AmendmentResult result) {
-            return of(result.amendment(), result.warnings(), List.of(), List.of())
+            return of(result.amendment(), result.warnings(), List.of(), List.of(), result.stockConsequence())
                     .withOrderVersion(result.orderVersion(), result.replayed());
         }
 
@@ -2431,6 +2733,15 @@ public class OperationsOrderController {
                 List<String> warnings,
                 List<String> commands,
                 List<AmendmentCommandDetail> commandDetails) {
+            return of(row, warnings, commands, commandDetails, List.of());
+        }
+
+        static AmendmentResponse of(
+                JdbcOrderAmendmentStore.AmendmentRow row,
+                List<String> warnings,
+                List<String> commands,
+                List<AmendmentCommandDetail> commandDetails,
+                List<LineRemovalCoordinator.LineConsequence> stockConsequence) {
             return new AmendmentResponse(
                     row.id(),
                     row.orderId(),
@@ -2450,14 +2761,17 @@ public class OperationsOrderController {
                     row.createdAt(),
                     row.createdByActorType(),
                     row.createdByActorId(),
-                    actionsFor(row));
+                    actionsFor(row),
+                    stockConsequence.stream().map(StockConsequenceLine::of).toList());
         }
 
         private static List<String> actionsFor(JdbcOrderAmendmentStore.AmendmentRow row) {
             if (row.status().terminal()) {
                 return List.of();
             }
-            boolean awaitingConfirmation = row.deltaTotalMinor() > 0 && row.confirmationAttestedAt() == null;
+            // ADR 0169: a removal waits for the customer's agreement whatever it does to the total.
+            boolean awaitingConfirmation =
+                    (row.deltaTotalMinor() > 0 || row.removesStock()) && row.confirmationAttestedAt() == null;
             boolean awaitingApproval = row.requiresApproval() && row.approvalRequestId() == null;
             return awaitingConfirmation || awaitingApproval ? List.of("RESOLVE") : List.of();
         }
@@ -2482,7 +2796,54 @@ public class OperationsOrderController {
                     createdAt,
                     createdByActorType,
                     createdByActorId,
-                    actions);
+                    actions,
+                    stockConsequence);
+        }
+    }
+
+    /**
+     * What one affected order line costs the stock (ADR 0169), shown before a removal is applied and kept with
+     * the amendment after it. Units, never money: the ledger carries no cost.
+     *
+     * @param kitchenState {@code NOT_STARTED}, {@code STARTED}, {@code MADE} or {@code UNKNOWN}; a started or made
+     *        line is written off whatever the reason says
+     * @param declaredDisposition what the removal reason says to do with a sold unit
+     * @param effectiveDisposition what applies once the kitchen's record is taken into account
+     */
+    public record StockConsequenceLine(
+            UUID orderLineId,
+            UUID variantId,
+            String productName,
+            BigDecimal quantityBefore,
+            BigDecimal quantityAfter,
+            int stockUnits,
+            String kitchenState,
+            String declaredDisposition,
+            String effectiveDisposition,
+            int releasedUnits,
+            int returnedUnits,
+            int writtenOffUnits,
+            int noEffectUnits,
+            UUID reasonId,
+            String reasonCategory) {
+
+        static StockConsequenceLine of(LineRemovalCoordinator.LineConsequence consequence) {
+            return new StockConsequenceLine(
+                    consequence.orderLineId(),
+                    consequence.variantId(),
+                    consequence.productName(),
+                    consequence.quantityBefore(),
+                    consequence.quantityAfter(),
+                    consequence.stockUnits(),
+                    consequence.kitchenState(),
+                    consequence.declaredDisposition(),
+                    consequence.effectiveDisposition(),
+                    consequence.releasedUnits(),
+                    consequence.returnedUnits(),
+                    consequence.writtenOffUnits(),
+                    consequence.noEffectUnits(),
+                    consequence.reasonId(),
+                    consequence.reasonCategory());
         }
     }
 
@@ -2789,6 +3150,18 @@ public class OperationsOrderController {
      *                   bill (ADR 0029). Null for every order not attached to a
      *                   table session: a delivery, a pickup, or a DINE_IN order
      *                   an operator keyed in without seating anyone
+     * @param createdByDisplayName  the name the tenant keeps for the staff member
+     *                   who took the order (ADR 0160, the board's optional «Создал»
+     *                   column), resolved with one {@code StaffDirectory#namesOf}
+     *                   batch per page -- the same tenant-scoped, read-time
+     *                   resolution the detail read uses (row {@code 9.2d}). Null
+     *                   for an actor that is not a {@code USER} (a system job, an
+     *                   integration), for a subject this tenant has no name for, and
+     *                   on a summary read outside the board. A staff member's name
+     *                   is not a customer's: it goes only to a caller {@code
+     *                   order.read} already admits, and never carries the raw
+     *                   subject (the console draws a dash instead)
+     * @param acceptedByDisplayName the same resolution for {@code acceptedByActorId}
      */
     public record OrderSummaryResponse(
             UUID orderId,
@@ -2816,7 +3189,9 @@ public class OperationsOrderController {
             @Nullable String acceptedByActorId,
             @Nullable String processAttention,
             @Nullable UUID courierId,
-            OrderTablesPort.@Nullable OrderTable table) {
+            OrderTablesPort.@Nullable OrderTable table,
+            @Nullable String createdByDisplayName,
+            @Nullable String acceptedByDisplayName) {
 
         /**
          * The summary of an order read outside the board — the detail read's own
@@ -2837,6 +3212,9 @@ public class OperationsOrderController {
          * @param table      resolved separately by the caller ({@link
          *                   OrderQueryService#tableFor}), the single-order
          *                   counterpart to the board's batched lookup
+         * @param createdByDisplayName the caller's own resolution of the creating
+         *                   actor, the same one the detail header carries
+         * @param acceptedByDisplayName the same for the accepting actor
          */
         static OrderSummaryResponse of(
                 JdbcOrderStore.OrderRow order,
@@ -2844,10 +3222,19 @@ public class OperationsOrderController {
                 @Nullable UUID courierId,
                 boolean amendmentAwaitingOperator,
                 boolean presentablePayment,
-                OrderTablesPort.@Nullable OrderTable table) {
+                OrderTablesPort.@Nullable OrderTable table,
+                @Nullable String createdByDisplayName,
+                @Nullable String acceptedByDisplayName) {
             return of(
                     new JdbcOrderStore.OrderBoardRow(
-                            order, null, courierId, amendmentAwaitingOperator, presentablePayment, table),
+                            order,
+                            null,
+                            courierId,
+                            amendmentAwaitingOperator,
+                            presentablePayment,
+                            table,
+                            createdByDisplayName,
+                            acceptedByDisplayName),
                     grantedCapabilities);
         }
 
@@ -2886,7 +3273,9 @@ public class OperationsOrderController {
                     order.acceptedByActorId(),
                     row.processAttention(),
                     row.courierId(),
-                    row.table());
+                    row.table(),
+                    row.createdByDisplayName(),
+                    row.acceptedByDisplayName());
         }
     }
 
@@ -2957,6 +3346,10 @@ public class OperationsOrderController {
      *                       subject id.
      * @param acceptedByDisplayName the same resolution for {@code
      *                       acceptedByActorId}
+     * @param lineRemovalEnabled ADR 0169: true when this brand has {@code
+     *                       ordering.amendment_line_removal_enabled} on and the
+     *                       order can still be amended, so the console offers
+     *                       the removal path only where it will be carried out
      */
     public record OrderDetailResponse(
             OrderSummaryResponse summary,
@@ -2979,7 +3372,8 @@ public class OperationsOrderController {
             @Nullable Long cashTenderedExpectedMinor,
             @Nullable Long changeDueMinor,
             @Nullable OutcomeResponse outcome,
-            CustomerResponse customer) {
+            CustomerResponse customer,
+            boolean lineRemovalEnabled) {
 
         static OrderDetailResponse of(
                 OrderQueryService.OrderDetail detail,
@@ -2990,8 +3384,14 @@ public class OperationsOrderController {
                 boolean presentablePayment,
                 OrderTablesPort.@Nullable OrderTable table,
                 StaffDirectory staffDirectory,
-                Map<UUID, BigDecimal> portionSteps) {
+                Map<UUID, BigDecimal> portionSteps,
+                Map<UUID, OrderMarkService.LineMarking> marking,
+                boolean lineRemovalEnabled) {
             var order = detail.order();
+            String createdByName = displayNameOf(
+                    staffDirectory, order.tenantId(), order.createdByActorType(), order.createdByActorId());
+            String acceptedByName = displayNameOf(
+                    staffDirectory, order.tenantId(), order.acceptedByActorType(), order.acceptedByActorId());
             return new OrderDetailResponse(
                     OrderSummaryResponse.of(
                             order,
@@ -2999,21 +3399,21 @@ public class OperationsOrderController {
                             courierId,
                             amendmentAwaitingOperator,
                             presentablePayment,
-                            table),
+                            table,
+                            createdByName,
+                            acceptedByName),
                     order.subtotalMinor(),
                     order.taxMinor(),
                     order.acceptanceMode(),
-                    lineResponses(detail, portionSteps),
+                    lineResponses(detail, portionSteps, marking),
                     detail.warnings(),
                     order.currentRevision(),
                     order.createdByActorType(),
                     order.createdByActorId(),
-                    displayNameOf(
-                            staffDirectory, order.tenantId(), order.createdByActorType(), order.createdByActorId()),
+                    createdByName,
                     order.acceptedByActorType(),
                     order.acceptedByActorId(),
-                    displayNameOf(
-                            staffDirectory, order.tenantId(), order.acceptedByActorType(), order.acceptedByActorId()),
+                    acceptedByName,
                     order.acceptedAt(),
                     order.callbackRequested(),
                     order.callbackResolvedAt(),
@@ -3023,7 +3423,8 @@ public class OperationsOrderController {
                             ? null
                             : order.cashTenderedExpectedMinor() - order.totalMinor(),
                     outcomeRow == null ? null : OutcomeResponse.of(outcomeRow),
-                    CustomerResponse.of(detail.customer()));
+                    CustomerResponse.of(detail.customer()),
+                    lineRemovalEnabled);
         }
 
         /**
@@ -3057,7 +3458,9 @@ public class OperationsOrderController {
         }
 
         private static List<LineResponse> lineResponses(
-                OrderQueryService.OrderDetail detail, Map<UUID, BigDecimal> portionSteps) {
+                OrderQueryService.OrderDetail detail,
+                Map<UUID, BigDecimal> portionSteps,
+                Map<UUID, OrderMarkService.LineMarking> marking) {
             return detail.lines().stream()
                     .map(line -> new LineResponse(
                             line.line().lineNumber(),
@@ -3086,7 +3489,10 @@ public class OperationsOrderController {
                             OrderLineCatchweightResponse.of(line.line()),
                             line.line().isComboComponent()
                                     ? null
-                                    : portionSteps.get(line.line().sourceVariantId())))
+                                    : portionSteps.get(line.line().sourceVariantId()),
+                            line.line().origin(),
+                            line.line().autoAddMandatory(),
+                            LineMarkingResponse.of(marking.get(line.line().lineId()))))
                     .toList();
         }
     }
@@ -3337,7 +3743,28 @@ public class OperationsOrderController {
             // ADR 0137: the step this line may be amended in, present only on a line of a splittable
             // dish whose order can still be amended -- so a console offers 1,5 of a plov and never of
             // a can. Absent means whole units; it is the published rule, not a property of the line.
-            @Nullable BigDecimal portionSize) {}
+            @Nullable BigDecimal portionSize,
+            // ADR 0158: CUSTOMER for a line the customer chose, AUTO_ADD for one an auto-add rule put in
+            // the basket. The console prints «добавлено автоматически» beside the latter, and a line
+            // that was mandatory could not be removed by the customer.
+            String origin,
+            boolean autoAddMandatory,
+            // ADR 0161: present on a marked line while marked-goods capture is on -- how many units must be
+            // scanned and how many are. Counts and nothing else: no screen shows a code.
+            @Nullable LineMarkingResponse marking) {}
+
+    /**
+     * ADR 0161: the marking progress of one order line.
+     *
+     * @param required units that must be scanned before the order may leave the pass
+     * @param captured units scanned so far
+     */
+    public record LineMarkingResponse(int required, int captured) {
+
+        static @Nullable LineMarkingResponse of(OrderMarkService.@Nullable LineMarking marking) {
+            return marking == null ? null : new LineMarkingResponse(marking.required(), marking.captured());
+        }
+    }
 
     /** An option the server applied to a line, and what it cost for the whole line (ADR 0136). */
     public record AutoSelectedChargeResponse(String name, long amountMinor) {}

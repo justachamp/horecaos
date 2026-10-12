@@ -1,0 +1,140 @@
+@if (canRead()) {
+  <div class="pin" data-testid="staff-pin-panel">
+    <dt class="q-caption">{{ 'staff.pin.field' | t }}</dt>
+    <dd class="q-body-sm" data-testid="staff-pin-status">
+      @switch (state()) {
+        @case ('loading') {
+          …
+        }
+        @case ('outOfReach') {
+          {{ 'staff.pin.outOfReach' | t }}
+        }
+        @case ('unknown') {
+          {{ 'staff.pin.unknown' | t }}
+        }
+        @default {
+          @if (pin(); as current) {
+            @switch (current.status) {
+              @case ('ACTIVE') {
+                {{ 'staff.pin.status.ACTIVE' | t }}
+                @if (current.setAt) {
+                  <span class="q-caption muted">{{
+                    'staff.pin.setAt' | t: { date: when(current.setAt) }
+                  }}</span>
+                }
+              }
+              @case ('LOCKED') {
+                {{ 'staff.pin.status.LOCKED' | t }}
+                @if (current.lockedAt) {
+                  <span class="q-caption muted">{{
+                    'staff.pin.lockedAt' | t: { date: when(current.lockedAt) }
+                  }}</span>
+                }
+              }
+              @default {
+                {{ 'staff.pin.status.NOT_SET' | t }}
+              }
+            }
+          }
+        }
+      }
+    </dd>
+
+    @if (pin(); as current) {
+      @if (current.pending; as waiting) {
+        <p class="q-caption muted" data-testid="staff-pin-pending">
+          @if (waiting.issuedBy; as by) {
+            {{ 'staff.pin.pending.manager' | t: { by: by, time: until(waiting.expiresAt) } }}
+          } @else {
+            {{ 'staff.pin.pending.self' | t: { time: until(waiting.expiresAt) } }}
+          }
+        </p>
+      }
+    }
+
+    @if (notice(); as message) {
+      <p class="q-body-sm notice" role="status" data-testid="staff-pin-notice">{{ message }}</p>
+    }
+
+    @if (issued(); as code) {
+      <div class="code" role="status" data-testid="staff-pin-code-box">
+        <h3 class="q-emphasis">{{ 'staff.pin.codeTitle' | t }}</h3>
+        <p class="code__value q-mono" data-testid="staff-pin-code">{{ shownCode(code.code) }}</p>
+        <p class="q-body-sm">
+          {{ 'staff.pin.codeValid' | t: { time: until(code.expiresAt) } }}
+        </p>
+        <button
+          type="button"
+          class="text-button"
+          (click)="dismissCode()"
+          data-testid="staff-pin-code-done"
+        >
+          {{ 'staff.pin.codeDone' | t }}
+        </button>
+      </div>
+    }
+
+    @if (canManage() && state() === 'ready') {
+      @if (form() === 'none') {
+        <div class="actions">
+          <button
+            type="button"
+            class="text-button"
+            (click)="open('issue')"
+            data-testid="staff-pin-issue"
+          >
+            {{ 'staff.pin.issue' | t }}
+          </button>
+          @if (pin()?.status !== 'NOT_SET') {
+            <button
+              type="button"
+              class="text-button text-button--destructive"
+              (click)="open('reset')"
+              data-testid="staff-pin-reset"
+            >
+              {{ 'staff.pin.reset' | t }}
+            </button>
+          }
+        </div>
+      } @else {
+        <div class="form" data-testid="staff-pin-form">
+          <h3 class="q-emphasis">
+            {{ (form() === 'issue' ? 'staff.pin.issueTitle' : 'staff.pin.resetTitle') | t }}
+          </h3>
+          <p class="q-body-sm">
+            {{ (form() === 'issue' ? 'staff.pin.issueBody' : 'staff.pin.resetBody') | t }}
+          </p>
+          <label class="q-caption field-label" for="pin-reason">{{ 'staff.pin.reason' | t }}</label>
+          <textarea
+            id="pin-reason"
+            class="q-body field"
+            rows="2"
+            maxlength="500"
+            [value]="reason()"
+            (input)="onReason($event)"
+            [disabled]="busy()"
+            data-testid="staff-pin-reason"
+          ></textarea>
+          @if (error(); as message) {
+            <p class="q-body-sm error" role="alert" data-testid="staff-pin-error">{{ message }}</p>
+          }
+          <div class="actions">
+            <button type="button" class="text-button" (click)="close()" [disabled]="busy()">
+              {{ 'staff.pin.cancel' | t }}
+            </button>
+            <button
+              type="button"
+              class="text-button"
+              [class.text-button--destructive]="form() === 'reset'"
+              (click)="confirm()"
+              [disabled]="busy() || reason().trim() === ''"
+              data-testid="staff-pin-confirm"
+            >
+              {{ (form() === 'issue' ? 'staff.pin.issueConfirm' : 'staff.pin.resetConfirm') | t }}
+            </button>
+          </div>
+        </div>
+      }
+    }
+  </div>
+}

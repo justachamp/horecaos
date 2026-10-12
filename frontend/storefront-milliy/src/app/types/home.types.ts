@@ -137,6 +137,28 @@ export interface MenuItem {
    * choices are what the product page asks about.
    */
   comboGroups?: MenuItemComboGroup[];
+  /** ADR 0174: the badges and filter options this product carries, in the author's order. */
+  tags?: MenuItemTag[];
+  /** ADR 0174: the composition labels shown on the product page. A label only: no allergen meaning. */
+  ingredients?: MenuItemIngredient[];
+}
+
+/** ADR 0174: a badge and/or filter option, its wording already resolved for the customer's language. */
+export interface MenuItemTag {
+  id: string;
+  code: string;
+  /** A key into the closed pictogram list (`FLAME`, `LEAF`, `STAR`, `HEART`, `FISH`, `NEW`), or null for a text-only badge. */
+  icon: string | null;
+  showAsBadge: boolean;
+  showAsFilter: boolean;
+  name: string;
+}
+
+/** ADR 0174: a composition label on a product page. Never priced, stocked, ordered or counted. */
+export interface MenuItemIngredient {
+  id: string;
+  code: string;
+  name: string;
 }
 
 /** Menu category (id + name only) */

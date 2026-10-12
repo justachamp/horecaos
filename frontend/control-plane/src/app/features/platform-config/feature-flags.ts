@@ -16,6 +16,10 @@ const FLAG_WORDS: Readonly<
     name: 'featureFlags.flag.supportVisits',
     description: 'featureFlags.flag.supportVisits.description',
   },
+  'feature.marked_goods': {
+    name: 'featureFlags.flag.markedGoods',
+    description: 'featureFlags.flag.markedGoods.description',
+  },
 };
 
 type PendingChange =

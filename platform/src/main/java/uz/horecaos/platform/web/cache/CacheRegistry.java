@@ -97,6 +97,23 @@ public enum CacheRegistry {
             "StaffMemberChanged (evicted on every profile write)"),
 
     /**
+     * A person's stored interface preferences, as the sealed rows (ADR 0160), keyed by {@code (tenant,
+     * subject)}.
+     *
+     * <p>Twenty seconds, evicted after the commit of every write, reset and anonymisation. What it holds is
+     * ciphertext and versions, never a plaintext document: the console reads a person's documents once per
+     * session and the read decrypts every time, so this saves the database round trip and nothing else. A
+     * write checks the version against the database and never against this cache, so no correctness
+     * decision reads it; a replica that did not see the write serves the old row until the TTL, which is the
+     * window the console's one retry on a stale version has to tolerate.
+     */
+    STAFF_PREFERENCES(
+            "staff.preferences",
+            Duration.ofSeconds(20),
+            20_000,
+            "StaffPreferencesService (evicted after every write, reset and anonymisation)"),
+
+    /**
      * Geocoder answers (ADR 0145, ADR 0033), keyed by tenant, region and version, locale,
      * operation and a keyed hash of the normalized query.
      *
@@ -155,6 +172,37 @@ public enum CacheRegistry {
             "StaffMfaService (evicted on every enrolment, removal and reset)"),
 
     /**
+     * ADR 0155: subjects known not to be an enrolled device, so a staff request does not cost an extra database read to be
+     * told it is not one. Only the negative answer is held. A staff subject never becomes a device, and a device's
+     * subject is minted at enrolment and cannot have made an authenticated request before its row exists; an <em>active</em>
+     * device is always read from {@code iam.device_principals}, so a revocation or a change of attribution mode takes
+     * effect on the next request and not a TTL later. Five minutes only bounds memory.
+     */
+    IAM_NOT_A_DEVICE(
+            "iam.not_a_device",
+            Duration.ofMinutes(5),
+            50_000,
+            "none: only the negative is held, and a subject does not change kind"),
+
+    /**
+     * ADR 0155: the per-node throttle on a device's «last seen» stamp -- present means "stamped within the minute", so a
+     * device's busy board costs one bounded {@code UPDATE} a minute per node. The sixty seconds <em>is</em> the stamp
+     * interval; nothing reads it for a decision and an empty cache only stamps once more.
+     */
+    IAM_DEVICE_LAST_SEEN("iam.device_last_seen", Duration.ofSeconds(60), 20_000, "none: the TTL is the stamp interval"),
+
+    /**
+     * ADR 0155: the roster a terminal shows -- who may unlock it, as labels. A display, so it may be thirty seconds
+     * stale: the unlock, the activation and every later request recompute eligibility from the grants, so a person
+     * who lost their job in the last half minute is still on the list and cannot get in.
+     */
+    TERMINAL_ROSTER(
+            "terminal.roster",
+            Duration.ofSeconds(30),
+            2_000,
+            "none needed: the TTL is the staleness budget, and eligibility is recomputed at unlock"),
+
+    /**
      * ADR 0069: the model's reply to a question already answered from exactly the same
      * facts -- "identical grounded questions are served from cache".
      *
@@ -171,7 +219,55 @@ public enum CacheRegistry {
             "assistant.grounded_replies",
             Duration.ofMinutes(5),
             5_000,
-            "None needed: the key carries a digest of the retrieved facts, so changed facts miss");
+            "None needed: the key carries a digest of the retrieved facts, so changed facts miss"),
+
+    /**
+     * ADR 0154: a brand's logo thresholded to one bit at a roll's width, keyed by tenant, media asset id
+     * and width in dots.
+     *
+     * <p>Twenty-four hours and no invalidation event, because an asset is immutable (ADR 0010: a new logo
+     * is a new asset id, so the old key simply stops being asked for) and the entry is derived data an
+     * eviction or a restart rebuilds from the object store. Only consulted when the brand's receipt profile
+     * asks for the logo; the profile is read from the database on every render, so turning the logo off
+     * takes effect at once rather than a TTL later. A few hundred bytes to a few kilobytes an entry.
+     */
+    PRINTING_LOGO_BITMAPS(
+            "printing.logo_bitmaps",
+            Duration.ofHours(24),
+            500,
+            "none: the key carries the immutable asset id and the roll width"),
+
+    /**
+     * ADR 0159: the anonymous public review summary of one brand -- the count, the sum of ratings and the
+     * five-bar distribution, keyed by tenant and brand.
+     *
+     * <p>Five minutes, per the record. It holds numbers and no words, and a hide, a withdrawal or an
+     * erasure never moves the average (a rating is not moderated), so nothing evicts it: the TTL is the
+     * whole staleness budget, and a new review shows within it. What the endpoint reveals is decided on
+     * every request from the brand's current visibility setting and minimum count, never from this
+     * entry, so a brand that switches its page off stops serving at once.
+     */
+    REVIEWS_PUBLIC_SUMMARY(
+            "reviews.public_summary",
+            Duration.ofSeconds(300),
+            5_000,
+            "none: counts only, and the TTL is the budget; visibility is re-read on every request"),
+
+    /**
+     * ADR 0159: the anonymous public list of one brand's published comments, keyed by tenant and brand.
+     *
+     * <p>Sixty seconds, and the one cache here that holds decrypted personal text: a published, consented
+     * and approved comment sits in process memory in the clear for up to a minute (ADR 0029's
+     * named-purpose rule holds for the public read through {@code reviews.public.display}). Because of
+     * that it is evicted by the writer: a moderation decision, a customer's withdrawal and an erasure
+     * each evict the brand's entry in the same request, after the commit, so the next read cannot return
+     * the comment. It never holds a {@code PENDING}, {@code HIDDEN} or unconsented comment.
+     */
+    REVIEWS_PUBLIC_LIST(
+            "reviews.public_list",
+            Duration.ofSeconds(60),
+            5_000,
+            "ReviewCommentModerated, a customer's withdrawal and an erasure (evicted in the same request, after the commit)");
 
     private static final Map<String, CacheRegistry> BY_NAME = Arrays.stream(values())
             .collect(Collectors.toUnmodifiableMap(CacheRegistry::cacheName, Function.identity()));

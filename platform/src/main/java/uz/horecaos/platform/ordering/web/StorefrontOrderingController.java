@@ -36,6 +36,7 @@ import uz.horecaos.platform.customers.api.CustomerOwned;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.protection.Classified;
 import uz.horecaos.platform.iam.api.protection.DataClass;
+import uz.horecaos.platform.ordering.application.AutoAddReconciler;
 import uz.horecaos.platform.ordering.application.CartPaymentOptions;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
@@ -762,6 +763,10 @@ public class StorefrontOrderingController {
                             "CODE_EXPIRED",
                             "REDEMPTION_LIMIT_REACHED",
                             "PER_CUSTOMER_LIMIT_REACHED",
+                            // ADR 0158: a line a rule added that the customer may not remove or lower, or
+                            // a quantity past the rule's bounds -- the basket is well formed, the rule refuses.
+                            "AUTO_ADD_LINE_MANDATORY",
+                            "AUTO_ADD_QUANTITY_OUT_OF_BOUNDS",
                             // Row 4.2g: a well-formed line against an item whose own
                             // schedule currently refuses it — nothing in the request
                             // is wrong, the same shape as NOT_SERVICEABLE beside it.
@@ -1064,7 +1069,9 @@ public class StorefrontOrderingController {
                                             .map(one ->
                                                     new NestedModifierResponse(one.parentOptionId(), one.optionId()))
                                             .toList(),
-                                    view.selectionsOf(line.lineKey()).modifierOptionIds()))
+                                    view.selectionsOf(line.lineKey()).modifierOptionIds(),
+                                    line.origin(),
+                                    AutoAddLineResponse.of(view.autoAddOf(line.lineKey()))))
                             .toList(),
                     view.cart().appliedCouponCode(),
                     view.cart().paymentMethodCode());
@@ -1098,7 +1105,45 @@ public class StorefrontOrderingController {
             List<NestedModifierResponse> nestedModifiers,
             // The first-level modifier options the line holds, so a line keyed by a hash (a combo, or
             // one with a second-level choice) can be edited from any device. Empty when it holds none.
-            List<UUID> modifierOptionIds) {}
+            List<UUID> modifierOptionIds,
+            // ADR 0158: CUSTOMER for a line the customer put there, AUTO_ADD for one a rule added.
+            String origin,
+            // ADR 0158: present exactly on a line a rule added -- which rule, the text to show beside it,
+            // whether the customer can remove it, and the bounds on its quantity. The client draws the
+            // remove control from `removable` and never from knowledge of the rules.
+            @Nullable AutoAddLineResponse autoAdd) {}
+
+    /**
+     * What the cart says about a line a rule added (ADR 0158).
+     *
+     * @param ruleCode        the rule's stable code
+     * @param customerText    the text to show beside the line, by language; empty when the rule states none
+     * @param mandatory       the customer cannot remove the line or lower it below the computed quantity
+     * @param removable       the opposite of {@code mandatory}, for a client that wants one flag to branch on
+     * @param minimumQuantity the least the line may hold; 0 means it can be removed
+     * @param maximumQuantity the most the line may hold
+     */
+    public record AutoAddLineResponse(
+            String ruleCode,
+            java.util.Map<String, String> customerText,
+            boolean mandatory,
+            boolean removable,
+            BigDecimal minimumQuantity,
+            BigDecimal maximumQuantity) {
+
+        static @Nullable AutoAddLineResponse of(AutoAddReconciler.@Nullable LineInfo info) {
+            if (info == null) {
+                return null;
+            }
+            return new AutoAddLineResponse(
+                    info.ruleCode(),
+                    info.customerText(),
+                    info.mandatory(),
+                    info.removable(),
+                    info.minimumQuantity(),
+                    info.maximumQuantity());
+        }
+    }
 
     public record ComboPickResponse(UUID componentId, int quantity) {}
 
@@ -1173,7 +1218,10 @@ public class StorefrontOrderingController {
             List<HiddenChargeResponse> hiddenCharges,
             List<AppliedPromotionResponse> appliedPromotions,
             @Nullable String promoCodeOutcome,
-            List<GiftOfferResponse> giftOffers) {
+            List<GiftOfferResponse> giftOffers,
+            // ADR 0158: the rules changed the basket while it was priced, so cartVersion is newer than the
+            // one sent and the client redraws the basket instead of paying for one it has not seen.
+            boolean changedByPricing) {
 
         static PricedCartResponse of(CartService.PricedCart priced, AppliedPromotions promotions) {
             QuoteSnapshot quote = priced.quote();
@@ -1200,7 +1248,8 @@ public class StorefrontOrderingController {
                     promotions.couponOutcome() == null
                             ? null
                             : promotions.couponOutcome().name(),
-                    GiftOfferResponse.of(promotions));
+                    GiftOfferResponse.of(promotions),
+                    priced.changedByPricing());
         }
     }
 
@@ -1417,7 +1466,8 @@ public class StorefrontOrderingController {
                                             .map(m -> new AutoSelectedChargeResponse(
                                                     m.optionName(), line.hiddenChargeOf(m.sourceOptionId())))
                                             .toList(),
-                                    CatchweightLineResponse.of(line.line())))
+                                    CatchweightLineResponse.of(line.line()),
+                                    line.line().origin()))
                             .toList(),
                     detail.warnings(),
                     AppliedPromotionResponse.of(promotions));
@@ -1462,7 +1512,10 @@ public class StorefrontOrderingController {
             @Nullable String comboName,
             List<String> autoSelectedModifiers,
             List<AutoSelectedChargeResponse> autoSelectedCharges,
-            @Nullable CatchweightLineResponse catchweight) {}
+            @Nullable CatchweightLineResponse catchweight,
+            // ADR 0158: AUTO_ADD for a line a rule added, CUSTOMER otherwise. A reorder repeats only
+            // what the customer chose: the rules add their own again.
+            String origin) {}
 
     /**
      * An option the server applied to an order line, with what it cost (ADR 0136).

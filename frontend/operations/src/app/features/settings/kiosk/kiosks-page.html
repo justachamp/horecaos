@@ -1,0 +1,18 @@
+<div class="kiosks">
+  <h1 class="q-subhead">{{ 'settings.nav.kiosks' | t }}</h1>
+
+  @if (!ready()) {
+    <p class="q-body-sm">…</p>
+  } @else if (scope(); as current) {
+    @if (branchName(); as branch) {
+      <p class="q-caption hint" data-testid="kiosks-branch">
+        {{ 'settings.kioskPairing.branch' | t: { branch: branch } }}
+      </p>
+    }
+    <q-kiosk-card [scope]="current" />
+  } @else {
+    <p class="q-body-sm" data-testid="kiosks-no-branch">
+      {{ 'settings.kioskPairing.noBranch' | t }}
+    </p>
+  }
+</div>

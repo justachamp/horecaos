@@ -31,6 +31,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
+import uz.horecaos.platform.ordering.api.OrderMarksPort;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -62,11 +63,14 @@ public class FiscalDocumentController {
     private final FiscalDocumentService documents;
     private final CurrentActor currentActor;
     private final OrderDirectory orders;
+    private final OrderMarksPort marks;
 
-    public FiscalDocumentController(FiscalDocumentService documents, CurrentActor currentActor, OrderDirectory orders) {
+    public FiscalDocumentController(
+            FiscalDocumentService documents, CurrentActor currentActor, OrderDirectory orders, OrderMarksPort marks) {
         this.documents = documents;
         this.currentActor = currentActor;
         this.orders = orders;
+        this.marks = marks;
     }
 
     @GetMapping("/documents/blocked")
@@ -88,13 +92,35 @@ public class FiscalDocumentController {
         }
 
         List<BlockedDocumentResponse> rows = documents.blocked(tenantId, reasonCode, limit).stream()
-                .map(row -> BlockedDocumentResponse.of(row, publicOrderNumberOf(tenantId, row.orderId())))
+                .map(row -> BlockedDocumentResponse.of(
+                        row, publicOrderNumberOf(tenantId, row.orderId()), markProgressOf(tenantId, row)))
                 .toList();
 
         return ResponseEntity.ok(new BlockedWorklistResponse(
                 rows.size(),
                 rows,
                 documents.partnerFiscalizationWired() ? null : PartnerFiscalizationPort.NOT_WIRED_WARNING));
+    }
+
+    /**
+     * ADR 0161: how many of a marked order's units are scanned, for a document blocked because they are not.
+     * Counts only, read through the port that decrypts nothing; null for every other document, so an
+     * ordinary worklist row costs no extra read.
+     */
+    private @Nullable MarkProgressResponse markProgressOf(UUID tenantId, FiscalDocumentRow row) {
+        if (!FiscalReasonCode.MARKS_INCOMPLETE.equals(row.reasonCode())) {
+            return null;
+        }
+        List<OrderMarksPort.LineMarkCount> counts = marks.markCounts(tenantId, row.orderId());
+        if (counts.isEmpty()) {
+            return null;
+        }
+        int required =
+                counts.stream().mapToInt(OrderMarksPort.LineMarkCount::required).sum();
+        int captured = counts.stream()
+                .mapToInt(count -> Math.min(count.captured(), count.required()))
+                .sum();
+        return new MarkProgressResponse(captured, required);
     }
 
     @GetMapping("/orders/{orderId}/documents")
@@ -159,7 +185,10 @@ public class FiscalDocumentController {
                     + "corrected, never deleted. On the Click path the adapter reads back through "
                     + "GET payment/ofd_data first — a populated qrCodeURL means the earlier "
                     + "submission worked — because Click does not document submit_items as "
-                    + "idempotent.")
+                    + "idempotent. Answers 409 with reasonCode FISCAL_LINES_NOT_BUILT, sending "
+                    + "nothing, while the real receipt line builder does not exist and the "
+                    + "environment is not a sandbox where the platform allows the placeholder "
+                    + "line (ADR 0166).")
     public ResponseEntity<ResolutionResponse> retry(
             @PathVariable UUID tenantId,
             @PathVariable UUID documentId,
@@ -197,6 +226,10 @@ public class FiscalDocumentController {
                     ErrorCode.RESOURCE_CONFLICT,
                     unsellable.getMessage(),
                     Map.of("reasonCode", FiscalReasonCode.NO_FISCAL_PATH));
+        } catch (FiscalDocumentService.LinesNotBuiltException notBuilt) {
+            // ADR 0166, Decision 6: a 409 a client can branch on, and nothing was sent.
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT, notBuilt.getMessage(), Map.of("reasonCode", "FISCAL_LINES_NOT_BUILT"));
         } catch (FiscalDocumentService.StaleDocumentException stale) {
             throw ApiException.staleVersion(stale.expected(), stale.actual());
         }
@@ -287,6 +320,9 @@ public class FiscalDocumentController {
      * @param hasEvidence whether the tax authority's identifiers are on the row.
      *                    Whether, not what: the identifiers themselves are ADR 0029
      *                    evidence and are not a worklist's business
+     * @param marks       present on a document blocked {@code MARKS_INCOMPLETE} (ADR 0161):
+     *                    the units scanned of the units required across the order's marked
+     *                    lines. Counts; never a code
      */
     public record BlockedDocumentResponse(
             UUID documentId,
@@ -304,9 +340,15 @@ public class FiscalDocumentController {
             int version,
             @Nullable Instant submittedAt,
             @Nullable Instant reportingDeadlineAt,
-            @Nullable Instant blockedAt) {
+            @Nullable Instant blockedAt,
+            @Nullable MarkProgressResponse marks) {
 
         public static BlockedDocumentResponse of(FiscalDocumentRow row, @Nullable String publicOrderNumber) {
+            return of(row, publicOrderNumber, null);
+        }
+
+        public static BlockedDocumentResponse of(
+                FiscalDocumentRow row, @Nullable String publicOrderNumber, @Nullable MarkProgressResponse marks) {
             return new BlockedDocumentResponse(
                     row.id(),
                     row.orderId(),
@@ -323,9 +365,13 @@ public class FiscalDocumentController {
                     row.version(),
                     row.submittedAt(),
                     row.reportingDeadlineAt(),
-                    row.blockedAt());
+                    row.blockedAt(),
+                    marks);
         }
     }
+
+    /** @param captured units scanned so far; @param required units that must be scanned before a receipt can be built */
+    public record MarkProgressResponse(int captured, int required) {}
 
     /**
      * A window's coverage, reported as counts and shares rather than one figure.

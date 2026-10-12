@@ -25,6 +25,12 @@ export interface TenantSummaryView {
   readonly createdAt: string;
   readonly countryCode: string;
   readonly businessType: string;
+  /**
+   * ADR 0164: a read-only hint that the tenant looks half-configured -- `COURIER_SERVICE_WITHOUT_DELIVERIES_CONSOLE`
+   * or `DELIVERIES_CONSOLE_WITHOUT_COURIER_SERVICE` -- and null when type and module agree. It blocks and
+   * changes nothing: the business type is a label and the module carries the console profile.
+   */
+  readonly consoleProfileNote?: string | null;
 }
 
 /** GET /control-plane/tenant-plans -- a tenant's live subscription, by plan. */
@@ -230,6 +236,11 @@ export interface OnboardingTemplateSuggestion {
   readonly businessType: string | null;
   /** True when a template names the tenant's business type; false when the default was taken. */
   readonly matched: boolean;
+  /**
+   * ADR 0164: the commercial module that shapes the console for this kind of tenant, named so the operator
+   * can offer it. A recommendation and never a grant.
+   */
+  readonly recommendedModule?: string | null;
 }
 
 /**

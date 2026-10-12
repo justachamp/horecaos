@@ -1,5 +1,7 @@
 package uz.horecaos.platform.kitchen.application;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
@@ -18,6 +20,8 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,13 +33,17 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort;
 import uz.horecaos.platform.fulfillment.api.OrderProgressPort.OrderProgress;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.kitchen.api.KitchenTicketAmended;
+import uz.horecaos.platform.kitchen.api.KitchenTicketReleased;
 import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource;
 import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource.OrderClock;
 import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource.OrderForKitchen;
 import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource.OrderLineForKitchen;
+import uz.horecaos.platform.kitchen.application.port.KitchenPaymentSource;
 import uz.horecaos.platform.kitchen.domain.KitchenStateMachine;
 import uz.horecaos.platform.kitchen.domain.ReleaseMode;
 import uz.horecaos.platform.kitchen.domain.RoutingLevel;
@@ -48,6 +56,7 @@ import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.StationCapacityRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketItemRow;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketRow;
+import uz.horecaos.platform.ordering.api.OrderStatusFacts;
 import uz.horecaos.platform.telemetry.api.RealtimeSignal;
 import uz.horecaos.platform.telemetry.api.RealtimeSignalPublisher;
 import uz.horecaos.platform.telemetry.api.ScopeKey;
@@ -94,7 +103,15 @@ public class KitchenTicketService {
     private final Clock clock;
     private final TransactionTemplate independently;
     private final RealtimeSignalPublisher realtime;
+    private final ApplicationEventPublisher events;
+    private final KitchenPaymentSource payments;
+    private final MeterRegistry meters;
 
+    /**
+     * A kitchen assembled without ordering's payment facts: it knows no order's status, so {@link
+     * #releaseDue} voids nothing on an order's account (what every test that predates ADR 0168 builds), and
+     * as every caller built this before ADR 0154 nothing listens for a release or an amendment.
+     */
     public KitchenTicketService(
             JdbcKitchenStore kitchen,
             KitchenOrderSource orders,
@@ -103,6 +120,47 @@ public class KitchenTicketService {
             Clock clock,
             TransactionTemplate unitOfWork,
             RealtimeSignalPublisher realtime) {
+        this(
+                kitchen,
+                orders,
+                orderProgress,
+                audit,
+                clock,
+                unitOfWork,
+                realtime,
+                KitchenPaymentSource.NONE,
+                new SimpleMeterRegistry());
+    }
+
+    /** With ordering's payment facts and a meter registry, and nothing listening for a release or an amendment. */
+    public KitchenTicketService(
+            JdbcKitchenStore kitchen,
+            KitchenOrderSource orders,
+            OrderProgressPort orderProgress,
+            AuditRecorder audit,
+            Clock clock,
+            TransactionTemplate unitOfWork,
+            RealtimeSignalPublisher realtime,
+            KitchenPaymentSource payments,
+            MeterRegistry meters) {
+        this(kitchen, orders, orderProgress, audit, clock, unitOfWork, realtime, event -> {}, payments, meters);
+    }
+
+    @Autowired
+    public KitchenTicketService(
+            JdbcKitchenStore kitchen,
+            KitchenOrderSource orders,
+            OrderProgressPort orderProgress,
+            AuditRecorder audit,
+            Clock clock,
+            TransactionTemplate unitOfWork,
+            RealtimeSignalPublisher realtime,
+            ApplicationEventPublisher events,
+            KitchenPaymentSource payments,
+            MeterRegistry meters) {
+        this.events = events;
+        this.payments = payments;
+        this.meters = meters;
         this.kitchen = kitchen;
         this.orders = orders;
         this.orderProgress = orderProgress;
@@ -128,7 +186,7 @@ public class KitchenTicketService {
      * those tests publish immediately rather than losing the signal to a
      * callback nothing ever invokes.
      */
-    private void signalBoardChanged(UUID tenantId, UUID locationId, UUID ticketId, int version, Instant now) {
+    void signalBoardChanged(UUID tenantId, UUID locationId, UUID ticketId, int version, Instant now) {
         Runnable publish = () -> realtime.publish(RealtimeSignal.of(
                 tenantId,
                 StreamChannel.KITCHEN_BOARD,
@@ -631,6 +689,14 @@ public class KitchenTicketService {
         }
         TicketRow after = rollUp(tenantId, ticket, "SERVICE", "kitchen", orderId.toString(), now);
         signalBoardChanged(tenantId, after.locationId(), after.id(), after.version(), now);
+        if (ticket.status() != TicketStatus.HELD) {
+            // ADR 0154: an amendment to a ticket that has already been released is a fact the kitchen
+            // counts (V0523) and tells the branch's printing about. One still on hold is not: nothing
+            // was cooked or printed from the old version, and its release prints the order as it is.
+            int revision = kitchen.bumpAmendmentRevision(tenantId, ticket.id());
+            events.publishEvent(new KitchenTicketAmended(
+                    Ids.newId(), tenantId, after.brandId(), after.locationId(), after.id(), orderId, revision, now));
+        }
     }
 
     /**
@@ -814,7 +880,13 @@ public class KitchenTicketService {
                 correlationId,
                 now);
         Optional<TicketRow> fired = kitchen.findTicket(tenantId, ticketId);
-        fired.ifPresent(ticket -> signalBoardChanged(tenantId, ticket.locationId(), ticketId, ticket.version(), now));
+        fired.ifPresent(ticket -> {
+            signalBoardChanged(tenantId, ticket.locationId(), ticketId, ticket.version(), now);
+            // ADR 0154: the ticket reached its stations. An in-process signal inside this transaction;
+            // a printing listener runs after commit and cannot roll the release back.
+            events.publishEvent(new KitchenTicketReleased(
+                    Ids.newId(), tenantId, ticket.brandId(), ticket.locationId(), ticketId, ticket.orderId(), now));
+        });
         return fired;
     }
 
@@ -902,7 +974,7 @@ public class KitchenTicketService {
             UUID ticketId,
             int expectedVersion,
             ReleaseMode mode,
-            Instant releaseAt,
+            @Nullable Instant releaseAt,
             boolean overrideGranted,
             @Nullable String reasonCode,
             String actorId,
@@ -1012,17 +1084,41 @@ public class KitchenTicketService {
     }
 
     /**
-     * Fires everything the scheduler has claimed.
+     * Fires everything the scheduler has claimed, except what an order that is already over has left
+     * behind.
      *
      * <p>Each ticket goes through the same conditional update a human release
      * goes through, so a cook pressing "release now" in the same instant as the
      * scheduler still settles at one outcome rather than two.
+     *
+     * <p>ADR 0168 Decision 10, the guard: a ticket whose order is already terminal is voided, never
+     * fired. {@code claimDueForRelease} has no predicate on the order, so before this a cancelled
+     * pre-order's buffered ticket fired on schedule; the terminal-order listener closes that in the
+     * cancellation's own transaction, and this closes it for an order that reached a terminal status by a
+     * route the listener did not see. One batch read of the claimed orders, per tenant.
      */
     @Transactional
     public int releaseDue(int batchSize) {
         Instant now = clock.instant();
+        List<TicketRow> claimed = kitchen.claimDueForRelease(now, batchSize);
+        Map<UUID, Map<UUID, KitchenPaymentSource.OrderState>> stateByTenant = new HashMap<>();
+        Map<UUID, List<UUID>> orderIdsByTenant = new HashMap<>();
+        for (TicketRow ticket : claimed) {
+            orderIdsByTenant
+                    .computeIfAbsent(ticket.tenantId(), tenant -> new ArrayList<>())
+                    .add(ticket.orderId());
+        }
+        orderIdsByTenant.forEach(
+                (tenantId, orderIds) -> stateByTenant.put(tenantId, payments.orderState(tenantId, orderIds)));
+
         int fired = 0;
-        for (TicketRow ticket : kitchen.claimDueForRelease(now, batchSize)) {
+        for (TicketRow ticket : claimed) {
+            KitchenPaymentSource.OrderState state =
+                    stateByTenant.getOrDefault(ticket.tenantId(), Map.of()).get(ticket.orderId());
+            if (state != null && OrderStatusFacts.isTerminal(state.status())) {
+                voidBufferedTicket(ticket, now);
+                continue;
+            }
             if (fire(
                             ticket.tenantId(),
                             ticket.id(),
@@ -1037,6 +1133,71 @@ public class KitchenTicketService {
             }
         }
         return fired;
+    }
+
+    /**
+     * Voids the buffered ticket of an order that was cancelled or expired, in that order's own
+     * transaction (ADR 0168 Decision 10). A ticket that has already fired is left exactly as it is: food
+     * already started is never recalled, and nothing here unstarts it.
+     *
+     * @return the voided ticket, or empty when the order has no ticket or it is no longer in the buffer
+     */
+    @Transactional
+    public Optional<TicketRow> voidBufferedTicketOfOrder(UUID tenantId, UUID orderId) {
+        return kitchen.findTicketByOrder(tenantId, orderId)
+                .filter(ticket -> ticket.status() == TicketStatus.HELD)
+                .flatMap(ticket -> voidBufferedTicket(ticket, clock.instant()));
+    }
+
+    /**
+     * {@code HELD -> VOIDED} by the conditional update every other transition uses, with the ticket
+     * event {@code ORDER_TERMINAL}, plus {@code PAYMENT_HOLD_CLEARED} when the ticket carried a hold (a
+     * voided ticket keeps its hold columns, which is how a cancelled payment-held pre-order still says how it
+     * ended).
+     */
+    Optional<TicketRow> voidBufferedTicket(TicketRow ticket, Instant now) {
+        Optional<Integer> won =
+                kitchen.transitionTicket(ticket.tenantId(), ticket.id(), TicketStatus.HELD, TicketStatus.VOIDED, now);
+        if (won.isEmpty()) {
+            return Optional.empty();
+        }
+        kitchen.recordEvent(
+                ticket.tenantId(),
+                ticket.id(),
+                null,
+                TicketStatus.HELD.name(),
+                TicketStatus.VOIDED.name(),
+                "ORDER_TERMINAL",
+                "SYSTEM_JOB",
+                "kitchen-order-terminal",
+                null,
+                ticket.orderId().toString(),
+                now);
+        if (ticket.heldForPayment()) {
+            kitchen.recordEvent(
+                    ticket.tenantId(),
+                    ticket.id(),
+                    null,
+                    TicketStatus.HELD.name(),
+                    TicketStatus.VOIDED.name(),
+                    "PAYMENT_HOLD_CLEARED",
+                    "SYSTEM_JOB",
+                    "kitchen-order-terminal",
+                    null,
+                    ticket.orderId().toString(),
+                    now);
+            countHold("cleared_terminal");
+        }
+        countHold("voided_terminal");
+        Optional<TicketRow> voided = kitchen.findTicket(ticket.tenantId(), ticket.id());
+        voided.ifPresent(
+                after -> signalBoardChanged(ticket.tenantId(), ticket.locationId(), ticket.id(), after.version(), now));
+        return voided;
+    }
+
+    /** {@code kitchen.payment_hold{outcome}}: bounded labels only, never a tenant or a branch. */
+    void countHold(String outcome) {
+        meters.counter("kitchen.payment_hold", "outcome", outcome).increment();
     }
 
     // ------------------------------------------------------------ station actions

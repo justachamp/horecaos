@@ -126,6 +126,69 @@ public final class ConfigurationKeys {
                     + "their name is erased and the application archived.")
             .build();
 
+    /**
+     * ADR 0161 (ADR 0082 flag): whether marked-goods capture is on for a tenant. Off until a tenant names a
+     * marked SKU and the three preconditions of ADR 0161 hold, and ADR 0161 has the platform turn it on.
+     * Read by catalog (publication) and ordering (capture and the handover guard) through {@code
+     * tenancy.api.FeatureFlagKeys}.
+     *
+     * <p>Tenant-visible like every ADR 0082 flag ({@code ConfigurationKeysTests} requires it), which also
+     * means the tenant settings surface can set it for the tenant's own account. "The platform turns it on"
+     * is therefore the rollout rule and not a mechanism; making it one needs either an exemption from that
+     * invariant or a write guard that knows the actor, which is the owner's call and is recorded as open.
+     */
+    public static final ConfigurationKey<Boolean> FEATURE_MARKED_GOODS = ConfigurationKey.of(
+                    "feature.marked_goods", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Turns on marked-goods (DataMatrix) capture at the pass and the handover guard "
+                    + "that holds an order until every marked unit is scanned.")
+            .build();
+
+    /**
+     * ADR 0161: how much of a marking code's shape the server checks. Declared here so a stored row for it
+     * passes the startup validator, and declared identically in {@code
+     * ordering.api.MarkingConfigurationKeys} where it is consumed, for the reason recorded on {@link
+     * #COMMERCIAL_ENFORCEMENT_CEILING}.
+     */
+    public static final ConfigurationKey<String> FISCAL_MARKING_STRUCTURE_CHECK = ConfigurationKey.of(
+                    "fiscal.marking.structure_check", String.class)
+            .defaultValue("GS1")
+            .ownedBy("fiscal")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("How much of a marking code's shape the server checks: GS1 (the assumed GS1 "
+                    + "element-string shape) or NONE (only the character set and length).")
+            .build();
+
+    /** ADR 0161: whether a hand-typed or pasted marking code is accepted; see {@link #FISCAL_MARKING_STRUCTURE_CHECK}. */
+    public static final ConfigurationKey<Boolean> FISCAL_MARKING_ALLOW_KEYED_ENTRY = ConfigurationKey.of(
+                    "fiscal.marking.allow_keyed_entry", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("fiscal")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Whether a marking code typed or pasted by hand is accepted at the pass. Off by "
+                    + "default: a keyed code is not the code on the package.")
+            .build();
+
+    /**
+     * ADR 0175: the longest offered-to-answered interval the day close still believes as one
+     * call's ring time. Declared here so a stored row for it passes the startup validator, and
+     * declared identically in {@code voice.api.VoiceConfigurationKeys} where it is consumed, for the
+     * reason recorded on {@link #COMMERCIAL_ENFORCEMENT_CEILING}.
+     */
+    public static final ConfigurationKey<Integer> VOICE_RING_TIME_CEILING_SECONDS = ConfigurationKey.of(
+                    "voice.ring_time_ceiling_seconds", Integer.class)
+            .defaultValue(1800)
+            .ownedBy("voice")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("The longest interval, in seconds, from a call's arrival to its first answer "
+                    + "that still counts as one call's answer speed; a longer pair is treated as two "
+                    + "calls and left out of the average.")
+            .build();
+
     public static final ConfigurationKey<Integer> INVENTORY_RESERVATION_TTL_SECONDS = ConfigurationKey.of(
                     "inventory.reservation_ttl_seconds", Integer.class)
             .defaultValue(900)
@@ -457,6 +520,30 @@ public final class ConfigurationKeys {
     }
 
     /**
+     * ADR 0157: the content module's two keys, declared identically in {@code
+     * content.api.ContentConfigurationKeys}, where they are consumed, for the reason recorded on
+     * {@link #COMMERCIAL_ENFORCEMENT_CEILING}. {@code ContentConfigurationKeysTests} holds the two
+     * together.
+     */
+    public static final ConfigurationKey<Integer> CONTENT_REVISION_MEDIA_RETENTION_DAYS = ConfigurationKey.of(
+                    "content.revision_media_retention_days", Integer.class)
+            .defaultValue(90)
+            .ownedBy("content")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Days after a content revision is superseded before the media only it uses is "
+                    + "released (ADR 0157). Revisions themselves are kept indefinitely.")
+            .build();
+
+    public static final ConfigurationKey<Integer> CONTENT_VIDEO_MAX_LIVE_PER_BRAND = ConfigurationKey.of(
+                    "content.video.max_live_per_brand", Integer.class)
+            .defaultValue(5)
+            .ownedBy("content")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Videos a brand may have live in its storefront content at once (ADR 0157). "
+                    + "Publishing a sixth is refused with CONTENT_VIDEO_LIMIT.")
+            .build();
+
+    /**
      * ADR 0082: whether a tenant's operations app shows its administrators the
      * HorecaOS support visits to their account (ADR 0081), and lets them end
      * one. Off until turned on: the page is new, and the first tenants to see
@@ -470,6 +557,74 @@ public final class ConfigurationKeys {
             .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
             .describedAs("Shows a tenant's administrators the HorecaOS support visits to their "
                     + "account in the operations app, and lets them end one.")
+            .build();
+
+    /**
+     * ADR 0162 (ADR 0082): whether a tenant sees the kiosk pairing and registry cards in Settings → Channel setup,
+     * and whether a paired kiosk's own record carries the channel it sells through. Off until turned on: no
+     * kiosk application exists, so the first tenant to see the cards is chosen by a pilot, not everyone at once.
+     * The enum value, the table and the role are inert without rows; rollback is revoking the device and
+     * switching this off.
+     */
+    public static final ConfigurationKey<Boolean> FEATURE_KIOSK_DEVICES = ConfigurationKey.of(
+                    "feature.kiosk_devices", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("tenancy")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Shows a tenant's managers the kiosk pairing and registry cards in the operations "
+                    + "app, and lets a paired kiosk read the channel it sells through.")
+            .build();
+
+    /**
+     * ADR 0155: the five terminal policy values. Tenant-scope values written only by the Policy card of
+     * Staff → Терминалы ({@code PUT /terminal-policy}, behind {@code terminal.manage} at TENANT scope), so none of them
+     * is tenant-visible: the generic configuration editor neither lists nor writes them, and the capability is the
+     * control. The per-device override of the auto-lock and the device's attribution mode live on the device record.
+     * The lockout numbers are deliberately absent: a security control a tenant can weaken is not one.
+     */
+    public static final ConfigurationKey<Integer> TERMINAL_PIN_LENGTH = ConfigurationKey.of(
+                    "terminal.pin.length", Integer.class)
+            .defaultValue(6)
+            .ownedBy("iam")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("The length of the next staff PIN set at a terminal: 4 or 6. An existing PIN keeps the "
+                    + "length it was set with.")
+            .build();
+
+    public static final ConfigurationKey<Integer> TERMINAL_AUTO_LOCK_SECONDS = ConfigurationKey.of(
+                    "terminal.auto_lock_seconds", Integer.class)
+            .defaultValue(300)
+            .ownedBy("iam")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Seconds without a touch or a mutating request after which a terminal locks (30 to 3600). "
+                    + "A device may override it.")
+            .build();
+
+    public static final ConfigurationKey<Integer> TERMINAL_SESSION_MAX_HOURS = ConfigurationKey.of(
+                    "terminal.session.max_hours", Integer.class)
+            .defaultValue(12)
+            .ownedBy("iam")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Hours after which a terminal session ends whatever its traffic (1 to 16).")
+            .build();
+
+    public static final ConfigurationKey<String> TERMINAL_ROSTER_DISPLAY = ConfigurationKey.of(
+                    "terminal.roster.display", String.class)
+            .defaultValue("NAME_INITIAL")
+            .ownedBy("iam")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("How a colleague reads on a shared terminal: NAME_INITIAL (first name and the initial of "
+                    + "the last) or REFERENCE (the non-personal S-0142).")
+            .build();
+
+    public static final ConfigurationKey<String> TERMINAL_ATTRIBUTION_DEFAULT = ConfigurationKey.of(
+                    "terminal.attribution.default", String.class)
+            .defaultValue("DEVICE_ONLY")
+            .ownedBy("iam")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("The attribution mode a newly approved terminal starts in: DEVICE_ONLY, PERSON_OPTIONAL "
+                    + "or PERSON_REQUIRED.")
             .build();
 
     /**
@@ -521,6 +676,50 @@ public final class ConfigurationKeys {
             .defaultValue(5)
             .ownedBy("kitchen")
             .describedAs("Minutes without a read after which a kitchen wall display is shown as not seen.")
+            .build();
+
+    /**
+     * ADR 0154, ADR 0082: declared identically in {@code printing.api.PrintingConfigurationKeys}, where it
+     * is consumed (this registry is internal to tenancy and a reference the other way would make the
+     * modules cyclic; {@code PrintingConfigurationKeyTests} holds the two together).
+     */
+    public static final ConfigurationKey<Boolean> FEATURE_PRINTING = ConfigurationKey.of(
+                    "feature.printing", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("printing")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Lets a tenant's branches print kitchen tickets, order slips and fiscal receipts "
+                    + "through a print agent or a browser.")
+            .build();
+
+    /** ADR 0154: see {@link #FEATURE_PRINTING}. */
+    public static final ConfigurationKey<String> PRINTING_DOCUMENT_LOCALE = ConfigurationKey.of(
+                    "printing.document_locale", String.class)
+            .defaultValue("ru")
+            .ownedBy("printing")
+            .tenantVisible()
+            .describedAs("The language printed documents are written in at a branch: ru, uz-Latn or en.")
+            .build();
+
+    /** ADR 0154: see {@link #FEATURE_PRINTING}. */
+    public static final ConfigurationKey<Integer> PRINTING_KITCHEN_TICKET_EXPIRE_MINUTES = ConfigurationKey.of(
+                    "printing.kitchen_ticket.expire_minutes", Integer.class)
+            .defaultValue(30)
+            .ownedBy("printing")
+            .tenantVisible()
+            .describedAs("Minutes after which a kitchen ticket still waiting for its printer is dropped "
+                    + "instead of printing stale (5 to 240).")
+            .build();
+
+    /** ADR 0154: see {@link #FEATURE_PRINTING}. */
+    public static final ConfigurationKey<Integer> PRINTING_LATE_MARKER_MINUTES = ConfigurationKey.of(
+                    "printing.late_marker_minutes", Integer.class)
+            .defaultValue(5)
+            .ownedBy("printing")
+            .tenantVisible()
+            .describedAs(
+                    "Minutes after being queued beyond which a printed document is marked delayed " + "(1 to 1440).")
             .build();
 
     public static final ConfigurationKey<Integer> ORDERING_AT_RISK_BEFORE_MINUTES = ConfigurationKey.of(
@@ -598,6 +797,75 @@ public final class ConfigurationKeys {
             .tenantVisible()
             .describedAs("Prior successful orders a customer needs before auto-accept applies to "
                     + "them. 0 means no gate. Not yet enforced.")
+            .build();
+
+    /** ADR 0158's rollout gate, declared identically in {@code ordering.api.OrderingConfigurationKeys}. */
+    public static final ConfigurationKey<Boolean> ORDERING_AUTO_ADD_ENABLED = ConfigurationKey.of(
+                    "ordering.auto_add_enabled", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("ordering")
+            .settableAt(ScopeType.BRAND)
+            .describedAs("Whether the cart evaluates auto-add rules (packaging, cutlery and the like) for this "
+                    + "brand. Off means the cart neither adds nor removes anything.")
+            .build();
+
+    /** ADR 0158's shadow mode, declared identically in {@code ordering.api.OrderingConfigurationKeys}. */
+    public static final ConfigurationKey<Boolean> ORDERING_AUTO_ADD_SHADOW_ENABLED = ConfigurationKey.of(
+                    "ordering.auto_add_shadow_enabled", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("ordering")
+            .settableAt(ScopeType.BRAND)
+            .describedAs("While auto-add is off, count what the rules would have added without adding it.")
+            .build();
+
+    /** ADR 0169's rollout gate, declared identically in {@code ordering.api.OrderingConfigurationKeys}. */
+    public static final ConfigurationKey<Boolean> ORDERING_AMENDMENT_LINE_REMOVAL_ENABLED = ConfigurationKey.of(
+                    "ordering.amendment_line_removal_enabled", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("ordering")
+            .settableAt(ScopeType.BRAND)
+            .describedAs("Whether an operator may remove a line from, or lower a quantity on, a confirmed order "
+                    + "by amendment. Off means the command is refused.")
+            .build();
+
+    /** ADR 0158's legal switch, declared identically in {@code catalog.api.CatalogConfigurationKeys}. */
+    public static final ConfigurationKey<Boolean> CATALOG_AUTO_ADD_MANDATORY_ALLOWED = ConfigurationKey.of(
+                    "catalog.auto_add_mandatory_allowed", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("catalog")
+            .settableAt(ScopeType.TENANT)
+            .describedAs("Whether a mandatory auto-add rule (a cart line the customer cannot remove) may be "
+                    + "published for this tenant. Written by a platform administrator on the owner's instruction.")
+            .build();
+
+    /** ADR 0173, declared identically in {@code catalog.api.CatalogConfigurationKeys}. */
+    public static final ConfigurationKey<Integer> CATALOG_MXIK_REFERENCE_MAX_AGE_DAYS = ConfigurationKey.of(
+                    "catalog.mxik_reference_max_age_days", Integer.class)
+            .defaultValue(45)
+            .ownedBy("catalog")
+            .settableAt(ScopeType.PLATFORM)
+            .describedAs("Days the loaded national ИКПУ/MXIK classification list may age before a platform "
+                    + "alert is raised.")
+            .build();
+
+    /** ADR 0173, declared identically in {@code catalog.api.CatalogConfigurationKeys}. */
+    public static final ConfigurationKey<Integer> CATALOG_MXIK_IMPORT_WITHDRAWAL_THRESHOLD_PERCENT =
+            ConfigurationKey.of("catalog.mxik_import_withdrawal_threshold_percent", Integer.class)
+                    .defaultValue(2)
+                    .ownedBy("catalog")
+                    .settableAt(ScopeType.PLATFORM)
+                    .describedAs(
+                            "Percent of the currently valid ИКПУ/MXIK rows a full-snapshot import may withdraw "
+                                    + "before it is held for review. A truncated or wrong file otherwise empties the list in one request.")
+                    .build();
+
+    /** ADR 0173, declared identically in {@code catalog.api.CatalogConfigurationKeys}. */
+    public static final ConfigurationKey<Long> CATALOG_MXIK_IMPORT_MAX_BYTES = ConfigurationKey.of(
+                    "catalog.mxik_import_max_bytes", Long.class)
+            .defaultValue(33_554_432L)
+            .ownedBy("catalog")
+            .settableAt(ScopeType.PLATFORM)
+            .describedAs("The largest decoded ИКПУ/MXIK file, in bytes, the importer accepts in one request.")
             .build();
 
     /**
@@ -844,10 +1112,223 @@ public final class ConfigurationKeys {
                     + "Switching it on ends the affected accounts' sessions so the next sign-in is asked.")
             .build();
 
+    /**
+     * ADR 0176: days a staff sign-in row is kept, read by {@code iam}'s {@code StaffSignInSweeper}
+     * (which holds the code and the default as constants, because importing this registry's key
+     * type would close an {@code iam -> tenancy -> audit -> iam} cycle; {@code
+     * IamConfigurationKeyTests} keeps the two equal).
+     */
+    public static final ConfigurationKey<Integer> IAM_STAFF_SIGN_IN_RETENTION_DAYS = ConfigurationKey.of(
+                    "iam.staff_sign_in_retention_days", Integer.class)
+            .defaultValue(180)
+            .ownedBy("iam")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Days a staff sign-in record (browser, system, form and times; no address) is "
+                    + "kept before it is deleted. Between 30 and 730.")
+            .build();
+
+    /**
+     * ADR 0156: whether a tenant records its staff's hours. Declared here so a stored row for it
+     * passes the startup validator, and declared identically in {@code
+     * workforce.api.WorkforceConfigurationKeys} where it is consumed, for the reason recorded on
+     * {@link #COMMERCIAL_ENFORCEMENT_CEILING}. {@code WorkforceConfigurationKeyTests} keeps the seven
+     * in step.
+     */
+    public static final ConfigurationKey<Boolean> WORKFORCE_ATTENDANCE_ENABLED = ConfigurationKey.of(
+                    "workforce.attendance.enabled", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("workforce")
+            .tenantVisible()
+            .settableAt(ScopeType.TENANT)
+            .describedAs("Whether this company records its staff's working hours (rota, clock-in and "
+                    + "timesheet). Off until switched on; switching it on is an audited change.")
+            .build();
+
+    public static final ConfigurationKey<Integer> WORKFORCE_SHIFT_VARIANCE_THRESHOLD_MINUTES = ConfigurationKey.of(
+                    "workforce.shift.variance_threshold_minutes", Integer.class)
+            .defaultValue(30)
+            .ownedBy("workforce")
+            .tenantVisible()
+            .settableAt(ScopeType.TENANT, ScopeType.BRAND, ScopeType.LOCATION)
+            .describedAs("Minutes a closed shift may differ from its plan before a manager must approve it. "
+                    + "Between 5 and 240.")
+            .build();
+
+    public static final ConfigurationKey<Boolean> WORKFORCE_SHIFT_APPROVER_MUST_DIFFER = ConfigurationKey.of(
+                    "workforce.shift.approver_must_differ", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("workforce")
+            .tenantVisible()
+            .settableAt(ScopeType.TENANT)
+            .describedAs("Whether a different person must approve a shift's variance than edited it. Off, "
+                    + "because a branch with one manager could otherwise approve nothing.")
+            .build();
+
+    public static final ConfigurationKey<Integer> WORKFORCE_SHIFT_RETROACTIVE_EDIT_DAYS = ConfigurationKey.of(
+                    "workforce.shift.retroactive_edit_days", Integer.class)
+            .defaultValue(7)
+            .ownedBy("workforce")
+            .tenantVisible()
+            .settableAt(ScopeType.TENANT)
+            .describedAs("How many days back a branch manager may correct a shift; older ones need the "
+                    + "approval capability. Between 0 and 60.")
+            .build();
+
+    public static final ConfigurationKey<Integer> WORKFORCE_SHIFT_MAX_OPEN_HOURS = ConfigurationKey.of(
+                    "workforce.shift.max_open_hours", Integer.class)
+            .defaultValue(14)
+            .ownedBy("workforce")
+            .tenantVisible()
+            .settableAt(ScopeType.TENANT, ScopeType.BRAND, ScopeType.LOCATION)
+            .describedAs("Hours after which a still-open shift is flagged as not closed. Between 4 and 16.")
+            .build();
+
+    public static final ConfigurationKey<Integer> WORKFORCE_ROSTER_LATE_AFTER_MINUTES = ConfigurationKey.of(
+                    "workforce.roster.late_after_minutes", Integer.class)
+            .defaultValue(10)
+            .ownedBy("workforce")
+            .tenantVisible()
+            .settableAt(ScopeType.TENANT, ScopeType.BRAND, ScopeType.LOCATION)
+            .describedAs("Minutes after the planned start with no shift before a person reads as late. "
+                    + "Between 1 and 120.")
+            .build();
+
+    public static final ConfigurationKey<Integer> WORKFORCE_ROSTER_MATCH_WINDOW_MINUTES = ConfigurationKey.of(
+                    "workforce.roster.match_window_minutes", Integer.class)
+            .defaultValue(240)
+            .ownedBy("workforce")
+            .tenantVisible()
+            .settableAt(ScopeType.TENANT)
+            .describedAs("Minutes either side of a published entry's start within which a new shift is "
+                    + "matched to it. Between 30 and 480.")
+            .build();
+
+    // ADR 0159 / ADR 0082: the reviews module's scalar keys, declared identically in
+    // reviews.api.ReviewsConfigurationKeys -- the registry the startup validator and the write path
+    // consult lives here and cannot import it. ReviewsConfigurationKeysTests fails the build if the two
+    // ever drift apart.
+
+    public static final ConfigurationKey<Boolean> FEATURE_SERVICE_RECOVERY = ConfigurationKey.of(
+                    "feature.service_recovery", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("reviews")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Opens a service-recovery case from a low review and shows the worklist "
+                    + "(ADR 0159). Off: no new case opens; existing cases and every review stay.")
+            .build();
+
+    public static final ConfigurationKey<Boolean> FEATURE_FEEDBACK_SETTINGS = ConfigurationKey.of(
+                    "feature.feedback_settings", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("reviews")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("Offers feedback tags with a review, governs when the rating prompt is sent, and "
+                    + "serves the public review endpoints (ADR 0159). Off: the prompt is sent at once, as "
+                    + "before, and nothing is public.")
+            .build();
+
+    public static final ConfigurationKey<String> FEEDBACK_PUBLIC_VISIBILITY = ConfigurationKey.of(
+                    "feedback.public_visibility", String.class)
+            .defaultValue("NONE")
+            .ownedBy("reviews")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("How much of the brand's reviews its public page shows: NONE, RATING_ONLY or "
+                    + "RATING_AND_COMMENTS (ADR 0159). Off by default.")
+            .build();
+
+    public static final ConfigurationKey<Integer> FEEDBACK_PUBLIC_MINIMUM_REVIEWS = ConfigurationKey.of(
+                    "feedback.public_minimum_reviews", Integer.class)
+            .defaultValue(10)
+            .ownedBy("reviews")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("How many reviews a brand must have before its public summary shows an average "
+                    + "(0 to 1000, ADR 0159).")
+            .build();
+
+    public static final ConfigurationKey<Boolean> FEEDBACK_COMMENTS_REQUIRE_APPROVAL = ConfigurationKey.of(
+                    "feedback.comments_require_approval", Boolean.class)
+            .defaultValue(true)
+            .ownedBy("reviews")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("Whether a comment the customer agreed to show publicly waits for a moderator "
+                    + "before it appears (ADR 0159).")
+            .build();
+
+    /**
+     * ADR 0167 Decision 7: days the customer funnel, registration and link-click count rows are kept.
+     * Declared here so a stored row for it passes the startup validator, and declared identically in
+     * {@code reporting.api.ReportingConfigurationKeys} where it is consumed, for the reason recorded on
+     * {@link #COMMERCIAL_ENFORCEMENT_CEILING}.
+     */
+    public static final ConfigurationKey<Integer> REPORTING_FUNNEL_RETENTION_DAYS = ConfigurationKey.of(
+                    "reporting.funnel_retention_days", Integer.class)
+            .defaultValue(400)
+            .ownedBy("reporting")
+            .settableAt(ScopeType.PLATFORM)
+            .describedAs("Days the customer funnel, registration and attribution-link click counts are "
+                    + "kept, by business date. The rows hold counts and no personal data.")
+            .build();
+
+    /**
+     * ADR 0171 Decision 5: the most points one customer may be credited from a till in one business day
+     * without a person looking. Declared here so a stored row passes the startup validator, and declared
+     * identically in {@code loyalty.api.LoyaltyConfigurationKeys} where it is consumed, for the reason
+     * recorded on {@link #COMMERCIAL_ENFORCEMENT_CEILING}.
+     */
+    public static final ConfigurationKey<Long> LOYALTY_POS_SYNC_MAX_AUTO_CREDIT_MINOR = ConfigurationKey.of(
+                    "loyalty.pos_sync.max_auto_credit_minor", Long.class)
+            .defaultValue(100_000L)
+            .ownedBy("loyalty")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("Points one customer may be credited from the till in one business day before the "
+                    + "credit is held for review.")
+            .build();
+
+    /** ADR 0171 Decision 5: the same bound for a whole binding in one business day. */
+    public static final ConfigurationKey<Long> LOYALTY_POS_SYNC_MAX_BINDING_CREDIT_MINOR_PER_DAY = ConfigurationKey.of(
+                    "loyalty.pos_sync.max_binding_credit_minor_per_day", Long.class)
+            .defaultValue(2_000_000L)
+            .ownedBy("loyalty")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("Points one point-of-sale binding may credit from the till in one business day "
+                    + "before further credits are held for review.")
+            .build();
+
+    /** ADR 0171 Decision 8: the tenant says this brand's till keeps a bonus balance of its own. */
+    public static final ConfigurationKey<Boolean> LOYALTY_POS_TILL_KEEPS_BALANCE = ConfigurationKey.of(
+                    "loyalty.pos.till_keeps_balance", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("loyalty")
+            .tenantVisible()
+            .settableAt(ScopeType.BRAND)
+            .describedAs("Whether this brand's point-of-sale terminal keeps a customer bonus balance of its own.")
+            .build();
+
+    /** ADR 0171 Decision 3/4: seconds between pulls of what happened at a till. */
+    public static final ConfigurationKey<Integer> LOYALTY_POS_SYNC_PULL_INTERVAL_SECONDS = ConfigurationKey.of(
+                    "loyalty.pos_sync.pull_interval_seconds", Integer.class)
+            .defaultValue(300)
+            .ownedBy("loyalty")
+            .settableAt(ScopeType.PLATFORM)
+            .describedAs("Seconds between pulls of the movements that happened at a point-of-sale terminal.")
+            .build();
+
     private static final Map<String, ConfigurationKey<?>> BY_CODE = index(List.of(
             CART_EXPIRY_MINUTES,
             ORDERING_CART_RETENTION_DAYS,
             COURIER_APPLICANT_RETENTION_MONTHS,
+            VOICE_RING_TIME_CEILING_SECONDS,
+            FEATURE_MARKED_GOODS,
+            FISCAL_MARKING_STRUCTURE_CHECK,
+            FISCAL_MARKING_ALLOW_KEYED_ENTRY,
             QUOTE_TTL_SECONDS,
             PROMOTION_APPROVAL_PERCENTAGE_OVER_BP,
             PROMOTION_APPROVAL_AMOUNT_OVER_MINOR,
@@ -860,6 +1341,19 @@ public final class ConfigurationKeys {
             AUDIT_SECURITY_RETENTION_DAYS,
             AUDIT_BUSINESS_RETENTION_DAYS,
             IAM_STAFF_MFA_REQUIREMENT,
+            IAM_STAFF_SIGN_IN_RETENTION_DAYS,
+            WORKFORCE_ATTENDANCE_ENABLED,
+            WORKFORCE_SHIFT_VARIANCE_THRESHOLD_MINUTES,
+            WORKFORCE_SHIFT_APPROVER_MUST_DIFFER,
+            WORKFORCE_SHIFT_RETROACTIVE_EDIT_DAYS,
+            WORKFORCE_SHIFT_MAX_OPEN_HOURS,
+            WORKFORCE_ROSTER_LATE_AFTER_MINUTES,
+            WORKFORCE_ROSTER_MATCH_WINDOW_MINUTES,
+            REPORTING_FUNNEL_RETENTION_DAYS,
+            LOYALTY_POS_SYNC_MAX_AUTO_CREDIT_MINOR,
+            LOYALTY_POS_SYNC_MAX_BINDING_CREDIT_MINOR_PER_DAY,
+            LOYALTY_POS_TILL_KEEPS_BALANCE,
+            LOYALTY_POS_SYNC_PULL_INTERVAL_SECONDS,
             CUSTOMERS_TELEGRAM_AUTH_PHONE_PATTERN,
             CUSTOMERS_OTP_DELIVERY_CHANNEL_ORDER,
             CUSTOMERS_PII_EXPORT_APPROVAL_THRESHOLD_ROWS,
@@ -871,12 +1365,24 @@ public final class ConfigurationKeys {
             ASSISTANT_DISCLOSURE_TEXT_EN,
             ASSISTANT_DISCLOSURE_TEXT_RU,
             ASSISTANT_DISCLOSURE_TEXT_UZ,
+            CONTENT_REVISION_MEDIA_RETENTION_DAYS,
+            CONTENT_VIDEO_MAX_LIVE_PER_BRAND,
             FEATURE_SUPPORT_VISITS,
+            FEATURE_KIOSK_DEVICES,
+            TERMINAL_PIN_LENGTH,
+            TERMINAL_AUTO_LOCK_SECONDS,
+            TERMINAL_SESSION_MAX_HOURS,
+            TERMINAL_ROSTER_DISPLAY,
+            TERMINAL_ATTRIBUTION_DEFAULT,
             ORDERING_BUSINESS_DAY_START_HOUR,
             ORDERING_AVERAGE_ORDER_MINUTES,
             ORDERING_MAXIMUM_ORDER_MINUTES,
             ORDERING_LATE_ORDER_THRESHOLD_MINUTES,
             KITCHEN_DISPLAY_NOT_SEEN_AFTER_MINUTES,
+            FEATURE_PRINTING,
+            PRINTING_DOCUMENT_LOCALE,
+            PRINTING_KITCHEN_TICKET_EXPIRE_MINUTES,
+            PRINTING_LATE_MARKER_MINUTES,
             ORDERING_AT_RISK_BEFORE_MINUTES,
             ORDERING_LATE_COLOUR,
             ORDERING_MINIMUM_ORDER_AMOUNT_MINOR,
@@ -886,6 +1392,13 @@ public final class ConfigurationKeys {
             ORDERING_OPERATOR_PROMO_CODE_ALLOWED,
             ORDERING_AUTO_ACCEPT_ELIGIBLE_CHANNELS,
             ORDERING_AUTO_ACCEPT_MIN_PRIOR_ORDERS,
+            ORDERING_AUTO_ADD_ENABLED,
+            ORDERING_AUTO_ADD_SHADOW_ENABLED,
+            ORDERING_AMENDMENT_LINE_REMOVAL_ENABLED,
+            CATALOG_AUTO_ADD_MANDATORY_ALLOWED,
+            CATALOG_MXIK_REFERENCE_MAX_AGE_DAYS,
+            CATALOG_MXIK_IMPORT_WITHDRAWAL_THRESHOLD_PERCENT,
+            CATALOG_MXIK_IMPORT_MAX_BYTES,
             CATALOG_USE_STOCK_LOGIC,
             INVENTORY_STOPS_CREATION_ENABLED,
             INVENTORY_STOPS_READ_ENABLED,
@@ -898,7 +1411,12 @@ public final class ConfigurationKeys {
             DELIVERY_OUT_OF_ZONE_POLICY,
             MARKETING_CHANNEL_PRIORITY_ORDER,
             MARKETING_IN_APP_SHOW_CAP_PER_DAY,
-            MARKETING_SCENARIO_CONTROL_GROUP_PERCENT_DEFAULT));
+            MARKETING_SCENARIO_CONTROL_GROUP_PERCENT_DEFAULT,
+            FEATURE_SERVICE_RECOVERY,
+            FEATURE_FEEDBACK_SETTINGS,
+            FEEDBACK_PUBLIC_VISIBILITY,
+            FEEDBACK_PUBLIC_MINIMUM_REVIEWS,
+            FEEDBACK_COMMENTS_REQUIRE_APPROVAL));
 
     private ConfigurationKeys() {}
 

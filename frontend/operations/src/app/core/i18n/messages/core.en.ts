@@ -25,6 +25,9 @@ export const coreEn = {
   'shell.nav.inbox': 'Inbox',
   'shell.nav.kitchen': 'Kitchen',
   'shell.nav.delivery': 'Delivery',
+  'shell.nav.deliveries': 'Deliveries',
+  'shell.profile.showAll': 'Show all sections',
+  'shell.profile.hideAgain': 'Hide the rest',
   'shell.nav.couriers': 'Couriers',
   'shell.nav.customers': 'Customers',
   'shell.nav.staff': 'Staff and access',
@@ -54,7 +57,7 @@ export const coreEn = {
   'orders.status.RECEIVED': 'Received',
   'orders.status.PAYMENT_AUTHORIZING': 'Payment',
   'orders.status.AWAITING_APPROVAL': 'Awaiting approval',
-  'orders.status.PAYMENT_FAILED': 'Payment failed',
+  'orders.status.PAYMENT_FAILED': 'Cancelled: not paid',
   'orders.status.CONFIRMED': 'Confirmed',
   'orders.status.REJECTED': 'Rejected',
   'orders.status.EXPIRED': 'Expired',
@@ -96,6 +99,7 @@ export const coreEn = {
   'orders.table.chip': 'Table {tables}',
   'orders.action.catchweightNotReconciled':
     'Weigh the items sold by weight before handing the order over',
+  'orders.action.marksIncomplete': 'Scan the marked items before handing the order over',
 
   'notBuilt.title': 'Not built yet',
   'notBuilt.body':
@@ -210,6 +214,20 @@ export const coreEn = {
   'ui.mediaUploader.confirm': 'Use this crop',
   'ui.mediaUploader.cancel': 'Cancel',
   'ui.mediaUploader.uploading': 'Uploading…',
+  'ui.mediaUploader.videoNotMp4': 'Only MP4 video is accepted — export the clip as MP4 (H.264)',
+  'ui.mediaUploader.videoTooLarge': 'That video is over 12 MB — export it smaller',
+  'ui.mediaUploader.videoTooLong': 'That video is longer than 20 seconds — trim it',
+  'ui.mediaUploader.videoDimensions':
+    'The video must be at most 1920 pixels on its long edge and at least 480 on its short edge',
+  'ui.mediaUploader.videoUnreadable':
+    'This browser cannot read that video — export it as MP4 with H.264 video',
+  'ui.mediaUploader.videoRejectedByServer':
+    'The platform refused that video. Export it as MP4 with H.264 video (and AAC audio, or none), at most 12 MB, 20 seconds and 1920 pixels, with “fast start” (web optimised) turned on, then upload it again',
+  'ui.mediaUploader.posterFailed': 'Could not capture a poster frame from that video',
+  'ui.mediaUploader.posterHint':
+    'Choose the frame customers see before the video plays (and instead of it when they ask their phone for less motion)',
+  'ui.mediaUploader.posterFrame': 'Poster frame',
+  'ui.mediaUploader.posterConfirm': 'Use this frame',
 
   // `q-mapping-pane` (ADR 0012/0026, gap-map row X.24) — the dual list, link/
   // unlink, unmapped filter, bulk auto-match and the two-sided conflict card
@@ -454,4 +472,17 @@ export const coreEn = {
   'settings.orderPolicy.field.reason': 'Reason for this change',
   'settings.orderPolicy.publish': 'Publish',
   'settings.orderPolicy.publishing': 'Publishing…',
+
+  'shared.columnPicker.toggle': 'Columns',
+  'shared.columnPicker.label': 'Table columns',
+  'shared.columnPicker.reset': 'Restore the default columns',
+  'shared.columnPicker.saved':
+    'Your choice is saved to your account and follows you to every device.',
+  'shared.columnPicker.session': 'Your choice lasts only until this session ends.',
+  'shared.columnPicker.writeFailed':
+    'Your last change could not be saved to your account. It applies on this screen only.',
+  'shell.localeScope.thisDevice': 'Language set for this device only.',
+  'shell.localeScope.allDevices': 'For all my devices',
+  'shell.localeScope.keep': 'Only on this device',
+  'shell.localeScope.failed': 'The language could not be saved. It stays on this device only.',
 } as const;

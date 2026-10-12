@@ -32,6 +32,12 @@ export interface OrderLine {
    */
   readonly catchweight?: OrderLineCatchweight | null;
   /**
+   * ADR 0161: present on a marked line while marked-goods capture is on for the tenant -- the units that
+   * must be scanned before the order may leave the pass, and how many are. Counts only: no screen shows
+   * a code.
+   */
+  readonly marking?: OrderLineMarking | null;
+  /**
    * ADR 0137: the step this line may be amended in — the published portion size of a splittable
    * dish — present only while the order can still be amended. Absent means whole units, whatever
    * `quantity` currently holds: it is the menu's rule and not a property of the line.
@@ -61,6 +67,14 @@ export interface OrderLine {
   readonly autoSelectedModifiers?: readonly string[];
   /** ADR 0136: the same options with what each cost for the whole line — already inside {@link finalAmountMinor}. */
   readonly autoSelectedCharges?: readonly OrderLineAutoCharge[];
+  /**
+   * ADR 0158: `CUSTOMER` for a line the customer chose, `AUTO_ADD` for one an auto-add rule put in the basket.
+   * The line list prints «added automatically» beside the latter. Absent on a platform that predates it, which
+   * is a customer's line.
+   */
+  readonly origin?: 'CUSTOMER' | 'AUTO_ADD' | null;
+  /** ADR 0158: a rule's line the customer could not decline. It can be neither removed nor lowered (ADR 0169). */
+  readonly autoAddMandatory?: boolean;
 }
 
 /** `OperationsOrderController.ComboResponse` — the combo a line was bought as part of. */
@@ -77,6 +91,12 @@ export interface OrderLineCombo {
 export interface OrderLineAutoCharge {
   readonly name: string;
   readonly amountMinor: number;
+}
+
+/** `OperationsOrderController.LineMarkingResponse`. */
+export interface OrderLineMarking {
+  readonly required: number;
+  readonly captured: number;
 }
 
 /** `OperationsOrderController.OrderLineCatchweightResponse`. */
@@ -165,6 +185,12 @@ export interface OrderDetailResponse {
   readonly changeDueMinor?: number | null;
   readonly outcome?: OrderOutcome | null;
   readonly customer: OrderCustomer;
+  /**
+   * ADR 0169: true when this brand has the removal path switched on and the order can still be amended, so
+   * the amend menu offers "remove items" and the quantity dialog may lower a quantity only where the server
+   * will carry them out. Absent on a platform that predates it: treated as off.
+   */
+  readonly lineRemovalEnabled?: boolean;
 }
 
 /**

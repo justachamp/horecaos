@@ -46,8 +46,9 @@ export const todayRu: AreaMessages<typeof todayEn> = {
   'myWork.channel.empty': 'Сегодня у вас пока нет заказов',
   'myWork.payment.title': 'Выручка по способу оплаты',
   'myWork.payment.empty': 'Пока нет поступлений за сегодня',
-  'myWork.locked.title': 'Пока недоступно',
-  'myWork.locked.ask':
-    'Персонализация интерфейса (сохранённые фильтры, раскладка) пока не построена.',
   'myWork.profile.body': 'Имя, телефон, фото и языки меняются в вашем профиле.',
+
+  'myWork.interface.body':
+    'Язык, филиал по умолчанию, столбцы и сохранённые виды доски заказов меняются в вашем профиле.',
+  'myWork.interface.link': 'Настроить интерфейс',
 };

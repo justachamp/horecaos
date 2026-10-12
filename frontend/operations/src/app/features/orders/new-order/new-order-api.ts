@@ -320,6 +320,11 @@ export interface PlaceOrderRequest {
    * any other payment method.
    */
   readonly cashTenderedMinor?: number | null;
+  /**
+   * ADR 0158: the rules whose lines the operator took off the basket the last quote showed, each by the
+   * `ruleId` that quote named. The cart never evaluates them into this order. Absent means none.
+   */
+  readonly declinedAutoAddRuleIds?: readonly string[];
 }
 
 // -------------------------------------------------------- §5.6 the server's price (row 1.3e)
@@ -369,6 +374,26 @@ export interface OrderQuote {
   readonly provisional: boolean;
   readonly lines: readonly QuotedLine[];
   readonly discounts: readonly QuotedDiscount[];
+  /** ADR 0158: the lines a rule added to the basket; not lines of the request. Absent from a platform that predates it. */
+  readonly autoAdded?: readonly QuotedAutoAddLine[];
+}
+
+/**
+ * `OperationsOrderController.QuotedAutoAddLineResponse` — a line an auto-add rule put in the basket (ADR 0158),
+ * priced. The composer shows it beside the operator's own lines; `ruleId` sent back as declined takes it off, and
+ * a `mandatory` one cannot be declined.
+ */
+export interface QuotedAutoAddLine {
+  readonly ruleId: string;
+  readonly ruleCode: string;
+  /** By language (`ru`, `uz-Latn`, `en`); empty when the rule states no wording. */
+  readonly customerText: Readonly<Record<string, string>>;
+  readonly mandatory: boolean;
+  readonly variantId: string;
+  readonly quantity: number;
+  readonly baseAmountMinor: number;
+  readonly finalAmountMinor: number;
+  readonly taxAmountMinor: number;
 }
 
 // -------------------------------------------------------- §5.4 branch resolution (row 1.3)

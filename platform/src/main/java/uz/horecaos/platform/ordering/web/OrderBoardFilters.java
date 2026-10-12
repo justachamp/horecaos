@@ -48,12 +48,21 @@ final class OrderBoardFilters {
             Set.of("NOT_REQUIRED", "PENDING", "AUTHORIZED", "CAPTURED", "FAILED", "VOIDED", "REFUNDED");
 
     /**
-     * {@code fiscal.fiscal_documents.status}'s own six values (V0027 widened by
-     * V0039, {@code ck_fiscal_document_status}) — the board's {@code
+     * {@code fiscal.fiscal_documents.status}'s own ten values (V0027 widened by
+     * V0039 and V0551, {@code ck_fiscal_document_status}) — the board's {@code
      * fiscalStatus} filter refuses anything else for the same reason.
      */
-    private static final Set<String> KNOWN_FISCAL_STATUSES =
-            Set.of("NOT_APPLICABLE", "PENDING", "SUBMITTED", "ISSUED", "FAILED", "BLOCKED");
+    private static final Set<String> KNOWN_FISCAL_STATUSES = Set.of(
+            "NOT_APPLICABLE",
+            "PENDING",
+            "SUBMITTED",
+            "ISSUED",
+            "FAILED",
+            "BLOCKED",
+            "CORRECTION_REQUESTED",
+            "VOID_REQUESTED",
+            "CORRECTED",
+            "VOIDED");
 
     private OrderBoardFilters() {}
 

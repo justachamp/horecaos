@@ -57,6 +57,7 @@
       @if (description()) {
         <p class="line-clamp-3 text-[13px] leading-relaxed text-zinc-400">{{ description() }}</p>
       }
+      <app-tag-badges [tags]="item().tags ?? []" />
       <app-physical-facts [physical]="physical()" [compact]="true" />
     </a>
     @if (qty() === 0) {

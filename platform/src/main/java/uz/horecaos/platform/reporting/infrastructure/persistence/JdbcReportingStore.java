@@ -357,7 +357,7 @@ public class JdbcReportingStore {
                 SELECT l.id, l.order_id, l.source_variant_id, l.product_name_snapshot,
                        l.quantity, l.base_amount_minor, l.final_amount_minor, resolved.category_id,
                        l.combo_selection_id, l.combo_container_variant_id, l.combo_quantity,
-                       l.combo_name_snapshot
+                       l.combo_name_snapshot, l.origin, l.auto_add_rule_id
                   FROM ordering.order_lines l
                   JOIN ordering.orders o ON o.id = l.order_id AND o.tenant_id = l.tenant_id
                   LEFT JOIN catalog.variants v
@@ -393,7 +393,9 @@ public class JdbcReportingStore {
                         row.getObject("combo_selection_id", UUID.class),
                         row.getObject("combo_container_variant_id", UUID.class),
                         row.getObject("combo_quantity", Integer.class),
-                        row.getString("combo_name_snapshot")))
+                        row.getString("combo_name_snapshot"),
+                        row.getString("origin"),
+                        row.getObject("auto_add_rule_id", UUID.class)))
                 .list();
     }
 
@@ -479,15 +481,19 @@ public class JdbcReportingStore {
      * grain {@link #readSourceOrders} already uses for orders — a business day
      * is defined once, by {@link BusinessDayBoundary}, and every fact this
      * store derives is windowed by it the same way.
+     *
+     * <p>ADR 0175: an {@code ANSWERED} row also carries four values derived from
+     * the call it belongs to, so the close can pair the answer with the call's
+     * {@code OFFERED} event without the Java record ever holding a provider call
+     * id: whether it is the first answer of its call, the call's earliest offered
+     * time (even on the previous business day), the operator it resolves to (its
+     * own, else the one on the call's {@code ENDED} event) and whether an order
+     * placed from the call exists. The statement selects neither caller-number
+     * column, no customer reference and no order id; the order is only tested for
+     * existence.
      */
     public List<SourceCallEvent> readSourceCallEvents(UUID tenantId, Instant from, Instant to) {
-        return jdbc.sql("""
-                SELECT brand_id, location_id, event_type, operator_principal_id, duration_seconds, occurred_at
-                  FROM voice.call_events
-                 WHERE tenant_id = :tenantId
-                   AND occurred_at >= :from AND occurred_at < :to
-                 ORDER BY occurred_at
-                """)
+        return jdbc.sql(CALL_EVENTS_SQL)
                 .param("tenantId", tenantId)
                 .param("from", utc(from))
                 .param("to", utc(to))
@@ -497,8 +503,53 @@ public class JdbcReportingStore {
                         row.getString("event_type"),
                         row.getString("operator_principal_id"),
                         row.getObject("duration_seconds", Integer.class),
-                        row.getObject("occurred_at", OffsetDateTime.class).toInstant()))
+                        row.getObject("occurred_at", OffsetDateTime.class).toInstant(),
+                        row.getBoolean("first_answer_of_call"),
+                        optionalInstant(row.getObject("offered_at", OffsetDateTime.class)),
+                        row.getString("resolved_operator"),
+                        row.getBoolean("has_order")))
                 .list();
+    }
+
+    /**
+     * The call-event read, public so a test can prove what its select list does not name
+     * (ADR 0175: no caller number, no customer reference, no order id).
+     */
+    public static final String CALL_EVENTS_SQL = """
+            SELECT e.brand_id, e.location_id, e.event_type, e.operator_principal_id,
+                   e.duration_seconds, e.occurred_at,
+                   (e.event_type = 'ANSWERED' AND NOT EXISTS (
+                        SELECT 1 FROM voice.call_events a
+                         WHERE a.tenant_id = e.tenant_id AND a.installation_id = e.installation_id
+                           AND a.provider_call_id = e.provider_call_id AND a.event_type = 'ANSWERED'
+                           AND (a.occurred_at, a.id) < (e.occurred_at, e.id))) AS first_answer_of_call,
+                   ofr.occurred_at AS offered_at,
+                   CASE WHEN e.event_type = 'ANSWERED' THEN
+                        COALESCE(NULLIF(e.operator_principal_id, ''),
+                                 (SELECT l.operator_principal_id FROM voice.call_events l
+                                   WHERE l.tenant_id = e.tenant_id AND l.installation_id = e.installation_id
+                                     AND l.provider_call_id = e.provider_call_id
+                                     AND l.event_type = 'ENDED' AND l.operator_principal_id IS NOT NULL
+                                     AND l.operator_principal_id <> ''
+                                   ORDER BY l.occurred_at, l.id LIMIT 1))
+                   END AS resolved_operator,
+                   COALESCE(ofr.id IS NOT NULL AND EXISTS (
+                        SELECT 1 FROM ordering.orders o
+                         WHERE o.tenant_id = e.tenant_id AND o.source_call_id = ofr.id
+                           AND o.created_at >= ofr.occurred_at), false) AS has_order
+              FROM voice.call_events e
+              LEFT JOIN LATERAL (
+                    SELECT f.id, f.occurred_at FROM voice.call_events f
+                     WHERE e.event_type = 'ANSWERED'
+                       AND f.tenant_id = e.tenant_id AND f.installation_id = e.installation_id
+                       AND f.provider_call_id = e.provider_call_id AND f.event_type = 'OFFERED'
+                     ORDER BY f.occurred_at, f.id LIMIT 1) ofr ON true
+             WHERE e.tenant_id = :tenantId AND e.occurred_at >= :from AND e.occurred_at < :to
+             ORDER BY e.occurred_at, e.id
+            """;
+
+    private static @Nullable Instant optionalInstant(@Nullable OffsetDateTime value) {
+        return value == null ? null : value.toInstant();
     }
 
     /**
@@ -603,7 +654,9 @@ public class JdbcReportingStore {
             @Nullable UUID comboSelectionId,
             @Nullable UUID comboContainerVariantId,
             @Nullable Integer comboQuantity,
-            @Nullable String comboName) {
+            @Nullable String comboName,
+            String lineOrigin,
+            @Nullable UUID autoAddRuleId) {
 
         public SourceLine {
             quantity = Quantities.normalise(quantity);
@@ -630,14 +683,50 @@ public class JdbcReportingStore {
     public record RefundedOrder(
             UUID locationId, UUID legalEntityId, String channelCode, String fulfilmentMode, Instant createdAt) {}
 
-    /** ADR 0064: one row of {@link #readSourceCallEvents}. */
+    /**
+     * ADR 0064: one row of {@link #readSourceCallEvents}.
+     *
+     * <p>ADR 0175: the last four values are derived for an {@code ANSWERED} row and are
+     * {@code false}/{@code null} for every other event type. {@code firstAnswerOfCall}
+     * is true for exactly one answer per call, so a transfer's second answer adds no ring
+     * sample and no conversion; {@code offeredAt} is the call's earliest {@code OFFERED}
+     * time, which may fall on the previous business day; {@code resolvedOperator} is the
+     * answer's own operator, else the one on the call's {@code ENDED} event; {@code hasOrder}
+     * is whether an order placed from the call exists, in any status.
+     */
     public record SourceCallEvent(
             UUID brandId,
             UUID locationId,
             String eventType,
             @Nullable String operatorPrincipalId,
             @Nullable Integer durationSeconds,
-            Instant occurredAt) {}
+            Instant occurredAt,
+            boolean firstAnswerOfCall,
+            @Nullable Instant offeredAt,
+            @Nullable String resolvedOperator,
+            boolean hasOrder) {
+
+        /** An event with no call-level derivation, which is every event but an answer. */
+        public SourceCallEvent(
+                UUID brandId,
+                UUID locationId,
+                String eventType,
+                @Nullable String operatorPrincipalId,
+                @Nullable Integer durationSeconds,
+                Instant occurredAt) {
+            this(
+                    brandId,
+                    locationId,
+                    eventType,
+                    operatorPrincipalId,
+                    durationSeconds,
+                    occurredAt,
+                    false,
+                    null,
+                    null,
+                    false);
+        }
+    }
 
     // ---------------------------------------------------------- fact writes
 
@@ -650,6 +739,8 @@ public class JdbcReportingStore {
      */
     public void clearDay(UUID tenantId, LocalDate businessDate) {
         for (String table : List.of(
+                // ADR 0163: the station-load fact, cleared and rewritten with the day it belongs to.
+                "fact_station_load",
                 "fact_order_line",
                 "fact_order_tender",
                 "fact_order",
@@ -664,12 +755,157 @@ public class JdbcReportingStore {
                 "fact_external_delivery_cost",
                 // ADR 0140 (7.9): the promotion redemption fact, cleared and rewritten
                 // with the day like every other fact beside it.
-                "fact_promotion_redemption")) {
+                "fact_promotion_redemption",
+                // ADR 0156: closed staff shifts, cleared and rewritten with the day.
+                "fact_staff_shift",
+                // ADR 0159 (5.4/5.5): the review facts, cleared and rewritten with the day. The
+                // recovery case fact is keyed by case alone and is upserted, never cleared by day.
+                "fact_review_tag",
+                "fact_review")) {
             jdbc.sql("DELETE FROM reporting.%s WHERE tenant_id = :tenantId AND business_date = :day".formatted(table))
                     .param("tenantId", tenantId)
                     .param("day", businessDate)
                     .update();
         }
+    }
+
+    // ------------------------------------------------------------ station load (ADR 0163)
+
+    /**
+     * The portions each station fired in one business day, by operating hour (ADR 0163 Decision 1).
+     *
+     * <p>Read from {@code kitchen.tickets} and {@code kitchen.ticket_items} by the close job, the one thing
+     * that may read another module's tables, exactly as {@link #readSourceTenders} reads {@code payments}
+     * (ADR 0115). A ticket counts by the instant it fired, {@code released_at}, inside the day's own
+     * {@code [from, to)}; an item counts when {@code status <> 'CANCELLED' OR started_at IS NOT NULL}, so work a
+     * cook began keeps its portions and a line struck before anyone touched it does not (the replacement an
+     * amendment appends counts once, in the hour of the ticket's own {@code released_at}). A ticket voided
+     * before it fired has no {@code released_at} and counts nothing. This is deliberately not the ceiling read
+     * ("still to be cooked in a window"): it asks what was cooked.
+     *
+     * <p>The hour is whole elapsed hours since the day's own start instant, not a wall-clock extract, so a
+     * business day that starts at 09:00 and crosses midnight reads 0 to 23 in order, and a day an offset change
+     * makes 23 or 25 hours long cannot produce hour 24 (the last hour is clamped to 23).
+     */
+    public List<SourceStationLoad> readSourceStationLoad(UUID tenantId, Instant from, Instant to) {
+        return jdbc.sql("""
+                SELECT t.location_id, ti.station_id, s.code AS station_code, s.role AS station_role,
+                       LEAST(23, GREATEST(0, floor(extract(epoch FROM (t.released_at - :from)) / 3600)::int))
+                           AS operating_hour,
+                       sum(ti.quantity) AS portions,
+                       count(DISTINCT t.id) AS tickets
+                  FROM kitchen.ticket_items ti
+                  JOIN kitchen.tickets t ON t.id = ti.ticket_id AND t.tenant_id = ti.tenant_id
+                  JOIN kitchen.stations s ON s.id = ti.station_id AND s.tenant_id = ti.tenant_id
+                 WHERE t.tenant_id = :tenantId
+                   AND t.released_at IS NOT NULL
+                   AND t.released_at >= :from AND t.released_at < :to
+                   AND (ti.status <> 'CANCELLED' OR ti.started_at IS NOT NULL)
+                 GROUP BY t.location_id, ti.station_id, s.code, s.role, operating_hour
+                 ORDER BY t.location_id, ti.station_id, operating_hour
+                """)
+                .param("tenantId", tenantId)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .query((ResultSet row, int number) -> new SourceStationLoad(
+                        row.getObject("location_id", UUID.class),
+                        row.getObject("station_id", UUID.class),
+                        row.getString("station_code"),
+                        row.getString("station_role"),
+                        row.getInt("operating_hour"),
+                        row.getBigDecimal("portions"),
+                        row.getInt("tickets")))
+                .list();
+    }
+
+    /** One row of {@link #readSourceStationLoad}. */
+    public record SourceStationLoad(
+            UUID locationId,
+            UUID stationId,
+            String stationCode,
+            String stationRole,
+            int operatingHour,
+            java.math.BigDecimal portions,
+            int tickets) {}
+
+    public void insertStationLoadFact(ReportingFacts.StationLoadFact fact) {
+        jdbc.sql("""
+                INSERT INTO reporting.fact_station_load (
+                    tenant_id, business_date, location_id, station_id, station_code, station_role,
+                    operating_hour, portions, tickets, boundary_version, metric_calculation_version)
+                VALUES (
+                    :tenantId, :businessDate, :locationId, :stationId, :stationCode, :stationRole,
+                    :operatingHour, :portions, :tickets, :boundaryVersion, :calculationVersion)
+                """)
+                .param("tenantId", fact.tenantId())
+                .param("businessDate", fact.businessDate())
+                .param("locationId", fact.locationId())
+                .param("stationId", fact.stationId())
+                .param("stationCode", fact.stationCode())
+                .param("stationRole", fact.stationRole())
+                .param("operatingHour", fact.operatingHour())
+                .param("portions", fact.portions())
+                .param("tickets", fact.tickets())
+                .param("boundaryVersion", fact.boundaryVersion())
+                .param("calculationVersion", fact.metricCalculationVersion())
+                .update();
+    }
+
+    /**
+     * Deletes the station-load fact of one date and nothing else: the rebuild's one destructive statement
+     * (ADR 0163 Decision 1). Never {@link #clearDay}, which would take every fact a manager has already acted
+     * on with it.
+     */
+    public int deleteStationLoad(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql("DELETE FROM reporting.fact_station_load WHERE tenant_id = :tenantId AND business_date = :day")
+                .param("tenantId", tenantId)
+                .param("day", businessDate)
+                .update();
+    }
+
+    /** The stored station-load fact of one date, ordered so two reads of unchanged data compare byte for byte. */
+    public List<ReportingFacts.StationLoadFact> readStationLoadFacts(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql("""
+                SELECT tenant_id, business_date, location_id, station_id, station_code, station_role,
+                       operating_hour, portions, tickets, boundary_version, metric_calculation_version
+                  FROM reporting.fact_station_load
+                 WHERE tenant_id = :tenantId AND business_date = :day
+                 ORDER BY location_id, station_id, operating_hour
+                """)
+                .param("tenantId", tenantId)
+                .param("day", businessDate)
+                .query((ResultSet row, int number) -> new ReportingFacts.StationLoadFact(
+                        row.getObject("tenant_id", UUID.class),
+                        row.getObject("business_date", LocalDate.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getObject("station_id", UUID.class),
+                        row.getString("station_code"),
+                        row.getString("station_role"),
+                        row.getInt("operating_hour"),
+                        row.getBigDecimal("portions"),
+                        row.getInt("tickets"),
+                        row.getInt("boundary_version"),
+                        row.getInt("metric_calculation_version")))
+                .list();
+    }
+
+    /**
+     * The boundary regime the date's most recent completed {@code CLOSE} run was computed under, or empty when
+     * the date has never been closed. The rebuild takes it so a date closed under another regime is refused
+     * rather than rebuilt on the wrong day boundaries.
+     */
+    public Optional<Integer> closedUnderBoundaryVersion(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql("""
+                SELECT boundary_version FROM reporting.close_runs
+                 WHERE tenant_id = :tenantId AND business_date = :day
+                   AND run_kind = 'CLOSE' AND status = 'COMPLETED'
+                 ORDER BY started_at DESC
+                 LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("day", businessDate)
+                .query(Integer.class)
+                .optional();
     }
 
     /** ADR 0064. Mirrors {@link #insertAggregate}'s shape: one row per {@code CallHourFact}. */
@@ -678,9 +914,11 @@ public class JdbcReportingStore {
                 INSERT INTO reporting.fact_call_hour
                     (tenant_id, business_date, hour_of_day, location_id, brand_id, operator_principal_id,
                      boundary_version, metric_calculation_version, offered_count, answered_count,
-                     missed_count, transferred_count, talk_duration_seconds)
+                     missed_count, transferred_count, talk_duration_seconds,
+                     answered_call_count, ring_seconds_total, ring_sample_count, ring_seconds_max, converted_count)
                 VALUES (:tenantId, :businessDate, :hourOfDay, :locationId, :brandId, :operatorPrincipalId,
-                        :boundaryVersion, :calculationVersion, :offered, :answered, :missed, :transferred, :talk)
+                        :boundaryVersion, :calculationVersion, :offered, :answered, :missed, :transferred, :talk,
+                        :answeredCalls, :ringTotal, :ringSamples, :ringMax, :converted)
                 """)
                 .param("tenantId", fact.tenantId())
                 .param("businessDate", fact.businessDate())
@@ -695,37 +933,122 @@ public class JdbcReportingStore {
                 .param("missed", fact.missedCount())
                 .param("transferred", fact.transferredCount())
                 .param("talk", fact.talkDurationSeconds())
+                .param("answeredCalls", fact.answeredCallCount())
+                .param("ringTotal", fact.ringSecondsTotal())
+                .param("ringSamples", fact.ringSampleCount())
+                .param("ringMax", fact.ringSecondsMax())
+                .param("converted", fact.convertedCount())
                 .update();
     }
 
     /** ADR 0064: one branch's call-stats hours for one business date, for the owner-facing read. */
     public List<CallHourFact> readCallHourFacts(UUID tenantId, UUID locationId, LocalDate businessDate) {
-        return jdbc.sql("""
-                SELECT tenant_id, brand_id, location_id, business_date, hour_of_day, operator_principal_id,
-                       boundary_version, metric_calculation_version, offered_count, answered_count,
-                       missed_count, transferred_count, talk_duration_seconds
-                FROM reporting.fact_call_hour
+        return jdbc.sql(CALL_HOUR_SELECT + """
                 WHERE tenant_id = :tenantId AND location_id = :locationId AND business_date = :businessDate
                 ORDER BY hour_of_day, operator_principal_id
                 """)
                 .param("tenantId", tenantId)
                 .param("locationId", locationId)
                 .param("businessDate", businessDate)
-                .query((ResultSet row, int number) -> new CallHourFact(
-                        row.getObject("tenant_id", UUID.class),
-                        row.getObject("brand_id", UUID.class),
-                        row.getObject("location_id", UUID.class),
-                        row.getObject("business_date", LocalDate.class),
-                        row.getInt("hour_of_day"),
-                        row.getString("operator_principal_id"),
-                        row.getInt("boundary_version"),
-                        row.getInt("metric_calculation_version"),
-                        row.getInt("offered_count"),
-                        row.getInt("answered_count"),
-                        row.getInt("missed_count"),
-                        row.getInt("transferred_count"),
-                        row.getLong("talk_duration_seconds")))
+                .query(JdbcReportingStore::toCallHourFact)
                 .list();
+    }
+
+    /** ADR 0175: every location's call hours for one business date, for the recut's comparison. */
+    public List<CallHourFact> readCallHourFactsForDay(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql(CALL_HOUR_SELECT + """
+                WHERE tenant_id = :tenantId AND business_date = :businessDate
+                ORDER BY location_id, hour_of_day, operator_principal_id
+                """)
+                .param("tenantId", tenantId)
+                .param("businessDate", businessDate)
+                .query(JdbcReportingStore::toCallHourFact)
+                .list();
+    }
+
+    /**
+     * ADR 0175: how many closed days in a range hold at least one call fact for a branch, with the
+     * first and last hour of one, so the coverage read can tell "connected, nothing closed yet"
+     * from "measured". Counts and dates only; no operator, no number.
+     */
+    public CallFactSpan callFactSpan(UUID tenantId, UUID locationId, LocalDate from, LocalDate toInclusive) {
+        return jdbc.sql("""
+                SELECT count(DISTINCT business_date) AS days, min(business_date) AS first_day,
+                       max(business_date) AS last_day
+                FROM reporting.fact_call_hour
+                WHERE tenant_id = :tenantId AND location_id = :locationId
+                  AND business_date >= :from AND business_date <= :to
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("from", from)
+                .param("to", toInclusive)
+                .query((ResultSet row, int number) -> new CallFactSpan(
+                        row.getInt("days"),
+                        row.getObject("first_day", LocalDate.class),
+                        row.getObject("last_day", LocalDate.class)))
+                .single();
+    }
+
+    /** ADR 0175: closed days with call facts in a range; the dates are null when there are none. */
+    public record CallFactSpan(
+            int closedDaysWithCalls,
+            @Nullable LocalDate firstDay,
+            @Nullable LocalDate lastDay) {}
+
+    /**
+     * ADR 0175: the earliest and latest call event a branch recorded in a window, as instants. Reads
+     * only {@code occurred_at}: never a caller number, a customer reference or a call id.
+     */
+    public CallEventSpan callEventSpan(UUID tenantId, UUID locationId, Instant from, Instant to) {
+        return jdbc.sql("""
+                SELECT min(occurred_at) AS first_at, max(occurred_at) AS last_at
+                FROM voice.call_events
+                WHERE tenant_id = :tenantId AND location_id = :locationId
+                  AND occurred_at >= :from AND occurred_at < :to
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .query((ResultSet row, int number) -> new CallEventSpan(
+                        optionalInstant(row.getObject("first_at", OffsetDateTime.class)),
+                        optionalInstant(row.getObject("last_at", OffsetDateTime.class))))
+                .single();
+    }
+
+    public record CallEventSpan(
+            @Nullable Instant firstAt, @Nullable Instant lastAt) {}
+
+    private static final String CALL_HOUR_SELECT = """
+            SELECT tenant_id, brand_id, location_id, business_date, hour_of_day, operator_principal_id,
+                   boundary_version, metric_calculation_version, offered_count, answered_count,
+                   missed_count, transferred_count, talk_duration_seconds,
+                   answered_call_count, ring_seconds_total, ring_sample_count, ring_seconds_max,
+                   converted_count
+            FROM reporting.fact_call_hour
+            """;
+
+    private static CallHourFact toCallHourFact(ResultSet row, int number) throws java.sql.SQLException {
+        return new CallHourFact(
+                row.getObject("tenant_id", UUID.class),
+                row.getObject("brand_id", UUID.class),
+                row.getObject("location_id", UUID.class),
+                row.getObject("business_date", LocalDate.class),
+                row.getInt("hour_of_day"),
+                row.getString("operator_principal_id"),
+                row.getInt("boundary_version"),
+                row.getInt("metric_calculation_version"),
+                row.getInt("offered_count"),
+                row.getInt("answered_count"),
+                row.getInt("missed_count"),
+                row.getInt("transferred_count"),
+                row.getLong("talk_duration_seconds"),
+                row.getObject("answered_call_count", Integer.class),
+                row.getObject("ring_seconds_total", Long.class),
+                row.getObject("ring_sample_count", Integer.class),
+                row.getObject("ring_seconds_max", Integer.class),
+                row.getObject("converted_count", Integer.class));
     }
 
     /**
@@ -805,6 +1128,72 @@ public class JdbcReportingStore {
                         row.getLong("redemptions"),
                         row.getLong("discount_minor"),
                         row.getLong("markup_minor")))
+                .list();
+    }
+
+    /**
+     * Removes the review facts for these reviews that are filed under another day.
+     *
+     * <p>{@code fact_review}'s key is {@code (tenant_id, review_id)} with no business date, so a
+     * boundary change that moves a review across the seam would otherwise make the next close insert
+     * it again, violate the key and roll the whole close back. The same job {@link
+     * #clearMisfiledPromotionRedemptions} does for the promotion fact, on this fact's own key.
+     */
+    public void clearMisfiledReviews(UUID tenantId, List<UUID> reviewIds, LocalDate keep) {
+        if (reviewIds.isEmpty()) {
+            return;
+        }
+        for (String table : List.of("fact_review_tag", "fact_review")) {
+            jdbc.sql("""
+                    DELETE FROM reporting.%s
+                     WHERE tenant_id = :tenantId AND review_id IN (:reviewIds)
+                       AND business_date <> :keep
+                    """.formatted(table))
+                    .param("tenantId", tenantId)
+                    .param("reviewIds", reviewIds)
+                    .param("keep", keep)
+                    .update();
+        }
+    }
+
+    /** One brand's stored review facts for a day, summed: what a recut compares against. */
+    public record ReviewDayTotal(UUID brandId, long reviews, long ratingSum, long tags) {}
+
+    public List<ReviewDayTotal> readReviewDayTotals(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql("""
+                SELECT brand_id, count(*) AS reviews, COALESCE(sum(rating), 0) AS rating_sum,
+                       COALESCE(sum(tag_count), 0) AS tags
+                  FROM reporting.fact_review
+                 WHERE tenant_id = :tenantId AND business_date = :day
+                 GROUP BY brand_id
+                """)
+                .param("tenantId", tenantId)
+                .param("day", businessDate)
+                .query((ResultSet row, int number) -> new ReviewDayTotal(
+                        row.getObject("brand_id", UUID.class),
+                        row.getLong("reviews"),
+                        row.getLong("rating_sum"),
+                        row.getLong("tags")))
+                .list();
+    }
+
+    /** One brand's stored case facts for a day: those opened on it and those closed on it. */
+    public record RecoveryDayTotal(UUID brandId, long opened, long closed) {}
+
+    public List<RecoveryDayTotal> readRecoveryDayTotals(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql("""
+                SELECT brand_id,
+                       count(*) FILTER (WHERE opened_business_date = :day) AS opened,
+                       count(*) FILTER (WHERE closed_business_date = :day) AS closed
+                  FROM reporting.fact_recovery_case
+                 WHERE tenant_id = :tenantId
+                   AND (opened_business_date = :day OR closed_business_date = :day)
+                 GROUP BY brand_id
+                """)
+                .param("tenantId", tenantId)
+                .param("day", businessDate)
+                .query((ResultSet row, int number) -> new RecoveryDayTotal(
+                        row.getObject("brand_id", UUID.class), row.getLong("opened"), row.getLong("closed")))
                 .list();
     }
 
@@ -894,18 +1283,22 @@ public class JdbcReportingStore {
         params.put("comboContainerVariantId", fact.comboContainerVariantId());
         params.put("comboQuantity", fact.comboQuantity());
         params.put("comboName", fact.comboNameSnapshot());
+        params.put("lineOrigin", fact.lineOrigin());
+        params.put("autoAddRuleId", fact.autoAddRuleId());
 
         jdbc.sql("""
                 INSERT INTO reporting.fact_order_line (
                     tenant_id, business_date, order_id, line_id, location_id, variant_id,
                     category_id, product_name_snapshot, quantity, gross_som, discount_som, net_som,
                     occurred_at, legal_entity_id,
-                    combo_selection_id, combo_container_variant_id, combo_quantity, combo_name_snapshot)
+                    combo_selection_id, combo_container_variant_id, combo_quantity, combo_name_snapshot,
+                    line_origin, auto_add_rule_id)
                 VALUES (
                     :tenantId, :businessDate, :orderId, :lineId, :locationId, :variantId,
                     :categoryId, :productName, :quantity, :gross, :discount, :net, :occurredAt,
                     :legalEntityId,
-                    :comboSelectionId, :comboContainerVariantId, :comboQuantity, :comboName)
+                    :comboSelectionId, :comboContainerVariantId, :comboQuantity, :comboName,
+                    :lineOrigin, :autoAddRuleId)
                 """).params(params).update();
     }
 
@@ -1263,6 +1656,398 @@ public class JdbcReportingStore {
                     :orderId, :subjectHash, :discount, :markup, :currency, :redeemedAt)
                 """).params(params).update();
     }
+
+    /** ADR 0156. One row per closed staff shift; see {@code ReportingFacts.StaffShiftFact}. */
+    public void insertStaffShiftFact(ReportingFacts.StaffShiftFact fact) {
+        jdbc.sql("""
+                INSERT INTO reporting.fact_staff_shift (
+                    tenant_id, business_date, shift_id, boundary_version, metric_calculation_version,
+                    brand_id, location_id, staff_member_id, staff_display_reference,
+                    planned_seconds, worked_seconds, break_seconds, paid_seconds, variance_seconds,
+                    approval_status, had_roster_entry, started_at, ended_at)
+                VALUES (
+                    :tenantId, :businessDate, :shiftId, :boundaryVersion, :calculationVersion,
+                    :brandId, :locationId, :memberId, :reference,
+                    :planned, :worked, :break, :paid, :variance,
+                    :approval, :hadEntry, :startedAt, :endedAt)
+                """)
+                .param("tenantId", fact.tenantId())
+                .param("businessDate", fact.businessDate())
+                .param("shiftId", fact.shiftId())
+                .param("boundaryVersion", fact.boundaryVersion())
+                .param("calculationVersion", fact.metricCalculationVersion())
+                .param("brandId", fact.brandId())
+                .param("locationId", fact.locationId())
+                .param("memberId", fact.staffMemberId())
+                .param("reference", fact.staffDisplayReference())
+                .param("planned", fact.plannedSeconds())
+                .param("worked", fact.workedSeconds())
+                .param("break", fact.breakSeconds())
+                .param("paid", fact.paidSeconds())
+                .param("variance", fact.varianceSeconds())
+                .param("approval", fact.approvalStatus())
+                .param("hadEntry", fact.hadRosterEntry())
+                .param("startedAt", utc(fact.startedAt()))
+                .param("endedAt", utc(fact.endedAt()))
+                .update();
+    }
+
+    /**
+     * Removes this fact's rows for these shifts that are filed under another day. A shift whose start
+     * was corrected onto another business date must leave the day it was filed under, or the next close
+     * would count its hours twice -- the job {@link #clearMisfiledPromotionRedemptions} does for the
+     * promotion fact, on this fact's own key.
+     */
+    public void clearMisfiledStaffShifts(UUID tenantId, List<UUID> shiftIds, LocalDate keep) {
+        if (shiftIds.isEmpty()) {
+            return;
+        }
+        jdbc.sql("""
+                DELETE FROM reporting.fact_staff_shift
+                 WHERE tenant_id = :tenantId AND shift_id IN (:shiftIds) AND business_date <> :keep
+                """)
+                .param("tenantId", tenantId)
+                .param("shiftIds", shiftIds)
+                .param("keep", keep)
+                .update();
+    }
+
+    /** One branch's stored staff-shift facts for a day, summed: what a recut compares against. */
+    public record StaffShiftDayTotal(UUID locationId, long shifts, long workedSeconds, long paidSeconds) {}
+
+    public List<StaffShiftDayTotal> readStaffShiftDayTotals(UUID tenantId, LocalDate businessDate) {
+        return jdbc.sql("""
+                SELECT location_id, count(*) AS shifts,
+                       COALESCE(sum(worked_seconds), 0) AS worked, COALESCE(sum(paid_seconds), 0) AS paid
+                  FROM reporting.fact_staff_shift
+                 WHERE tenant_id = :tenantId AND business_date = :day
+                 GROUP BY location_id
+                """)
+                .param("tenantId", tenantId)
+                .param("day", businessDate)
+                .query((row, n) -> new StaffShiftDayTotal(
+                        row.getObject("location_id", UUID.class),
+                        row.getLong("shifts"),
+                        row.getLong("worked"),
+                        row.getLong("paid")))
+                .list();
+    }
+
+    /** The total paid seconds of a range's stored staff-shift facts: the figure a payroll file must equal. */
+    public long readStaffShiftPaidSeconds(UUID tenantId, LocalDate from, LocalDate to, List<UUID> locationIds) {
+        return jdbc.sql("""
+                        SELECT COALESCE(sum(paid_seconds), 0) FROM reporting.fact_staff_shift
+                         WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                           AND (:allLocations OR location_id IN (:locationIds))
+                        """)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .param("allLocations", locationIds.isEmpty())
+                .param("locationIds", locationIds.isEmpty() ? List.of(new UUID(0, 0)) : locationIds)
+                .query(Long.class)
+                .single();
+    }
+
+    /** ADR 0159. One row per review, whatever became of its comment. */
+    public void insertReviewFact(ReportingFacts.ReviewFact fact) {
+        jdbc.sql("""
+                INSERT INTO reporting.fact_review (
+                    tenant_id, review_id, business_date, boundary_version, metric_calculation_version,
+                    brand_id, location_id, order_id, customer_subject_hash, rating, has_comment, tag_count)
+                VALUES (
+                    :tenantId, :reviewId, :businessDate, :boundaryVersion, :calculationVersion,
+                    :brandId, :locationId, :orderId, :subjectHash, :rating, :hasComment, :tagCount)
+                """)
+                .param("tenantId", fact.tenantId())
+                .param("reviewId", fact.reviewId())
+                .param("businessDate", fact.businessDate())
+                .param("boundaryVersion", fact.boundaryVersion())
+                .param("calculationVersion", fact.metricCalculationVersion())
+                .param("brandId", fact.brandId())
+                .param("locationId", fact.locationId())
+                .param("orderId", fact.orderId())
+                .param("subjectHash", fact.customerSubjectHash())
+                .param("rating", fact.rating())
+                .param("hasComment", fact.hasComment())
+                .param("tagCount", fact.tagCount())
+                .update();
+    }
+
+    /** ADR 0159. One row per (review, tag): category and sentiment, never the tag's label. */
+    public void insertReviewTagFact(ReportingFacts.ReviewTagFact fact) {
+        jdbc.sql("""
+                INSERT INTO reporting.fact_review_tag (
+                    tenant_id, review_id, tag_id, business_date, boundary_version, metric_calculation_version,
+                    brand_id, location_id, category, sentiment)
+                VALUES (
+                    :tenantId, :reviewId, :tagId, :businessDate, :boundaryVersion, :calculationVersion,
+                    :brandId, :locationId, :category, :sentiment)
+                """)
+                .param("tenantId", fact.tenantId())
+                .param("reviewId", fact.reviewId())
+                .param("tagId", fact.tagId())
+                .param("businessDate", fact.businessDate())
+                .param("boundaryVersion", fact.boundaryVersion())
+                .param("calculationVersion", fact.metricCalculationVersion())
+                .param("brandId", fact.brandId())
+                .param("locationId", fact.locationId())
+                .param("category", fact.category())
+                .param("sentiment", fact.sentiment())
+                .update();
+    }
+
+    /**
+     * ADR 0159. One row per case, written again whenever a close sees the case touched: it is opened
+     * on one day and closed on another, so the row is rewritten and never re-filed.
+     */
+    public void upsertRecoveryCaseFact(ReportingFacts.RecoveryCaseFact fact) {
+        jdbc.sql("""
+                INSERT INTO reporting.fact_recovery_case (
+                    tenant_id, case_id, opened_business_date, closed_business_date, boundary_version,
+                    metric_calculation_version, brand_id, location_id, order_id, review_id, rating, state,
+                    outcome_code, seconds_to_first_response, seconds_to_close, first_response_breached,
+                    resolution_breached, compensation_count, remedy_money_minor, currency)
+                VALUES (
+                    :tenantId, :caseId, :openedDate, :closedDate, :boundaryVersion,
+                    :calculationVersion, :brandId, :locationId, :orderId, :reviewId, :rating, :state,
+                    :outcome, :firstResponse, :toClose, :firstBreached,
+                    :resolutionBreached, :compensations, :remedy, :currency)
+                ON CONFLICT (tenant_id, case_id) DO UPDATE SET
+                    opened_business_date = EXCLUDED.opened_business_date,
+                    closed_business_date = EXCLUDED.closed_business_date,
+                    boundary_version = EXCLUDED.boundary_version,
+                    metric_calculation_version = EXCLUDED.metric_calculation_version,
+                    brand_id = EXCLUDED.brand_id,
+                    location_id = EXCLUDED.location_id,
+                    order_id = EXCLUDED.order_id,
+                    review_id = EXCLUDED.review_id,
+                    rating = EXCLUDED.rating,
+                    state = EXCLUDED.state,
+                    outcome_code = EXCLUDED.outcome_code,
+                    seconds_to_first_response = EXCLUDED.seconds_to_first_response,
+                    seconds_to_close = EXCLUDED.seconds_to_close,
+                    first_response_breached = EXCLUDED.first_response_breached,
+                    resolution_breached = EXCLUDED.resolution_breached,
+                    compensation_count = EXCLUDED.compensation_count,
+                    remedy_money_minor = EXCLUDED.remedy_money_minor,
+                    currency = EXCLUDED.currency,
+                    built_at = now()
+                """)
+                .param("tenantId", fact.tenantId())
+                .param("caseId", fact.caseId())
+                .param("openedDate", fact.openedBusinessDate())
+                .param("closedDate", fact.closedBusinessDate())
+                .param("boundaryVersion", fact.boundaryVersion())
+                .param("calculationVersion", fact.metricCalculationVersion())
+                .param("brandId", fact.brandId())
+                .param("locationId", fact.locationId())
+                .param("orderId", fact.orderId())
+                .param("reviewId", fact.reviewId())
+                .param("rating", fact.rating())
+                .param("state", fact.state())
+                .param("outcome", fact.outcomeCode())
+                .param("firstResponse", fact.secondsToFirstResponse())
+                .param("toClose", fact.secondsToClose())
+                .param("firstBreached", fact.firstResponseBreached())
+                .param("resolutionBreached", fact.resolutionBreached())
+                .param("compensations", fact.compensationCount())
+                .param("remedy", fact.remedyMoneyMinor())
+                .param("currency", fact.currency())
+                .update();
+    }
+
+    /**
+     * ADR 0159 (5.4/5.5): the reviews a location received in a closed range -- how many, the sum of
+     * their ratings, how many carried words, and the count at each star. The average is derived from
+     * the two sums by the caller, so two locations are never averaged into a third.
+     */
+    public List<ReviewSummaryRow> readReviewSummary(
+            UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId) {
+        return jdbc.sql("""
+                SELECT brand_id, location_id, count(*) AS reviews, COALESCE(sum(rating), 0) AS rating_sum,
+                       count(*) FILTER (WHERE has_comment) AS with_comment,
+                       count(*) FILTER (WHERE rating = 1) AS one,
+                       count(*) FILTER (WHERE rating = 2) AS two,
+                       count(*) FILTER (WHERE rating = 3) AS three,
+                       count(*) FILTER (WHERE rating = 4) AS four,
+                       count(*) FILTER (WHERE rating = 5) AS five
+                  FROM reporting.fact_review
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND (CAST(:brandId AS uuid) IS NULL OR brand_id = CAST(:brandId AS uuid))
+                 GROUP BY brand_id, location_id
+                 ORDER BY brand_id, location_id
+                """)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .param("brandId", brandId)
+                .query((ResultSet row, int number) -> new ReviewSummaryRow(
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getLong("reviews"),
+                        row.getLong("rating_sum"),
+                        row.getLong("with_comment"),
+                        List.of(
+                                row.getLong("one"),
+                                row.getLong("two"),
+                                row.getLong("three"),
+                                row.getLong("four"),
+                                row.getLong("five"))))
+                .list();
+    }
+
+    /** The tags those reviews carried, by category and sentiment: "which part is getting worse". */
+    public List<ReviewTagRow> readReviewTags(UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId) {
+        return jdbc.sql("""
+                SELECT brand_id, location_id, category, sentiment, count(*) AS tags
+                  FROM reporting.fact_review_tag
+                 WHERE tenant_id = :tenantId AND business_date BETWEEN :from AND :to
+                   AND (CAST(:brandId AS uuid) IS NULL OR brand_id = CAST(:brandId AS uuid))
+                 GROUP BY brand_id, location_id, category, sentiment
+                 ORDER BY brand_id, location_id, category, sentiment
+                """)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .param("brandId", brandId)
+                .query((ResultSet row, int number) -> new ReviewTagRow(
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getString("category"),
+                        row.getString("sentiment"),
+                        row.getLong("tags")))
+                .list();
+    }
+
+    /**
+     * ADR 0159: the cases of a closed range, per location. A case counts as opened on its opening
+     * date and closed on its closing date, so the two counts and the two durations are over different
+     * sets and the row says so. The mean is whole seconds rounded to the nearest and the 90th
+     * percentile is the continuous one over the same set.
+     */
+    public List<RecoverySummaryRow> readRecoverySummary(
+            UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId) {
+        return jdbc.sql("""
+                SELECT brand_id, location_id,
+                       count(*) FILTER (WHERE opened_business_date BETWEEN :from AND :to) AS opened,
+                       count(*) FILTER (WHERE closed_business_date BETWEEN :from AND :to) AS closed,
+                       avg(seconds_to_first_response) FILTER (
+                           WHERE opened_business_date BETWEEN :from AND :to) AS first_mean,
+                       percentile_cont(0.9) WITHIN GROUP (ORDER BY seconds_to_first_response) FILTER (
+                           WHERE opened_business_date BETWEEN :from AND :to) AS first_p90,
+                       avg(seconds_to_close) FILTER (
+                           WHERE closed_business_date BETWEEN :from AND :to) AS close_mean,
+                       percentile_cont(0.9) WITHIN GROUP (ORDER BY seconds_to_close) FILTER (
+                           WHERE closed_business_date BETWEEN :from AND :to) AS close_p90,
+                       count(*) FILTER (
+                           WHERE opened_business_date BETWEEN :from AND :to
+                             AND (first_response_breached OR resolution_breached)) AS breached,
+                       COALESCE(sum(compensation_count) FILTER (
+                           WHERE opened_business_date BETWEEN :from AND :to), 0) AS compensations
+                  FROM reporting.fact_recovery_case
+                 WHERE tenant_id = :tenantId
+                   AND (opened_business_date BETWEEN :from AND :to OR closed_business_date BETWEEN :from AND :to)
+                   AND (CAST(:brandId AS uuid) IS NULL OR brand_id = CAST(:brandId AS uuid))
+                 GROUP BY brand_id, location_id
+                 ORDER BY brand_id, location_id
+                """)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .param("brandId", brandId)
+                .query((ResultSet row, int number) -> new RecoverySummaryRow(
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getLong("opened"),
+                        row.getLong("closed"),
+                        wholeSeconds(row.getBigDecimal("first_mean")),
+                        wholeSeconds(row.getBigDecimal("first_p90")),
+                        wholeSeconds(row.getBigDecimal("close_mean")),
+                        wholeSeconds(row.getBigDecimal("close_p90")),
+                        row.getLong("breached"),
+                        row.getLong("compensations")))
+                .list();
+    }
+
+    /** How the cases closed in the range ended, per location and outcome. */
+    public List<RecoveryOutcomeRow> readRecoveryOutcomes(
+            UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId) {
+        return jdbc.sql("""
+                SELECT brand_id, location_id, outcome_code, count(*) AS cases
+                  FROM reporting.fact_recovery_case
+                 WHERE tenant_id = :tenantId AND closed_business_date BETWEEN :from AND :to
+                   AND outcome_code IS NOT NULL
+                   AND (CAST(:brandId AS uuid) IS NULL OR brand_id = CAST(:brandId AS uuid))
+                 GROUP BY brand_id, location_id, outcome_code
+                 ORDER BY brand_id, location_id, outcome_code
+                """)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .param("brandId", brandId)
+                .query((ResultSet row, int number) -> new RecoveryOutcomeRow(
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getString("outcome_code"),
+                        row.getLong("cases")))
+                .list();
+    }
+
+    /**
+     * Remedy money attached to the cases opened in the range, per location and currency, as it was
+     * attached. Never summed across currencies, and a benefit grant is a count, not a row here.
+     */
+    public List<RecoveryRemedyRow> readRecoveryRemedies(
+            UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId) {
+        return jdbc.sql("""
+                SELECT brand_id, location_id, currency, sum(remedy_money_minor) AS amount_minor
+                  FROM reporting.fact_recovery_case
+                 WHERE tenant_id = :tenantId AND opened_business_date BETWEEN :from AND :to
+                   AND currency IS NOT NULL AND remedy_money_minor > 0
+                   AND (CAST(:brandId AS uuid) IS NULL OR brand_id = CAST(:brandId AS uuid))
+                 GROUP BY brand_id, location_id, currency
+                 ORDER BY brand_id, location_id, currency
+                """)
+                .param("tenantId", tenantId)
+                .param("from", from)
+                .param("to", to)
+                .param("brandId", brandId)
+                .query((ResultSet row, int number) -> new RecoveryRemedyRow(
+                        row.getObject("brand_id", UUID.class),
+                        row.getObject("location_id", UUID.class),
+                        row.getString("currency"),
+                        row.getLong("amount_minor")))
+                .list();
+    }
+
+    private static @Nullable Long wholeSeconds(@Nullable BigDecimal value) {
+        return value == null
+                ? null
+                : value.setScale(0, java.math.RoundingMode.HALF_UP).longValueExact();
+    }
+
+    /** One location's reviews over a range. {@code distribution} is the count at one to five stars. */
+    public record ReviewSummaryRow(
+            UUID brandId, UUID locationId, long reviews, long ratingSum, long withComment, List<Long> distribution) {}
+
+    public record ReviewTagRow(UUID brandId, UUID locationId, String category, String sentiment, long tags) {}
+
+    public record RecoverySummaryRow(
+            UUID brandId,
+            UUID locationId,
+            long opened,
+            long closed,
+            @Nullable Long firstResponseMeanSeconds,
+            @Nullable Long firstResponseP90Seconds,
+            @Nullable Long closeMeanSeconds,
+            @Nullable Long closeP90Seconds,
+            long breached,
+            long compensations) {}
+
+    public record RecoveryOutcomeRow(UUID brandId, UUID locationId, String outcomeCode, long cases) {}
+
+    public record RecoveryRemedyRow(UUID brandId, UUID locationId, String currency, long amountMinor) {}
 
     /** ORDER STATUSES that never became a sale: counted in the redemption log, excluded from the summary. */
     private static final String NOT_A_SALE = "('CANCELLED', 'REJECTED', 'EXPIRED', 'PAYMENT_FAILED')";

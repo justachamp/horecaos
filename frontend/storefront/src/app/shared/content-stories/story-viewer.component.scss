@@ -1,0 +1,32 @@
+:host {
+  display: contents;
+}
+
+/* The bar of the slide being shown fills over that slide's own duration. */
+.story-fill {
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.story-fill-active {
+  animation-name: story-fill;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes story-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Under reduced motion nothing animates: the current bar simply reads as full. */
+@media (prefers-reduced-motion: reduce) {
+  .story-fill-active {
+    animation: none;
+    transform: scaleX(1);
+  }
+}

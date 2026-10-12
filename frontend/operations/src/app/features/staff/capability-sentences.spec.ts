@@ -34,6 +34,10 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
   'commercial.plan.read',
   'commercial.subscription.manage',
   'commercial.usage.read',
+  'content.author',
+  'content.manage',
+  'content.publish',
+  'content.read',
   'conversation.flow.manage',
   'conversation.inbox.manage',
   'courier.adjustment.approve',
@@ -70,6 +74,7 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
   'dinein.session.read',
   'fiscal.document.read',
   'fiscal.document.resolve',
+  'fiscal.evidence.reveal',
   'geo.lookup',
   'iam.grant.manage',
   'iam.staff.mfa.read',
@@ -82,7 +87,11 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
   'integration.telegram-staff-link.issue',
   'inventory.adjust',
   'inventory.read',
+  'kiosk.device.manage',
   'kitchen.display.read',
+  'kitchen.headcount.read',
+  'kitchen.paid-hold.manage',
+  'kitchen.productivity.manage',
   'kitchen.station.manage',
   'kitchen.ticket.advance',
   'kitchen.ticket.read',
@@ -138,6 +147,8 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
   'refund.execute',
   'refund.request',
   'reporting.read',
+  'review.moderate',
+  'review.read',
   'reservation.manage',
   'reservation.read',
   'serviceability.manage',
@@ -146,7 +157,14 @@ const TENANT_VISIBLE_CAPABILITY_CODES = [
   'staff.profile.manage',
   'staff.profile.read',
   'staff.self.manage',
+  'staff.shift.approve',
+  'staff.shift.clock',
+  'staff.shift.export',
+  'staff.shift.manage',
+  'staff.shift.read',
   'suppression.manage',
+  'terminal.manage',
+  'terminal.read',
   'tenant.onboarding.manage',
   'tenant.read',
   'tenant.write',
@@ -165,6 +183,22 @@ describe('CAPABILITY_SENTENCES', () => {
     }
     expect(CAPABILITY_SENTENCES['staff.emergency-contact.read'].en).toContain('recorded');
     expect(CAPABILITY_SENTENCES['staff.emergency-contact.read'].ru).toContain('записывается');
+  });
+
+  it('describes the five staff-hours capabilities (ADR 0156) in plain words, the export saying it is recorded', () => {
+    for (const code of [
+      'staff.shift.read',
+      'staff.shift.manage',
+      'staff.shift.approve',
+      'staff.shift.export',
+      'staff.shift.clock',
+    ]) {
+      expect(CAPABILITY_SENTENCES[code], code).toBeDefined();
+      expect(CAPABILITY_SENTENCES[code].area).toBe('staff');
+    }
+    expect(CAPABILITY_SENTENCES['staff.shift.export'].en).toContain('recorded');
+    expect(CAPABILITY_SENTENCES['staff.shift.manage'].en).toContain('recorded');
+    expect(CAPABILITY_SENTENCES['staff.shift.approve'].ru).toContain('по одной');
   });
 
   it('describes the two chat-assistant capabilities (ADR 0069) as what a person can do, under their own heading', () => {

@@ -39,6 +39,7 @@ import uz.horecaos.platform.iam.application.mfa.MfaCodeBudget;
 import uz.horecaos.platform.iam.application.mfa.MfaMetrics;
 import uz.horecaos.platform.iam.application.mfa.MfaPolicy;
 import uz.horecaos.platform.iam.application.mfa.SealedTokens;
+import uz.horecaos.platform.iam.application.sessions.StaffSessionLedger;
 import uz.horecaos.platform.iam.infrastructure.keycloak.StaffDirectGrantClient;
 import uz.horecaos.platform.iam.infrastructure.keycloak.StaffPasswordCheckClient;
 import uz.horecaos.platform.iam.infrastructure.keycloak.StaffPasswordCheckClient.PasswordCheck;
@@ -73,6 +74,7 @@ class StaffAuthServiceTests {
     private StaffAccounts accounts;
     private MovableClock limiterClock;
     private SealedTokens tickets;
+    private StaffSessionLedger ledger;
     private StaffAuthService service;
 
     @BeforeEach
@@ -81,6 +83,7 @@ class StaffAuthServiceTests {
         passwordCheck = mock(StaffPasswordCheckClient.class);
         policy = mock(MfaPolicy.class);
         accounts = mock(StaffAccounts.class);
+        ledger = mock(StaffSessionLedger.class);
         limiterClock = new MovableClock(NOW);
         InProcessRateLimiter rateLimiter = new InProcessRateLimiter(limiterClock);
         SecretResolver secrets = new SecretResolver() {
@@ -105,6 +108,7 @@ class StaffAuthServiceTests {
                 accounts,
                 tickets,
                 new MfaMetrics(new SimpleMeterRegistry()),
+                ledger,
                 CLOCK);
         // Most tests are about what the login client answers; the password-only client confirms the
         // password, and nobody needs a second factor, unless a test says otherwise.

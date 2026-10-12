@@ -618,3 +618,45 @@ describe('DishCardComponent -- portions and weighed items (ADR 0137)', () => {
     expect(view.q('dine-in-quantity')?.textContent?.trim()).toBe('0,5');
   });
 });
+
+describe('DishCardComponent: tag badges (ADR 0174)', () => {
+  it('draws a badge for each tag its author made a badge, with its name in text', () => {
+    const { host } = render({
+      linked: false,
+      ordering: false,
+      item: {
+        ...dish(),
+        tags: [
+          {
+            id: 't1',
+            code: 'spicy',
+            icon: 'FLAME',
+            showAsBadge: true,
+            showAsFilter: true,
+            name: 'Achchiq',
+          },
+          {
+            id: 't2',
+            code: 'vegan',
+            icon: null,
+            showAsBadge: false,
+            showAsFilter: true,
+            name: 'Vegan',
+          },
+        ],
+      },
+    });
+
+    const badges = Array.from(host.querySelectorAll('[data-testid="tag-badges"] li')).map((node) =>
+      node.textContent?.trim(),
+    );
+    expect(badges).toEqual(['Achchiq']);
+    expect(host.querySelector('[data-tag="spicy"] svg')).not.toBeNull();
+  });
+
+  it('draws no badge row for a dish without tags', () => {
+    const { host } = render({ linked: false, ordering: false });
+
+    expect(host.querySelector('[data-testid="tag-badges"]')).toBeNull();
+  });
+});

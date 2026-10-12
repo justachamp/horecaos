@@ -9,6 +9,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalAction;
@@ -53,6 +55,8 @@ import uz.horecaos.platform.ordering.api.OrderCallbackResolved;
 import uz.horecaos.platform.ordering.api.OrderRevisionCreated;
 import uz.horecaos.platform.ordering.api.OrderingConfigurationKeys;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
+import uz.horecaos.platform.ordering.application.AmendmentBasket.LineDecrease;
+import uz.horecaos.platform.ordering.application.LineRemovalCoordinator.LineConsequence;
 import uz.horecaos.platform.ordering.domain.AmendmentCommandType;
 import uz.horecaos.platform.ordering.domain.AmendmentStatus;
 import uz.horecaos.platform.ordering.domain.DeliveryDestination;
@@ -65,6 +69,7 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.O
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderLineRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.RevisionRow;
+import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOutcomeReasonStore.ReasonRow;
 import uz.horecaos.platform.pricing.api.CartPricingPort;
 import uz.horecaos.platform.pricing.api.PromoCodeRedemptionPort;
 import uz.horecaos.platform.pricing.api.PromotionQueryPort;
@@ -87,21 +92,22 @@ import uz.horecaos.platform.web.api.Quantities;
  * its own complete total; revision N−1 is left byte-identical, and there is never
  * a second order for one meal the customer ordered once.
  *
- * <p>Eleven of the twelve commands are carried out. Five change no money — the
+ * <p>All twelve commands are carried out. Five change no money — the
  * kitchen note, the callback flag, the change-due figure, and, ADR 0113 (wave P10)
  * added, the courier note and the internal note — which is deliberately the
  * order ADR 0039's rollout puts them in: they exercise the revision machinery
  * with nothing at risk. Wave 10 (gap map rows {@code 1.2c}/{@code 2.1d}) then
- * built six of the seven financial commands — {@code ADD_LINES}, {@code
+ * built six of the seven financial commands: {@code ADD_LINES}, {@code
  * CHANGE_LINE_QUANTITY} for an increase only, {@code CHANGE_PAYMENT_METHOD},
  * {@code CHANGE_DELIVERY_ADDRESS}, {@code CHANGE_FULFILLMENT_TIME} and {@code
  * CHANGE_CONTACT} — each repricing, reserving, charging or re-fiscalizing
- * through the consequence its own ADR 0039 matrix row declares. Only {@code
- * REMOVE_LINES} is still refused by name rather than accepted and
- * half-performed, because releasing or writing off already-committed stock
- * needs a fourth ADR 0017 primitive this build does not have, and a command
- * carried out in the quote and forgotten in the inventory ledger is the
- * failure the whole design exists to prevent.
+ * through the consequence its own ADR 0039 matrix row declares. ADR 0169 built
+ * the seventh, {@code REMOVE_LINES}, and the decrease of {@code
+ * CHANGE_LINE_QUANTITY}, on inventory's {@code dispose}: a line taken off a
+ * confirmed order names a removal reason the tenant authored, and that reason
+ * (and what the kitchen has already cooked) decides whether the stock goes back
+ * on the shelf or is written off. Both are behind the brand's rollout gate
+ * {@code ordering.amendment_line_removal_enabled}.
  */
 @Service
 public class OrderAmendmentService {
@@ -152,6 +158,7 @@ public class OrderAmendmentService {
     private final PromotionQueryPort promotionQuery;
     private final OrderDeliveryPoint deliveryPoint;
     private final CartMenuRules menu;
+    private final LineRemovalCoordinator removals;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderAmendmentService(
@@ -174,7 +181,8 @@ public class OrderAmendmentService {
             OrderCatalogSnapshot catalog,
             PromotionRedemptionPort promotions,
             PromotionQueryPort promotionQuery,
-            CartMenuRules menu) {
+            CartMenuRules menu,
+            LineRemovalCoordinator removals) {
         this.orders = orders;
         this.amendments = amendments;
         this.audit = audit;
@@ -194,6 +202,7 @@ public class OrderAmendmentService {
         this.promotions = promotions;
         this.promotionQuery = promotionQuery;
         this.menu = menu;
+        this.removals = removals;
         this.deliveryPoint = new OrderDeliveryPoint(orders, protection, objectMapper);
         // A second template for the one write that has to outlive the exception it
         // accompanies, exactly as PaymentAttemptService needs for the same reason:
@@ -225,7 +234,7 @@ public class OrderAmendmentService {
         Optional<AmendmentRow> replay = amendments.findByIdempotencyKey(tenantId, command.idempotencyKey());
         if (replay.isPresent()) {
             AmendmentRow existing = replay.get();
-            return new AmendmentResult(
+            return resultOf(
                     existing,
                     orders.find(tenantId, orderId).map(OrderRow::version).orElse(0),
                     List.of(),
@@ -244,6 +253,7 @@ public class OrderAmendmentService {
         }
 
         requireBuilt(command.commands());
+        requireRemovalSwitchedOn(order, command.commands());
         requirePosExportSettled(tenantId, orderId);
         requireBeforeCutPoint(
                 order, command.commands().stream().anyMatch(c -> c.type().financial()));
@@ -265,16 +275,34 @@ public class OrderAmendmentService {
         // applies simply expires on the ordinary ADR 0018 TTL; it is never a
         // second charge or a second reservation.
         DecodedAmendment decoded = decode(typedPayloadsOfIssued(command.commands()));
+        List<OrderLineRow> liveAtPropose = orders.lines(tenantId, orderId);
+        requireRemovalsPossible(decoded.basket(), liveAtPropose);
         requireOrderableQuantities(order, decoded.basket());
-        requireWeighedLinesStayAtHandover(order, decoded, orders.lines(tenantId, orderId));
+        requireWeighedLinesStayAtHandover(order, decoded, liveAtPropose);
+        requireScannedLinesAreNotReplaced(tenantId, orderId, decoded);
         long deltaTotalMinor = 0L;
         boolean requiresApproval = false;
         UUID quoteId = null;
+        List<LineConsequence> consequences = List.of();
         if (repricesOrder(order, decoded)) {
             QuoteSnapshot quote = repriceFor(
                     order, decoded.basket(), decoded.paymentMethodCode(), command.idempotencyKey() + ":quote");
             quoteId = quote.quoteId();
             deltaTotalMinor = quote.totalMinor() - order.totalMinor();
+
+            // ADR 0169: what leaves the order, and what that means for stock, is known from the quote and the
+            // order's own lines. A provider-paid order cannot lose a line: the refund half is a person at the
+            // provider's console (ADR 0048) and the fiscal half is not built.
+            List<LineDecrease> decreases = decreasesOf(liveAtPropose, decoded.basket(), quote);
+            if (!decreases.isEmpty()) {
+                requireNotPaidThroughProvider(order);
+                Map<UUID, ReasonRow> reasonByLine = removals.reasonsFor(
+                        tenantId,
+                        AmendmentBasket.units(liveAtPropose),
+                        decreases,
+                        decoded.basket().removalReasons());
+                consequences = removals.preview(order, decreases, reasonByLine, quoteIdsOf(order, quote.quoteId()));
+            }
 
             if (deltaTotalMinor > 0 && !"NOT_REQUIRED".equals(order.paymentStatusProjection())) {
                 throw new AmendmentRefusedException(
@@ -317,13 +345,24 @@ public class OrderAmendmentService {
                 now.plus(TTL),
                 command.actorType(),
                 command.actorId(),
-                now));
+                now,
+                !consequences.isEmpty()
+                        || command.commands().stream().anyMatch(c -> c.type() == AmendmentCommandType.REMOVE_LINES)));
 
         int sequence = 0;
+        boolean previewStored = false;
         for (AmendmentCommand issued : command.commands()) {
             sequence++;
+            Map<String, Object> stored = issued.payload();
+            if (!previewStored && !consequences.isEmpty() && stockAffecting(issued.type())) {
+                // The preview the operator was shown travels with the command that caused it, so the amendment
+                // read back later says what it was going to do to the stock.
+                stored = new LinkedHashMap<>(stored);
+                stored.put("stockConsequence", consequences);
+                previewStored = true;
+            }
             amendments.insertCommand(
-                    amendmentId, tenantId, sequence, issued.type(), objectMapper.writeValueAsString(issued.payload()));
+                    amendmentId, tenantId, sequence, issued.type(), objectMapper.writeValueAsString(stored));
         }
 
         recordAudit(
@@ -359,7 +398,7 @@ public class OrderAmendmentService {
                 order.version()));
 
         if (!command.applyOnPrice()) {
-            return new AmendmentResult(proposed, order.version(), List.of(), false);
+            return new AmendmentResult(proposed, order.version(), List.of(), false, consequences);
         }
         return apply(
                 tenantId,
@@ -402,7 +441,7 @@ public class OrderAmendmentService {
         if (amendment.status().terminal()) {
             // Already settled. The caller is told what happened rather than being
             // allowed to apply on top, exactly as a duplicate approval decision is.
-            return new AmendmentResult(
+            return resultOf(
                     amendment,
                     orders.find(tenantId, orderId).map(OrderRow::version).orElse(0),
                     List.of(),
@@ -430,6 +469,10 @@ public class OrderAmendmentService {
         if (amendment.deltaTotalMinor() > 0 && amendment.confirmationAttestedAt() == null) {
             throw new CustomerConfirmationRequiredException(amendment.deltaTotalMinor());
         }
+        // ADR 0169: the same for a removal, whatever it does to the total. The customer ordered the item.
+        if (amendment.removesStock() && amendment.confirmationAttestedAt() == null) {
+            throw CustomerConfirmationRequiredException.forRemoval();
+        }
 
         requirePosExportSettled(tenantId, orderId);
 
@@ -443,6 +486,13 @@ public class OrderAmendmentService {
         requireBeforeCutPoint(
                 order, commands.stream().anyMatch(c -> c.commandType().financial()));
         DecodedAmendment decoded = decode(typedPayloadsOfStored(commands));
+        // ADR 0161, decision 10: asked again, under the lock a scan takes. A scan does not move the order's
+        // version, so the check above cannot see one made since this amendment was priced.
+        if (!decoded.basket().removedLineIds().isEmpty()
+                || !decoded.basket().changedQuantities().isEmpty()) {
+            orders.lockForUpdate(tenantId, orderId);
+            requireScannedLinesAreNotReplaced(tenantId, orderId, decoded);
+        }
         List<OrderLineRow> liveLines = orders.lines(tenantId, orderId);
 
         // Re-derived rather than trusted from the stored column: an approval is
@@ -489,6 +539,7 @@ public class OrderAmendmentService {
                         new IllegalStateException("Order " + orderId + " has no revision " + order.currentRevision()));
 
         long deltaTotalMinor = amendment.deltaTotalMinor();
+        List<LineRemovalCoordinator.Applied> appliedRemovals = List.of();
         boolean fiscalCorrectionRequired = false;
         UUID quoteId = previous.pricingQuoteId();
         String contextHash = previous.pricingContextHash();
@@ -523,6 +574,29 @@ public class OrderAmendmentService {
 
             reserveIncrease(tenantId, order, storedQuoteId, quote, liveLines, decoded.basket());
             writeLineChanges(tenantId, order, liveLines, decoded.basket(), quote, newRevision);
+            // ADR 0169: asked again here, from the live lines and the stored quote, because a priced amendment
+            // outlives the call that priced it. inventory.dispose reads the reservations itself and refuses what
+            // the order does not hold; any refusal rolls the revision back with it.
+            List<LineDecrease> decreases = decreasesOf(liveLines, decoded.basket(), quote);
+            if (!decreases.isEmpty()) {
+                requireNotPaidThroughProvider(order);
+                Map<UUID, ReasonRow> reasonByLine = removals.reasonsFor(
+                        tenantId,
+                        AmendmentBasket.units(liveLines),
+                        decreases,
+                        decoded.basket().removalReasons());
+                appliedRemovals = removals.carryOut(
+                        order,
+                        amendment,
+                        newRevision,
+                        decreases,
+                        reasonByLine,
+                        quoteIdsOf(order, storedQuoteId),
+                        actorType,
+                        actorId,
+                        consumedApprovalId,
+                        now);
+            }
             // The order still holds the one redemption its checkout took; a
             // repriced basket only changes how much discount that redemption
             // stands for. Never a second redemption (see repriceFor).
@@ -544,6 +618,13 @@ public class OrderAmendmentService {
             totalMinor = quote.totalMinor();
             deltaTotalMinor = totalMinor - previous.totalMinor();
             fiscalCorrectionRequired = true;
+            // ADR 0169, decision 6: the cash a courier is told to collect follows the amended total. This was
+            // missing for an increase as well. A payment-method change brings its own tender (below).
+            if (decoded.paymentMethodCode() == null
+                    && "NOT_REQUIRED".equals(order.paymentStatusProjection())
+                    && deltaTotalMinor != 0) {
+                removals.restateCashDue(order, totalMinor, actorId);
+            }
         }
 
         String paymentProjectionPatch = null;
@@ -683,9 +764,22 @@ public class OrderAmendmentService {
                 correlationId,
                 now);
 
+        if (!appliedRemovals.isEmpty()) {
+            recordAudit(
+                    order,
+                    "ordering.order.line-removed",
+                    actorType,
+                    actorId,
+                    reason,
+                    orderVersion,
+                    removalAuditOf(amendmentId, newRevision, appliedRemovals, consumedApprovalId),
+                    correlationId,
+                    now);
+        }
+
         log.info("Amendment {} applied to order {} as revision {}", amendmentId, orderId, newRevision);
 
-        return new AmendmentResult(amendments.find(tenantId, amendmentId).orElseThrow(), orderVersion, warnings, false);
+        return resultOf(amendments.find(tenantId, amendmentId).orElseThrow(), orderVersion, warnings, false);
     }
 
     /**
@@ -710,7 +804,7 @@ public class OrderAmendmentService {
         AmendmentRow amendment =
                 amendments.find(tenantId, amendmentId).orElseThrow(() -> new AmendmentNotFoundException(amendmentId));
 
-        if (amendment.deltaTotalMinor() <= 0) {
+        if (amendment.deltaTotalMinor() <= 0 && !amendment.removesStock()) {
             if (amendment.version() != expectedVersion) {
                 throw new OrderStateService.StaleOrderException(expectedVersion, amendment.version());
             }
@@ -817,6 +911,212 @@ public class OrderAmendmentService {
                         .formatted(command.type()));
             }
         }
+    }
+
+    /**
+     * ADR 0169, decision 10: {@code REMOVE_LINES} is a built command behind a brand's rollout gate. While the
+     * gate is off it is refused by name, as it was before it existed; lowering a quantity is refused by the
+     * basket ({@code QUANTITY_DECREASE_NOT_SUPPORTED}) for the same gate.
+     */
+    private void requireRemovalSwitchedOn(OrderRow order, List<AmendmentCommand> commands) {
+        if (commands.stream().anyMatch(c -> c.type() == AmendmentCommandType.REMOVE_LINES)
+                && !removals.enabled(order)) {
+            throw new AmendmentNotPermittedException(("REMOVE_LINES is not switched on for this brand "
+                    + "(ordering.amendment_line_removal_enabled is off). Take a second order for "
+                    + "the corrected basket instead, or ask for the removal path to be enabled."));
+        }
+    }
+
+    /**
+     * ADR 0169: what can be said about a removal from the order's lines alone, before anything is priced.
+     *
+     * <ul>
+     *   <li>{@code LINE_NOT_LIVE}: a line that is not on the order any more (closed by a revision, or never
+     *       its own);
+     *   <li>{@code CONFLICTING_LINE_COMMANDS}: one line both removed and given a new quantity;
+     *   <li>{@code COMBO_COMPONENT_NOT_REMOVABLE}: some of a combo's component lines named and not the rest. A
+     *       combo goes whole;
+     *   <li>{@code AUTO_ADD_LINE_MANDATORY}: a line a rule added that the customer cannot decline (ADR 0158)
+     *       can be neither removed nor lowered;
+     *   <li>{@code WOULD_EMPTY_ORDER}: nothing the customer chose would be left. That is a cancellation, and it
+     *       takes ADR 0039's cancel path with its own reason.
+     * </ul>
+     */
+    private void requireRemovalsPossible(FinancialIntent intent, List<OrderLineRow> liveLines) {
+        if (intent.removedLineIds().isEmpty() && intent.changedQuantities().isEmpty()) {
+            return;
+        }
+        Map<UUID, OrderLineRow> liveById = liveLines.stream()
+                .collect(Collectors.toMap(OrderLineRow::lineId, line -> line, (first, second) -> first));
+        for (UUID removed : intent.removedLineIds()) {
+            if (!liveById.containsKey(removed)) {
+                throw new AmendmentRefusedException(
+                        "LINE_NOT_LIVE", "Line " + removed + " is not a live line on this order");
+            }
+            if (intent.changedQuantities().containsKey(removed)) {
+                throw new AmendmentRefusedException(
+                        "CONFLICTING_LINE_COMMANDS",
+                        "Line " + removed + " is both removed and given a new quantity in one amendment");
+            }
+        }
+        List<AmendmentBasket.Unit> units = AmendmentBasket.units(liveLines);
+        UUID partial = AmendmentBasket.requireWholeCombos(units, intent.removedLineIds());
+        if (partial != null) {
+            throw new AmendmentRefusedException(
+                    "COMBO_COMPONENT_NOT_REMOVABLE",
+                    "Line " + partial + " is one component of a combo. A combo is removed whole, by naming all of "
+                            + "its lines.");
+        }
+        for (UUID removed : intent.removedLineIds()) {
+            requireNotMandatoryAutoAdd(liveById.get(removed));
+        }
+        intent.changedQuantities().forEach((targeted, quantity) -> {
+            OrderLineRow line = liveById.get(targeted);
+            if (line != null && quantity.compareTo(line.quantity()) < 0) {
+                requireNotMandatoryAutoAdd(line);
+            }
+        });
+        if (!intent.removedLineIds().isEmpty() && intent.addedLines().isEmpty()) {
+            boolean customerLineStays = units.stream()
+                    .filter(unit -> unit.lines().stream()
+                            .noneMatch(line -> intent.removedLineIds().contains(line.lineId())))
+                    .anyMatch(unit -> !"AUTO_ADD".equals(unit.first().origin()));
+            if (!customerLineStays) {
+                throw new AmendmentRefusedException(
+                        "WOULD_EMPTY_ORDER",
+                        "This would leave the order with nothing on it. Cancel the order instead: that records "
+                                + "why, and takes the stock back by the cancellation's own rules.");
+            }
+        }
+    }
+
+    private static void requireNotMandatoryAutoAdd(@Nullable OrderLineRow line) {
+        if (line != null && line.autoAddMandatory()) {
+            throw new AmendmentRefusedException(
+                    "AUTO_ADD_LINE_MANDATORY",
+                    "Line " + line.lineId() + " was added by a rule the customer cannot decline, so it is neither "
+                            + "removed nor lowered on its own");
+        }
+    }
+
+    /**
+     * ADR 0169, open input on provider-paid orders: an order the customer paid through a provider cannot lose a
+     * line by amendment. The money half is a person at the provider's console (ADR 0048, the platform calls no
+     * refund API) and the fiscal half (ADR 0038's correction document) is not built. The operator's paths are a
+     * partial refund with the line left on the order, or cancel and take a new order.
+     */
+    private void requireNotPaidThroughProvider(OrderRow order) {
+        if (!"NOT_REQUIRED".equals(order.paymentStatusProjection())) {
+            throw new AmendmentRefusedException(
+                    "PAID_ORDER_DECREASE_NOT_SUPPORTED",
+                    "This order's payment already runs through a provider, so a line cannot be taken off it "
+                            + "here: the refund is made at the provider and recorded as a remedy. Refund the "
+                            + "difference and leave the line, or cancel and take a new order.");
+        }
+    }
+
+    /** ADR 0169: whether this order's brand has the removal path switched on (the console offers it only then). */
+    public boolean lineRemovalEnabled(OrderRow order) {
+        return removals.enabled(order);
+    }
+
+    private static boolean stockAffecting(AmendmentCommandType type) {
+        return type == AmendmentCommandType.REMOVE_LINES || type == AmendmentCommandType.CHANGE_LINE_QUANTITY;
+    }
+
+    private static List<LineDecrease> decreasesOf(
+            List<OrderLineRow> liveLines, FinancialIntent intent, QuoteSnapshot quote) {
+        if (intent.removedLineIds().isEmpty() && intent.changedQuantities().isEmpty()) {
+            return List.of();
+        }
+        return AmendmentBasket.decreases(
+                quote,
+                AmendmentBasket.units(liveLines),
+                intent.removedLineIds(),
+                intent.changedQuantities().keySet());
+    }
+
+    /** The quotes that own this order's reservations: each revision's, the order's own, and this amendment's. */
+    private List<UUID> quoteIdsOf(OrderRow order, UUID amendmentQuoteId) {
+        Set<UUID> ids = new LinkedHashSet<>();
+        orders.revisions(order.tenantId(), order.orderId()).stream()
+                .map(RevisionRow::pricingQuoteId)
+                .filter(Objects::nonNull)
+                .forEach(ids::add);
+        if (order.pricingQuoteId() != null) {
+            ids.add(order.pricingQuoteId());
+        }
+        ids.add(amendmentQuoteId);
+        return List.copyOf(ids);
+    }
+
+    private static Map<String, Object> removalAuditOf(
+            UUID amendmentId,
+            int revision,
+            List<LineRemovalCoordinator.Applied> applied,
+            @Nullable UUID approvalRequestId) {
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("amendmentId", amendmentId.toString());
+        after.put("revision", revision);
+        after.put("lines", applied.size());
+        after.put(
+                "reasonIds",
+                applied.stream().map(a -> a.reason().id().toString()).distinct().toList());
+        after.put(
+                "reasonCategories",
+                applied.stream()
+                        .map(a -> a.reason().systemCategory())
+                        .distinct()
+                        .toList());
+        after.put(
+                "stockUnits",
+                applied.stream().mapToInt(a -> a.consequence().stockUnits()).sum());
+        after.put(
+                "releasedUnits",
+                applied.stream().mapToInt(a -> a.consequence().releasedUnits()).sum());
+        after.put(
+                "returnedUnits",
+                applied.stream().mapToInt(a -> a.consequence().returnedUnits()).sum());
+        after.put(
+                "writtenOffUnits",
+                applied.stream()
+                        .mapToInt(a -> a.consequence().writtenOffUnits())
+                        .sum());
+        after.put(
+                "noEffectUnits",
+                applied.stream().mapToInt(a -> a.consequence().noEffectUnits()).sum());
+        if (approvalRequestId != null) {
+            after.put("approvalRequestId", approvalRequestId.toString());
+        }
+        return after;
+    }
+
+    /** The stock consequence the stored commands of an amendment carry, if any (ADR 0169). */
+    public List<LineConsequence> stockConsequence(List<JdbcOrderAmendmentStore.CommandRow> commands) {
+        for (JdbcOrderAmendmentStore.CommandRow row : commands) {
+            if (!stockAffecting(row.commandType())) {
+                continue;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> payload = objectMapper.readValue(row.payloadJson(), Map.class);
+            Object preview = payload.get("stockConsequence");
+            if (preview != null) {
+                return objectMapper.convertValue(preview, new TypeReference<List<LineConsequence>>() {});
+            }
+        }
+        return List.of();
+    }
+
+    private AmendmentResult resultOf(
+            AmendmentRow amendment, int orderVersion, List<String> warnings, boolean replayed) {
+        return new AmendmentResult(
+                amendment,
+                orderVersion,
+                warnings,
+                replayed,
+                amendment.removesStock()
+                        ? stockConsequence(amendments.commands(amendment.tenantId(), amendment.id()))
+                        : List.of());
     }
 
     /**
@@ -997,10 +1297,15 @@ public class OrderAmendmentService {
     private record FinancialIntent(
             List<NewLine> addedLines,
             Map<UUID, BigDecimal> changedQuantities,
-            @Nullable DeliveryDestination address) {
+            @Nullable DeliveryDestination address,
+            Set<UUID> removedLineIds,
+            Map<UUID, UUID> removalReasons) {
 
         boolean needsReprice() {
-            return !addedLines.isEmpty() || !changedQuantities.isEmpty() || address != null;
+            return !addedLines.isEmpty()
+                    || !changedQuantities.isEmpty()
+                    || !removedLineIds.isEmpty()
+                    || address != null;
         }
     }
 
@@ -1043,6 +1348,8 @@ public class OrderAmendmentService {
         String paymentMethodCode = null;
         List<NewLine> addedLines = new ArrayList<>();
         Map<UUID, BigDecimal> changedQuantities = new LinkedHashMap<>();
+        Set<UUID> removedLineIds = new LinkedHashSet<>();
+        Map<UUID, UUID> removalReasons = new LinkedHashMap<>();
         int newLineSequence = 0;
 
         for (TypedPayload command : commands) {
@@ -1111,12 +1418,28 @@ public class OrderAmendmentService {
                                 asComboPicks(line.get("comboPicks"))));
                     }
                 }
-                case CHANGE_LINE_QUANTITY ->
+                case CHANGE_LINE_QUANTITY -> {
+                    UUID targeted = asUuid(Objects.requireNonNull(
+                            payload.get("orderLineId"), "CHANGE_LINE_QUANTITY command has no orderLineId"));
                     changedQuantities.put(
-                            asUuid(Objects.requireNonNull(
-                                    payload.get("orderLineId"), "CHANGE_LINE_QUANTITY command has no orderLineId")),
+                            targeted,
                             asQuantity(Objects.requireNonNull(
                                     payload.get("quantity"), "CHANGE_LINE_QUANTITY command has no quantity")));
+                    if (payload.get("removalReasonId") != null) {
+                        removalReasons.put(targeted, asUuid(payload.get("removalReasonId")));
+                    }
+                }
+                case REMOVE_LINES -> {
+                    UUID reasonId =
+                            payload.get("removalReasonId") == null ? null : asUuid(payload.get("removalReasonId"));
+                    for (UUID removed : asUuidList(Objects.requireNonNull(
+                            payload.get("orderLineIds"), "REMOVE_LINES command has no orderLineIds"))) {
+                        removedLineIds.add(removed);
+                        if (reasonId != null) {
+                            removalReasons.put(removed, reasonId);
+                        }
+                    }
+                }
                 default -> throw new IllegalStateException("No built handler for " + command.type());
             }
         }
@@ -1129,7 +1452,12 @@ public class OrderAmendmentService {
         return new DecodedAmendment(
                 orderFields,
                 snapshot,
-                new FinancialIntent(List.copyOf(addedLines), Map.copyOf(changedQuantities), address),
+                new FinancialIntent(
+                        List.copyOf(addedLines),
+                        Map.copyOf(changedQuantities),
+                        address,
+                        Set.copyOf(removedLineIds),
+                        Map.copyOf(removalReasons)),
                 paymentMethodCode);
     }
 
@@ -1186,6 +1514,7 @@ public class OrderAmendmentService {
                 .toList();
     }
 
+    @SuppressWarnings("unchecked")
     private static List<UUID> asUuidList(@Nullable Object value) {
         if (value == null) {
             return List.of();
@@ -1228,7 +1557,13 @@ public class OrderAmendmentService {
         // ADR 0136: the live lines go back to pricing as what the customer bought, which for a
         // combo is the container and the picks, not the component lines it was stored as.
         List<CartPricingPort.PricingCommand.Item> items = new ArrayList<>(AmendmentBasket.pricingItems(
-                AmendmentBasket.units(liveLines), intent.changedQuantities(), modifiersByLine));
+                AmendmentBasket.units(liveLines),
+                intent.changedQuantities(),
+                modifiersByLine,
+                intent.removedLineIds(),
+                // ADR 0169: a lowered quantity is a decrease to carry out only where the brand has the removal
+                // path on; elsewhere it is the old refusal, from the old code.
+                removals.enabled(order)));
         for (UUID targeted : intent.changedQuantities().keySet()) {
             if (liveLines.stream().noneMatch(line -> line.lineId().equals(targeted))) {
                 throw new AmendmentRefusedException(
@@ -1406,6 +1741,47 @@ public class OrderAmendmentService {
         }
     }
 
+    /**
+     * ADR 0161, Decision 10: an amendment that would close or reduce a line holding a live mark is refused
+     * before it writes anything.
+     *
+     * <p>{@code CHANGE_LINE_QUANTITY} closes the line and inserts a replacement, and {@code REMOVE_LINES}
+     * (ADR 0169) closes it and inserts nothing; either would leave the marks scanned against the old line
+     * live on a line nobody can see, which the handover guard and the receipt would then count against an
+     * order that no longer holds the unit. Adding units is {@code ADD_LINES}: a new line with its own scans.
+     * The operator releases the line's marks through the removal endpoint first, then amends and rescans, and
+     * ADR 0169 adds no marking logic of its own: it reaches this check, which keys on the lines an amendment
+     * names, not on the command that names them.
+     *
+     * <p>Asked at propose, so the operator is refused before the customer is rung, and asked again at apply,
+     * because a scan is a write of its own that does not move the order's version: an operator at the pass
+     * can scan a unit between the two. At apply it runs under the order row's lock, the one a capture takes
+     * ({@code JdbcOrderMarkStore#lockOrder}), so a scan that is committing waits and is counted, and a scan
+     * that arrives afterwards finds the line closed.
+     */
+    private void requireScannedLinesAreNotReplaced(UUID tenantId, UUID orderId, DecodedAmendment decoded) {
+        Set<UUID> removed = decoded.basket().removedLineIds();
+        Set<UUID> changed = decoded.basket().changedQuantities().keySet();
+        if (removed.isEmpty() && changed.isEmpty()) {
+            return;
+        }
+        Set<UUID> scanned = orders.linesHoldingLiveMarks(tenantId, orderId);
+        if (scanned.isEmpty()) {
+            return;
+        }
+        if (removed.stream().anyMatch(scanned::contains)) {
+            throw new AmendmentRefusedException(
+                    "MARKS_ALREADY_CAPTURED",
+                    "This line already has scanned units. Take them back at the pass first, then remove the line");
+        }
+        if (changed.stream().anyMatch(scanned::contains)) {
+            throw new AmendmentRefusedException(
+                    "MARKS_ALREADY_CAPTURED",
+                    "This line already has scanned units. Take them back at the pass first, or add the "
+                            + "extra units as a new line with its own scans");
+        }
+    }
+
     private static void requireOrderable(CartMenuRules.PhysicalRules rules, BigDecimal quantity, BigDecimal maximum) {
         rules.refusalOf(quantity, maximum).ifPresent(refusal -> {
             throw new AmendmentRefusedException(refusal.code(), refusal.message());
@@ -1537,7 +1913,9 @@ public class OrderAmendmentService {
             FinancialIntent intent,
             QuoteSnapshot quote,
             int newRevision) {
-        if (intent.addedLines().isEmpty() && intent.changedQuantities().isEmpty()) {
+        if (intent.addedLines().isEmpty()
+                && intent.changedQuantities().isEmpty()
+                && intent.removedLineIds().isEmpty()) {
             return;
         }
         UUID orderId = order.orderId();
@@ -1581,16 +1959,22 @@ public class OrderAmendmentService {
 
         int nextNumber = orders.nextLineNumber(tenantId, orderId);
 
-        for (AmendmentBasket.Unit unit : AmendmentBasket.touched(
-                AmendmentBasket.units(liveLines), intent.changedQuantities().keySet())) {
-            List<QuoteSnapshot.Line> quoted = Objects.requireNonNull(
-                    quotedByKey.get(unit.key()), "The accepted quote always prices every changed line");
+        Set<UUID> touchedLineIds = new HashSet<>(intent.changedQuantities().keySet());
+        touchedLineIds.addAll(intent.removedLineIds());
+        for (AmendmentBasket.Unit unit : AmendmentBasket.touched(AmendmentBasket.units(liveLines), touchedLineIds)) {
             for (OrderLineRow original : unit.lines()) {
                 if (!orders.closeLine(tenantId, orderId, original.lineId(), newRevision)) {
                     throw new AmendmentRefusedException(
                             "ORDER_LINE_NOT_FOUND", "Line " + original.lineId() + " is no longer live on this order");
                 }
             }
+            if (unit.lines().stream().anyMatch(line -> intent.removedLineIds().contains(line.lineId()))) {
+                // ADR 0169: a removed purchase is closed and not written again. The quote does not price it, and
+                // its rows stay where they are as history, closed by this revision.
+                continue;
+            }
+            List<QuoteSnapshot.Line> quoted = Objects.requireNonNull(
+                    quotedByKey.get(unit.key()), "The accepted quote always prices every changed line");
             for (QuoteSnapshot.Line priced : quoted) {
                 OrderLineRow original = unit.replacedBy(priced);
                 UUID newLineId = UUID.randomUUID();
@@ -1621,7 +2005,10 @@ public class OrderAmendmentService {
                                 : null,
                         // ADR 0137: the replacement keeps what its provisional figures were
                         // provisional against.
-                        priced.catchweight());
+                        priced.catchweight(),
+                        // ADR 0158: and what put it in the basket, so a quantity change does not
+                        // turn a rule's line into a customer's.
+                        original.lineOrigin());
                 carryOver(
                         tenantId,
                         original,
@@ -2140,6 +2527,35 @@ public class OrderAmendmentService {
         }
 
         /**
+         * ADR 0169: a quantity change that may lower the quantity. The removal reason is what a lowering
+         * needs and an increase ignores, so it is carried when it was given and is simply unused otherwise.
+         */
+        public static AmendmentCommand changeLineQuantity(
+                UUID orderLineId, BigDecimal quantity, @Nullable UUID removalReasonId) {
+            AmendmentCommand command = changeLineQuantity(orderLineId, quantity);
+            if (removalReasonId != null) {
+                command.payload().put("removalReasonId", removalReasonId);
+            }
+            return command;
+        }
+
+        /**
+         * ADR 0169: takes these live order lines off the order, for a reason the tenant authored. A combo
+         * goes whole: naming only some of its component lines is refused, not rounded.
+         */
+        public static AmendmentCommand removeLines(List<UUID> orderLineIds, @Nullable UUID removalReasonId) {
+            if (orderLineIds == null || orderLineIds.isEmpty()) {
+                throw new IllegalArgumentException("REMOVE_LINES names at least one order line");
+            }
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("orderLineIds", List.copyOf(orderLineIds));
+            if (removalReasonId != null) {
+                payload.put("removalReasonId", removalReasonId);
+            }
+            return new AmendmentCommand(AmendmentCommandType.REMOVE_LINES, payload);
+        }
+
+        /**
          * One line {@link #addLines} carries: a variant, a quantity, and its modifiers.
          *
          * @param comboPicks ADR 0136: what is picked inside a combo, when {@code variantId} is a
@@ -2200,7 +2616,18 @@ public class OrderAmendmentService {
      *                 than doing the work, so a retried request gives the same
      *                 answer as the first
      */
-    public record AmendmentResult(AmendmentRow amendment, int orderVersion, List<String> warnings, boolean replayed) {}
+    public record AmendmentResult(
+            AmendmentRow amendment,
+            int orderVersion,
+            List<String> warnings,
+            boolean replayed,
+            List<LineConsequence> stockConsequence) {
+
+        /** Every result before ADR 0169, none of which takes stock off the order. */
+        public AmendmentResult(AmendmentRow amendment, int orderVersion, List<String> warnings, boolean replayed) {
+            this(amendment, orderVersion, warnings, replayed, List.of());
+        }
+    }
 
     public static class AmendmentNotFoundException extends RuntimeException {
         public AmendmentNotFoundException(UUID amendmentId) {
@@ -2242,6 +2669,16 @@ public class OrderAmendmentService {
             super(("This amendment raises the total by %d and cannot commit until the customer's "
                             + "agreement is recorded")
                     .formatted(deltaMinor));
+        }
+
+        private CustomerConfirmationRequiredException(String message) {
+            super(message);
+        }
+
+        /** ADR 0169: a removal needs the agreement whatever it does to the total. */
+        public static CustomerConfirmationRequiredException forRemoval() {
+            return new CustomerConfirmationRequiredException("This amendment takes a line off the order and cannot "
+                    + "commit until the customer's agreement is recorded");
         }
     }
 

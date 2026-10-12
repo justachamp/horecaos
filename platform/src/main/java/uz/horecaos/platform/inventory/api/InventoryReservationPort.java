@@ -9,9 +9,10 @@ import java.util.UUID;
  * What checkout and the ADR 0019 inventory process manager need from inventory
  * (ADR 0017).
  *
- * <p>Deliberately three verbs. Ordering may take a hold, turn it into a sale, or
- * give it back; it may not read or write the movement ledger, which is the
- * evidence of what actually happened and is appended by inventory alone.
+ * <p>Deliberately four verbs. Ordering may take a hold, turn it into a sale, give
+ * it back, or (ADR 0169) say what it no longer needs after the sale; it may not
+ * read or write the movement ledger, which is the evidence of what actually
+ * happened and is appended by inventory alone.
  *
  * <p>Everything here is keyed by the quote a hold was taken for rather than by a
  * reservation id, so a retried checkout and a restarted process manager both
@@ -82,6 +83,35 @@ public interface InventoryReservationPort {
 
     /** Frees a hold when a checkout fails, an order is rejected, or a cart is abandoned. */
     boolean release(UUID tenantId, UUID quoteId);
+
+    /**
+     * Gives back or writes off the stock an order no longer needs (ADR 0169, the fourth verb).
+     *
+     * <p>Reads the order's reservations itself, in the caller's transaction and under the position row lock, and
+     * acts on what inventory actually did rather than on the order's status: units still on a {@code HELD} hold are
+     * released (no movement); units already sold take the declared disposition; units the kitchen has started or
+     * made are written off whatever it says. A replay with the same idempotency key returns the first answer and
+     * moves nothing. Refused ({@code DISPOSAL_EXCEEDS_ORDER_CLAIM}) when it asks for more than the order holds,
+     * with nothing written.
+     *
+     * <p>A default that refuses, so a test double written before this verb existed keeps compiling;
+     * {@code InventoryService} overrides it.
+     */
+    default StockDisposal dispose(StockDisposalCommand command) {
+        throw new UnsupportedOperationException("This inventory port cannot dispose of stock");
+    }
+
+    /**
+     * What {@link #dispose} would do for this command at this moment, without doing it (ADR 0169): the counts an
+     * operator is shown before a removal is applied. Reads only and never idempotent-keyed; the movement ids are
+     * empty. The apply calls {@link #dispose} again and does not trust this answer, because the order's stock can
+     * move in between.
+     *
+     * <p>A default that refuses, like {@link #dispose}; {@code InventoryService} overrides it.
+     */
+    default StockDisposal previewDispose(StockDisposalCommand command) {
+        throw new UnsupportedOperationException("This inventory port cannot preview a disposal");
+    }
 
     /**
      * The same check {@link #reserveForQuote} takes atomically with its hold,

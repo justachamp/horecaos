@@ -33,6 +33,23 @@ public interface EntitlementGate {
     Optional<Answer> checkFeature(UUID tenantId, String entitlementKeyCode);
 
     /**
+     * Whether the plan, an override or a module <em>grants</em> the feature, regardless of how the
+     * platform currently enforces the limits (ADR 0157).
+     *
+     * <p>{@link #checkFeature} answers "should the platform currently act on this", which under the
+     * catalogue's meter-only default is {@code true} for a feature nobody granted: the right question
+     * for a check that must not refuse a tenant, and the wrong one for a switch that is <em>off until
+     * the platform owner turns it on for a tenant</em>. A caller of the second kind -- the content
+     * module's editorial tier and video -- asks this. It is defaulted to {@link #checkFeature} so an
+     * implementation that predates it keeps the answer it had.
+     *
+     * @return empty for a code that names no known feature key
+     */
+    default Optional<Answer> checkGranted(UUID tenantId, String entitlementKeyCode) {
+        return checkFeature(tenantId, entitlementKeyCode);
+    }
+
+    /**
      * @param entitled    whether the tenant's plan includes this feature right now
      * @param description what the key means, for the answer sentence
      * @param upgradePath where a merchant goes to buy it

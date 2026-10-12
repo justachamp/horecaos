@@ -412,12 +412,119 @@ export const marketingEn = {
   'marketing.loyalty.redemption.form.excludesFee':
     'Exclude the delivery fee from the eligible value',
 
-  'marketing.loyalty.deposit.title': 'Deposit accounts',
+  'marketing.loyalty.deposit.title': 'Deposit accounts — not offered',
   'marketing.loyalty.deposit.body':
-    'Not built, and not a gap: ADR 0046 withdrew customer-funded stored value from scope outright. HorecaOS holds no customer funds, so a prepaid deposit account raises the same question as an unlicensed payment service, and the decision is to offer points only.',
+    'HorecaOS does not hold customer money, so there is no prepaid deposit. Customers earn and spend loyalty points, which are not money; a venue that runs its own licensed prepaid programme can connect its provider as a payment method.',
+  'marketing.loyalty.deposit.revisit':
+    'A decision, not a gap (ADR 0165). It is reopened only if HorecaOS, or a company its owner controls, obtains a Central Bank authorisation that covers customer prepayments, or counsel confirms in writing that a venue’s own authorisation obliges HorecaOS to operate that venue’s ledger. A venue asking for the feature does not reopen it. This narrows ADR 0046’s “a licence exists” condition: a venue’s licence alone brings a payment-provider method, never a balance held here.',
+
+  // ---------------------------------------------------------------- loyalty 6.3b POS balance sync (ADR 0171)
+  'marketing.loyalty.tab.programme': 'Programme',
+  'marketing.loyalty.tab.posSync': 'POS balance sync',
   'marketing.loyalty.posSync.title': 'POS balance sync',
   'marketing.loyalty.posSync.body':
-    'Not built. No ADR owns a point-of-sale terminal reading or writing a loyalty balance, and no provider capability declares it — see frontend-information-architecture.md §6.3.',
+    'The points ledger is the single record of what a customer holds. A point-of-sale terminal that keeps a bonus balance of its own is compared with it and kept equal to it; its number is never copied over the ledger, and a difference is a row for a person to settle, not something corrected silently.',
+  'marketing.loyalty.posSync.lag':
+    'A balance here and at the till may differ for up to five minutes.',
+  'marketing.loyalty.posSync.notice':
+    'This brand’s till keeps its own bonus balance and HorecaOS cannot see or change it. A customer’s balance here and at the till can differ.',
+  'marketing.loyalty.posSync.error': 'The POS sync could not be loaded.',
+  'marketing.loyalty.posSync.bindings.title': 'Connected terminals',
+  'marketing.loyalty.posSync.bindings.empty':
+    'No point-of-sale terminal is connected to this brand.',
+  'marketing.loyalty.posSync.binding.mode': 'Mode',
+  'marketing.loyalty.posSync.binding.matched': 'Matched customers',
+  'marketing.loyalty.posSync.binding.open': 'Open differences',
+  'marketing.loyalty.posSync.binding.lastPass': 'Last pass',
+  'marketing.loyalty.posSync.binding.never': 'Never',
+  'marketing.loyalty.posSync.capability.SUPPORTED': 'Can sync',
+  'marketing.loyalty.posSync.capability.PARTIAL': 'Partly can sync',
+  'marketing.loyalty.posSync.capability.UNSUPPORTED': 'Cannot sync',
+  'marketing.loyalty.posSync.capability.UNASSESSED': 'Not assessed',
+  'marketing.loyalty.posSync.capability.PARTIAL.note':
+    'This vendor can do part of the sync; the missing half is named in its assessment.',
+  'marketing.loyalty.posSync.capability.UNSUPPORTED.note':
+    'This vendor’s system has no customer bonus balance to read or write, so its balances are not mirrored here.',
+  'marketing.loyalty.posSync.capability.UNASSESSED.note':
+    'Nobody has assessed what this vendor exposes for a customer wallet, so it cannot be given this capability and its balances are not mirrored here.',
+  'marketing.loyalty.posSync.mode.REPORT_ONLY': 'Report only: compares, applies and pushes nothing',
+  'marketing.loyalty.posSync.mode.PULL': 'Imports what happens at the till',
+  'marketing.loyalty.posSync.mode.PULL_AND_PUSH': 'Imports and sends the ledger’s balance',
+  'marketing.loyalty.posSync.reconcile.action': 'Reconcile now',
+  'marketing.loyalty.posSync.reconcile.running': 'Reconciling…',
+  'marketing.loyalty.posSync.runs.title': 'Reconciliation reports',
+  'marketing.loyalty.posSync.runs.empty': 'No pass has run yet.',
+  'marketing.loyalty.posSync.runs.close': 'Close',
+  'marketing.loyalty.posSync.runs.noDifferences': 'This pass found no differences.',
+  'marketing.loyalty.posSync.runs.column.pass': 'Pass',
+  'marketing.loyalty.posSync.runs.column.compared': 'Compared',
+  'marketing.loyalty.posSync.runs.column.matched': 'Equal',
+  'marketing.loyalty.posSync.runs.column.tillHigher': 'Till higher',
+  'marketing.loyalty.posSync.runs.column.tillLower': 'Till lower',
+  'marketing.loyalty.posSync.runs.column.tillOnly': 'Till only',
+  'marketing.loyalty.posSync.runs.column.platformOnly': 'Ledger only',
+  'marketing.loyalty.posSync.runs.column.ambiguous': 'Ambiguous',
+  'marketing.loyalty.posSync.runs.column.imported': 'Imported',
+  'marketing.loyalty.posSync.runs.column.held': 'Held',
+  'marketing.loyalty.posSync.runs.column.unverifiable': 'Unverifiable',
+  'marketing.loyalty.posSync.runs.column.pushed': 'Sent',
+  'marketing.loyalty.posSync.run.kind.PULL': 'Import',
+  'marketing.loyalty.posSync.run.kind.PUSH': 'Send',
+  'marketing.loyalty.posSync.run.kind.RECONCILE': 'Reconciliation',
+  'marketing.loyalty.posSync.run.status.RUNNING': 'Running',
+  'marketing.loyalty.posSync.run.status.SUCCEEDED': 'Done',
+  'marketing.loyalty.posSync.run.status.FAILED': 'Failed',
+  'marketing.loyalty.posSync.discrepancies.title': 'Differences to settle',
+  'marketing.loyalty.posSync.discrepancies.empty': 'No open differences.',
+  'marketing.loyalty.posSync.discrepancies.platform': 'Ledger',
+  'marketing.loyalty.posSync.discrepancies.till': 'Till',
+  'marketing.loyalty.posSync.discrepancies.delta': 'Difference',
+  'marketing.loyalty.posSync.discrepancies.reason': 'Reason for the decision',
+  'marketing.loyalty.posSync.discrepancies.pending':
+    'Waiting for a second person’s signature. Nothing has been credited yet.',
+  'marketing.loyalty.posSync.kind.TILL_HIGHER': 'Till higher than the ledger',
+  'marketing.loyalty.posSync.kind.TILL_HIGHER.note':
+    'The till shows more points than the ledger holds. Nothing has been changed on either side.',
+  'marketing.loyalty.posSync.kind.TILL_LOWER': 'Till lower than the ledger',
+  'marketing.loyalty.posSync.kind.TILL_LOWER.note':
+    'The till shows fewer points than the ledger holds. Nothing has been changed on either side.',
+  'marketing.loyalty.posSync.kind.TILL_ONLY': 'Till customer with no points account',
+  'marketing.loyalty.posSync.kind.TILL_ONLY.note':
+    'A customer at the till matches no points account of this brand. No account is created from a till record.',
+  'marketing.loyalty.posSync.kind.PLATFORM_ONLY': 'Ledger customer the till no longer knows',
+  'marketing.loyalty.posSync.kind.PLATFORM_ONLY.note':
+    'A matched customer is no longer found at the till.',
+  'marketing.loyalty.posSync.kind.AMBIGUOUS_MATCH': 'More than one possible match',
+  'marketing.loyalty.posSync.kind.AMBIGUOUS_MATCH.note':
+    'The till’s phone fits more than one account. It is reported and never guessed.',
+  'marketing.loyalty.posSync.kind.SPEND_EXCEEDS_BALANCE': 'Spent at the till beyond the balance',
+  'marketing.loyalty.posSync.kind.SPEND_EXCEEDS_BALANCE.note':
+    'The customer spent more at the till than the ledger held. The balance covered part of it; the brand carries the rest, shown on the liability report.',
+  'marketing.loyalty.posSync.kind.CREDIT_HELD': 'Credit from the till held for review',
+  'marketing.loyalty.posSync.kind.CREDIT_HELD.note':
+    'A credit from the till is above the daily cap. Nothing is credited until someone decides.',
+  'marketing.loyalty.posSync.kind.RATIO_MISMATCH': 'Programme is not one point to one som',
+  'marketing.loyalty.posSync.kind.RATIO_MISMATCH.note':
+    'Only a one-to-one programme can be synced, so this terminal is not bound.',
+  'marketing.loyalty.posSync.kind.NOT_CONSENTED': 'Customer has not agreed to the sync',
+  'marketing.loyalty.posSync.kind.NOT_CONSENTED.note':
+    'The customer is left out of the sync until they agree.',
+  'marketing.loyalty.posSync.kind.UNVERIFIABLE': 'Could not be checked',
+  'marketing.loyalty.posSync.kind.UNVERIFIABLE.note':
+    'The till did not answer, or answered in another currency. Not the same as a difference.',
+  'marketing.loyalty.posSync.resolution.ACCEPT_TILL': 'Accept the till’s number',
+  'marketing.loyalty.posSync.resolution.ACCEPT_TILL.hint':
+    'Apply the difference to the ledger as an adjustment. Above the manual-adjustment threshold a second person must sign.',
+  'marketing.loyalty.posSync.resolution.ACCEPT_PLATFORM': 'Keep the ledger’s number',
+  'marketing.loyalty.posSync.resolution.ACCEPT_PLATFORM.hint':
+    'Send the ledger’s balance to the till again.',
+  'marketing.loyalty.posSync.resolution.ABSORB': 'Brand carries it',
+  'marketing.loyalty.posSync.resolution.ABSORB.hint':
+    'Record that this is seen and the brand accepts it. Nothing moves.',
+  'marketing.loyalty.posSync.resolution.SUSPEND': 'Stop syncing this customer',
+  'marketing.loyalty.posSync.resolution.SUSPEND.hint':
+    'Leave this customer out of the sync from now on.',
+  'marketing.loyalty.liability.tillAbsorbed': 'Absorbed from till spends: {amount}',
 
   // -------------------------------------------------------------- referrals 6.6 (a new ADR, wave 47)
   'marketing.referrals.title': 'Referrals',
@@ -912,4 +1019,394 @@ export const marketingEn = {
   'marketing.campaign.recipients.deliveryHint':
     'Delivery is evidence from the gateway, not a promise: “handed to the operator” means it was accepted and nothing more has been reported.',
   'marketing.campaign.recipients.segments': '{count} segment(s) billed',
+
+  'marketing.content.kind.BANNER': 'Banner',
+  'marketing.content.kind.PROMO_CARD': 'Promo card',
+  'marketing.content.kind.PRODUCT_GROUP': 'Product group',
+  'marketing.content.kind.STORY_GROUP': 'Story',
+  'marketing.content.kind.POPUP': 'Pop-up',
+  'marketing.content.kind.NEWS': 'News',
+  'marketing.content.kind.GALLERY_ALBUM': 'Photo album',
+  'marketing.content.kind.RECIPE': 'Recipe',
+  'marketing.content.kind.VACANCY': 'Vacancy',
+  'marketing.content.placement.HOME_CAROUSEL': 'Home carousel',
+  'marketing.content.placement.HOME_GROUPS': 'Home groups',
+  'marketing.content.placement.STORY_RAIL': 'Stories',
+  'marketing.content.placement.PROMO_GRID': 'Promo grid',
+  'marketing.content.placement.ENTRY_MODAL': 'Entry pop-up',
+  'marketing.content.state.DRAFT': 'Draft',
+  'marketing.content.state.PUBLISHED': 'Published',
+  'marketing.content.state.WITHDRAWN': 'Withdrawn',
+  'marketing.content.state.ARCHIVED': 'Archived',
+  'marketing.content.visibility.LIVE': 'Live',
+  'marketing.content.visibility.SCHEDULED': 'Scheduled',
+  'marketing.content.visibility.EXPIRED': 'Ended',
+  'marketing.content.unpublishedChanges': 'Unpublished changes',
+  'marketing.content.problemsCount': '{count} to fix',
+  'marketing.content.problem.CONTENT_DEFAULT_LOCALE_MISSING':
+    'Write a title in the brand’s default language before publishing',
+  'marketing.content.problem.CONTENT_LOCALE_INCOMPLETE':
+    'This brand requires every language to be filled in',
+  'marketing.content.problem.CONTENT_MEDIA_NOT_DISPLAYABLE':
+    'An image is missing, still being checked, or not public',
+  'marketing.content.problem.CONTENT_MEDIA_ASPECT_MISMATCH':
+    'The image is the wrong shape or too small for this placement',
+  'marketing.content.problem.CONTENT_TARGET_NOT_FOUND':
+    'The linked dish or category is not on the brand’s published menu',
+  'marketing.content.problem.CONTENT_PROMOTION_NOT_FOUND': 'The linked promotion does not exist',
+  'marketing.content.problem.CONTENT_LINK_HOST_NOT_ALLOWED':
+    'The link points at a site that is not on the list of allowed links',
+  'marketing.content.problem.CONTENT_CHANNEL_NOT_A_CONTENT_SURFACE':
+    'A chosen channel cannot show content',
+  'marketing.content.problem.CONTENT_PLACEMENT_FULL':
+    'This place is full — take something down first',
+  'marketing.content.problem.CONTENT_NOTHING_TO_PUBLISH':
+    'Nothing has changed since the live version',
+  'marketing.content.problem.CONTENT_VIDEO_LIMIT':
+    'The brand already has the most videos it may show at once',
+  'marketing.content.problem.CONTENT_POSTER_REQUIRED': 'A video needs a poster image',
+  'marketing.content.problem.CONTENT_REVISION_MEDIA_RELEASED':
+    'That version’s images were released and cannot be restored',
+  'marketing.content.problem.CONTENT_KIND_NOT_ENABLED':
+    'This kind of content is not switched on for the brand',
+  'marketing.content.problem.CONTENT_PROMOTION_NOT_LIVE':
+    'The promotion this card is bound to is not live, so the card is hidden',
+  'marketing.content.problem.CONTENT_MEDIA_NOT_RENDERED':
+    'The image has not finished rendering, so the item is not shown yet',
+  'marketing.content.problem.CONTENT_VIDEO_NOT_ENTITLED':
+    'The plan no longer includes video, so this item is hidden and cannot be published again',
+  'marketing.content.problem.other': 'Needs attention: {detail}',
+
+  'marketing.content.media.none': 'No image yet.',
+  'marketing.content.media.shapeHint': 'Shape {ratio}, at least {width} px wide.',
+  'marketing.content.media.noPreview': 'Preview not ready',
+  'marketing.content.media.video': 'Video',
+  'marketing.content.media.remove': 'Remove',
+  'marketing.content.media.processing': 'Uploading and checking the file…',
+  'marketing.content.media.imageRefused':
+    'The platform refused that image. Use a JPEG, PNG or WebP under 10 MB.',
+  'marketing.content.media.notReady':
+    'The file was uploaded but has not been verified yet. Try again in a minute.',
+  'marketing.content.media.failed': 'The upload failed. Try again.',
+
+  'marketing.content.link.label': 'When tapped, go to',
+  'marketing.content.link.type.NONE': 'Nowhere',
+  'marketing.content.link.type.PRODUCT': 'A dish',
+  'marketing.content.link.type.CATEGORY': 'A category',
+  'marketing.content.link.type.CART': 'The cart',
+  'marketing.content.link.type.PROMOTION': 'A promotion',
+  'marketing.content.link.type.EXTERNAL': 'A web address',
+  'marketing.content.link.searchProduct': 'Search dishes',
+  'marketing.content.link.searchCategory': 'Search categories',
+  'marketing.content.link.searchPromotion': 'Search live promotions',
+  'marketing.content.link.chosen': 'Chosen: {label}',
+  'marketing.content.link.clear': 'Change',
+  'marketing.content.link.url': 'Address (https only)',
+  'marketing.content.link.notHttps': 'Only https addresses are allowed.',
+  'marketing.content.link.hostNotAllowed':
+    'This site is not on the list of allowed links yet. Add it under Links before publishing.',
+
+  'marketing.content.card.title': 'Title',
+  'marketing.content.card.subtitle': 'Subtitle (optional)',
+  'marketing.content.card.body': 'Text (optional)',
+  'marketing.content.card.cta': 'Button text (optional)',
+  'marketing.content.card.alt': 'Image description for screen readers (optional)',
+  'marketing.content.card.image': 'Image or video',
+  'marketing.content.card.localeImage':
+    'A different image in this language (when the picture carries its own words)',
+  'marketing.content.popup.settings': 'When it appears',
+  'marketing.content.popup.delay': 'Show after (seconds)',
+  'marketing.content.popup.dailyWindow': 'Only during a window each day',
+  'marketing.content.popup.from': 'From',
+  'marketing.content.popup.until': 'Until',
+  'marketing.content.popup.dailyHint':
+    'Judged by the visitor’s own clock. A window that ends before it starts runs past midnight.',
+  'marketing.content.popup.cap': 'How often one device sees it',
+  'marketing.content.popup.cap.ONCE_EVER': 'Once, ever',
+  'marketing.content.popup.cap.ONCE_PER_DAY': 'Once a day',
+  'marketing.content.popup.cap.EVERY_N_DAYS': 'Every few days',
+  'marketing.content.popup.capDays': 'Days between showings',
+  'marketing.content.popup.capHint':
+    'Each device keeps count itself — the platform does not identify visitors. Editing and publishing again starts the count over.',
+
+  'marketing.content.group.title': 'Group title',
+  'marketing.content.group.mode': 'What the group shows',
+  'marketing.content.group.manual': 'Dishes I pick',
+  'marketing.content.group.byCategory': 'A category',
+  'marketing.content.group.members': 'Dishes: {count} of {max}',
+  'marketing.content.group.searchDish': 'Search dishes to add',
+  'marketing.content.group.order': 'Order on the home screen',
+  'marketing.content.group.skipHint':
+    'A dish the menu no longer has is skipped quietly; a stopped dish stays the menu’s business.',
+  'marketing.content.group.sort': 'Order of the dishes',
+  'marketing.content.group.sort.MENU_ORDER': 'As in the menu',
+  'marketing.content.group.sort.NEWEST': 'Newest first',
+  'marketing.content.group.limit': 'Show at most',
+
+  'marketing.content.story.title': 'Story title',
+  'marketing.content.story.avatar': 'Round picture in the story strip',
+  'marketing.content.story.slides': 'Slides: {count} of {max}',
+  'marketing.content.story.slideLabel': 'Slide {n}',
+  'marketing.content.story.addSlide': 'Add a slide',
+  'marketing.content.story.removeSlide': 'Remove this slide',
+  'marketing.content.story.slideMedia': 'Picture or video of this slide',
+  'marketing.content.story.duration': 'Shown for (seconds)',
+  'marketing.content.story.caption': 'Caption (optional)',
+
+  'marketing.content.blocks.text': 'Text',
+  'marketing.content.blocks.bold': 'Bold',
+  'marketing.content.blocks.italic': 'Italic',
+  'marketing.content.blocks.link': 'Link',
+  'marketing.content.blocks.linkAddress': 'Link address (https, tel: or mailto:)',
+  'marketing.content.blocks.linkRefused': 'Only https, tel: and mailto: links are allowed.',
+  'marketing.content.blocks.addRun': 'Add text',
+  'marketing.content.blocks.removeRun': 'Remove this text',
+  'marketing.content.blocks.blockType': 'Block type',
+  'marketing.content.blocks.type.PARAGRAPH': 'Paragraph',
+  'marketing.content.blocks.type.HEADING': 'Heading',
+  'marketing.content.blocks.type.QUOTE': 'Quote',
+  'marketing.content.blocks.type.LIST': 'List',
+  'marketing.content.blocks.type.IMAGE': 'Image',
+  'marketing.content.blocks.type.DIVIDER': 'Divider',
+  'marketing.content.blocks.headingLevel': 'Heading level',
+  'marketing.content.blocks.level2': 'Heading',
+  'marketing.content.blocks.level3': 'Subheading',
+  'marketing.content.blocks.ordered': 'Numbered',
+  'marketing.content.blocks.moveUp': 'Move block up',
+  'marketing.content.blocks.moveDown': 'Move block down',
+  'marketing.content.blocks.removeBlock': 'Remove block',
+  'marketing.content.blocks.addBlock': 'Add block',
+  'marketing.content.blocks.addItem': 'Add item',
+  'marketing.content.blocks.removeItem': 'Remove item',
+  'marketing.content.blocks.caption': 'Caption',
+  'marketing.content.blocks.imageNone': 'No image yet. Choose one.',
+  'marketing.content.blocks.imageUploaded': 'Image added',
+  'marketing.content.blocks.imageFailed': 'The image could not be uploaded.',
+  'marketing.content.blocks.divider': 'Divider',
+  'marketing.content.blocks.problem.TOO_MANY_BLOCKS': 'A body has at most 200 blocks.',
+  'marketing.content.blocks.problem.TOO_MANY_RUNS': 'Block {block}: at most 40 pieces of text.',
+  'marketing.content.blocks.problem.TOO_MANY_ITEMS': 'Block {block}: at most 50 items.',
+  'marketing.content.blocks.problem.TEXT_TOO_LONG': 'A body has at most 50,000 characters of text.',
+  'marketing.content.blocks.problem.RUN_TOO_LONG':
+    'Block {block}: a piece of text is over 5,000 characters.',
+  'marketing.content.blocks.problem.FORBIDDEN_CHARACTER':
+    'Block {block}: contains a control or text-direction character that is not allowed.',
+  'marketing.content.blocks.problem.HREF_NOT_ALLOWED':
+    'Block {block}: a link must be https, tel: or mailto:.',
+  'marketing.content.blocks.problem.EMPTY_LIST': 'Block {block}: a list needs at least one item.',
+  'marketing.content.blocks.problem.IMAGE_WITHOUT_ASSET': 'Block {block}: choose an image.',
+
+  'marketing.content.editorial.title': 'Title',
+  'marketing.content.editorial.summary': 'Short summary (optional)',
+  'marketing.content.editorial.cover': 'Cover picture',
+  'marketing.content.editorial.body': 'Text',
+  'marketing.content.vacancy.legend': 'The job',
+  'marketing.content.vacancy.employment': 'Type of work',
+  'marketing.content.vacancy.employment.FULL_TIME': 'Full time',
+  'marketing.content.vacancy.employment.PART_TIME': 'Part time',
+  'marketing.content.vacancy.employment.SHIFT': 'Shifts',
+  'marketing.content.vacancy.employment.INTERNSHIP': 'Internship',
+  'marketing.content.vacancy.applyType': 'How to get in touch',
+  'marketing.content.vacancy.apply.PHONE': 'Phone number',
+  'marketing.content.vacancy.apply.TELEGRAM': 'Telegram address (t.me/…)',
+  'marketing.content.vacancy.apply.URL': 'Web address (https)',
+  'marketing.content.vacancy.apply.EMAIL': 'E-mail address',
+  'marketing.content.vacancy.applyValue': 'The contact to publish',
+  'marketing.content.vacancy.noApplicants':
+    'This is a listing only: the platform has no application form and keeps nothing about candidates. People contact you at the address above.',
+  'marketing.content.album.images': 'Photos: {count} of {max}',
+  'marketing.content.album.imageLabel': 'Photo {n}',
+  'marketing.content.album.add': 'Add a photo',
+  'marketing.content.album.caption': 'Caption in this language (optional)',
+  'marketing.content.album.remove': 'Remove this photo',
+
+  'marketing.content.preview.channel': 'Channel',
+  'marketing.content.preview.locale': 'Language',
+  'marketing.content.preview.day': 'As on day (optional)',
+  'marketing.content.preview.refresh': 'Refresh',
+  'marketing.content.preview.noChannel':
+    'No channel can show content yet, so there is nothing to preview.',
+  'marketing.content.preview.failed': 'Could not build the preview.',
+  'marketing.content.preview.loading': 'Building the preview…',
+  'marketing.content.preview.absent':
+    'This item is not in the preview for this channel, language and day — it is outside its window, on another channel, tied to a promotion that is not live, or its image is still being checked. Save the draft first if you have just changed it.',
+  'marketing.content.preview.dishes': '{count} dishes',
+  'marketing.content.preview.popupDelay': 'Pop-up after {seconds} s',
+  'marketing.content.preview.empty': 'Nothing is on the home screen for this channel and day.',
+
+  'marketing.content.history.loading': 'Loading the versions…',
+  'marketing.content.history.empty': 'Never published, so there is no history yet.',
+  'marketing.content.history.version': 'Version {n}',
+  'marketing.content.history.againstPrevious': 'Compare with the version before',
+  'marketing.content.history.againstLive': 'Compare with the live version',
+  'marketing.content.history.publishedBy': 'Published by {who} at {when}',
+  'marketing.content.history.noChange': 'Nothing differs.',
+  'marketing.content.history.restore': 'Put this version into the draft',
+  'marketing.content.history.restoreHint':
+    'This only fills the draft. Nothing reaches customers until you publish it.',
+  'marketing.content.history.failed': 'Could not read the history.',
+
+  'marketing.content.stats.clientReported':
+    'Reported by visitors’ own devices. Anyone can inflate these numbers, nothing identifies a visitor, and the reports do not use them — read them as a hint, not a measurement.',
+  'marketing.content.stats.loading': 'Loading the counts…',
+  'marketing.content.stats.failed': 'Could not read the counts.',
+  'marketing.content.stats.window': 'Last days: {range}',
+  'marketing.content.stats.empty': 'Nothing has been reported yet.',
+  'marketing.content.stats.version': 'Version',
+  'marketing.content.stats.impressions': 'Shown',
+  'marketing.content.stats.clicks': 'Taps',
+  'marketing.content.stats.dismissals': 'Dismissed',
+  'marketing.content.stats.completions': 'Watched to the end',
+
+  'marketing.content.editor.new': 'New: {kind}',
+  'marketing.content.editor.unsaved': 'Not saved',
+  'marketing.content.editor.close': 'Close the editor',
+  'marketing.content.editor.stale':
+    'Someone else changed this item while you were editing. Reload to see their version; your unsaved edits will be replaced.',
+  'marketing.content.editor.reload': 'Reload',
+  'marketing.content.editor.archivedNote':
+    'This item is archived: it is read-only and out of the lists.',
+  'marketing.content.editor.tab.edit': 'Edit',
+  'marketing.content.editor.tab.preview': 'Preview',
+  'marketing.content.editor.tab.history': 'History',
+  'marketing.content.editor.tab.stats': 'Counts',
+  'marketing.content.editor.internalName': 'Internal name (only your team sees it)',
+  'marketing.content.editor.slug':
+    'Address (lower-case letters, digits and hyphens; fixed once saved)',
+  'marketing.content.editor.placement': 'Where it appears',
+  'marketing.content.editor.channels': 'Channels',
+  'marketing.content.editor.channelsHint':
+    'Leave all unselected to show it on every channel that can show content.',
+  'marketing.content.editor.noChannels':
+    'No channel can show content yet (a web, app or Telegram channel is needed).',
+  'marketing.content.editor.schedule': 'Schedule',
+  'marketing.content.editor.schedule.always': 'Always',
+  'marketing.content.editor.schedule.between': 'Between two dates',
+  'marketing.content.editor.schedule.from': 'From a date onwards',
+  'marketing.content.editor.schedule.backwards': 'The end is not after the start.',
+  'marketing.content.editor.schedule.hint':
+    'Whole days in your timezone. Whether it is showing is worked out each time a customer opens the app, so nothing has to run at midnight.',
+  'marketing.content.editor.promotion': 'Tie to a promotion (optional)',
+  'marketing.content.editor.promotionHint':
+    'The card shows only while this promotion is live, and takes the promotion’s dates when it has none of its own. The platform never adds a promo code to a card; type one yourself if you want it shown.',
+  'marketing.content.editor.branch': 'Branch (optional)',
+  'marketing.content.editor.branchNone': 'No particular branch',
+  'marketing.content.editor.language': 'Language',
+  'marketing.content.editor.needsTitle':
+    'Write a title in {languages}, or clear what you typed there.',
+  'marketing.content.editor.problems': 'To fix before publishing',
+  'marketing.content.editor.previewUnsaved':
+    'You have unsaved changes. The preview shows the last saved draft.',
+  'marketing.content.editor.save': 'Save draft',
+  'marketing.content.editor.publish': 'Publish',
+  'marketing.content.editor.withdraw': 'Withdraw',
+  'marketing.content.editor.archive': 'Archive',
+  'marketing.content.editor.discard': 'Discard draft',
+  'marketing.content.editor.saved': 'Draft saved. Customers do not see it until it is published.',
+  'marketing.content.editor.published': 'Published. Customers see it within a minute.',
+  'marketing.content.editor.done': 'Done.',
+  'marketing.content.editor.restored':
+    'The version is in the draft. Nothing reaches customers until you publish it.',
+  'marketing.content.editor.failed': 'Something went wrong. Try again.',
+  'marketing.content.editor.refused': 'The platform did not accept this. See what to fix below.',
+  'marketing.content.editor.confirm.publish.title': 'Publish this?',
+  'marketing.content.editor.confirm.publish.body':
+    'What you see now is saved and goes live. Customers see it within a minute, in the languages you filled in.',
+  'marketing.content.editor.confirm.withdraw.title': 'Take it down?',
+  'marketing.content.editor.confirm.withdraw.body':
+    'Customers stop seeing it within a minute. Every version is kept, and you can publish it again.',
+  'marketing.content.editor.confirm.archive.title': 'Archive this?',
+  'marketing.content.editor.confirm.archive.body':
+    'It leaves the lists, and is taken down first if it is live. Its address becomes free to use again.',
+  'marketing.content.editor.confirm.discard.title': 'Discard the draft?',
+  'marketing.content.editor.confirm.discard.body':
+    'The live version stays as it is; the changes you have not published are lost.',
+
+  'marketing.content.list.from': 'from {day}',
+  'marketing.content.list.limit': 'Live: {live} of at most {max}',
+  'marketing.content.list.showArchived': 'Show archived',
+  'marketing.content.list.hideArchived': 'Back to the list',
+  'marketing.content.list.new': 'New {kind}',
+  'marketing.content.list.loading': 'Loading…',
+  'marketing.content.list.empty': 'Nothing here yet.',
+  'marketing.content.list.orderHint':
+    'Drag to reorder, or use the arrows. The order takes effect at once and is not a new version.',
+  'marketing.content.list.orderMoved':
+    'Someone changed the order while you were dragging. The list has been read again.',
+  'marketing.content.list.more': 'Show more',
+  'marketing.content.list.discard.title': 'Leave without saving?',
+  'marketing.content.list.discard.body': 'You have changes that are not saved. They will be lost.',
+  'marketing.content.list.discard.confirm': 'Leave',
+  'marketing.content.list.discard.keep': 'Keep editing',
+
+  'marketing.content.hosts.title': 'Allowed links',
+  'marketing.content.hosts.intro':
+    'A banner, story or pop-up can link to a web address only if its site is on this list. Your channels’ own verified addresses are always on it; nothing else is until you add it.',
+  'marketing.content.hosts.host': 'Site (for example shop.example.uz)',
+  'marketing.content.hosts.reason': 'Why (optional)',
+  'marketing.content.hosts.add': 'Allow this site',
+  'marketing.content.hosts.invalid':
+    'Type just the site’s name: lower-case letters, digits, dots and hyphens — no https://, no port, no *.',
+  'marketing.content.hosts.audited':
+    'Adding or removing a site is recorded in the audit history as a security fact. A link to a site that leaves the list stops working within a minute; the item itself stays live.',
+  'marketing.content.hosts.empty': 'No sites yet.',
+  'marketing.content.hosts.addedBy': 'added by {who}',
+  'marketing.content.hosts.fromChannel': 'a verified address of one of your channels',
+  'marketing.content.hosts.remove': 'Remove',
+  'marketing.content.hosts.removeTitle': 'Stop allowing {host}?',
+  'marketing.content.hosts.removeBody':
+    'Links to this site stop working within a minute. The banners, stories and pop-ups that use them stay live, without the link.',
+
+  'marketing.content.policy.title': 'Settings',
+  'marketing.content.policy.saved': 'Saved.',
+  'marketing.content.policy.publishing': 'Publishing',
+  'marketing.content.policy.requireAll':
+    'Require text in every language of the brand before publishing',
+  'marketing.content.policy.requireAllHint':
+    'By default only the brand’s default language is required; the others fall back to it. This can only make publishing stricter.',
+  'marketing.content.policy.editorial': 'Editorial content',
+  'marketing.content.policy.editorialNotEntitled':
+    'Your plan does not include news, photo albums, recipes or vacancies. The platform owner switches this on for a tenant.',
+  'marketing.content.policy.kind.news': 'News',
+  'marketing.content.policy.kind.gallery': 'Photo albums',
+  'marketing.content.policy.kind.recipes': 'Recipes',
+  'marketing.content.policy.kind.vacancies': 'Vacancies',
+  'marketing.content.policy.vacancyNote':
+    'A vacancy is a listing with one contact you choose to publish. The platform has no application form and keeps nothing about candidates.',
+  'marketing.content.policy.videoOn':
+    'Video: your plan allows MP4 video in banners, cards, pop-ups and stories.',
+  'marketing.content.policy.videoOff':
+    'Video: not part of your plan. The platform owner switches it on for a tenant.',
+
+  'marketing.content.health.title': 'Needs attention',
+  'marketing.content.health.intro':
+    'Things customers are being shown that are not quite right. The app has already dealt with each quietly — a broken link becomes “nowhere”, a card tied to a stopped promotion is hidden — so nobody sees an error, but nobody sees what you meant either.',
+  'marketing.content.health.ok': 'Everything customers are being shown is as you made it.',
+  'marketing.content.health.failed': 'Could not read the health of the content.',
+
+  'marketing.content.page.title': 'Content',
+  'marketing.content.page.intro':
+    'What your brand puts in front of customers beside the menu: banners, promo cards, stories and an entry pop-up on the home screen — and, when your plan and your settings allow, news, photo albums, recipes and vacancies. Nothing reaches customers until you publish it.',
+  'marketing.content.page.needsAttention': '{count} need attention',
+  'marketing.content.page.views': 'Lists',
+  'marketing.content.page.tab.items': 'Content',
+  'marketing.content.page.tab.links': 'Links',
+  'marketing.content.page.tab.settings': 'Settings',
+  'marketing.content.page.tab.health': 'Health',
+
+  'marketing.storefront.title': 'Storefront',
+  'marketing.storefront.intro':
+    'What the home screen of your storefronts shows, and in what order: groups of dishes, the carousel, and a preview of the whole screen. Nothing reaches customers until it is published.',
+  'marketing.storefront.tab.groups': 'Home groups',
+  'marketing.storefront.tab.carousel': 'Offer carousel',
+  'marketing.storefront.tab.preview': 'Preview',
+  'marketing.storefront.tab.switcher': 'Brand switcher',
+  'marketing.storefront.groups.hint':
+    'Titled rails of dishes on the home screen: hand-picked, or a whole category. Their order here is their order on the screen.',
+  'marketing.storefront.carousel.hint':
+    'The carousel at the top of the home screen is shared by banners and promo cards. Order it here; write and publish them under Content. It is the same for every customer — a personal offer for one guest is a separate thing.',
+  'marketing.storefront.carousel.link': 'Open Content',
+  'marketing.storefront.switcher.title': 'Brand switcher and marketplace layout — not built',
+  'marketing.storefront.switcher.body':
+    'These wait until a tenant runs two brands on one storefront and asks for them (ADR 0157, Release 4). Until then there is nothing to configure, and no setting is reserved for it.',
 } as const;

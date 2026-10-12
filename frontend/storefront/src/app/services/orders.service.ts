@@ -117,6 +117,25 @@ export class OrdersService {
   }
 
   /**
+   * The links to the receipts filed for one of the customer's own orders (ADR 0166, ADR 0058).
+   *
+   * A list, and often an empty one: an order paid in cash has no receipt from a payment provider, and a
+   * card payment has none until the provider reports it. The link is the one the customer was sent when
+   * the receipt was issued; the platform returns nothing else about the receipt. Only an `https` link is
+   * kept here as well, because it is rendered as an anchor and whatever else a provider's column held
+   * must never become a navigation target.
+   */
+  getReceipts(id: string | number): Observable<readonly OrderReceipt[]> {
+    return from(
+      this.api.get<OrderReceiptsResponse>(`${this.brandPath}/orders/${id}/receipts`),
+    ).pipe(
+      map((response) =>
+        (response.receipts ?? []).filter((receipt) => /^https:\/\/\S+$/.test(receipt.url)),
+      ),
+    );
+  }
+
+  /**
    * Cancels an order that has not been confirmed.
    *
    * The idempotency key is formed once, outside the retry, and reused: the whole
@@ -347,6 +366,24 @@ export interface OrderLineCatchweight {
   readonly pricePerQuantumMinor: number;
   readonly provisional: boolean;
   readonly actualWeightGrams?: number | null;
+}
+
+/**
+ * One receipt filed for an order: which kind of document it is and where the tax authority shows it.
+ *
+ * `StorefrontFiscalReceiptController.ReceiptResponse`. No fiscal sign, terminal, INN or line comes with
+ * it, and none is wanted here.
+ */
+export interface OrderReceipt {
+  /** `SALE`, `REFUND` or `CORRECTION`; any other value is shown as a plain receipt. */
+  readonly kind: string;
+  /** An `https` link to the receipt on the tax authority's site. */
+  readonly url: string;
+  readonly registeredAt: string | null;
+}
+
+export interface OrderReceiptsResponse {
+  readonly receipts: readonly OrderReceipt[];
 }
 
 /**

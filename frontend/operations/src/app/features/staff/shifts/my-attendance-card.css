@@ -1,0 +1,53 @@
+.mine {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.mine__muted {
+  color: var(--q-ink-muted);
+}
+
+.mine__error {
+  color: var(--q-error-text, var(--q-ink));
+}
+
+.mine__button {
+  min-height: 48px;
+  padding: 0 20px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: transparent;
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.mine__button--primary {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-on-primary, #fff);
+}
+
+.mine__button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mine__recent {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mine__recent li {
+  display: flex;
+  gap: 12px;
+}

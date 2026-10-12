@@ -13,6 +13,7 @@ const translate = (key: MessageKey, values?: Readonly<Record<string, string | nu
     'error.detailed.noReference': '{detail}',
     'error.RESOURCE_NOT_FOUND': 'That no longer exists.',
     'orders.action.catchweightNotReconciled': 'Weigh it first.',
+    'orders.action.marksIncomplete': 'Scan it first.',
   };
   let template = templates[key] ?? key;
   for (const [name, value] of Object.entries(values ?? {})) {
@@ -187,5 +188,40 @@ describe('mutationErrorNotice: CATCHWEIGHT_NOT_RECONCILED (ADR 0137)', () => {
     );
 
     expect(mutationErrorNotice(refused, translate, status).text).not.toBe('Weigh it first.');
+  });
+});
+
+describe('mutationErrorNotice: MARKS_INCOMPLETE (ADR 0161)', () => {
+  const status = (value: string) => value;
+
+  it('tells the operator to scan, in the console language, and does not throw the order away by re-reading it', () => {
+    const refused = new ApiError(
+      ApiErrorCode.RESOURCE_CONFLICT,
+      409,
+      {
+        status: 409,
+        code: ApiErrorCode.RESOURCE_CONFLICT,
+        reason: 'MARKS_INCOMPLETE',
+        detail: 'The order has marked lines that are not fully scanned',
+        orderLineIds: ['line-1'],
+      },
+      'corr-1',
+    );
+
+    const notice = mutationErrorNotice(refused, translate, status);
+
+    expect(notice.text).toBe('Scan it first.');
+    expect(notice.shouldReread).toBe(false);
+  });
+
+  it('does not take a catchweight refusal for a marking one, or the reverse', () => {
+    const weigh = new ApiError(
+      ApiErrorCode.RESOURCE_CONFLICT,
+      409,
+      { status: 409, code: ApiErrorCode.RESOURCE_CONFLICT, reason: 'CATCHWEIGHT_NOT_RECONCILED' },
+      null,
+    );
+
+    expect(mutationErrorNotice(weigh, translate, status).text).toBe('Weigh it first.');
   });
 });

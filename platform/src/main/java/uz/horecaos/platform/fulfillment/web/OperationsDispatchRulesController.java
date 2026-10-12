@@ -90,8 +90,9 @@ import uz.horecaos.platform.web.idempotency.Idempotent;
  * version they already did.
  *
  * <p>The simulator is a {@code POST} because its body can carry a whole draft document. It declares the
- * read capability, writes nothing, calls no provider and asks no quote, so ADR 0031's idempotency rules do
- * not apply to it.
+ * read capability, changes no state, calls no provider and asks no quote, so ADR 0031's idempotency rules do
+ * not apply to it. (A rule that groups, simulated against a plan, reads drop-offs under a named purpose, and
+ * that reveal is recorded in the audit trail as the caller's: see {@link DispatchRuleSimulator}.)
  *
  * <p>Request bodies box every optional field: Jackson 3 refuses a missing primitive as a malformed body,
  * and an editor that leaves an offset blank is not malformed.
@@ -155,7 +156,7 @@ public class OperationsDispatchRulesController {
         Editor editor = rules.view(scope);
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, AggregateVersion.toETag(editor.versionAtScope()))
-                .body(RulesResponse.of(editor, rules.groupingAllowed()));
+                .body(RulesResponse.of(editor, rules.groupingAllowed(), rules.runPayModeDecided(scope)));
     }
 
     @PutMapping("/dispatch-rules")
@@ -168,7 +169,8 @@ public class OperationsDispatchRulesController {
                     + "company's active delivery installation, a zone that is not a delivery zone, or a source "
                     + "outside the closed set; when a rule can never match because one above it takes every order "
                     + "it would; when its dispatch start leaves a partner no time; when it enables grouping "
-                    + "(not available until the pay treatment for a run is decided) or asks for a hold. "
+                    + "(RUN_PAY_MODE_UNDECIDED until the courier pay for a run is decided in the courier policy; "
+                    + "GROUPING_WAIT_NOT_AVAILABLE for any wait above zero) or asks for a hold. "
                     + "Requires If-Match carrying the version the GET at this same scope returned, or the write "
                     + "is refused with STALE_VERSION naming both versions. The version this replaces is never "
                     + "touched: a plan keeps the document version it was created under.")
@@ -185,7 +187,7 @@ public class OperationsDispatchRulesController {
         Editor published = rules.author(scope, body.toDocument(), expectedVersion, actor(), body.reason());
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, AggregateVersion.toETag(published.versionAtScope()))
-                .body(RulesResponse.of(published, rules.groupingAllowed()));
+                .body(RulesResponse.of(published, rules.groupingAllowed(), rules.runPayModeDecided(scope)));
     }
 
     @GetMapping("/dispatch-rules/options")
@@ -235,7 +237,10 @@ public class OperationsDispatchRulesController {
                     + "against typed facts or a recent plan's, with the very evaluator the live path runs. Returns "
                     + "the matched rule, why each earlier rule did not match (its first failing condition), the "
                     + "resolved action, the partners in the order they would be tried, what could not be honoured, "
-                    + "and when sourcing would start. It calls no provider, asks no quote and writes nothing.")
+                    + "and when sourcing would start. It calls no provider and asks no quote. A rule that groups, "
+                    + "simulated against a recent plan, measures the courier feed as sourcing does: the drop-off of "
+                    + "that plan and of the orders the candidates carry are read for the purpose DISPATCH_GROUPING, "
+                    + "each read recorded in the audit trail as yours, and only distances are returned.")
     public SimulationResponse simulate(@PathVariable UUID tenantId, @Valid @RequestBody SimulationRequest body) {
 
         ResourceScope location = ResourceScope.location(tenantId, body.brandId(), body.locationId());
@@ -248,7 +253,8 @@ public class OperationsDispatchRulesController {
                 editingScope,
                 body.draft() == null ? null : body.draft().toDocument(),
                 body.scenario() == null ? null : body.scenario().toScenario(),
-                body.planId());
+                body.planId(),
+                ActorRef.user(currentActor.get().subject(), null));
         return SimulationResponse.of(result);
     }
 
@@ -336,6 +342,8 @@ public class OperationsDispatchRulesController {
      * @param versionAtScope the latest version authored at exactly the requested scope (0 when it
      *                       inherits): send it back as If-Match
      * @param groupingAllowed whether this deployment lets a rule enable grouping
+     * @param runPayDecided  whether the courier pay for a run of several orders is decided at this scope (ADR 0170):
+     *                       a rule that groups is refused with {@code RUN_PAY_MODE_UNDECIDED} while it is not
      */
     public record RulesResponse(
             int schema,
@@ -347,9 +355,10 @@ public class OperationsDispatchRulesController {
             int policyVersion,
             int versionAtScope,
             List<Level> levels,
-            boolean groupingAllowed) {
+            boolean groupingAllowed,
+            boolean runPayDecided) {
 
-        static RulesResponse of(Editor editor, boolean groupingAllowed) {
+        static RulesResponse of(Editor editor, boolean groupingAllowed, boolean runPayDecided) {
             DispatchRulesDocument document = editor.document();
             return new RulesResponse(
                     document.schema(),
@@ -361,7 +370,8 @@ public class OperationsDispatchRulesController {
                     editor.policyVersion(),
                     editor.versionAtScope(),
                     editor.levels(),
-                    groupingAllowed);
+                    groupingAllowed,
+                    runPayDecided);
         }
     }
 
@@ -641,7 +651,8 @@ public class OperationsDispatchRulesController {
             PickupView pickup,
             List<String> notes,
             List<String> violations,
-            boolean providerCalled) {
+            boolean providerCalled,
+            @Nullable GroupingFeedView grouping) {
 
         static SimulationResponse of(Simulation simulation) {
             return new SimulationResponse(
@@ -658,7 +669,38 @@ public class OperationsDispatchRulesController {
                     simulation.notes(),
                     simulation.violations(),
                     // Stated, not implied: a simulation asks no provider and no quote, ever.
-                    false);
+                    false,
+                    simulation.grouping() == null ? null : GroupingFeedView.of(simulation.grouping()));
+        }
+    }
+
+    /**
+     * ADR 0170: what the grouping bias measured for a recent plan, and the pay basis each offer would carry.
+     * Courier ids and distances only (ADR 0029).
+     */
+    public record GroupingFeedView(int candidates, List<GroupedCandidateView> measured) {
+
+        static GroupingFeedView of(DispatchRuleSimulator.GroupingFeed feed) {
+            return new GroupingFeedView(
+                    feed.candidates(),
+                    feed.measured().stream().map(GroupedCandidateView::of).toList());
+        }
+    }
+
+    public record GroupedCandidateView(
+            UUID courierId,
+            int activeAssignments,
+            int concurrencyCeiling,
+            @Nullable Integer groupableWithMetres,
+            String payBasis) {
+
+        static GroupedCandidateView of(DispatchRuleSimulator.GroupedCandidate candidate) {
+            return new GroupedCandidateView(
+                    candidate.courierId(),
+                    candidate.activeAssignments(),
+                    candidate.concurrencyCeiling(),
+                    candidate.groupableWithMetres(),
+                    candidate.payBasis());
         }
     }
 

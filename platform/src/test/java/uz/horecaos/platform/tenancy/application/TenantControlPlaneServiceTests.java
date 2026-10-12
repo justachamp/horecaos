@@ -1286,7 +1286,8 @@ class TenantControlPlaneServiceTests {
                             tenant.status(),
                             Instant.EPOCH,
                             "UZ",
-                            "RESTAURANT"))
+                            "RESTAURANT",
+                            false))
                     .toList();
         }
 

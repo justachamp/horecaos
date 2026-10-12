@@ -1,0 +1,43 @@
+@if (rail().length > 0) {
+  <section
+    class="stories"
+    data-testid="content-stories"
+    [attr.aria-label]="'content.storiesLabel' | t"
+  >
+    <ul class="stories__rail rail">
+      @for (entry of rail(); track entry.story.id) {
+        <li class="stories__item" [appContentImpression]="entry.story">
+          <button
+            #opener
+            type="button"
+            class="story"
+            data-testid="story-open"
+            [attr.aria-label]="'content.storyOpen' | t: { title: entry.story.title }"
+            (click)="show(entry.story, opener)"
+          >
+            <span class="story__ring">
+              @if (entry.plan; as avatar) {
+                <app-content-media
+                  class="story__avatar"
+                  [plan]="avatar"
+                  [alt]="entry.alt"
+                  sizes="64px"
+                  (failed)="avatarFailed(entry.story.id)"
+                />
+              } @else {
+                <span class="story__initial" data-testid="story-initial" aria-hidden="true">{{
+                  entry.initial
+                }}</span>
+              }
+            </span>
+            <span class="story__title" [attr.lang]="entry.lang">{{ entry.story.title }}</span>
+          </button>
+        </li>
+      }
+    </ul>
+  </section>
+}
+
+@if (open(); as story) {
+  <app-content-story-viewer [story]="story" (closed)="close()" />
+}

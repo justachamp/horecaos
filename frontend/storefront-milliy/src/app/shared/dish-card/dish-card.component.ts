@@ -22,6 +22,7 @@ import {
   type PhysicalFacts,
 } from '../../utils/physical';
 import { PhysicalFactsComponent } from '../physical-facts/physical-facts.component';
+import { TagBadgesComponent } from '../tag-badges/tag-badges.component';
 import { TranslatePipe } from '../translate/translate.pipe';
 
 /**
@@ -77,7 +78,13 @@ import { TranslatePipe } from '../translate/translate.pipe';
 @Component({
   selector: 'app-dish-card',
   standalone: true,
-  imports: [NgTemplateOutlet, RouterLink, PhysicalFactsComponent, TranslatePipe],
+  imports: [
+    NgTemplateOutlet,
+    RouterLink,
+    PhysicalFactsComponent,
+    TagBadgesComponent,
+    TranslatePipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './dish-card.component.html',
   styleUrl: './dish-card.component.scss',

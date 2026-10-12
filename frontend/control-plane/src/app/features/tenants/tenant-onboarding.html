@@ -381,6 +381,13 @@
             }}
           </p>
         }
+        @if (suggested.recommendedModule) {
+          <p class="q-body-sm muted moduleRecommendation" data-testid="recommended-module">
+            {{
+              i18n.t('onboarding.template.recommendedModule', { code: suggested.recommendedModule })
+            }}
+          </p>
+        }
       }
       @if (activeTemplates().length > 1) {
         <label class="q-body-sm templateChoice">

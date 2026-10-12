@@ -255,6 +255,42 @@
         }
       }
 
+      @if (r.grouping; as feed) {
+        <div class="sim__grouping" data-testid="sim-grouping">
+          <p class="q-body-sm">{{ 'delivery.rules.sim.grouping.heading' | t }}</p>
+          @if (feed.measured.length === 0) {
+            <p class="q-caption sim__muted" data-testid="sim-grouping-empty">
+              {{ 'delivery.rules.sim.grouping.empty' | t }}
+            </p>
+          } @else {
+            <ul>
+              @for (courier of feed.measured; track courier.courierId) {
+                <li class="q-body-sm" [attr.data-testid]="'sim-grouping-' + courier.courierId">
+                  <span class="sim__ruleName">{{ shortId(courier.courierId) }}</span>
+                  <span class="q-caption sim__muted">
+                    {{
+                      'delivery.rules.sim.grouping.carrying'
+                        | t: { n: courier.activeAssignments, max: courier.concurrencyCeiling }
+                    }}
+                    @if (courier.groupableWithMetres !== null) {
+                      —
+                      {{
+                        'delivery.rules.sim.grouping.metres'
+                          | t: { metres: courier.groupableWithMetres }
+                      }}
+                      —
+                      {{ basisLabel(courier.payBasis) | t }}
+                    } @else {
+                      — {{ 'delivery.rules.sim.grouping.notGroupable' | t }}
+                    }
+                  </span>
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      }
+
       @if (r.violations.length > 0) {
         <div class="sim__problems" role="alert" data-testid="sim-violations">
           <p class="q-body-sm">{{ 'delivery.rules.sim.violations' | t }}</p>

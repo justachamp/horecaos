@@ -1,5 +1,7 @@
 package uz.horecaos.platform.reporting.application;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -11,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayAggregate;
 import uz.horecaos.platform.reporting.application.ReportingFacts.BranchDayKey;
 import uz.horecaos.platform.reporting.application.ReportingFacts.CallHourFact;
@@ -297,6 +300,13 @@ public final class DayAggregator {
     }
 
     /**
+     * The longest offered-to-answered interval still believed, when no ADR 0030 value was
+     * resolved (a test, or a close wired without the resolver). Mirrors the declared default
+     * of {@code voice.ring_time_ceiling_seconds}.
+     */
+    public static final int DEFAULT_RING_TIME_CEILING_SECONDS = 1800;
+
+    /**
      * ADR 0064: one business date's call activity, bucketed by branch, hour,
      * and operator (the sentinel {@code "(unassigned)"} standing in for a call
      * this build could not attribute to a specific person — see {@link
@@ -313,16 +323,52 @@ public final class DayAggregator {
             List<SourceCallEvent> events,
             int boundaryVersion,
             int calculationVersion) {
+        return callHourFacts(
+                tenantId,
+                businessDate,
+                zone,
+                events,
+                boundaryVersion,
+                calculationVersion,
+                DEFAULT_RING_TIME_CEILING_SECONDS);
+    }
+
+    /**
+     * ADR 0175: the same facts plus the five call-level columns. The existing counts accumulate on
+     * the event's own key exactly as before; the new values accumulate on the key {@code (brand,
+     * location, hour of the first answer, resolved operator)}, so a key that exists only for them is
+     * a row of zero event counts, which V0149's check allows.
+     *
+     * <p>Every row this writes carries non-null values for the call KPIs (zero where nothing was
+     * measured) and a non-null maximum exactly when it holds a ring sample; a row read back from a
+     * day closed before the migration carries {@code null} and is "not measured".
+     *
+     * @param ringCeilingSeconds the longest offered-to-answered interval still believed
+     *     ({@code voice.ring_time_ceiling_seconds}); a longer pair is two calls joined by a reused
+     *     provider id, still an answered call but not a ring sample
+     */
+    public static List<CallHourFact> callHourFacts(
+            UUID tenantId,
+            LocalDate businessDate,
+            ZoneId zone,
+            List<SourceCallEvent> events,
+            int boundaryVersion,
+            int calculationVersion,
+            int ringCeilingSeconds) {
 
         Map<CallHourKey, CallAccumulator> byKey = new LinkedHashMap<>();
         for (SourceCallEvent event : events) {
             int hour = ZonedDateTime.ofInstant(event.occurredAt(), zone).getHour();
-            String operator = event.operatorPrincipalId() == null
-                            || event.operatorPrincipalId().isBlank()
-                    ? "(unassigned)"
-                    : event.operatorPrincipalId();
-            CallHourKey key = new CallHourKey(event.brandId(), event.locationId(), hour, operator);
+            CallHourKey key = new CallHourKey(
+                    event.brandId(), event.locationId(), hour, operatorOrSentinel(event.operatorPrincipalId()));
             byKey.computeIfAbsent(key, ignored -> new CallAccumulator()).add(event);
+
+            if ("ANSWERED".equals(event.eventType()) && event.firstAnswerOfCall()) {
+                CallHourKey answeredKey = new CallHourKey(
+                        event.brandId(), event.locationId(), hour, operatorOrSentinel(event.resolvedOperator()));
+                byKey.computeIfAbsent(answeredKey, ignored -> new CallAccumulator())
+                        .addFirstAnswer(event, ringCeilingSeconds);
+            }
         }
 
         List<CallHourFact> rows = new ArrayList<>(byKey.size());
@@ -335,6 +381,10 @@ public final class DayAggregator {
         return rows;
     }
 
+    private static String operatorOrSentinel(@Nullable String operatorPrincipalId) {
+        return operatorPrincipalId == null || operatorPrincipalId.isBlank() ? "(unassigned)" : operatorPrincipalId;
+    }
+
     private record CallHourKey(UUID brandId, UUID locationId, int hour, String operatorPrincipalId) {}
 
     private static final class CallAccumulator {
@@ -343,6 +393,13 @@ public final class DayAggregator {
         private int missed;
         private int transferred;
         private long talkDurationSeconds;
+
+        // ADR 0175: the call-level columns, accumulated only from a call's first answer.
+        private int answeredCalls;
+        private long ringSecondsTotal;
+        private int ringSamples;
+        private int ringSecondsMax;
+        private int converted;
 
         void add(SourceCallEvent event) {
             switch (event.eventType()) {
@@ -361,6 +418,28 @@ public final class DayAggregator {
             }
         }
 
+        /**
+         * One call's first answer: it is an answered call, it is a ring sample only when an {@code
+         * OFFERED} exists and the interval is between zero and the ceiling (a lost event shows up as
+         * lower coverage, never as a wrong average), and it is a conversion when an order was placed
+         * from the call.
+         */
+        void addFirstAnswer(SourceCallEvent answer, int ringCeilingSeconds) {
+            answeredCalls++;
+            Instant offeredAt = answer.offeredAt();
+            if (offeredAt != null) {
+                long interval = Duration.between(offeredAt, answer.occurredAt()).toSeconds();
+                if (interval >= 0 && interval <= ringCeilingSeconds) {
+                    ringSamples++;
+                    ringSecondsTotal += interval;
+                    ringSecondsMax = Math.max(ringSecondsMax, (int) interval);
+                }
+            }
+            if (answer.hasOrder()) {
+                converted++;
+            }
+        }
+
         CallHourFact toRow(
                 UUID tenantId, LocalDate businessDate, CallHourKey key, int boundaryVersion, int calculationVersion) {
             return new CallHourFact(
@@ -376,7 +455,12 @@ public final class DayAggregator {
                     answered,
                     missed,
                     transferred,
-                    talkDurationSeconds);
+                    talkDurationSeconds,
+                    answeredCalls,
+                    ringSecondsTotal,
+                    ringSamples,
+                    ringSamples > 0 ? ringSecondsMax : null,
+                    converted);
         }
     }
 }

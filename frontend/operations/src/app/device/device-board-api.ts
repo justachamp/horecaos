@@ -8,15 +8,26 @@ import type {
   VduBoardResponse,
 } from '../features/kitchen/kitchen-api';
 import { environment } from '../../environments/environment';
-import { DeviceProfile, toDeviceProfile } from './device-profile';
+import { DEVICE_BUILD, DeviceProfile, toDeviceProfile } from './device-profile';
 import { DeviceSession } from './device-session';
+import { TerminalSession } from './terminal-session';
 
 export class DeviceBoardError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** ADR 0031's code from the problem body when there was one (`TERMINAL_UNLOCK_REQUIRED`, ...); never a message. */
+    readonly code: string | null = null,
   ) {
     super(message);
+  }
+
+  /**
+   * A refusal that is about the person at the terminal and not about the device: the device's own grant is fine, so the
+   * shell must not forget its credential over it (ADR 0155).
+   */
+  get isTerminalRefusal(): boolean {
+    return this.code !== null && this.code.startsWith('TERMINAL_');
   }
 }
 
@@ -42,6 +53,7 @@ export class DeviceBoardError extends Error {
 @Injectable({ providedIn: 'root' })
 export class DeviceBoardApi {
   private readonly session = inject(DeviceSession);
+  private readonly terminal = inject(TerminalSession);
 
   /**
    * The calling device's own record (`GET /api/v1/devices/me`): its branch and zone and, for a wall,
@@ -87,10 +99,20 @@ export class DeviceBoardApi {
 
   private async authorizedFetch<T>(path: string, method: 'GET' | 'POST'): Promise<T> {
     const token = await this.session.accessToken();
-    const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+      // Which build this device runs, so the registry can show it (ADR 0155, Decision 6). Also its presence signal.
+      'X-Device-Build': DEVICE_BUILD,
+    };
     if (method === 'POST') {
       headers['Content-Type'] = 'application/json';
       headers['Idempotency-Key'] = newIdempotencyKey();
+      // A person unlocked at this terminal is named on the actions they take, by the session the server issued. A read
+      // carries nothing: polling the board is not a person using the screen (ADR 0155).
+      const sessionToken = this.terminal.sessionToken();
+      if (sessionToken !== null) {
+        headers['X-Terminal-Session'] = sessionToken;
+      }
     }
     const response = await fetch(`${environment.apiBaseUrl}${path}`, {
       method,
@@ -101,8 +123,19 @@ export class DeviceBoardApi {
       throw new DeviceBoardError(
         response.status,
         `Kitchen board request failed (HTTP ${response.status})`,
+        await problemCode(response),
       );
     }
     return response.json();
+  }
+}
+
+/** The `code` of a problem body, or null: a refusal with no readable body is still a refusal. */
+async function problemCode(response: Response): Promise<string | null> {
+  try {
+    const body = (await response.json()) as { code?: unknown };
+    return typeof body.code === 'string' ? body.code : null;
+  } catch {
+    return null;
   }
 }

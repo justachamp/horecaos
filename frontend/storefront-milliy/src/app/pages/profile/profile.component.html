@@ -83,7 +83,7 @@
         <section class="rate-card">
           <h2 class="rate-card__title">{{ 'profile.rateTitle' | t }}</h2>
           <p class="rate-card__sub">
-            {{ 'profile.rateSubtitleForOrder' | t: { order: order.order_number ?? order.id } }}
+            {{ 'profile.rateSubtitleForOrder' | t: { order: order.label } }}
           </p>
           <span class="rate-card__field-label">{{ 'profile.rateFieldLabel' | t }}</span>
           <div class="stars">
@@ -99,12 +99,25 @@
               </button>
             }
           </div>
+          @if (offeredTags().length > 0) {
+            <span class="rate-card__field-label">{{ 'profile.tagsLabel' | t }}</span>
+            <app-tag-picker
+              [tags]="offeredTags()"
+              [selected]="selectedTagIds()"
+              [label]="'profile.tagsLabel' | t"
+              (toggled)="toggleTag($event)"
+            />
+            <p class="hint">{{ 'profile.tagsHint' | t: { max: maxTags() } }}</p>
+          }
           <textarea
             class="field field--area"
             [value]="ratingComment()"
             (input)="ratingComment.set($any($event.target).value)"
             [placeholder]="'profile.commentPlaceholder' | t"
           ></textarea>
+          @if (showConsent()) {
+            <app-consent-box [checked]="publicConsent()" (changed)="publicConsent.set($event)" />
+          }
           @if (ratingErrorKey(); as errorKey) {
             <p class="hint hint--error" role="alert">{{ errorKey | t }}</p>
           }
@@ -118,9 +131,20 @@
           </button>
         </section>
       } @else {
-        <p class="thanks">{{ 'profile.rateThanks' | t }}</p>
+        <p class="thanks">
+          {{
+            (submittedDisplay()?.state === 'PENDING'
+              ? 'profile.rateThanksPending'
+              : submittedDisplay()?.state === 'PUBLISHED'
+                ? 'profile.rateThanksPublished'
+                : 'profile.rateThanks'
+            ) | t
+          }}
+        </p>
       }
     }
+
+    <app-my-reviews [refresh]="reviewsRefresh()" />
 
     <button type="button" class="signout" (click)="signOut()">{{ 'profile.logout' | t }}</button>
   }

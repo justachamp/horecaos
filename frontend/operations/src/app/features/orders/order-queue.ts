@@ -27,11 +27,20 @@ import { TimeZone, formatClock, formatTime } from '../../core/format/datetime';
 import { formatMoney } from '../../core/format/money';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { SavedView } from '../../core/preferences/preference-documents';
+import {
+  normalisedSavedViewLabel,
+  withColumnShown,
+  withoutColumnChoice,
+  withSavedViews,
+} from '../../core/preferences/preference-edits';
+import { OwnPreferences } from '../../core/preferences/own-preferences';
 import { BrandOrderStream } from '../../core/realtime/brand-order-stream';
 import { RealtimeClient, RealtimeFrame } from '../../core/realtime/realtime-client';
 import { startVisibilityPoll } from '../../core/realtime/visibility-poll';
 import { ServiceStatus } from '../../shell/service-status';
 import { ShortcutRegistry } from '../../shared/keyboard/shortcut-registry';
+import { ColumnPicker, ColumnPickerItem } from '../../shared/ui/column-picker';
 import { DateRange, DateRangePicker } from '../../shared/ui/date-range-picker';
 import { FilterBar, FilterBarChip } from '../../shared/ui/filter-bar';
 import { OrderTableChip } from '../../shared/ui/order-table-chip/order-table-chip';
@@ -56,10 +65,17 @@ import {
   BulkOrderRef,
   OrderBulkActionsApi,
 } from './order-bulk-actions-api';
+import { BulkAssignSubmission, OrderBulkAssignDialog } from './order-bulk-assign-dialog';
 import { CountableOrder, OrderCounts, PolicyFor, TabCounts, zeroTabCounts } from './order-counts';
 import { describeApiError, errorReference, mutationErrorNotice } from './order-errors';
 import { OrderOutcomeReasonDialog, OutcomeReasonSubmission } from './order-outcome-reason-dialog';
 import { BoardKeyAction, OrderBoardKeys, orderBoardScope } from './order-board-shortcuts';
+import {
+  ORDER_BOARD_COLUMNS,
+  OrderBoardColumnContext,
+  columnVisibility,
+  offeredColumns,
+} from './order-board-columns';
 import { OrderQueueBulkBar } from './order-queue-bulk-bar';
 import { OrderQueueBulkResult } from './order-queue-bulk-result';
 import { OrderQueueToolbar } from './order-queue-toolbar';
@@ -81,6 +97,8 @@ import {
 } from './order-queue-filter-state';
 import {
   bulkAdvanceTarget,
+  bulkAssignEligible,
+  bulkAssignIneligibleCount,
   bulkCancelEligible,
   bulkCancelIneligibleCount,
   pruneSelection,
@@ -88,6 +106,8 @@ import {
   toggleSelectPage,
 } from './order-queue-selection';
 import { OrderReasonDialog, OrderReasonSubmission } from './order-reason-dialog';
+import { OrderSavedViews } from './order-saved-views';
+import { filtersFromView, viewFiltersFrom } from './order-saved-view-filters';
 import {
   OrderRejectReasonDialog,
   OrderRejectSubmission,
@@ -233,10 +253,11 @@ interface RowDialogState {
  *
  * **Selection and bulk actions.** A checkbox column, a bulk-action bar that
  * replaces the filter row while anything is selected, and `POST
- * .../orders/bulk-actions` (ADR 0039) — `ADVANCE`/`CANCEL` only.
- * **Bulk courier assignment is explicitly out of scope**: `BulkActionType`
- * has no such member, and the bulk bar says so rather than offering a button
- * that would 400. Every bulk action is offered only when it is valid for
+ * .../orders/bulk-actions` (ADR 0039) — `ADVANCE`, `CANCEL` and, since ADR
+ * 0172, `ASSIGN_COURIER`: «Назначить курьера» opens a courier picker over the
+ * roster and sends one request naming the courier, a reason code and the
+ * selection; it needs `order.bulk-action` **and** `delivery.manual_assign`,
+ * and the server decides per item. Every bulk action is offered only when it is valid for
  * *every* selected row (§2.10) — see `order-queue-selection.ts` for the
  * eligibility rules — and a partial failure renders §2.10's result panel,
  * with **Повторить проблемные** resubmitting only the failed items under a
@@ -274,10 +295,13 @@ interface RowDialogState {
     StatusPill,
     FilterBar,
     DateRangePicker,
+    OrderBulkAssignDialog,
     OrderQueueBulkBar,
     OrderQueueBulkResult,
     OrderQueueToolbar,
     OrderRowActions,
+    OrderSavedViews,
+    ColumnPicker,
   ],
   templateUrl: './order-queue.html',
   styleUrl: './order-queue.css',
@@ -307,6 +331,7 @@ export class OrderQueue implements OnInit {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly shortcuts = inject(ShortcutRegistry);
   protected readonly filterState = inject(OrderQueueFilterState);
+  private readonly preferences = inject(OwnPreferences);
 
   protected readonly tabs = ORDER_TABS.map((id) => ORDER_TAB_DEFINITIONS[id]);
 
@@ -378,6 +403,57 @@ export class OrderQueue implements OnInit {
   /** The queue is reading the brand-scoped board right now. */
   protected readonly allBranchesActive = computed(
     () => this.canViewAllBranches() && this.filters().allBranches,
+  );
+
+  // ----------------------------------------------- the person's own board (ADR 0160)
+
+  /** What this screen and this person can draw: «Все филиалы» for «Филиал», `COURIER_READ`'s roster for «Тип курьера». */
+  private readonly columnContext = computed<OrderBoardColumnContext>(() => ({
+    allBranches: this.allBranchesActive(),
+    courierRoster: this.capabilities.has('COURIER_READ'),
+  }));
+
+  /**
+   * Which columns the table draws: the person's choice from their account (`ORDER_BOARD`), held to what
+   * this screen and this person can draw -- «Филиал» exists only on «Все филиалы», «Тип курьера» only for
+   * someone who may read the courier roster. The columns the table always draws are
+   * not in this record because no choice can name them. While the account's document is on its way the
+   * mirror, then the code's default, decides; a failed read leaves the board as it always was.
+   */
+  protected readonly cols = computed(() =>
+    columnVisibility(this.preferences.orderBoard(), this.columnContext()),
+  );
+
+  /** The picker lists the columns whose cell has something to draw here, in the platform's order. */
+  protected readonly pickerColumns = computed<readonly ColumnPickerItem[]>(() => {
+    const visibility = this.cols();
+    return offeredColumns(this.columnContext()).map((key) => ({
+      key,
+      label: this.i18n.t(ORDER_BOARD_COLUMNS[key].labelKey),
+      shown: visibility[key],
+    }));
+  });
+
+  protected readonly canResetColumns = computed(() => {
+    const columns = this.preferences.orderBoard().columns;
+    return (columns?.show?.length ?? 0) + (columns?.hide?.length ?? 0) > 0;
+  });
+
+  protected readonly savedViews = computed(() => this.preferences.orderBoard().savedViews ?? []);
+
+  /** False for an account the tenant keeps no record for: its choices then last for the session only. */
+  protected readonly preferencesPersistent = this.preferences.persistent;
+
+  /**
+   * True after a change to the columns or the saved views was dropped on its way to the account (a second
+   * device won twice, or the platform refused it): the screen still shows it, the account does not hold it.
+   * Said on the board itself, not only in a menu that is usually closed.
+   */
+  protected readonly preferencesWriteFailed = this.preferences.writeFailed;
+
+  /** The board has a filter on that a saved view cannot hold, so «Сохранить вид» says it is left out. */
+  protected readonly viewsLeftOut = computed(
+    () => viewFiltersFrom(this.filters(), new Date()).leftOut,
   );
 
   /**
@@ -462,6 +538,12 @@ export class OrderQueue implements OnInit {
   protected readonly bulkBusy = signal(false);
   protected readonly bulkResult = signal<BulkActionResponse | null>(null);
   protected readonly bulkCancelDialogOpen = signal(false);
+  /** ADR 0172: the courier picker behind «Назначить курьера», and the roster it lists. */
+  protected readonly bulkAssignDialogOpen = signal(false);
+  protected readonly bulkAssignRoster = signal<readonly RosterEntryResponse[]>([]);
+  /** ADR 0172: the refused orders of an assignment being retried with another courier; null when it is a fresh pick. */
+  protected readonly bulkAssignRetryOrders = signal<readonly BulkOrderRef[] | null>(null);
+  protected readonly bulkAssignTriedCourierId = signal<string | null>(null);
   protected readonly bulkCancelReasons = signal<readonly ReasonResponse[]>([]);
   private lastBulkSubmission: BulkActionRequest | null = null;
 
@@ -617,6 +699,9 @@ export class OrderQueue implements OnInit {
   }
 
   private async start(): Promise<void> {
+    // The person's columns and views arrive on their own; the board never waits for them (a mirror paints
+    // first, and a failed read falls back to the code's default).
+    void this.preferences.ensureLoaded();
     await this.location.ensureLoaded();
     await this.refresh();
     this.hasStarted = true;
@@ -1093,7 +1178,8 @@ export class OrderQueue implements OnInit {
 
   protected typeLabel(order: OrderSummaryResponse): string {
     const mode = order.fulfillmentMode ? this.fulfillmentModeLabel(order.fulfillmentMode) : '—';
-    return order.channelCode ? `${mode} · ${order.channelCode}` : mode;
+    // «Канал» is the channel part of this cell (ADR 0160): turning it off leaves the fulfilment mode.
+    return order.channelCode && this.cols().channel ? `${mode} · ${order.channelCode}` : mode;
   }
 
   private fulfillmentModeLabel(mode: string): string {
@@ -1149,6 +1235,42 @@ export class OrderQueue implements OnInit {
       this.courierRoster().find((courier) => courier.courierId === order.courierId)
         ?.displayReference ?? order.courierId
     );
+  }
+
+  /**
+   * «Тип курьера» (ADR 0160): the courier type's name from the roster this page already fetches for the
+   * «Курьер» column. «—» for an order with no courier of its own (unassigned, or carried by a partner),
+   * and while the roster has not answered; never the courier's id.
+   */
+  protected courierTypeLabel(order: OrderSummaryResponse): string {
+    if (!order.courierId) {
+      return '—';
+    }
+    return (
+      this.courierRoster().find((courier) => courier.courierId === order.courierId)
+        ?.courierTypeName ?? '—'
+    );
+  }
+
+  /** «Скидка»: the order's discount in its own currency; `0` is a dash, like the delivery fee. */
+  protected formatDiscount(order: OrderSummaryResponse): string {
+    const discountMinor = order.discountMinor ?? 0;
+    return discountMinor > 0
+      ? formatMoney({ amountMinor: discountMinor, currency: order.currency }, this.i18n.locale())
+      : '—';
+  }
+
+  /**
+   * «Создал»: the name the tenant keeps for the staff member who took the order. «—» for an actor that is
+   * not a person and for a subject the tenant has no name for -- the raw `createdByActorId` is never drawn.
+   */
+  protected createdByLabel(order: OrderSummaryResponse): string {
+    return order.createdByDisplayName?.trim() || '—';
+  }
+
+  /** «Принял»: as {@link createdByLabel}, for the accepting actor. */
+  protected acceptedByLabel(order: OrderSummaryResponse): string {
+    return order.acceptedByDisplayName?.trim() || '—';
   }
 
   /**
@@ -1373,6 +1495,68 @@ export class OrderQueue implements OnInit {
     // `me`. Lazily loaded here rather than at start-up, so a session that
     // never touches this toggle never spends the extra request.
     void this.tenant.ensureLoaded().then(() => void this.refresh());
+  }
+
+  // --------------------------------------------- the person's columns and views (ADR 0160)
+
+  protected onColumnToggled(change: { readonly key: string; readonly shown: boolean }): void {
+    const key = change.key as keyof typeof ORDER_BOARD_COLUMNS;
+    this.preferences.updateOrderBoard((document) => withColumnShown(document, key, change.shown));
+  }
+
+  protected onColumnsReset(): void {
+    this.preferences.updateOrderBoard((document) => withoutColumnChoice(document));
+  }
+
+  /** Saves the board as it is now -- its tab and the filters a view can hold -- under the name the person typed. */
+  protected onViewSaved(label: string): void {
+    const { filters } = viewFiltersFrom(this.filters(), new Date());
+    const view: SavedView = {
+      id: crypto.randomUUID(),
+      label: normalisedSavedViewLabel(label),
+      tab: this.activeTab(),
+      filters,
+    };
+    this.preferences.updateOrderBoard((document) =>
+      withSavedViews(document, [...(document.savedViews ?? []), view]),
+    );
+  }
+
+  protected onViewRemoved(viewId: string): void {
+    this.preferences.updateOrderBoard((document) =>
+      withSavedViews(
+        document,
+        (document.savedViews ?? []).filter((view) => view.id !== viewId),
+      ),
+    );
+  }
+
+  /**
+   * Opens a saved view: its tab, and exactly its filters over an empty board. The board's own memory for
+   * that tab is replaced, as a pasted link replaces it, so the next cold visit remembers the view's state.
+   */
+  protected onViewApplied(view: SavedView): void {
+    const filters = filtersFromView(view, new Date(), {
+      canViewAllBranches: this.canViewAllBranches(),
+    });
+    const params = filtersToQueryParams(filters);
+    const tabChanges = view.tab !== this.activeTab();
+    const urlCarriesFilters = Object.values(params).some((value) => value !== null);
+    this.filterState.setFilters(view.tab, filters);
+    this.bindingOptionsScopeKey = null;
+    void this.router
+      .navigate([], {
+        relativeTo: this.route,
+        queryParams: { tab: view.tab, ...params },
+        queryParamsHandling: 'merge',
+      })
+      .then(() => {
+        // A tab change, or filters in the URL, already made the route subscription read the board; a view
+        // that only clears the filters of the tab already open changes no part of the URL it listens to.
+        if (!tabChanges && !urlCarriesFilters) {
+          void this.refresh();
+        }
+      });
   }
 
   protected onResetFilters(): void {
@@ -1711,7 +1895,11 @@ export class OrderQueue implements OnInit {
 
   /** The table's column count, for the empty row's `colspan`. */
   protected columnCount(): number {
-    return 11 + (this.canSelectOrders() ? 1 : 0) + (this.allBranchesActive() ? 1 : 0);
+    // The columns the table always draws: the severity rail, number, time, type, total, delivery fee,
+    // status and actions -- and then whichever optional ones the person's choice leaves on.
+    const always = 8;
+    const optional = Object.values(this.cols()).filter(Boolean).length;
+    return always + optional + (this.canSelectOrders() ? 1 : 0);
   }
 
   protected canBulkCancel(): boolean {
@@ -1729,6 +1917,73 @@ export class OrderQueue implements OnInit {
     return this.i18n.t('orders.queue.bulk.cancelUnavailable', {
       ineligible,
       total: this.selectionCount(),
+    });
+  }
+
+  /**
+   * ADR 0172: «Назначить курьера» needs both grants at the location — `order.bulk-action` for the
+   * endpoint and `delivery.manual_assign` for the act — and every selected row's `actions[]` to
+   * carry `ASSIGN_COURIER`. A prediction; the server decides.
+   */
+  protected canBulkAssign(): boolean {
+    return (
+      this.capabilities.has('DELIVERY_MANUAL_ASSIGN') && bulkAssignEligible(this.selectedOrders())
+    );
+  }
+
+  protected bulkAssignUnavailableMessage(): string | null {
+    if (this.selectionCount() === 0 || !this.capabilities.has('DELIVERY_MANUAL_ASSIGN')) {
+      return null;
+    }
+    const ineligible = bulkAssignIneligibleCount(this.selectedOrders());
+    if (ineligible === 0) {
+      return null;
+    }
+    return this.i18n.t('orders.queue.bulk.assignUnavailable', {
+      ineligible,
+      total: this.selectionCount(),
+    });
+  }
+
+  protected onBulkAssignClick(): void {
+    if (!this.canBulkAssign()) {
+      return;
+    }
+    this.bulkAssignRetryOrders.set(null);
+    this.bulkAssignTriedCourierId.set(null);
+    this.openBulkAssignDialog();
+  }
+
+  /** Fetches the roster the dispatch board reads, then shows the picker; an unreadable roster shows an empty one. */
+  private openBulkAssignDialog(): void {
+    const tenantId = this.location.scope()?.tenantId;
+    if (!tenantId) {
+      return;
+    }
+    void this.couriersApi
+      .roster(tenantId)
+      .then((roster) => this.bulkAssignRoster.set(roster))
+      .catch(() => this.bulkAssignRoster.set([]))
+      .finally(() => this.bulkAssignDialogOpen.set(true));
+  }
+
+  protected onBulkAssignDismiss(): void {
+    this.bulkAssignDialogOpen.set(false);
+    this.bulkAssignRetryOrders.set(null);
+    this.bulkAssignTriedCourierId.set(null);
+  }
+
+  protected onBulkAssignConfirm(submission: BulkAssignSubmission): void {
+    this.bulkAssignDialogOpen.set(false);
+    // A retry sends only the orders that were refused, to the courier just picked, under a new key.
+    const orders = this.bulkAssignRetryOrders() ?? this.orderRefsOf(this.selectedOrders());
+    this.bulkAssignRetryOrders.set(null);
+    this.bulkAssignTriedCourierId.set(null);
+    void this.submitBulk({
+      actionType: 'ASSIGN_COURIER',
+      orders,
+      courierId: submission.courierId,
+      reasonCode: submission.reasonCode,
     });
   }
 
@@ -1859,6 +2114,14 @@ export class OrderQueue implements OnInit {
         orderId: ref.orderId,
         expectedVersion: freshVersionById.get(ref.orderId) ?? ref.expectedVersion,
       }));
+    if (previous.actionType === 'ASSIGN_COURIER') {
+      // The same courier would refuse the same orders for the same reason (a full ceiling, a lapsed
+      // registration), so the retry of an assignment asks who should take them instead (ADR 0172).
+      this.bulkAssignRetryOrders.set(retryOrders);
+      this.bulkAssignTriedCourierId.set(previous.courierId ?? null);
+      this.openBulkAssignDialog();
+      return;
+    }
     void this.submitBulk({ ...previous, orders: retryOrders });
   }
 
@@ -1872,6 +2135,8 @@ export class OrderQueue implements OnInit {
     this.bulkResultItemLabel(orderId);
   protected readonly bulkProblemLabeller = (code: string | null | undefined): string =>
     this.bulkProblemLabel(code);
+  protected readonly bulkNoteLabeller = (note: string | null | undefined): string =>
+    this.bulkNoteLabel(note);
 
   protected bulkResultItemLabel(orderId: string): string {
     const row = this.rows().find((r) => r.order.orderId === orderId);
@@ -1895,6 +2160,8 @@ export class OrderQueue implements OnInit {
         return this.i18n.t('orders.queue.bulk.problem.CANCELLATION_NOT_PERMITTED');
       case 'CATCHWEIGHT_NOT_RECONCILED':
         return this.i18n.t('orders.queue.bulk.problem.CATCHWEIGHT_NOT_RECONCILED');
+      case 'MARKS_INCOMPLETE':
+        return this.i18n.t('orders.queue.bulk.problem.MARKS_INCOMPLETE');
       case 'REASON_NOT_FOUND':
         return this.i18n.t('orders.queue.bulk.problem.REASON_NOT_FOUND');
       case 'VALIDATION_FAILED':
@@ -1903,8 +2170,53 @@ export class OrderQueue implements OnInit {
         return this.i18n.t('orders.queue.bulk.problem.ORDER_NOT_FOUND_AT_LOCATION');
       case 'UNEXPECTED_FAILURE':
         return this.i18n.t('orders.queue.bulk.problem.UNEXPECTED_FAILURE');
+      // ADR 0172: the assignment's own stable codes.
+      case 'NOT_A_DELIVERY_ORDER':
+      case 'NO_DELIVERY_PLAN':
+      case 'PLAN_NOT_OPEN':
+      case 'ALREADY_ASSIGNED_TO_THIS_COURIER':
+      case 'ALREADY_ASSIGNED':
+      case 'ALREADY_BEING_SOURCED':
+      case 'PARTNER_ATTEMPT_UNRECONCILED':
+      case 'COURIER_NOT_ELIGIBLE':
+      case 'COURIER_AT_CAPACITY':
+        return this.i18n.t(`orders.queue.bulk.problem.${code}`);
       default:
         return code ?? '';
+    }
+  }
+
+  /**
+   * ADR 0172: an item's note is a comma-separated list of stable codes. A code this client does
+   * not know renders as itself, the same «renders harmlessly» rule as an unknown problem code.
+   */
+  protected bulkNoteLabel(note: string | null | undefined): string {
+    if (!note) {
+      return '';
+    }
+    return note
+      .split(',')
+      .map((code) => this.bulkNoteCodeLabel(code))
+      .join(', ');
+  }
+
+  private bulkNoteCodeLabel(code: string): string {
+    switch (code) {
+      case 'OVERRODE_DISPATCH_RULE':
+        return this.i18n.t('orders.queue.bulk.note.OVERRODE_DISPATCH_RULE');
+      case 'OUTSIDE_DISTANCE_BAND':
+        return this.i18n.t('orders.queue.bulk.note.OUTSIDE_DISTANCE_BAND');
+      case 'NO_OPEN_SHIFT':
+        return this.i18n.t('orders.queue.bulk.note.NO_OPEN_SHIFT');
+      case 'COURIER_NOT_ACTIVE':
+        return this.i18n.t('orders.queue.bulk.note.COURIER_NOT_ACTIVE');
+      case 'REGISTRATION_LAPSED':
+        return this.i18n.t('orders.queue.bulk.note.REGISTRATION_LAPSED');
+      case 'ENGAGEMENT_NOT_ACTIVE':
+        return this.i18n.t('orders.queue.bulk.note.ENGAGEMENT_NOT_ACTIVE');
+      default:
+        // DUTY_STATE_* and any refusal this client does not know render as themselves.
+        return code;
     }
   }
 

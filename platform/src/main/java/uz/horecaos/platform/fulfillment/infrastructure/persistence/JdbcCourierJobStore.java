@@ -213,6 +213,7 @@ public class JdbcCourierJobStore {
     private static String offerSelect() {
         return """
                 SELECT a.id AS offer_id, a.version AS offer_version, a.requested_at, a.expires_at,
+                       a.pay_basis, a.run_merge_distance_m,
                        %s
                 FROM fulfillment.assignment_attempts a
                 %s
@@ -250,7 +251,9 @@ public class JdbcCourierJobStore {
                 Objects.requireNonNull(instant(row, "pickup_window_start")),
                 Objects.requireNonNull(instant(row, "pickup_window_end")),
                 instant(row, "promised_delivery_end"),
-                mapPickup(row));
+                mapPickup(row),
+                row.getString("pay_basis"),
+                row.getObject("run_merge_distance_m", Integer.class));
     }
 
     private static Job mapJob(ResultSet row, int number) throws SQLException {

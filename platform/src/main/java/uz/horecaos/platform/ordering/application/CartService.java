@@ -132,7 +132,13 @@ public class CartService {
     private final CommentPresetLookup commentPresets;
     private final InventoryReservationPort inventory;
     private final TableBindingPort tables;
+    private final AutoAddReconciler autoAdd;
 
+    /**
+     * A cart that evaluates no auto-add rules (ADR 0158): every caller that predates the reconciler, and a
+     * test that never publishes one. The gate {@code ordering.auto_add_enabled} is closed by default, so the
+     * reconciler it is given here is never asked to do anything.
+     */
     @SuppressWarnings("checkstyle:ParameterNumber")
     public CartService(
             JdbcCartStore carts,
@@ -152,6 +158,61 @@ public class CartService {
             CommentPresetLookup commentPresets,
             InventoryReservationPort inventory,
             TableBindingPort tables) {
+        this(
+                carts,
+                channels,
+                menu,
+                serviceability,
+                tenancy,
+                pricing,
+                addresses,
+                protection,
+                objectMapper,
+                clock,
+                blacklist,
+                promoCodes,
+                configuration,
+                saleWindows,
+                commentPresets,
+                inventory,
+                tables,
+                new AutoAddReconciler(
+                        carts,
+                        CartAutoAddRules.NONE,
+                        channels,
+                        configuration,
+                        inventory,
+                        saleWindows,
+                        tenancy,
+                        (tenantId, brandId, locationId, channelCode, variantIds, modifierOptionIds) ->
+                                java.util.Optional.empty(),
+                        pricing,
+                        objectMapper,
+                        new io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
+                        clock));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public CartService(
+            JdbcCartStore carts,
+            SalesChannelLookup channels,
+            CartMenuRules menu,
+            ServiceabilityResolver serviceability,
+            OrderingTenantContext tenancy,
+            CartPricingPort pricing,
+            CustomerAddressBook addresses,
+            FieldProtection protection,
+            ObjectMapper objectMapper,
+            Clock clock,
+            CustomerBlacklistPort blacklist,
+            PromoCodeQueryPort promoCodes,
+            ConfigurationResolver configuration,
+            CartSaleWindowRules saleWindows,
+            CommentPresetLookup commentPresets,
+            InventoryReservationPort inventory,
+            TableBindingPort tables,
+            AutoAddReconciler autoAdd) {
         this.carts = carts;
         this.channels = channels;
         this.menu = menu;
@@ -169,6 +230,7 @@ public class CartService {
         this.commentPresets = commentPresets;
         this.inventory = inventory;
         this.tables = tables;
+        this.autoAdd = autoAdd;
     }
 
     /**
@@ -276,7 +338,7 @@ public class CartService {
                             selections.put(line.lineKey(), new LineSelections(picks, nested, modifiers));
                         }
                     }
-                    return new CartView(cart, lines, selections);
+                    return new CartView(cart, lines, selections, autoAdd.describe(cart, lines));
                 });
     }
 
@@ -499,6 +561,9 @@ public class CartService {
             @Nullable String customerNote) {
 
         CartRow cart = requireEditable(tenantId, brandId, callerAccountId, cartId);
+        if (lineKey.startsWith(AutoAddReconciler.LINE_KEY_PREFIX)) {
+            return editInjectedLine(cart, callerAccountId, expectedVersion, lineKey, variantId, quantity);
+        }
         List<ComboPick> picks = canonicalPicks(comboPicks);
         List<NestedModifier> nested = canonicalNested(nestedModifiers);
         requireLineKeyShape(lineKey, !picks.isEmpty());
@@ -555,6 +620,10 @@ public class CartService {
                 noteEncrypted,
                 now);
 
+        // ADR 0158: the basket the customer just edited decides what the rules add, in the same
+        // transaction, so the one version bump below covers the line and what it injected.
+        autoAdd.reconcile(cart);
+
         if (!carts.touchAndInvalidatePricing(tenantId, cartId, expectedVersion, now)) {
             // The version moved between the read and the write, so this edit is
             // built on a cart that no longer exists in that shape. Failing here
@@ -564,19 +633,107 @@ public class CartService {
         return view(tenantId, brandId, callerAccountId, cartId).orElseThrow();
     }
 
+    /**
+     * The customer sets the quantity of a line a rule injected (ADR 0158).
+     *
+     * <p>A key beginning {@code aa:} is reserved: a customer cannot create such a line, only change one
+     * that is already in the cart, and only its quantity. The quantity must be one the line's variant may
+     * be ordered in, must not exceed the rule's maximum and, for a mandatory rule, must not fall below the
+     * quantity the rules compute for the basket. A quantity the customer sets is remembered, so a later
+     * re-evaluation does not overwrite it (except to enforce those bounds).
+     */
+    private CartView editInjectedLine(
+            CartRow cart,
+            UUID callerAccountId,
+            int expectedVersion,
+            String lineKey,
+            UUID variantId,
+            BigDecimal quantity) {
+        UUID tenantId = cart.tenantId();
+        CartLineRow line = lines(tenantId, cart.cartId()).stream()
+                .filter(candidate -> candidate.lineKey().equals(lineKey) && candidate.injected())
+                .findFirst()
+                .orElseThrow(() -> new CartRefusedException(
+                        "LINE_KEY_INVALID",
+                        "A line key beginning '" + AutoAddReconciler.LINE_KEY_PREFIX
+                                + "' is reserved for lines a rule added"));
+        if (!line.variantId().equals(variantId)) {
+            throw new CartRefusedException(
+                    "LINE_KEY_INVALID", "An automatically added line keeps the variant its rule chose");
+        }
+        requireQuantityAllowed(
+                menu.forVariant(tenantId, cart.brandId(), channelCodeOf(tenantId, cart), variantId)
+                        .map(rules -> rules.physicalOf(variantId))
+                        .orElse(CartMenuRules.PhysicalRules.WHOLE_UNITS),
+                quantity);
+        autoAdd.requireQuantityInBounds(cart, line, quantity);
+        Instant now = clock.instant();
+        carts.updateInjectedLine(
+                tenantId,
+                cart.cartId(),
+                lineKey,
+                variantId,
+                quantity,
+                line.autoAddRuleVersion() == null ? 1 : line.autoAddRuleVersion(),
+                true,
+                now);
+        autoAdd.reconcile(cart);
+        if (!carts.touchAndInvalidatePricing(tenantId, cart.cartId(), expectedVersion, now)) {
+            throw new StaleCartException(expectedVersion, cart.version());
+        }
+        return view(tenantId, cart.brandId(), callerAccountId, cart.cartId()).orElseThrow();
+    }
+
     @Transactional
     public CartView removeLine(
             UUID tenantId, UUID brandId, UUID callerAccountId, UUID cartId, int expectedVersion, String lineKey) {
         CartRow cart = requireEditable(tenantId, brandId, callerAccountId, cartId);
         Instant now = clock.instant();
 
+        CartLineRow removed = lines(tenantId, cartId).stream()
+                .filter(candidate -> candidate.lineKey().equals(lineKey))
+                .findFirst()
+                .orElse(null);
+        if (removed != null && removed.injected() && removed.autoAddRuleId() != null) {
+            // ADR 0158: a line a rule added is removable unless the rule is mandatory, and a removal is
+            // remembered for the life of the cart: the rule is never evaluated into it again.
+            AutoAddReconciler.LineInfo info =
+                    autoAdd.describe(cart, List.of(removed)).get(lineKey);
+            if (info != null && info.mandatory()) {
+                throw new CartRefusedException(
+                        AutoAddReconciler.AUTO_ADD_LINE_MANDATORY, "This line cannot be removed from the basket");
+            }
+            carts.recordDecline(tenantId, cartId, removed.autoAddRuleId(), now);
+        }
         if (!carts.deleteLine(tenantId, cartId, lineKey)) {
             throw new CartRefusedException("LINE_NOT_FOUND", "No line " + lineKey + " in this cart");
         }
+        autoAdd.reconcile(cart);
         if (!carts.touchAndInvalidatePricing(tenantId, cartId, expectedVersion, now)) {
             throw new StaleCartException(expectedVersion, cart.version());
         }
         return view(tenantId, brandId, callerAccountId, cartId).orElseThrow();
+    }
+
+    /**
+     * Records that these rules are not wanted in this cart (ADR 0158), before any line is put in it: the
+     * operator's composer sends the rules whose lines it took off the basket the last quote showed, and the
+     * cart then never evaluates them in. The same memory a customer's removal leaves, without the line.
+     *
+     * @throws CartRefusedException {@code AUTO_ADD_LINE_MANDATORY} for a rule the customer may not decline
+     */
+    @Transactional
+    public void declineAutoAddRules(
+            UUID tenantId, UUID brandId, UUID callerAccountId, UUID cartId, java.util.Collection<UUID> ruleIds) {
+        CartRow cart = requireEditable(tenantId, brandId, callerAccountId, cartId);
+        Instant now = clock.instant();
+        for (UUID ruleId : ruleIds) {
+            if (autoAdd.isMandatory(cart, ruleId)) {
+                throw new CartRefusedException(
+                        AutoAddReconciler.AUTO_ADD_LINE_MANDATORY, "A mandatory line cannot be taken off the basket");
+            }
+            carts.recordDecline(tenantId, cartId, ruleId, now);
+        }
     }
 
     /**
@@ -678,6 +835,7 @@ public class CartService {
                 destination.longitude(),
                 now);
 
+        autoAdd.reconcile(cart);
         if (!carts.touchAndInvalidatePricing(tenantId, cartId, expectedVersion, now)) {
             // Rolls the destination write back with it, exactly as a losing line
             // edit does. A destination attached to a cart version nobody asked for
@@ -928,8 +1086,24 @@ public class CartService {
             throw new StaleCartException(expectedVersion, cart.version());
         }
 
+        // ADR 0158: the rules are verified before the customer's own lines are checked, so an injected
+        // line whose stock ran out since the last edit is dropped and the cart re-priced, and the refusal
+        // that names a line applies only to lines the customer chose. A difference advances the version,
+        // and the priced answer says so, so a client redraws instead of paying for a basket it has not seen.
+        boolean changedByPricing = false;
+        if (autoAdd.reconcile(cart)) {
+            if (!carts.touchAndInvalidatePricing(tenantId, cartId, expectedVersion, clock.instant())) {
+                throw new StaleCartException(expectedVersion, cart.version());
+            }
+            cart = carts.find(tenantId, brandId, cartId).orElseThrow();
+            changedByPricing = true;
+        }
+
         List<CartLineRow> lines = lines(tenantId, cartId);
-        if (lines.isEmpty()) {
+        if (lines.stream().allMatch(CartLineRow::injected)) {
+            // ADR 0158: a rule's line goes with something the customer chose, never alone. The rules
+            // drop it with the customer's last line; this holds for a cart they could not (a closed
+            // gate neither adds nor removes), so a basket of packaging is never priced.
             throw new CartRefusedException("CART_EMPTY", "An empty cart has nothing to price");
         }
         // Row 4.2g: re-checked here, not only at putLine. A line added inside its
@@ -1004,7 +1178,7 @@ public class CartService {
                 clock.instant())) {
             throw new StaleCartException(cart.version(), cart.version());
         }
-        return new PricedCart(cart.cartId(), cart.version(), quote, cart.appliedCouponCode());
+        return new PricedCart(cart.cartId(), cart.version(), quote, cart.appliedCouponCode(), changedByPricing);
     }
 
     /**
@@ -1196,6 +1370,11 @@ public class CartService {
                 existing.guestReferenceHash());
 
         for (CartLineRow line : oldLines) {
+            if (line.injected()) {
+                // ADR 0158: a rule's line is not the customer's selection. The new location's own
+                // rules (and its own stock) decide what is injected there, below.
+                continue;
+            }
             // The note ciphertext is bound to its old row by the ADR 0029
             // associated data, so it cannot simply be copied across: a value
             // moved to another row fails to decrypt. A rebuilt line therefore
@@ -1222,6 +1401,9 @@ public class CartService {
                     null,
                     now);
         }
+
+        // What the customer removed stays removed: moving branch is not a new chance for the bag.
+        carts.copyDeclines(tenantId, cartId, rebuilt.cartId(), now);
 
         // The destination does come across, where the note above does not, and the
         // difference is what each one costs to lose. A note is a nicety; a
@@ -1265,6 +1447,7 @@ public class CartService {
         if (!carts.transition(tenantId, cartId, CartStatus.ACTIVE, CartStatus.ABANDONED, null, now)) {
             throw new StaleCartException(expectedVersion, existing.version());
         }
+        autoAdd.reconcile(rebuilt);
         log.info("Rebuilt cart {} as {} at location {}", cartId, rebuilt.cartId(), newLocationId);
 
         return view(tenantId, brandId, callerAccountId, rebuilt.cartId()).orElseThrow();
@@ -1287,6 +1470,14 @@ public class CartService {
 
     public List<CartLineRow> lines(UUID tenantId, UUID cartId) {
         return carts.lines(tenantId, cartId);
+    }
+
+    /**
+     * What the rules say about the injected lines among these (ADR 0158), for the writer that copies a
+     * cart onto an order: which rule put each there, and whether the customer could have removed it.
+     */
+    public java.util.Map<String, AutoAddReconciler.LineInfo> autoAddInfoOf(CartRow cart, List<CartLineRow> lines) {
+        return autoAdd.describe(cart, lines);
     }
 
     /** The chosen option ids, read back out of the stored snapshot. */
@@ -1318,13 +1509,16 @@ public class CartService {
 
     /** One cart line, as pricing is asked about it: the single place a stored line becomes a pricing item. */
     CartPricingPort.PricingCommand.Item pricingItemOf(CartLineRow line) {
-        return new CartPricingPort.PricingCommand.Item(
+        CartPricingPort.PricingCommand.Item item = new CartPricingPort.PricingCommand.Item(
                 line.lineKey(),
                 line.variantId(),
                 line.quantity(),
                 modifierIdsOf(line),
                 pricingPicks(comboPicksOf(line)),
                 pricingNested(nestedModifiersOf(line)));
+        // ADR 0158 (open input 2): pricing is told a line's origin, never the rule behind it, so a promotion
+        // that names products, variants or categories can leave a rule's line out of what it counts.
+        return line.injected() ? item.asAutoAdded() : item;
     }
 
     private static List<CartPricingPort.PricingCommand.ComboPick> pricingPicks(List<ComboPick> picks) {
@@ -1663,15 +1857,30 @@ public class CartService {
      * that a cart response can never grow a field that turns out to be somebody's
      * home address.
      */
-    public record CartView(CartRow cart, List<CartLineRow> lines, java.util.Map<String, LineSelections> selections) {
+    public record CartView(
+            CartRow cart,
+            List<CartLineRow> lines,
+            java.util.Map<String, LineSelections> selections,
+            java.util.Map<String, AutoAddReconciler.LineInfo> autoAdd) {
 
         public CartView {
             selections = java.util.Map.copyOf(selections);
+            autoAdd = java.util.Map.copyOf(autoAdd);
+        }
+
+        /** A view with no injected line in it, which is every view before ADR 0158. */
+        public CartView(CartRow cart, List<CartLineRow> lines, java.util.Map<String, LineSelections> selections) {
+            this(cart, lines, selections, java.util.Map.of());
         }
 
         /** A view with no composite line in it, which is every view before ADR 0136. */
         public CartView(CartRow cart, List<CartLineRow> lines) {
-            this(cart, lines, java.util.Map.of());
+            this(cart, lines, java.util.Map.of(), java.util.Map.of());
+        }
+
+        /** What the rules say about an injected line: its rule, text, whether it can go and its bounds. */
+        public AutoAddReconciler.@Nullable LineInfo autoAddOf(String lineKey) {
+            return autoAdd.get(lineKey);
         }
 
         /** What a line holds beyond its variant, modifiers and note; empty for an ordinary line. */
@@ -1770,15 +1979,23 @@ public class CartService {
      * @param presentedCouponCode the code applied to the cart when it was priced, so a
      *        reader can ask what became of it (ADR 0140). The raw code is the customer's
      *        own input and is never echoed in a response.
+     * @param changedByPricing ADR 0158: the rules changed the basket while it was being priced
+     *        (an injected line was added, changed or dropped), so {@code cartVersion} is newer
+     *        than the one the caller sent and the client redraws the basket
      */
     public record PricedCart(
             UUID cartId,
             int cartVersion,
             QuoteSnapshot quote,
-            @Nullable String presentedCouponCode) {
+            @Nullable String presentedCouponCode,
+            boolean changedByPricing) {
+
+        public PricedCart(UUID cartId, int cartVersion, QuoteSnapshot quote, @Nullable String presentedCouponCode) {
+            this(cartId, cartVersion, quote, presentedCouponCode, false);
+        }
 
         public PricedCart(UUID cartId, int cartVersion, QuoteSnapshot quote) {
-            this(cartId, cartVersion, quote, null);
+            this(cartId, cartVersion, quote, null, false);
         }
     }
 

@@ -14,6 +14,8 @@ import type {
   MenuItemCommentPreset,
   MenuItemModifierGroup,
   MenuItemVariant,
+  MenuItemIngredient,
+  MenuItemTag,
 } from '../../types/home.types';
 import { ComboChoicesComponent } from '../../shared/combo-choices/combo-choices.component';
 import { NestedChoicesComponent } from '../../shared/nested-choices/nested-choices.component';
@@ -49,6 +51,7 @@ import { EcommerceItem, pushEcommerceEvent } from '../../core/analytics/ecommerc
 import type { CartResponseItem } from '../../types/cart.types';
 import { presetLabelFor } from '../../utils/preset-label';
 import { PhysicalFactsComponent } from '../../shared/physical-facts/physical-facts.component';
+import { TagBadgesComponent } from '../../shared/tag-badges/tag-badges.component';
 import {
   formatQuantity,
   initialQuantity,
@@ -90,6 +93,10 @@ export interface ProductDisplay {
   price: string;
   badge?: string;
   variants: ProductVariantDisplay[];
+  /** ADR 0174: the badges this product carries. */
+  tags: MenuItemTag[];
+  /** ADR 0174: the composition labels shown under the description. */
+  ingredients: MenuItemIngredient[];
 }
 
 function menuItemToDisplay(item: MenuItem, formatPriceFn: (n: number) => string): ProductDisplay {
@@ -118,6 +125,8 @@ function menuItemToDisplay(item: MenuItem, formatPriceFn: (n: number) => string)
     price: formatPriceFn(item.price),
     badge,
     variants,
+    tags: item.tags ?? [],
+    ingredients: item.ingredients ?? [],
   };
 }
 
@@ -170,6 +179,7 @@ function sameOptionIds(a: readonly string[], b: readonly string[]): boolean {
     ComboChoicesComponent,
     NestedChoicesComponent,
     PhysicalFactsComponent,
+    TagBadgesComponent,
     TranslatePipe,
   ],
   templateUrl: './product.component.html',
@@ -192,6 +202,11 @@ export class ProductComponent {
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
+  /** ADR 0174: the composition line, in the author's order: a label for the customer to read, nothing more. */
+  ingredientLine(item: ProductDisplay): string {
+    return item.ingredients.map((ingredient) => ingredient.name).join(', ');
+  }
+
   readonly product = signal<ProductDisplay | null>(null);
   readonly favouriting = signal(false);
   /** Raw menu item for variant IDs (cart API) */

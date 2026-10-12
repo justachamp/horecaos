@@ -95,6 +95,18 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
         return posChannels.size() == 1 ? Optional.of(posChannels.getFirst()) : Optional.empty();
     }
 
+    @Override
+    public List<SalesChannel> activeChannels(UUID tenantId) {
+        return jdbc.sql("SELECT " + CHANNEL_COLUMNS + """
+                FROM tenant.sales_channels
+                WHERE tenant_id = :tenantId AND status <> 'ARCHIVED'
+                ORDER BY code
+                """)
+                .param("tenantId", tenantId)
+                .query(JdbcSalesChannelStore::toChannel)
+                .list();
+    }
+
     public List<SalesChannel> listForTenant(UUID tenantId) {
         return jdbc.sql("SELECT " + CHANNEL_COLUMNS + """
                 FROM tenant.sales_channels
@@ -212,6 +224,23 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
                 .list()
                 .forEach(entry -> counts.put(entry.getKey(), entry.getValue()));
         return counts;
+    }
+
+    /** The ids of the active channels that are active at this branch, for the "is the branch in service" probe. */
+    public List<UUID> activeChannelIdsAt(UUID tenantId, UUID locationId) {
+        return jdbc.sql("""
+                SELECT c.id
+                  FROM tenant.sales_channels c
+                  JOIN tenant.sales_channel_locations scl
+                    ON scl.tenant_id = c.tenant_id AND scl.channel_id = c.id
+                 WHERE c.tenant_id = :tenantId AND c.status = 'ACTIVE'
+                   AND scl.location_id = :locationId AND scl.status = 'ACTIVE'
+                 ORDER BY c.code
+                """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .query((rs, n) -> rs.getObject("id", UUID.class))
+                .list();
     }
 
     /** Every channel's enabled fulfilment modes, for the registry list's "Типы получения" chips. */
@@ -350,16 +379,26 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
         if (!bumpVersion(tenantId, channelId, expectedVersion, now)) {
             return false;
         }
-        jdbc.sql("DELETE FROM tenant.sales_channel_locations "
-                        + "WHERE tenant_id = :tenantId AND channel_id = :channelId")
+        // The set is replaced as a diff and not as a delete-all-then-insert. A kiosk (ADR 0162) is bound to a
+        // channel at a location through a foreign key onto this very row, so a blind delete of every row would
+        // be refused for a binding the new set keeps. Only a location that is leaving the set is deleted, and
+        // a kiosk still paired through it refuses that delete by name (see explain).
+        jdbc.sql("""
+                DELETE FROM tenant.sales_channel_locations
+                 WHERE tenant_id = :tenantId AND channel_id = :channelId
+                   AND NOT (location_id = ANY (:locationIds))
+                """)
                 .param("tenantId", tenantId)
                 .param("channelId", channelId)
+                .param("locationIds", locationIds.toArray(UUID[]::new))
                 .update();
         for (UUID locationId : locationIds) {
             jdbc.sql("""
                     INSERT INTO tenant.sales_channel_locations (
                         tenant_id, channel_id, location_id, status, created_at, updated_at)
                     VALUES (:tenantId, :channelId, :locationId, 'ACTIVE', :now, :now)
+                    ON CONFLICT (channel_id, location_id)
+                    DO UPDATE SET status = 'ACTIVE', updated_at = :now
                     """)
                     .param("tenantId", tenantId)
                     .param("channelId", channelId)
@@ -515,6 +554,13 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
         }
         if (message.contains("fk_channel_location_location")) {
             return new IllegalArgumentException("That location does not belong to this tenant");
+        }
+        // ADR 0162: a kiosk is paired through this channel at this location (fk_kiosk_device_channel_location),
+        // so the location cannot leave the channel's set while the kiosk is paired. Its own sentence, because
+        // the fix is a different act (revoke or rebind the kiosk) from anything the operator was doing here.
+        if (message.contains("fk_kiosk_device_channel_location")) {
+            return new IllegalStateException("A kiosk is paired through this channel at a location you are removing; "
+                    + "revoke the kiosk or move it to another kiosk channel first");
         }
         if (message.contains("fk_sales_channel_price_plane")) {
             return new IllegalArgumentException("That price plane channel does not belong to this tenant");

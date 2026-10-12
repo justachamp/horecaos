@@ -2,7 +2,6 @@ package uz.horecaos.platform.ordering.domain;
 
 import java.util.EnumSet;
 import java.util.Set;
-import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 
 /**
@@ -25,7 +24,7 @@ public enum OutcomeSystemCategory {
     CUSTOMER_UNREACHABLE(OutcomeReasonKind.CANCELLATION),
     CUSTOMER_NO_SHOW(OutcomeReasonKind.CANCELLATION),
     RESTAURANT_REFUSED(OutcomeReasonKind.CANCELLATION),
-    ITEM_UNAVAILABLE(OutcomeReasonKind.CANCELLATION),
+    ITEM_UNAVAILABLE(OutcomeReasonKind.CANCELLATION, OutcomeReasonKind.LINE_REMOVAL),
     KITCHEN_CAPACITY(OutcomeReasonKind.CANCELLATION),
     DELIVERY_FAILED(OutcomeReasonKind.CANCELLATION),
     COURIER_UNAVAILABLE(OutcomeReasonKind.CANCELLATION),
@@ -35,6 +34,13 @@ public enum OutcomeSystemCategory {
     TEST_ORDER(OutcomeReasonKind.CANCELLATION),
     SUSPECTED_FRAUD(OutcomeReasonKind.CANCELLATION),
     PRICING_ERROR(OutcomeReasonKind.CANCELLATION),
+
+    // ------------------------------------------------------------ line removal (ADR 0169)
+
+    CUSTOMER_CHANGED_MIND(OutcomeReasonKind.LINE_REMOVAL),
+    KITCHEN_ERROR(OutcomeReasonKind.LINE_REMOVAL),
+    ORDER_ENTRY_ERROR(OutcomeReasonKind.LINE_REMOVAL),
+    QUALITY_ISSUE(OutcomeReasonKind.LINE_REMOVAL),
 
     // -------------------------------------------------------------- completion
 
@@ -61,15 +67,18 @@ public enum OutcomeSystemCategory {
      * restaurant declined" and "the restaurant never looked" are different facts
      * with different branch metrics, and no operator picks this one.
      */
-    APPROVAL_DEADLINE_LAPSED(null),
+    APPROVAL_DEADLINE_LAPSED,
 
     /** Neither registry offers this; it is what an unmapped tenant reason lands on. */
-    OTHER(null);
+    OTHER;
 
-    private final @Nullable OutcomeReasonKind reasonKind;
+    private final Set<OutcomeReasonKind> reasonKinds;
 
-    OutcomeSystemCategory(@Nullable OutcomeReasonKind reasonKind) {
-        this.reasonKind = reasonKind;
+    /** The registries that may carry this category; none for a system-only fact. */
+    OutcomeSystemCategory(OutcomeReasonKind... reasonKinds) {
+        EnumSet<OutcomeReasonKind> kinds = EnumSet.noneOf(OutcomeReasonKind.class);
+        kinds.addAll(java.util.Arrays.asList(reasonKinds));
+        this.reasonKinds = kinds;
     }
 
     /**
@@ -83,7 +92,7 @@ public enum OutcomeSystemCategory {
         if (this == OTHER) {
             return true;
         }
-        return reasonKind == kind;
+        return reasonKinds.contains(kind);
     }
 
     /** The categories a tenant may choose from for this kind. */

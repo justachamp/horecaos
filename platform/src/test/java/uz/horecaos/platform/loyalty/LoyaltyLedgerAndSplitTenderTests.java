@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -21,6 +22,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
@@ -43,12 +45,14 @@ import uz.horecaos.platform.loyalty.api.HeldTenderPort;
 import uz.horecaos.platform.loyalty.api.LoyaltyBalanceChanged;
 import uz.horecaos.platform.loyalty.api.LoyaltyExpiryWarningPort;
 import uz.horecaos.platform.loyalty.api.PointsRedemptionPort;
+import uz.horecaos.platform.loyalty.application.AdjustmentReasonPolicyService;
 import uz.horecaos.platform.loyalty.application.LoyaltyAccrualService;
 import uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService;
 import uz.horecaos.platform.loyalty.application.LoyaltyMaintenanceService;
 import uz.horecaos.platform.loyalty.application.LoyaltyPolicyService;
 import uz.horecaos.platform.loyalty.application.LoyaltyQueryService;
 import uz.horecaos.platform.loyalty.application.PointsRedemptionService;
+import uz.horecaos.platform.loyalty.domain.AdjustmentReasonPolicy;
 import uz.horecaos.platform.loyalty.domain.EntryType;
 import uz.horecaos.platform.loyalty.domain.LotStatus;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore;
@@ -61,6 +65,7 @@ import uz.horecaos.platform.payments.settlement.OrderSettlementService.PlannedTe
 import uz.horecaos.platform.payments.settlement.OrderSettlementService.SettlementPlan;
 import uz.horecaos.platform.payments.settlement.SettlementStatus;
 import uz.horecaos.platform.payments.settlement.TenderStatus;
+import uz.horecaos.platform.support.InMemoryPlatformPolicies;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.web.api.ApiException;
 
@@ -182,6 +187,8 @@ class LoyaltyLedgerAndSplitTenderTests {
     private LoyaltyQueryService queries;
     private OrderSettlementService settlements;
     private RecordingAudit audit;
+    private InMemoryPlatformPolicies reasonPolicies;
+    private SimpleMeterRegistry meters;
 
     private UUID locationId;
     private UUID otherLocationId;
@@ -242,7 +249,15 @@ class LoyaltyLedgerAndSplitTenderTests {
         LoyaltyPolicyService policies = new LoyaltyPolicyService(store);
         redemption = new PointsRedemptionService(store, policies, events, clock);
         accrual = new LoyaltyAccrualService(store, policies, events, clock);
-        adjustments = new LoyaltyAdjustmentService(store, new AlwaysApproves(), audit, clock, 100_000L);
+        reasonPolicies = new InMemoryPlatformPolicies();
+        meters = new SimpleMeterRegistry();
+        adjustments = new LoyaltyAdjustmentService(
+                store,
+                new AlwaysApproves(),
+                audit,
+                clock,
+                new AdjustmentReasonPolicyService(reasonPolicies, reasonPolicies, meters),
+                100_000L);
         maintenance = new LoyaltyMaintenanceService(
                 store, redemption, NOTHING_AWAITS, NO_WARNINGS_RECORDED, transactions, clock);
         queries = new LoyaltyQueryService(store, clock);
@@ -760,35 +775,74 @@ class LoyaltyLedgerAndSplitTenderTests {
     @DisplayName("a balance tender can never name a payment intent")
     void pointsCannotReachAProvider() {
         UUID order = completedOrder("E-1", 100_000L, 0L);
-        UUID settlementId = UUID.randomUUID();
-        jdbc.sql("""
-                INSERT INTO payments.order_settlements (id, tenant_id, order_id, currency,
-                    total_due_minor, settled_minor, status)
-                VALUES (:id, :tenantId, :orderId, 'UZS', 100000, 0, 'PLANNED')
-                """)
-                .param("id", settlementId)
-                .param("tenantId", TENANT)
-                .param("orderId", order)
-                .update();
+        UUID settlementId = insertSettlement(order);
+        // A REAL intent, so fk_tender_intent is satisfied. The first version of this test named
+        // a random UUID, which the foreign key refuses on its own: it passed with the check
+        // dropped, and asserted only that "something" failed (ADR 0165).
+        UUID intentId = insertClickIntent(order);
 
-        // The structural form of "not withdrawable": platform-held value has no
-        // column in which it could become an outbound provider call, so nothing
-        // can inflate a Click received_ecash with it even by a mistaken insert.
-        Throwable refusal = catchThrowable(() -> jdbc.sql("""
-                INSERT INTO payments.tenders (id, tenant_id, settlement_id, sequence,
-                    payment_method_id, settles_from_balance, amount_minor, currency, status,
-                    payment_intent_id, idempotency_key)
-                VALUES (:id, :tenantId, :settlementId, 1, :methodId, true, 5000, 'UZS',
-                        'RESERVED', :intentId, 'k')
-                """)
-                .param("id", UUID.randomUUID())
-                .param("tenantId", TENANT)
-                .param("settlementId", settlementId)
-                .param("methodId", pointsMethod)
-                .param("intentId", UUID.randomUUID())
-                .update());
+        // The control: a money tender naming that very intent is accepted. Without it a
+        // refusal below could be any of a dozen things.
+        insertTender(settlementId, 1, clickMethod, false, intentId, "k-money");
 
-        assertThat(refusal).isNotNull();
+        // The structural form of "not withdrawable": platform-held value has no column in which
+        // it could become an outbound provider call, so nothing can inflate a Click
+        // received_ecash with it even by a mistaken insert.
+        Throwable refusal = catchThrowable(() -> insertTender(settlementId, 2, pointsMethod, true, intentId, "k-pts"));
+
+        assertThat(refusal)
+                .as("the CHECK that a balance tender has no intent is what refuses it, not the "
+                        + "foreign key and not the one-balance-leg index")
+                .hasMessageContaining("ck_tender_balance_has_no_intent");
+    }
+
+    @Test
+    @DisplayName("a balance method can never be registered as a partner, terminal or marketplace path")
+    void aBalanceMethodIsNeverAFiscalPath() {
+        Instant now = clock.instant();
+
+        // The control: OPERATOR is the one responsibility a balance method may carry, so the
+        // three refusals below cannot be some other error on the insert.
+        UUID accepted = settlementStore.registerMethod(TENANT, "BAL_OPERATOR", "Balance", "OPERATOR", true, now);
+        assertThat(accepted).isNotNull();
+
+        for (String responsibility : List.of("PARTNER", "TERMINAL", "MARKETPLACE")) {
+            Throwable refusal = catchThrowable(() -> settlementStore.registerMethod(
+                    TENANT, "BAL_" + responsibility, "Balance", responsibility, true, now));
+
+            assertThat(refusal)
+                    .as(
+                            "a balance method under %s would be asked to issue a receipt or call a provider "
+                                    + "for money that is not one",
+                            responsibility)
+                    .hasMessageContaining("ck_payment_method_balance_is_not_a_fiscal_path");
+        }
+
+        // And the same three responsibilities are fine for a method that is not a balance, so
+        // it is the combination that is refused and not the responsibility.
+        for (String responsibility : List.of("PARTNER", "TERMINAL", "MARKETPLACE")) {
+            assertThat(settlementStore.registerMethod(
+                            TENANT, "MONEY_" + responsibility, "Money", responsibility, false, now))
+                    .isNotNull();
+        }
+    }
+
+    @Test
+    @DisplayName("a settlement admits one balance leg and no second")
+    void aSettlementAdmitsOneBalanceLeg() {
+        UUID order = completedOrder("E-2", 100_000L, 0L);
+        UUID settlementId = insertSettlement(order);
+
+        insertTender(settlementId, 1, pointsMethod, true, null, "k-first");
+
+        Throwable refusal = catchThrowable(() -> insertTender(settlementId, 2, pointsMethod, true, null, "k-second"));
+        assertThat(refusal)
+                .as("two balance legs in one settlement are how a deposit plus points would arrive "
+                        + "(ADR 0165); the unique index is what stops it, and its name is what proves it")
+                .hasMessageContaining("ux_tender_one_balance_per_settlement");
+
+        // The control: a money leg beside the balance leg is exactly what a split tender is.
+        insertTender(settlementId, 3, cashMethod, false, null, "k-cash");
     }
 
     @Test
@@ -2066,6 +2120,87 @@ class LoyaltyLedgerAndSplitTenderTests {
                 .update();
     }
 
+    private double unlistedCount(String mode) {
+        var counter = meters.find(AdjustmentReasonPolicyService.UNLISTED_COUNTER_NAME)
+                .tag("mode", mode)
+                .counter();
+        return counter == null ? 0.0 : counter.count();
+    }
+
+    private ApprovalOutcome adjustWithReason(String reasonCode, long amountMinor, String key) {
+        return transactions.execute(status -> adjustments.adjust(new LoyaltyAdjustmentService.AdjustmentCommand(
+                TENANT,
+                BRAND,
+                customerId,
+                amountMinor,
+                "UZS",
+                reasonCode,
+                "Counter",
+                ActorRef.user("support-1", "Support"),
+                key,
+                "corr-" + key)));
+    }
+
+    private List<AuditFact> auditedAdjustments() {
+        return audit.facts.stream()
+                .filter(fact -> fact.actionCode().equals("loyalty.balance.adjust"))
+                .toList();
+    }
+
+    private UUID insertSettlement(UUID orderId) {
+        UUID settlementId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO payments.order_settlements (id, tenant_id, order_id, currency,
+                    total_due_minor, settled_minor, status)
+                VALUES (:id, :tenantId, :orderId, 'UZS', 100000, 0, 'PLANNED')
+                """)
+                .param("id", settlementId)
+                .param("tenantId", TENANT)
+                .param("orderId", orderId)
+                .update();
+        return settlementId;
+    }
+
+    /** A pending Click intent, so a tender that names it satisfies {@code fk_tender_intent}. */
+    private UUID insertClickIntent(UUID orderId) {
+        UUID intentId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO payments.payment_intents (id, tenant_id, order_id, brand_id, location_id,
+                    tender, payment_method_code, provider_type, requested_amount_minor, currency,
+                    status, capture_timing, idempotency_key)
+                VALUES (:id, :tenantId, :orderId, :brandId, :locationId, 'PROVIDER', 'CLICK',
+                    'CLICK', 100000, 'UZS', 'PENDING', 'BEFORE_CONFIRMATION', :key)
+                """)
+                .param("id", intentId)
+                .param("tenantId", TENANT)
+                .param("orderId", orderId)
+                .param("brandId", BRAND)
+                .param("locationId", locationId)
+                .param("key", "intent-" + intentId)
+                .update();
+        return intentId;
+    }
+
+    private void insertTender(
+            UUID settlementId, int sequence, UUID methodId, boolean balance, @Nullable UUID intentId, String key) {
+        jdbc.sql("""
+                INSERT INTO payments.tenders (id, tenant_id, settlement_id, sequence,
+                    payment_method_id, settles_from_balance, amount_minor, currency, status,
+                    payment_intent_id, idempotency_key)
+                VALUES (:id, :tenantId, :settlementId, :sequence, :methodId, :balance, 5000, 'UZS',
+                        'PLANNED', :intentId, :key)
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", TENANT)
+                .param("settlementId", settlementId)
+                .param("sequence", sequence)
+                .param("methodId", methodId)
+                .param("balance", balance)
+                .param("intentId", intentId)
+                .param("key", key)
+                .update();
+    }
+
     private void seedPaymentMethods() {
         Instant now = clock.instant();
         cashMethod = settlementStore.registerMethod(TENANT, "CASH", "Наличные", "OPERATOR", false, now);
@@ -2088,6 +2223,129 @@ class LoyaltyLedgerAndSplitTenderTests {
                 ActorRef.user("support-1", "Support"),
                 key,
                 "corr-" + key)));
+    }
+
+    // ---------------------------------- the operator's reason code (ADR 0165)
+
+    @Test
+    @DisplayName("every code on the list is accepted, in either mode, and none of them is counted as unlisted")
+    void everyListedReasonCodeIsAccepted() {
+        int n = 0;
+        for (AdjustmentReasonPolicy.Mode mode : AdjustmentReasonPolicy.Mode.values()) {
+            reasonPolicies.author(
+                    AdjustmentReasonPolicyService.REASON_CODES,
+                    uz.horecaos.platform.iam.api.ResourceScope.platform(),
+                    new AdjustmentReasonPolicy(mode, AdjustmentReasonPolicy.DEFAULT_CODES),
+                    ActorRef.user("platform-1", "Platform"),
+                    "mode " + mode);
+            for (String code : AdjustmentReasonPolicy.DEFAULT_CODES) {
+                adjustWithReason(code, 1_000L, "listed-" + mode + "-" + n++);
+            }
+        }
+
+        assertThat(queries.balance(TENANT, accountId()).balanceMinor())
+                .as("ten adjustments of 1 000, five per mode, all applied")
+                .isEqualTo(10_000L);
+        assertThat(meters.find(AdjustmentReasonPolicyService.UNLISTED_COUNTER_NAME)
+                        .counters())
+                .as("a listed code never touches the counter")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("while the list is only reported, CASH_RECEIVED is accepted and counted, by mode alone")
+    void reportOnlyAcceptsAnUnlistedCodeAndCountsIt() {
+        // Nothing authored: the built-in default applies, which is REPORT_ONLY.
+        adjustWithReason("CASH_RECEIVED", 7_000L, "unlisted-1");
+
+        assertThat(queries.balance(TENANT, accountId()).balanceMinor())
+                .as("report-only is what lets a tenant's habits show up in a metric before they "
+                        + "show up as a refusal")
+                .isEqualTo(7_000L);
+
+        assertThat(unlistedCount("REPORT_ONLY")).isEqualTo(1.0);
+        assertThat(meters.find(AdjustmentReasonPolicyService.UNLISTED_COUNTER_NAME)
+                        .counters())
+                .singleElement()
+                .satisfies(counter -> assertThat(counter.getId().getTags())
+                        .as("labelled by mode and nothing else: a reason code is typed by a person and "
+                                + "may contain a name, and a tenant or amount label would be unbounded")
+                        .hasSize(1));
+
+        assertThat(auditedAdjustments())
+                .as("which codes operators really used is read from the audit facts")
+                .singleElement()
+                .satisfies(fact -> assertThat(fact.changeDocument()).containsEntry("reasonCode", "CASH_RECEIVED"));
+    }
+
+    @Test
+    @DisplayName("once the list is enforced, CASH_RECEIVED is refused as a field error and moves nothing")
+    void anEnforcedListRefusesCashReceived() {
+        reasonPolicies.author(
+                AdjustmentReasonPolicyService.REASON_CODES,
+                uz.horecaos.platform.iam.api.ResourceScope.platform(),
+                new AdjustmentReasonPolicy(AdjustmentReasonPolicy.Mode.ENFORCE, AdjustmentReasonPolicy.DEFAULT_CODES),
+                ActorRef.user("platform-1", "Platform"),
+                "enforce after one release of report-only data");
+
+        ApiException refusal = (ApiException) catchThrowable(() -> adjustWithReason("CASH_RECEIVED", 7_000L, "cash-1"));
+
+        assertThat(refusal).isNotNull();
+        assertThat(refusal.errorCode()).isEqualTo(uz.horecaos.platform.web.api.ErrorCode.VALIDATION_FAILED);
+        assertThat(refusal.getMessage())
+                .as("the detail never echoes the code: a person typed it and it may carry a name")
+                .doesNotContain("CASH_RECEIVED");
+        assertThat(refusal.properties().get("errors"))
+                .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
+                .singleElement()
+                .isEqualTo(new uz.horecaos.platform.web.api.ApiProblem.FieldError(
+                        "reasonCode",
+                        AdjustmentReasonPolicyService.NOT_PERMITTED,
+                        "Choose one of the permitted reason codes"));
+
+        assertThat(store.findAccount(TENANT, BRAND, customerId))
+                .as("a refused code opens no account and writes no entry")
+                .isEmpty();
+        assertThat(auditedAdjustments()).isEmpty();
+        assertThat(unlistedCount("ENFORCE"))
+                .as("the counter counts the attempt in the mode that refused it")
+                .isEqualTo(1.0);
+
+        // The control: a listed code still goes through, so it was the code and not the mode.
+        adjustWithReason("GOODWILL", 2_000L, "goodwill-1");
+        assertThat(queries.balance(TENANT, accountId()).balanceMinor()).isEqualTo(2_000L);
+    }
+
+    @Test
+    @DisplayName("the audit fact names the policy and version the adjustment was permitted under")
+    void theAuditFactPersistsThePolicyItUsed() {
+        var first = reasonPolicies.author(
+                AdjustmentReasonPolicyService.REASON_CODES,
+                uz.horecaos.platform.iam.api.ResourceScope.platform(),
+                AdjustmentReasonPolicy.platformDefault(),
+                ActorRef.user("platform-1", "Platform"),
+                "seed the report-only list");
+        adjustWithReason("GOODWILL", 1_000L, "pinned-1");
+
+        var second = reasonPolicies.author(
+                AdjustmentReasonPolicyService.REASON_CODES,
+                uz.horecaos.platform.iam.api.ResourceScope.platform(),
+                new AdjustmentReasonPolicy(AdjustmentReasonPolicy.Mode.ENFORCE, AdjustmentReasonPolicy.DEFAULT_CODES),
+                ActorRef.user("platform-1", "Platform"),
+                "enforce");
+        adjustWithReason("GOODWILL", 1_000L, "pinned-2");
+
+        assertThat(auditedAdjustments())
+                .extracting(fact -> fact.changeDocument().get("policyId"))
+                .containsExactly(first.policyId().toString(), second.policyId().toString());
+        assertThat(auditedAdjustments())
+                .extracting(fact -> fact.changeDocument().get("policyVersion"))
+                .containsExactly(1, 2);
+        assertThat(reasonPolicies.pinned(
+                        AdjustmentReasonPolicyService.REASON_CODES, first.policyId(), first.policyVersion()))
+                .as("the version the first adjustment used still resolves, however the list changed since")
+                .hasValueSatisfying(pinned ->
+                        assertThat(pinned.document().mode()).isEqualTo(AdjustmentReasonPolicy.Mode.REPORT_ONLY));
     }
 
     // ---------------------------------------------------------------- doubles

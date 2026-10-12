@@ -98,12 +98,16 @@ export const deliveryEn = {
   'delivery.rules.start.READY': 'When the food is ready',
   'delivery.rules.start.offset': 'Shift by (minutes)',
   'delivery.rules.grouping': 'Group orders into one run',
-  'delivery.rules.grouping.locked':
-    'Not available yet: how a courier is paid for a run of several orders is still to be decided.',
+  'delivery.rules.grouping.locked': 'Switched off on this installation.',
+  'delivery.rules.grouping.payUndecided':
+    'Grouping changes what a courier earns for the same kilometres, so first decide how a run of several orders is paid.',
+  'delivery.rules.grouping.payUndecided.link': 'Decide the pay for a run',
   'delivery.rules.grouping.enable': 'Prefer a courier who is already going that way',
   'delivery.rules.grouping.radius': 'Merge radius (metres)',
   'delivery.rules.grouping.orders': 'Orders per run',
   'delivery.rules.grouping.wait': 'Longest wait (seconds)',
+  'delivery.rules.grouping.waitNotAvailable':
+    'Waiting for a courier who is going that way is not available: grouping only ranks couriers, and the wait stays zero.',
   'delivery.rules.reason': 'Why are you changing the rules?',
   'delivery.rules.reasonRequired': 'Say why you are changing the rules.',
   'delivery.rules.publish': 'Publish',
@@ -167,6 +171,21 @@ export const deliveryEn = {
     'The winning partner is decided by the prices quoted at booking.',
   'delivery.rules.sim.note.NO_ZONE_EVIDENCE':
     'This order has no zone, so zone rules cannot match it.',
+  'delivery.rules.sim.note.GROUPING_CEILING_BELOW_RUN':
+    'No courier type of this company can carry as many orders as this rule groups, so no run will form.',
+  'delivery.rules.sim.note.GROUPING_NEEDS_A_PLAN_TO_MEASURE':
+    'Choose a recent order to see which couriers would be measured: a typed scenario has no door.',
+  'delivery.rules.sim.note.FLEET_NOT_MEASURABLE': 'The courier fleet could not be measured here.',
+  'delivery.rules.sim.note.GROUPING_SWITCHED_OFF':
+    'Grouping is switched off for the whole platform, so orders are offered one by one and no couriers are measured.',
+  'delivery.rules.sim.grouping.heading': 'Couriers measured for grouping',
+  'delivery.rules.sim.grouping.empty': 'No courier is on shift to be measured.',
+  'delivery.rules.sim.grouping.carrying': 'carrying {n} of {max}',
+  'delivery.rules.sim.grouping.metres': '{metres} m from a drop-off they carry',
+  'delivery.rules.sim.grouping.notGroupable': 'not groupable',
+  'delivery.rules.sim.grouping.basis.DIRECT': 'would be offered the order at its own pay',
+  'delivery.rules.sim.grouping.basis.RUN_INCREMENT':
+    'would be offered it paid on the extra distance',
   'delivery.rules.sim.violations': 'This draft cannot be published as it stands:',
   'delivery.rules.sim.noProvider': 'No partner was called and no price was asked.',
   'delivery.timings.heading': 'Timing',
@@ -189,8 +208,9 @@ export const deliveryEn = {
   'delivery.paymentWindow.action': 'After that',
   'delivery.paymentWindow.action.FLAG_ONLY': 'Flag the order for a person',
   'delivery.paymentWindow.action.CANCEL': 'Cancel the order',
-  'delivery.paymentWindow.cancelLocked':
-    'Cancelling an unpaid order is not available until product decides it.',
+  'delivery.paymentWindow.cancelNote':
+    'Cancelling ends the order as «Cancelled: not paid»: its stock and promo code go back and the payment page is closed. A payment that arrives afterwards never revives it; finance is told a refund is due.',
+  'delivery.paymentWindow.cancelTooShort': 'A window that cancels is at least 15 minutes.',
   'delivery.paymentWindow.save': 'Publish the window',
   'delivery.paymentWindow.saved': 'Published as version {version}.',
   'delivery.dialog.cancel': 'Cancel',
@@ -675,6 +695,17 @@ export const deliveryEn = {
   'delivery.policy.overridden': 'Overridden',
   'delivery.policy.inherited': 'Inherited: {value}',
   'delivery.policy.policyIdentity': 'Policy {id} · v{version}',
+  'delivery.policy.runPayMode': 'Pay for a run of several orders',
+  'delivery.policy.runPayMode.UNDECIDED': 'Not decided (every order is paid in full)',
+  'delivery.policy.runPayMode.PER_ORDER': 'Every order in full',
+  'delivery.policy.runPayMode.FIRST_FULL_THEN_INCREMENT':
+    'First order in full, the rest by their extra distance',
+  'delivery.policy.runPayMode.acknowledge':
+    'I confirm our courier engagement terms allow pay that depends on the run. HorecaOS asserts nothing about our contracts.',
+  'delivery.policy.runPayMode.pendingApproval':
+    'Sent for a second signature (request {request}). Nothing changes until it is approved; publish the same document again afterwards.',
+  'delivery.policy.consequence.runPayMode':
+    'Decides what a courier is paid when one run carries several orders to neighbouring doors. «First in full» pays each later order its per-order amount and minimum in full and its per-kilometre amount only for the distance beyond the previous drop-off; the courier sees the amount before accepting. A dispatch rule cannot turn grouping on while this is undecided.',
   'delivery.policy.shiftEnforcement': 'Shift enforcement',
   'delivery.policy.shiftEnforcement.ENFORCED': 'Enforced',
   'delivery.policy.shiftEnforcement.ADVISORY': 'Advisory',

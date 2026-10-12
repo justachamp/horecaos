@@ -22,11 +22,59 @@ class DevicePrincipalClassTests {
     }
 
     @Test
+    void aPrintAgentIsApprovedAsAPrintAgentAndAsNothingElseAndNothingIsApprovedAsOne() {
+        // ADR 0154: the class decides which role a device is granted. An approval click must never hand a
+        // display the agent's bundle, or an agent a display's.
+        assertThat(DevicePrincipalClass.PRINT_AGENT.mayBeApprovedAs(DevicePrincipalClass.PRINT_AGENT))
+                .isTrue();
+        for (DevicePrincipalClass other : DevicePrincipalClass.values()) {
+            if (other == DevicePrincipalClass.PRINT_AGENT) {
+                continue;
+            }
+            assertThat(DevicePrincipalClass.PRINT_AGENT.mayBeApprovedAs(other))
+                    .as("an agent cannot be approved as " + other)
+                    .isFalse();
+            assertThat(other.mayBeApprovedAs(DevicePrincipalClass.PRINT_AGENT))
+                    .as(other + " cannot be approved as an agent")
+                    .isFalse();
+        }
+    }
+
+    @Test
     void everyClassMayBeApprovedAsItself() {
         for (DevicePrincipalClass deviceClass : DevicePrincipalClass.values()) {
             assertThat(deviceClass.mayBeApprovedAs(deviceClass))
                     .as(deviceClass.name())
                     .isTrue();
         }
+    }
+
+    @Test
+    void aKioskIsApprovedAsAKioskAndNothingElseAndNoOtherClassBecomesAKiosk() {
+        assertThat(DevicePrincipalClass.KIOSK.mayBeApprovedAs(DevicePrincipalClass.KIOSK))
+                .isTrue();
+        assertThat(DevicePrincipalClass.KIOSK.mayBeApprovedAs(DevicePrincipalClass.KITCHEN_KDS))
+                .as("a customer-facing device cannot be approved as a kitchen control surface")
+                .isFalse();
+        assertThat(DevicePrincipalClass.KIOSK.mayBeApprovedAs(DevicePrincipalClass.KITCHEN_VDU))
+                .as("ADR 0162 narrows nothing: the kiosk is its own family, not a lesser kitchen display")
+                .isFalse();
+        for (DevicePrincipalClass other :
+                new DevicePrincipalClass[] {DevicePrincipalClass.KITCHEN_KDS, DevicePrincipalClass.KITCHEN_VDU}) {
+            assertThat(other.mayBeApprovedAs(DevicePrincipalClass.KIOSK))
+                    .as("%s must never be approved as a kiosk", other)
+                    .isFalse();
+        }
+    }
+
+    @Test
+    void onlyTheTouchKitchenDisplayIsUnlockableByAPerson() {
+        assertThat(DevicePrincipalClass.KITCHEN_KDS.unlockable()).isTrue();
+        assertThat(DevicePrincipalClass.KITCHEN_VDU.unlockable())
+                .as("a wall has no controls")
+                .isFalse();
+        assertThat(DevicePrincipalClass.KIOSK.unlockable())
+                .as("a kiosk is touched by customers; a customer is never a staff identity (ADR 0162)")
+                .isFalse();
     }
 }

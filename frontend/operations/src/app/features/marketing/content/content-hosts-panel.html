@@ -1,0 +1,101 @@
+<section class="hosts" data-testid="content-hosts">
+  <h2 class="q-subhead">{{ 'marketing.content.hosts.title' | t }}</h2>
+  <p class="q-body-sm hosts__note">{{ 'marketing.content.hosts.intro' | t }}</p>
+
+  @if (denied()) {
+    <q-denied-state capability="content.read" />
+  } @else {
+    @if (error(); as message) {
+      <p class="q-body-sm hosts__error" role="alert" data-testid="content-hosts-error">
+        {{ message }}
+      </p>
+    }
+
+    <form class="hosts__add" (submit)="$event.preventDefault(); add()">
+      <label class="hosts__field">
+        <span class="q-caption">{{ 'marketing.content.hosts.host' | t }}</span>
+        <input
+          type="text"
+          class="hosts__input"
+          autocomplete="off"
+          spellcheck="false"
+          [value]="typed()"
+          (input)="typed.set($any($event.target).value)"
+          [attr.aria-invalid]="typed() !== '' && normalized() === null"
+          data-testid="content-host-input"
+        />
+      </label>
+      <label class="hosts__field">
+        <span class="q-caption">{{ 'marketing.content.hosts.reason' | t }}</span>
+        <input
+          type="text"
+          class="hosts__input"
+          maxlength="1000"
+          [value]="reason()"
+          (input)="reason.set($any($event.target).value)"
+          data-testid="content-host-reason"
+        />
+      </label>
+      <button
+        type="submit"
+        class="hosts__button"
+        [disabled]="busy() || normalized() === null"
+        data-testid="content-host-add"
+      >
+        {{ 'marketing.content.hosts.add' | t }}
+      </button>
+    </form>
+    @if (typed() !== '' && normalized() === null) {
+      <p class="q-caption hosts__error" role="alert" data-testid="content-host-invalid">
+        {{ 'marketing.content.hosts.invalid' | t }}
+      </p>
+    }
+    <p class="q-caption hosts__note">{{ 'marketing.content.hosts.audited' | t }}</p>
+
+    @if (loading()) {
+      <p class="q-caption" role="status">{{ 'marketing.content.list.loading' | t }}</p>
+    } @else if (hosts().length === 0) {
+      <p class="q-body-sm hosts__note" data-testid="content-hosts-empty">
+        {{ 'marketing.content.hosts.empty' | t }}
+      </p>
+    } @else {
+      <ul class="hosts__list">
+        @for (host of hosts(); track host.host) {
+          <li class="hosts__row" data-testid="content-host-row">
+            <code class="q-body-sm">{{ host.host }}</code>
+            @if (host.source === 'ADDED') {
+              <span class="q-caption hosts__note">
+                {{ 'marketing.content.hosts.addedBy' | t: { who: host.addedBy } }}
+              </span>
+              <button
+                type="button"
+                class="hosts__remove"
+                (click)="removing.set(host)"
+                data-testid="content-host-remove"
+              >
+                {{ 'marketing.content.hosts.remove' | t }}
+              </button>
+            } @else {
+              <span class="q-caption hosts__note" data-testid="content-host-channel">
+                {{ 'marketing.content.hosts.fromChannel' | t }}
+              </span>
+            }
+          </li>
+        }
+      </ul>
+    }
+  }
+
+  @if (removing(); as host) {
+    <q-confirm-dialog
+      [title]="'marketing.content.hosts.removeTitle' | t: { host: host.host }"
+      [body]="'marketing.content.hosts.removeBody' | t"
+      [confirmLabel]="'marketing.content.hosts.remove' | t"
+      [cancelLabel]="'marketing.dialog.cancel' | t"
+      tone="destructive"
+      [busy]="busy()"
+      (confirm)="confirmRemove()"
+      (cancel)="removing.set(null)"
+    />
+  }
+</section>

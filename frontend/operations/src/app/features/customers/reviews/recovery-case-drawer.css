@@ -1,0 +1,138 @@
+.case {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-inline-size: min(520px, 90vw);
+}
+
+.case__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.case__stars {
+  font-size: var(--q-type-subhead);
+  letter-spacing: 2px;
+}
+
+.case__source,
+.case__muted {
+  color: var(--q-ink-muted);
+}
+
+.case__section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.case__section h3,
+.case__section h4 {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+.case__comment {
+  margin: 0;
+  padding-block: 8px;
+  padding-inline: 12px;
+  border-inline-start: 3px solid var(--q-hairline);
+  background: var(--q-surface-1);
+  white-space: pre-wrap;
+}
+
+.case__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.case__tag {
+  padding-block: 2px;
+  padding-inline: 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: 999px;
+  background: var(--q-success-tint);
+  color: var(--q-success-text);
+}
+
+.case__tag--negative {
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.case__facts {
+  flex-direction: row;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.case__clocks > div {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.case__clock-name {
+  min-inline-size: 110px;
+  color: var(--q-ink-muted);
+}
+
+.case__breach {
+  color: var(--q-error-text);
+  font-weight: 600;
+}
+
+.case__list {
+  margin: 0;
+  padding-inline-start: 18px;
+}
+
+.case__form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-block-start: 8px;
+}
+
+.case__row {
+  display: flex;
+  gap: 8px;
+}
+
+.case__close {
+  padding: 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.control {
+  padding-block: 6px;
+  padding-inline: 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font: inherit;
+}
+
+.link {
+  color: var(--q-primary);
+}
+
+.band {
+  padding-block: 8px;
+  padding-inline: 12px;
+  border-radius: var(--q-radius);
+}
+
+.band--error {
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}

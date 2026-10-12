@@ -1,0 +1,23 @@
+@if (reasons().length === 0) {
+  <p class="removal-reason__empty q-body-sm" role="alert" data-testid="removal-reason-empty">
+    {{ 'orders.dialog.removal.noReasons' | t }}
+    <a routerLink="/settings/reference-data" class="removal-reason__link">{{
+      'orders.dialog.removal.noReasonsLink' | t
+    }}</a>
+  </p>
+} @else {
+  <label class="removal-reason__field">
+    <span class="q-body-sm">{{ 'orders.dialog.removal.reason' | t }}</span>
+    <select
+      class="removal-reason__select q-body-sm"
+      [value]="selectedId() ?? ''"
+      (change)="choose($any($event.target).value)"
+      data-testid="removal-reason-select"
+    >
+      <option value="">{{ 'orders.dialog.removal.reasonPlaceholder' | t }}</option>
+      @for (reason of reasons(); track reason.id) {
+        <option [value]="reason.id">{{ reason.internalName }}</option>
+      }
+    </select>
+  </label>
+}

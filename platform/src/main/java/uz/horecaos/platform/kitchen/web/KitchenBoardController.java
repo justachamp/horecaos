@@ -17,6 +17,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,6 +37,7 @@ import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.kitchen.application.KitchenDeviceDisplayService;
 import uz.horecaos.platform.kitchen.application.KitchenDeviceDisplayService.WallCaller;
+import uz.horecaos.platform.kitchen.application.KitchenPaymentHoldService;
 import uz.horecaos.platform.kitchen.application.KitchenTicketService;
 import uz.horecaos.platform.kitchen.application.port.KitchenOrderSource.OrderClock;
 import uz.horecaos.platform.kitchen.domain.ReleaseMode;
@@ -79,7 +81,9 @@ public class KitchenBoardController {
     private final OrderTablesPort orderTables;
     private final KitchenDeviceDisplayService displays;
     private final LatenessPolicyPort latenessPolicies;
+    private final @Nullable KitchenPaymentHoldService holds;
 
+    /** A board with no paid-hold service: what every test that predates ADR 0168 builds. */
     public KitchenBoardController(
             KitchenTicketService tickets,
             CurrentActor currentActor,
@@ -88,6 +92,19 @@ public class KitchenBoardController {
             OrderTablesPort orderTables,
             KitchenDeviceDisplayService displays,
             LatenessPolicyPort latenessPolicies) {
+        this(tickets, currentActor, authorization, courierEta, orderTables, displays, latenessPolicies, null);
+    }
+
+    @Autowired
+    public KitchenBoardController(
+            KitchenTicketService tickets,
+            CurrentActor currentActor,
+            AuthorizationService authorization,
+            CourierEtaPort courierEta,
+            OrderTablesPort orderTables,
+            KitchenDeviceDisplayService displays,
+            LatenessPolicyPort latenessPolicies,
+            @Nullable KitchenPaymentHoldService holds) {
         this.tickets = tickets;
         this.currentActor = currentActor;
         this.authorization = authorization;
@@ -95,6 +112,7 @@ public class KitchenBoardController {
         this.orderTables = orderTables;
         this.displays = displays;
         this.latenessPolicies = latenessPolicies;
+        this.holds = holds;
     }
 
     @GetMapping("/tickets")
@@ -348,13 +366,35 @@ public class KitchenBoardController {
             @Valid @RequestBody ReleaseRequest body) {
 
         atLocation(tenantId, ticketId, locationId);
-        TicketRow after = tickets.releaseNow(
-                tenantId,
-                ticketId,
-                body.expectedVersion(),
-                body.reasonCode(),
-                currentActor.get().subject(),
-                null);
+        TicketRow after;
+        if (holds == null) {
+            after = tickets.releaseNow(
+                    tenantId,
+                    ticketId,
+                    body.expectedVersion(),
+                    body.reasonCode(),
+                    currentActor.attributed().subject(),
+                    null);
+        } else {
+            // ADR 0168 Decision 6. The endpoint's declaration covers kitchen.ticket.release; the override is a
+            // second, narrower capability asked for here rather than in the annotation, because it matters
+            // only for a ticket held for payment, which the caller cannot know without reading it. The
+            // capability is the authenticated principal's; the ticket event names the attributed person
+            // (ADR 0155), as every other action on this board does.
+            boolean overrideGranted = authorization.has(
+                    currentActor.get().subject(),
+                    Capability.KITCHEN_TICKET_RELEASE_OVERRIDE,
+                    ResourceScope.location(tenantId, brandId, locationId));
+            after = holds.release(
+                    tenantId,
+                    ticketId,
+                    body.expectedVersion(),
+                    body.reasonCode(),
+                    overrideGranted,
+                    body.overrideReasonCode(),
+                    currentActor.attributed().subject(),
+                    null);
+        }
         return ResponseEntity.ok(TicketResponse.of(after, tickets.items(tenantId, ticketId))
                 .withClock(clockOf(tenantId, after.orderId())));
     }
@@ -393,7 +433,7 @@ public class KitchenBoardController {
                 body.releaseAt(),
                 overrideGranted,
                 body.reasonCode(),
-                currentActor.get().subject(),
+                currentActor.attributed().subject(),
                 null);
         return ResponseEntity.ok(TicketResponse.of(after, tickets.items(tenantId, ticketId))
                 .withClock(clockOf(tenantId, after.orderId())));
@@ -415,7 +455,7 @@ public class KitchenBoardController {
 
         atLocation(tenantId, ticketId, locationId);
         TicketRow after = tickets.handOver(
-                        tenantId, ticketId, currentActor.get().subject(), null)
+                        tenantId, ticketId, currentActor.attributed().subject(), null)
                 .orElseGet(() -> tickets.require(tenantId, ticketId));
         return ResponseEntity.ok(TicketResponse.of(after, tickets.items(tenantId, ticketId))
                 .withClock(clockOf(tenantId, after.orderId())));
@@ -431,7 +471,7 @@ public class KitchenBoardController {
             @PathVariable UUID itemId) {
 
         itemAtLocation(tenantId, itemId, locationId);
-        var outcome = tickets.start(tenantId, itemId, currentActor.get().subject(), null);
+        var outcome = tickets.start(tenantId, itemId, currentActor.attributed().subject(), null);
         return ResponseEntity.ok(ItemResponse.of(outcome));
     }
 
@@ -448,7 +488,7 @@ public class KitchenBoardController {
             @PathVariable UUID itemId) {
 
         itemAtLocation(tenantId, itemId, locationId);
-        var outcome = tickets.ready(tenantId, itemId, currentActor.get().subject(), null);
+        var outcome = tickets.ready(tenantId, itemId, currentActor.attributed().subject(), null);
         return ResponseEntity.ok(ItemResponse.of(outcome));
     }
 
@@ -468,7 +508,7 @@ public class KitchenBoardController {
 
         itemAtLocation(tenantId, itemId, locationId);
         var outcome = tickets.recall(
-                tenantId, itemId, body.reasonCode(), currentActor.get().subject(), null);
+                tenantId, itemId, body.reasonCode(), currentActor.attributed().subject(), null);
         return ResponseEntity.ok(ItemResponse.of(outcome));
     }
 
@@ -604,7 +644,11 @@ public class KitchenBoardController {
             boolean orderTerminal,
             @Nullable Instant courierEtaAt,
             OrderTablesPort.@Nullable OrderTable table,
-            List<ItemView> items) {
+            List<ItemView> items,
+            @Nullable String holdReason,
+            @Nullable Instant holdSince,
+            boolean holdBlocked,
+            boolean holdOverdue) {
 
         /** This response with the order's lateness clock (ADR 0150); unchanged when the order has none. */
         TicketResponse withClock(@Nullable OrderClock clock) {
@@ -634,7 +678,11 @@ public class KitchenBoardController {
                     clock.terminal(),
                     courierEtaAt,
                     table,
-                    items);
+                    items,
+                    holdReason,
+                    holdSince,
+                    holdBlocked,
+                    holdOverdue);
         }
 
         static TicketResponse of(TicketRow ticket, List<TicketItemRow> items) {
@@ -684,7 +732,11 @@ public class KitchenBoardController {
                     false,
                     courierEtaAt,
                     table,
-                    items.stream().map(ItemView::of).toList());
+                    items.stream().map(ItemView::of).toList(),
+                    ticket.holdReason(),
+                    ticket.holdSince(),
+                    ticket.holdBlockedNotifiedAt() != null,
+                    ticket.holdOverdueNotifiedAt() != null);
         }
     }
 
@@ -917,9 +969,14 @@ public class KitchenBoardController {
         }
     }
 
+    /**
+     * @param overrideReasonCode ADR 0168: required, from the closed registry, to fire a ticket that is held
+     *                           for payment; ignored for every other ticket
+     */
     record ReleaseRequest(
             @NotNull Integer expectedVersion,
-            @NotBlank @Size(max = 48) String reasonCode) {}
+            @NotBlank @Size(max = 48) String reasonCode,
+            @Nullable @Size(max = 48) String overrideReasonCode) {}
 
     record RescheduleRequest(
             @NotNull Integer expectedVersion,

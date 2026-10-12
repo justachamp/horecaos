@@ -12,6 +12,7 @@
   </span>
   <span class="dish__body">
     <span class="dish__name">{{ item().name }}</span>
+    <app-tag-badges [tags]="item().tags ?? []" />
     @if (item().description) {
       <span class="dish__desc">{{ item().description }}</span>
     }

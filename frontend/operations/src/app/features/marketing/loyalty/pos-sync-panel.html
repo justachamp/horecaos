@@ -1,0 +1,254 @@
+<div class="pos-sync" data-testid="loyalty-pos-sync">
+  <p class="q-body-sm pos-sync__intro">{{ 'marketing.loyalty.posSync.body' | t }}</p>
+
+  @if (loading()) {
+    <p class="q-body-sm" data-testid="pos-sync-loading">{{ 'marketing.loyalty.loading' | t }}</p>
+  } @else if (denied()) {
+    <p class="q-body-sm" data-testid="pos-sync-denied">{{ 'marketing.loyalty.denied' | t }}</p>
+  } @else {
+    @if (loadError(); as error) {
+      <div class="pos-sync__error" role="alert" data-testid="pos-sync-load-error">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+    @if (actionError(); as error) {
+      <div class="pos-sync__error" role="alert" data-testid="pos-sync-action-error">
+        <span class="q-body-sm">{{ error }}</span>
+      </div>
+    }
+
+    @if (standingNotice()) {
+      <div class="pos-sync__notice" role="status" data-testid="pos-sync-standing-notice">
+        <p class="q-body-sm">{{ 'marketing.loyalty.posSync.notice' | t }}</p>
+      </div>
+    }
+
+    <p class="q-caption pos-sync__lag" data-testid="pos-sync-lag">
+      {{ 'marketing.loyalty.posSync.lag' | t }}
+    </p>
+
+    <!-- Per binding: can this point of sale mirror a balance at all, and how is it doing -->
+    <section class="pos-sync__section" data-testid="pos-sync-bindings">
+      <h2 class="q-body pos-sync__title">{{ 'marketing.loyalty.posSync.bindings.title' | t }}</h2>
+      @for (binding of bindings(); track binding.bindingId) {
+        <article class="pos-sync__binding" data-testid="pos-sync-binding">
+          <header class="pos-sync__binding-head">
+            <span class="q-body pos-sync__provider">{{ binding.providerType }}</span>
+            <span
+              class="pos-sync__badge"
+              [class.pos-sync__badge--live]="binding.syncing"
+              [class.pos-sync__badge--blocked]="!binding.syncing"
+              data-testid="pos-sync-capability"
+            >
+              {{ capabilityLabelKey(binding.capabilityState) | t }}
+            </span>
+          </header>
+          @if (capabilityNoteKey(binding.capabilityState); as note) {
+            <p class="q-caption pos-sync__note" data-testid="pos-sync-capability-note">
+              {{ note | t }}
+            </p>
+          }
+          <dl class="pos-sync__facts">
+            <div>
+              <dt class="q-caption">{{ 'marketing.loyalty.posSync.binding.mode' | t }}</dt>
+              <dd class="q-body-sm" data-testid="pos-sync-mode">
+                {{ modeLabelKey(binding.mode) | t }}
+              </dd>
+            </div>
+            <div>
+              <dt class="q-caption">{{ 'marketing.loyalty.posSync.binding.matched' | t }}</dt>
+              <dd class="q-body-sm q-tnum">{{ binding.matchedAccounts }}</dd>
+            </div>
+            <div>
+              <dt class="q-caption">{{ 'marketing.loyalty.posSync.binding.open' | t }}</dt>
+              <dd class="q-body-sm q-tnum">{{ binding.openDiscrepancies }}</dd>
+            </div>
+            <div>
+              <dt class="q-caption">{{ 'marketing.loyalty.posSync.binding.lastPass' | t }}</dt>
+              <dd class="q-body-sm">
+                @if (binding.lastRun; as last) {
+                  {{ runKindLabelKey(last.kind) | t }} · {{ last.startedAt }}
+                } @else {
+                  {{ 'marketing.loyalty.posSync.binding.never' | t }}
+                }
+              </dd>
+            </div>
+          </dl>
+          @if (binding.syncing) {
+            <button
+              type="button"
+              class="pos-sync__action"
+              data-testid="pos-sync-reconcile"
+              [disabled]="reconcilingBindingId() === binding.bindingId"
+              (click)="reconcile(binding)"
+            >
+              {{
+                reconcilingBindingId() === binding.bindingId
+                  ? ('marketing.loyalty.posSync.reconcile.running' | t)
+                  : ('marketing.loyalty.posSync.reconcile.action' | t)
+              }}
+            </button>
+          }
+        </article>
+      } @empty {
+        <p class="q-body-sm" data-testid="pos-sync-no-bindings">
+          {{ 'marketing.loyalty.posSync.bindings.empty' | t }}
+        </p>
+      }
+    </section>
+
+    <!-- The reconciliation report -->
+    <section class="pos-sync__section" data-testid="pos-sync-runs">
+      <h2 class="q-body pos-sync__title">{{ 'marketing.loyalty.posSync.runs.title' | t }}</h2>
+      <table class="pos-sync__table">
+        <thead>
+          <tr>
+            <th>{{ 'marketing.loyalty.posSync.runs.column.pass' | t }}</th>
+            <th class="num">{{ 'marketing.loyalty.posSync.runs.column.compared' | t }}</th>
+            <th class="num">{{ 'marketing.loyalty.posSync.runs.column.matched' | t }}</th>
+            <th class="num">{{ 'marketing.loyalty.posSync.runs.column.tillHigher' | t }}</th>
+            <th class="num">{{ 'marketing.loyalty.posSync.runs.column.tillLower' | t }}</th>
+            <th class="num">{{ 'marketing.loyalty.posSync.runs.column.tillOnly' | t }}</th>
+            <th class="num">{{ 'marketing.loyalty.posSync.runs.column.platformOnly' | t }}</th>
+            <th class="num">{{ 'marketing.loyalty.posSync.runs.column.ambiguous' | t }}</th>
+            <th class="num">{{ 'marketing.loyalty.posSync.runs.column.imported' | t }}</th>
+            <th class="num">{{ 'marketing.loyalty.posSync.runs.column.held' | t }}</th>
+            <th class="num">{{ 'marketing.loyalty.posSync.runs.column.unverifiable' | t }}</th>
+            <th class="num">{{ 'marketing.loyalty.posSync.runs.column.pushed' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (run of runs(); track run.runId) {
+            <tr class="pos-sync__row" data-testid="pos-sync-run-row">
+              <td>
+                <button type="button" class="pos-sync__link" (click)="openRun(run)">
+                  {{ runKindLabelKey(run.kind) | t }} · {{ run.startedAt }}
+                </button>
+                @if (run.status !== 'SUCCEEDED') {
+                  <span class="pos-sync__badge pos-sync__badge--blocked">{{
+                    runStatusLabelKey(run.status) | t
+                  }}</span>
+                }
+              </td>
+              <td class="num q-tnum">{{ run.compared }}</td>
+              <td class="num q-tnum">{{ run.matched }}</td>
+              <td class="num q-tnum">{{ run.tillHigher }}</td>
+              <td class="num q-tnum">{{ run.tillLower }}</td>
+              <td class="num q-tnum">{{ run.tillOnly }}</td>
+              <td class="num q-tnum">{{ run.platformOnly }}</td>
+              <td class="num q-tnum">{{ run.ambiguous }}</td>
+              <td class="num q-tnum">{{ run.imported }}</td>
+              <td class="num q-tnum">{{ run.held }}</td>
+              <td class="num q-tnum">{{ run.unverifiable }}</td>
+              <td class="num q-tnum">{{ run.pushed }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="12">
+                <p class="q-body-sm" data-testid="pos-sync-runs-empty">
+                  {{ 'marketing.loyalty.posSync.runs.empty' | t }}
+                </p>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (openedRun(); as opened) {
+        <div class="pos-sync__opened" data-testid="pos-sync-opened-run">
+          <div class="pos-sync__opened-head">
+            <h3 class="q-body-sm">
+              {{ runKindLabelKey(opened.run.kind) | t }} · {{ opened.run.startedAt }}
+            </h3>
+            <button type="button" class="pos-sync__link" (click)="closeRun()">
+              {{ 'marketing.loyalty.posSync.runs.close' | t }}
+            </button>
+          </div>
+          @for (found of opened.discrepancies; track found.discrepancyId) {
+            <p class="q-body-sm" data-testid="pos-sync-opened-run-row">
+              {{ kindLabelKey(found.kind) | t }}
+              @if (showsBalances(found)) {
+                · {{ formatPoints(found.platformBalanceMinor) }} /
+                {{ formatPoints(found.tillBalanceMinor) }}
+              }
+            </p>
+          } @empty {
+            <p class="q-body-sm">{{ 'marketing.loyalty.posSync.runs.noDifferences' | t }}</p>
+          }
+        </div>
+      }
+    </section>
+
+    <!-- Every difference, with the two balances and only the resolutions that fit -->
+    <section class="pos-sync__section" data-testid="pos-sync-discrepancies">
+      <h2 class="q-body pos-sync__title">
+        {{ 'marketing.loyalty.posSync.discrepancies.title' | t }}
+      </h2>
+      @for (row of discrepancies(); track row.discrepancyId) {
+        <article class="pos-sync__discrepancy" data-testid="pos-sync-discrepancy">
+          <header class="pos-sync__binding-head">
+            <span class="q-body" data-testid="pos-sync-discrepancy-kind">{{
+              kindLabelKey(row.kind) | t
+            }}</span>
+          </header>
+          <p class="q-caption pos-sync__note">{{ kindNoteKey(row.kind) | t }}</p>
+          @if (showsBalances(row)) {
+            <dl class="pos-sync__facts" data-testid="pos-sync-balances">
+              <div>
+                <dt class="q-caption">
+                  {{ 'marketing.loyalty.posSync.discrepancies.platform' | t }}
+                </dt>
+                <dd class="q-body-sm q-tnum">{{ formatPoints(row.platformBalanceMinor) }}</dd>
+              </div>
+              <div>
+                <dt class="q-caption">{{ 'marketing.loyalty.posSync.discrepancies.till' | t }}</dt>
+                <dd class="q-body-sm q-tnum">{{ formatPoints(row.tillBalanceMinor) }}</dd>
+              </div>
+              <div>
+                <dt class="q-caption">{{ 'marketing.loyalty.posSync.discrepancies.delta' | t }}</dt>
+                <dd class="q-body-sm q-tnum" data-testid="pos-sync-delta">
+                  {{ formatPoints(row.deltaMinor, true) }}
+                </dd>
+              </div>
+            </dl>
+          }
+          @if (isAwaitingSignature(row)) {
+            <p class="q-body-sm pos-sync__pending" role="status" data-testid="pos-sync-pending">
+              {{ 'marketing.loyalty.posSync.discrepancies.pending' | t }}
+            </p>
+          }
+          <label class="pos-sync__reason">
+            <span class="q-caption">{{
+              'marketing.loyalty.posSync.discrepancies.reason' | t
+            }}</span>
+            <input
+              type="text"
+              maxlength="500"
+              data-testid="pos-sync-reason"
+              [value]="reasonOf(row)"
+              (input)="setReason(row, $any($event.target).value)"
+            />
+          </label>
+          <div class="pos-sync__resolutions">
+            @for (resolution of allowedResolutions(row); track resolution) {
+              <button
+                type="button"
+                class="pos-sync__action"
+                [attr.data-testid]="'pos-sync-resolve-' + resolution"
+                [attr.title]="resolutionHintKey(resolution) | t"
+                [disabled]="!canResolve(row)"
+                (click)="resolve(row, resolution)"
+              >
+                {{ resolutionLabelKey(resolution) | t }}
+              </button>
+            }
+          </div>
+        </article>
+      } @empty {
+        <p class="q-body-sm" data-testid="pos-sync-discrepancies-empty">
+          {{ 'marketing.loyalty.posSync.discrepancies.empty' | t }}
+        </p>
+      }
+    </section>
+  }
+</div>

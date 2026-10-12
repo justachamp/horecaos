@@ -19,7 +19,7 @@
         <input
           class="q-body field"
           type="number"
-          min="1"
+          [min]="minimumMinutes()"
           max="1440"
           [disabled]="!canWrite()"
           [value]="minutes() ?? ''"
@@ -29,19 +29,32 @@
       </label>
       <label class="card__field q-caption">
         {{ 'delivery.paymentWindow.action' | t }}
-        <select class="q-body field" disabled data-testid="window-action">
-          <option value="FLAG_ONLY" selected>
+        <select
+          class="q-body field"
+          [disabled]="!canWrite()"
+          [value]="action()"
+          (change)="setAction($any($event.target).value)"
+          data-testid="window-action"
+        >
+          <option value="FLAG_ONLY" [selected]="action() === 'FLAG_ONLY'">
             {{ 'delivery.paymentWindow.action.FLAG_ONLY' | t }}
           </option>
-          <option value="CANCEL" disabled>
+          <option value="CANCEL" [selected]="action() === 'CANCEL'">
             {{ 'delivery.paymentWindow.action.CANCEL' | t }}
           </option>
         </select>
       </label>
     </div>
-    <p class="q-caption card__muted" data-testid="window-cancel-locked">
-      {{ 'delivery.paymentWindow.cancelLocked' | t }}
-    </p>
+    @if (action() === 'CANCEL') {
+      <p class="q-caption card__muted" data-testid="window-cancel-note">
+        {{ 'delivery.paymentWindow.cancelNote' | t }}
+      </p>
+      @if (cancelTooShort()) {
+        <p class="q-caption card__error" role="alert" data-testid="window-cancel-too-short">
+          {{ 'delivery.paymentWindow.cancelTooShort' | t }}
+        </p>
+      }
+    }
 
     @if (canWrite()) {
       <label class="card__field q-caption">

@@ -8,6 +8,7 @@ import {
 } from '@angular/router';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { ConsoleProfile } from './console-profile';
 import { CurrentTenant } from './current-tenant';
 import { ScopeGrant } from './session-context';
 import { capabilityGuard, navItemForUrl } from './capability.guard';
@@ -113,6 +114,108 @@ describe('capabilityGuard', () => {
       expect(String(result)).toBe(
         '/access-denied?capability=CUSTOMER_READ&section=shell.nav.customers',
       );
+    });
+  });
+
+  describe('a branch manager, who pairs a branch’s kiosks (ADR 0162, ADR 0025)', () => {
+    /**
+     * `PlatformRole.LOCATION_MANAGER`: `kiosk.device.manage` at her branch and no `tenant.read` anywhere. The kiosk's QR
+     * opens a page under /settings, which is hers to use and the rest of which is not.
+     */
+    const LOCATION_MANAGER: ScopeGrant = {
+      scope: { type: 'LOCATION', tenantId: 't1', brandId: 'b1', locationId: 'l1' },
+      roleCode: 'location-manager',
+      capabilities: [
+        'ORDER_READ',
+        'IAM_GRANT_MANAGE',
+        'TERMINAL_READ',
+        'TERMINAL_MANAGE',
+        'KIOSK_DEVICE_MANAGE',
+      ],
+    };
+
+    it('is admitted to the approval page the kiosk’s QR opens, code and all', async () => {
+      tenant.scopes.set([LOCATION_MANAGER]);
+
+      expect(await run('/settings/channel-setup/kiosk-pairing?code=K7QX-4M2P')).toBe(true);
+      expect(await run('/settings/channel-setup/kiosk-pairing')).toBe(true);
+    });
+
+    it('is admitted to the branch’s kiosks, which the Channel setup hub keeps behind channel.read', async () => {
+      tenant.scopes.set([LOCATION_MANAGER]);
+
+      expect(await run('/settings/channel-setup/kiosks')).toBe(true);
+      expect(await run('/settings/channel-setup/kiosks?location=l1#top')).toBe(true);
+    });
+
+    it('is not admitted to the rest of Settings, which is the tenant’s', async () => {
+      tenant.scopes.set([LOCATION_MANAGER]);
+      const denied = '/access-denied?capability=TENANT_READ&section=shell.nav.settings';
+
+      expect(String(await run('/settings'))).toBe(denied);
+      expect(String(await run('/settings/sales-channels'))).toBe(denied);
+      expect(String(await run('/settings/channel-setup/some-channel-id'))).toBe(denied);
+      expect(String(await run('/settings/channel-setup/kiosks/extra'))).toBe(denied);
+      expect(String(await run('/settings/channel-setup/kiosk-pairing-other'))).toBe(denied);
+    });
+
+    it('is still refused a section she holds nothing for', async () => {
+      tenant.scopes.set([LOCATION_MANAGER]);
+
+      expect(String(await run('/finance'))).toBe(
+        '/access-denied?capability=PAYMENT_READ&section=shell.nav.finance',
+      );
+    });
+
+    it('is refused the pages too when she cannot pair kiosks, naming the section’s own capability', async () => {
+      tenant.scopes.set([{ ...LOCATION_MANAGER, capabilities: ['ORDER_READ', 'TERMINAL_READ'] }]);
+
+      expect(String(await run('/settings/channel-setup/kiosk-pairing'))).toBe(
+        '/access-denied?capability=TENANT_READ&section=shell.nav.settings',
+      );
+    });
+
+    it('leaves a tenant owner, who reads the tenant, in all of Settings', async () => {
+      tenant.scopes.set([grant(['TENANT_READ'])]);
+
+      expect(await run('/settings/channel-setup/kiosk-pairing')).toBe(true);
+      expect(await run('/settings/sales-channels')).toBe(true);
+    });
+  });
+
+  describe('a deliveries console profile (ADR 0164)', () => {
+    /** The profile puts the kitchen, marketing and the inbox away and opens on /deliveries. */
+    const deliveriesProfile = {
+      variant: signal<'STANDARD' | 'DELIVERIES'>('DELIVERIES'),
+      putAway: signal(['/kitchen', '/marketing', '/inbox']),
+      hiddenSections: signal(['/kitchen', '/marketing', '/inbox']),
+      ensureLoaded: () => Promise.resolve(),
+    };
+
+    beforeEach(() => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          provideRouter([]),
+          { provide: CurrentTenant, useValue: tenant },
+          { provide: ConsoleProfile, useValue: deliveriesProfile },
+        ],
+      });
+    });
+
+    it('only puts a section away: a holder who types its URL is still let in', async () => {
+      tenant.scopes.set([grant(['KITCHEN_TICKET_READ'])]);
+
+      expect(await run('/kitchen/buffer')).toBe(true);
+    });
+
+    it('and grants nothing: a section put away stays refused to someone without its capability', async () => {
+      tenant.scopes.set([grant(['ORDER_READ'])]);
+
+      const result = await run('/kitchen/buffer');
+
+      expect(result).toBeInstanceOf(UrlTree);
+      expect(String(result)).toContain('capability=KITCHEN_TICKET_READ');
     });
   });
 

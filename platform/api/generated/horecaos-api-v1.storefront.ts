@@ -26,6 +26,11 @@ export interface AcceptanceStatusView {
   lastAcceptedVersion?: string;
 }
 
+export interface AcceptedResponse {
+  accepted?: number;
+  rejected?: number;
+}
+
 export interface AddRoundRequest {
   orderId: string;
 }
@@ -55,6 +60,11 @@ export interface AdmissionResponse {
   walkInAvailable?: boolean;
 }
 
+export interface AlbumImage {
+  caption?: string;
+  media?: Media;
+}
+
 export interface AnalyticsConfigResponse {
   ga4MeasurementId?: string;
   gtmContainerId?: string;
@@ -72,8 +82,22 @@ export interface AppliedPromotionResponse {
   source?: string;
 }
 
+export interface Apply {
+  type?: string;
+  value?: string;
+}
+
 export interface ApplyPromoCodeRequest {
   code: string;
+}
+
+export interface AutoAddLineResponse {
+  customerText?: { [key: string]: string };
+  mandatory?: boolean;
+  maximumQuantity?: number;
+  minimumQuantity?: number;
+  removable?: boolean;
+  ruleCode?: string;
 }
 
 export interface BalanceResponse {
@@ -94,17 +118,43 @@ export interface Banner {
   priority?: number;
 }
 
+export interface Branch {
+  addressLine?: string;
+  city?: string;
+  locationId?: string;
+  name?: string;
+}
+
 export interface CallbackRequestResponse {
   leadId: string;
 }
 
+export interface Cap {
+  mode?: string;
+  n?: number;
+}
+
+export interface CarouselItem {
+  ctaLabel?: string;
+  id?: string;
+  kind?: string;
+  link?: Link;
+  media?: Media;
+  revisionNo?: number;
+  subtitle?: string;
+  textLocale?: string;
+  title?: string;
+}
+
 export interface CartLineResponse {
+  autoAdd?: AutoAddLineResponse;
   comboPicks?: Array<ComboPickResponse>;
   commentPresetCodes?: Array<string>;
   hasCustomerNote?: boolean;
   lineKey?: string;
   modifierOptionIds?: Array<string>;
   nestedModifiers?: Array<NestedModifierResponse>;
+  origin?: string;
   quantity?: number;
   variantId?: string;
 }
@@ -211,6 +261,12 @@ export interface CustomerTelegramLinkStatusResponse {
   linked?: boolean;
 }
 
+export interface Daily {
+  daysOfWeek?: Array<number>;
+  from?: string;
+  until?: string;
+}
+
 export interface DeliveryChargeResponse {
   feeMinor?: number;
   freeDeliveryFromMinor?: number;
@@ -243,6 +299,46 @@ export interface DestinationResponse {
   cartId?: string;
 }
 
+export interface EntryDetail {
+  blocks?: Array<{  }>;
+  bodyLocale?: string;
+  cover?: Media;
+  images?: Array<AlbumImage>;
+  kind?: string;
+  publishedAt?: string;
+  slug?: string;
+  summary?: string;
+  textLocale?: string;
+  title?: string;
+  vacancy?: Vacancy;
+}
+
+export interface EntryPage {
+  items?: Array<EntrySummary>;
+  nextCursor?: string;
+}
+
+export interface EntrySummary {
+  cover?: Media;
+  employmentType?: string;
+  publishedAt?: string;
+  slug?: string;
+  summary?: string;
+  textLocale?: string;
+  title?: string;
+}
+
+export interface EventEntry {
+  event: string;
+  itemId: string;
+  revisionNo: number;
+}
+
+export interface EventsRequest {
+  channel: string;
+  events: Array<EventEntry>;
+}
+
 export interface ExchangeRequest {
   tableToken: string;
 }
@@ -263,6 +359,22 @@ export interface FaqResponse {
 
 export interface FavouritesResponse {
   productIds?: Array<string>;
+}
+
+export interface Features {
+  gallery?: boolean;
+  news?: boolean;
+  recipes?: boolean;
+  vacancies?: boolean;
+}
+
+export interface FeedbackConfigResponse {
+  consentTextKey?: string;
+  enabled?: boolean;
+  maxTagsPerReview?: number;
+  negative?: Array<OfferedTag>;
+  positive?: Array<OfferedTag>;
+  publicComments?: boolean;
 }
 
 export interface FulfillmentModeAvailability {
@@ -292,6 +404,17 @@ export interface GiftOfferResponse {
 export interface GrantResponse {
   expiresAt?: string;
   grant?: string;
+}
+
+export interface Group {
+  categoryId?: string;
+  id?: string;
+  limit?: number;
+  order?: string;
+  productIds?: Array<string>;
+  revisionNo?: number;
+  textLocale?: string;
+  title?: string;
 }
 
 export interface GuestBillResponse {
@@ -325,10 +448,25 @@ export interface HiddenChargeResponse {
   optionId?: string;
 }
 
+export interface HomeDocument {
+  carousel?: Array<CarouselItem>;
+  groups?: Array<Group>;
+  locale?: string;
+  popup?: Popup;
+  promoGrid?: Array<CarouselItem>;
+  stories?: Array<StoryGroup>;
+}
+
 export interface HostnameLookupView {
   channelId?: string;
   tenantId?: string;
   verified?: boolean;
+}
+
+export interface Link {
+  targetId?: string;
+  type?: string;
+  url?: string;
 }
 
 export interface LocationProfile {
@@ -350,6 +488,17 @@ export interface LoyaltyStorefrontControllerEntryResponse {
   orderId?: string;
   reasonCode?: string;
   type?: string;
+}
+
+export interface Media {
+  alt?: string;
+  durationMs?: number;
+  heightPx?: number;
+  kind?: string;
+  posterUrl?: string;
+  renditions?: Array<Rendition>;
+  url?: string;
+  widthPx?: number;
 }
 
 export interface MenuCategory {
@@ -385,6 +534,12 @@ export interface MenuComboGroup {
   sortOrder?: number;
 }
 
+export interface MenuIngredient {
+  code?: string;
+  ingredientId?: string;
+  name?: string;
+}
+
 export interface MenuModifierGroup {
   allowSameOptionMultipleTimes?: boolean;
   code?: string;
@@ -418,12 +573,24 @@ export interface MenuProduct {
   commentPresets?: Array<CommentPresetOption>;
   description?: string;
   imageUrls?: Array<string>;
+  ingredients?: Array<MenuIngredient>;
   mediaAssetIds?: Array<string>;
   modifierGroupIds?: Array<string>;
   modifierGroupPolicies?: Array<MenuModifierGroupPolicy>;
   name?: string;
   productId?: string;
+  tags?: Array<MenuTag>;
   variants?: Array<MenuVariant>;
+}
+
+export interface MenuTag {
+  code?: string;
+  icon?: string;
+  name?: string;
+  showAsBadge?: boolean;
+  showAsFilter?: boolean;
+  sortOrder?: number;
+  tagId?: string;
 }
 
 export interface MenuVariant {
@@ -431,6 +598,7 @@ export interface MenuVariant {
   isDefault?: boolean;
   modifierGroupIds?: Array<string>;
   modifierGroupPolicies?: Array<MenuModifierGroupPolicy>;
+  name?: string;
   onSaleNow?: boolean;
   orderable?: boolean;
   physical?: PhysicalFacts;
@@ -470,6 +638,14 @@ export interface NutritionPer100 {
   proteinGramsPer100?: number;
 }
 
+export interface OfferedTag {
+  category?: string;
+  code?: string;
+  iconUrl?: string;
+  id?: string;
+  labels?: { [key: string]: string };
+}
+
 export interface OrderLineResponse {
   autoSelectedCharges?: Array<StorefrontOrderingControllerAutoSelectedChargeResponse>;
   autoSelectedModifiers?: Array<string>;
@@ -480,6 +656,7 @@ export interface OrderLineResponse {
   lineNumber?: number;
   modifierOptionIds?: Array<string>;
   modifiers?: Array<string>;
+  origin?: string;
   productId?: string;
   productName?: string;
   quantity?: number;
@@ -549,6 +726,13 @@ export interface PaymentSessionRequest {
   returnUrl?: string;
 }
 
+export interface PendingReviewResponse {
+  locationId?: string;
+  orderId?: string;
+  placedAt?: string;
+  publicOrderNumber?: string;
+}
+
 export interface PhysicalFacts {
   catchweight?: boolean;
   catchweightNominalGrams?: number;
@@ -602,10 +786,26 @@ export interface PlatformLocalesResponse {
   locales?: Array<PlatformLocaleEntryResponse>;
 }
 
+export interface Popup {
+  body?: string;
+  cap?: Cap;
+  ctaLabel?: string;
+  daily?: Daily;
+  dismiss?: string;
+  id?: string;
+  link?: Link;
+  media?: Media;
+  revisionNo?: number;
+  showAfterSeconds?: number;
+  textLocale?: string;
+  title?: string;
+}
+
 export interface PricedCartResponse {
   appliedPromotions?: Array<AppliedPromotionResponse>;
   cartId?: string;
   cartVersion?: number;
+  changedByPricing?: boolean;
   contextHash?: string;
   currency?: string;
   delivery?: DeliveryChargeResponse;
@@ -636,6 +836,42 @@ export interface ProfileResponse {
   version?: number;
 }
 
+export interface PublicComment {
+  branchName?: string;
+  comment?: string;
+  date?: string;
+  rating?: number;
+  tags?: Array<PublicTag>;
+}
+
+export interface PublicDisplayResponse {
+  reasonCode?: string;
+  state?: "NOT_SHARED" | "PENDING" | "PUBLISHED" | "HIDDEN";
+  withdrawable?: boolean;
+}
+
+export interface PublicList {
+  items?: Array<PublicComment>;
+  nextCursor?: string;
+  visibility?: "NONE" | "RATING_ONLY" | "RATING_AND_COMMENTS";
+}
+
+export interface PublicSummary {
+  average?: number;
+  count?: number;
+  distribution?: Array<number>;
+  ready?: boolean;
+  visibility?: "NONE" | "RATING_ONLY" | "RATING_AND_COMMENTS";
+}
+
+export interface PublicTag {
+  category?: "FOOD" | "SERVICE" | "COURIER" | "DELIVERY_TIME" | "OTHER";
+  code?: string;
+  iconUrl?: string;
+  labels?: { [key: string]: string };
+  sentiment?: "POSITIVE" | "NEGATIVE";
+}
+
 export interface PutLineRequest {
   comboPicks?: Array<ComboPickRequest>;
   commentPresetCodes?: Array<string>;
@@ -644,6 +880,16 @@ export interface PutLineRequest {
   nestedModifiers?: Array<NestedModifierRequest>;
   quantity?: number;
   variantId: string;
+}
+
+export interface ReceiptResponse {
+  kind?: string;
+  registeredAt?: string;
+  url?: string;
+}
+
+export interface ReceiptsResponse {
+  receipts?: Array<ReceiptResponse>;
 }
 
 export interface RedeemRequest {
@@ -664,6 +910,11 @@ export interface RegisterRequest {
 export interface RegistrationResponse {
   accountId?: string;
   created?: boolean;
+}
+
+export interface Rendition {
+  url?: string;
+  widthPx?: number;
 }
 
 export interface ReorderLineResponse {
@@ -693,6 +944,15 @@ export interface ReorderPlanResponse {
 
 export interface RequestCodeRequest {
   phone: string;
+}
+
+export interface ReviewTag {
+  category?: string;
+  code?: string;
+  iconAssetId?: string;
+  id?: string;
+  labels?: { [key: string]: string };
+  sentiment?: string;
 }
 
 export interface SaveAddressRequest {
@@ -735,6 +995,13 @@ export interface SignInPollResponse {
 
 export interface SignInRequest {
   grant: string;
+}
+
+export interface Slide {
+  caption?: string;
+  durationSeconds?: number;
+  link?: Link;
+  media?: Media;
 }
 
 export interface SocialLinkResponse {
@@ -839,8 +1106,19 @@ export interface StorefrontReviewControllerReviewResponse {
   comment?: string;
   id?: string;
   orderId?: string;
+  publicDisplay?: PublicDisplayResponse;
   rating?: number;
   submittedAt?: string;
+  tags?: Array<ReviewTag>;
+}
+
+export interface StoryGroup {
+  avatar?: Media;
+  id?: string;
+  revisionNo?: number;
+  slides?: Array<Slide>;
+  textLocale?: string;
+  title?: string;
 }
 
 export interface SubmitCodeRequest {
@@ -849,7 +1127,9 @@ export interface SubmitCodeRequest {
 
 export interface SubmitReviewRequest {
   comment?: string;
+  publicConsent?: boolean;
   rating?: number;
+  tagIds?: Array<string>;
 }
 
 export interface TermsView {
@@ -857,6 +1137,12 @@ export interface TermsView {
   isPlatformDefault?: boolean;
   locale?: string;
   version?: number;
+}
+
+export interface Vacancy {
+  apply?: Apply;
+  branch?: Branch;
+  employmentType?: string;
 }
 
 export interface Operations {
@@ -871,6 +1157,7 @@ export interface Operations {
   "entries": { method: "GET"; path: "/api/v1/storefront/loyalty/tenants/{tenantId}/accounts/{accountId}/entries"; request: { parameters: { path: { accountId: string; tenantId: string } } }; responses: { "200": Array<LoyaltyStorefrontControllerEntryResponse> } };
   "nearbyPickupLocations": { method: "POST"; path: "/api/v1/storefront/pickup-locations"; request: { parameters: Record<string, never>; body: PickupLocationSearchRequest }; responses: { "200": PickupLocations } };
   "analyticsConfig": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/analytics"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": AnalyticsConfigResponse } };
+  "click": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/attribution-links/{token}/clicks"; request: { parameters: { path: { brandId: string; tenantId: string; token: string } } }; responses: { "200": unknown } };
   "createCart": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateCartRequest }; responses: { "200": CartResponse } };
   "readCart": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": CartResponse } };
   "readDestination": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/destination"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": DestinationResponse } };
@@ -885,6 +1172,18 @@ export interface Operations {
   "applyPromoCode": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/promo-code"; request: { parameters: { path: { brandId: string; cartId: string; tenantId: string } }; body: ApplyPromoCodeRequest }; responses: { "200": CartResponse } };
   "bindTable": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/table"; request: { parameters: { header: { "X-Dine-In-Token": string }; path: { brandId: string; cartId: string; tenantId: string } } }; responses: { "200": CartResponse } };
   "checkout": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/checkouts"; request: { parameters: { header: { "Idempotency-Key": string; "X-Dine-In-Token"?: string }; path: { brandId: string; tenantId: string } }; body: CheckoutRequest }; responses: { "200": CheckoutResponse } };
+  "listVacancies": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/careers"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { channel: string; cursor?: string; limit?: number; locale?: string } } }; responses: { "200": EntryPage } };
+  "getVacancy": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/careers/{slug}"; request: { parameters: { path: { brandId: string; slug: string; tenantId: string }; query: { channel: string; locale?: string } } }; responses: { "200": EntryDetail } };
+  "recordContentEvents": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/events"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: EventsRequest }; responses: { "200": AcceptedResponse } };
+  "editorialFeatures": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/features"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Features } };
+  "listGallery": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/gallery"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { channel: string; cursor?: string; limit?: number; locale?: string } } }; responses: { "200": EntryPage } };
+  "getGalleryAlbum": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/gallery/{slug}"; request: { parameters: { path: { brandId: string; slug: string; tenantId: string }; query: { channel: string; locale?: string } } }; responses: { "200": EntryDetail } };
+  "contentHome": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/home"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { channel: string; locale?: string } } }; responses: { "200": HomeDocument } };
+  "listNews": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/news"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { channel: string; cursor?: string; limit?: number; locale?: string } } }; responses: { "200": EntryPage } };
+  "getNews": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/news/{slug}"; request: { parameters: { path: { brandId: string; slug: string; tenantId: string }; query: { channel: string; locale?: string } } }; responses: { "200": EntryDetail } };
+  "listRecipes": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/recipes"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { channel: string; cursor?: string; limit?: number; locale?: string } } }; responses: { "200": EntryPage } };
+  "getRecipe": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/recipes/{slug}"; request: { parameters: { path: { brandId: string; slug: string; tenantId: string }; query: { channel: string; locale?: string } } }; responses: { "200": EntryDetail } };
+  "config": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/feedback/config"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": FeedbackConfigResponse } };
   "register": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/registrations"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RegisterRequest }; responses: { "200": RegistrationResponse } };
   "signIn": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/sessions"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: SignInRequest }; responses: { "200": CustomerSessionResponse } };
   "signOut": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/sessions/current"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": unknown } };
@@ -913,6 +1212,7 @@ export interface Operations {
   "readOrder": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } } }; responses: { "200": OrderResponse } };
   "cancel": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/cancellations"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } }; body: StorefrontOrderingControllerCancelRequest }; responses: { "200": OrderStateResponse } };
   "openPaymentSession": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/payment-sessions"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; orderId: string; tenantId: string } }; body: PaymentSessionRequest }; responses: { "200": StorefrontPaymentControllerPaymentSessionResponse } };
+  "receipts": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/receipts"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } } }; responses: { "200": ReceiptsResponse } };
   "reorderPlan": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/reorder"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } } }; responses: { "200": ReorderPlanResponse } };
   "submit": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/review"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } }; body: SubmitReviewRequest }; responses: { "200": StorefrontReviewControllerReviewResponse } };
   "poll_1": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/presented-offers"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { surface?: string } } }; responses: { "200": Array<Banner> } };
@@ -920,6 +1220,10 @@ export interface Operations {
   "myReferral": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/me"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": MyReferralResponse } };
   "redeem": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/redemptions"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RedeemRequest }; responses: { "200": ReferralStorefrontControllerRedemptionResponse } };
   "myReviews": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PageStorefrontReviewControllerReviewResponse } };
+  "pending": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews/pending"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<PendingReviewResponse> } };
+  "comments": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews/public"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PublicList } };
+  "summary": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews/public/summary"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": PublicSummary } };
+  "withdraw": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews/{reviewId}/public-display/withdrawal"; request: { parameters: { path: { brandId: string; reviewId: string; tenantId: string } } }; responses: { "200": PublicDisplayResponse } };
   "faq": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/faq"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { locale?: string } } }; responses: { "200": Array<FaqResponse> } };
   "socialLinks": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/support/social-links"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<SocialLinkResponse> } };
   "unlink": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/link"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": unknown } };
@@ -934,7 +1238,7 @@ export interface Operations {
   "page": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/channels/{channel}/pages/{slug}"; request: { parameters: { path: { channel: string; slug: string; tenantId: string }; query: { locale: string } } }; responses: { "200": PageView } };
   "presentation": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/channels/{channel}/presentation"; request: { parameters: { path: { channel: string; tenantId: string } } }; responses: { "200": StorefrontChannelSetupControllerPresentationView } };
   "availability": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/locations/{locationId}/variants/{variantId}/availability"; request: { parameters: { path: { locationId: string; tenantId: string; variantId: string }; query: { channel: string } } }; responses: { "200": StorefrontAvailabilityResponse } };
-  "image": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/media/{assetId}"; request: { parameters: { path: { assetId: string; tenantId: string } } }; responses: { "200": unknown } };
+  "image": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/media/{assetId}"; request: { parameters: { path: { assetId: string; tenantId: string }; query: { variant?: string } } }; responses: { "200": unknown } };
 }
 
 export type OperationName = keyof Operations;

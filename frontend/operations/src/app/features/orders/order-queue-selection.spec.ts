@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { OrderSummaryResponse } from './order-summary';
 import {
   bulkAdvanceTarget,
+  bulkAssignEligible,
+  bulkAssignIneligibleCount,
   bulkCancelEligible,
   bulkCancelIneligibleCount,
   pruneSelection,
@@ -179,5 +181,27 @@ describe('bulkAdvanceTarget', () => {
       ];
       expect(bulkAdvanceTarget(selected)).toBe(target);
     }
+  });
+});
+
+describe('bulkAssignEligible (ADR 0172)', () => {
+  const assignable = (id: string) =>
+    order({ orderId: id, actions: [{ action: 'ASSIGN_COURIER' }, { action: 'CANCEL' }] });
+
+  it('is offered only when every selected row carries ASSIGN_COURIER in its server-supplied actions', () => {
+    expect(bulkAssignEligible([assignable('a'), assignable('b')])).toBe(true);
+    expect(bulkAssignIneligibleCount([assignable('a'), assignable('b')])).toBe(0);
+  });
+
+  it('is absent, not partial, when one row cannot take a courier — and counts the rows that cannot', () => {
+    const carried = order({ orderId: 'c', actions: [{ action: 'CANCEL' }] });
+
+    expect(bulkAssignEligible([assignable('a'), carried])).toBe(false);
+    expect(bulkAssignIneligibleCount([assignable('a'), carried])).toBe(1);
+  });
+
+  it('is never offered for an empty selection, and a row without actions[] cannot take one', () => {
+    expect(bulkAssignEligible([])).toBe(false);
+    expect(bulkAssignEligible([order({ orderId: 'x' })])).toBe(false);
   });
 });

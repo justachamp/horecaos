@@ -8,6 +8,7 @@ import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { ChallengeState, OrderHandoverApi } from '../orders/order-handover-api';
+import { CapturedMark, OrderMarkingApi } from '../orders/order-marking-api';
 import { ActualWeightResult, OrderWeighingApi } from '../orders/order-weighing-api';
 import { BoardResponse, KitchenApi, TicketResponse } from './kitchen-api';
 import { ExpoPage } from './expo-page';
@@ -55,6 +56,7 @@ describe('ExpoPage', () => {
     apiClient?: Partial<ApiClient>,
     handoverApi?: Partial<OrderHandoverApi>,
     weighingApi?: Partial<OrderWeighingApi>,
+    markingApi?: Partial<OrderMarkingApi>,
   ): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [ExpoPage],
@@ -85,6 +87,11 @@ describe('ExpoPage', () => {
         {
           provide: OrderWeighingApi,
           useValue: weighingApi ?? { captureActualWeight: () => NEVER },
+        },
+        // ADR 0161: the scanning panel is only drawn for an order with a marked line.
+        {
+          provide: OrderMarkingApi,
+          useValue: markingApi ?? { list: () => of({ orderId: 'order-1', lines: [] }) },
         },
       ],
     }).compileComponents();
@@ -564,6 +571,192 @@ describe('ExpoPage', () => {
       expect(handOverButton(host).disabled).toBe(true);
 
       order = weighedOrder(false, 8);
+      await (fixture.componentInstance as unknown as { refresh(): Promise<void> }).refresh();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(handOverButton(host).disabled).toBe(false);
+    });
+  });
+
+  // ----------------------------------------------- marked goods (ADR 0161)
+
+  describe('marked goods at handover (ADR 0161)', () => {
+    const SCAN = '010460000000001521Zq8mK2pXr4Wd';
+
+    function markedOrder(captured: number, required = 2, version = 7) {
+      return {
+        version,
+        value: {
+          summary: {
+            orderId: 'order-1',
+            status: 'READY',
+            currency: 'UZS',
+            version,
+            totalMinor: 200_000,
+          },
+          kitchenNote: null,
+          lines: [
+            {
+              lineId: 'line-1',
+              lineNumber: 1,
+              productName: 'Vodka',
+              quantity: required,
+              finalAmountMinor: 100_000 * required,
+              modifiers: [],
+              commentPresets: [],
+              hasNote: false,
+              marking: { required, captured },
+            },
+          ],
+        },
+      };
+    }
+
+    const BOARD: BoardResponse = { tickets: [ready({})], warnings: [] };
+
+    const api = (read: () => unknown): Partial<ApiClient> => ({
+      get: read as unknown as ApiClient['get'],
+    });
+
+    function kitchen(extra: Partial<KitchenApi> = {}): Partial<KitchenApi> {
+      return { board: () => Promise.resolve(BOARD), stations: () => Promise.resolve([]), ...extra };
+    }
+
+    function pack(host: HTMLElement): void {
+      (host.querySelector('[data-testid="expo-packed"]') as HTMLInputElement).click();
+      fixture.detectChanges();
+    }
+
+    const handOverButton = (host: HTMLElement) =>
+      host.querySelector('[data-testid="expo-handover"]') as HTMLButtonElement;
+
+    function scanOnTheTicket(host: HTMLElement): void {
+      const field = host.querySelector('[data-testid="datamatrix-field"]') as HTMLInputElement;
+      for (const character of SCAN) {
+        field.dispatchEvent(
+          new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: character }),
+        );
+      }
+      field.dispatchEvent(
+        new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }),
+      );
+    }
+
+    it('will not hand an order over while a marked line is short of scans, and says why', async () => {
+      const handOver = vi.fn().mockReturnValue(of({ ...ready({}), status: 'HANDED_OVER' }));
+      await render(
+        kitchen({ handOver }),
+        api(() => of(markedOrder(1))),
+      );
+      const host = fixture.nativeElement as HTMLElement;
+
+      pack(host);
+
+      expect(handOverButton(host).disabled).toBe(true);
+      expect(host.querySelector('[data-testid="expo-scan-first"]')).not.toBeNull();
+      handOverButton(host).click();
+      expect(handOver).not.toHaveBeenCalled();
+    });
+
+    it('draws the scanning panel on the ticket of a marked order with the count so far', async () => {
+      await render(
+        kitchen(),
+        api(() => of(markedOrder(1))),
+      );
+      const host = fixture.nativeElement as HTMLElement;
+
+      expect(host.querySelector('[data-testid="order-marking"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="order-marking-progress"]')?.textContent).toContain(
+        '1 of 2 scanned',
+      );
+    });
+
+    it('lets the order go once every unit is scanned, and the panel no longer warns', async () => {
+      await render(
+        kitchen(),
+        api(() => of(markedOrder(2))),
+      );
+      const host = fixture.nativeElement as HTMLElement;
+
+      pack(host);
+
+      expect(handOverButton(host).disabled).toBe(false);
+      expect(host.querySelector('[data-testid="expo-scan-first"]')).toBeNull();
+    });
+
+    it('scanning the last unit on the ticket frees the hand-over, reading the order again to prove it', async () => {
+      let order = markedOrder(1);
+      const capture = vi.fn(() => {
+        order = markedOrder(2, 2, 7);
+        const result: CapturedMark = {
+          markId: 'm2',
+          sequence: 2,
+          gtin: '04600000000015',
+          captured: 2,
+          required: 2,
+          orderMarksComplete: true,
+          gtinChecked: true,
+        };
+        return of(result);
+      });
+      await render(
+        kitchen(),
+        api(() => of(order)),
+        undefined,
+        undefined,
+        { capture, list: () => of({ orderId: 'order-1', lines: [] }) },
+      );
+      const host = fixture.nativeElement as HTMLElement;
+      pack(host);
+      expect(handOverButton(host).disabled).toBe(true);
+
+      scanOnTheTicket(host);
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(capture).toHaveBeenCalledTimes(1);
+      expect(host.querySelector('[data-testid="expo-scan-first"]')).toBeNull();
+      expect(handOverButton(host).disabled).toBe(false);
+    });
+
+    it('does not hand over while it has not yet read the order, rather than guess nothing needs scanning', async () => {
+      await render(
+        kitchen(),
+        api(() => NEVER),
+      );
+      const host = fixture.nativeElement as HTMLElement;
+
+      pack(host);
+
+      expect(handOverButton(host).disabled).toBe(true);
+    });
+
+    it('draws no scanning panel and holds nothing back for an order with no marked line', async () => {
+      await render(
+        kitchen(),
+        api(() => of({ value: { lines: [], kitchenNote: null }, version: null })),
+      );
+      const host = fixture.nativeElement as HTMLElement;
+
+      pack(host);
+
+      expect(handOverButton(host).disabled).toBe(false);
+      expect(host.querySelector('[data-testid="order-marking"]')).toBeNull();
+      expect(host.querySelector('[data-testid="expo-scan-first"]')).toBeNull();
+    });
+
+    it('notices on the next poll that another screen finished the scans', async () => {
+      let order = markedOrder(1);
+      await render(
+        kitchen(),
+        api(() => of(order)),
+      );
+      const host = fixture.nativeElement as HTMLElement;
+      pack(host);
+      expect(handOverButton(host).disabled).toBe(true);
+
+      order = markedOrder(2);
       await (fixture.componentInstance as unknown as { refresh(): Promise<void> }).refresh();
       await flushMicrotasks();
       fixture.detectChanges();

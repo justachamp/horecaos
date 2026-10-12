@@ -119,6 +119,25 @@ export interface CartResponseItem {
    * `modifierOptionIds`. Empty on most lines.
    */
   nestedModifiers?: readonly { readonly parentOptionId: string; readonly optionId: string }[];
+  /** ADR 0158: `CUSTOMER` for a line the customer put there, `AUTO_ADD` for one a rule added. Absent is the customer's. */
+  origin?: 'CUSTOMER' | 'AUTO_ADD';
+  /**
+   * ADR 0158: present exactly on a line a rule added. The screen draws its remove control and its stepper from
+   * these and never from knowledge of the rules: `removable` is the opposite of `mandatory`, and the quantity
+   * moves between `minimumQuantity` (0 means it can be removed) and `maximumQuantity`.
+   */
+  autoAdd?: CartAutoAddLine;
+}
+
+/** What the cart says about a line a rule added (ADR 0158). */
+export interface CartAutoAddLine {
+  readonly ruleCode: string;
+  /** The rule's wording in the customer's language; null when the rule states none, and then the screen says «added automatically». */
+  readonly text: string | null;
+  readonly mandatory: boolean;
+  readonly removable: boolean;
+  readonly minimumQuantity: number;
+  readonly maximumQuantity: number;
 }
 
 /** Vendor from cart response */

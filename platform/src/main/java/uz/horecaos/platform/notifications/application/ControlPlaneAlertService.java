@@ -50,4 +50,13 @@ public class ControlPlaneAlertService implements ControlPlaneAlertPort {
             log.warn("Control-plane alert {} could not be stored as an incident", alert.eventClass(), unstored);
         }
     }
+
+    @Override
+    public void resolve(String eventClass, String subjectType, String subjectId, String by, String note) {
+        try {
+            alerts.resolveBySubject(eventClass, subjectType, subjectId, by, note, java.time.Instant.now());
+        } catch (RuntimeException unresolved) {
+            log.warn("Control-plane alert {} could not be resolved", eventClass, unresolved);
+        }
+    }
 }

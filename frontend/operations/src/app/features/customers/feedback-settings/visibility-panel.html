@@ -1,0 +1,141 @@
+<section class="panel" data-testid="visibility">
+  <header class="panel__head">
+    <h2 class="q-subhead">{{ 'customers.feedback.visibility.title' | t }}</h2>
+    <p class="q-body-sm muted">{{ 'customers.feedback.visibility.hint' | t }}</p>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm">{{ 'customers.feedback.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm muted">{{ 'customers.feedback.denied' | t }}</p>
+    }
+    @case ('error') {
+      <div class="band band--error" role="alert">
+        <span class="q-body-sm">{{ errorText() }}</span>
+      </div>
+    }
+    @case ('ready') {
+      @if (flag(); as f) {
+        <div class="flag" data-testid="visibility-flag">
+          <div class="flag__text">
+            <strong class="q-emphasis">{{ 'customers.feedback.visibility.flag' | t }}</strong>
+            <span class="q-body-sm">
+              {{ f.on ? ('customers.feedback.flag.on' | t) : ('customers.feedback.flag.off' | t) }}
+            </span>
+            @if (!f.on) {
+              <p class="q-caption muted">{{ 'customers.feedback.visibility.flagOff' | t }}</p>
+            }
+          </div>
+          @if (canWrite()) {
+            <button
+              type="button"
+              class="secondary"
+              [disabled]="busy()"
+              (click)="toggleFlag()"
+              data-testid="visibility-flag-toggle"
+            >
+              {{
+                f.on
+                  ? ('customers.feedback.flag.switchOff' | t)
+                  : ('customers.feedback.flag.switchOn' | t)
+              }}
+            </button>
+          }
+        </div>
+      }
+
+      @if (errorText(); as message) {
+        <div class="band band--error" role="alert" data-testid="visibility-error">
+          <span class="q-body-sm">{{ message }}</span>
+        </div>
+      }
+      @if (notice(); as message) {
+        <div class="band band--info" role="status" data-testid="visibility-saved">
+          <span class="q-body-sm">{{ message }}</span>
+        </div>
+      }
+
+      <form class="form" (submit)="$event.preventDefault(); save()">
+        <label class="field">
+          <span class="q-caption">{{ 'customers.feedback.visibility.level' | t }}</span>
+          <select
+            class="control"
+            [value]="visibility()"
+            [disabled]="!canWrite()"
+            (change)="onVisibility($any($event.target).value)"
+            data-testid="visibility-level"
+          >
+            @for (v of visibilities; track v) {
+              <option [value]="v" [selected]="v === visibility()">
+                {{ visibilityKey(v) | t }}
+              </option>
+            }
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="q-caption">{{ 'customers.feedback.visibility.minimum' | t }}</span>
+          <input
+            class="control control--narrow"
+            type="number"
+            min="0"
+            max="1000"
+            [value]="minimum()"
+            [disabled]="!canWrite()"
+            (input)="onMinimum($any($event.target).value)"
+            data-testid="visibility-minimum"
+          />
+          <span class="q-caption muted">{{ 'customers.feedback.visibility.minimumHint' | t }}</span>
+        </label>
+        @if (!minimumValid()) {
+          <p class="q-caption band--warn" data-testid="visibility-invalid">
+            {{ 'customers.feedback.visibility.invalid' | t }}
+          </p>
+        }
+
+        <label class="inline">
+          <input
+            type="checkbox"
+            [checked]="requireApproval()"
+            [disabled]="!canWrite()"
+            (change)="requireApproval.set($any($event.target).checked)"
+            data-testid="visibility-approval"
+          />
+          <span class="q-body-sm">{{ 'customers.feedback.visibility.requireApproval' | t }}</span>
+        </label>
+
+        @if (canModerate()) {
+          <a class="link q-body-sm" routerLink="/customers/reviews/moderation">
+            {{ 'customers.feedback.visibility.moderationLink' | t }}
+          </a>
+        }
+
+        @if (canWrite()) {
+          <label class="field">
+            <span class="q-caption">{{ 'customers.feedback.reason.label' | t }}</span>
+            <input
+              class="control"
+              type="text"
+              maxlength="1000"
+              [value]="reason()"
+              (input)="reason.set($any($event.target).value)"
+              data-testid="visibility-reason"
+            />
+          </label>
+          <div>
+            <button
+              type="submit"
+              class="primary"
+              [disabled]="!canSave()"
+              data-testid="visibility-save"
+            >
+              {{ 'customers.feedback.save' | t }}
+            </button>
+          </div>
+        }
+      </form>
+    }
+  }
+</section>

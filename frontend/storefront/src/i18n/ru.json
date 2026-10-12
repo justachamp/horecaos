@@ -80,6 +80,42 @@
     "recentSearches": "Недавние поиски",
     "modeUnavailableToday": "Сейчас недоступно"
   },
+  "content": {
+    "carousel": "Предложения",
+    "promoGrid": "Акции",
+    "stories": "Истории",
+    "storyOpen": "Открыть историю: {{title}}",
+    "storyClose": "Закрыть историю",
+    "storyNext": "Следующий слайд",
+    "storyPrevious": "Предыдущий слайд",
+    "storySlide": "Слайд {{current}} из {{total}}",
+    "learnMore": "Подробнее",
+    "open": "Открыть",
+    "popupClose": "Закрыть",
+    "editorialSection": "Ещё от нас",
+    "editorial": {
+      "news": "Новости",
+      "gallery": "Галерея",
+      "recipes": "Рецепты",
+      "careers": "Вакансии"
+    },
+    "unavailable": "Эта страница недоступна.",
+    "empty": "Пока ничего нет.",
+    "loadMore": "Показать ещё",
+    "published": "Опубликовано {{date}}",
+    "employment": {
+      "FULL_TIME": "Полная занятость",
+      "PART_TIME": "Частичная занятость",
+      "SHIFT": "Сменный график",
+      "INTERNSHIP": "Стажировка"
+    },
+    "vacancy": {
+      "employment": "Занятость",
+      "branch": "Филиал",
+      "contact": "Как откликнуться"
+    },
+    "gallery": "Фотографии"
+  },
   "cart": {
     "title": "Корзина",
     "clearCart": "Очистить корзину",
@@ -148,7 +184,8 @@
       "choose": "Выберите подарок",
       "add": "Добавить подарок: {{name}}",
       "addMany": "Добавить подарок: {{name}} ×{{count}}"
-    }
+    },
+    "autoAdded": "Добавлено автоматически"
   },
   "orders": {
     "title": "Заказы",
@@ -165,6 +202,13 @@
     "placeOrder": "Оформить заказ",
     "repeat": "Повторить заказ",
     "repeatAddedAll": "{{count}} блюд добавлено в корзину",
+    "receipt": {
+      "title": "Чек",
+      "open": "Открыть чек",
+      "openRefund": "Открыть чек возврата",
+      "openCorrection": "Открыть чек коррекции",
+      "hint": "Чек откроется на сайте налоговой службы."
+    },
     "cancel": "Отменить",
     "cancelConfirm": "Вы уверены, что хотите отменить этот заказ?",
     "order": "Заказ",
@@ -307,7 +351,8 @@
     "pickAtLeast": "Выберите не меньше {{min}}",
     "pickAny": "Выберите любые",
     "variantGroupsTitle": "Выбор для «{{variant}}»",
-    "fromPrice": "от {{price}}"
+    "fromPrice": "от {{price}}",
+    "ingredients": "Состав"
   },
   "terms": {
     "agreementTitle": "Договор публичной оферты",
@@ -450,5 +495,45 @@
     "portionStep": "Заказывается порциями по {{step}}",
     "weighedLine": "Взвешено: {{weight}}",
     "estimateLine": "≈ {{weight}}, оценка"
+  },
+  "rateOrder": {
+    "title": "Оцените заказ",
+    "subtitle": "Заказ №{{number}} · ваш отзыв важен для кухни",
+    "stars": "Оценка",
+    "tagsLabel": "Что понравилось или не понравилось?",
+    "tagsHint": "Выберите до {{max}}. Необязательно.",
+    "commentPlaceholder": "Оставить комментарий (необязательно)",
+    "publicConsent": "Согласен показать мой отзыв на странице ресторана без моего имени",
+    "publicConsentHint": "Показывается только комментарий: без имени, номера и заказа. Можно отозвать в любой момент.",
+    "submit": "Отправить оценку",
+    "yourReview": "Ваш отзыв",
+    "withdrawPublic": "Убрать со страницы",
+    "publicState": {
+      "PENDING": "Комментарий на проверке",
+      "PUBLISHED": "Комментарий показан на странице ресторана",
+      "HIDDEN": "Комментарий не показывается на странице"
+    },
+    "hiddenReason": {
+      "ABUSIVE_LANGUAGE": "есть оскорбительные выражения",
+      "PERSONAL_DATA_OF_ANOTHER": "есть личные данные другого человека",
+      "NAMES_AN_INDIVIDUAL": "назван конкретный человек",
+      "SPAM_OR_UNRELATED": "не по теме",
+      "LEGAL_REQUEST": "по юридическому запросу",
+      "CUSTOMER_WITHDREW": "вы убрали его сами",
+      "CUSTOMER_ERASED": "удалён по вашей просьбе"
+    }
+  },
+  "publicReviews": {
+    "title": "Отзывы гостей",
+    "count": "Оценок: {{count}}",
+    "distribution": "Распределение оценок",
+    "more": "Показать ещё"
+  },
+  "menu": {
+    "filter": {
+      "title": "Фильтр по тегам",
+      "clear": "Сбросить",
+      "empty": "Нет блюд со всеми выбранными тегами."
+    }
   }
 }

@@ -190,10 +190,27 @@
                     }
                   </dd>
                 </dl>
+                @if (brandScope(); as vocabularyScope) {
+                  <q-product-vocabulary
+                    [scope]="vocabularyScope"
+                    [productId]="product.productId"
+                    kind="TAG"
+                    data-testid="editor-tags"
+                  />
+                  <q-product-vocabulary
+                    [scope]="vocabularyScope"
+                    [productId]="product.productId"
+                    kind="INGREDIENT"
+                    data-testid="editor-ingredients"
+                  />
+                }
               </div>
             }
             @case ('VARIANTS') {
               <div class="editor__section">
+                <p class="q-caption" data-testid="editor-variant-name-hint">
+                  {{ 'catalog.editor.vocabulary.variantNameHint' | t }}
+                </p>
                 <table class="editor__table">
                   <thead>
                     <tr>
@@ -600,7 +617,27 @@
                   </fieldset>
                 }
                 <p class="q-caption">{{ 'catalog.editor.fiscal.notBuilt' | t }}</p>
-                <p class="q-caption">{{ 'catalog.editor.fiscal.mxikReferenceNote' | t }}</p>
+                @if (mxikStatus(); as list) {
+                  @if (!list.loaded) {
+                    <p class="q-caption" data-testid="editor-mxik-not-loaded">
+                      {{ 'catalog.editor.fiscal.mxikNotLoaded' | t }}
+                    </p>
+                  } @else {
+                    <p class="q-caption" data-testid="editor-mxik-loaded">
+                      {{
+                        'catalog.editor.fiscal.mxikLoaded'
+                          | t: { version: list.datasetVersion ?? 0, valid: list.validRows }
+                      }}
+                    </p>
+                    @if (list.stale) {
+                      <p class="q-caption" data-testid="editor-mxik-stale">
+                        {{ 'catalog.editor.fiscal.mxikStale' | t: { days: list.ageDays ?? 0 } }}
+                      </p>
+                    }
+                  }
+                } @else {
+                  <p class="q-caption">{{ 'catalog.editor.fiscal.mxikReferenceNote' | t }}</p>
+                }
               </div>
             }
             @case ('PHYSICAL') {

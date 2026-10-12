@@ -285,6 +285,21 @@ public enum Capability {
     REVIEW_READ("review.read", "review", "read"),
 
     /**
+     * ADR 0159: deciding whether a customer's comment may be shown on the brand's public page, and
+     * reading the queue of comments waiting for that decision.
+     *
+     * <p>Moderation hides words and never numbers: a holder moves a comment between {@code PENDING},
+     * {@code PUBLISHED} and {@code HIDDEN} for one of five coded reasons and cannot touch a rating, so
+     * the capability changes who may read a sentence and nothing about the average. Held where the
+     * decision to put a customer's words on a restaurant's page is made -- the owner, the administrator
+     * and the brand manager -- and at brand scope, because the public page is a brand's.
+     *
+     * <p>Separate from {@link #REVIEW_READ}: reading a review is a look, hiding one is a decision with an
+     * audit fact, and a suspended tenant keeps the first and loses the second.
+     */
+    REVIEW_MODERATE("review.moderate", "review", "moderate"),
+
+    /**
      * ADR 0013: reading an order's payment — the intent, its attempts, and the
      * provider states recorded beside HorecaOS's own.
      *
@@ -393,6 +408,23 @@ public enum Capability {
      * decide that a receipt obligation has been discharged.
      */
     FISCAL_DOCUMENT_RESOLVE("fiscal.document.resolve", "fiscal", "document.resolve"),
+
+    /**
+     * ADR 0166: seeing the identifiers of a filed receipt in full — the fiscal sign, the receipt
+     * number and the receipt link — for a declared purpose, with a SECURITY audit fact for each
+     * look.
+     *
+     * <p>Separate from {@link #FISCAL_DOCUMENT_READ} on purpose, and not held by everyone who
+     * holds it. The order's evidence read shows structure, the INN that issued the receipt, the
+     * lines as filed and the identifiers masked to their last four characters; reading a
+     * worklist and handing a colleague a receipt link are different acts, and ADR 0029's rule is
+     * that the second one leaves a trail saying who looked and why. A branch manager can read the
+     * first; the tenant owner and finance, who answer a complaint or a tax inquiry, hold this.
+     *
+     * <p>It is not a power to read a marking code. ADR 0161 keeps every code off every screen and
+     * gives it no reveal, so no purpose on this capability returns one.
+     */
+    FISCAL_EVIDENCE_REVEAL("fiscal.evidence.reveal", "fiscal", "evidence.reveal"),
 
     REFUND_REQUEST("refund.request", "refund", "request"),
     REFUND_APPROVE("refund.approve", "refund", "approve"),
@@ -601,6 +633,33 @@ public enum Capability {
      */
     KITCHEN_STATION_MANAGE("kitchen.station.manage", "kitchen", "station.manage"),
 
+    /**
+     * ADR 0168: publishing the {@code kitchen.paid_hold} policy at a tenant, a brand or a location -- whether a
+     * buffered ticket is held until its order's payment arrives, and the minutes before a blocked one counts as
+     * stuck. Its own capability rather than {@link #KITCHEN_STATION_MANAGE}: that one decides where dishes appear,
+     * this decides whether a kitchen may start cooking against money that has not arrived. Held by the same roles
+     * (tenant-owner, tenant-admin, location-manager) for the argument that capability's documentation makes, and
+     * by no line role. The platform-wide mode is not published through this: the owner publishes it at platform
+     * scope through {@code PolicyAuthor}.
+     */
+    KITCHEN_PAID_HOLD_MANAGE("kitchen.paid-hold.manage", "kitchen", "paid-hold.manage"),
+
+    /**
+     * ADR 0163: reading one branch's cook headcount plan -- the portions the kitchen is forecast to fire in each
+     * hour, per station, and the cooks that needs at the tenant's own stated pace. A manager's planning aid, so it
+     * is held where {@link #KITCHEN_STATION_MANAGE} is and not by a line cook or a device: a cook has no business
+     * reading what the branch plans to pay for. Not {@code REPORTING_READ}, which grants branch and company
+     * figures; this reads one branch's kitchen.
+     */
+    KITCHEN_HEADCOUNT_READ("kitchen.headcount.read", "kitchen", "headcount.read"),
+
+    /**
+     * ADR 0163: publishing the {@code kitchen.station_productivity} policy -- how many portions one cook produces
+     * in an hour at a station role or station, which the platform never supplies. A pace, never a person: nothing
+     * it holds is keyed to a named employee. Held by the same bundles as {@link #KITCHEN_HEADCOUNT_READ}.
+     */
+    KITCHEN_PRODUCTIVITY_MANAGE("kitchen.productivity.manage", "kitchen", "productivity.manage"),
+
     /** ADR 0041: reading a branch's production tickets. Line, expo, and manager. */
     KITCHEN_TICKET_READ("kitchen.ticket.read", "kitchen", "ticket.read"),
 
@@ -668,6 +727,53 @@ public enum Capability {
      * deciding the order is out the door.
      */
     KITCHEN_TICKET_HANDOVER("kitchen.ticket.handover", "kitchen", "ticket.handover"),
+
+    /**
+     * ADR 0154: reading a branch's printers, print routes, print queue and printer-facing agents, a
+     * brand's receipt profile, and the preview bitmap of a document. Nothing here prints; the preview
+     * is a picture of what a job would put on paper.
+     *
+     * <p>Held by the location, brand and tenant managers and nobody on the floor: the queue lists
+     * failed and dead jobs of the branch, and a preview of a slip is an order's lines. The one picture the
+     * floor fetches is that of a job the person herself handed to her browser, which
+     * {@link #PRINT_REPRINT} carries: she is the one who prints it.
+     */
+    PRINT_READ("print.read", "print", "read"),
+
+    /**
+     * ADR 0154: registering and retiring a printer, binding it to an agent's advertised alias, creating
+     * and changing a print route, approving and revoking a print agent, cancelling a queued job, and
+     * (at {@code BRAND} scope) changing a brand's receipt profile.
+     *
+     * <p>The profile endpoints are brand-scoped, which a location manager does not hold: a footer and
+     * a logo are the brand's face on every branch's paper. A location manager manages the printers and
+     * routes of her own branch.
+     */
+    PRINT_MANAGE("print.manage", "print", "manage"),
+
+    /**
+     * ADR 0154: asking for paper on demand -- a test page, a reprint of an order slip, a receipt or a
+     * kitchen ticket. Every reprint is a new job, linked to the first, naming the person and a reason
+     * code in an ADR 0027 fact.
+     *
+     * <p>Wider than {@link #PRINT_MANAGE} on purpose: a cashier reprints a receipt a customer lost, and
+     * that is the whole of what the floor may do with a printer.
+     */
+    PRINT_REPRINT("print.reprint", "print", "reprint"),
+
+    /**
+     * ADR 0154: a print agent claiming jobs for the printers it advertises, and fetching the bytes of a
+     * job it holds the live lease of. Held by the {@code print-agent} device role and nobody else; the
+     * agent is a byte pipe and this is the whole of its read side.
+     */
+    PRINT_JOB_CLAIM("print.job.claim", "print", "job.claim"),
+
+    /**
+     * ADR 0154: a print agent reporting what happened to a job it holds the lease of. Separate from
+     * {@link #PRINT_JOB_CLAIM} so that the day a transport that only reports exists (a printer-side
+     * polling protocol behind the same service) it can be given one without the other.
+     */
+    PRINT_JOB_REPORT("print.job.report", "print", "job.report"),
 
     /**
      * ADR 0047: authoring a branch's sections and tables, and configuring what a
@@ -1465,6 +1571,20 @@ public enum Capability {
     LOYALTY_POLICY_MANAGE("loyalty.policy.manage", "loyalty", "policy.manage"),
 
     /**
+     * ADR 0171: resolving a difference between the platform's loyalty ledger and a till's bonus balance
+     * (accepting the till's number, pushing the platform's again, absorbing a loss, or suspending a
+     * customer's link), and asking for a reconciliation now.
+     *
+     * <p>Separate from {@link #LOYALTY_ADJUST} and {@link #LOYALTY_POLICY_MANAGE} because a resolution can
+     * credit points: accepting a till's higher number writes an order-free adjustment, and a brand's
+     * outstanding points are its legal entity's liability (the argument ADR 0046 makes for
+     * {@code loyalty.policy.manage}). Granted at {@code BRAND} scope to the tenant owner and to finance,
+     * and not to a location manager, who can read the report and cannot change what it says. A resolution
+     * that credits above the manual-adjustment threshold also needs an ADR 0027 approval by a second person.
+     */
+    LOYALTY_SYNC_MANAGE("loyalty.sync.manage", "loyalty", "sync.manage"),
+
+    /**
      * A new ADR (referral program): reading a brand's referral program, its
      * customer codes, and its redemptions — "referrals actually happening" for
      * a marketer, and a support agent answering "why did my friend's code not
@@ -2004,6 +2124,38 @@ public enum Capability {
     ASSISTANT_KNOWLEDGE_MANAGE("assistant.knowledge.manage", "assistant-knowledge", "manage"),
 
     /**
+     * ADR 0157: reading a brand's storefront content -- its banners, promo cards, product groups,
+     * stories, pop-ups and (when switched on) editorial entries -- with their drafts, immutable
+     * revisions, health and preview. Brand scope: content belongs to a brand, never to a location.
+     */
+    CONTENT_READ("content.read", "content", "read"),
+
+    /**
+     * ADR 0157: writing a draft -- creating an item, replacing or discarding its draft, cloning an
+     * older revision into the draft. A draft is {@code INTERNAL} and in front of nobody; what
+     * reaches customers is {@link #CONTENT_PUBLISH}.
+     */
+    CONTENT_AUTHOR("content.author", "content", "author"),
+
+    /**
+     * ADR 0157: putting a draft in front of customers, taking it down, archiving it, and ordering a
+     * placement. Held by the same roles as {@link #CONTENT_AUTHOR}: there is no four-eyes step
+     * (the {@code content.publishing} policy carries no approval field in Release 1) because nothing
+     * a banner does spends money or sends a message. A platform administrator holds it too, which is
+     * how a takedown of any item is possible; there is no moderation queue and no automatic review.
+     */
+    CONTENT_PUBLISH("content.publish", "content", "publish"),
+
+    /**
+     * ADR 0157: the external-link allowlist -- adding and removing a host an {@code EXTERNAL} link
+     * or a block {@code href} may point at -- and the brand's {@code content.publishing} and
+     * {@code content.editorial} policies. The allowlist is the open-redirect control, so each change
+     * is an audited security fact; and it is held by the tenant owner and administrator only, not by
+     * the brand manager who authors and publishes.
+     */
+    CONTENT_MANAGE("content.manage", "content", "manage"),
+
+    /**
      * ADR 0068: reading a brand's authored terms-of-service versions, their
      * history, and which one is currently in force.
      */
@@ -2128,6 +2280,85 @@ public enum Capability {
      * {@code RequiresCapability}.
      */
     STAFF_SELF_MANAGE("staff.self.manage", "staff", "self.manage"),
+
+    /**
+     * ADR 0162: reading the calling kiosk's own configuration ({@code GET .../kiosk/configuration}) and
+     * nothing else. Machine-only: held by {@link PlatformRole#KIOSK_DEVICE} and no staff bundle, so a
+     * customer-facing device is granted nothing it could order, read a customer or take money with.
+     */
+    KIOSK_DEVICE_READ("kiosk.device.read", "kiosk", "device.read"),
+
+    /**
+     * ADR 0162: pairing a kiosk, listing a branch's kiosks, renaming or re-binding one and revoking it.
+     * Not {@link #KITCHEN_STATION_MANAGE} (the person who may attach a customer-facing device that will
+     * one day take orders and money to a branch is not the head chef) and not the tenant-wide {@link
+     * #CHANNEL_MANAGE}. Held at {@code LOCATION} scope by the branch manager and above, by no machine.
+     */
+    KIOSK_DEVICE_MANAGE("kiosk.device.manage", "kiosk", "device.manage"),
+
+    /**
+     * ADR 0155: the class-neutral registry of a location's device principals and the tenant's terminal
+     * policy -- the list, the per-device record, who is unlocked now, the session history.
+     */
+    TERMINAL_READ("terminal.read", "terminal", "read"),
+
+    /**
+     * ADR 0155: renaming a device, setting its attribution mode and auto-lock, revoking it from the
+     * registry, and saving the tenant's terminal policy. The policy is tenant-scoped and is reached
+     * only by a grant held at {@code TENANT} scope; a location manager's grant does not cover it.
+     */
+    TERMINAL_MANAGE("terminal.manage", "terminal", "manage"),
+
+    /**
+     * ADR 0155: a device asking the platform to open, touch, end or change the PIN of a terminal session
+     * for a person -- the roster, the unlock, the activation, the keypad's touch. Machine-only: held by
+     * {@link PlatformRole#KITCHEN_DEVICE} and by no person's bundle. It opens no board data; the
+     * session it opens confers nothing the device and the person do not both hold already.
+     */
+    TERMINAL_UNLOCK("terminal.unlock", "terminal", "unlock"),
+
+    /**
+     * ADR 0156: reading a branch's staff roster and timesheet -- who is rostered, who is working,
+     * the shifts and their variance. Read at {@code LOCATION} scope (one branch), and at {@code
+     * BRAND} and {@code TENANT} for the wider lists. Held by the owner, the administrator,
+     * finance, the brand manager and the branch manager.
+     *
+     * <p>Reading hours is not reading identity: a holder without {@code staff.profile.read}
+     * sees the non-personal display reference («S-0142») and no name.
+     */
+    STAFF_SHIFT_READ("staff.shift.read", "staff", "shift.read"),
+
+    /**
+     * ADR 0156: authoring the rota and recording or correcting hours for someone else -- creating,
+     * moving, publishing and cancelling roster entries, opening, closing, correcting and voiding a
+     * shift. {@code LOCATION} scope only: a broader grant covers it downward. A correction leaves
+     * an ADR 0027 fact carrying the old and new times and a reason from a closed list.
+     */
+    STAFF_SHIFT_MANAGE("staff.shift.manage", "staff", "shift.manage"),
+
+    /**
+     * ADR 0156: approving, one shift at a time, a shift whose variance against its plan is over the
+     * tenant's threshold, and editing a shift older than the retroactive-edit window. Approval is
+     * deliberately not a bulk action: its guarantee is that a person looked.
+     */
+    STAFF_SHIFT_APPROVE("staff.shift.approve", "staff", "shift.approve"),
+
+    /**
+     * ADR 0156: the identity column group of the payroll export (the person's name and employee
+     * number) next to their hours. Held by the owner, the administrator and finance, which makes
+     * finance a reader of staff names inside an audited export file and nowhere else: finance
+     * holds neither {@code staff.profile.read} nor {@code staff.profile.manage}, and no profile
+     * route is opened to it. Without it the export carries the display reference only.
+     */
+    STAFF_SHIFT_EXPORT("staff.shift.export", "staff", "shift.export"),
+
+    /**
+     * ADR 0156: a person starting and ending their own shift from the console at a branch where
+     * they hold a job. Authorised by {@code StaffSelfAuthorized}, as {@link #STAFF_SELF_MANAGE} is:
+     * held at any scope in the tenant, with the handler acting on the caller's own record and
+     * checking the branch itself. It is on no route's {@code RequiresCapability}.
+     */
+    STAFF_SHIFT_CLOCK("staff.shift.clock", "staff", "shift.clock"),
 
     /**
      * Global control-plane administration. Issued by Keycloak as described in

@@ -1164,6 +1164,45 @@ public class JdbcCustomerStore {
                 .optional();
     }
 
+    /**
+     * The latest decision for one purpose in one scope that carries one evidence reference.
+     *
+     * <p>A purpose a customer grants once per thing (a review's public display is granted once per review,
+     * ADR 0159) has one live decision per thing, not one per purpose: withdrawing the first review's
+     * display must not leave the second review's grant looking withdrawn. The reference is the key.
+     */
+    public Optional<ConsentRow> currentConsentForEvidence(
+            UUID tenantId,
+            UUID accountId,
+            @Nullable UUID brandId,
+            String purpose,
+            @Nullable String channel,
+            String evidenceReference) {
+        return jdbc.sql("""
+                SELECT decision, policy_version, decided_at, source
+                FROM customer.consent_decisions
+                WHERE tenant_id = :tenantId AND customer_account_id = :accountId
+                  AND purpose = :purpose
+                  AND brand_id IS NOT DISTINCT FROM :brandId
+                  AND channel IS NOT DISTINCT FROM :channel
+                  AND evidence_reference = :evidence
+                ORDER BY decided_at DESC, recorded_at DESC
+                LIMIT 1
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("brandId", brandId)
+                .param("purpose", purpose)
+                .param("channel", channel)
+                .param("evidence", evidenceReference)
+                .query((row, number) -> new ConsentRow(
+                        row.getString("decision"),
+                        row.getString("policy_version"),
+                        row.getObject("decided_at", OffsetDateTime.class).toInstant(),
+                        row.getString("source")))
+                .optional();
+    }
+
     public List<ConsentHistoryRow> consentHistory(UUID tenantId, UUID accountId) {
         return jdbc.sql("""
                 SELECT purpose, brand_id, channel, decision, policy_version, source, decided_at

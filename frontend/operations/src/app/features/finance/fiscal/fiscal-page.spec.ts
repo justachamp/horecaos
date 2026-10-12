@@ -5,7 +5,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { OrderLookupApi } from '../../../core/api/order-lookup-api';
 import { I18n } from '../../../core/i18n/i18n';
+import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { FiscalApi, FiscalCoverageView, FiscalDocumentView } from './fiscal-api';
+import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
+import { FiscalCorrectionRequestView, FiscalEvidenceApi } from './fiscal-evidence-api';
 import { FiscalPage } from './fiscal-page';
 
 const TENANT_ID = 'tenant-1';
@@ -68,6 +71,10 @@ describe('FiscalPage', () => {
     unblock: ReturnType<typeof vi.fn>;
   };
   let orderLookup: { byNumber: ReturnType<typeof vi.fn> };
+  let evidenceApi: {
+    forOrder: ReturnType<typeof vi.fn>;
+    openCorrections: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(async () => {
     api = {
@@ -87,6 +94,18 @@ describe('FiscalPage', () => {
         .mockResolvedValue({ documentId: 'doc-1', outcome: 'PENDING', version: 4, warning: null }),
     };
     orderLookup = { byNumber: vi.fn().mockResolvedValue([]) };
+    evidenceApi = {
+      openCorrections: vi.fn().mockResolvedValue([]),
+      forOrder: vi.fn().mockResolvedValue({
+        orderId: 'order-42',
+        publicOrderNumber: '0099',
+        retention: { years: 7, provisional: true },
+        marks: { state: 'NOT_BUILT', required: null, captured: null },
+        revealed: false,
+        purpose: null,
+        documents: [],
+      }),
+    };
 
     await TestBed.configureTestingModule({
       imports: [FiscalPage],
@@ -94,6 +113,8 @@ describe('FiscalPage', () => {
         { provide: FiscalApi, useValue: api },
         { provide: OrderLookupApi, useValue: orderLookup },
         { provide: CurrentTenant, useValue: new FakeCurrentTenant() },
+        { provide: FiscalEvidenceApi, useValue: evidenceApi },
+        { provide: SessionCapabilities, useValue: { has: () => false } },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -126,6 +147,33 @@ describe('FiscalPage', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('order-7');
   });
 
+  it('says how many units of a marked order are scanned beside a document blocked for its marks', async () => {
+    api.blocked.mockResolvedValue({
+      count: 2,
+      documents: [
+        {
+          ...BLOCKED_DOCUMENT,
+          documentId: 'doc-marks',
+          reasonCode: 'MARKS_INCOMPLETE',
+          marks: { captured: 2, required: 5 },
+        },
+        { ...BLOCKED_DOCUMENT, documentId: 'doc-other', marks: null },
+      ],
+      warning: null,
+    });
+    fixture = TestBed.createComponent(FiscalPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const progress = (fixture.nativeElement as HTMLElement).querySelectorAll(
+      '[data-testid="fiscal-marks-progress"]',
+    );
+    expect(progress).toHaveLength(1);
+    expect(progress[0].textContent).toContain('2 of 5 scanned');
+    expect(progress[0].closest('tr')?.textContent).toContain('MARKS_INCOMPLETE');
+  });
+
   it('never renders a fiscal sign, receipt URL or marking code', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).not.toContain('qrCodeURL');
@@ -139,6 +187,33 @@ describe('FiscalPage', () => {
     await flushMicrotasks();
 
     expect(api.blocked).toHaveBeenLastCalledWith(TENANT_ID, 'MARKS_INCOMPLETE');
+  });
+
+  it('offers every reason a document can be blocked for, the placeholder gate’s among them', async () => {
+    const offered = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('select.filter option'),
+    ).map((option) => (option as HTMLOptionElement).value);
+
+    // `FiscalReasonCode.BLOCKING`, the platform's own list. LINES_NOT_BUILT is what every Click receipt outside a
+    // sandbox is blocked for until the real line builder exists, so it is the reason most documents wait on.
+    expect(offered).toEqual([
+      '',
+      'PROVIDER_REPORT_OVERDUE',
+      'CLASSIFICATION_MISSING',
+      'MARKS_INCOMPLETE',
+      'NO_FISCAL_PATH',
+      'TERMINAL_OFFLINE',
+      'LINES_NOT_BUILT',
+    ]);
+  });
+
+  it('reloads the worklist filtered by the lines-not-built reason too', async () => {
+    const select = fixture.nativeElement.querySelector('select.filter') as HTMLSelectElement;
+    select.value = 'LINES_NOT_BUILT';
+    select.dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+
+    expect(api.blocked).toHaveBeenLastCalledWith(TENANT_ID, 'LINES_NOT_BUILT');
   });
 
   it('retries a blocked document with the reason and its version as If-Match', async () => {
@@ -206,6 +281,165 @@ describe('FiscalPage', () => {
     expect(api.forOrder).toHaveBeenCalledWith(TENANT_ID, 'order-42');
   });
 
+  it('draws the evidence of the order that was looked up beneath its documents (row X.2)', async () => {
+    orderLookup.byNumber.mockResolvedValue([
+      {
+        orderId: 'order-42',
+        publicOrderNumber: '0099',
+        brandId: 'brand-1',
+        locationId: 'loc-1',
+        status: 'CONFIRMED',
+        total: { amountMinor: 30_000, currency: 'UZS' },
+        createdAt: '2026-08-30T09:00:00Z',
+      },
+    ]);
+    api.forOrder.mockResolvedValue([{ ...BLOCKED_DOCUMENT, orderId: 'order-42' }]);
+
+    const input = fixture.nativeElement.querySelector('#fiscal-order-number') as HTMLInputElement;
+    input.value = '0099';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    (
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+        (button) => button.textContent?.trim() === 'Find',
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(evidenceApi.forOrder).toHaveBeenCalledWith(TENANT_ID, 'order-42');
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="fiscal-evidence"]'),
+    ).not.toBeNull();
+  });
+
+  describe('the correction and void requests waiting for the fiscal agent', () => {
+    const DAY = 86_400_000;
+
+    function request(
+      overrides: Partial<FiscalCorrectionRequestView> = {},
+    ): FiscalCorrectionRequestView {
+      return {
+        requestId: 'req-1',
+        documentId: 'doc-1',
+        orderId: 'order-42',
+        publicOrderNumber: '0099',
+        kind: 'CORRECTION',
+        reasonCode: 'WRONG_AMOUNT',
+        status: 'REQUESTED',
+        requestedBy: 'finance-1',
+        approvalId: 'approval-1',
+        requestedAt: new Date(Date.now() - 3 * DAY - 3_600_000).toISOString(),
+        attachedDocumentId: null,
+        attachedAt: null,
+        version: 1,
+        ...overrides,
+      };
+    }
+
+    async function reload(): Promise<void> {
+      fixture = TestBed.createComponent(FiscalPage);
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+    }
+
+    const byTestId = (id: string): HTMLElement | null =>
+      (fixture.nativeElement as HTMLElement).querySelector(`[data-testid="${id}"]`);
+
+    it('reads them for the tenant on load, and says when there are none', () => {
+      expect(evidenceApi.openCorrections).toHaveBeenCalledWith(TENANT_ID);
+      expect(byTestId('fiscal-requests-empty')).not.toBeNull();
+      expect(byTestId('fiscal-request-row')).toBeNull();
+    });
+
+    it('names each request by the order’s number, in words, with the days it has waited', async () => {
+      evidenceApi.openCorrections.mockResolvedValue([
+        request(),
+        request({
+          requestId: 'req-2',
+          orderId: 'order-77',
+          publicOrderNumber: '0100',
+          kind: 'VOID',
+          reasonCode: 'DUPLICATE_RECEIPT',
+          requestedAt: new Date(Date.now() - 20 * 60_000).toISOString(),
+        }),
+      ]);
+      await reload();
+
+      const rows = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll(
+          '[data-testid="fiscal-request-row"]',
+        ),
+      ) as HTMLElement[];
+      expect(rows).toHaveLength(2);
+      const text = (row: HTMLElement) => (row.textContent ?? '').replace(/\s+/g, ' ');
+      expect(text(rows[0])).toContain('0099');
+      expect(text(rows[0])).not.toContain('order-42');
+      expect(text(rows[0])).toContain('Correct the receipt');
+      expect(text(rows[0])).toContain('Wrong amount');
+      expect(rows[0].querySelector('[data-testid="fiscal-request-age"]')?.textContent?.trim()).toBe(
+        '3 d',
+      );
+      expect(text(rows[1])).toContain('Void the receipt');
+      expect(text(rows[1])).toContain('Duplicate receipt');
+      expect(
+        rows[1].querySelector('[data-testid="fiscal-request-age"]')?.textContent?.trim(),
+        'a request raised twenty minutes ago has waited no days',
+      ).toBe('0 d');
+    });
+
+    it('shows a reason this client does not know as it came, rather than hiding the request', async () => {
+      evidenceApi.openCorrections.mockResolvedValue([request({ reasonCode: 'SOMETHING_NEW' })]);
+      await reload();
+
+      expect(byTestId('fiscal-request-row')?.textContent).toContain('SOMETHING_NEW');
+    });
+
+    it('opens that order’s documents and evidence, where the agent’s reference is attached', async () => {
+      evidenceApi.openCorrections.mockResolvedValue([request()]);
+      api.forOrder.mockResolvedValue([{ ...BLOCKED_DOCUMENT, orderId: 'order-42' }]);
+      await reload();
+
+      (byTestId('fiscal-request-open') as HTMLButtonElement).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(api.forOrder).toHaveBeenCalledWith(TENANT_ID, 'order-42');
+      expect(evidenceApi.forOrder).toHaveBeenCalledWith(TENANT_ID, 'order-42');
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="fiscal-evidence"]'),
+      ).not.toBeNull();
+      expect((fixture.nativeElement as HTMLElement).textContent).toContain('Order 0099');
+    });
+
+    it('says it plainly when the role cannot read them, and when the read fails', async () => {
+      evidenceApi.openCorrections.mockRejectedValue(
+        new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, null),
+      );
+      await reload();
+      expect(byTestId('fiscal-requests-denied')).not.toBeNull();
+
+      evidenceApi.openCorrections.mockRejectedValue(
+        new ApiError('INTERNAL_ERROR', 500, null, null),
+      );
+      await reload();
+      expect(byTestId('fiscal-requests-error')).not.toBeNull();
+      expect(byTestId('fiscal-requests-denied')).toBeNull();
+    });
+  });
+
+  it('reads no evidence until an order has been looked up', () => {
+    expect(evidenceApi.forOrder).not.toHaveBeenCalled();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="fiscal-evidence"]'),
+    ).toBeNull();
+  });
+
   it('shows a denied state when the session names no tenant', async () => {
     await TestBed.resetTestingModule()
       .configureTestingModule({
@@ -213,6 +447,8 @@ describe('FiscalPage', () => {
         providers: [
           { provide: FiscalApi, useValue: api },
           { provide: OrderLookupApi, useValue: orderLookup },
+          { provide: FiscalEvidenceApi, useValue: evidenceApi },
+          { provide: SessionCapabilities, useValue: { has: () => false } },
           {
             provide: CurrentTenant,
             useValue: {

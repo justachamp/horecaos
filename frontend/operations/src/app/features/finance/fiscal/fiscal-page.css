@@ -9,6 +9,7 @@
   max-width: 720px;
 }
 
+.requests,
 .blocked,
 .coverage {
   margin-top: 32px;
@@ -206,4 +207,9 @@
 .coverage__range .field {
   width: 160px;
   margin-top: 4px;
+}
+
+.marks {
+  display: block;
+  color: var(--q-ink-muted);
 }

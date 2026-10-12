@@ -118,6 +118,13 @@
           [currency]="detail.value.summary.currency"
           (orderChanged)="refreshOrder()"
         />
+        <q-order-marking-panel
+          [scope]="scope"
+          [orderId]="detail.value.summary.orderId"
+          [status]="detail.value.summary.status"
+          [lines]="detail.value.lines"
+          (marksChanged)="refreshOrder()"
+        />
       }
     </section>
 
@@ -844,6 +851,12 @@
       </section>
     }
 
+    <!-- ================================================================ Печать (ADR 0154) -->
+    <!-- Hidden by the panel itself while `feature.printing` is off for the tenant. It is not the POS export section above: that one sends the order to the till, this one prints on paper (ADR 0154 decision 11). -->
+    @if (printScope(); as scope) {
+      <q-order-print-panel [scope]="scope" [orderId]="detail.value.summary.orderId" />
+    }
+
     <!-- ================================================================ Атрибуция (§3.12) -->
     <section class="pane__section" [attr.aria-label]="'orders.detail.section.attribution' | t">
       <h2 class="q-emphasis pane__section-title">{{ 'orders.detail.section.attribution' | t }}</h2>
@@ -930,7 +943,11 @@
     />
   }
   @if (dialog() === 'amendMenu') {
-    <q-order-amend-menu (select)="onAmendMenuSelect($event)" (dismiss)="onDialogDismiss()" />
+    <q-order-amend-menu
+      [lineRemovalEnabled]="lineRemovalEnabled()"
+      (select)="onAmendMenuSelect($event)"
+      (dismiss)="onDialogDismiss()"
+    />
   }
   @if (dialog() === 'kitchenNote') {
     <q-order-note-dialog
@@ -995,8 +1012,19 @@
   @if (dialog() === 'changeQuantity' && order(); as detail) {
     <q-order-change-quantity-dialog
       [lines]="detail.value.lines"
+      [lineRemovalEnabled]="lineRemovalEnabled()"
+      [reasons]="removalReasons()"
       [busy]="busy()"
       (confirm)="onChangeQuantityConfirm($event)"
+      (dismiss)="onDialogDismiss()"
+    />
+  }
+  @if (dialog() === 'removeLines' && order(); as detail) {
+    <q-order-remove-lines-dialog
+      [lines]="detail.value.lines"
+      [reasons]="removalReasons()"
+      [busy]="busy()"
+      (confirm)="onRemoveLinesConfirm($event)"
       (dismiss)="onDialogDismiss()"
     />
   }
@@ -1040,6 +1068,7 @@
       [deltaMinor]="pending.deltaMinor"
       [currency]="order()?.value.summary?.currency ?? 'UZS'"
       [requiresApproval]="pending.requiresApproval"
+      [stockConsequence]="pending.stockConsequence"
       [locale]="locale()"
       [busy]="busy()"
       (confirm)="onAmendConfirmDialogConfirm($event)"

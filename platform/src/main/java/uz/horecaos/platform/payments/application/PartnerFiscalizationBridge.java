@@ -5,8 +5,10 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.fiscal.api.PartnerFiscalizationPort;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
@@ -18,8 +20,6 @@ import uz.horecaos.platform.payments.domain.PaymentProviderType;
 import uz.horecaos.platform.payments.domain.ProviderBinding;
 import uz.horecaos.platform.payments.domain.SomAmount;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentIntentStore;
-import uz.horecaos.platform.tenancy.api.FiscalSeller;
-import uz.horecaos.platform.tenancy.api.LegalEntityDirectory;
 
 /**
  * The other half of ADR 0038's rollout stage 4: {@code fiscal.api}'s consumer-declared
@@ -50,9 +50,16 @@ import uz.horecaos.platform.tenancy.api.LegalEntityDirectory;
  * catalog data this class has no capability to read is not this change's to add.
  * {@link #syntheticLine} is the honest stand-in until that exists: one line for the
  * whole order total, named and coded as visibly synthetic rather than presented as
- * real classification data. A tenant that goes live with Click before that lands
- * needs a real line builder before its receipts are correct, not before its receipts
- * exist at all.
+ * real classification data.
+ *
+ * <p><strong>The stand-in is a sandbox tool, not a fallback (ADR 0166, Decision 6).</strong>
+ * Filed with the tax authority a one-line receipt with a placeholder classification, VAT 0 and
+ * possibly a zero TIN can only be corrected, never withdrawn. So it goes out only where the
+ * binding's provider environment is a sandbox and the platform has allowed it
+ * ({@link SyntheticLineGate}); everywhere else a document with no stored lines answers
+ * {@link Outcome#LINES_NOT_BUILT}, sends nothing, and stays blocked with its reason. The real
+ * line builder is the prerequisite for every production Click receipt; when it ships the
+ * placeholder is deleted, not merely refused.
  */
 @Service
 public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
@@ -76,22 +83,41 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
     private final PaymentBindingResolver bindings;
     private final JdbcPaymentIntentStore intents;
     private final OrderDirectory orders;
-    private final LegalEntityDirectory legalEntities;
+    private final SyntheticLineGate syntheticLines;
     private final Clock clock;
+    private final @Nullable MarkedOrderReceiptProjection markedOrders;
 
+    /** A bridge wired without marked-goods projection: an unmarked order takes the aggregate line where ADR 0166 allows it. */
     public PartnerFiscalizationBridge(
             PaymentFiscalService fiscalDocuments,
             PaymentBindingResolver bindings,
             JdbcPaymentIntentStore intents,
             OrderDirectory orders,
-            LegalEntityDirectory legalEntities,
+            SyntheticLineGate syntheticLines,
             Clock clock) {
+        this(fiscalDocuments, bindings, intents, orders, syntheticLines, clock, null);
+    }
+
+    /**
+     * @param markedOrders ADR 0161: builds the receipt of an order that holds a marked line, codes included,
+     *     so such an order never takes the synthetic aggregate line
+     */
+    @Autowired
+    public PartnerFiscalizationBridge(
+            PaymentFiscalService fiscalDocuments,
+            PaymentBindingResolver bindings,
+            JdbcPaymentIntentStore intents,
+            OrderDirectory orders,
+            SyntheticLineGate syntheticLines,
+            Clock clock,
+            @Nullable MarkedOrderReceiptProjection markedOrders) {
         this.fiscalDocuments = fiscalDocuments;
         this.bindings = bindings;
         this.intents = intents;
         this.orders = orders;
-        this.legalEntities = legalEntities;
+        this.syntheticLines = syntheticLines;
         this.clock = clock;
+        this.markedOrders = markedOrders;
     }
 
     @Override
@@ -129,9 +155,60 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
             return Outcome.NO_PROVIDER_PATH;
         }
 
-        FiscalDocument submittable = document.lines().isEmpty() ? withSyntheticLines(document) : document;
+        boolean placeholder = false;
+        FiscalDocument submittable = document;
+        if (document.lines().isEmpty()) {
+            // ADR 0161: an order holding a marked line is never given the synthetic aggregate line. Its
+            // receipt is projected from the order's lines and the codes scanned at the pass, or nothing is
+            // sent at all.
+            MarkedOrderReceiptProjection.Result marked;
+            if (markedOrders == null) {
+                marked = new MarkedOrderReceiptProjection.Result.NotMarked();
+            } else {
+                Optional<String> filedUnder = fiscalDocuments.sellerTaxpayerNumber(tenantId, documentId);
+                if (filedUnder.isEmpty()) {
+                    // ADR 0166, Decision 3 and 9: the seller of a real receipt is the taxpayer the document
+                    // was opened under, and Click files what it is sent. A document with no snapshot has no
+                    // seller to name, and a real receipt with real codes is never filed under a TIN of
+                    // zeros: nothing is built and nothing is sent.
+                    log.warn(
+                            "Fiscal document {} for order {} was not sent: it holds no seller snapshot",
+                            documentId,
+                            document.orderId());
+                    return Outcome.REJECTED;
+                }
+                marked = markedOrders.project(document, filedUnder.get());
+            }
+            switch (marked) {
+                case MarkedOrderReceiptProjection.Result.MarksIncomplete incomplete -> {
+                    return Outcome.BLOCKED_MARKS;
+                }
+                case MarkedOrderReceiptProjection.Result.Unprojectable unprojectable -> {
+                    log.warn(
+                            "Fiscal document {} for order {} was not sent: {}",
+                            documentId,
+                            document.orderId(),
+                            unprojectable.reason());
+                    return Outcome.REJECTED;
+                }
+                case MarkedOrderReceiptProjection.Result.Lines projected ->
+                    submittable = copyWithLines(document, projected.lines());
+                case MarkedOrderReceiptProjection.Result.NotMarked notMarked -> {
+                    // ADR 0166, Decision 6. No real lines are stored and there is no builder to make
+                    // them for an unmarked order, so the only receipt that could go out is the
+                    // placeholder -- and that is filed only where it cannot be mistaken for a sale.
+                    // Nothing is sent and nothing is recorded as though it had been: the caller blocks
+                    // the document with its reason.
+                    if (!syntheticLines.permitted(binding.get())) {
+                        return Outcome.LINES_NOT_BUILT;
+                    }
+                    placeholder = true;
+                    submittable = withSyntheticLines(document);
+                }
+            }
+        }
 
-        FiscalStatus result = fiscalDocuments.submit(submittable, binding.get(), clock.instant());
+        FiscalStatus result = fiscalDocuments.submit(submittable, binding.get(), clock.instant(), placeholder);
         return switch (result) {
             case ISSUED -> Outcome.ISSUED;
             case FAILED -> Outcome.REJECTED;
@@ -167,6 +244,12 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
     }
 
     private FiscalReceiptLine syntheticLine(FiscalDocument document, String fiscalName, SomAmount amount) {
+        // The snapshot, as for a real receipt. The visibly synthetic zero is the fallback for a sandbox
+        // placeholder only (the gate has already refused everywhere else), where it cannot be mistaken
+        // for a sale.
+        String commissionTin = fiscalDocuments
+                .sellerTaxpayerNumber(document.tenantId(), document.id())
+                .orElse(SYNTHETIC_TIN);
         return new FiscalReceiptLine(
                 fiscalName,
                 SYNTHETIC_MXIK_CODE,
@@ -179,26 +262,8 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
                 null,
                 null,
                 List.of(),
-                commissionTin(document),
+                commissionTin,
                 null);
-    }
-
-    /**
-     * Best-effort resolution of the seller's real TIN through the order's own
-     * location, falling back to a visibly synthetic one. {@link LegalEntityDirectory}
-     * answers by location and business date, never by an entity id alone, so this
-     * asks the same question the order's own fiscalization already asked and
-     * accepts the answer only when it names the same entity the document snapshotted
-     * — a location whose assignment changed since must not attribute today's
-     * resolution to yesterday's sale.
-     */
-    private String commissionTin(FiscalDocument document) {
-        return orders.summary(document.tenantId(), document.orderId())
-                .flatMap(
-                        order -> legalEntities.sellerFor(document.tenantId(), order.locationId(), LocalDate.now(clock)))
-                .filter(seller -> seller.legalEntityId().equals(document.legalEntityId()))
-                .map(FiscalSeller::taxpayerNumber)
-                .orElse(SYNTHETIC_TIN);
     }
 
     private static FiscalDocument copyWithLines(FiscalDocument document, List<FiscalReceiptLine> lines) {

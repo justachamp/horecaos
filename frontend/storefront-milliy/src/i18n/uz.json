@@ -67,6 +67,37 @@
     "telegramExpiryNotice": "Havola bir martalik va tez orada eskiradi — darhol oching.",
     "telegramCancel": "Telefon raqami bilan kirish"
   },
+  "content": {
+    "carouselLabel": "Aksiya va yangiliklar",
+    "promoGridLabel": "Boshqa takliflar",
+    "storiesLabel": "Hikoyalar",
+    "storyOpen": "Hikoyani ochish: {{title}}",
+    "storyClose": "Hikoyani yopish",
+    "storyNext": "Keyingi slayd",
+    "storyPrevious": "Oldingi slayd",
+    "storyProgress": "{{total}} tadan {{current}}-slayd",
+    "openLink": "Batafsil",
+    "popupClose": "Yopish"
+  },
+  "editorial": {
+    "homeLabel": "Biz haqimizda",
+    "news": "Yangiliklar",
+    "gallery": "Galereya",
+    "recipes": "Retseptlar",
+    "careers": "Vakansiyalar",
+    "loadMore": "Yana ko‘rsatish",
+    "empty": "Hozircha hech narsa yo‘q",
+    "unavailableTitle": "Mavjud emas",
+    "unavailableBody": "Bu bo‘lim hozircha mavjud emas.",
+    "branch": "Filial",
+    "applyHint": "Ariza topshirish uchun ish beruvchi bilan bevosita bog‘laning",
+    "employment": {
+      "FULL_TIME": "To‘liq stavka",
+      "PART_TIME": "Yarim stavka",
+      "SHIFT": "Smenali ish",
+      "INTERNSHIP": "Stajirovka"
+    }
+  },
   "home": {
     "delivery": "Yetkazib berish",
     "pickup": "Olib ketish",
@@ -143,7 +174,8 @@
       "choose": "Sovg'angizni tanlang",
       "add": "Sovg'ani qo'shish: {{name}}",
       "addMany": "Sovg'ani qo'shish: {{name}} ×{{count}}"
-    }
+    },
+    "autoAdded": "Avtomatik qoʻshildi"
   },
   "checkout": {
     "title": "To'lov",
@@ -315,7 +347,29 @@
       "avatarUnavailable": "Profil rasmi hozircha mavjud emas.",
       "avatarFailed": "Rasm saqlanmadi. Boshqasini tanlang."
     },
-    "referral": "Do'stlarni taklif qilish"
+    "referral": "Do'stlarni taklif qilish",
+    "tagsLabel": "Nima yoqdi yoki yoqmadi?",
+    "tagsHint": "{{max}} tagacha tanlang. Ixtiyoriy.",
+    "publicConsent": "Sharhimni restoran sahifasida ismimsiz ko'rsatishga roziman",
+    "publicConsentHint": "Faqat izohingiz ko'rsatiladi: ismingiz, raqamingiz va buyurtmangiz ko'rsatilmaydi. Istalgan vaqtda qaytarib olishingiz mumkin.",
+    "rateThanksPending": "Rahmat! Baholovingiz yuborildi. Izohingiz sahifada ko'rsatilishidan oldin ko'rib chiqiladi.",
+    "rateThanksPublished": "Rahmat! Baholovingiz yuborildi va izohingiz restoran sahifasida ko'rsatilmoqda.",
+    "myReviews": "Mening sharhlarim",
+    "withdrawPublic": "Sahifadan olib tashlash",
+    "publicState": {
+      "PENDING": "Izohingiz tekshirilmoqda",
+      "PUBLISHED": "Izohingiz restoran sahifasida ko'rsatilmoqda",
+      "HIDDEN": "Izohingiz sahifada ko'rsatilmaydi"
+    },
+    "hiddenReason": {
+      "ABUSIVE_LANGUAGE": "haqoratli so'zlar bor",
+      "PERSONAL_DATA_OF_ANOTHER": "boshqa kishining shaxsiy ma'lumotlari bor",
+      "NAMES_AN_INDIVIDUAL": "muayyan shaxs nomi aytilgan",
+      "SPAM_OR_UNRELATED": "mavzuga aloqasiz",
+      "LEGAL_REQUEST": "huquqiy talab bo'yicha",
+      "CUSTOMER_WITHDREW": "siz o'zingiz olib tashladingiz",
+      "CUSTOMER_ERASED": "so'rovingiz bo'yicha o'chirildi"
+    }
   },
   "product": {
     "variants": "Variantlar",
@@ -415,7 +469,8 @@
     "loadError": "Taomni yuklab bo‘lmadi",
     "increase": "Ko‘paytirish",
     "decrease": "Kamaytirish",
-    "lowStock": "Faqat {{count}} ta qoldi"
+    "lowStock": "Faqat {{count}} ta qoldi",
+    "ingredients": "Tarkibi"
   },
   "referral": {
     "title": "Referal",
@@ -540,5 +595,20 @@
     "portionStep": "{{step}} porsiyalarda buyurtma qilinadi",
     "weighedLine": "Tortildi: {{weight}}",
     "estimateLine": "≈ {{weight}}, taxminiy"
+  },
+  "reviews": {
+    "public": {
+      "title": "Mehmonlar fikri",
+      "count": "{{count}} ta baho",
+      "distribution": "Baholar taqsimoti",
+      "more": "Yana ko'rsatish"
+    }
+  },
+  "menu": {
+    "filter": {
+      "title": "Teglar boʻyicha filtr",
+      "clear": "Tozalash",
+      "empty": "Tanlangan teglarning hammasiga ega taom yoʻq."
+    }
   }
 }

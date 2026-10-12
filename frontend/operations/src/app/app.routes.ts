@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 
 import { authGuard } from './core/auth/auth.guard';
 import { capabilityGuard } from './core/auth/capability.guard';
+import { landingGuard, statisticsLandingGuard } from './core/auth/landing.guard';
 import { messagesGuard } from './core/i18n/messages.guard';
 import { platformLocalesGuard } from './core/i18n/platform-locales';
 import { customersLandingGuard } from './features/customers/customers-landing.guard';
@@ -104,7 +105,18 @@ export const routes: Routes = [
     canActivate: [authGuard, platformLocalesGuard],
     canActivateChild: [capabilityGuard],
     children: [
-      { path: '', pathMatch: 'full', redirectTo: 'today' },
+      // ADR 0164: the profile decides where the console opens -- `/today`, or `/deliveries` for a tenant
+      // that bought the deliveries-console module. An unreadable profile is `/today`, as it always was.
+      { path: '', pathMatch: 'full', canActivate: [landingGuard], children: [] },
+      {
+        // ADR 0164, slice one: `/deliveries` is the landing route of the deliveries profile and is the
+        // dispatch board, which already shows a delivery (a plan with its courier, its non-PII
+        // destination, its promise and its state) as the record. Not a rail entry and not a second
+        // screen: slice two, the history list, waits for the first courier-service tenant.
+        path: 'deliveries',
+        pathMatch: 'full',
+        redirectTo: 'delivery/dispatch',
+      },
       {
         // operations IA §9.1c: where `capabilityGuard` sends a direct URL
         // into a section its own capability check refused. Declared before
@@ -132,16 +144,18 @@ export const routes: Routes = [
         path: 'my-profile',
         // `auth` as well: the «Второй фактор» card shares its enrolment form (and its words,
         // namespace `mfa`) with the page a refused sign-in sends an account to (ADR 0148).
-        canActivate: [messagesGuard('staff', 'auth')],
+        // `orders` too: «Интерфейс» names a saved view's tab and refuses a view's name in the order
+        // board's own words (ADR 0160), so the two screens say the same thing.
+        canActivate: [messagesGuard('staff', 'auth', 'orders')],
         loadComponent: () =>
           import('./features/staff/my-profile-page').then((m) => m.MyProfilePage),
       },
       // IA 0.2 (My work), wave T01: `0.2a`/`0.2b` are real (the actor-grouped
       // channel read is self-scoped by the token's own subject, per
       // MyWorkQueryService's own doc); `0.2c` is «Мой профиль» (ADR 0139),
-      // linked from a band inside the page, and `0.2d` stays an honest locked
-      // band inside the page itself rather than a second not-built route —
-      // see `my-work-page.ts`'s own doc for the boundary.
+      // linked from a band inside the page, and `0.2d` (ADR 0160) is the «Интерфейс»
+      // section of that same profile, linked the same way — see `my-work-page.ts`'s
+      // own doc for the boundary.
       {
         path: 'today/my-work',
         canActivate: [messagesGuard('today', 'staff')],
@@ -236,37 +250,49 @@ export const routes: Routes = [
             loadComponent: () =>
               import('./features/customers/segments/segments-page').then((m) => m.SegmentsPage),
           },
-          // 5.4 Reviews (ADR 0071, wave 59): a customer's own rating of their
-          // own completed order, read against its order and customer.
-          // Deliberately not the four-dimension service-recovery kanban
-          // statistics.md's own skip table and the IA's original §5.4 row
-          // described — see the ADR's own Alternatives table for why: it
-          // would duplicate the order-remedy console (ADR 0048) that already
-          // exists for acting on a bad review, and invent case-management
-          // state nobody asked to operate. §5.5 Feedback settings stays the
-          // honest not-built stub below — there is no tag library or prompt
-          // timing to author when this screen has neither.
+          // 5.4 Reviews: ADR 0071's filtered list of a customer's rating of their own order
+          // (wave 59), and since ADR 0159 two more views of the same entity under one small tab
+          // strip -- the service-recovery worklist (a board and a table of cases, each with an
+          // owner, two clocks and a history; `recovery.case.manage`) and the queue of comments
+          // customers agreed to show publicly (`review.moderate`). The list stays the default
+          // child: a reader who holds only `review.read` lands where they always did.
           {
             path: 'reviews',
             loadComponent: () =>
-              import('./features/customers/reviews/reviews-page').then((m) => m.ReviewsPage),
+              import('./features/customers/reviews/reviews-shell').then((m) => m.ReviewsShell),
+            children: [
+              {
+                path: '',
+                loadComponent: () =>
+                  import('./features/customers/reviews/reviews-page').then((m) => m.ReviewsPage),
+              },
+              {
+                path: 'recovery',
+                loadComponent: () =>
+                  import('./features/customers/reviews/recovery-worklist-page').then(
+                    (m) => m.RecoveryWorklistPage,
+                  ),
+              },
+              {
+                path: 'moderation',
+                loadComponent: () =>
+                  import('./features/customers/reviews/moderation-page').then(
+                    (m) => m.ModerationPage,
+                  ),
+              },
+            ],
           },
-          // 5.5 Feedback settings: the review entity 5.4 reads now exists
-          // (ADR 0071, wave 59), but the ADR's own "no moderation, no kanban"
-          // decision means there is still nothing here for a settings screen
-          // to author. Prompt timing and a review tag library both configure
-          // a moderation/tagging pipeline that ADR 0071 deliberately did not
-          // build — see its Alternatives table. Honest not-built rather than
-          // a settings editor with no feature behind it.
+          // 5.5 Feedback settings (ADR 0159): the review tag library (wording in every language,
+          // category, sentiment, a 3:2 icon), when a customer is asked to rate an order per
+          // order type and channel, which reviews open a recovery case, and what the public may
+          // see. It replaces the not-built page this route held while ADR 0071's "no moderation,
+          // no tag library, no prompt timing" stood; ADR 0159 supersedes that part.
           {
             path: 'feedback-settings',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: {
-              spec:
-                'frontend-information-architecture.md §5.5 (Feedback settings) — ADR 0071 ' +
-                'deliberately ships no moderation, tag library, or prompt-timing config',
-            },
+              import('./features/customers/feedback-settings/feedback-settings-page').then(
+                (m) => m.FeedbackSettingsPage,
+              ),
           },
           {
             path: '',
@@ -385,6 +411,23 @@ export const routes: Routes = [
                 data: { spec: 'operations-spec/settings.md §10.5 (Channel setup)' },
               },
               {
+                // ADR 0162: the page a kiosk's QR opens. Declared before `:channelId`, which would otherwise take
+                // the literal segment as a channel id. It approves nothing on arrival. A branch manager reaches it
+                // without the rest of Settings (`NavItem.alsoAdmittedAt` in `shell/navigation.ts`, which names this path).
+                path: 'kiosk-pairing',
+                loadComponent: () =>
+                  import('./features/settings/kiosk/kiosk-pairing-page').then(
+                    (m) => m.KioskPairingPage,
+                  ),
+              },
+              {
+                // ADR 0162, Decision 6: the branch's kiosks (the KIOSK card) without the channel hub around them, for the
+                // branch manager the hub's `channel.read` turns away. Admitted by path like `kiosk-pairing` above.
+                path: 'kiosks',
+                loadComponent: () =>
+                  import('./features/settings/kiosk/kiosks-page').then((m) => m.KiosksPage),
+              },
+              {
                 path: ':channelId',
                 loadComponent: () =>
                   import('./features/settings/channel-setup/channel-setup-page').then(
@@ -447,6 +490,12 @@ export const routes: Routes = [
               import('./features/settings/fiscalization/fiscalization-page').then(
                 (m) => m.FiscalizationPage,
               ),
+          },
+          {
+            // 10.14 Printing and receipts (ADR 0154), shown while `feature.printing` is on for this tenant.
+            path: 'printing',
+            loadComponent: () =>
+              import('./features/settings/printing/printing-page').then((m) => m.PrintingPage),
           },
           {
             path: 'notifications',
@@ -565,6 +614,22 @@ export const routes: Routes = [
               import('./features/staff/approvals-page').then((m) => m.ApprovalsPage),
           },
           {
+            // Терминалы (ADR 0155, Decisions 6 and 7): the class-neutral registry of a branch's devices and the
+            // tenant's Policy card. A tab beside Approvals; declared before the empty-path Люди child for the same
+            // reason `roles`, `activity` and `approvals` are.
+            path: 'terminals',
+            loadComponent: () =>
+              import('./features/staff/terminals/terminals-page').then((m) => m.TerminalsPage),
+          },
+          {
+            // 9.6 Смены (ADR 0156): the rota, today and the timesheet. Lazy, so the
+            // initial bundle does not carry it; declared before the empty-path Люди
+            // child for the same reason `roles` is.
+            path: 'shifts',
+            loadComponent: () =>
+              import('./features/staff/shifts/staff-shifts-page').then((m) => m.StaffShiftsPage),
+          },
+          {
             // 9.5 Проверка доступа (ADR 0109, wave W03): a debugging tool
             // used a handful of times a year, deliberately not a
             // `staff-shell.html` tab — reached only from the link at the
@@ -647,16 +712,14 @@ export const routes: Routes = [
       },
       {
         // Marketing (wave 37, frontend-information-architecture.md §6): a
-        // sub-nav shell over six tier-2 tabs, the same shape `finance`'s and
-        // `delivery`'s own shells use. Only `campaigns` (§6.4) has a real
-        // backend to render — ADR 0044's audiences, campaign lifecycle, and
-        // suppression machinery — with audience targeting and suppression
-        // management folded into it rather than routed separately, since
-        // neither is its own IA row. The other five route to the shared
-        // `NotBuiltPage`: §6.1/6.2 have a schema (V0093) and no authoring
-        // service or controller above it; §6.5/6.7/6.8 have neither schema
-        // nor service. See `marketing-shell.ts`'s own doc. (6.1 and 6.2 have
-        // both since: ADR 0140 and ADR 0072.)
+        // sub-nav shell over its tier-2 tabs, the same shape `finance`'s and
+        // `delivery`'s own shells use. Every tab now has a real screen: the
+        // campaigns (§6.4, ADR 0044's audiences, campaign lifecycle and
+        // suppression, with audience targeting and suppression folded into it
+        // rather than routed separately), promotions and promo codes (ADR 0140,
+        // ADR 0072), loyalty, referrals, automations, and -- since ADR 0157 --
+        // Content (§6.7, §6.7a) and Storefront merchandising (§6.8). See
+        // `marketing-shell.ts`'s own doc.
         path: 'marketing',
         canActivate: [messagesGuard('marketing')],
         loadComponent: () =>
@@ -691,9 +754,10 @@ export const routes: Routes = [
           // 6.3 Loyalty (ADR 0046, wave 44): the last tier-3 Marketing row
           // this wave built, alongside 6.4 Campaigns' own real backend.
           // Accrual-rule and redemption-policy authoring through the new
-          // `LoyaltyPolicyController`; deposit accounts and POS balance sync
-          // render as honest not-built panels inside `LoyaltyPage` itself,
-          // not a separate route — see that component's own doc.
+          // `LoyaltyPolicyController`; deposit accounts render as an honest
+          // not-built panel inside `LoyaltyPage` itself, not a separate route.
+          // The till tab (ADR 0171, row 6.3b) is the other half of that page:
+          // the reconciliation of a POS balance against the platform's ledger.
           {
             path: 'loyalty',
             loadComponent: () =>
@@ -740,17 +804,24 @@ export const routes: Routes = [
                 (m) => m.AutomationsPage,
               ),
           },
+          // 6.7 / 6.7a Content (ADR 0157): banners, promo cards, stories, the entry pop-up and, when the
+          // plan and the brand allow it, news, photo albums, recipes and vacancy listings -- each a list
+          // with an editor, previewed from drafts and published as an immutable revision. Lazy, so
+          // nothing here joins the initial chunk.
           {
             path: 'content',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'frontend-information-architecture.md §6.7 (Content)' },
+              import('./features/marketing/content/content-page').then((m) => m.ContentPage),
           },
+          // 6.8 Storefront merchandising (ADR 0157, Decisions 5 and 12): the home groups, the order of
+          // the offer carousel and a preview of the whole home screen. The brand switcher and the
+          // marketplace layout are Release 4 and wait for a tenant that asks (the page says so).
           {
             path: 'storefront',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'frontend-information-architecture.md §6.8 (Storefront merchandising)' },
+              import('./features/marketing/storefront/storefront-page').then(
+                (m) => m.StorefrontPage,
+              ),
           },
         ],
       },
@@ -843,26 +914,21 @@ export const routes: Routes = [
                 (m) => m.PriceBookMatrixPage,
               ),
           },
-          // catalog.md §4.13: every vocabulary on this screen is honestly
-          // "not built — ADR 0016" except Бренды, which already belongs to
-          // tenancy and is not duplicated here — the spec's own instruction
-          // is that nothing on this screen should be built before its
-          // disposition is decided.
+          // catalog.md §4.13 / ADR 0174 (gap-map row 4.7): tags and ingredients are authored here;
+          // comment presets, kitchen departments, recommended products and brands were built under
+          // other records and are linked out. Attributes are retired as a vocabulary (the variant's own
+          // published name is the axis label).
           {
             path: 'reference-data',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: { spec: 'operations-spec/catalog.md §4.13 (Reference data)' },
+              import('./features/catalog/reference-data-page').then((m) => m.ReferenceDataPage),
           },
-          // catalog.md's own parity table: "Unowned; closest ADR 0018/0019.
-          // Needs a decision before design." Zero backend anywhere.
+          // ADR 0158 (gap-map row 4.9): the rules that put packaging, cutlery and gift lines in a cart,
+          // and the simulator that previews them. Lazy, like every catalog page.
           {
             path: 'auto-add',
             loadComponent: () =>
-              import('./features/not-built/not-built-page').then((m) => m.NotBuiltPage),
-            data: {
-              spec: 'frontend-information-architecture.md §4.9 (Auto-add rules) — no backend',
-            },
+              import('./features/catalog/auto-add-page').then((m) => m.AutoAddPage),
           },
         ],
       },
@@ -877,7 +943,8 @@ export const routes: Routes = [
         canActivate: [messagesGuard('reports')],
         loadComponent: () => import('./features/reports/reports-shell').then((m) => m.ReportsShell),
         children: [
-          { path: '', pathMatch: 'full', redirectTo: 'overview' },
+          // ADR 0164: the couriers report for the deliveries profile, the overview for everyone else.
+          { path: '', pathMatch: 'full', canActivate: [statisticsLandingGuard], children: [] },
           {
             path: 'overview',
             loadComponent: () =>
@@ -939,8 +1006,9 @@ export const routes: Routes = [
           // new CUSTOMER_TYPE dimension), and cohorts/RFM are two new
           // bespoke reads (`.../customer-cohorts`, `.../customer-rfm`) — see
           // `customer-analytics-page.ts`'s own doc for what is scoped down.
-          // 7.6c (acquisition source, the pre-order funnel) stays blocked on
-          // ADR 0043's open legal input for behavioural telemetry.
+          // 7.6c (acquisition source, the pre-order funnel) is drawn from
+          // server-side facts only (ADR 0167); its visits stage is labelled
+          // "not measured" until counsel answers the telemetry question.
           {
             path: 'customers',
             loadComponent: () =>

@@ -13,9 +13,12 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.fulfillment.api.DeliveryOrderPort;
 import uz.horecaos.platform.fulfillment.api.DeliveryOrderPort.DispatchOrderFacts;
+import uz.horecaos.platform.fulfillment.api.InternalFleetPort;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort;
 import uz.horecaos.platform.fulfillment.api.ShipmentBookingPort.PartnerOption;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliveryPlan;
@@ -29,6 +32,7 @@ import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument.Skip;
 import uz.horecaos.platform.fulfillment.domain.sourcing.PickupPlan;
 import uz.horecaos.platform.fulfillment.domain.sourcing.SourcingMode;
+import uz.horecaos.platform.fulfillment.domain.sourcing.SourcingPlanner;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDispatchBranchStore;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDispatchBranchStore.DispatchBranch;
@@ -57,10 +61,18 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * anything -- its channel, zone and prepayment come from {@link DeliveryOrderPort#dispatchFacts} -- so
  * asking "which rule would this order match today" never reveals where a customer lives.
  *
- * <p>It calls no provider, requests no quote, writes nothing and publishes no signal, and the response
- * says so. A {@code CHEAPEST} rule's winner is decided by quotes at the moment of booking, which a
- * simulator cannot and must not ask for; it names the candidates in the order the booking would consider
- * them and says the choice among them is made then.
+ * <p>It calls no provider, requests no quote and publishes no signal, and the response says so. A {@code
+ * CHEAPEST} rule's winner is decided by quotes at the moment of booking, which a simulator cannot and must
+ * not ask for; it names the candidates in the order the booking would consider them and says the choice among
+ * them is made then.
+ *
+ * <p><strong>The one exception is a rule that groups, simulated against a recent plan</strong> (ADR 0170): the
+ * feed is measured exactly as sourcing measures it, which reads the drop-off point of that plan and of the
+ * orders the candidate couriers carry, under the purpose {@code DISPATCH_GROUPING}. Each read is a recorded
+ * reveal in the audit trail, attributed to the person who asked, and what leaves is a distance, never a place.
+ * It is done for the document in force only while the platform's grouping switch is on, because only then does
+ * the live path do it; a draft is measured either way, since previewing the feed before the switch is turned on
+ * is how the record rolls grouping out.
  */
 @Service
 public class DispatchRuleSimulator {
@@ -72,7 +84,9 @@ public class DispatchRuleSimulator {
     private final JdbcDeliveryPlanStore plans;
     private final JdbcDispatchBranchStore branches;
     private final JdbcDispatchRuleStore store;
+    private final @Nullable InternalFleetPort fleet;
 
+    /** A simulator that cannot measure the fleet: it says so in a note instead of inventing a feed. */
     public DispatchRuleSimulator(
             DispatchRulesAuthoringService rules,
             PolicyResolver policies,
@@ -81,6 +95,19 @@ public class DispatchRuleSimulator {
             JdbcDeliveryPlanStore plans,
             JdbcDispatchBranchStore branches,
             JdbcDispatchRuleStore store) {
+        this(rules, policies, bookings, orders, plans, branches, store, null);
+    }
+
+    @Autowired
+    public DispatchRuleSimulator(
+            DispatchRulesAuthoringService rules,
+            PolicyResolver policies,
+            ShipmentBookingPort bookings,
+            DeliveryOrderPort orders,
+            JdbcDeliveryPlanStore plans,
+            JdbcDispatchBranchStore branches,
+            JdbcDispatchRuleStore store,
+            @Nullable InternalFleetPort fleet) {
         this.rules = rules;
         this.policies = policies;
         this.bookings = bookings;
@@ -88,6 +115,7 @@ public class DispatchRuleSimulator {
         this.plans = plans;
         this.branches = branches;
         this.store = store;
+        this.fleet = fleet;
     }
 
     /**
@@ -107,6 +135,24 @@ public class DispatchRuleSimulator {
             @Nullable DispatchRulesDocument draft,
             @Nullable Scenario scenario,
             @Nullable UUID planId) {
+        return simulate(tenantId, brandId, locationId, editingScope, draft, scenario, planId, null);
+    }
+
+    /**
+     * The same, on behalf of a person: when a rule that groups is measured against a recent plan, the drop-offs
+     * that measurement reveals are recorded as read for them (ADR 0029).
+     *
+     * @param requestedBy who asked; null records the reveals as the sourcing job's
+     */
+    public Simulation simulate(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            ResourceScope editingScope,
+            @Nullable DispatchRulesDocument draft,
+            @Nullable Scenario scenario,
+            @Nullable UUID planId,
+            @Nullable ActorRef requestedBy) {
 
         if ((scenario == null) == (planId == null)) {
             throw new ApiException(
@@ -166,6 +212,9 @@ public class DispatchRuleSimulator {
                     installation == null ? null : installation.displayName()));
         }
 
+        List<String> notes = new ArrayList<>(notesFor(decision, ladder, facts));
+        GroupingFeed feed = groupingFeed(
+                tenantId, brandId, locationId, planId, decision, "DRAFT".equals(source), requestedBy, notes);
         return new Simulation(
                 source,
                 policyId,
@@ -177,8 +226,76 @@ public class DispatchRuleSimulator {
                 ladder,
                 decision.skips(),
                 pickup,
-                notesFor(decision, ladder, facts),
-                violations);
+                List.copyOf(notes),
+                violations,
+                feed);
+    }
+
+    /**
+     * What the grouping bias would see for a plan right now (ADR 0170): each candidate courier's measured
+     * distance to a carried drop-off and the pay basis the offer would be stamped with.
+     *
+     * <p>Only for a recent plan, because a typed scenario has no door to measure from; a scenario gets a note
+     * saying so. It reads the live fleet and asks no provider and no quote; the reveal is the same named-purpose
+     * decrypt the live feed makes, and what comes back is a distance, never a place.
+     */
+    private @Nullable GroupingFeed groupingFeed(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            @Nullable UUID planId,
+            DispatchDecision decision,
+            boolean draft,
+            @Nullable ActorRef requestedBy,
+            List<String> notes) {
+
+        DispatchRulesDocument.Grouping grouping = decision.grouping();
+        if (grouping == null || !decision.mode().usesFleet()) {
+            return null;
+        }
+        if (!draft && !rules.groupingAllowed()) {
+            // The kill switch (ADR 0170 Decision 6) is off, so the live path ignores the grouping of the
+            // document in force: it would not be measured, ranked on or stamped. Showing a feed for it would
+            // be a simulation of something that does not happen, and a read of customers' doors for nothing.
+            // A draft is different on purpose: previewing the feed with the switch still off is the rollout's
+            // own step (ADR 0170, rollout), and the draft's violations already say it cannot be published yet.
+            notes.add("GROUPING_SWITCHED_OFF");
+            return null;
+        }
+        int ceiling = store.highestCourierConcurrency(tenantId);
+        if (ceiling < grouping.maxOrdersPerRun()) {
+            notes.add("GROUPING_CEILING_BELOW_RUN");
+        }
+        if (planId == null) {
+            notes.add("GROUPING_NEEDS_A_PLAN_TO_MEASURE");
+            return null;
+        }
+        if (fleet == null) {
+            notes.add("FLEET_NOT_MEASURABLE");
+            return null;
+        }
+        DeliveryPlan plan = plans.find(tenantId, planId).orElse(null);
+        if (plan == null) {
+            return null;
+        }
+        List<InternalFleetPort.FleetCandidate> candidates = fleet.candidates(
+                tenantId,
+                brandId,
+                locationId,
+                plan.distanceMeters() == null ? 0 : plan.distanceMeters(),
+                new InternalFleetPort.GroupingProbe(
+                        planId, grouping.mergeRadiusMeters(), grouping.maxOrdersPerRun(), requestedBy));
+        List<GroupedCandidate> measured = candidates.stream()
+                .map(candidate -> new GroupedCandidate(
+                        candidate.courierId(),
+                        candidate.activeAssignments(),
+                        candidate.concurrencyCeiling(),
+                        SourcingPlanner.isGroupable(candidate, grouping) ? candidate.groupableWithMetres() : null,
+                        SourcingPlanner.isGroupable(candidate, grouping) && candidate.runIncrementPay()
+                                ? "RUN_INCREMENT"
+                                : "DIRECT"))
+                .toList();
+        return new GroupingFeed(candidates.size(), measured);
     }
 
     private DispatchFacts factsOf(Scenario scenario, UUID brandId, UUID locationId, ZoneId branchZone) {
@@ -288,6 +405,8 @@ public class DispatchRuleSimulator {
      *                       the window it is held to
      * @param notes          stable codes for what an operator should look at
      * @param violations     for a draft, why it would not be published; empty otherwise
+     * @param grouping       for a recent plan under a rule that groups: what the live fleet measured and the pay
+     *                       basis each offer would carry (ADR 0170); null otherwise
      */
     public record Simulation(
             String documentSource,
@@ -301,5 +420,54 @@ public class DispatchRuleSimulator {
             List<Skip> skips,
             PickupPlan pickup,
             List<String> notes,
-            List<String> violations) {}
+            List<String> violations,
+            @Nullable GroupingFeed grouping) {
+
+        /** A simulation with no grouping feed: every caller that predates ADR 0170. */
+        public Simulation(
+                String documentSource,
+                @Nullable UUID policyId,
+                int policyVersion,
+                DispatchFacts facts,
+                DispatchDecision decision,
+                List<RuleTrace> trace,
+                List<String> lanes,
+                List<LadderStep> ladder,
+                List<Skip> skips,
+                PickupPlan pickup,
+                List<String> notes,
+                List<String> violations) {
+            this(
+                    documentSource,
+                    policyId,
+                    policyVersion,
+                    facts,
+                    decision,
+                    trace,
+                    lanes,
+                    ladder,
+                    skips,
+                    pickup,
+                    notes,
+                    violations,
+                    null);
+        }
+    }
+
+    /**
+     * The grouping feed for one plan: how many couriers were candidates and what was measured for each.
+     *
+     * @param candidates how many couriers the fleet would offer the plan to
+     * @param measured   each of them with their distance to a carried drop-off, or null when they were not
+     *                   groupable, and the pay basis their offer would be stamped with
+     */
+    public record GroupingFeed(int candidates, List<GroupedCandidate> measured) {}
+
+    /** One candidate courier of the feed: ids and numbers only, no name, no place (ADR 0029). */
+    public record GroupedCandidate(
+            UUID courierId,
+            int activeAssignments,
+            int concurrencyCeiling,
+            @Nullable Integer groupableWithMetres,
+            String payBasis) {}
 }

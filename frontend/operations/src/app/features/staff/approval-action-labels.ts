@@ -30,6 +30,10 @@ const ACTION_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
   'customer.pii.export': 'staff.approvals.action.customerPiiExport',
   /** ADR 0140: a promotion's activation above the configured thresholds, or any markup. */
   'pricing.promotion.activate': 'staff.approvals.action.pricingPromotionActivate',
+  /** ADR 0166: a correction or a void of an issued fiscal receipt, asked of the tenant's own fiscal agent. */
+  'fiscal.correction.request': 'staff.approvals.action.fiscalCorrectionRequest',
+  /** ADR 0166: attaching the reference the agent returned, which becomes a linked document the customer is shown. */
+  'fiscal.correction.attach': 'staff.approvals.action.fiscalCorrectionAttach',
 };
 
 /** The label key for a known action code, or `null` for one this map does not (yet) name. */

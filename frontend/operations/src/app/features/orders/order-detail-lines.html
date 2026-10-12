@@ -28,6 +28,13 @@
           <td class="q-tnum">{{ row.line.lineNumber }}</td>
           <td>
             <div>{{ lineName(row.line) }}</div>
+            @if (row.line.origin === 'AUTO_ADD') {
+              <!-- ADR 0158: a rule put this line in the basket; the operator reads it as such, and a
+                   mandatory one is the customer's to keep (ADR 0169 refuses to lower or remove it). -->
+              <div class="q-caption pane__line-variant" data-testid="order-detail-line-origin">
+                {{ 'orders.detail.lines.autoAdded' | t }}
+              </div>
+            }
             @if (row.line.variantName) {
               <div class="q-caption pane__line-variant">{{ row.line.variantName }}</div>
             }

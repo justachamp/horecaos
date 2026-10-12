@@ -263,6 +263,102 @@ class DeliverySourcingServiceTests {
         assertThat(outcome.policyVersion()).isEqualTo(1);
     }
 
+    // ---------------------------------------------- ADR 0170: the grouping feed and the pay stamp
+
+    @Test
+    @DisplayName("ADR 0170: a plan under a rule with no grouping asks the plain fleet and measures nothing")
+    void aRuleWithoutGroupingNeverMeasures() {
+        MeasuringFleet fleet = new MeasuringFleet(
+                List.of(new InternalFleetPort.FleetCandidate(COURIER, 60, 1, 3, 400, 1)),
+                List.of(new InternalFleetPort.FleetCandidate(COURIER, 60, 1, 3, 400, 1, 250, LEAD, true)));
+        RecordingSourcingJournal journal = new RecordingSourcingJournal();
+        DeliverySourcingService service = service(fleet, new RecordingBookingPort(List.of(NOOR)), sourceAt(), journal);
+
+        service.source(request(SourcingMode.FLEET_FIRST));
+
+        assertThat(fleet.probes).as("no grouping, so no probe and no decrypt").isEmpty();
+        assertThat(fleet.plainCalls).isEqualTo(1);
+        assertThat(journal.offers).singleElement().satisfies(offer -> {
+            assertThat(offer.runStamp()).isEqualTo(SourcingJournal.RunStamp.DIRECT);
+            assertThat(offer.decisionReason()).isEqualTo(SourcingDecision.FLEET_AVAILABLE);
+        });
+    }
+
+    @Test
+    @DisplayName("ADR 0170: under a grouping rule the probe names the plan, the radius and the run ceiling, and a"
+            + " groupable courier is offered on the run basis, stamped with the distance and the lead")
+    void aGroupableCourierIsOfferedOnTheRunBasis() {
+        MeasuringFleet fleet = new MeasuringFleet(
+                List.of(new InternalFleetPort.FleetCandidate(COURIER, 60, 1, 3, 400, 1)),
+                List.of(new InternalFleetPort.FleetCandidate(COURIER, 60, 1, 3, 400, 1, 250, LEAD, true)));
+        RecordingSourcingJournal journal = new RecordingSourcingJournal();
+        DeliverySourcingService service = service(fleet, new RecordingBookingPort(List.of(NOOR)), sourceAt(), journal);
+
+        service.source(groupedRequest());
+
+        SourcingRequest asked = groupedRequest();
+        assertThat(fleet.probes).singleElement().isEqualTo(new InternalFleetPort.GroupingProbe(asked.planId(), 700, 3));
+        assertThat(journal.offers).singleElement().satisfies(offer -> {
+            assertThat(offer.runStamp()).isEqualTo(SourcingJournal.RunStamp.runIncrement(250, LEAD));
+            assertThat(offer.decisionReason())
+                    .as("the attempt says the distance behind the bias was a straight line")
+                    .isEqualTo(SourcingDecision.FLEET_AVAILABLE + DeliverySourcingService.GROUPED_STRAIGHT_LINE);
+        });
+    }
+
+    @Test
+    @DisplayName("ADR 0170: a courier ranked as groupable under PER_ORDER pay, and one who is not groupable at all,"
+            + " are offered DIRECT")
+    void everyoneElseIsOfferedDirect() {
+        // PER_ORDER: measured, ranked first, but the pay treatment is not the run's.
+        MeasuringFleet perOrder = new MeasuringFleet(
+                List.of(), List.of(new InternalFleetPort.FleetCandidate(COURIER, 60, 1, 3, 400, 1, 250, LEAD, false)));
+        RecordingSourcingJournal first = new RecordingSourcingJournal();
+        service(perOrder, new RecordingBookingPort(List.of(NOOR)), sourceAt(), first)
+                .source(groupedRequest());
+        assertThat(first.offers).singleElement().satisfies(offer -> {
+            assertThat(offer.runStamp()).isEqualTo(SourcingJournal.RunStamp.DIRECT);
+            assertThat(offer.decisionReason()).endsWith(DeliverySourcingService.GROUPED_STRAIGHT_LINE);
+        });
+
+        // The bias found nothing near: an ordinary offer, with nothing said about grouping on the attempt.
+        MeasuringFleet nothingNear = new MeasuringFleet(
+                List.of(), List.of(new InternalFleetPort.FleetCandidate(COURIER, 60, 0, 3, 400, 1, null, null, false)));
+        RecordingSourcingJournal second = new RecordingSourcingJournal();
+        service(nothingNear, new RecordingBookingPort(List.of(NOOR)), sourceAt(), second)
+                .source(groupedRequest());
+        assertThat(second.offers).singleElement().satisfies(offer -> {
+            assertThat(offer.runStamp()).isEqualTo(SourcingJournal.RunStamp.DIRECT);
+            assertThat(offer.decisionReason()).isEqualTo(SourcingDecision.FLEET_AVAILABLE);
+        });
+    }
+
+    @Test
+    @DisplayName("ADR 0170 Decision 6: with the kill switch off, a grouping the plan was created with is not measured,"
+            + " not revealed and not stamped -- the offer is an ordinary DIRECT one")
+    void theKillSwitchStopsAGroupingAlreadyInThePlan() {
+        // The plan's decision carries the grouping because it was published while the switch was on.
+        MeasuringFleet fleet = new MeasuringFleet(
+                List.of(new InternalFleetPort.FleetCandidate(COURIER, 60, 1, 3, 400, 1)),
+                List.of(new InternalFleetPort.FleetCandidate(COURIER, 60, 1, 3, 400, 1, 250, LEAD, true)));
+        RecordingSourcingJournal journal = new RecordingSourcingJournal();
+        DeliverySourcingService service =
+                service(fleet, new RecordingBookingPort(List.of(NOOR)), sourceAt(), journal, false);
+
+        service.source(groupedRequest());
+
+        assertThat(fleet.probes)
+                .as("a probe is what decrypts customers' drop-offs: none may be asked once grouping is off")
+                .isEmpty();
+        assertThat(fleet.plainCalls).isEqualTo(1);
+        assertThat(journal.offers).singleElement().satisfies(offer -> {
+            assertThat(offer.runStamp()).isEqualTo(SourcingJournal.RunStamp.DIRECT);
+            assertThat(offer.decisionReason())
+                    .as("nothing is said about grouping on an attempt that was not grouped")
+                    .isEqualTo(SourcingDecision.FLEET_AVAILABLE);
+        });
+    }
+
     private static Instant sourceAt() {
         return plan().sourceAt();
     }
@@ -331,8 +427,24 @@ class DeliverySourcingServiceTests {
 
     private static DeliverySourcingService service(
             InternalFleetPort fleet, ShipmentBookingPort bookings, Instant now, RecordingSourcingJournal journal) {
+        return service(fleet, bookings, now, journal, true);
+    }
+
+    private static DeliverySourcingService service(
+            InternalFleetPort fleet,
+            ShipmentBookingPort bookings,
+            Instant now,
+            RecordingSourcingJournal journal,
+            boolean groupingAllowed) {
         return new DeliverySourcingService(
-                fleet, bookings, journal, unconfigured(), fact -> {}, Clock.fixed(now, ZoneOffset.UTC));
+                fleet,
+                bookings,
+                journal,
+                unconfigured(),
+                fact -> {},
+                Clock.fixed(now, ZoneOffset.UTC),
+                null,
+                groupingAllowed);
     }
 
     private static InternalFleetPort emptyFleet() {
@@ -356,6 +468,66 @@ class DeliverySourcingServiceTests {
                 return Optional.empty();
             }
         };
+    }
+
+    private static final UUID LEAD = UUID.fromString("22222222-2222-2222-2222-222222222222");
+
+    private static SourcingRequest groupedRequest() {
+        SourcingRequest base = request(SourcingMode.FLEET_FIRST);
+        DispatchRulesDocument.Action action = new DispatchRulesDocument.Action(
+                SourcingMode.FLEET_FIRST,
+                DispatchRulesDocument.PartnerSet.bindingOrder(),
+                DispatchRulesDocument.Start.lead(),
+                new DispatchRulesDocument.Grouping(700, 3, 0),
+                null);
+        return new SourcingRequest(
+                base.tenantId(),
+                base.brandId(),
+                base.locationId(),
+                base.orderId(),
+                base.planId(),
+                base.orderReference(),
+                base.plan(),
+                base.mode(),
+                base.distanceMeters(),
+                base.pickup(),
+                base.dropoff(),
+                base.prepaid(),
+                base.itemValueMinor(),
+                base.currency(),
+                base.customerDeliveryFeeMinor(),
+                base.correlationId(),
+                DispatchDecision.of("grouped-rule", action, List.of()));
+    }
+
+    /** A fleet that answers the plain candidates to the plain ask and the measured ones to a probe. */
+    private static final class MeasuringFleet implements InternalFleetPort {
+
+        private final List<FleetCandidate> plain;
+        private final List<FleetCandidate> measured;
+        private final List<GroupingProbe> probes = new ArrayList<>();
+        private int plainCalls;
+
+        MeasuringFleet(List<FleetCandidate> plain, List<FleetCandidate> measured) {
+            this.plain = plain;
+            this.measured = measured;
+        }
+
+        @Override
+        public List<FleetCandidate> candidates(UUID tenantId, UUID brandId, UUID locationId, int distanceMeters) {
+            plainCalls++;
+            return plain;
+        }
+
+        @Override
+        public List<FleetCandidate> candidates(
+                UUID tenantId, UUID brandId, UUID locationId, int distanceMeters, @Nullable GroupingProbe probe) {
+            if (probe == null) {
+                return candidates(tenantId, brandId, locationId, distanceMeters);
+            }
+            probes.add(probe);
+            return measured;
+        }
     }
 
     private static final class CountingFleetPort implements InternalFleetPort {

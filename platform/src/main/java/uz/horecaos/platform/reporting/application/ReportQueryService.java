@@ -65,6 +65,12 @@ public class ReportQueryService {
                         metric.id().code(),
                         metric.openQuestion() == null ? "its source fact does not exist" : metric.openQuestion());
             }
+            if (metric.grain() == Grain.DAY_LOCATION_STATION_HOUR) {
+                // ADR 0163: the kitchen's own fact is not in agg_branch_day, and a station-hour series is
+                // read by the headcount plan, never composed from branch slices.
+                throw new ReportingRefusals.NonScalarMetricException(
+                        metric.id().code(), "GET .../kitchen/headcount-plan");
+            }
             switch (metric.aggregation()) {
                 case MEDIAN ->
                     throw new ReportingRefusals.NonScalarMetricException(
@@ -75,10 +81,7 @@ public class ReportQueryService {
                 // the endpoint that actually answers it (P39).
                 case DISTRIBUTION ->
                     throw new ReportingRefusals.NonScalarMetricException(
-                            metric.id().code(),
-                            metric.id().code().startsWith("payment_mix")
-                                    ? "GET .../reporting/payment-mix"
-                                    : "GET .../reporting/sla-buckets");
+                            metric.id().code(), distributionEndpoint(metric.id().code()));
                 // Wave 9 w4-reports-distance-crm (7.1): delivery_distance.average.v1
                 // is sourced from fact_order directly, the same physical-read
                 // reasoning MEDIAN's own case above already gives.
@@ -134,6 +137,20 @@ public class ReportQueryService {
         resultRows.sort(Comparator.comparing(row -> row.slice().sortKey()));
 
         return new ReportResult(resultRows, provenance(query.tenantId(), metrics, boundary));
+    }
+
+    /** Which endpoint answers a DISTRIBUTION metric, since {@code /queries} cannot. */
+    private static String distributionEndpoint(String metricCode) {
+        if (metricCode.startsWith("payment_mix")) {
+            return "GET .../reporting/payment-mix";
+        }
+        if (metricCode.startsWith("funnel.stage")) {
+            return "GET .../reporting/customer-funnel";
+        }
+        if (metricCode.startsWith("acquisition.source")) {
+            return "GET .../reporting/acquisition-sources";
+        }
+        return "GET .../reporting/sla-buckets";
     }
 
     /**
@@ -556,6 +573,49 @@ public class ReportQueryService {
                 store.readPromotionRedemptions(tenantId, from, to, promotionId, Math.min(Math.max(limit, 1), 500)),
                 provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
     }
+
+    /**
+     * ADR 0159 (5.4/5.5): the reviews a location received over the closed business days in the range,
+     * the tags they carried, and the figures behind the average. Read from {@code fact_review} and
+     * {@code fact_review_tag} alone -- never a {@code reviews} table (ADR 0023) -- so it lags by up to
+     * a business day, in exchange for one definition of a review count.
+     */
+    @Transactional(readOnly = true)
+    public ReviewSummaryResult reviewSummary(UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId) {
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+        return new ReviewSummaryResult(
+                store.readReviewSummary(tenantId, from, to, brandId),
+                store.readReviewTags(tenantId, from, to, brandId),
+                provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    /**
+     * ADR 0159: the service-recovery cases of a location over the closed business days in the range --
+     * opened, closed by outcome, first-response and close times, the share that breached a clock, and
+     * the remedy money attached, per currency.
+     */
+    @Transactional(readOnly = true)
+    public RecoverySummaryResult recoverySummary(UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId) {
+        validateRange(from, to);
+        refuseMixedBoundaryRegime(tenantId, from, to);
+        return new RecoverySummaryResult(
+                store.readRecoverySummary(tenantId, from, to, brandId),
+                store.readRecoveryOutcomes(tenantId, from, to, brandId),
+                store.readRecoveryRemedies(tenantId, from, to, brandId),
+                provenance(tenantId, List.of(), businessDays.boundaryFor(tenantId)));
+    }
+
+    public record ReviewSummaryResult(
+            List<JdbcReportingStore.ReviewSummaryRow> rows,
+            List<JdbcReportingStore.ReviewTagRow> tags,
+            Provenance provenance) {}
+
+    public record RecoverySummaryResult(
+            List<JdbcReportingStore.RecoverySummaryRow> rows,
+            List<JdbcReportingStore.RecoveryOutcomeRow> outcomes,
+            List<JdbcReportingStore.RecoveryRemedyRow> remedies,
+            Provenance provenance) {}
 
     public record PromotionSummaryResult(List<JdbcReportingStore.PromotionSummaryRow> rows, Provenance provenance) {}
 
@@ -1431,7 +1491,7 @@ public class ReportQueryService {
 
     // ------------------------------------------------------------- refusals
 
-    private void refuseMixedBoundaryRegime(UUID tenantId, LocalDate from, LocalDate to) {
+    void refuseMixedBoundaryRegime(UUID tenantId, LocalDate from, LocalDate to) {
         Optional<LocalDate> recutThrough = businessDays.recutCompletedThrough(tenantId);
         if (recutThrough.isEmpty()) {
             return;
@@ -1445,7 +1505,7 @@ public class ReportQueryService {
     }
 
     /** Same bound {@link ReportQuery} already enforces, for the two order-grain reads below it. */
-    private static void validateRange(LocalDate from, LocalDate to) {
+    static void validateRange(LocalDate from, LocalDate to) {
         if (to.isBefore(from)) {
             throw new IllegalArgumentException("The range ends before it starts");
         }
@@ -1502,7 +1562,7 @@ public class ReportQueryService {
                         : null);
     }
 
-    private Provenance provenance(UUID tenantId, List<MetricDefinition> metrics, BusinessDayBoundary boundary) {
+    Provenance provenance(UUID tenantId, List<MetricDefinition> metrics, BusinessDayBoundary boundary) {
 
         Set<String> versions = new LinkedHashSet<>();
         List<String> provisional = new ArrayList<>();

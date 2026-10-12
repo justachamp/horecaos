@@ -92,10 +92,22 @@ export class FunnelChart {
   readonly ariaLabel = input.required<string>();
   readonly valueFormatter = input<ChartValueFormatter>(DEFAULT_VALUE_FORMATTER);
 
+  /**
+   * Whether each stage prints its share of the funnel's first stage. On by default, which is right for
+   * a narrowing funnel of one population (the sales funnel). Off for a funnel of independent daily counts
+   * (the customer funnel, ADR 0167): a share there would read as a conversion rate between stages that
+   * are not one cohort, so the chart draws bars to the largest stage and prints only the count.
+   */
+  readonly showShare = input<boolean>(true);
+
   protected readonly width = WIDTH;
   protected readonly hover = signal<HoverTip | null>(null);
 
   private readonly firstStageValue = computed(() => {
+    if (!this.showShare()) {
+      // No share is printed, so the scale only has to keep every bar inside its track.
+      return Math.max(1, ...this.stages().map((stage) => stage.value));
+    }
     const first = this.stages().at(0);
     return first && first.value > 0 ? first.value : 1;
   });

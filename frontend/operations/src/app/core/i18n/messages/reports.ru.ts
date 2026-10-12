@@ -435,6 +435,39 @@ export const reportsRu: AreaMessages<typeof reportsEn> = {
   'reports.customers.rfm.frequency.F2_FEW': '2–3 заказа',
   'reports.customers.rfm.frequency.F3_FREQUENT': '4+ заказов',
 
+  // ---------------------------------------------------------------- reports 7.6c customer funnel and acquisition source (ADR 0167)
+  'reports.customers.funnel.title': 'Воронка клиентов',
+  'reports.customers.funnel.intro':
+    'Ежедневные счётчики, которые платформа берёт из регистраций, корзин, оформлений и заказов. Это число различных событий за каждый день, а не когорта: отношение двух этапов — это интенсивность активности, а не вероятность того, что один человек дойдёт до конца.',
+  'reports.customers.funnel.stage.VISITS': 'Посещения',
+  'reports.customers.funnel.stage.REGISTERED': 'Зарегистрировались',
+  'reports.customers.funnel.stage.BASKET_STARTED': 'Начали корзину',
+  'reports.customers.funnel.stage.CHECKOUT_STARTED': 'Дошли до оформления',
+  'reports.customers.funnel.stage.ORDERED': 'Заказали',
+  'reports.customers.funnel.visits.notMeasured':
+    'Посещения: не измеряются. Для этого отчёта ничего не собирается ни из браузера, ни из приложения, ни из бота, поэтому посещения не показаны нулём и не оценены. Ресторан, которому нужны посещения, может прочитать их в собственной Google Analytics.',
+  'reports.customers.funnel.reason.NOT_BY_CHANNEL':
+    'У регистраций нет канала продаж, поэтому срез по каналу их не включает.',
+  'reports.customers.funnel.unrecorded':
+    '{stage}: дней без данных — {days}. Их корзины к моменту подсчёта уже были удалены, поэтому итог неполный.',
+  'reports.customers.funnel.empty': 'За этот период счётчики воронки ещё не записаны.',
+  'reports.customers.funnel.error': 'Не удалось загрузить воронку.',
+  'reports.customers.acquisition.title': 'Источник привлечения',
+  'reports.customers.acquisition.intro':
+    'Регистрации по способу создания аккаунта, переходы по ссылкам привлечения этого ресторана и заказы по каналам продаж — рядом друг с другом.',
+  'reports.customers.acquisition.noAttribution':
+    'Это не приписывает клиента или заказ ссылке: сколько человек открыло ссылку и сколько зарегистрировалось показано рядом, но не связано.',
+  'reports.customers.acquisition.registrations': 'Регистрации по происхождению',
+  'reports.customers.acquisition.clicks': 'Переходы по ссылкам привлечения',
+  'reports.customers.acquisition.orders': 'Заказы по каналам продаж',
+  'reports.customers.acquisition.empty': 'За этот период нечего показать.',
+  'reports.customers.acquisition.archivedLink': '{label} (в архиве)',
+  'reports.customers.acquisition.origin.SELF_SERVICE': 'Зарегистрировались сами',
+  'reports.customers.acquisition.origin.OPERATOR': 'Создал сотрудник',
+  'reports.customers.acquisition.origin.IMPORT': 'Импорт',
+  'reports.customers.acquisition.origin.AGGREGATOR': 'Маркетплейс',
+  'reports.customers.acquisition.origin.MIGRATION': 'Перенос',
+
   // ---------------------------------------------------------------- reports 7.5/7.5a/7.5b staff (T12)
   'reports.staff.title': 'Отчёты по персоналу',
   'reports.staff.loading': 'Загрузка…',
@@ -475,12 +508,20 @@ export const reportsRu: AreaMessages<typeof reportsEn> = {
   'reports.staff.telephony.column.answerRate': 'Доля отвеченных',
   'reports.staff.telephony.column.missed': 'Пропущено',
   'reports.staff.telephony.column.transferred': 'Переведено',
-  'reports.staff.telephony.column.talkTime': 'Время разговора',
+  'reports.staff.telephony.column.answerSpeed': 'Скорость ответа',
+  'reports.staff.telephony.column.conversion': 'Конверсия',
+  'reports.staff.telephony.column.callLength': 'Длительность звонка',
   'reports.staff.telephony.rangeCapped': 'Показаны первые {days} дн. более длинного периода.',
-  'reports.staff.telephony.answerSpeedNotBuilt':
-    'Скорость ответа не показана: пока нет столбца времени ожидания вызова (V0149).',
-  'reports.staff.telephony.conversionNotBuilt':
-    'Конверсия звонков в заказы не показана: нужна привязка call-provenance, которую даёт 1.6 (пока не реализовано).',
+  'reports.staff.telephony.help':
+    'Скорость ответа — время от поступления звонка до первого ответа, поэтому в неё входят голосовое меню и очередь. Конверсия — доля отвеченных звонков, по которым оформлен заказ (в любом статусе); это нижняя граница: заказ, привязанный после закрытия дня, учитывается только при пересчёте дня. Длительность звонка — от первого события звонка до его конца, включая ожидание ответа. Показатель, который не измерялся, отображается прочерком, а не нулём.',
+  'reports.staff.telephony.notMeasured': 'не измерено',
+  'reports.staff.telephony.measuredOn': 'измерено по {n} из {m} отвеченных звонков',
+  'reports.staff.telephony.convertedOf': '{n} из {m} отвеченных звонков',
+  'reports.staff.telephony.speedValue': '{avg} с (макс. {max} с)',
+  'reports.staff.telephony.unattributed': 'Не назначено',
+  'reports.staff.telephony.branchTotal': 'Итого по филиалу',
+  'reports.staff.telephony.nextClose':
+    'Звонки за сегодня появятся после закрытия бизнес-дня, около {time}.',
 
   // ---------------------------------------------------------------- reports 7.9 marketing (T15)
   'reports.marketing.title': 'Маркетинговые отчёты',
@@ -629,4 +670,27 @@ export const reportsRu: AreaMessages<typeof reportsEn> = {
   'reports.geography.section.pins': 'Сегодняшние заказы точками',
   'reports.geography.pins.intro':
     'Куда идут сегодняшние заказы на доставку этого филиала, по точке на заказ, чтобы видеть скопления и выбросы. Это открывает адреса доставки, поэтому записывается и доступно диспетчерам и управляющим филиала; к отчёту выше оно не относится.',
+  // ------------------------------------------- staff hours export (ADR 0156)
+  'reports.exportCentre.reportOption.staffAttendance': 'Часы сотрудников (для зарплаты)',
+  'reports.exportCentre.piiGroupLabel.staff': 'Имена и табельные номера (нужен staff.shift.export)',
+  'reports.exportCentre.piiGroupHidden.staff':
+    'Столбцы с именами и табельными номерами скрыты — у вас нет capability staff.shift.export',
+  'reports.exportCentre.includeUnresolved':
+    'Включить смены, которые ещё идут или ждут подтверждения (с пометкой, без оплачиваемых часов)',
+  'reports.exportCentre.error.unresolvedShifts':
+    'В этом периоде есть смены, которые ещё идут или ждут подтверждения. Сначала закройте их или отметьте галочку, чтобы включить их с пометкой.',
+  'reports.exportCentre.error.tooLarge':
+    'В этом периоде больше строк, чем помещается в один файл (20 000). Выберите период покороче: файл никогда не обрезается.',
+  'reports.exportCentre.column.staffDisplayReference': 'Номер сотрудника',
+  'reports.exportCentre.column.plannedSeconds': 'План (секунд)',
+  'reports.exportCentre.column.workedSeconds': 'Отработано (секунд)',
+  'reports.exportCentre.column.breakSeconds': 'Перерыв (секунд)',
+  'reports.exportCentre.column.paidSeconds': 'К оплате (секунд)',
+  'reports.exportCentre.column.varianceSeconds': 'К плану (секунд)',
+  'reports.exportCentre.column.approvalStatus': 'Подтверждение',
+  'reports.exportCentre.column.startedAt': 'Начало',
+  'reports.exportCentre.column.endedAt': 'Конец',
+  'reports.exportCentre.column.timezone': 'Часовой пояс',
+  'reports.exportCentre.column.employeeNumber': 'Табельный номер',
+  'reports.exportCentre.column.staffName': 'Имя',
 };

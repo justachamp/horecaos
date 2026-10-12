@@ -185,3 +185,32 @@
   margin-top: 6px;
   color: var(--q-ink-muted);
 }
+
+/* 7.6c: the funnel and the acquisition source (ADR 0167) */
+.not-measured {
+  color: var(--q-ink-muted);
+  background: var(--q-surface-1);
+  border-radius: var(--q-radius);
+  padding: 10px 12px;
+  margin: 0 0 12px;
+  max-width: 78ch;
+}
+
+.gap-note {
+  color: var(--q-ink-muted);
+  margin: 8px 0 0;
+  max-width: 78ch;
+}
+
+.acquisition-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.acquisition-column__title {
+  color: var(--q-ink-muted);
+  margin: 0 0 6px;
+  font-weight: 600;
+}

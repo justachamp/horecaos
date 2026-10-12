@@ -182,7 +182,8 @@ services:
         # secret eagerly at bean construction, and only data_encryption/kek
         # and the two identity_admin values above were ever seeded here. The
         # values match application.yml's own "environment" provider fallbacks
-        # (HORECAOS_MEDIA_ACCESS_KEY / _SECRET_KEY and HORECAOS_HANDOVER_PEPPER),
+        # (HORECAOS_MEDIA_ACCESS_KEY / _SECRET_KEY, HORECAOS_HANDOVER_PEPPER and
+        # HORECAOS_TERMINAL_PIN_PEPPER, ADR 0155),
         # so behaviour is identical whichever provider a checkout ends up on.
         bao kv put horecaos/local/object_storage/platform/media-access-key \
           value=horecaos
@@ -190,6 +191,8 @@ services:
           value=horecaos-local-secret
         bao kv put horecaos/local/data_encryption/platform/handover-pepper \
           value=horecaos-local-handover-pepper-not-for-use
+        bao kv put horecaos/local/data_encryption/platform/terminal-pin-pepper \
+          value=horecaos-local-terminal-pin-pepper-not-for-use
         echo "seeded horecaos local secrets"
 
   object-store:
@@ -332,6 +335,23 @@ services:
         export AWS_SECRET_ACCESS_KEY=horecaos-local-secret
         create_bucket http://object-store:9000 horecaos-audit-archive --object-lock-enabled-for-bucket
         echo "created horecaos-audit-archive with Object Lock enabled"
+
+  fake-printer:
+    # ADR 0154: the end of a print agent's path when no hardware is attached. It listens where a thermal
+    # printer listens (raw TCP 9100), answers the agent's DLE EOT status questions "online, paper present",
+    # and draws every page it is sent as text in its log, so a developer can see what would have come out
+    # of the roll. The reference agent (tools/print-agent) is pointed at it with
+    #     "printers": { "counter": { "kind": "tcp", "host": "127.0.0.1", "port": 9100 } }
+    # In a profile of its own: `make up` does not pull a Node image for people who never print.
+    #     docker compose --profile printing up -d fake-printer && docker compose logs -f fake-printer
+    profiles: ["printing"]
+    image: node:22-alpine
+    working_dir: /app
+    command: ["node", "print-agent.mjs", "fake-printer", "--port", "9100"]
+    volumes:
+      - ./tools/print-agent:/app:ro
+    ports:
+      - "9100:9100"
 
 volumes:
   object-store-data:

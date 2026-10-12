@@ -20,6 +20,7 @@ class ModularArchitectureTests {
             "catalog",
             "commercial",
             "configuration",
+            "content",
             "conversations",
             "courier",
             "customers",
@@ -37,6 +38,7 @@ class ModularArchitectureTests {
             "ordering",
             "payments",
             "pricing",
+            "printing",
             "referral",
             "reporting",
             "reviews",
@@ -48,6 +50,26 @@ class ModularArchitectureTests {
     @Test
     void verifiesModuleBoundaries() {
         ApplicationModules.of(HorecaOSPlatformApplication.class).verify();
+    }
+
+    @Test
+    @DisplayName("nothing depends on printing: events flow into it and never out (ADR 0154, Decision 1)")
+    void noModuleDependsOnPrinting() {
+        var modules = ApplicationModules.of(HorecaOSPlatformApplication.class);
+        assertThat(modules.getModuleByName("printing"))
+                .as("the printing module exists")
+                .isPresent();
+
+        List<String> dependents = modules.stream()
+                .filter(module -> !module.getIdentifier().toString().equals("printing"))
+                .filter(module -> module.getDirectDependencies(modules).containsModuleNamed("printing"))
+                .map(module -> module.getIdentifier().toString())
+                .toList();
+
+        assertThat(dependents)
+                .as("a module that reads printing would make a defect in paper a defect in an order, a"
+                        + " ticket or a fiscal receipt")
+                .isEmpty();
     }
 
     @Test
@@ -90,6 +112,28 @@ class ModularArchitectureTests {
 
             assertThat(offenders).isEmpty();
         }
+    }
+
+    @Test
+    @DisplayName("ordering imports neither fiscal nor payments, so marks can be read by both without a cycle")
+    void orderingDoesNotReachForwardIntoTheFiscalPath() throws IOException {
+        // ADR 0161 puts the marking-code table and its port in ordering because fiscal and payments each
+        // import ordering.api already. A single import the other way would close the cycle that placement
+        // exists to avoid, and Modulith would only say so when it was already closed; this says why.
+        List<String> offenders = sourcesIn(List.of("ordering")).stream()
+                .filter(source -> read(source)
+                        .lines()
+                        .filter(line -> line.startsWith("import "))
+                        .anyMatch(line -> line.startsWith("import uz.horecaos.platform.fiscal.")
+                                || line.startsWith("import uz.horecaos.platform.payments.")
+                                || line.startsWith("import static uz.horecaos.platform.fiscal.")
+                                || line.startsWith("import static uz.horecaos.platform.payments.")))
+                .map(Path::toString)
+                .toList();
+
+        assertThat(offenders)
+                .as("ordering owns ordering.order_line_marks; fiscal and payments depend on it, never the reverse")
+                .isEmpty();
     }
 
     private static List<Path> sourcesIn(List<String> modules) throws IOException {

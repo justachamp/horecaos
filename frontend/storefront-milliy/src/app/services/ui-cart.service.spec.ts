@@ -264,6 +264,118 @@ describe('UiCartService project() (via load())', () => {
   });
 });
 
+describe('UiCartService project(): lines a rule added (ADR 0158)', () => {
+  function menuWith(variantId: string, name: string) {
+    return emptyMenu({
+      products: [
+        {
+          productId: 'p-' + variantId,
+          code: null,
+          name,
+          description: null,
+          mediaAssetIds: [],
+          imageUrls: [],
+          variants: [
+            {
+              variantId,
+              sku: null,
+              unitCode: null,
+              isDefault: true,
+              orderable: true,
+              amountMinor: 1_000,
+              onSaleNow: true,
+              remainingQuantity: null,
+            },
+          ],
+          modifierGroupIds: [],
+        },
+      ],
+    });
+  }
+
+  it('carries the rule’s wording in the customer’s language, its floor and its ceiling, onto the displayed line', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = baseCart({
+      lines: [
+        {
+          lineKey: 'v-box',
+          variantId: 'v-box',
+          quantity: 2,
+          hasCustomerNote: false,
+          origin: 'AUTO_ADD',
+          autoAdd: {
+            ruleCode: 'BOX',
+            customerText: { ru: 'Упаковка', 'uz-Latn': 'Qadoq', en: 'Packaging' },
+            mandatory: true,
+            removable: false,
+            minimumQuantity: 2,
+            maximumQuantity: 4,
+          },
+        },
+      ],
+    });
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(pricedFor(cart));
+    menu.menu.mockResolvedValue(menuWith('v-box', 'Box'));
+
+    await service.load();
+
+    const item = service.cartData()?.items[0];
+    expect(item?.origin).toBe('AUTO_ADD');
+    expect(item?.autoAdd).toEqual({
+      ruleCode: 'BOX',
+      text: 'Qadoq',
+      mandatory: true,
+      removable: false,
+      minimumQuantity: 2,
+      maximumQuantity: 4,
+    });
+  });
+
+  it('shows no wording when the rule states none in this language, and leaves a customer’s line unmarked', async () => {
+    const { service, carts, menu } = setUp();
+    const cart = baseCart({
+      lines: [
+        {
+          lineKey: 'v-box',
+          variantId: 'v-box',
+          quantity: 1,
+          hasCustomerNote: false,
+          origin: 'AUTO_ADD',
+          autoAdd: {
+            ruleCode: 'BOX',
+            customerText: {},
+            mandatory: false,
+            removable: true,
+            minimumQuantity: 0,
+            maximumQuantity: 3,
+          },
+        },
+        {
+          lineKey: 'v-own',
+          variantId: 'v-own',
+          quantity: 1,
+          hasCustomerNote: false,
+          origin: 'CUSTOMER',
+        },
+      ],
+    });
+    carts.ensure.mockResolvedValue(cart);
+    carts.price.mockResolvedValue(pricedFor(cart));
+    menu.menu.mockResolvedValue({
+      ...menuWith('v-box', 'Box'),
+      products: [...menuWith('v-box', 'Box').products, ...menuWith('v-own', 'Osh').products],
+    });
+
+    await service.load();
+
+    const items = service.cartData()?.items ?? [];
+    expect(items.find((item) => item.item_id === 'v-box')?.autoAdd?.text).toBeNull();
+    expect(items.find((item) => item.item_id === 'v-own')?.autoAdd).toBeUndefined();
+    expect(items.find((item) => item.item_id === 'v-own')?.origin).toBeUndefined();
+  });
+});
+
 describe('UiCartService.setQuantity', () => {
   const item: CartResponseItem = {
     variant_id: 'v1',

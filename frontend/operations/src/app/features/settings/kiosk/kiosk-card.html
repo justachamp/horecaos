@@ -1,0 +1,217 @@
+<section class="facet-card" data-testid="kiosk-card">
+  <h2 class="q-subhead">{{ 'settings.channelSetup.kiosk.title' | t }}</h2>
+
+  @if (!flagLoaded()) {
+    <p class="q-body-sm">…</p>
+  } @else if (!enabled()) {
+    <p class="q-body-sm status locked" data-testid="kiosk-off">
+      {{ 'settings.channelSetup.kiosk.locked' | t }}
+    </p>
+  } @else {
+    <p class="q-body-sm hint">{{ 'settings.kiosk.lead' | t }}</p>
+
+    @if (canManage()) {
+      <a
+        class="primary-link"
+        routerLink="/settings/channel-setup/kiosk-pairing"
+        data-testid="kiosk-pair"
+      >
+        {{ 'settings.kiosk.pair' | t }}
+      </a>
+    }
+
+    @switch (state()) {
+      @case ('loading') {
+        <p class="q-body-sm">{{ 'settings.kiosk.loading' | t }}</p>
+      }
+      @case ('denied') {
+        <p class="q-body-sm" data-testid="kiosk-denied">{{ 'settings.kiosk.denied' | t }}</p>
+      }
+      @case ('error') {
+        <p class="q-body-sm error" data-testid="kiosk-error">{{ 'settings.kiosk.error' | t }}</p>
+      }
+      @default {
+        @if (active().length === 0) {
+          <p class="q-body-sm hint" data-testid="kiosk-empty">{{ 'settings.kiosk.empty' | t }}</p>
+        } @else {
+          <table class="kiosks" data-testid="kiosk-table">
+            <thead>
+              <tr>
+                <th>{{ 'settings.kiosk.column.name' | t }}</th>
+                <th>{{ 'settings.kiosk.column.channel' | t }}</th>
+                <th>{{ 'settings.kiosk.column.lastSeen' | t }}</th>
+                <th>{{ 'settings.kiosk.column.enrolled' | t }}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (kiosk of active(); track kiosk.deviceId) {
+                <tr [attr.data-testid]="'kiosk-row-' + kiosk.deviceId">
+                  <td>
+                    @if (editId() === kiosk.deviceId) {
+                      <input
+                        type="text"
+                        maxlength="120"
+                        [value]="draftName()"
+                        (input)="draftName.set($any($event.target).value)"
+                        [attr.data-testid]="'kiosk-edit-name-' + kiosk.deviceId"
+                      />
+                    } @else {
+                      {{ kiosk.displayName }}
+                    }
+                  </td>
+                  <td>
+                    @if (editId() === kiosk.deviceId) {
+                      <select
+                        [value]="draftChannel()"
+                        (change)="draftChannel.set($any($event.target).value)"
+                        [attr.data-testid]="'kiosk-edit-channel-' + kiosk.deviceId"
+                      >
+                        <option value="">{{ 'settings.kiosk.channel.choose' | t }}</option>
+                        @for (choice of channels(); track choice.channelId) {
+                          <option
+                            [value]="choice.channelId"
+                            [selected]="draftChannel() === choice.channelId"
+                          >
+                            {{ choice.displayName }}
+                          </option>
+                        }
+                      </select>
+                    } @else if (kiosk.channel; as bound) {
+                      <span [attr.data-testid]="'kiosk-channel-' + kiosk.deviceId">{{
+                        bound.displayName
+                      }}</span>
+                    } @else {
+                      <span class="warn" [attr.data-testid]="'kiosk-channel-' + kiosk.deviceId">{{
+                        'settings.kiosk.channel.none' | t
+                      }}</span>
+                    }
+                    @if (kiosk.needsAttention) {
+                      <p
+                        class="q-caption warn"
+                        [attr.data-testid]="'kiosk-attention-' + kiosk.deviceId"
+                      >
+                        {{ 'settings.kiosk.needsAttention' | t }}
+                      </p>
+                    }
+                  </td>
+                  <td>
+                    <span
+                      [class.warn]="quiet(kiosk)"
+                      [attr.data-testid]="'kiosk-lastseen-' + kiosk.deviceId"
+                      >{{ lastSeenLabel(kiosk) }}</span
+                    >
+                    @if (kiosk.lastSeenBuild) {
+                      <span class="q-caption hint">{{ kiosk.lastSeenBuild }}</span>
+                    }
+                  </td>
+                  <td class="q-caption">
+                    {{ kiosk.enrolledBy ?? '—' }}<br />{{ formatted(kiosk.enrolledAt) }}
+                  </td>
+                  <td>
+                    @if (revokeId() === kiosk.deviceId) {
+                      <div class="inline">
+                        <input
+                          type="text"
+                          [value]="revokeReason()"
+                          (input)="revokeReason.set($any($event.target).value)"
+                          [placeholder]="'settings.kiosk.revoke.reasonPlaceholder' | t"
+                          [attr.data-testid]="'kiosk-revoke-reason-' + kiosk.deviceId"
+                        />
+                        <button
+                          type="button"
+                          class="destructive"
+                          [disabled]="revokeReason().trim() === '' || revokeBusy()"
+                          (click)="confirmRevoke()"
+                          [attr.data-testid]="'kiosk-revoke-confirm-' + kiosk.deviceId"
+                        >
+                          {{ 'settings.kiosk.revoke.confirm' | t }}
+                        </button>
+                        <button type="button" class="secondary" (click)="cancelRevoke()">
+                          {{ 'settings.kiosk.revoke.cancel' | t }}
+                        </button>
+                        @if (revokeError()) {
+                          <p class="q-caption error" data-testid="kiosk-revoke-error">
+                            {{ revokeError() }}
+                          </p>
+                        }
+                      </div>
+                    } @else if (editId() === kiosk.deviceId) {
+                      <button
+                        type="button"
+                        class="primary"
+                        [disabled]="!editValid() || editSaving()"
+                        (click)="saveEdit(kiosk)"
+                        [attr.data-testid]="'kiosk-edit-save-' + kiosk.deviceId"
+                      >
+                        {{ 'settings.kiosk.edit.save' | t }}
+                      </button>
+                      <button type="button" class="secondary" (click)="cancelEdit()">
+                        {{ 'settings.kiosk.edit.cancel' | t }}
+                      </button>
+                    } @else if (canManage()) {
+                      <button
+                        type="button"
+                        class="secondary"
+                        (click)="startEdit(kiosk)"
+                        [attr.data-testid]="'kiosk-edit-start-' + kiosk.deviceId"
+                      >
+                        {{ 'settings.kiosk.edit.start' | t }}
+                      </button>
+                      <button
+                        type="button"
+                        class="secondary"
+                        (click)="toggleReplaceHint(kiosk.deviceId)"
+                        [attr.data-testid]="'kiosk-replace-' + kiosk.deviceId"
+                      >
+                        {{ 'settings.kiosk.replace.start' | t }}
+                      </button>
+                      <button
+                        type="button"
+                        class="secondary"
+                        (click)="startRevoke(kiosk.deviceId)"
+                        [attr.data-testid]="'kiosk-revoke-start-' + kiosk.deviceId"
+                      >
+                        {{ 'settings.kiosk.revoke.start' | t }}
+                      </button>
+                    }
+                    @if (editError() && editId() === kiosk.deviceId) {
+                      <p class="q-caption error" data-testid="kiosk-edit-error">
+                        {{ editError() }}
+                      </p>
+                    }
+                  </td>
+                </tr>
+                @if (replaceHintId() === kiosk.deviceId) {
+                  <tr class="sub">
+                    <td colspan="5" class="q-body-sm" data-testid="kiosk-replace-hint">
+                      {{ 'settings.kiosk.replace.hint' | t }}
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+          @if (editError() && editId() === null) {
+            <p class="q-caption error" data-testid="kiosk-edit-error">{{ editError() }}</p>
+          }
+        }
+
+        @if (revoked().length > 0) {
+          <h3 class="q-emphasis">{{ 'settings.kiosk.revoked.title' | t }}</h3>
+          <ul class="revoked" data-testid="kiosk-revoked">
+            @for (kiosk of revoked(); track kiosk.deviceId) {
+              <li class="q-body-sm">
+                {{ kiosk.displayName }}
+                <span class="hint">
+                  {{ kiosk.revokedBy ?? '—' }},
+                  {{ kiosk.revokedAt ? formatted(kiosk.revokedAt) : '' }}: {{ kiosk.revokedReason }}
+                </span>
+              </li>
+            }
+          </ul>
+        }
+      }
+    }
+  }
+</section>

@@ -36,6 +36,7 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.nav.locations': 'Филиалы',
   'settings.nav.salesChannels': 'Каналы продаж',
   'settings.nav.channelSetup': 'Настройка каналов',
+  'settings.nav.kiosks': 'Киоски',
   'settings.nav.orderPolicy': 'Правила заказа',
   'settings.nav.paymentMethods': 'Способы оплаты',
   'settings.nav.fiscalization': 'Фискализация',
@@ -102,6 +103,8 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.home.description.salesChannels':
     'Какие каналы продаж существуют и что каждому из них разрешено.',
   'settings.home.description.channelSetup': 'Настройка витрины за каждым каналом.',
+  'settings.home.description.kiosks':
+    'Подключить киоск по коду на его экране и видеть, переименовывать, переносить и отключать киоски филиала.',
   'settings.home.description.orderPolicy': 'Свод правил, по которым оценивается каждый заказ.',
   'settings.home.description.catalogBaseSettings':
     'Переключатели логики остатков и цен QR/киоска — общие для всей компании.',
@@ -670,6 +673,22 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.classification.nodeType.VARIANT': 'Блюдо',
   'settings.fiscalization.classification.nodeType.MODIFIER_OPTION': 'Модификатор',
   'settings.fiscalization.classification.nodeType.FEE': 'Сбор',
+  'settings.fiscalization.classification.withdrawn.title':
+    'Коды, выведенные из национального справочника: {count}',
+  'settings.fiscalization.classification.withdrawn.lead':
+    'Эти позиции по-прежнему классифицированы и продаются. Если справочник называет преемника, их можно перевести на него одним щелчком; автоматически ничего не заменяется, а уже выданный чек сохраняет код, с которым был отправлен.',
+  'settings.fiscalization.classification.withdrawn.code': 'ИКПУ / MXIK',
+  'settings.fiscalization.classification.withdrawn.on': 'Выведен',
+  'settings.fiscalization.classification.withdrawn.successor': 'Указанный преемник',
+  'settings.fiscalization.classification.withdrawn.noSuccessor': 'не указан',
+  'settings.fiscalization.classification.withdrawn.replace': 'Заменить на {code}',
+  'settings.fiscalization.classification.withdrawn.replaceAll':
+    'Заменить {count} на указанных преемников',
+  'settings.fiscalization.classification.withdrawn.confirm':
+    'Заменить ИКПУ у позиций ({count}) на преемника из национального справочника? Меняется только ИКПУ.',
+  'settings.fiscalization.classification.withdrawn.confirmYes': 'Заменить',
+  'settings.fiscalization.classification.withdrawn.outcome':
+    'Заменено: {replaced}. Осталось как было: {left}.',
   'settings.fiscalization.classification.deliveryFee.name': 'Доставка',
   'settings.fiscalization.classification.deliveryFee.warning':
     'Стоимость доставки не классифицирована фискально — это как раз то, что обычно забывают. Бренд не может взимать плату за доставку через фискализирующий канал без этого.',
@@ -822,6 +841,12 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.referenceData.cancellation.add': 'Добавить причину отмены',
   'settings.referenceData.completion.title': 'Причины завершения',
   'settings.referenceData.completion.add': 'Добавить причину завершения',
+  'settings.referenceData.removal.title': 'Причины удаления позиций',
+  'settings.referenceData.removal.add': 'Добавить причину удаления',
+  'settings.referenceData.removal.lead':
+    'Почему позицию сняли с подтверждённого заказа. Причина определяет, что станет с остатком; оператор выбирает причину, а не распоряжение.',
+  'settings.referenceData.removal.unavailableCannotReturn':
+    'Причина «нет в наличии» не может возвращать позицию на склад: её там не было.',
   'settings.referenceData.add': 'Добавить',
   'settings.referenceData.disable': 'Отключить',
   'settings.referenceData.empty': 'Пока нет.',
@@ -1326,6 +1351,11 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
     'Пороги, выше которых акция или крупная выгрузка клиентов ждёт второй подписи.',
   'settings.fiscalization.noAccess': 'Нет доступа',
   'settings.fiscalization.responsibility': 'Кто выдаёт чек',
+  'settings.fiscalization.responsibility.lead':
+    'Читается из той же модели, что и экран «Платежи»: справочник говорит, кто отвечает за чек по способу оплаты, а мерчант-аккаунты и фискальные терминалы — можно ли это сделать сегодня. Здесь это не настраивается: настройка, расходящаяся с привязками, была бы ложным заявлением о налоговом документе.',
+  'settings.fiscalization.responsibility.state.live': 'чек выдать можно',
+  'settings.fiscalization.responsibility.state.noPath': 'нет фискального пути',
+  'settings.fiscalization.responsibility.state.notApplicable': 'чек не нужен',
   'settings.locations.pin.title': 'Точка на карте',
   'settings.locations.pin.none':
     'У филиала нет точки на карте. Пока её нет, от филиала нельзя мерить расстояния и вокруг него нельзя нарисовать зону доставки. Откройте редактирование, чтобы поставить точку.',
@@ -1466,4 +1496,301 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
     '«{name}» отозвано: оно больше не может обслуживать этот бренд.',
   'settings.storefrontApps.denied':
     'Приложения витрин выбирают только владелец и администраторы аккаунта.',
+
+  // ------------------------------------------------------------------- kiosk pairing and the KIOSK card (ADR 0162)
+  'settings.kiosk.lead':
+    'Киоски самообслуживания этого филиала. Киоск сам показывает код и QR; вы подтверждаете код и выбираете канал, через который он продаёт.',
+  'settings.kiosk.pair': 'Подключить киоск',
+  'settings.kiosk.loading': 'Загружаем киоски',
+  'settings.kiosk.denied': 'Нет доступа к киоскам этого филиала',
+  'settings.kiosk.error': 'Не удалось загрузить киоски. Повторите чуть позже.',
+  'settings.kiosk.empty': 'В этом филиале пока нет подключённых киосков.',
+  'settings.kiosk.column.name': 'Название',
+  'settings.kiosk.column.channel': 'Канал продаж',
+  'settings.kiosk.column.lastSeen': 'Последний сигнал',
+  'settings.kiosk.column.enrolled': 'Подключил',
+  'settings.kiosk.channel.choose': 'Выберите канал',
+  'settings.kiosk.channel.none': 'Нет канала',
+  'settings.kiosk.needsAttention':
+    'Этот киоск не может продавать: у него нет канала или канал архивирован либо снят с продажи здесь.',
+  'settings.kiosk.lastSeen.never': 'Ещё не выходил на связь',
+  'settings.kiosk.lastSeen.now': 'Только что',
+  'settings.kiosk.lastSeen.minutes': '{minutes} мин назад',
+  'settings.kiosk.lastSeen.at': 'Последний сигнал {time}',
+  'settings.kiosk.edit.start': 'Изменить',
+  'settings.kiosk.edit.save': 'Сохранить',
+  'settings.kiosk.edit.cancel': 'Отмена',
+  'settings.kiosk.edit.stale':
+    'Кто-то уже изменил этот киоск. Список обновлён, повторите изменение.',
+  'settings.kiosk.edit.channelUnavailable':
+    'Этот канал не является активным киоск-каналом, продающим в этом филиале.',
+  'settings.kiosk.revoke.start': 'Отключить',
+  'settings.kiosk.revoke.confirm': 'Отключить киоск',
+  'settings.kiosk.revoke.cancel': 'Отмена',
+  'settings.kiosk.revoke.reasonPlaceholder': 'Причина',
+  'settings.kiosk.replace.start': 'Заменить',
+  'settings.kiosk.replace.hint':
+    'Чтобы заменить киоск, отключите его и подключите новый. Киоск сам показывает код на экране, консоль кодов не выдаёт.',
+  'settings.kiosk.revoked.title': 'Отключённые киоски',
+  'settings.kioskPairing.title': 'Подключение киоска',
+  'settings.kioskPairing.lead':
+    'Откройте эту страницу по QR на киоске или введите код, который он показывает. Пока вы не подтвердите ниже, ничего не подключится.',
+  'settings.kioskPairing.noBranch':
+    'Сначала выберите филиал в панели области: киоск подключается к одному филиалу.',
+  'settings.kioskPairing.branch': 'Филиал: {branch}',
+  'settings.kioskPairing.code.label': 'Код на экране киоска',
+  'settings.kioskPairing.code.look': 'Проверить код',
+  'settings.kioskPairing.notKiosk':
+    'Этот код принадлежит кухонному экрану, а не киоску. Подключите его в разделе «Кухня → Устройства».',
+  'settings.kioskPairing.claim.title': 'Устройство просит стать киоском',
+  'settings.kioskPairing.claim.expires': 'Код действует до {time}.',
+  'settings.kioskPairing.claim.label': 'Как устройство назвало себя',
+  'settings.kioskPairing.form.name': 'Название в списке',
+  'settings.kioskPairing.form.channel': 'Канал продаж',
+  'settings.kioskPairing.form.noChannels':
+    'В этом филиале нет активного киоск-канала. Сначала добавьте его.',
+  'settings.kioskPairing.form.confirm': 'Код на экране киоска передо мной: {code}.',
+  'settings.kioskPairing.form.submit': 'Подключить киоск',
+  'settings.kioskPairing.done': '{name} теперь продаёт через канал {channel}.',
+  'settings.kioskPairing.doneHint':
+    'Киоск прочитает настройки и покажет статус в течение минуты. На нём ничего вводить не нужно.',
+  'settings.kioskPairing.back': 'К киоскам',
+  'settings.kioskPairing.error.gone':
+    'Код неизвестен, уже использован или истёк. Попросите киоск показать новый.',
+  'settings.kioskPairing.error.tooMany':
+    'Проверено слишком много кодов. Подождите минуту и повторите.',
+  'settings.kioskPairing.error.denied': 'У вас нет права подключать киоски в этом филиале.',
+  'settings.kioskPairing.error.failed': 'Не удалось проверить код. Повторите чуть позже.',
+  'settings.kioskPairing.error.classMismatch':
+    'Этот код запрашивал другой тип устройства, поэтому подключить его как киоск нельзя.',
+  'settings.kioskPairing.error.channelUnavailable':
+    'Этот канал не является активным киоск-каналом, продающим в этом филиале.',
+  // ---------------------------------------------------------------- printing and receipts (ADR 0154)
+  'settings.nav.printing': 'Печать и чеки',
+  'settings.home.description.printing': 'Какой принтер что печатает и что указано на чеке.',
+  'settings.printing.title': 'Печать и чеки',
+  'settings.printing.lead':
+    'Пока вы не добавите маршрут ниже, филиал ничего не печатает. Маршрут задаёт, какой документ идёт на какой принтер.',
+  'settings.printing.loading': 'Загружаем…',
+  'settings.printing.denied': 'Настройки печати доступны менеджерам.',
+  'settings.printing.loadError': 'Не удалось загрузить настройки печати.',
+  'settings.printing.retry': 'Повторить',
+  'settings.printing.off':
+    'Печать для вашего аккаунта ещё не включена. Смотреть можно, а сохранить изменения не получится, пока поддержка HorecaOS не включит её.',
+  'settings.printing.pickBranch':
+    'Выберите филиал в панели выше, чтобы настроить его принтеры и маршруты. Подвал чека ниже относится к бренду.',
+  'settings.printing.save': 'Сохранить',
+  'settings.printing.cancel': 'Отмена',
+  'settings.printing.edit': 'Изменить',
+  'settings.printing.error.off':
+    'Печать для вашего аккаунта не включена. Попросите поддержку HorecaOS включить её.',
+  'settings.printing.error.noRoute':
+    'Для этого документа здесь ничего не настроено. Сначала добавьте маршрут или выберите принтер.',
+  'settings.printing.doc.kitchenTicket': 'Кухонный тикет',
+  'settings.printing.doc.orderSlip': 'Сводка заказа',
+  'settings.printing.doc.fiscalReceipt': 'Фискальный чек',
+  'settings.printing.doc.testPage': 'Тестовая страница',
+  'settings.printing.printers.title': 'Принтеры',
+  'settings.printing.printers.lead':
+    'Принтер принадлежит одному филиалу. Он печатает через этот браузер или через агент печати — небольшую программу на компьютере в филиале, которая видит принтер. HorecaOS не хранит сетевой адрес принтера.',
+  'settings.printing.printers.add': 'Добавить принтер',
+  'settings.printing.printers.empty':
+    'Принтеров пока нет. Добавьте принтер, затем маршрут, чтобы направить на него документ.',
+  'settings.printing.printers.saved': 'Принтер сохранён.',
+  'settings.printing.printers.retired':
+    'Принтер выведен из работы. Его маршруты перестают печатать, прошлые задания остаются.',
+  'settings.printing.printers.restored': 'Принтер возвращён в работу.',
+  'settings.printing.printers.testBrowser': 'Тестовая страница отправлена в окно печати браузера.',
+  'settings.printing.printers.testQueued':
+    'Тестовая страница поставлена в очередь. Она напечатается, когда её заберёт агент.',
+  'settings.printing.printers.testPage': 'Тестовая страница',
+  'settings.printing.printers.retire': 'Вывести из работы',
+  'settings.printing.printers.restore': 'Вернуть',
+  'settings.printing.printers.col.name': 'Название',
+  'settings.printing.printers.col.roll': 'Лента',
+  'settings.printing.printers.col.connection': 'Подключение',
+  'settings.printing.printers.col.status': 'Состояние',
+  'settings.printing.printers.tape': '{width} мм',
+  'settings.printing.printers.kind.browser': 'Браузер этого рабочего места',
+  'settings.printing.printers.kind.agent': 'Через агент печати',
+  'settings.printing.printers.status.retired': 'Выведен',
+  'settings.printing.printers.form.name': 'Название',
+  'settings.printing.printers.form.tape': 'Ширина ленты',
+  'settings.printing.printers.form.connection': 'Как печатает',
+  'settings.printing.printers.form.browserNote':
+    'Печать запускает человек в браузере. Сама она ничего не печатает, поэтому маршрут на такой принтер не может быть автоматическим.',
+  'settings.printing.printers.form.noAgent':
+    'В этом филиале пока нет одобренного агента печати. Одобрите его в разделе ниже и вернитесь сюда.',
+  'settings.printing.printers.form.agent': 'Агент печати',
+  'settings.printing.printers.form.alias': 'Принтер, который видит агент',
+  'settings.printing.printers.form.noAlias':
+    'Этот агент пока не сообщил ни об одном принтере. Проверьте, что он запущен и что в его настройках указан принтер.',
+  'settings.printing.printers.form.aliasNote':
+    'Это имя, которое агент дал принтеру. Где принтер находится в сети, задаётся только в настройках самого агента.',
+  'settings.printing.printer.status.online': 'В сети',
+  'settings.printing.printer.status.offline': 'Не в сети',
+  'settings.printing.printer.status.outOfPaper': 'Нет бумаги',
+  'settings.printing.printer.status.coverOpen': 'Крышка открыта',
+  'settings.printing.printer.status.error': 'Ошибка',
+  'settings.printing.printer.status.unknown': 'Нет данных',
+  'settings.printing.agents.title': 'Агенты печати',
+  'settings.printing.agents.lead':
+    'Агент — небольшая программа, которую поддержка HorecaOS запускает на компьютере в филиале. При запуске она показывает короткий код; введите его здесь, чтобы одобрить агента. Одобренный агент может забирать задания на печать и сообщать результат — больше ничего.',
+  'settings.printing.agents.code': 'Код, который показывает агент',
+  'settings.printing.agents.codeNote': 'Код действует несколько минут после запуска агента.',
+  'settings.printing.agents.lookUp': 'Проверить код',
+  'settings.printing.agents.codeUnknown':
+    'Агента с таким кодом нет. Возможно, код истёк — перезапустите агент, чтобы получить новый.',
+  'settings.printing.agents.claims': 'Этот код принадлежит: {label}',
+  'settings.printing.agents.grantNote':
+    'Одобрение позволит ему забирать задания печати этого филиала и сообщать результат. Войти в систему или читать что-то ещё он не может.',
+  'settings.printing.agents.name': 'Название агента',
+  'settings.printing.agents.approve': 'Одобрить агента',
+  'settings.printing.agents.approved': 'Агент одобрен.',
+  'settings.printing.agents.empty': 'В этом филиале нет агентов печати.',
+  'settings.printing.agents.status.active': 'Активен',
+  'settings.printing.agents.status.revoked': 'Отозван',
+  'settings.printing.agents.enrolled': 'Одобрил {by}, {time}',
+  'settings.printing.agents.revokedAt': 'Отозвал {by}, {time}',
+  'settings.printing.agents.advertises': 'Принтеры, о которых он сообщает:',
+  'settings.printing.agents.advertisesNone': 'Он не сообщал ни об одном принтере.',
+  'settings.printing.agents.revoke': 'Отозвать',
+  'settings.printing.agents.revokeNote':
+    'Агенту откажут уже при следующем запросе. Никто не выходит из системы.',
+  'settings.printing.agents.reason': 'Зачем вы его отзываете (сохранится в журнале действий)',
+  'settings.printing.agents.revoked': 'Агент отозван.',
+  'settings.printing.routes.title': 'Что куда печатается',
+  'settings.printing.routes.lead':
+    'Маршрут отправляет один вид документа на один принтер. Кухонный тикет может идти на свой принтер для каждой станции; станция без своего маршрута использует маршрут без станции.',
+  'settings.printing.routes.add': 'Добавить маршрут',
+  'settings.printing.routes.empty':
+    'Маршрутов пока нет, поэтому филиал ничего не печатает. Действие «Печать» на экране заказа сообщит, что для документа нет принтера.',
+  'settings.printing.routes.noPrinter': 'Сначала добавьте принтер — маршруту он нужен.',
+  'settings.printing.routes.posMayPrint': 'Ваша касса, возможно, уже печатает это.',
+  'settings.printing.routes.posExplain':
+    'HorecaOS не может определить, печатает ли касса то, что получает, и сам маршрут не создаёт. Посмотрите, прежде чем добавлять: два бумажных тикета на один заказ — это ошибка.',
+  'settings.printing.routes.col.document': 'Документ',
+  'settings.printing.routes.col.station': 'Станция',
+  'settings.printing.routes.col.printer': 'Принтер',
+  'settings.printing.routes.col.copies': 'Копии',
+  'settings.printing.routes.col.auto': 'Печатает',
+  'settings.printing.routes.anyStation': 'Любая станция без своего маршрута',
+  'settings.printing.routes.autoOn': 'Сама',
+  'settings.printing.routes.autoOff': 'Только по запросу',
+  'settings.printing.routes.inactive': 'Отключён',
+  'settings.printing.routes.delete': 'Удалить',
+  'settings.printing.routes.deleteConfirm': 'Удалить насовсем',
+  'settings.printing.routes.deleted': 'Маршрут удалён. Уже созданные по нему задания остаются.',
+  'settings.printing.routes.saved': 'Маршрут сохранён.',
+  'settings.printing.routes.form.document': 'Документ',
+  'settings.printing.routes.form.station': 'Станция',
+  'settings.printing.routes.form.anyStation': 'Любая станция без своего маршрута',
+  'settings.printing.routes.form.stationNote':
+    'Тикет станции без своего маршрута уходит на маршрут без станции.',
+  'settings.printing.routes.form.printer': 'Принтер',
+  'settings.printing.routes.form.copies': 'Копии',
+  'settings.printing.routes.form.auto': 'Печатать автоматически',
+  'settings.printing.routes.form.autoNote':
+    'Кухонный тикет печатается, когда его отпускают на кухню; сводка заказа — при подтверждении заказа; фискальный чек — после фискализации продажи.',
+  'settings.printing.routes.form.autoNeedsAgent':
+    'Автоматическая печать возможна только на принтере, подключённом через агент печати.',
+  'settings.printing.routes.form.active': 'Маршрут действует',
+  'settings.printing.fiscal.title': 'Фискальный чек',
+  'settings.printing.fiscal.lead':
+    'Что такое напечатанный фискальный чек. Это справка — здесь ничего не редактируется.',
+  'settings.printing.fiscal.evidence':
+    'Печатаются номер чека, фискальный признак, номер терминала, время регистрации, наименование и ИНН продавца — ровно так, как их вернул фискальный оператор.',
+  'settings.printing.fiscal.qr':
+    'Ниже печатается QR-код сохранённой ссылки на чек — телефон открывает по нему сам чек.',
+  'settings.printing.fiscal.copy': 'Каждая печать того же чека после первой помечается как копия.',
+  'settings.printing.fiscal.slip':
+    'Сводка заказа никогда не чек: на ней написано, что это не фискальный документ.',
+  'settings.printing.fiscal.policy': 'В этом филиале',
+  'settings.printing.fiscal.noRoute':
+    'Для фискальных чеков маршрута нет, поэтому чек печатается только по просьбе с экрана заказа.',
+  'settings.printing.fiscal.routeAuto': 'Печатается сама на «{printer}» (копий: {copies}).',
+  'settings.printing.fiscal.routeManual': 'Идёт на «{printer}» по просьбе (копий: {copies}).',
+  'settings.printing.fiscal.caution':
+    'Прежде чем оставлять автоматическую печать включённой, попросите бухгалтера подтвердить, какие формулировки должен нести напечатанный чек. HorecaOS печатает то, что вернул фискальный оператор, и не может проверить юридический текст за вас.',
+  'settings.printing.profile.title': 'Ширина ленты и оформление',
+  'settings.printing.profile.lead':
+    'Что несёт бумага бренда: логотип, если он нужен, и несколько строк внизу. Всё остальное зафиксировано.',
+  'settings.printing.profile.fixed':
+    'Наименование и ИНН продавца, номер заказа, итоги, QR-код и фискальный блок нельзя переместить, изменить размер или убрать.',
+  'settings.printing.profile.logo': 'Печатать логотип бренда сверху',
+  'settings.printing.profile.logoNote':
+    'Он превращается в чёрно-белые точки. Лучше всего печатается простой контрастный логотип.',
+  'settings.printing.profile.locale.ru': 'Русский',
+  'settings.printing.profile.locale.uzLatn': 'Узбекский (латиница)',
+  'settings.printing.profile.locale.en': 'Английский',
+  'settings.printing.profile.footerLine': 'Строка подвала {n}',
+  'settings.printing.profile.footerNote':
+    'До трёх строк на язык, по {max} символов, чтобы строка помещалась на ленту 80 мм. Документ печатается на одном языке — филиала, а не клиента.',
+  'settings.printing.profile.saved': 'Сохранено.',
+  'settings.printing.profile.updated': 'Последнее сохранение: {by}, {time}',
+  'settings.printing.profile.tapeNote':
+    'Ширина ленты (58 или 80 мм) — свойство каждого принтера; она задаётся в принтере.',
+  'settings.printing.queue.title': 'Очередь печати',
+  'settings.printing.queue.lead':
+    'Сначала новые. Задание, которое не напечаталось, просрочилось или было отменено, можно напечатать снова; повторная печать помечается как копия и сохраняет, кто и зачем её попросил.',
+  'settings.printing.queue.filter': 'Показать',
+  'settings.printing.queue.all': 'Все задания',
+  'settings.printing.queue.refresh': 'Обновить',
+  'settings.printing.queue.empty': 'Заданий на печать пока нет.',
+  'settings.printing.queue.col.queued': 'Поставлено',
+  'settings.printing.queue.col.document': 'Документ',
+  'settings.printing.queue.col.printer': 'Принтер',
+  'settings.printing.queue.col.state': 'Состояние',
+  'settings.printing.queue.copy': 'Копия',
+  'settings.printing.queue.attempt': 'попытка {n}',
+  'settings.printing.queue.preview': 'Просмотр',
+  'settings.printing.queue.reprint': 'Напечатать снова',
+  'settings.printing.queue.cancel': 'Отменить',
+  'settings.printing.queue.cancelled': 'Задание отменено.',
+  'settings.printing.queue.reprintNote':
+    'Будет создано новое задание по текущим данным документа. Оно напечатается с пометкой «копия».',
+  'settings.printing.queue.reason': 'Зачем (сохранится в журнале действий)',
+  'settings.printing.queue.reprintPrinter': 'Принтер',
+  'settings.printing.queue.reprintConfirm': 'Напечатать снова',
+  'settings.printing.queue.reprinted': 'Создано новое задание на печать.',
+  'settings.printing.queue.more': 'Показать более старые',
+  'settings.printing.job.status.queued': 'В очереди',
+  'settings.printing.job.status.claimed': 'Печатается',
+  'settings.printing.job.status.printed': 'Напечатано',
+  'settings.printing.job.status.handedOff': 'Отправлено в браузер',
+  'settings.printing.job.status.dead': 'Не напечатано',
+  'settings.printing.job.status.cancelled': 'Отменено',
+  'settings.printing.job.status.expired': 'Просрочено',
+  'settings.printing.job.failure.printerOffline': 'Принтер был не в сети.',
+  'settings.printing.job.failure.outOfPaper': 'В принтере закончилась бумага.',
+  'settings.printing.job.failure.coverOpen': 'Крышка принтера была открыта.',
+  'settings.printing.job.failure.transport': 'Агент не смог связаться с принтером.',
+  'settings.printing.job.failure.render': 'Документ не удалось нарисовать.',
+  'settings.printing.job.failure.leaseLapsed': 'Агент не ответил вовремя.',
+  'settings.printing.job.failure.unknown': 'Не удалось.',
+  'settings.printing.reason.customerRequest': 'Попросил клиент',
+  'settings.printing.reason.paperJam': 'Замялась бумага',
+  'settings.printing.reason.printerFault': 'Неисправность принтера',
+  'settings.printing.reason.kitchenRequest': 'Попросила кухня',
+  'settings.printing.reason.amendedOrder': 'Заказ изменили',
+  'settings.printing.reason.test': 'Проверка',
+  'settings.printing.reason.other': 'Другое',
+  'settings.printing.policy.title': 'Язык и сроки',
+  'settings.printing.policy.lead':
+    'Задаётся для этого филиала. Значение, которое вы не задали здесь, берётся у бренда, компании или по умолчанию.',
+  'settings.printing.policy.locale.label': 'Язык печатных документов',
+  'settings.printing.policy.locale.hint': 'Один язык на документ — язык филиала, а не клиента.',
+  'settings.printing.policy.expire.label':
+    'Через сколько минут ожидающий кухонный тикет отбрасывается',
+  'settings.printing.policy.expire.hint':
+    'Тикет, который так долго ждёт принтер, отбрасывается, а не печатается с опозданием (от 5 до 240).',
+  'settings.printing.policy.late.label':
+    'Через сколько минут напечатанный документ помечается «с задержкой»',
+  'settings.printing.policy.late.hint':
+    'Документ, пробывший в очереди дольше, печатается со временем постановки в очередь (от 1 до 1440).',
+  'settings.printing.policy.minutes': '{n} мин',
+  'settings.printing.policy.reason': 'Зачем вы это меняете (сохранится в журнале действий)',
+  'settings.printing.policy.saved': 'Сохранено для этого филиала.',
+  'settings.printing.policy.reverted': 'Теперь филиал снова наследует значение.',
+  'settings.printing.policy.revertReason': 'Возврат к унаследованному значению',
 };

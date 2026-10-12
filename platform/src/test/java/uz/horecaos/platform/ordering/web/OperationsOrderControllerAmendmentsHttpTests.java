@@ -196,7 +196,8 @@ class OperationsOrderControllerAmendmentsHttpTests {
     }
 
     @Test
-    @DisplayName("REMOVE_LINES is refused by name over HTTP -- declared by ADR 0039, not built")
+    @DisplayName(
+            "REMOVE_LINES is refused by name over HTTP while the brand has not switched the removal path on (ADR 0169)")
     void removeLinesIsRefusedByNameOverHttp() throws Exception {
         UUID orderId = seedOrder(LOCATION_A, "AMD-3", "CONFIRMED");
 
@@ -206,12 +207,15 @@ class OperationsOrderControllerAmendmentsHttpTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .header("If-Match", "\"1\"")
                         .content("""
-                                {"commands":[{"type":"REMOVE_LINES","orderLineId":"%s","quantity":1}],\
-                                "applyImmediately":false,"reasonCode":"OPERATOR_CORRECTION"}""".formatted(UUID.randomUUID())))
+                                {"commands":[{"type":"REMOVE_LINES","orderLineIds":["%s"],\
+                                "removalReasonId":"%s"}],\
+                                "applyImmediately":false,"reasonCode":"OPERATOR_CORRECTION"}""".formatted(UUID.randomUUID(), UUID.randomUUID())))
                 .andReturn();
 
         assertThat(result.getResponse().getStatus()).isEqualTo(409);
-        assertThat(result.getResponse().getContentAsString()).contains("not built");
+        assertThat(result.getResponse().getContentAsString())
+                .contains("REMOVE_LINES")
+                .contains("not switched on");
     }
 
     @Test

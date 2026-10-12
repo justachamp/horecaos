@@ -2,11 +2,16 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { signal } from '@angular/core';
 
+import { ApiClient } from '../../core/api/api-client';
 import { APP_CONFIG, type AppConfig } from '../../core/config/app-config';
 import { HomeComponent } from './home.component';
+import { ContentService } from '../../services/content.service';
+import { EditorialService } from '../../services/editorial.service';
 import { LangService } from '../../services/lang.service';
 import { MenuService } from '../../services/menu.service';
+import { ReviewsService } from '../../services/reviews.service';
 import { TranslateService } from '../../services/translate.service';
+import { NO_CONTENT, type ContentHome } from '../../types/content.types';
 import type { CustomerUiResponse, MenuItem, MenuItemVariant } from '../../types/home.types';
 
 const CONFIG: AppConfig = {
@@ -77,6 +82,17 @@ class FakeMenuService {
   readonly currency = signal<string | null>('UZS');
   home = vi.fn();
 }
+/** The public rating block is not under test here: the platform reports nothing to show. */
+class FakeReviewsService {
+  publicSummary = vi.fn(async () => ({
+    visibility: 'NONE' as const,
+    ready: false,
+    count: null,
+    average: null,
+    distribution: null,
+  }));
+  publicComments = vi.fn();
+}
 class FakeLangService {
   langId = () => 'uz';
 }
@@ -87,6 +103,22 @@ class FakeTranslateService {
   current = () => ({});
 }
 
+/** A content service that has nothing to show, so the menu specs below see only the menu. */
+class FakeContentService {
+  readonly carousel = signal<ContentHome['carousel']>([]);
+  readonly groups = signal<ContentHome['groups']>([]);
+  readonly stories = signal<ContentHome['stories']>([]);
+  readonly promoGrid = signal<ContentHome['promoGrid']>([]);
+  readonly popup = signal<ContentHome['popup']>(null);
+  load = vi.fn().mockResolvedValue(undefined);
+}
+
+/** An editorial service that runs no kind, so the menu specs below see only the menu. */
+class FakeEditorialService {
+  readonly features = signal({ news: false, gallery: false, recipes: false, vacancies: false });
+  loadFeatures = vi.fn().mockResolvedValue(undefined);
+}
+
 async function setUp(menu: CustomerUiResponse) {
   const service = new FakeMenuService();
   service.home.mockResolvedValue(menu);
@@ -94,7 +126,10 @@ async function setUp(menu: CustomerUiResponse) {
     imports: [HomeComponent],
     providers: [
       provideRouter([]),
+      { provide: ContentService, useClass: FakeContentService },
+      { provide: EditorialService, useClass: FakeEditorialService },
       { provide: MenuService, useValue: service },
+      { provide: ReviewsService, useClass: FakeReviewsService },
       { provide: LangService, useClass: FakeLangService },
       { provide: TranslateService, useClass: FakeTranslateService },
       { provide: APP_CONFIG, useValue: CONFIG },
@@ -265,5 +300,381 @@ describe('HomeComponent -- the menu grid', () => {
 
     expect(host.textContent).toContain('home.emptyMenu');
     expect(host.querySelectorAll('[data-testid="dish-card"]').length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// ADR 0157: the content the brand published, read beside the menu and never in its way.
+// ---------------------------------------------------------------------------------------------
+
+const UUID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+
+const IMAGE = {
+  kind: 'IMAGE',
+  alt: 'A plate of plov',
+  widthPx: 1600,
+  heightPx: 533,
+  renditions: [
+    { widthPx: 400, url: '/api/v1/storefront/tenants/t/media/a?variant=w400' },
+    { widthPx: 800, url: '/api/v1/storefront/tenants/t/media/a?variant=w800' },
+  ],
+};
+
+function contentBody(overrides: Record<string, unknown> = {}) {
+  return {
+    locale: 'uz-Latn',
+    carousel: [
+      {
+        id: UUID(1),
+        kind: 'BANNER',
+        revisionNo: 1,
+        title: 'Plov week',
+        textLocale: 'uz-Latn',
+        media: IMAGE,
+        link: { type: 'PRODUCT', targetId: UUID(11) },
+      },
+    ],
+    groups: [
+      {
+        id: UUID(2),
+        revisionNo: 1,
+        title: 'Popular',
+        textLocale: 'uz-Latn',
+        productIds: [UUID(11), UUID(404)],
+      },
+    ],
+    promoGrid: [
+      {
+        id: UUID(3),
+        kind: 'PROMO_CARD',
+        revisionNo: 1,
+        title: 'Second helping',
+        textLocale: 'uz-Latn',
+        media: IMAGE,
+        link: { type: 'NONE' },
+      },
+    ],
+    stories: [
+      {
+        id: UUID(4),
+        revisionNo: 1,
+        title: 'Today',
+        textLocale: 'uz-Latn',
+        slides: [{ media: IMAGE, durationSeconds: 5, link: { type: 'NONE' } }],
+      },
+    ],
+    ...overrides,
+  };
+}
+
+const MENU_WITH_PLOV = () =>
+  response([{ id: UUID(100), name: 'Osh', items: [item(UUID(11), 'Toshkent oshi')] }]);
+
+type ContentReply = 'pending' | 'fail' | Record<string, unknown>;
+
+const NO_FEATURES = { news: false, gallery: false, recipes: false, vacancies: false };
+
+async function setUpWithContent(
+  menu: CustomerUiResponse,
+  content: ContentReply,
+  features: ContentReply = NO_FEATURES,
+) {
+  const menuService = new FakeMenuService();
+  menuService.home.mockResolvedValue(menu);
+  const answer = (reply: ContentReply) => {
+    if (reply === 'pending') {
+      return new Promise(() => undefined);
+    }
+    return reply === 'fail'
+      ? Promise.reject(new TypeError('Failed to fetch'))
+      : Promise.resolve(reply);
+  };
+  const api = {
+    get: vi.fn((path: string) => answer(path.endsWith('/content/features') ? features : content)),
+  };
+  TestBed.configureTestingModule({
+    imports: [HomeComponent],
+    providers: [
+      provideRouter([{ path: '**', children: [] }]),
+      { provide: MenuService, useValue: menuService },
+      { provide: ApiClient, useValue: api },
+      { provide: LangService, useClass: FakeLangService },
+      { provide: TranslateService, useClass: FakeTranslateService },
+      { provide: APP_CONFIG, useValue: CONFIG },
+    ],
+  });
+  const fixture = TestBed.createComponent(HomeComponent);
+  fixture.detectChanges();
+  await fixture.whenStable();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  fixture.detectChanges();
+  const host = fixture.nativeElement as HTMLElement;
+  const homeReads = () =>
+    api.get.mock.calls.filter(([path]) => String(path).endsWith('/content/home'));
+  return { fixture, host, api, menuService, homeReads };
+}
+
+describe('HomeComponent -- the content a brand published', () => {
+  it('asks for the content of this brand and channel in the visitor’s language, beside the menu', async () => {
+    const { api, menuService, homeReads } = await setUpWithContent(MENU_WITH_PLOV(), contentBody());
+
+    expect(menuService.home).toHaveBeenCalledTimes(1);
+    expect(homeReads()).toHaveLength(1);
+    expect(api.get).toHaveBeenCalledWith(
+      `/storefront/tenants/${CONFIG.tenantId}/brands/${CONFIG.brandId}/content/home`,
+      { query: { channel: 'STOREFRONT', locale: 'uz' }, anonymous: true, silent: true },
+    );
+  });
+
+  it('draws the carousel, the promo grid, the stories and the groups above the menu', async () => {
+    const { host } = await setUpWithContent(MENU_WITH_PLOV(), contentBody());
+
+    expect(host.querySelector('[data-testid="content-carousel"]')?.textContent).toContain(
+      'Plov week',
+    );
+    expect(host.querySelector('[data-testid="content-promo-grid"]')?.textContent).toContain(
+      'Second helping',
+    );
+    expect(host.querySelector('[data-testid="content-stories"]')?.textContent).toContain('Today');
+    expect(host.querySelector('[data-testid="content-group"]')?.textContent).toContain('Popular');
+    // The group joined the menu the page holds, skipped the id it lacks, and the menu is still there.
+    expect(
+      host.querySelectorAll('[data-testid="content-group"] [data-testid="dish-card"]'),
+    ).toHaveLength(1);
+    expect(host.querySelectorAll('app-menu-grid [data-testid="dish-card"]')).toHaveLength(1);
+  });
+
+  it('draws the content above the menu, in the order of the page', async () => {
+    const { host } = await setUpWithContent(MENU_WITH_PLOV(), contentBody());
+    const position = (selector: string) => {
+      const el = host.querySelector(selector);
+      return el ? [...host.querySelectorAll('*')].indexOf(el) : -1;
+    };
+
+    const order = [
+      '.search',
+      '[data-testid="content-stories"]',
+      '[data-testid="content-carousel"]',
+      '[data-testid="content-promo-grid"]',
+      '[data-testid="content-group"]',
+      'app-menu-grid',
+    ].map(position);
+
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it('still shows the whole menu when the content cannot be read, and says nothing about it', async () => {
+    const { host } = await setUpWithContent(MENU_WITH_PLOV(), 'fail');
+
+    expect(host.querySelectorAll('[data-testid="dish-card"]')).toHaveLength(1);
+    expect(host.textContent).toContain('Toshkent oshi');
+    expect(host.textContent).not.toContain('home.loadError');
+    expect(host.querySelector('[data-testid="content-carousel"]')).toBeNull();
+    expect(host.querySelector('[data-testid="content-promo-grid"]')).toBeNull();
+    expect(host.querySelector('[data-testid="content-stories"]')).toBeNull();
+    expect(host.querySelector('[data-testid="content-group"]')).toBeNull();
+    expect(host.querySelector('[data-testid="content-popup"]')).toBeNull();
+  });
+
+  it('does not wait for the content to draw the menu', async () => {
+    const { host } = await setUpWithContent(MENU_WITH_PLOV(), 'pending');
+
+    expect(host.querySelectorAll('[data-testid="dish-card"]')).toHaveLength(1);
+    expect(host.querySelector('[data-testid="content-carousel"]')).toBeNull();
+  });
+
+  it('looks as it did before content existed when the brand has published nothing', async () => {
+    const { host } = await setUpWithContent(MENU_WITH_PLOV(), {
+      locale: 'uz-Latn',
+      carousel: [],
+      groups: [],
+    });
+
+    expect(host.querySelector('[data-testid="content-carousel"]')).toBeNull();
+    expect(host.querySelector('[data-testid="content-group"]')).toBeNull();
+    expect(host.querySelectorAll('[data-testid="dish-card"]')).toHaveLength(1);
+  });
+
+  it('keeps showing content when the menu cannot be read, but draws no group over a menu it lacks', async () => {
+    const menuService = new FakeMenuService();
+    menuService.home.mockRejectedValue(new Error('menu down'));
+    TestBed.configureTestingModule({
+      imports: [HomeComponent],
+      providers: [
+        provideRouter([{ path: '**', children: [] }]),
+        { provide: MenuService, useValue: menuService },
+        { provide: ApiClient, useValue: { get: vi.fn().mockResolvedValue(contentBody()) } },
+        { provide: LangService, useClass: FakeLangService },
+        { provide: TranslateService, useClass: FakeTranslateService },
+        { provide: APP_CONFIG, useValue: CONFIG },
+      ],
+    });
+    const fixture = TestBed.createComponent(HomeComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.textContent).toContain('home.loadError');
+    expect(host.querySelector('[data-testid="content-carousel"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="content-group"]')).toBeNull();
+  });
+
+  it('has no hard-coded promotion picture in the template', async () => {
+    const { host } = await setUpWithContent(MENU_WITH_PLOV(), 'fail');
+
+    expect(host.innerHTML).not.toContain('home-promo');
+  });
+
+  it('shows the entry pop-up after its delay', async () => {
+    vi.useFakeTimers();
+    try {
+      localStorage.clear();
+      const body = contentBody({
+        popup: {
+          id: UUID(5),
+          revisionNo: 1,
+          title: 'Welcome',
+          textLocale: 'uz-Latn',
+          link: { type: 'NONE' },
+          showAfterSeconds: 5,
+          cap: { mode: 'ONCE_EVER', n: 1 },
+          dismiss: 'DISMISSIBLE',
+        },
+      });
+      const menuService = new FakeMenuService();
+      menuService.home.mockResolvedValue(MENU_WITH_PLOV());
+      TestBed.configureTestingModule({
+        imports: [HomeComponent],
+        providers: [
+          provideRouter([{ path: '**', children: [] }]),
+          { provide: MenuService, useValue: menuService },
+          { provide: ApiClient, useValue: { get: vi.fn().mockResolvedValue(body) } },
+          { provide: LangService, useClass: FakeLangService },
+          { provide: TranslateService, useClass: FakeTranslateService },
+          { provide: APP_CONFIG, useValue: CONFIG },
+        ],
+      });
+      const fixture = TestBed.createComponent(HomeComponent);
+      fixture.detectChanges();
+      await vi.advanceTimersByTimeAsync(0);
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[data-testid="content-popup"]')).toBeNull();
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      fixture.detectChanges();
+
+      expect(host.querySelector('[data-testid="content-popup"]')?.textContent).toContain('Welcome');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('HomeComponent -- the editorial pages a brand runs', () => {
+  const links = (host: HTMLElement) =>
+    [...host.querySelectorAll('[data-testid="editorial-links"] a')].map((a) =>
+      a.getAttribute('href'),
+    );
+
+  it('links to the kinds the brand runs, below the content and above the menu', async () => {
+    const { host, api } = await setUpWithContent(MENU_WITH_PLOV(), contentBody(), {
+      news: true,
+      gallery: false,
+      recipes: true,
+      vacancies: true,
+    });
+
+    expect(links(host)).toEqual(['/news', '/recipes', '/careers']);
+    expect(api.get).toHaveBeenCalledWith(
+      `/storefront/tenants/${CONFIG.tenantId}/brands/${CONFIG.brandId}/content/features`,
+      { anonymous: true, silent: true },
+    );
+    const position = (selector: string) =>
+      [...host.querySelectorAll('*')].indexOf(host.querySelector(selector) as Element);
+    expect(position('[data-testid="content-promo-grid"]')).toBeLessThan(
+      position('[data-testid="editorial-links"]'),
+    );
+    expect(position('[data-testid="editorial-links"]')).toBeLessThan(position('app-menu-grid'));
+  });
+
+  it('shows no link when no kind is on', async () => {
+    const { host } = await setUpWithContent(MENU_WITH_PLOV(), contentBody());
+
+    expect(host.querySelector('[data-testid="editorial-links"]')).toBeNull();
+  });
+
+  it('shows no link, and nothing else changes, when the features cannot be read', async () => {
+    const { host } = await setUpWithContent(MENU_WITH_PLOV(), contentBody(), 'fail');
+
+    expect(host.querySelector('[data-testid="editorial-links"]')).toBeNull();
+    expect(host.querySelectorAll('[data-testid="dish-card"]').length).toBeGreaterThan(0);
+    expect(host.querySelector('[data-testid="content-carousel"]')).not.toBeNull();
+  });
+
+  it('does not wait for the features to draw the menu', async () => {
+    const { host } = await setUpWithContent(MENU_WITH_PLOV(), 'fail', 'pending');
+
+    expect(host.querySelectorAll('[data-testid="dish-card"]')).toHaveLength(1);
+  });
+});
+
+describe('HomeComponent -- a content link to a category', () => {
+  it('chooses that category in the menu', async () => {
+    const { fixture, host } = await setUp(
+      response([
+        { id: UUID(100), name: 'Osh', items: [item('p1', 'Toshkent oshi')] },
+        { id: UUID(101), name: 'Salat', items: [item('p2', 'Achichuk')] },
+      ]),
+    );
+
+    fixture.componentRef.setInput('category', UUID(101));
+    fixture.detectChanges();
+
+    expect(host.querySelectorAll('[data-testid="dish-card"]').length).toBe(1);
+    expect(host.textContent).toContain('Achichuk');
+    expect(host.textContent).not.toContain('Toshkent oshi');
+    expect(host.querySelectorAll('.chip.is-active')[0].textContent).toContain('Salat');
+  });
+
+  it('ignores a category the menu does not have, and shows the whole menu', async () => {
+    const { fixture, host } = await setUp(
+      response([
+        { id: UUID(100), name: 'Osh', items: [item('p1', 'Toshkent oshi')] },
+        { id: UUID(101), name: 'Salat', items: [item('p2', 'Achichuk')] },
+      ]),
+    );
+
+    fixture.componentRef.setInput('category', UUID(999));
+    fixture.detectChanges();
+
+    expect(host.querySelectorAll('[data-testid="dish-card"]').length).toBe(2);
+  });
+
+  it('still lets the customer choose another category afterwards', async () => {
+    const { fixture, host } = await setUp(
+      response([
+        { id: UUID(100), name: 'Osh', items: [item('p1', 'Toshkent oshi')] },
+        { id: UUID(101), name: 'Salat', items: [item('p2', 'Achichuk')] },
+      ]),
+    );
+    fixture.componentRef.setInput('category', UUID(101));
+    fixture.detectChanges();
+
+    host.querySelectorAll<HTMLButtonElement>('.chip')[1].click(); // "Osh"
+    fixture.detectChanges();
+
+    expect(host.textContent).toContain('Toshkent oshi');
+    expect(host.textContent).not.toContain('Achichuk');
+  });
+});
+
+describe('the no-content value', () => {
+  it('is the same empty document a failed read leaves', () => {
+    expect(NO_CONTENT.carousel).toEqual([]);
+    expect(NO_CONTENT.popup).toBeNull();
   });
 });

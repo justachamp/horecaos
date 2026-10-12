@@ -7,11 +7,13 @@ import {
   OrdersService,
   type ApiOrderDetail,
   type OrderLineCatchweight,
+  type OrderReceipt,
   type ReorderPlanResponse,
 } from '../../services/orders.service';
 import { NotificationService } from '../../services/notification.service';
 import { TranslateService } from '../../services/translate.service';
 import { TranslatePipe } from '../translate/translate.pipe';
+import { RateOrderComponent } from '../rate-order/rate-order.component';
 import { NavigationHistoryService } from '../../services/navigation-history.service';
 import { LangService } from '../../services/lang.service';
 import { formatQuantity, formatWeight } from '../../utils/physical';
@@ -45,6 +47,13 @@ import {
  * `OrdersComponent`, which restricts itself to the newest history row for
  * exactly that reason). There is no list here to economise across.
  *
+ * <h2>Rating the order</h2>
+ *
+ * The same screen carries the rating card (ADR 0159): {@link RateOrderComponent} asks the platform
+ * whether this order is still awaiting a review and shows the form only if it is, shows the customer's
+ * own review (and where its comment stands for the public page) if there is one, and shows nothing
+ * otherwise -- including whenever the restaurant has not switched its feedback settings on.
+ *
  * <h2>Hidden, not greyed</h2>
  *
  * The button appears only when the plan's `verdict` is `READY`. `PARTIAL` --
@@ -56,7 +65,7 @@ import {
 @Component({
   selector: 'app-order-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslatePipe],
+  imports: [CommonModule, RouterLink, TranslatePipe, RateOrderComponent],
   templateUrl: './order-detail.component.html',
   styleUrl: './order-detail.component.scss',
 })
@@ -79,6 +88,15 @@ export class OrderDetailComponent implements OnInit {
    * too.
    */
   reorderPlan = signal<ReorderPlanResponse | null>(null);
+
+  /**
+   * The links to the receipts filed for this order (ADR 0166), once the platform has answered.
+   *
+   * Empty while the read is in flight, when it failed, and when no receipt has been filed -- an order
+   * paid in cash has none from a payment provider -- and all three render nothing: a receipt section
+   * with nothing in it would only ask the customer a question the page cannot answer.
+   */
+  receipts = signal<readonly OrderReceipt[]>([]);
   repeating = signal(false);
   repeatError = signal<string | null>(null);
 
@@ -138,6 +156,35 @@ export class OrderDetailComponent implements OnInit {
       },
     });
     this.loadReorderPlan(id);
+    this.loadReceipts(id);
+  }
+
+  /**
+   * Asks which receipts have been filed for this order.
+   *
+   * Independent of the order's own load, like the reorder plan: the order renders as soon as it
+   * arrives and the receipt links appear a moment later. A failure leaves the list empty, which the
+   * template reads as «show nothing»: the customer was sent the same link when the receipt was issued,
+   * so a read that fails costs them a convenience and never the receipt.
+   */
+  private loadReceipts(id: string): void {
+    this.receipts.set([]);
+    this.ordersService.getReceipts(id).subscribe({
+      next: (receipts) => this.receipts.set(receipts),
+      error: () => this.receipts.set([]),
+    });
+  }
+
+  /** The words on a receipt link: a refund or a correction says so, anything else is the receipt. */
+  receiptLabelKey(kind: string): string {
+    switch (kind) {
+      case 'REFUND':
+        return 'orders.receipt.openRefund';
+      case 'CORRECTION':
+        return 'orders.receipt.openCorrection';
+      default:
+        return 'orders.receipt.open';
+    }
   }
 
   /**

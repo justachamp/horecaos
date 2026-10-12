@@ -241,12 +241,21 @@ export class CartService {
   private pricing: Promise<PricedCart> | null = null;
 
   private async priceOnce(): Promise<PricedCart> {
-    return this.withVersion((cart, version) =>
+    const priced = (await this.withVersion((cart, version) =>
       this.api.mutate<PricedCart>('POST', `${this.brandPath}/carts/${cart.cartId}/pricing`, {
         expectedVersion: version,
         idempotencyKey: newIdempotencyKey(),
       }),
-    ) as unknown as Promise<PricedCart>;
+    )) as unknown as PricedCart;
+    if (priced.changedByPricing) {
+      // ADR 0158: a rule added, resized or removed a line while the basket was priced, so the cart this client
+      // holds is not the one the quote is for. Read it again; the quote's version is the fresh cart's.
+      const held = this.cart();
+      if (held) {
+        this.cart.set(await this.api.get<PlatformCart>(`${this.brandPath}/carts/${held.cartId}`));
+      }
+    }
+    return priced;
   }
 
   /**
@@ -607,6 +616,21 @@ export interface PlatformCartLine {
    * holds none); absent from a platform that does not. See {@link optionIdsOfLine}.
    */
   readonly modifierOptionIds?: readonly string[];
+  /** ADR 0158: `CUSTOMER` or `AUTO_ADD`; absent from a platform that predates it, which is the customer's. */
+  readonly origin?: 'CUSTOMER' | 'AUTO_ADD';
+  /** ADR 0158: present exactly on a line a rule added. */
+  readonly autoAdd?: PlatformAutoAddLine | null;
+}
+
+/** `StorefrontOrderingController.AutoAddLineResponse`, transcribed. */
+export interface PlatformAutoAddLine {
+  readonly ruleCode: string;
+  /** By language (`ru`, `uz-Latn`, `en`); empty when the rule states no wording. */
+  readonly customerText: Readonly<Record<string, string>>;
+  readonly mandatory: boolean;
+  readonly removable: boolean;
+  readonly minimumQuantity: number;
+  readonly maximumQuantity: number;
 }
 
 export interface PlatformCart {
@@ -668,6 +692,11 @@ export interface PricedCart {
    * lines. Pricing adds nothing; a screen offers to add the gift and prices the cart again.
    */
   readonly giftOffers?: readonly GiftOffer[];
+  /**
+   * ADR 0158: the rules changed the basket while it was priced, so the lines this client holds are older than
+   * the quote. It reads the cart again before drawing it or paying for it.
+   */
+  readonly changedByPricing?: boolean;
 }
 
 /** `StorefrontOrderingController.HiddenChargeResponse`, transcribed. */

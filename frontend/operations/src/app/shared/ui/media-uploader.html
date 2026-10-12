@@ -1,4 +1,66 @@
-@if (cropping(); as isCropping) {
+@if (posterStep()) {
+  <div class="uploader__crop" data-testid="uploader-poster-step">
+    <p class="q-body-sm">{{ 'ui.mediaUploader.posterHint' | t }}</p>
+    <div class="uploader__ratios" role="group" [attr.aria-label]="'ui.mediaUploader.ratio' | t">
+      @for (ratio of aspectRatios(); track ratio) {
+        <button
+          type="button"
+          class="uploader__ratio"
+          [class.uploader__ratio--active]="selectedRatio() === ratio"
+          (click)="selectRatio(ratio)"
+          [attr.data-testid]="'uploader-ratio-' + ratio"
+        >
+          {{ ratio }}
+        </button>
+      }
+    </div>
+
+    <div class="uploader__box uploader__box--video" [style.aspect-ratio]="aspectCss()">
+      <video
+        #posterVideo
+        class="uploader__video"
+        [attr.src]="previewUrl()"
+        muted
+        playsinline
+        preload="auto"
+        data-testid="uploader-poster-video"
+      ></video>
+    </div>
+
+    <label class="uploader__zoom">
+      <span class="q-caption">{{ 'ui.mediaUploader.posterFrame' | t }}</span>
+      <input
+        type="range"
+        min="0"
+        [max]="videoDurationSeconds()"
+        step="0.1"
+        [value]="posterSecond()"
+        (input)="onPosterScrub($any($event.target).value, posterVideo)"
+        data-testid="uploader-poster-scrub"
+      />
+    </label>
+
+    <div class="uploader__actions">
+      <button
+        type="button"
+        class="uploader__cancel"
+        (click)="cancelPoster()"
+        data-testid="uploader-poster-cancel"
+      >
+        {{ 'ui.mediaUploader.cancel' | t }}
+      </button>
+      <button
+        type="button"
+        class="uploader__confirm"
+        [disabled]="capturing()"
+        (click)="confirmPoster(posterVideo)"
+        data-testid="uploader-poster-confirm"
+      >
+        {{ 'ui.mediaUploader.posterConfirm' | t }}
+      </button>
+    </div>
+  </div>
+} @else if (cropping(); as isCropping) {
   <div class="uploader__crop">
     <div class="uploader__ratios" role="group" [attr.aria-label]="'ui.mediaUploader.ratio' | t">
       @for (ratio of aspectRatios(); track ratio) {

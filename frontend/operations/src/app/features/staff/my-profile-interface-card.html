@@ -1,0 +1,174 @@
+<section class="section" data-testid="my-profile-interface">
+  <h2 class="q-emphasis">{{ 'staff.myProfile.interface.title' | t }}</h2>
+
+  @if (!preferences.persistent()) {
+    <p class="q-caption note" data-testid="interface-session-only">
+      {{ 'staff.myProfile.interface.sessionOnly' | t }}
+    </p>
+  }
+  @if (preferences.writeFailed()) {
+    <p class="q-caption error" role="alert" data-testid="interface-write-failed">
+      {{ 'staff.myProfile.interface.writeFailed' | t }}
+    </p>
+  }
+
+  <!-- Язык -->
+  <div class="block" data-testid="interface-language">
+    <h3 class="q-body-sm block__title">{{ 'staff.myProfile.interface.language.title' | t }}</h3>
+    @if (override(); as differs) {
+      <p class="q-body-sm" data-testid="interface-language-override">
+        {{
+          'staff.myProfile.interface.language.override'
+            | t: { device: differs.device, account: differs.account }
+        }}
+      </p>
+      <button
+        type="button"
+        class="text-button q-body-sm"
+        (click)="useMyLanguage()"
+        data-testid="interface-language-use-mine"
+      >
+        {{ 'staff.myProfile.interface.language.useMine' | t }}
+      </button>
+    } @else {
+      <p class="q-body-sm" data-testid="interface-language-line">
+        {{ languageLine().key | t: { language: languageLine().name } }}
+      </p>
+    }
+  </div>
+
+  <!-- Филиал по умолчанию -->
+  <div class="block" data-testid="interface-branch">
+    <h3 class="q-body-sm block__title">{{ 'staff.myProfile.interface.branch.title' | t }}</h3>
+    @if (branches().length > 1) {
+      <select
+        class="select q-body-sm"
+        [value]="defaultBranchId()"
+        (change)="chooseDefaultBranch($any($event.target).value)"
+        [attr.aria-label]="'staff.myProfile.interface.branch.title' | t"
+        data-testid="interface-branch-select"
+      >
+        <option value="" [selected]="defaultBranchId() === ''">
+          {{ 'staff.myProfile.interface.branch.none' | t }}
+        </option>
+        @for (branch of branches(); track branch.id) {
+          <option [value]="branch.id" [selected]="branch.id === defaultBranchId()">
+            {{ branch.displayName }}
+          </option>
+        }
+      </select>
+      <p class="q-caption note">{{ 'staff.myProfile.interface.branch.hint' | t }}</p>
+      @if (defaultIsStale()) {
+        <p class="q-caption note" data-testid="interface-branch-stale">
+          {{ 'staff.myProfile.interface.branch.stale' | t }}
+        </p>
+      }
+    } @else {
+      <p class="q-caption note" data-testid="interface-branch-single">
+        {{ 'staff.myProfile.interface.branch.single' | t }}
+      </p>
+    }
+  </div>
+
+  <!-- Мои виды -->
+  <div class="block" data-testid="interface-views">
+    <h3 class="q-body-sm block__title">{{ 'staff.myProfile.interface.views.title' | t }}</h3>
+    @for (view of views(); track view.id) {
+      <div class="view" data-testid="interface-view">
+        @if (renaming() === view.id) {
+          <input
+            type="text"
+            class="input q-body-sm"
+            [value]="renameDraft()"
+            (input)="renameDraft.set($any($event.target).value)"
+            (keydown.enter)="saveRename(view)"
+            [attr.aria-label]="'orders.queue.views.name.label' | t"
+            data-testid="interface-view-rename-input"
+          />
+          <button
+            type="button"
+            class="text-button q-body-sm"
+            (click)="saveRename(view)"
+            data-testid="interface-view-rename-save"
+          >
+            {{ 'staff.myProfile.interface.views.save' | t }}
+          </button>
+          <button type="button" class="text-button q-body-sm" (click)="cancelRename()">
+            {{ 'staff.myProfile.interface.views.cancel' | t }}
+          </button>
+          @if (renameProblem(); as problem) {
+            <span class="q-caption error" role="alert" data-testid="interface-view-rename-problem">
+              {{ problem | t: { max: 40 } }}
+            </span>
+          }
+        } @else {
+          <span class="view__name q-body-sm">{{ view.label }}</span>
+          <span class="view__tab q-caption">{{ tabLabelKey(view) | t }}</span>
+          <button
+            type="button"
+            class="text-button q-body-sm"
+            (click)="startRename(view)"
+            data-testid="interface-view-rename"
+          >
+            {{ 'staff.myProfile.interface.views.rename' | t }}
+          </button>
+          <button
+            type="button"
+            class="text-button q-body-sm"
+            (click)="deleteView(view)"
+            data-testid="interface-view-delete"
+          >
+            {{ 'staff.myProfile.interface.views.delete' | t }}
+          </button>
+        }
+      </div>
+    } @empty {
+      <p class="q-caption note" data-testid="interface-views-empty">
+        {{ 'staff.myProfile.interface.views.empty' | t }}
+      </p>
+    }
+  </div>
+
+  <!-- Столбцы доски -->
+  <div class="block" data-testid="interface-columns">
+    <h3 class="q-body-sm block__title">{{ 'staff.myProfile.interface.columns.title' | t }}</h3>
+    <button
+      type="button"
+      class="text-button q-body-sm"
+      [disabled]="!hasColumnChoice()"
+      (click)="resetColumns()"
+      data-testid="interface-columns-reset"
+    >
+      {{ 'staff.myProfile.interface.columns.reset' | t }}
+    </button>
+
+    @if (confirmingReset()) {
+      <p class="q-body-sm" data-testid="interface-reset-confirm-text">
+        {{ 'staff.myProfile.interface.reset.confirm' | t }}
+      </p>
+      <div class="actions">
+        <button
+          type="button"
+          class="text-button q-body-sm"
+          (click)="resetBoard()"
+          data-testid="interface-reset-confirm"
+        >
+          {{ 'staff.myProfile.interface.reset.yes' | t }}
+        </button>
+        <button type="button" class="text-button q-body-sm" (click)="cancelReset()">
+          {{ 'staff.myProfile.interface.views.cancel' | t }}
+        </button>
+      </div>
+    } @else {
+      <button
+        type="button"
+        class="text-button q-body-sm"
+        [disabled]="!hasAnythingToReset()"
+        (click)="askToReset()"
+        data-testid="interface-reset-board"
+      >
+        {{ 'staff.myProfile.interface.reset.board' | t }}
+      </button>
+    }
+  </div>
+</section>

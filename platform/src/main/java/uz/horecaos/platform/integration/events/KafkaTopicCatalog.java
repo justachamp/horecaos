@@ -40,8 +40,20 @@ public final class KafkaTopicCatalog {
     /** ADR 0112: scenario decisions, a guest's run ending, and an offer being published. */
     public static final String MARKETING_EVENTS = "marketing.events";
 
+    /**
+     * ADR 0157: an item of brand-authored storefront content was published or withdrawn. Ids, kinds,
+     * placements and instants only -- never text, never a URL.
+     */
+    public static final String CONTENT_EVENTS = "content.events";
+
     /** ADR 0111 lead facts: a lead was registered, moved, handed to a branch or converted. */
     public static final String CUSTOMERS_EVENTS = "customers.events";
+
+    /**
+     * ADR 0159 review facts: a review was submitted, a comment moderated, a service-recovery case opened,
+     * moved or passed a clock.
+     */
+    public static final String REVIEWS_EVENTS = "reviews.events";
 
     /** ADR 0040 marketplace facts: a partner confirmed a new availability, a channel went stale. */
     public static final String INTEGRATION_EVENTS = "integration.events";
@@ -79,6 +91,10 @@ public final class KafkaTopicCatalog {
             // back that scenario alone. Shares tenancy's partition count: a pilot's
             // audiences are hundreds, not hundreds of thousands.
             new TopicSpecification(MARKETING_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
+            // ADR 0157. A brand publishes a handful of items a week, so this is the lightest
+            // business-fact topic there is and shares tenancy's partition count; keyed by item, so
+            // one item's facts stay in order. Nothing on it is text.
+            new TopicSpecification(CONTENT_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
             // ADR 0040. A confirmed availability push is one record per dish per binding and
             // a brand-wide stop across a pilot's bound venues is hundreds, not thousands a
             // minute, so this shares tenancy's partition count: keyed by binding, so one
@@ -88,6 +104,11 @@ public final class KafkaTopicCatalog {
             // calls and form fills -- the same cardinality tenancy's control-plane creations have,
             // keyed by lead so one lead's registration, hand-off and conversion stay in order.
             new TopicSpecification(CUSTOMERS_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
+            // ADR 0159. A review is one per completed order and a case is staff work on a low one, so the
+            // volume is a small fraction of orders; keyed by order so one order's review, moderation and
+            // case facts stay in order and a poison record holds back that order alone. Shares tenancy's
+            // partition count, seven days, replication one (ADR 0034).
+            new TopicSpecification(REVIEWS_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
             // ADR 0012. One schedule row per binding and a pilot's binding count
             // is small, so this shares fulfillment.commands' shape rather than
             // ordering's: a command topic, not a fact topic, and durable state

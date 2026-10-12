@@ -248,6 +248,15 @@
   border-radius: var(--q-radius);
 }
 
+.method .state {
+  margin-inline-start: 6px;
+  color: var(--q-ink-muted);
+}
+
+.method .state--warning {
+  color: var(--q-warning-text);
+}
+
 .method--off {
   color: var(--q-ink-subtle);
   text-decoration: line-through;
@@ -257,4 +266,11 @@
   .responsibility {
     grid-template-columns: 1fr;
   }
+}
+
+.withdrawn {
+  margin: 16px 0 24px;
+  padding: 12px 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
 }

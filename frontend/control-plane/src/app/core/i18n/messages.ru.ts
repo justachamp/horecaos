@@ -340,6 +340,10 @@ export const ru: Messages = {
   'tenants.column.currency': 'Валюта',
   'tenants.column.country': 'Страна',
   'tenants.column.businessType': 'Тип бизнеса',
+  'tenants.profileNote.courierServiceWithoutModule':
+    'Курьерская служба без консоли доставок: консоль открывается как ресторанная',
+  'tenants.profileNote.moduleWithoutCourierService':
+    'Есть консоль доставок, но это не курьерская служба',
   'tenants.column.plan': 'Тариф',
   'tenants.column.health': 'Открытые проблемы',
   'tenants.health.problems': '{count} ждут',
@@ -428,6 +432,9 @@ export const ru: Messages = {
   'featureFlags.flag.supportVisits': 'Страница визитов поддержки',
   'featureFlags.flag.supportVisits.description':
     'Показывает администраторам клиента в операционном приложении все визиты поддержки HorecaOS и позволяет завершить визит.',
+  'featureFlags.flag.markedGoods': 'Маркированные товары (DataMatrix)',
+  'featureFlags.flag.markedGoods.description':
+    'Включает сканирование кодов маркировки на выдаче и проверку, которая не выпускает заказ, пока не отсканирована каждая маркированная единица. Включайте для клиента только после проверки пути чека для маркированных товаров.',
 
   'tenantDetail.facts.title': 'Сведения о клиенте',
   'tenantDetail.facts.status': 'Статус',
@@ -746,6 +753,8 @@ export const ru: Messages = {
     'Email владельца не удалось расшифровать для этого клиента. Запустите новое подключение с email владельца.',
   'onboarding.template.suggested':
     'Предложен для типа «{type}»: шаблон {code} указывает этот тип бизнеса.',
+  'onboarding.template.recommendedModule':
+    'Рекомендуется для такого бизнеса: модуль «{code}», который меняет начальный экран консоли. Тип бизнеса его не включает.',
   'onboarding.template.fallback':
     'Ни один шаблон пока не указывает тип «{type}», поэтому новые запуски идут по шаблону {code}.',
   'onboarding.template.choose': 'Шаблон',
@@ -1108,6 +1117,70 @@ export const ru: Messages = {
   'fiscalReference.column.labelRu': 'Название (RU)',
   'fiscalReference.column.labelUz': 'Название (UZ)',
   'fiscalReference.column.packages': 'Упаковки по умолчанию',
+  'fiscalReference.status.title': 'Состояние списка',
+  'fiscalReference.status.dataset': 'Набор данных {version}, импортирован {importedAt}.',
+  'fiscalReference.status.counts': 'Действующих кодов: {valid}, отозвано: {withdrawn}.',
+  'fiscalReference.status.source': 'Опубликован органом {date}.',
+  'fiscalReference.status.stale':
+    'Список последний раз импортирован {days} дн. назад; его нужно обновлять не реже чем раз в {max} дн. Импортируйте актуальный файл.',
+  'fiscalReference.import.title': 'Импорт официального файла',
+  'fiscalReference.import.lead':
+    'Загрузите файл, скачанный у Государственного налогового комитета. Загрузка только проверяет файл: список не меняется, пока вы не примените результат.',
+  'fiscalReference.import.file': 'Файл (.xlsx или .csv)',
+  'fiscalReference.import.mode': 'Режим',
+  'fiscalReference.import.mode.FULL_SNAPSHOT':
+    'Полный снимок: коды, которых нет в файле, отзываются',
+  'fiscalReference.import.mode.PARTIAL':
+    'Частичный: только добавление и обновление, ничего не отзывает',
+  'fiscalReference.import.publishedOn': 'Опубликован органом',
+  'fiscalReference.import.validate': 'Проверить файл (пробный прогон)',
+  'fiscalReference.import.working': 'Выполняется…',
+  'fiscalReference.run.title': 'Пробный прогон',
+  'fiscalReference.run.status.VALIDATED': 'Готов к применению',
+  'fiscalReference.run.status.HELD_FOR_REVIEW': 'Удержан для проверки',
+  'fiscalReference.run.status.APPLYING': 'Применяется',
+  'fiscalReference.run.status.APPLIED': 'Применён',
+  'fiscalReference.run.status.FAILED': 'Не удался',
+  'fiscalReference.run.status.REJECTED': 'Отклонён',
+  'fiscalReference.run.counts':
+    'Строк: {total}; новых: {added}, изменённых: {changed}, без изменений: {unchanged}, будет отозвано: {withdrawn}, будет восстановлено: {reinstated}, с ошибками (не загружаются): {errors}.',
+  'fiscalReference.run.borrowed':
+    'У {count} строк есть только одно название; оно взято для обоих языков.',
+  'fiscalReference.run.lengths': 'Длины кодов в файле (длина: строк): {lengths}.',
+  'fiscalReference.run.partialNote':
+    'Частичный файл ничего не отзывает, сколько бы кодов в нём ни не было.',
+  'fiscalReference.run.held':
+    'Этот файл отозвал бы {count} кодов, больше {percent}% списка. Обычно это обрезанный или не тот файл. Применяйте, только если орган действительно отменил эти коды.',
+  'fiscalReference.run.acknowledge': 'Введите {count} для подтверждения',
+  'fiscalReference.run.apply': 'Применить к списку',
+  'fiscalReference.run.reject': 'Отклонить',
+  'fiscalReference.run.applied': 'Применён как набор данных {version}.',
+  'fiscalReference.run.rejected': 'Отклонён. Список не изменился.',
+  'fiscalReference.findings.title': 'Замечания',
+  'fiscalReference.findings.kind.ROW_ERROR': 'Строка не загружена',
+  'fiscalReference.findings.kind.WITHDRAWN': 'Будет отозван',
+  'fiscalReference.findings.kind.REINSTATED': 'Будет восстановлен',
+  'fiscalReference.findings.kind.PACKAGE_DEFAULTS_CHANGED': 'Меняются упаковки по умолчанию',
+  'fiscalReference.findings.more': 'Показать ещё',
+  'fiscalReference.recent.title': 'Недавние импорты',
+  'fiscalReference.recent.open': 'Открыть',
+  'fiscalReference.browse.title': 'Просмотр списка',
+  'fiscalReference.browse.includeWithdrawn': 'Показать коды, отозванные к сегодняшнему дню',
+  'fiscalReference.browse.withdrawn': 'Отозван {date}.',
+  'fiscalReference.browse.successor': 'Преемник: {code}.',
+  'fiscalReference.refusal.UNKNOWN_HEADER':
+    'В файле есть столбец, который импортёр не знает, поэтому ничего не прочитано. Профиль нужно обновить под этот файл.',
+  'fiscalReference.refusal.REQUIRED_COLUMN_MISSING':
+    'В файле нет столбца с кодом либо с названием на русском или узбекском.',
+  'fiscalReference.refusal.FILE_TOO_LARGE': 'Файл больше, чем принимает импортёр.',
+  'fiscalReference.refusal.FILE_UNREADABLE': 'Файл не удалось прочитать как список.',
+  'fiscalReference.refusal.RUN_IS_STALE':
+    'Список изменился после проверки этого файла. Загрузите файл заново.',
+  'fiscalReference.refusal.RUN_NOT_APPLICABLE':
+    'Этот прогон больше нельзя ни применить, ни отклонить.',
+  'fiscalReference.refusal.WITHDRAWAL_ACKNOWLEDGEMENT_REQUIRED':
+    'Введённое число не равно числу кодов, которые отозвал бы этот файл.',
+  'fiscalReference.refusal.UPLOAD_FAILED': 'Не удалось загрузить файл.',
 
   'staff.title': 'Сотрудники и роли',
   'staff.lead':

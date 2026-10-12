@@ -1,0 +1,69 @@
+<h1 class="q-title">{{ 'settings.printing.title' | t }}</h1>
+<p class="q-body-sm lead">{{ 'settings.printing.lead' | t }}</p>
+
+@switch (state()) {
+  @case ('loading') {
+    <p class="q-body-sm" data-testid="print-page-loading">{{ 'settings.printing.loading' | t }}</p>
+  }
+  @case ('denied') {
+    <p class="q-body-sm denied" data-testid="print-page-denied">
+      {{ 'settings.printing.denied' | t }}
+    </p>
+  }
+  @case ('error') {
+    <div class="error-band" role="alert" data-testid="print-page-error">
+      <span class="q-body-sm">{{ 'settings.printing.loadError' | t }}</span>
+      <button type="button" class="secondary" (click)="retry()">
+        {{ 'settings.printing.retry' | t }}
+      </button>
+    </div>
+  }
+  @case ('ready') {
+    @if (off()) {
+      <p class="q-body-sm banner" role="status" data-testid="print-page-off">
+        {{ 'settings.printing.off' | t }}
+      </p>
+    }
+
+    @if (locationScope(); as branch) {
+      @if (loadErrorText(); as message) {
+        <div class="error-band" role="alert" data-testid="print-page-branch-error">
+          <span class="q-body-sm">{{ message }}</span>
+          <button type="button" class="secondary" (click)="reload()">
+            {{ 'settings.printing.retry' | t }}
+          </button>
+        </div>
+      }
+
+      <q-print-printers-card
+        [scope]="branch"
+        [printers]="printers()"
+        [agents]="agents()"
+        (changed)="reload()"
+      />
+      <q-print-agents-card [scope]="branch" [agents]="agents()" (changed)="reload()" />
+      <q-print-routes-card
+        [scope]="branch"
+        [printers]="printers()"
+        [routes]="routes()"
+        [stations]="stations()"
+        [posMayPrint]="posMayPrint()"
+        (changed)="reload()"
+      />
+      <q-print-policy-card [scope]="branch" />
+      <q-print-fiscal-receipt-card [routes]="routes()" [printers]="printers()" />
+    } @else {
+      <p class="q-body-sm banner" data-testid="print-page-pick-branch">
+        {{ 'settings.printing.pickBranch' | t }}
+      </p>
+    }
+
+    @if (brandScope(); as brand) {
+      <q-print-receipt-profile-card [scope]="brand" />
+    }
+
+    @if (locationScope(); as branch) {
+      <q-print-queue-card [scope]="branch" [printers]="printers()" />
+    }
+  }
+}

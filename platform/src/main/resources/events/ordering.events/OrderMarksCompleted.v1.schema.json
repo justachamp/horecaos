@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/ordering.events/OrderMarksCompleted.v1.schema.json",
+  "title": "OrderMarksCompleted v1 payload",
+  "description": "Every marked line of the order now holds all the marking codes it needs (ADR 0161). A nudge, not a ledger: the fiscal module re-reads the counts to reopen a document blocked MARKS_INCOMPLETE, and a removal after completion publishes nothing, so consumers treat the current count as the truth. Identifiers and counts only: a marking code, its GTIN and the customer are never in an event (ADR 0029).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["orderId", "markedLineCount", "markedUnitCount", "completedAt"],
+  "properties": {
+    "orderId": { "type": "string", "format": "uuid" },
+    "brandId": { "type": ["string", "null"], "format": "uuid" },
+    "locationId": { "type": ["string", "null"], "format": "uuid" },
+    "markedLineCount": { "type": "integer", "minimum": 1 },
+    "markedUnitCount": { "type": "integer", "minimum": 1 },
+    "completedAt": { "type": "string", "format": "date-time" }
+  }
+}

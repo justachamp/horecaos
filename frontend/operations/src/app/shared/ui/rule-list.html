@@ -54,16 +54,18 @@
           }
         </div>
 
-        <label class="rule-list__toggle">
-          <input
-            type="checkbox"
-            [checked]="item.enabled"
-            (change)="onToggle(item, $any($event.target).checked)"
-          />
-          <span class="q-caption">{{
-            (item.enabled ? 'ui.ruleList.enabled' : 'ui.ruleList.disabled') | t
-          }}</span>
-        </label>
+        @if (showToggle()) {
+          <label class="rule-list__toggle">
+            <input
+              type="checkbox"
+              [checked]="item.enabled"
+              (change)="onToggle(item, $any($event.target).checked)"
+            />
+            <span class="q-caption">{{
+              (item.enabled ? 'ui.ruleList.enabled' : 'ui.ruleList.disabled') | t
+            }}</span>
+          </label>
+        }
       </li>
     }
   </ol>

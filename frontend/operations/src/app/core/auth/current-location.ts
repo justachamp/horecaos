@@ -5,6 +5,7 @@ import { LocationScope } from '../api/operations-paths';
 import { ApiClient } from '../api/api-client';
 import { settingsPaths } from '../api/settings-paths';
 import { BrandScope } from '../api/catalog-paths';
+import { OwnPreferences } from '../preferences/own-preferences';
 import { BrandChoice } from './brand-choice';
 import { firstBrandScope, resolveBrandForTenant } from './current-brand';
 import { SessionContext } from './session-context';
@@ -62,6 +63,14 @@ export interface LocationOption {
  * locations of whichever brand is picked, so the location picker and the 76 screens behind it
  * follow the pick. An operator who never picks gets the first brand, as before.
  *
+ * **Which branch, when the operator has not picked one on this device (ADR 0160).** One rule, the same
+ * for language and for branch: the branch chosen on *this device* (`selectLocation`, remembered in
+ * `localStorage`) wins; failing that, the person's stored default (`SHELL.defaultLocationId`, which follows
+ * them from machine to machine) if the roster still contains it; failing that, the first branch. A default
+ * whose grant has gone since is simply not in the roster and is ignored here -- the platform checks the
+ * grant when the default is saved, not afterwards. The preferences are read before the roster settles so
+ * the first screen opens on the right branch, not on the first one and then on the right one.
+ *
  * **The gap after a pick.** The brand in effect changes the moment the operator picks, but that
  * brand's branches arrive a read later, and the shell rebuilds the open screen at once. In that
  * gap this class answers «not known yet» ({@link scope} is `null`, {@link denied} is false,
@@ -84,6 +93,7 @@ export interface LocationOption {
 export class CurrentLocation {
   private readonly api = inject(ApiClient);
   private readonly choice = inject(BrandChoice);
+  private readonly preferences = inject(OwnPreferences);
 
   private readonly context = signal<SessionContext | null>(null);
   private readonly resolvedBrand = signal<BrandScope | null>(null);
@@ -122,7 +132,11 @@ export class CurrentLocation {
       return null;
     }
     const selected = this.selectedLocationId();
-    const chosen = options.find((option) => option.id === selected) ?? options[0];
+    const preferred = this.preferences.shell().defaultLocationId ?? null;
+    const chosen =
+      options.find((option) => option.id === selected) ??
+      options.find((option) => option.id === preferred) ??
+      options[0];
     return { tenantId: brand.tenantId, brandId: brand.brandId, locationId: chosen.id };
   });
 
@@ -232,7 +246,11 @@ export class CurrentLocation {
         const direct = firstBrandScope(result.value);
         const brand = direct ?? (await resolveBrandForTenant(this.api, result.value, this.choice));
         if (brand) {
-          await this.readOptionsFor(brand);
+          // The default branch is read with the roster, so the first answer is the right one.
+          await Promise.all([
+            this.readOptionsFor(brand),
+            this.preferences.ensureLoaded().catch(() => undefined),
+          ]);
           // After the first read, never before: the effect above compares this brand with the one
           // already loaded, and arming it earlier would read the same locations twice.
           if (!direct && this.resolvedBrand() !== null) {

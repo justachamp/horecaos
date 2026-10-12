@@ -172,6 +172,10 @@ export const financeEn = {
   'finance.fiscalDocumentStatus.ISSUED': 'Issued',
   'finance.fiscalDocumentStatus.FAILED': 'Failed',
   'finance.fiscalDocumentStatus.BLOCKED': 'Blocked',
+  'finance.fiscalDocumentStatus.CORRECTION_REQUESTED': 'Correction requested',
+  'finance.fiscalDocumentStatus.VOID_REQUESTED': 'Void requested',
+  'finance.fiscalDocumentStatus.CORRECTED': 'Corrected',
+  'finance.fiscalDocumentStatus.VOIDED': 'Voided',
 
   'finance.entitlementScope.SUBTOTAL': 'Subtotal',
   'finance.entitlementScope.DELIVERY_FEE': 'Delivery fee',
@@ -223,6 +227,7 @@ export const financeEn = {
   'finance.fiscal.field.blockedAt': 'Blocked at',
   'finance.fiscal.evidence.yes': 'On file',
   'finance.fiscal.evidence.no': 'None',
+  'finance.fiscal.marks.progress': '{captured} of {required} scanned',
   'finance.fiscal.action.retry': 'Ask again',
   'finance.fiscal.action.retry.reason': 'Why ask again',
   'finance.fiscal.action.retry.submit': 'Ask again',
@@ -717,4 +722,188 @@ export const financeEn = {
   'finance.subscription.wallet.balances': 'Paid balance {paid} · bonus credit {bonus}',
   'finance.subscription.statements.paid': 'Paid',
   'finance.subscription.statements.due': 'Due',
+
+  'finance.fiscalEvidence.title': 'Fiscal evidence',
+  'finance.fiscalEvidence.lead':
+    'What was filed with the tax authority for this order: the TIN it was filed under, the lines as filed, how the payment was split and how many marking codes were sent. HorecaOS records the filing; the restaurant’s own legal entity is the fiscal agent and issues any correction. No receipt is drawn here — the tax authority’s page is the receipt.',
+  'finance.fiscalEvidence.loading': 'Loading…',
+  'finance.fiscalEvidence.denied': 'This role is not permitted to read fiscal evidence.',
+  'finance.fiscalEvidence.error': 'The fiscal evidence could not be loaded. Try again in a moment.',
+  'finance.fiscalEvidence.empty': 'No fiscal documents for this order.',
+  'finance.fiscalEvidence.retention': 'Fiscal evidence is kept for {years} years.',
+  'finance.fiscalEvidence.retention.provisional':
+    'This period is provisional and has not been confirmed.',
+  'finance.fiscalEvidence.marks.counts':
+    'Marking codes: {captured} captured of {required} required. Only a count is shown, never a code.',
+  'finance.fiscalEvidence.marks.notBuilt':
+    'Marking codes: the mark store is not built yet, so no count is shown. A marking code is never shown on any screen.',
+  'finance.fiscalEvidence.reveal.purpose': 'Why do you need the identifiers in full?',
+  'finance.fiscalEvidence.reveal.purpose.choose': 'Choose a purpose',
+  'finance.fiscalEvidence.reveal.purpose.TAX_INQUIRY': 'Tax inquiry',
+  'finance.fiscalEvidence.reveal.purpose.CUSTOMER_COMPLAINT': 'Customer complaint',
+  'finance.fiscalEvidence.reveal.purpose.AUDIT': 'Audit',
+  'finance.fiscalEvidence.reveal.purpose.CORRECTION': 'Correction',
+  'finance.fiscalEvidence.reveal.action': 'Show identifiers in full',
+  'finance.fiscalEvidence.reveal.revealing': 'Opening…',
+  'finance.fiscalEvidence.reveal.recorded':
+    'Identifiers are masked by default. Each look is recorded with its purpose, and they hide again after two minutes.',
+  'finance.fiscalEvidence.reveal.active':
+    'Identifiers are shown in full for: {purpose}. This look has been recorded.',
+  'finance.fiscalEvidence.reveal.hide': 'Hide',
+  'finance.fiscalEvidence.reveal.denied':
+    'Identifiers are masked. Opening them in full needs a separate permission that this role does not hold.',
+  'finance.fiscalEvidence.document.type.SALE': 'Sale receipt',
+  'finance.fiscalEvidence.document.type.REFUND': 'Refund receipt',
+  'finance.fiscalEvidence.document.type.CORRECTION': 'Correction receipt',
+  'finance.fiscalEvidence.document.corrects':
+    'This document replaces another receipt of the same order.',
+  'finance.fiscalEvidence.responsibility.PARTNER': 'Issued through the provider’s merchant account',
+  'finance.fiscalEvidence.responsibility.TERMINAL': 'Issued by the restaurant’s fiscal equipment',
+  'finance.fiscalEvidence.responsibility.MARKETPLACE': 'Issued by the aggregator',
+  'finance.fiscalEvidence.responsibility.OPERATOR': 'Issued by an operator',
+  'finance.fiscalEvidence.field.inn': 'Filed under TIN (INN)',
+  'finance.fiscalEvidence.seller.source.OPENING': 'As it stood when the document was opened.',
+  'finance.fiscalEvidence.seller.source.BACKFILL':
+    'Resolved from the legal entity afterwards, not from the filing itself.',
+  'finance.fiscalEvidence.seller.source.UNRESOLVED':
+    'No legal entity is named on this document, so no TIN can be stated.',
+  'finance.fiscalEvidence.field.merchantAccount': 'Merchant account',
+  'finance.fiscalEvidence.field.fiscalSign': 'Fiscal sign',
+  'finance.fiscalEvidence.field.receiptNumber': 'Receipt number',
+  'finance.fiscalEvidence.field.terminalId': 'Terminal',
+  'finance.fiscalEvidence.field.receiptLink': 'Receipt at the tax authority',
+  'finance.fiscalEvidence.link.open': 'Open the receipt at the tax authority',
+  'finance.fiscalEvidence.field.registeredAt': 'Registered',
+  'finance.fiscalEvidence.field.tenderSplit': 'How the payment was split',
+  'finance.fiscalEvidence.split.card': 'Card',
+  'finance.fiscalEvidence.split.cash': 'Cash',
+  'finance.fiscalEvidence.split.ecash': 'Electronic wallet',
+  'finance.fiscalEvidence.split.none': 'No split was recorded for this document.',
+  'finance.fiscalEvidence.lines.title': 'Lines as filed',
+  'finance.fiscalEvidence.lines.column.name': 'Item',
+  'finance.fiscalEvidence.lines.column.ikpu': 'ИКПУ',
+  'finance.fiscalEvidence.lines.column.packageCode': 'Package code',
+  'finance.fiscalEvidence.lines.column.quantity': 'Qty',
+  'finance.fiscalEvidence.lines.column.price': 'Price',
+  'finance.fiscalEvidence.lines.column.vat': 'VAT',
+  'finance.fiscalEvidence.lines.column.discount': 'Discount',
+  'finance.fiscalEvidence.lines.column.marks': 'Marks',
+  'finance.fiscalEvidence.lines.kind.DELIVERY_FEE': 'Delivery',
+  'finance.fiscalEvidence.lines.kind.SYNTHETIC': 'Placeholder',
+  'finance.fiscalEvidence.lines.synthetic':
+    'This is the one-line placeholder a sandbox files to prove the connection. Its zeros are not a sale.',
+  'finance.fiscalEvidence.lines.notSent':
+    'No lines were recorded for this receipt: either nothing has been sent yet, or what was sent was not kept. Nothing is shown in their place.',
+  'finance.fiscalEvidence.lines.notReadable':
+    'The lines were recorded but cannot be opened. Nothing is shown in their place.',
+  'finance.fiscalEvidence.lines.filedUnder': 'The lines were filed under TIN {tin}.',
+  'finance.fiscalEvidence.lines.filedUnderDiffers':
+    'The lines were filed under TIN {filed}, which is not the TIN this document was opened under ({opened}). Both are shown as recorded; nothing here has been corrected.',
+  'finance.fiscalEvidence.lines.marksTransmitted':
+    '{count} marking codes were sent with this receipt. Only the number is kept on screen.',
+  'finance.fiscalEvidence.earlier.title':
+    'Earlier requests that also left for this receipt ({count})',
+  'finance.fiscalEvidence.earlier.lead':
+    'The lines above are the latest request. These were sent before it and replaced by it. The provider may hold any of them, because an answer that never came proves nothing about what arrived, so they are kept as they were sent.',
+  'finance.fiscalEvidence.earlier.attempt': 'Request {attempt}, sent {at}',
+  'finance.fiscalEvidence.correction.state':
+    '{kind} requested at {at}. The restaurant’s fiscal agent has not answered yet.',
+  'finance.fiscalEvidence.correction.action': 'Request a correction or void',
+  'finance.fiscalEvidence.correction.lead':
+    'HorecaOS records the request; the restaurant’s own fiscal agent issues the correction on the path the sale used. A second person must approve the request first.',
+  'finance.fiscalEvidence.correction.kind.label': 'What to ask for',
+  'finance.fiscalEvidence.correction.kind.CORRECTION': 'Correct the receipt',
+  'finance.fiscalEvidence.correction.kind.VOID': 'Void the receipt',
+  'finance.fiscalEvidence.correction.reason.label': 'Reason',
+  'finance.fiscalEvidence.correction.reason.choose': 'Choose a reason',
+  'finance.fiscalEvidence.correction.reason.WRONG_AMOUNT': 'Wrong amount',
+  'finance.fiscalEvidence.correction.reason.WRONG_LINES': 'Wrong lines',
+  'finance.fiscalEvidence.correction.reason.WRONG_CLASSIFICATION': 'Wrong ИКПУ or package code',
+  'finance.fiscalEvidence.correction.reason.WRONG_SELLER': 'Wrong seller',
+  'finance.fiscalEvidence.correction.reason.DUPLICATE_RECEIPT': 'Duplicate receipt',
+  'finance.fiscalEvidence.correction.reason.CUSTOMER_REFUND': 'Customer refund',
+  'finance.fiscalEvidence.correction.reason.OTHER': 'Other',
+  'finance.fiscalEvidence.correction.note.label': 'What is wrong (up to 255 characters)',
+  'finance.fiscalEvidence.correction.submit': 'Send the request',
+  'finance.fiscalEvidence.correction.submitting': 'Sending…',
+  'finance.fiscalEvidence.correction.pending':
+    'Waiting for a second approver. Approval request {id} is pending; send this request again once it has been approved.',
+  'finance.fiscalEvidence.correction.declined':
+    'The second approver declined approval request {id}, so this receipt is not corrected.',
+  'finance.fiscalEvidence.correction.requested':
+    'The request is recorded. The restaurant’s fiscal agent now has to issue it; attach the agent’s reference here when it has.',
+  'finance.fiscalEvidence.correction.attach.action': 'Attach the agent’s reference',
+  'finance.fiscalEvidence.correction.attach.lead':
+    'Enter the reference the restaurant’s fiscal agent returned. A second person approves exactly what you type before it is attached; HorecaOS then stores it as a linked document and never edits the original receipt.',
+  'finance.fiscalEvidence.correction.attach.pending':
+    'Waiting for a second approver. Approval request {id} is pending; attach the reference again, exactly as typed, once it has been approved.',
+  'finance.fiscalEvidence.correction.attach.declined':
+    'The second approver declined approval request {id}, so this reference is not attached.',
+  'finance.fiscalEvidence.correction.attach.urlRefused':
+    'The link must be a page of the tax authority’s own site (https, soliq.uz). Use the link the receipt itself gives.',
+  'finance.fiscalEvidence.correction.attach.url': 'Receipt link (https)',
+  'finance.fiscalEvidence.correction.attach.terminal': 'Terminal (optional)',
+  'finance.fiscalEvidence.correction.attach.submit': 'Attach the reference',
+  'finance.fiscalEvidence.correction.attached':
+    'The reference is attached as a linked document, and the original receipt now reads as corrected or voided.',
+  'finance.fiscalEvidence.correction.state.ATTACHED':
+    '{kind}: the fiscal agent’s reference is attached as a linked document.',
+  'finance.fiscalEvidence.correction.state.DECLINED':
+    '{kind}: closed because the fiscal agent declined to issue it. The receipt stands as it was filed.',
+  'finance.fiscalEvidence.correction.state.CANCELLED':
+    '{kind}: withdrawn. The receipt stands as it was filed.',
+  'finance.fiscalEvidence.correction.close.action': 'Close the request without a receipt',
+  'finance.fiscalEvidence.correction.close.lead':
+    'Use this when the restaurant’s fiscal agent declined to issue it, or the request was raised by mistake. The receipt stays exactly as it was filed, nothing is sent to the tax authority, and the request leaves the worklist.',
+  'finance.fiscalEvidence.correction.close.outcome.label': 'Why it is closed',
+  'finance.fiscalEvidence.correction.close.outcome.choose': 'Choose why',
+  'finance.fiscalEvidence.correction.close.outcome.DECLINED':
+    'The fiscal agent declined to issue it',
+  'finance.fiscalEvidence.correction.close.outcome.CANCELLED':
+    'Raised by mistake, or no longer needed',
+  'finance.fiscalEvidence.correction.close.note.label': 'What happened (up to 255 characters)',
+  'finance.fiscalEvidence.correction.close.submit': 'Close the request',
+  'finance.fiscalEvidence.correction.closed':
+    'The request is closed. The receipt stands as it was filed.',
+  'finance.fiscalEvidence.paymentTypes.title': 'Fiscalized payment types',
+  'finance.fiscalEvidence.paymentTypes.lead':
+    'Derived from the payment-method registry, the merchant accounts and the fiscal terminals, and it cannot be set: a setting that disagreed with them would be a false statement about a tax document. A method with no path is the restaurant’s own unreceipted obligation — HorecaOS does not fiscalize it.',
+  'finance.fiscalEvidence.paymentTypes.column.method': 'Payment method',
+  'finance.fiscalEvidence.paymentTypes.column.responsibility': 'Who issues the receipt',
+  'finance.fiscalEvidence.paymentTypes.column.path': 'Path',
+  'finance.fiscalEvidence.paymentTypes.column.state': 'Today',
+  'finance.fiscalEvidence.paymentTypes.column.entities': 'Legal entities and TIN',
+  'finance.fiscalEvidence.paymentTypes.path.PARTNER_ACCOUNT': 'Provider merchant account',
+  'finance.fiscalEvidence.paymentTypes.path.TERMINAL': 'Restaurant’s fiscal terminal',
+  'finance.fiscalEvidence.paymentTypes.path.AGGREGATOR': 'Aggregator',
+  'finance.fiscalEvidence.paymentTypes.path.NOT_A_FISCAL_PATH': 'Not a fiscal path',
+  'finance.fiscalEvidence.paymentTypes.path.NONE': 'No path',
+  'finance.fiscalEvidence.paymentTypes.live': 'A receipt can be issued',
+  'finance.fiscalEvidence.paymentTypes.noPath': 'No fiscal path',
+  'finance.fiscalEvidence.paymentTypes.notApplicable': 'Nothing to receipt',
+  'finance.fiscalEvidence.paymentTypes.note.AGGREGATOR_CONTRACT_NOT_RECORDED':
+    'No aggregator contract is recorded, so the receipt stays the restaurant’s own obligation.',
+  'finance.fiscalEvidence.paymentTypes.note.BALANCE_IS_A_LINE_DISCOUNT':
+    'A balance is a per-line discount on the receipt of the money tender, not a tender anyone receipts.',
+  'finance.fiscalEvidence.paymentTypes.note.OPERATOR_RESPONSIBILITY_UNIMPLEMENTED':
+    'HorecaOS does not issue receipts; the restaurant’s own fiscal equipment has to.',
+  'finance.fiscalEvidence.paymentTypes.terminals': '{count} capable terminals',
+  'finance.fiscalEvidence.paymentTypes.empty': 'No payment methods are registered.',
+  'finance.fiscalEvidence.paymentTypes.denied':
+    'This role is not permitted to read the fiscal payment types.',
+  'finance.fiscalEvidence.paymentTypes.error': 'The fiscal payment types could not be loaded.',
+  'finance.payments.tenders.fiscal': 'Fiscal receipt',
+  'finance.payments.tenders.fiscal.open': 'Show evidence',
+  'finance.payments.tenders.fiscal.none': 'No receipt document',
+  'finance.fiscalEvidence.requests.title': 'Correction and void requests',
+  'finance.fiscalEvidence.requests.lead':
+    'Asked of the restaurant’s own fiscal agent and not answered yet, longest waiting first. HorecaOS records the request and the agent issues the correction; no legal deadline is enforced here, so this only counts the days.',
+  'finance.fiscalEvidence.requests.empty': 'No request is waiting for the fiscal agent.',
+  'finance.fiscalEvidence.requests.error': 'The correction requests could not be loaded.',
+  'finance.fiscalEvidence.requests.column.kind': 'Asked for',
+  'finance.fiscalEvidence.requests.column.reason': 'Reason',
+  'finance.fiscalEvidence.requests.column.requested': 'Requested at',
+  'finance.fiscalEvidence.requests.column.waiting': 'Waiting',
+  'finance.fiscalEvidence.requests.days': '{days} d',
+  'finance.fiscalEvidence.requests.open': 'Open the order',
 } as const;

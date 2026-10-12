@@ -107,6 +107,14 @@ public enum PlatformRole {
                     IAM_STAFF_MFA_RESET,
                     STAFF_EMERGENCY_CONTACT_READ,
                     STAFF_SELF_MANAGE,
+                    // ADR 0156: staff hours. Rota and timesheet (read, manage, approve) and the payroll export with its
+                    // identity group. The clock is held so the owner can confer location-manager and
+                    // location-staff, which hold it, without the grant escalation rule refusing.
+                    STAFF_SHIFT_READ,
+                    STAFF_SHIFT_MANAGE,
+                    STAFF_SHIFT_APPROVE,
+                    STAFF_SHIFT_EXPORT,
+                    STAFF_SHIFT_CLOCK,
                     // ADR 0027: which of this tenant's actions need a second signature,
                     // and above what. Held here alone among the tenant bundles, and
                     // deliberately not by finance or the administrator: both execute
@@ -166,6 +174,10 @@ public enum PlatformRole {
                     // ADR 0046: what a point is worth, and how long it lasts. A currency
                     // decision rather than an operational one.
                     LOYALTY_POLICY_MANAGE,
+                    // ADR 0171: settling a difference between the ledger and a till's balance can
+                    // credit points, which is a liability of the brand's legal entity; held by the
+                    // owner and by finance, and by no location manager.
+                    LOYALTY_SYNC_MANAGE,
                     // ADR 0067: what a referral pays, to whom, and up to what cap.
                     // The same class of decision as the loyalty policy above it --
                     // it commits the tenant to giving value away -- so it sits with
@@ -175,6 +187,9 @@ public enum PlatformRole {
                     // ADR 0071: a brand's own order reviews, the same class of read as
                     // the referral line above it.
                     REVIEW_READ,
+                    // ADR 0159: the decision to put a customer's words on the brand's public page,
+                    // held where a brand speaks for itself. Hides words, never numbers.
+                    REVIEW_MODERATE,
                     // ADR 0072: a promo code's shape, value and limits -- the same
                     // class of decision as the two above it, held here alone for the
                     // same reason.
@@ -267,6 +282,10 @@ public enum PlatformRole {
                     PAYMENT_METHOD_MANAGE,
                     FISCAL_DOCUMENT_READ,
                     FISCAL_DOCUMENT_RESOLVE,
+                    // ADR 0166: the full identifiers of a filed receipt, for a declared
+                    // purpose and with a trail. The people who answer a complaint or a tax
+                    // inquiry, and not everyone who may read the worklist.
+                    FISCAL_EVIDENCE_REVEAL,
                     DELIVERY_PLAN_READ,
                     DELIVERY_MANUAL_ASSIGN,
                     SHIPMENT_CANCEL,
@@ -293,8 +312,23 @@ public enum PlatformRole {
                     DELIVERY_DISPATCH_RULES_WRITE,
                     COURIER_READ,
                     KITCHEN_STATION_MANAGE,
+                    // ADR 0162 and ADR 0155: pairing a kiosk, and the class-neutral terminals
+                    // registry. Held at LOCATION by the branch manager and above; the tenant policy
+                    // card is reached only through a TENANT-scope grant (the owner and administrator).
+                    KIOSK_DEVICE_MANAGE,
+                    TERMINAL_READ,
+                    TERMINAL_MANAGE,
+                    // ADR 0168 and ADR 0163: the buffer's paid-only hold and the cook plan are the manager's own,
+                    // beside the stations they plan, and no line role's.
+                    KITCHEN_PAID_HOLD_MANAGE,
+                    KITCHEN_HEADCOUNT_READ,
+                    KITCHEN_PRODUCTIVITY_MANAGE,
                     KITCHEN_TICKET_READ,
                     KITCHEN_DISPLAY_READ,
+                    // ADR 0154: printers, routes, the print queue and the receipt profile.
+                    PRINT_READ,
+                    PRINT_MANAGE,
+                    PRINT_REPRINT,
                     KITCHEN_TICKET_ADVANCE,
                     KITCHEN_TICKET_RECALL,
                     KITCHEN_TICKET_RELEASE,
@@ -358,6 +392,14 @@ public enum PlatformRole {
                     // the same roles. Reading its usage and spend rides the same pair.
                     ASSISTANT_READ,
                     ASSISTANT_KNOWLEDGE_MANAGE,
+                    // ADR 0157: the brand's storefront content. Authoring, publishing and the
+                    // content.publishing / content.editorial policies and link allowlist
+                    // (CONTENT_MANAGE) are the owner's and the administrator's; the brand
+                    // manager below authors and publishes but does not touch the allowlist.
+                    CONTENT_READ,
+                    CONTENT_AUTHOR,
+                    CONTENT_PUBLISH,
+                    CONTENT_MANAGE,
                     NOTIFICATION_READ,
                     NOTIFICATION_RETRY,
                     COMMERCIAL_SUBSCRIPTION_MANAGE,
@@ -405,6 +447,12 @@ public enum PlatformRole {
                     IAM_STAFF_MFA_RESET,
                     STAFF_EMERGENCY_CONTACT_READ,
                     STAFF_SELF_MANAGE,
+                    // ADR 0156: staff hours, as the owner holds them (see there for the clock).
+                    STAFF_SHIFT_READ,
+                    STAFF_SHIFT_MANAGE,
+                    STAFF_SHIFT_APPROVE,
+                    STAFF_SHIFT_EXPORT,
+                    STAFF_SHIFT_CLOCK,
                     // ADR 0044: authoring campaigns and reading audiences. Export is
                     // not here — an unrestricted download of the customer base is how a
                     // tenant's list reaches a competitor, so it sits with the owner.
@@ -414,6 +462,9 @@ public enum PlatformRole {
                     REFERRAL_READ,
                     // ADR 0071: a brand's own order reviews, the same class of read.
                     REVIEW_READ,
+                    // ADR 0159: the decision to put a customer's words on the brand's public page,
+                    // held where a brand speaks for itself. Hides words, never numbers.
+                    REVIEW_MODERATE,
                     CAMPAIGN_AUTHOR,
                     // ADR 0112: the offers a campaign may point at, and a quieter contact
                     // policy. Beside authoring, because both are ways of composing one.
@@ -526,8 +577,23 @@ public enum PlatformRole {
                     DELIVERY_DISPATCH_RULES_WRITE,
                     COURIER_READ,
                     KITCHEN_STATION_MANAGE,
+                    // ADR 0162 and ADR 0155: pairing a kiosk, and the class-neutral terminals
+                    // registry. Held at LOCATION by the branch manager and above; the tenant policy
+                    // card is reached only through a TENANT-scope grant (the owner and administrator).
+                    KIOSK_DEVICE_MANAGE,
+                    TERMINAL_READ,
+                    TERMINAL_MANAGE,
+                    // ADR 0168 and ADR 0163: the buffer's paid-only hold and the cook plan are the manager's own,
+                    // beside the stations they plan, and no line role's.
+                    KITCHEN_PAID_HOLD_MANAGE,
+                    KITCHEN_HEADCOUNT_READ,
+                    KITCHEN_PRODUCTIVITY_MANAGE,
                     KITCHEN_TICKET_READ,
                     KITCHEN_DISPLAY_READ,
+                    // ADR 0154: printers, routes, the print queue and the receipt profile.
+                    PRINT_READ,
+                    PRINT_MANAGE,
+                    PRINT_REPRINT,
                     KITCHEN_TICKET_ADVANCE,
                     KITCHEN_TICKET_RECALL,
                     KITCHEN_TICKET_RELEASE,
@@ -591,6 +657,14 @@ public enum PlatformRole {
                     // the same roles. Reading its usage and spend rides the same pair.
                     ASSISTANT_READ,
                     ASSISTANT_KNOWLEDGE_MANAGE,
+                    // ADR 0157: the brand's storefront content. Authoring, publishing and the
+                    // content.publishing / content.editorial policies and link allowlist
+                    // (CONTENT_MANAGE) are the owner's and the administrator's; the brand
+                    // manager below authors and publishes but does not touch the allowlist.
+                    CONTENT_READ,
+                    CONTENT_AUTHOR,
+                    CONTENT_PUBLISH,
+                    CONTENT_MANAGE,
                     NOTIFICATION_READ,
                     NOTIFICATION_RETRY,
                     COMMERCIAL_PLAN_READ,
@@ -616,6 +690,16 @@ public enum PlatformRole {
                     // changes her own phone too). Checked at any scope in the tenant, not by
                     // coverage -- see StaffSelfAuthorized.
                     STAFF_SELF_MANAGE,
+                    // ADR 0156: finance reads hours and receives the payroll file. staff.shift.export makes
+                    // finance a reader of names and employee numbers inside an audited export file and
+                    // nowhere else: it still holds neither staff.profile.read nor .manage.
+                    STAFF_SHIFT_READ,
+                    STAFF_SHIFT_EXPORT,
+                    // ADR 0171: the reconciliation report between the points ledger and a till's
+                    // balance is read by, and its differences settled by, the person who answers
+                    // for the brand's outstanding points -- finance, beside the owner.
+                    LOYALTY_READ,
+                    LOYALTY_SYNC_MANAGE,
                     // ADR 0042: what delivery cost, what is owed to each courier, and
                     // closing a settlement period. Authorising the payout is the owner's,
                     // so closing and releasing are never the same pair of hands.
@@ -656,6 +740,10 @@ public enum PlatformRole {
                     PAYMENT_ATTEMPT_RESOLVE,
                     FISCAL_DOCUMENT_READ,
                     FISCAL_DOCUMENT_RESOLVE,
+                    // ADR 0166: the full identifiers of a filed receipt, for a declared
+                    // purpose and with a trail. The people who answer a complaint or a tax
+                    // inquiry, and not everyone who may read the worklist.
+                    FISCAL_EVIDENCE_REVEAL,
                     // Which company sells where is exactly what a fiscal document and a
                     // merchant binding both resolve against; finance reads it for the
                     // same reason it reads those, and registering one stays with the
@@ -703,10 +791,18 @@ public enum PlatformRole {
                     // that name a brand in the path -- the tenant-wide grants routes still need the
                     // capability at TENANT scope.
                     IAM_GRANT_MANAGE,
+                    // ADR 0155: a brand manager reads the terminals registry of the branches under
+                    // them and changes none of it -- the branch manager and above manage a device.
+                    TERMINAL_READ,
                     // ADR 0139: a brand manager sees the people of their brand and edits none of
                     // them -- changing a person is the branch manager's and above.
                     STAFF_PROFILE_READ,
                     STAFF_SELF_MANAGE,
+                    // ADR 0156: the brand's rota and timesheet (the clock is held to confer location jobs).
+                    STAFF_SHIFT_READ,
+                    STAFF_SHIFT_MANAGE,
+                    STAFF_SHIFT_APPROVE,
+                    STAFF_SHIFT_CLOCK,
                     // ADR 0044: a brand markets itself, and needs to see who it would
                     // be reaching before it does.
                     AUDIENCE_READ,
@@ -716,6 +812,11 @@ public enum PlatformRole {
                     // ADR 0071: a brand's own order reviews — its own reputation
                     // signal, the same class of read as the referral line above it.
                     REVIEW_READ,
+                    // ADR 0159: the decision to put a customer's words on the brand's public page,
+                    // held where a brand speaks for itself. Hides words, never numbers.
+                    REVIEW_MODERATE,
+                    // ADR 0159: a brand works its own service-recovery cases (the brand worklist).
+                    RECOVERY_CASE_MANAGE,
                     CAMPAIGN_AUTHOR,
                     // ADR 0112: a brand manager's own offers and contact policy.
                     MARKETING_OFFER_MANAGE,
@@ -771,7 +872,23 @@ public enum PlatformRole {
                     // the same roles. Reading its usage and spend rides the same pair.
                     ASSISTANT_READ,
                     ASSISTANT_KNOWLEDGE_MANAGE,
+                    // ADR 0157: authors and publishes the brand's storefront content; the
+                    // link allowlist and the content policies (CONTENT_MANAGE) stay with the
+                    // owner and administrator.
+                    CONTENT_READ,
+                    CONTENT_AUTHOR,
+                    CONTENT_PUBLISH,
+                    // ADR 0157: and uploads the picture or video it publishes. Held at the brand, so
+                    // it reaches only the brand-scoped media routes (BrandMediaController), where the
+                    // asset is owned by the brand in the path; the tenant routes stay the owner's and
+                    // the administrator's.
+                    MEDIA_READ,
+                    MEDIA_UPLOAD,
                     REPORTING_READ,
+                    // ADR 0154: a brand manager sees its branches' printing and reprints; changing a printer is the
+                    // branch manager's and a brand's receipt profile is the tenant administrator's.
+                    PRINT_READ,
+                    PRINT_REPRINT,
                     // T14/ADR 0134: which products to promote, discount or take off
                     // the menu is exactly this role's own call (CATALOG_AUTHOR,
                     // PRICING_AUTHOR above), and the run's thresholds are what
@@ -797,6 +914,11 @@ public enum PlatformRole {
                     STAFF_PROFILE_MANAGE,
                     STAFF_EMERGENCY_CONTACT_READ,
                     STAFF_SELF_MANAGE,
+                    // ADR 0156: the branch's rota and timesheet, and the manager's own clock.
+                    STAFF_SHIFT_READ,
+                    STAFF_SHIFT_MANAGE,
+                    STAFF_SHIFT_APPROVE,
+                    STAFF_SHIFT_CLOCK,
                     // ADR 0042: the branch end of a shift. Closing and approving hours
                     // are a manager's, and opening is deliberately absent — a manager who
                     // can create shift state can create paid hours for somebody who was
@@ -831,12 +953,32 @@ public enum PlatformRole {
                     ORDER_BULK_ACTION,
                     REFUND_REQUEST,
                     RECOVERY_CASE_MANAGE,
+                    // ADR 0159: a branch manager reads the comment on a case that belongs to her
+                    // branch -- item-level reads through the case drawer. The brand-wide list stays
+                    // at brand scope (REVIEW_READ is declared BRAND on that route), so this widens
+                    // who may read one customer's words at the branch and nothing wider.
+                    REVIEW_READ,
                     // ADR 0041: the pass and the office. Recall, release and the late
                     // release are held here and not by the line, because each of them
                     // undoes or delays something the line has already reported.
                     KITCHEN_STATION_MANAGE,
+                    // ADR 0162 and ADR 0155: pairing a kiosk, and the class-neutral terminals
+                    // registry. Held at LOCATION by the branch manager and above; the tenant policy
+                    // card is reached only through a TENANT-scope grant (the owner and administrator).
+                    KIOSK_DEVICE_MANAGE,
+                    TERMINAL_READ,
+                    TERMINAL_MANAGE,
+                    // ADR 0168 and ADR 0163: the buffer's paid-only hold and the cook plan are the manager's own,
+                    // beside the stations they plan, and no line role's.
+                    KITCHEN_PAID_HOLD_MANAGE,
+                    KITCHEN_HEADCOUNT_READ,
+                    KITCHEN_PRODUCTIVITY_MANAGE,
                     KITCHEN_TICKET_READ,
                     KITCHEN_DISPLAY_READ,
+                    // ADR 0154: printers, routes, the print queue and the receipt profile.
+                    PRINT_READ,
+                    PRINT_MANAGE,
+                    PRINT_REPRINT,
                     KITCHEN_TICKET_ADVANCE,
                     KITCHEN_TICKET_RECALL,
                     KITCHEN_TICKET_RELEASE,
@@ -912,6 +1054,9 @@ public enum PlatformRole {
                     // changes her own phone too). Checked at any scope in the tenant, not by
                     // coverage -- see StaffSelfAuthorized.
                     STAFF_SELF_MANAGE,
+                    // ADR 0156: a person starting and ending their own shift from the console. A timesheet,
+                    // never a permission: nothing refuses work for want of an open shift.
+                    STAFF_SHIFT_CLOCK,
                     LOCATION_READ,
                     CATALOG_READ,
                     INVENTORY_READ,
@@ -939,6 +1084,9 @@ public enum PlatformRole {
                     // a kitchen cooks, so neither belongs on this bundle.
                     KITCHEN_TICKET_READ,
                     KITCHEN_DISPLAY_READ,
+                    // ADR 0154: a cashier reprints a receipt, and that is the whole of what the floor does with a
+                    // printer.
+                    PRINT_REPRINT,
                     KITCHEN_TICKET_ADVANCE,
                     // ADR 0047: the waiter and the host stand. Session manage stops
                     // short of closing a table that still owes money.
@@ -978,7 +1126,10 @@ public enum PlatformRole {
     KITCHEN_DEVICE(
             "kitchen-device",
             ScopeType.LOCATION,
-            EnumSet.of(KITCHEN_TICKET_READ, KITCHEN_DISPLAY_READ, KITCHEN_TICKET_ADVANCE)),
+            // ADR 0155: terminal.unlock is the machine's half of a staff PIN unlock -- the roster, the
+            // keypad's request, the lock. It opens no board data and a session confers nothing the
+            // device and the person do not both hold.
+            EnumSet.of(KITCHEN_TICKET_READ, KITCHEN_DISPLAY_READ, KITCHEN_TICKET_ADVANCE, TERMINAL_UNLOCK)),
 
     /**
      * ADR 0151: the whole of what a kitchen wall display (a VDU) may do — read the VDU projection
@@ -992,6 +1143,29 @@ public enum PlatformRole {
      * {@code KITCHEN_VDU}, and never to a staff member.
      */
     KITCHEN_VDU_DEVICE("kitchen-vdu-device", ScopeType.LOCATION, EnumSet.of(KITCHEN_DISPLAY_READ)),
+
+    /**
+     * ADR 0154: the whole of what a print agent may do -- claim the jobs of the printers it advertises
+     * at its own branch, fetch the bytes of a job it holds the live lease of, and report what happened.
+     * Exactly two capabilities, {@code print.job.claim} and {@code print.job.report}, and no read of any
+     * order, ticket, receipt or printer record: the agent is a byte pipe that receives bytes and a
+     * printer alias and reports an outcome, and holds no template, no language and no business rule.
+     *
+     * <p>Not a person's bundle and not offered by {@link TenantRoleCatalog}: only {@code
+     * PrintAgentService.approve} grants it, as the fixed consequence of approving an enrolment as
+     * {@code PRINT_AGENT}, and never to a staff member.
+     */
+    PRINT_AGENT("print-agent", ScopeType.LOCATION, EnumSet.of(PRINT_JOB_CLAIM, PRINT_JOB_REPORT)),
+
+    /**
+     * ADR 0162: the whole of what a customer-facing kiosk may do in this record -- read its own
+     * configuration. Exactly one capability, {@code kiosk.device.read}: it cannot read the kitchen
+     * board, an order, a customer or a settings document, and it cannot place an order, because the
+     * record that decides how a kiosk orders and takes payment has not been written and a device holds
+     * nothing it cannot yet use. Not a person's bundle and not offered by {@link TenantRoleCatalog}: only
+     * approving a pairing as {@code KIOSK} grants it, and never to a staff member.
+     */
+    KIOSK_DEVICE("kiosk-device", ScopeType.LOCATION, EnumSet.of(KIOSK_DEVICE_READ)),
 
     /**
      * ADR 0081: what a HorecaOS support person may see inside one tenant during
@@ -1140,6 +1314,10 @@ public enum PlatformRole {
                     ORDER_AMEND,
                     REFUND_REQUEST,
                     RECOVERY_CASE_MANAGE,
+                    // ADR 0159: a support agent who works a service-recovery case has to read the
+                    // customer's words to answer them. Tenant-wide, which is already the reach of
+                    // CUSTOMER_PII_REVEAL this bundle holds.
+                    REVIEW_READ,
                     DELIVERY_PLAN_READ,
                     // The three questions a support call is: why was my delivery that
                     // much, where is my confirmation, and can you send it again.

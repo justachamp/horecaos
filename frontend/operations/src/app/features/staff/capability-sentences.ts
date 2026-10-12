@@ -36,6 +36,7 @@ export interface CapabilitySentence extends Localized {
 export const CAPABILITY_AREAS: Readonly<Record<string, Localized>> = {
   tenant: { ru: 'Компания', 'uz-Latn': 'Kompaniya', en: 'Company' },
   brand: { ru: 'Бренды', 'uz-Latn': 'Brendlar', en: 'Brands' },
+  content: { ru: 'Контент витрины', 'uz-Latn': 'Vitrina kontenti', en: 'Storefront content' },
   location: { ru: 'Филиалы', 'uz-Latn': 'Filiallar', en: 'Locations' },
   'legal-entity': { ru: 'Юрлица', 'uz-Latn': 'Yuridik shaxslar', en: 'Legal entities' },
   channel: { ru: 'Каналы продаж', 'uz-Latn': 'Savdo kanallari', en: 'Sales channels' },
@@ -58,6 +59,7 @@ export const CAPABILITY_AREAS: Readonly<Record<string, Localized>> = {
   shipment: { ru: 'Отправления', 'uz-Latn': 'Joʻnatmalar', en: 'Shipments' },
   courier: { ru: 'Курьеры', 'uz-Latn': 'Kuryerlar', en: 'Couriers' },
   kitchen: { ru: 'Кухня', 'uz-Latn': 'Oshxona', en: 'Kitchen' },
+  terminal: { ru: 'Терминалы', 'uz-Latn': 'Terminallar', en: 'Terminals' },
   dinein: { ru: 'Зал', 'uz-Latn': 'Zal', en: 'Dine-in' },
   reservation: { ru: 'Бронирования', 'uz-Latn': 'Bronlar', en: 'Reservations' },
   marketplace: { ru: 'Агрегаторы', 'uz-Latn': 'Agregatorlar', en: 'Marketplaces' },
@@ -210,6 +212,31 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     en: 'Upload media',
   },
 
+  'content.read': {
+    area: 'content',
+    ru: 'Просматривать контент витрины',
+    'uz-Latn': 'Vitrina kontentini koʻrish',
+    en: 'View storefront content',
+  },
+  'content.author': {
+    area: 'content',
+    ru: 'Готовить контент витрины',
+    'uz-Latn': 'Vitrina kontentini tayyorlash',
+    en: 'Draft storefront content',
+  },
+  'content.publish': {
+    area: 'content',
+    ru: 'Публиковать контент витрины',
+    'uz-Latn': 'Vitrina kontentini eʼlon qilish',
+    en: 'Publish storefront content',
+  },
+  'content.manage': {
+    area: 'content',
+    ru: 'Управлять ссылками и правилами контента витрины',
+    'uz-Latn': 'Vitrina kontenti havolalari va qoidalarini boshqarish',
+    en: 'Manage storefront content links and rules',
+  },
+
   'inventory.read': {
     area: 'inventory',
     ru: 'Просматривать остатки',
@@ -328,6 +355,13 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     'uz-Latn': 'Fiskalizatsiya xatolarini hal qilish',
     en: 'Resolve fiscal document failures',
   },
+  'fiscal.evidence.reveal': {
+    area: 'fiscal',
+    ru: 'Открывать идентификаторы фискального чека целиком (каждый просмотр записывается с целью)',
+    'uz-Latn':
+      'Fiskal chek identifikatorlarini toʻliq ochish (har bir koʻrish maqsadi bilan yoziladi)',
+    en: 'Open fiscal receipt identifiers in full (each look is recorded with its purpose)',
+  },
 
   'refund.request': {
     area: 'refund',
@@ -353,6 +387,18 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     ru: 'Вести дело по жалобе клиента',
     'uz-Latn': 'Mijoz shikoyati boʻyicha ish yuritish',
     en: 'Manage a service-recovery case',
+  },
+  'review.read': {
+    area: 'recovery',
+    ru: 'Читать отзывы клиентов, включая комментарии',
+    'uz-Latn': 'Mijoz sharhlarini, jumladan izohlarni oʻqish',
+    en: 'Read customer reviews, comments included',
+  },
+  'review.moderate': {
+    area: 'recovery',
+    ru: 'Публиковать и скрывать комментарии клиентов на странице бренда',
+    'uz-Latn': 'Mijoz izohlarini brend sahifasida eʻlon qilish va yashirish',
+    en: 'Publish and hide customers’ comments on the brand’s page',
   },
   'recovery.remedy.approve': {
     area: 'recovery',
@@ -520,11 +566,47 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     en: 'Approve a courier shift variance',
   },
 
+  'kiosk.device.manage': {
+    area: 'channel',
+    ru: 'Подключать, переносить на другой канал и отключать киоски самообслуживания',
+    'uz-Latn': 'Oʻzi-oʻzi xizmat kiosklarini ulash, boshqa kanalga oʻtkazish va oʻchirish',
+    en: 'Pair, move to another channel and switch off self-service kiosks',
+  },
+  'terminal.read': {
+    area: 'terminal',
+    ru: 'Видеть устройства филиала и кто за ними работает',
+    'uz-Latn': 'Filial qurilmalarini va ular oldida kim ishlayotganini koʻrish',
+    en: 'See the devices of the branch and who is working at them',
+  },
+  'terminal.manage': {
+    area: 'terminal',
+    ru: 'Переименовывать и отключать устройства, настраивать вход по PIN',
+    'uz-Latn': 'Qurilmalarni qayta nomlash va oʻchirish, PIN bilan kirishni sozlash',
+    en: 'Rename and switch off devices, and set how PIN sign-in works',
+  },
   'kitchen.display.read': {
     area: 'kitchen',
     ru: 'Видеть экран выдачи кухни',
     'uz-Latn': 'Oshxona berish ekranini koʻrish',
     en: 'View the kitchen display board',
+  },
+  'kitchen.headcount.read': {
+    area: 'kitchen',
+    ru: 'Видеть, сколько поваров нужно по часам',
+    'uz-Latn': 'Soatlar boʻyicha nechta oshpaz kerakligini koʻrish',
+    en: 'See how many cooks each hour needs',
+  },
+  'kitchen.paid-hold.manage': {
+    area: 'kitchen',
+    ru: 'Настраивать удержание тикетов до оплаты',
+    'uz-Latn': 'Chiptalarni toʻlovgacha ushlab turishni sozlash',
+    en: 'Set whether tickets wait for payment',
+  },
+  'kitchen.productivity.manage': {
+    area: 'kitchen',
+    ru: 'Указывать, сколько порций повар делает за час',
+    'uz-Latn': 'Oshpaz bir soatda nechta porsiya tayyorlashini kiritish',
+    en: 'State how many portions a cook makes in an hour',
   },
   'kitchen.station.manage': {
     area: 'kitchen',
@@ -558,9 +640,9 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
   },
   'kitchen.ticket.release.override': {
     area: 'kitchen',
-    ru: 'Отпускать тикет досрочно',
-    'uz-Latn': 'Chiptani muddatidan oldin chiqarish',
-    en: 'Override an early ticket release',
+    ru: 'Отпускать тикет досрочно или несмотря на ожидание оплаты',
+    'uz-Latn': 'Chiptani muddatidan oldin yoki toʻlov kutilayotgan boʻlsa ham chiqarish',
+    en: 'Fire a ticket early, or while it waits for payment',
   },
 
   'dinein.floorplan.manage': {
@@ -881,6 +963,40 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     ru: 'Сбрасывать второй фактор сотрудника, потерявшего телефон (каждый сброс записывается)',
     'uz-Latn': 'Telefonini yoʻqotgan xodimning ikkinchi omilini tiklash (har bir tiklash yoziladi)',
     en: 'Reset the second factor of a person who lost their phone (each reset is recorded)',
+  },
+  // ADR 0156: staff hours. A timesheet and never a permission -- the sentences say what a person
+  // can do with other people's hours, and that finance sees names only inside the payroll file.
+  'staff.shift.read': {
+    area: 'staff',
+    ru: 'Смотреть график смен и табель сотрудников филиала',
+    'uz-Latn': 'Filial xodimlarining smena jadvali va tabelini koʻrish',
+    en: 'See the branch’s staff rota and timesheet',
+  },
+  'staff.shift.manage': {
+    area: 'staff',
+    ru: 'Составлять график смен, отмечать приход и уход сотрудников и исправлять часы (старое и новое время записываются)',
+    'uz-Latn':
+      'Smena jadvalini tuzish, xodimlarning kelish-ketishini belgilash va soatlarni tuzatish (eski va yangi vaqt yoziladi)',
+    en: 'Plan the rota, record when staff start and finish, and correct hours (old and new times are recorded)',
+  },
+  'staff.shift.approve': {
+    area: 'staff',
+    ru: 'Подтверждать смены с большим отклонением от графика, по одной',
+    'uz-Latn': 'Jadvaldan katta farq qilgan smenalarni birma-bir tasdiqlash',
+    en: 'Approve, one at a time, shifts that differ a lot from the rota',
+  },
+  'staff.shift.export': {
+    area: 'staff',
+    ru: 'Получать файл часов для зарплаты с именами и табельными номерами (каждая выгрузка записывается)',
+    'uz-Latn':
+      'Ish haqi uchun soatlar faylini ism va tabel raqamlari bilan olish (har bir yuklab olish yoziladi)',
+    en: 'Download the payroll hours file with names and employee numbers (each download is recorded)',
+  },
+  'staff.shift.clock': {
+    area: 'staff',
+    ru: 'Отмечать свой приход и уход на смене',
+    'uz-Latn': 'Oʻz smenasiga kelish va ketishini belgilash',
+    en: 'Clock yourself in and out of a shift',
   },
   'staff.self.manage': {
     area: 'staff',

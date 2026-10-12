@@ -25,13 +25,20 @@ import uz.horecaos.platform.ordering.api.OrderAmendmentApplied;
 public class KitchenAmendmentListener {
 
     private final KitchenTicketService tickets;
+    private final KitchenPaymentHoldService holds;
 
-    public KitchenAmendmentListener(KitchenTicketService tickets) {
+    public KitchenAmendmentListener(KitchenTicketService tickets, KitchenPaymentHoldService holds) {
         this.tickets = tickets;
+        this.holds = holds;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onOrderAmendmentApplied(OrderAmendmentApplied event) {
         tickets.syncAmendedLines(event.tenantId().value(), event.orderId());
+        // ADR 0168: an applied CHANGE_PAYMENT_METHOD is the one path by which payment becomes required after
+        // the order was confirmed. The projection this transaction has just patched is read here, so the
+        // hold (or, under SHADOW, the count of what would have been held) follows the amendment and not a
+        // sweep tick later. Every amendment is passed on, as above: a note amendment finds nothing to do.
+        holds.reconcileOrder(event.tenantId().value(), event.orderId());
     }
 }

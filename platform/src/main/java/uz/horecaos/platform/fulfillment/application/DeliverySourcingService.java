@@ -1,5 +1,6 @@
 package uz.horecaos.platform.fulfillment.application;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
@@ -11,6 +12,8 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
@@ -31,6 +34,7 @@ import uz.horecaos.platform.fulfillment.domain.sourcing.DeliverySourcingPolicy;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DeliverySubsidyPolicy;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchDecision;
 import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument;
+import uz.horecaos.platform.fulfillment.domain.sourcing.DispatchRulesDocument.Grouping;
 import uz.horecaos.platform.fulfillment.domain.sourcing.QuoteScoring;
 import uz.horecaos.platform.fulfillment.domain.sourcing.QuoteScoring.ScoredPartner;
 import uz.horecaos.platform.fulfillment.domain.sourcing.SourcingDecision;
@@ -103,7 +107,10 @@ public class DeliverySourcingService {
     private final PolicyResolver policies;
     private final AuditRecorder audit;
     private final Clock clock;
+    private final @Nullable MeterRegistry meters;
+    private final boolean groupingAllowed;
 
+    /** Grouping live and no meters: the tests that predate the kill switch, which build their own fixtures. */
     public DeliverySourcingService(
             InternalFleetPort fleet,
             ShipmentBookingPort bookings,
@@ -111,12 +118,31 @@ public class DeliverySourcingService {
             PolicyResolver policies,
             AuditRecorder audit,
             Clock clock) {
+        this(fleet, bookings, journal, policies, audit, clock, null, true);
+    }
+
+    @Autowired
+    public DeliverySourcingService(
+            InternalFleetPort fleet,
+            ShipmentBookingPort bookings,
+            SourcingJournal journal,
+            PolicyResolver policies,
+            AuditRecorder audit,
+            Clock clock,
+            @Nullable MeterRegistry meters,
+            // ADR 0170 Decision 6: the platform's kill switch for grouping. It is read here, on the live path, and
+            // not only where a rule is published: the rule document a plan was created with can carry a
+            // grouping that was published while the switch was on, and switching it off must stop the
+            // behaviour (the drop-off reveals and the run-increment stamp), not only new publications.
+            @Value("${horecaos.fulfillment.dispatch.grouping-enabled:false}") boolean groupingAllowed) {
         this.fleet = fleet;
         this.bookings = bookings;
         this.journal = journal;
         this.policies = policies;
         this.audit = audit;
         this.clock = clock;
+        this.meters = meters;
+        this.groupingAllowed = groupingAllowed;
     }
 
     /** The first tick for a plan nothing has been tried for yet. */
@@ -129,10 +155,27 @@ public class DeliverySourcingService {
         ResolvedPolicy<DeliverySourcingPolicy> policy = resolvePolicy(request);
         DispatchDecision dispatch = request.dispatch();
 
-        List<FleetCandidate> candidates = request.mode().usesFleet()
-                ? fleet.candidates(
-                        request.tenantId(), request.brandId(), request.locationId(), request.distanceMeters())
-                : List.of();
+        // ADR 0170: the grouping feed is asked only when the resolved action has a grouping, so a tenant
+        // with no rule for it reads nothing and decrypts nothing. Otherwise the plain overload, exactly as before.
+        // The deploy-level kill switch is applied here, to what the plan was created with: a grouping published
+        // while the switch was on does nothing once it is off (no probe, so no drop-off is decrypted; no bias; no
+        // run stamp), and a plan already in flight is offered DIRECT from its next tick.
+        Grouping grouping = groupingOf(dispatch);
+        List<FleetCandidate> candidates;
+        if (!request.mode().usesFleet()) {
+            candidates = List.of();
+        } else if (grouping == null) {
+            candidates = fleet.candidates(
+                    request.tenantId(), request.brandId(), request.locationId(), request.distanceMeters());
+        } else {
+            candidates = fleet.candidates(
+                    request.tenantId(),
+                    request.brandId(),
+                    request.locationId(),
+                    request.distanceMeters(),
+                    new InternalFleetPort.GroupingProbe(
+                            request.planId(), grouping.mergeRadiusMeters(), grouping.maxOrdersPerRun()));
+        }
         // The live binding list is narrowed and ordered by the decision the plan was created
         // with (ADR 0142 Decision 3): the rule document is never re-read here, so editing a
         // rule cannot reroute an order already in flight. A rule can only remove or reorder what
@@ -145,14 +188,7 @@ public class DeliverySourcingService {
                 : List.of();
 
         SourcingDecision decision = SourcingPlanner.decide(
-                request.plan(),
-                policy.document(),
-                request.mode(),
-                candidates,
-                partners,
-                progress,
-                now,
-                dispatch.grouping());
+                request.plan(), policy.document(), request.mode(), candidates, partners, progress, now, grouping);
 
         List<ScoredPartner> scored = List.of();
         boolean mayQuote = dispatch.partners().selection() == DispatchRulesDocument.PartnerSelection.CHEAPEST;
@@ -174,13 +210,13 @@ public class DeliverySourcingService {
                     QuoteScoring.ranked(scored),
                     ineligibleAsAttempted(progress, scored),
                     now,
-                    dispatch.grouping());
+                    grouping);
         }
 
         return switch (decision) {
             case SourcingDecision.BookPartner book ->
                 execute(request, book, progress, policy, quoteFor(scored, book), now);
-            case SourcingDecision.OfferInternal offer -> offer(request, offer, progress, policy, now);
+            case SourcingDecision.OfferInternal offer -> offer(request, offer, progress, policy, candidates, now);
             case SourcingDecision.WaitForInternal wait ->
                 new Outcome(wait, progress, null, policy.policyId(), policy.policyVersion(), null, false);
             case SourcingDecision.EscalateToOperations escalate -> escalate(request, escalate, progress, policy, now);
@@ -311,18 +347,22 @@ public class DeliverySourcingService {
             SourcingDecision.OfferInternal decision,
             SourcingProgress progress,
             ResolvedPolicy<DeliverySourcingPolicy> policy,
+            List<FleetCandidate> candidates,
             Instant now) {
 
+        Grouping grouping = groupingOf(request.dispatch());
+        SourcingJournal.RunStamp stamp = runStampOf(grouping, decision.courierId(), candidates);
         SourcingJournal.OpenAttempt attempt = journal.openInternalOffer(new SourcingJournal.InternalOffer(
                 request.tenantId(),
                 request.planId(),
                 decision.courierId(),
                 offerKey(request.planId(), decision.courierId()),
                 decision.expiresAt(),
-                decision.reason(),
+                reasonOf(decision.reason(), grouping, decision.courierId(), candidates),
                 policy.policyId(),
                 policy.policyVersion(),
-                now));
+                now,
+                stamp));
 
         log.info(
                 "Plan {} offered courier {} until {} ({})",
@@ -339,6 +379,76 @@ public class DeliverySourcingService {
                 policy.policyVersion(),
                 attempt.attemptId(),
                 false);
+    }
+
+    /**
+     * The grouping this tick may act on: the one the plan's decision carries, unless the platform's kill switch
+     * ({@code horecaos.fulfillment.dispatch.grouping-enabled}, ADR 0170 Decision 6) is off. The switch is read
+     * here, on every tick, because publishing is not the only moment grouping does anything: a rule published
+     * while the switch was on keeps ranking, decrypting and stamping until something on this path says stop.
+     * Runs already stamped finish on the basis they were stamped with (ADR 0170, rollback).
+     */
+    private @Nullable Grouping groupingOf(DispatchDecision dispatch) {
+        return groupingAllowed ? dispatch.grouping() : null;
+    }
+
+    /**
+     * How the order about to be offered will be paid, decided once and fixed (ADR 0170 Decisions 2 and 3).
+     *
+     * <p>{@code RUN_INCREMENT} only when the rule groups, this courier was groupable at this instant (measured,
+     * within the radius, under the run's ceiling), and they are one the pay treatment applies to (the resolved
+     * {@code courier.compensation} says first-full-then-increment and a rate card resolves). Everything else is
+     * {@code DIRECT}: the first order of a run, a tenant on {@code PER_ORDER} or undecided, a courier with no
+     * card, an offer made while the bias found nothing. A measured courier is still ranked first when the pay
+     * is {@code DIRECT}: grouping saves the road even where it does not change what a courier earns.
+     */
+    private SourcingJournal.RunStamp runStampOf(
+            @Nullable Grouping grouping, UUID courierId, List<FleetCandidate> candidates) {
+        if (grouping == null) {
+            return SourcingJournal.RunStamp.DIRECT;
+        }
+        FleetCandidate chosen = candidates.stream()
+                .filter(candidate -> candidate.courierId().equals(courierId))
+                .findFirst()
+                .orElse(null);
+        if (chosen == null || !SourcingPlanner.isGroupable(chosen, grouping)) {
+            count("fulfillment.grouping.offers", "not_groupable");
+            return SourcingJournal.RunStamp.DIRECT;
+        }
+        count("fulfillment.grouping.offers", "groupable");
+        Integer metres = chosen.groupableWithMetres();
+        UUID lead = chosen.groupLeadShipmentId();
+        if (!chosen.runIncrementPay() || metres == null || lead == null) {
+            return SourcingJournal.RunStamp.DIRECT;
+        }
+        return SourcingJournal.RunStamp.runIncrement(metres, lead);
+    }
+
+    /**
+     * The attempt's reason, with the source of the grouping distance when the courier was chosen as a groupable
+     * one (ADR 0170 Decision 10). The distance is the straight line between two doors: road distance is used only
+     * when ADR 0147's routing provider is bound to this read, and it is not, so the record says so on the
+     * attempt rather than leaving a reader to infer it. The suffix is a fixed code, so the 48-character column
+     * holds it after any of the planner's reasons.
+     */
+    private static String reasonOf(
+            String reason, @Nullable Grouping grouping, UUID courierId, List<FleetCandidate> candidates) {
+        if (grouping == null) {
+            return reason;
+        }
+        boolean grouped = candidates.stream()
+                .filter(candidate -> candidate.courierId().equals(courierId))
+                .anyMatch(candidate -> SourcingPlanner.isGroupable(candidate, grouping));
+        return grouped ? reason + GROUPED_STRAIGHT_LINE : reason;
+    }
+
+    /** Appended to an attempt's reason when its courier was ranked as groupable on a straight-line distance. */
+    public static final String GROUPED_STRAIGHT_LINE = "+GROUPED_STRAIGHT_LINE";
+
+    private void count(String meter, String outcome) {
+        if (meters != null) {
+            meters.counter(meter, "outcome", outcome).increment();
+        }
     }
 
     private Outcome escalate(

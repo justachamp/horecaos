@@ -367,6 +367,95 @@ public class JdbcOrderStore {
     }
 
     /**
+     * What an applied amendment took off one order line (ADR 0169), as the evidence row holds it.
+     *
+     * @param quantityAfter zero for a removal; the lowered quantity for a decrease
+     * @param stockUnits whole units the order no longer needs: the difference of the two ceilings
+     * @param reasonSnapshotJson the reason as it read when it was cited, so renaming it next year does not
+     *        rewrite this year's report
+     */
+    public record NewLineRemoval(
+            UUID id,
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            UUID orderId,
+            UUID amendmentId,
+            int revision,
+            UUID orderLineId,
+            UUID variantId,
+            BigDecimal quantityBefore,
+            BigDecimal quantityAfter,
+            int stockUnits,
+            int releasedUnits,
+            int returnedUnits,
+            int writtenOffUnits,
+            int noEffectUnits,
+            UUID reasonId,
+            int reasonVersion,
+            String reasonCategory,
+            String reasonSnapshotJson,
+            String dispositionDeclared,
+            String dispositionEffective,
+            String kitchenState,
+            String liabilityParty,
+            List<UUID> inventoryMovementIds,
+            @Nullable UUID approvalRequestId,
+            String actorType,
+            @Nullable String actorId,
+            Instant occurredAt) {}
+
+    /** Appends the evidence of one line taken off an order (ADR 0169). Append-only; never updated. */
+    public void insertLineRemoval(NewLineRemoval removal) {
+        jdbc.sql("""
+                INSERT INTO ordering.order_line_removals (
+                    id, tenant_id, brand_id, location_id, order_id, amendment_id, revision, order_line_id,
+                    variant_id, quantity_before, quantity_after, stock_units, released_units, returned_units,
+                    written_off_units, no_effect_units, reason_id, reason_version, reason_category,
+                    reason_snapshot_json, disposition_declared, disposition_effective, kitchen_state,
+                    liability_party, inventory_movement_ids, approval_request_id, actor_type, actor_id,
+                    occurred_at)
+                VALUES (
+                    :id, :tenantId, :brandId, :locationId, :orderId, :amendmentId, :revision, :orderLineId,
+                    :variantId, :quantityBefore, :quantityAfter, :stockUnits, :released, :returned,
+                    :writtenOff, :noEffect, :reasonId, :reasonVersion, :reasonCategory,
+                    CAST(:snapshot AS jsonb), :declared, :effective, :kitchenState,
+                    :liability, CAST(:movementIds AS uuid[]), :approvalRequestId, :actorType, :actorId,
+                    :occurredAt)
+                """)
+                .param("id", removal.id())
+                .param("tenantId", removal.tenantId())
+                .param("brandId", removal.brandId())
+                .param("locationId", removal.locationId())
+                .param("orderId", removal.orderId())
+                .param("amendmentId", removal.amendmentId())
+                .param("revision", removal.revision())
+                .param("orderLineId", removal.orderLineId())
+                .param("variantId", removal.variantId())
+                .param("quantityBefore", removal.quantityBefore())
+                .param("quantityAfter", removal.quantityAfter())
+                .param("stockUnits", removal.stockUnits())
+                .param("released", removal.releasedUnits())
+                .param("returned", removal.returnedUnits())
+                .param("writtenOff", removal.writtenOffUnits())
+                .param("noEffect", removal.noEffectUnits())
+                .param("reasonId", removal.reasonId())
+                .param("reasonVersion", removal.reasonVersion())
+                .param("reasonCategory", removal.reasonCategory())
+                .param("snapshot", removal.reasonSnapshotJson())
+                .param("declared", removal.dispositionDeclared())
+                .param("effective", removal.dispositionEffective())
+                .param("kitchenState", removal.kitchenState())
+                .param("liability", removal.liabilityParty())
+                .param("movementIds", uuidStrings(removal.inventoryMovementIds()))
+                .param("approvalRequestId", removal.approvalRequestId())
+                .param("actorType", removal.actorType())
+                .param("actorId", removal.actorId())
+                .param("occurredAt", OffsetDateTime.ofInstant(removal.occurredAt(), ZoneOffset.UTC))
+                .update();
+    }
+
+    /**
      * The live catchweight lines of an order that nobody has weighed yet (ADR 0137):
      * the question behind {@code CATCHWEIGHT_NOT_RECONCILED}, which refuses to hand an
      * order over while any of them is still priced against its nominal weight.
@@ -787,6 +876,63 @@ public class JdbcOrderStore {
             @Nullable String noteEncrypted,
             @Nullable ComboFacts combo,
             QuoteSnapshot.@Nullable Catchweight catchweight) {
+        insertLine(
+                lineId,
+                tenantId,
+                orderId,
+                lineNumber,
+                sourceProductId,
+                sourceVariantId,
+                productName,
+                variantName,
+                sku,
+                quantity,
+                unitMinor,
+                baseMinor,
+                finalMinor,
+                taxMinor,
+                noteEncrypted,
+                combo,
+                catchweight,
+                LineOrigin.CUSTOMER);
+    }
+
+    /**
+     * Where an order line came from (ADR 0158): the customer's own choice, or a line an auto-add rule
+     * put in the basket. The rule id and version are the evidence; {@code mandatory} records that the
+     * customer was not able to remove it. A line imported from the legacy platform is {@code AUTO_ADD}
+     * with no rule, which the order table allows and the cart table does not.
+     */
+    public record LineOrigin(
+            String origin, @Nullable UUID ruleId, @Nullable Integer ruleVersion, boolean mandatory) {
+
+        public static final LineOrigin CUSTOMER = new LineOrigin("CUSTOMER", null, null, false);
+
+        public static LineOrigin autoAdded(UUID ruleId, int ruleVersion, boolean mandatory) {
+            return new LineOrigin("AUTO_ADD", ruleId, ruleVersion, mandatory);
+        }
+    }
+
+    /** One line that may be a combo component (ADR 0136), sold by weight (ADR 0137), and added by a rule (ADR 0158). */
+    public void insertLine(
+            UUID lineId,
+            UUID tenantId,
+            UUID orderId,
+            int lineNumber,
+            @Nullable UUID sourceProductId,
+            UUID sourceVariantId,
+            String productName,
+            @Nullable String variantName,
+            @Nullable String sku,
+            BigDecimal quantity,
+            long unitMinor,
+            long baseMinor,
+            long finalMinor,
+            long taxMinor,
+            @Nullable String noteEncrypted,
+            @Nullable ComboFacts combo,
+            QuoteSnapshot.@Nullable Catchweight catchweight,
+            LineOrigin origin) {
         jdbc.sql("""
                 INSERT INTO ordering.order_lines (
                     id, tenant_id, order_id, line_number, source_product_id, source_variant_id,
@@ -796,14 +942,20 @@ public class JdbcOrderStore {
                     combo_selection_id, combo_container_variant_id, combo_name_snapshot,
                     combo_component_id, combo_quantity, combo_pick_quantity,
                     catchweight_quantum_grams, catchweight_nominal_grams,
-                    catchweight_price_per_quantum_minor, actual_weight_grams)
+                    catchweight_price_per_quantum_minor, actual_weight_grams,
+                    origin, auto_add_rule_id, auto_add_rule_version, auto_add_mandatory)
                 VALUES (:id, :tenantId, :orderId, :lineNumber, :productId, :variantId,
                     :productName, :variantName, :sku, :quantity,
                     :unit, :base, :finalAmount, :tax, :note,
                     :comboSelectionId, :comboContainerVariantId, :comboName,
                     :comboComponentId, :comboQuantity, :comboPickQuantity,
-                    :quantum, :nominal, :pricePerQuantum, :actualWeight)
+                    :quantum, :nominal, :pricePerQuantum, :actualWeight,
+                    :origin, :autoAddRuleId, :autoAddRuleVersion, :autoAddMandatory)
                 """)
+                .param("origin", origin.origin())
+                .param("autoAddRuleId", origin.ruleId())
+                .param("autoAddRuleVersion", origin.ruleVersion())
+                .param("autoAddMandatory", origin.mandatory())
                 .param("comboSelectionId", combo == null ? null : combo.selectionId())
                 .param("comboContainerVariantId", combo == null ? null : combo.containerVariantId())
                 .param("comboName", combo == null ? null : combo.name())
@@ -1440,6 +1592,35 @@ public class JdbcOrderStore {
                 .query(Long.class)
                 .single();
         return new OperatorTodayCountsRow(created, accepted);
+    }
+
+    /**
+     * The staff subjects that created or accepted an order at this branch in the window (ADR 0156,
+     * {@code OperatorActivity}). Only a {@code USER} actor is a person: an order a bot or a website
+     * placed names a customer or a channel in those columns. Bounded -- a branch's people are
+     * hundreds at most, and the caller only compares this set against its own roster.
+     */
+    public java.util.Set<String> operatorSubjectsAt(UUID tenantId, UUID locationId, Instant from, Instant to) {
+        return new java.util.LinkedHashSet<>(jdbc.sql("""
+                        SELECT created_by_actor_id
+                          FROM ordering.orders
+                         WHERE tenant_id = :tenantId AND location_id = :locationId
+                           AND created_by_actor_type = 'USER' AND created_by_actor_id IS NOT NULL
+                           AND created_at >= :from AND created_at < :to
+                        UNION
+                        SELECT accepted_by_actor_id
+                          FROM ordering.orders
+                         WHERE tenant_id = :tenantId AND location_id = :locationId
+                           AND accepted_by_actor_type = 'USER' AND accepted_by_actor_id IS NOT NULL
+                           AND accepted_at >= :from AND accepted_at < :to
+                        LIMIT 1000
+                        """)
+                .param("tenantId", tenantId)
+                .param("locationId", locationId)
+                .param("from", utc(from))
+                .param("to", utc(to))
+                .query(String.class)
+                .list());
     }
 
     /**
@@ -2213,6 +2394,38 @@ public class JdbcOrderStore {
                 .list();
     }
 
+    /**
+     * Takes the order row's lock for the rest of the transaction (ADR 0161).
+     *
+     * <p>The lock a mark capture, a mark removal and the handover guard serialise on
+     * ({@code JdbcOrderMarkStore#lockOrder}), taken here by the one other writer that must read the marks
+     * and then act on them: an amendment that closes a line. Without it a scan committing between the
+     * amendment's read of the marks and its write of the revision is missed.
+     */
+    public void lockForUpdate(UUID tenantId, UUID orderId) {
+        jdbc.sql("SELECT 1 FROM ordering.orders WHERE tenant_id = :tenantId AND id = :orderId FOR UPDATE")
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query(Integer.class)
+                .list();
+    }
+
+    /**
+     * The lines of this order that hold at least one live mark (ADR 0161). Read by the amendment guard that
+     * refuses to close or reduce a line a unit has been scanned against, without making the amendment
+     * service depend on the marking service.
+     */
+    public java.util.Set<UUID> linesHoldingLiveMarks(UUID tenantId, UUID orderId) {
+        return java.util.Set.copyOf(jdbc.sql("""
+                SELECT DISTINCT order_line_id FROM ordering.order_line_marks
+                WHERE tenant_id = :tenantId AND order_id = :orderId AND released_at IS NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query(UUID.class)
+                .list());
+    }
+
     /** The lines as they stand now: those no revision has closed. */
     public List<OrderLineRow> lines(UUID tenantId, UUID orderId) {
         return lines(tenantId, orderId, null);
@@ -2242,7 +2455,8 @@ public class JdbcOrderStore {
                        combo_selection_id, combo_container_variant_id, combo_name_snapshot,
                        combo_component_id, combo_quantity, combo_pick_quantity,
                        catchweight_quantum_grams, catchweight_nominal_grams,
-                       catchweight_price_per_quantum_minor, actual_weight_grams
+                       catchweight_price_per_quantum_minor, actual_weight_grams,
+                       origin, auto_add_rule_id, auto_add_rule_version, auto_add_mandatory
                 FROM ordering.order_lines
                 WHERE tenant_id = :tenantId AND order_id = :orderId
                   AND (:revision::integer IS NULL
@@ -2275,7 +2489,11 @@ public class JdbcOrderStore {
                         row.getObject("catchweight_quantum_grams", Integer.class),
                         row.getObject("catchweight_nominal_grams", Integer.class),
                         row.getObject("catchweight_price_per_quantum_minor", Long.class),
-                        row.getObject("actual_weight_grams", Integer.class)))
+                        row.getObject("actual_weight_grams", Integer.class),
+                        row.getString("origin"),
+                        row.getObject("auto_add_rule_id", UUID.class),
+                        row.getObject("auto_add_rule_version", Integer.class),
+                        row.getBoolean("auto_add_mandatory")))
                 .list();
     }
 
@@ -3247,6 +3465,17 @@ public class JdbcOrderStore {
      *                         uz.horecaos.platform.ordering.application.OrderQueryService#forLocation}
      *                         through {@link OrderTablesPort}, the same two-step
      *                         shape {@code courierId} has
+     * @param createdByDisplayName  the name the tenant keeps for the {@code USER}
+     *                         who took the order (ADR 0160, gap map row 1.1's
+     *                         «Создал» column), or null for a system or
+     *                         integration actor and for a subject this tenant has
+     *                         no name for. Always null as this class constructs
+     *                         the row -- {@code iam.*} is not this store's to
+     *                         join -- and filled in afterward by {@link
+     *                         uz.horecaos.platform.ordering.application.OrderQueryService#forLocation}
+     *                         with one {@code StaffDirectory#namesOf} batch per
+     *                         page
+     * @param acceptedByDisplayName the same resolution for the accepting actor
      */
     public record OrderBoardRow(
             OrderRow order,
@@ -3254,39 +3483,93 @@ public class JdbcOrderStore {
             @Nullable UUID courierId,
             boolean amendmentAwaitingOperator,
             boolean presentablePayment,
-            OrderTablesPort.@Nullable OrderTable table) {
+            OrderTablesPort.@Nullable OrderTable table,
+            @Nullable String createdByDisplayName,
+            @Nullable String acceptedByDisplayName) {
 
         /**
          * The row as this store constructs it: no courier, no open amendment, no
-         * presentable payment and no table, each filled in afterward by {@code
+         * presentable payment, no table and no actor names, each filled in afterward by {@code
          * OrderQueryService} through the port or store that owns the fact.
          */
         public OrderBoardRow(OrderRow order, @Nullable String processAttention) {
-            this(order, processAttention, null, false, false, null);
+            this(order, processAttention, null, false, false, null, null, null);
+        }
+
+        /** The row with no actor names, as the single-order summary builds it. */
+        public OrderBoardRow(
+                OrderRow order,
+                @Nullable String processAttention,
+                @Nullable UUID courierId,
+                boolean amendmentAwaitingOperator,
+                boolean presentablePayment,
+                OrderTablesPort.@Nullable OrderTable table) {
+            this(order, processAttention, courierId, amendmentAwaitingOperator, presentablePayment, table, null, null);
         }
 
         /** {@link #courierId} filled in, once the caller has resolved it through the port. */
         public OrderBoardRow withCourierId(@Nullable UUID resolvedCourierId) {
             return new OrderBoardRow(
-                    order, processAttention, resolvedCourierId, amendmentAwaitingOperator, presentablePayment, table);
+                    order,
+                    processAttention,
+                    resolvedCourierId,
+                    amendmentAwaitingOperator,
+                    presentablePayment,
+                    table,
+                    createdByDisplayName,
+                    acceptedByDisplayName);
         }
 
         /** {@link #amendmentAwaitingOperator} filled in, once the caller has resolved it through the store. */
         public OrderBoardRow withAmendmentAwaitingOperator(boolean resolvedAmendmentAwaitingOperator) {
             return new OrderBoardRow(
-                    order, processAttention, courierId, resolvedAmendmentAwaitingOperator, presentablePayment, table);
+                    order,
+                    processAttention,
+                    courierId,
+                    resolvedAmendmentAwaitingOperator,
+                    presentablePayment,
+                    table,
+                    createdByDisplayName,
+                    acceptedByDisplayName);
         }
 
         /** {@link #presentablePayment} filled in, once the caller has resolved it through the payments port. */
         public OrderBoardRow withPresentablePayment(boolean resolvedPresentablePayment) {
             return new OrderBoardRow(
-                    order, processAttention, courierId, amendmentAwaitingOperator, resolvedPresentablePayment, table);
+                    order,
+                    processAttention,
+                    courierId,
+                    amendmentAwaitingOperator,
+                    resolvedPresentablePayment,
+                    table,
+                    createdByDisplayName,
+                    acceptedByDisplayName);
         }
 
         /** {@link #table} filled in, once the caller has resolved it through {@link OrderTablesPort}. */
         public OrderBoardRow withTable(OrderTablesPort.@Nullable OrderTable resolvedTable) {
             return new OrderBoardRow(
-                    order, processAttention, courierId, amendmentAwaitingOperator, presentablePayment, resolvedTable);
+                    order,
+                    processAttention,
+                    courierId,
+                    amendmentAwaitingOperator,
+                    presentablePayment,
+                    resolvedTable,
+                    createdByDisplayName,
+                    acceptedByDisplayName);
+        }
+
+        /** The two actor names filled in, once the caller has resolved them through the staff directory. */
+        public OrderBoardRow withActorNames(@Nullable String resolvedCreatedBy, @Nullable String resolvedAcceptedBy) {
+            return new OrderBoardRow(
+                    order,
+                    processAttention,
+                    courierId,
+                    amendmentAwaitingOperator,
+                    presentablePayment,
+                    table,
+                    resolvedCreatedBy,
+                    resolvedAcceptedBy);
         }
     }
 
@@ -3675,10 +3958,79 @@ public class JdbcOrderStore {
             @Nullable Integer catchweightQuantumGrams,
             @Nullable Integer catchweightNominalGrams,
             @Nullable Long catchweightPricePerQuantumMinor,
-            @Nullable Integer actualWeightGrams) {
+            @Nullable Integer actualWeightGrams,
+            String origin,
+            @Nullable UUID autoAddRuleId,
+            @Nullable Integer autoAddRuleVersion,
+            boolean autoAddMandatory) {
 
         public OrderLineRow {
             quantity = Quantities.normalise(quantity);
+        }
+
+        /** A customer's own line, which is every line there was before ADR 0158. */
+        public OrderLineRow(
+                UUID lineId,
+                int lineNumber,
+                UUID sourceProductId,
+                UUID sourceVariantId,
+                String productName,
+                String variantName,
+                String sku,
+                BigDecimal quantity,
+                long unitAmountMinor,
+                long baseAmountMinor,
+                long finalAmountMinor,
+                long taxAmountMinor,
+                String noteEncrypted,
+                @Nullable UUID comboSelectionId,
+                @Nullable UUID comboContainerVariantId,
+                @Nullable String comboName,
+                @Nullable UUID comboComponentId,
+                @Nullable Integer comboQuantity,
+                @Nullable Integer comboPickQuantity,
+                @Nullable Integer catchweightQuantumGrams,
+                @Nullable Integer catchweightNominalGrams,
+                @Nullable Long catchweightPricePerQuantumMinor,
+                @Nullable Integer actualWeightGrams) {
+            this(
+                    lineId,
+                    lineNumber,
+                    sourceProductId,
+                    sourceVariantId,
+                    productName,
+                    variantName,
+                    sku,
+                    quantity,
+                    unitAmountMinor,
+                    baseAmountMinor,
+                    finalAmountMinor,
+                    taxAmountMinor,
+                    noteEncrypted,
+                    comboSelectionId,
+                    comboContainerVariantId,
+                    comboName,
+                    comboComponentId,
+                    comboQuantity,
+                    comboPickQuantity,
+                    catchweightQuantumGrams,
+                    catchweightNominalGrams,
+                    catchweightPricePerQuantumMinor,
+                    actualWeightGrams,
+                    "CUSTOMER",
+                    null,
+                    null,
+                    false);
+        }
+
+        /** Whether a rule put this line in the basket (ADR 0158). */
+        public boolean autoAdded() {
+            return "AUTO_ADD".equals(origin);
+        }
+
+        /** The origin this line carries into the revision that replaces it. */
+        public LineOrigin lineOrigin() {
+            return new LineOrigin(origin, autoAddRuleId, autoAddRuleVersion, autoAddMandatory);
         }
 
         public boolean hasNote() {

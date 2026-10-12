@@ -229,6 +229,32 @@ export const operationsPaths = {
   },
 
   /**
+   * ADR 0161: the marked lines of an order and the units scanned against them (GET, `order.read`).
+   * Never returns a code.
+   */
+  orderMarks(scope: LocationScope, orderId: string): string {
+    return `${this.order(scope, orderId)}/marks`;
+  },
+
+  /**
+   * ADR 0161: capture one scanned unit of a marked line (POST, `order.advance`, `Idempotency-Key`, no
+   * `If-Match`: a scan does not bump the order's version). The code travels only in the request body.
+   */
+  orderLineMarks(scope: LocationScope, orderId: string, lineId: string): string {
+    return `${this.order(scope, orderId)}/lines/${encodeURIComponent(lineId)}/marks`;
+  },
+
+  /** ADR 0161: take one scanned unit back (POST, `order.advance`, `Idempotency-Key`). */
+  orderLineMarkRemovals(
+    scope: LocationScope,
+    orderId: string,
+    lineId: string,
+    markId: string,
+  ): string {
+    return `${this.orderLineMarks(scope, orderId, lineId)}/${encodeURIComponent(markId)}/removals`;
+  },
+
+  /**
    * Reveal the customer's phone in full.
    *
    * A separate capability and a separate audited call requiring a stated purpose
@@ -682,6 +708,28 @@ export const operationsPaths = {
   },
 
   /**
+   * The cook-headcount plan of one branch (ADR 0163, `KitchenHeadcountController`): `GET` only,
+   * `?weekday=1..7&sampleSize=&holidayMode=`. Cooks per station and operating hour, a planning aid.
+   */
+  kitchenHeadcountPlan(scope: LocationScope): string {
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/kitchen/headcount-plan`;
+  },
+
+  /**
+   * The tenant's own portions-per-cook-hour figures (ADR 0163, `KitchenProductivityController`).
+   * Tenant-keyed on the operations surface; the brand and location it is read or written at travel
+   * as `?brandId=&locationId=`, exactly as the payment window's do.
+   */
+  kitchenProductivity(tenantId: string): string {
+    return `${OPERATIONS}/tenants/${encodeURIComponent(tenantId)}/kitchen-productivity`;
+  },
+
+  /** ADR 0168: the paid-hold policy, scope-resolved like the payment window. */
+  kitchenPaidHold(tenantId: string): string {
+    return `${OPERATIONS}/tenants/${encodeURIComponent(tenantId)}/kitchen-paid-hold`;
+  },
+
+  /**
    * One throughput ceiling — `PUT` corrects it, `DELETE` removes it (wave
    * T02, gap map row 2.6). Both take `expectedVersion` in the body, the same
    * convention {@link kitchenStationCapacity}'s own `POST` sibling keeps.
@@ -969,6 +1017,15 @@ export const operationsPaths = {
   },
 
   /**
+   * ADR 0175 (7.5b): whether the branch has a live telephony provider and what
+   * its closed call history covers, so the Telephony tab can stay out of sight
+   * for a branch with neither (`CallStatsController.coverage`).
+   */
+  voiceCallStatsCoverage(scope: LocationScope): string {
+    return `${OPERATIONS}${tenantBrandLocation(scope)}/voice/call-stats/coverage`;
+  },
+
+  /**
    * The CRM grid: `CustomerController`, tenant-scoped like `orders` — never
    * moved onto the ADR 0031 prefix, so this sits on {@link LEGACY_TENANT_PREFIX}
    * beside it. `LocationScope.brandId`/`locationId` are unused here; the
@@ -1157,6 +1214,16 @@ export const operationsPaths = {
    */
   customerLoyaltyAdjustments(scope: LocationScope, accountId: string): string {
     return `${this.customerLoyaltyBalances(scope, accountId)}/adjustments`;
+  },
+
+  /**
+   * The reason codes a manual adjustment may carry (ADR 0165) — the platform's closed list and
+   * whether it is enforced yet (`LoyaltyOperationsController.adjustmentReasonCodes`,
+   * `LOYALTY_ADJUST`, tenant-scoped). The dialog reads it when it opens, so the console never
+   * keeps a copy of the list in its own source.
+   */
+  loyaltyAdjustmentReasonCodes(scope: LocationScope): string {
+    return `${OPERATIONS}${tenant(scope)}/loyalty/adjustment-reason-codes`;
   },
 
   /**
@@ -1406,6 +1473,28 @@ export const mediaPaths = {
   /** A short-lived signed URL, only for an `AVAILABLE` asset. */
   downloadUrl(tenantId: string, assetId: string): string {
     return `${this.asset(tenantId, assetId)}/download-url`;
+  },
+
+  /**
+   * The same lifecycle under one brand (`BrandMediaController`, ADR 0157): declared at brand scope
+   * and owned by the brand in the path, so a brand manager -- whose `media.upload` is a brand grant
+   * and never covers the tenant routes above -- can upload the creative she publishes.
+   */
+  brandUploadRequests(tenantId: string, brandId: string): string {
+    return `/api/v1/tenants/${encodeURIComponent(tenantId)}/brands/${encodeURIComponent(brandId)}/media/assets/upload-requests`;
+  },
+
+  /** One of the brand's assets: its status. */
+  brandAsset(tenantId: string, brandId: string, assetId: string): string {
+    return `/api/v1/tenants/${encodeURIComponent(tenantId)}/brands/${encodeURIComponent(brandId)}/media/assets/${encodeURIComponent(assetId)}`;
+  },
+
+  brandFinalize(tenantId: string, brandId: string, assetId: string): string {
+    return `${this.brandAsset(tenantId, brandId, assetId)}/finalize`;
+  },
+
+  brandDownloadUrl(tenantId: string, brandId: string, assetId: string): string {
+    return `${this.brandAsset(tenantId, brandId, assetId)}/download-url`;
   },
 } as const;
 

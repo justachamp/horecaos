@@ -1,0 +1,165 @@
+<div class="pairing">
+  <h1 class="q-subhead">{{ 'settings.kioskPairing.title' | t }}</h1>
+
+  @if (!ready()) {
+    <p class="q-body-sm">…</p>
+  } @else if (!enabled()) {
+    <p class="q-body-sm" data-testid="pairing-off">
+      {{ 'settings.channelSetup.kiosk.locked' | t }}
+    </p>
+  } @else if (!scope()) {
+    <p class="q-body-sm" data-testid="pairing-no-branch">
+      {{ 'settings.kioskPairing.noBranch' | t }}
+    </p>
+  } @else if (paired(); as done) {
+    <div class="card" role="status" data-testid="pairing-done">
+      <p class="q-emphasis">
+        {{
+          'settings.kioskPairing.done'
+            | t: { name: done.displayName, channel: done.channel?.displayName ?? '' }
+        }}
+      </p>
+      <p class="q-body-sm hint">{{ 'settings.kioskPairing.doneHint' | t }}</p>
+      <a routerLink="/settings/channel-setup/kiosks" class="link" data-testid="pairing-back">{{
+        'settings.kioskPairing.back' | t
+      }}</a>
+    </div>
+  } @else {
+    <p class="q-body-sm hint">{{ 'settings.kioskPairing.lead' | t }}</p>
+    @if (branchName(); as branch) {
+      <p class="q-caption hint" data-testid="pairing-branch">
+        {{ 'settings.kioskPairing.branch' | t: { branch: branch } }}
+      </p>
+    }
+
+    <form class="card" (submit)="$event.preventDefault(); look()">
+      <label class="field">
+        <span class="q-caption">{{ 'settings.kioskPairing.code.label' | t }}</span>
+        <input
+          type="text"
+          autocomplete="off"
+          autocapitalize="characters"
+          spellcheck="false"
+          class="q-mono code"
+          [value]="code()"
+          (input)="onCode($any($event.target).value)"
+          data-testid="pairing-code"
+        />
+      </label>
+      <button
+        type="submit"
+        class="secondary"
+        [disabled]="code() === '' || lookup() === 'looking'"
+        data-testid="pairing-look"
+      >
+        {{ 'settings.kioskPairing.code.look' | t }}
+      </button>
+    </form>
+
+    @switch (lookup()) {
+      @case ('notFound') {
+        <p class="q-body-sm error" role="alert" data-testid="pairing-not-found">
+          {{ 'settings.kioskPairing.error.gone' | t }}
+        </p>
+      }
+      @case ('tooMany') {
+        <p class="q-body-sm error" role="alert" data-testid="pairing-too-many">
+          {{ 'settings.kioskPairing.error.tooMany' | t }}
+        </p>
+      }
+      @case ('denied') {
+        <p class="q-body-sm error" role="alert" data-testid="pairing-denied">
+          {{ 'settings.kioskPairing.error.denied' | t }}
+        </p>
+      }
+      @case ('failed') {
+        <p class="q-body-sm error" role="alert" data-testid="pairing-failed">
+          {{ 'settings.kioskPairing.error.failed' | t }}
+        </p>
+      }
+      @case ('found') {
+        @if (pending(); as claim) {
+          @if (!isKiosk()) {
+            <p class="q-body-sm error" role="alert" data-testid="pairing-not-kiosk">
+              {{ 'settings.kioskPairing.notKiosk' | t }}
+            </p>
+          } @else {
+            <section class="card" data-testid="pairing-claim">
+              <h2 class="q-emphasis">{{ 'settings.kioskPairing.claim.title' | t }}</h2>
+              <p class="q-body-sm">
+                {{
+                  'settings.kioskPairing.claim.expires' | t: { time: formatted(claim.expiresAt) }
+                }}
+              </p>
+              @if (claim.requestedLabel) {
+                <p class="q-body-sm">
+                  {{ 'settings.kioskPairing.claim.label' | t }}:
+                  <span data-testid="pairing-label">{{ claim.requestedLabel }}</span>
+                </p>
+              }
+
+              <label class="field">
+                <span class="q-caption">{{ 'settings.kioskPairing.form.name' | t }}</span>
+                <input
+                  type="text"
+                  [attr.maxlength]="nameMax"
+                  [value]="displayName()"
+                  (input)="displayName.set($any($event.target).value)"
+                  data-testid="pairing-name"
+                />
+              </label>
+
+              <label class="field">
+                <span class="q-caption">{{ 'settings.kioskPairing.form.channel' | t }}</span>
+                @if (channels().length === 0) {
+                  <span class="q-body-sm error" data-testid="pairing-no-channels">{{
+                    'settings.kioskPairing.form.noChannels' | t
+                  }}</span>
+                } @else {
+                  <select
+                    [value]="channelId()"
+                    (change)="channelId.set($any($event.target).value)"
+                    data-testid="pairing-channel"
+                  >
+                    <option value="">{{ 'settings.kiosk.channel.choose' | t }}</option>
+                    @for (choice of channels(); track choice.channelId) {
+                      <option [value]="choice.channelId">{{ choice.displayName }}</option>
+                    }
+                  </select>
+                }
+              </label>
+
+              <label class="confirm">
+                <input
+                  type="checkbox"
+                  [checked]="confirmed()"
+                  (change)="confirmed.set($any($event.target).checked)"
+                  data-testid="pairing-confirm"
+                />
+                <span class="q-body-sm">{{
+                  'settings.kioskPairing.form.confirm' | t: { code: code() }
+                }}</span>
+              </label>
+
+              @if (error()) {
+                <p class="q-body-sm error" role="alert" data-testid="pairing-error">
+                  {{ error() }}
+                </p>
+              }
+
+              <button
+                type="button"
+                class="primary"
+                [disabled]="!canSubmit()"
+                (click)="pair()"
+                data-testid="pairing-submit"
+              >
+                {{ 'settings.kioskPairing.form.submit' | t }}
+              </button>
+            </section>
+          }
+        }
+      }
+    }
+  }
+</div>

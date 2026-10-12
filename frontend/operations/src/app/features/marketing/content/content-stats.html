@@ -1,0 +1,42 @@
+<div class="stats" data-testid="content-stats">
+  <p class="q-caption stats__note" data-testid="content-stats-note">
+    {{ 'marketing.content.stats.clientReported' | t }}
+  </p>
+  @if (loading()) {
+    <p class="q-caption" role="status">{{ 'marketing.content.stats.loading' | t }}</p>
+  }
+  @if (error(); as message) {
+    <p class="q-body-sm stats__error" role="alert">{{ message }}</p>
+  }
+  @if (stats(); as data) {
+    <p class="q-caption">{{ 'marketing.content.stats.window' | t: { range: range(data) } }}</p>
+    @if (totals().length === 0) {
+      <p class="q-body-sm stats__note" data-testid="content-stats-empty">
+        {{ 'marketing.content.stats.empty' | t }}
+      </p>
+    } @else {
+      <table class="stats__table">
+        <thead>
+          <tr>
+            <th scope="col" class="q-caption">{{ 'marketing.content.stats.version' | t }}</th>
+            <th scope="col" class="q-caption">{{ 'marketing.content.stats.impressions' | t }}</th>
+            <th scope="col" class="q-caption">{{ 'marketing.content.stats.clicks' | t }}</th>
+            <th scope="col" class="q-caption">{{ 'marketing.content.stats.dismissals' | t }}</th>
+            <th scope="col" class="q-caption">{{ 'marketing.content.stats.completions' | t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of totals(); track row.revisionNo) {
+            <tr data-testid="content-stats-row">
+              <th scope="row" class="q-body-sm">{{ row.revisionNo }}</th>
+              <td class="q-tnum">{{ row.impressions }}</td>
+              <td class="q-tnum">{{ row.clicks }}</td>
+              <td class="q-tnum">{{ row.dismissals }}</td>
+              <td class="q-tnum">{{ row.completions }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  }
+</div>

@@ -2,9 +2,13 @@ package uz.horecaos.platform.ordering.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -20,15 +24,18 @@ import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
 import uz.horecaos.platform.ordering.api.OrderCancelled;
+import uz.horecaos.platform.ordering.api.OrderCapturedAfterLapse;
 import uz.horecaos.platform.ordering.api.OrderCompleted;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderExpired;
+import uz.horecaos.platform.ordering.api.OrderPaymentLapsed;
 import uz.horecaos.platform.ordering.api.OrderRejected;
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
 import uz.horecaos.platform.ordering.domain.AcceptanceMode;
 import uz.horecaos.platform.ordering.domain.ApprovalTimeoutAction;
 import uz.horecaos.platform.ordering.domain.CustomerRefund;
 import uz.horecaos.platform.ordering.domain.LiabilityParty;
+import uz.horecaos.platform.ordering.domain.MarkCaptureStage;
 import uz.horecaos.platform.ordering.domain.OrderDecisionChannel;
 import uz.horecaos.platform.ordering.domain.OrderOutcome;
 import uz.horecaos.platform.ordering.domain.OrderStateMachine;
@@ -44,6 +51,7 @@ import uz.horecaos.platform.pricing.api.PromoCodeRedemptionPort;
 import uz.horecaos.platform.tenancy.api.LocationCapacityPort;
 import uz.horecaos.platform.tenancy.api.LocationCapacityPort.CapacityOutcome;
 import uz.horecaos.platform.tenancy.api.TenantId;
+import uz.horecaos.platform.web.api.Quantities;
 
 /**
  * Everything that moves an order after checkout (ADR 0002, ADR 0019).
@@ -62,6 +70,11 @@ import uz.horecaos.platform.tenancy.api.TenantId;
 @Service
 public class OrderStateService {
 
+    /** The reason code and actor of the transition the unpaid-order sweep makes (ADR 0170). */
+    static final String PAYMENT_WINDOW_ELAPSED = "PAYMENT_WINDOW_ELAPSED";
+
+    static final String PAYMENT_WINDOW_ACTOR = "order-payment-window";
+
     private static final Logger log = LoggerFactory.getLogger(OrderStateService.class);
 
     /** The actor a transition records when a payment capture drove it, nobody clicked. */
@@ -77,7 +90,13 @@ public class OrderStateService {
     private final ApplicationEventPublisher events;
     private final Clock clock;
     private final PromoCodeRedemptionPort promoCodes;
+    private final OrderMarksGuard marks;
 
+    /**
+     * A state service wired without marked-goods capture: an order with no marked line has nothing to guard
+     * (ADR 0161), which is what every hand-built service in a suite that has nothing to say about marking
+     * wants.
+     */
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderStateService(
             JdbcOrderStore orders,
@@ -90,6 +109,38 @@ public class OrderStateService {
             ApplicationEventPublisher events,
             Clock clock,
             PromoCodeRedemptionPort promoCodes) {
+        this(
+                orders,
+                capacity,
+                inventoryProcess,
+                paymentProcess,
+                acceptancePolicies,
+                settlements,
+                audit,
+                events,
+                clock,
+                promoCodes,
+                OrderMarksGuard.NONE);
+    }
+
+    /**
+     * @param marks the ADR 0161 guard: refuses a handover while a marked line is short of codes, and frees an
+     *     order's marks when it is cancelled before the handover
+     */
+    @org.springframework.beans.factory.annotation.Autowired
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public OrderStateService(
+            JdbcOrderStore orders,
+            LocationCapacityPort capacity,
+            OrderInventoryProcess inventoryProcess,
+            OrderPaymentProcess paymentProcess,
+            OrderAcceptancePolicyService acceptancePolicies,
+            OrderSettlementPort settlements,
+            AuditRecorder audit,
+            ApplicationEventPublisher events,
+            Clock clock,
+            PromoCodeRedemptionPort promoCodes,
+            OrderMarksGuard marks) {
         this.orders = orders;
         this.capacity = capacity;
         this.inventoryProcess = inventoryProcess;
@@ -100,6 +151,7 @@ public class OrderStateService {
         this.events = events;
         this.clock = clock;
         this.promoCodes = promoCodes;
+        this.marks = marks;
     }
 
     /**
@@ -358,6 +410,13 @@ public class OrderStateService {
                             + "recorded against the settlement",
                     orderId,
                     order.status());
+            if (order.status() == OrderStatus.PAYMENT_FAILED) {
+                // ADR 0170 Decision 17: a capture after the window never revives the order. The money is
+                // recorded on the settlement as it always was; this says a refund is due, so a person is
+                // told rather than left to find it.
+                events.publishEvent(new OrderCapturedAfterLapse(
+                        UUID.randomUUID(), new TenantId(tenantId), orderId, now, order.brandId(), order.locationId()));
+            }
             return new DecisionResult(false, order.status(), order.version(), null);
         }
 
@@ -571,6 +630,110 @@ public class OrderStateService {
     }
 
     /**
+     * The unpaid-order window elapsed and the policy in force says {@code CANCEL} (ADR 0170 Decisions 13 to
+     * 16): the order ends as {@code PAYMENT_FAILED}, the platform's own word for a payment that never came.
+     *
+     * <p>In the shape of {@link #approvalDeadlineReached}: one conditional update naming {@code
+     * PAYMENT_AUTHORIZING} as the status it expects, so a capture landing in the same instant settles the
+     * order at exactly one outcome. It is deliberately not {@code CANCELLED}: that status and its reason
+     * registry are for a person's decision, and a payment that never came is its own commercial fact (ADR
+     * 0039). The outcome pairs the kind with the {@code PAYMENT_NOT_RECEIVED} category the schema already
+     * reserves for it; the consequences are the uniform ones of any terminal order (the inventory hold and
+     * the promo claim released, the kitchen slot freed, the settlement closed, the payment process row
+     * settled), and {@link OrderPaymentLapsed} is published so the provider's side is closed and the
+     * customer is told.
+     *
+     * <p>It decides nothing about whether the order <em>should</em> be ended: the guards (still unpaid, the
+     * window elapsed, no attempt left {@code UNCERTAIN}) belong to {@code OrderPaymentProcess.sweep}, which
+     * is the only caller.
+     *
+     * @param windowMinutes the {@code ordering.payment_window} that elapsed, carried on the event
+     * @param policyVersion the version of that document in force, recorded on the audit fact (0 when the
+     *                      deploy property, not a document, set the window)
+     */
+    @Transactional
+    public DecisionResult paymentWindowReached(UUID tenantId, UUID orderId, int windowMinutes, int policyVersion) {
+        Instant now = clock.instant();
+        OrderRow order = orders.find(tenantId, orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
+
+        if (order.status() != OrderStatus.PAYMENT_AUTHORIZING) {
+            return new DecisionResult(false, order.status(), order.version(), null);
+        }
+        OrderStateMachine.require(OrderStatus.PAYMENT_AUTHORIZING, OrderStatus.PAYMENT_FAILED);
+
+        Optional<Integer> won =
+                orders.transition(tenantId, orderId, OrderStatus.PAYMENT_AUTHORIZING, OrderStatus.PAYMENT_FAILED, now);
+        if (won.isEmpty()) {
+            // A capture won the race. Whatever settled the order stands; this call applies nothing.
+            OrderRow settled = orders.find(tenantId, orderId).orElseThrow();
+            return new DecisionResult(false, settled.status(), settled.version(), null);
+        }
+
+        int version = won.get();
+        orders.recordTransition(
+                tenantId,
+                orderId,
+                version,
+                OrderStatus.PAYMENT_AUTHORIZING,
+                OrderStatus.PAYMENT_FAILED,
+                TransitionTrigger.SYSTEM,
+                PAYMENT_WINDOW_ELAPSED,
+                "SYSTEM_JOB",
+                PAYMENT_WINDOW_ACTOR,
+                null,
+                now);
+
+        // Nothing was paid, so there is nothing to refund and nobody is out of pocket: the hold taken at
+        // checkout is released (a payment-first order is confirmed only after capture, so it was never
+        // committed), and the outcome says the payment is what was missing.
+        OrderOutcome outcome = new OrderOutcome(
+                TerminalOutcomeKind.PAYMENT_FAILED,
+                OutcomeSystemCategory.PAYMENT_NOT_RECEIVED,
+                null,
+                null,
+                null,
+                StockDisposition.RELEASE,
+                null,
+                CustomerRefund.NONE,
+                reservationCommitted(order),
+                null);
+
+        applyConsequences(
+                order,
+                OrderStatus.PAYMENT_FAILED,
+                version,
+                PAYMENT_WINDOW_ELAPSED,
+                null,
+                "SYSTEM_JOB",
+                PAYMENT_WINDOW_ACTOR,
+                outcome,
+                now,
+                windowMinutes);
+
+        recordAudit(
+                order,
+                "ordering.order.payment-window-lapsed",
+                "SYSTEM_JOB",
+                PAYMENT_WINDOW_ACTOR,
+                PAYMENT_WINDOW_ELAPSED,
+                version,
+                Map.of("status", OrderStatus.PAYMENT_AUTHORIZING.name()),
+                Map.of(
+                        "status",
+                        OrderStatus.PAYMENT_FAILED.name(),
+                        "windowMinutes",
+                        windowMinutes,
+                        "policyVersion",
+                        policyVersion),
+                AuditFact.Outcome.SUCCEEDED,
+                null,
+                now);
+
+        log.info("Order {} was not paid within {} minutes and is now PAYMENT_FAILED", orderId, windowMinutes);
+        return new DecisionResult(true, OrderStatus.PAYMENT_FAILED, version, null);
+    }
+
+    /**
      * An operations action along the kitchen path.
      *
      * <p>Guarded by the canonical machine, including the fulfilment-mode split at
@@ -630,6 +793,7 @@ public class OrderStateService {
             throw new OrderStateMachine.IllegalTransitionException(order.status(), target);
         }
         requireCatchweightReconciled(tenantId, orderId, target);
+        requireMarksComplete(tenantId, order.brandId(), orderId, target);
 
         Optional<Integer> won = orders.transition(tenantId, orderId, order.status(), target, now);
         if (won.isEmpty()) {
@@ -710,6 +874,28 @@ public class OrderStateService {
         List<UUID> unweighed = orders.unreconciledCatchweightLines(tenantId, orderId);
         if (!unweighed.isEmpty()) {
             throw new CatchweightNotReconciledException(unweighed);
+        }
+    }
+
+    /**
+     * {@code MARKS_INCOMPLETE} (ADR 0161): an order does not leave the pass while a marked line holds fewer
+     * live marks than it has units.
+     *
+     * <p>Runs on the same targets as {@link #requireCatchweightReconciled}, after it, and inside the advance
+     * transaction: the guard takes the order row's lock before it counts (only for an order that holds a
+     * marked line or a mark), and the status {@code UPDATE} that follows runs under that same lock, so a
+     * removal cannot commit between the count and the change. There is no bypass -- an unscanned marked sale
+     * is the breach this exists to prevent, and a supervisor override would be the way it happens.
+     *
+     * @throws MarksIncompleteException naming the lines still short of codes
+     */
+    private void requireMarksComplete(UUID tenantId, UUID brandId, UUID orderId, OrderStatus target) {
+        if (!isHandover(target)) {
+            return;
+        }
+        List<UUID> incomplete = marks.incompleteLines(tenantId, brandId, orderId);
+        if (!incomplete.isEmpty()) {
+            throw new MarksIncompleteException(incomplete);
         }
     }
 
@@ -999,6 +1185,13 @@ public class OrderStateService {
             log.info("Order {} still has catchweight lines nobody has weighed; refusing {}", orderId, target);
             outcome = ProgressProposal.REFUSED;
             resultStatus = order.status();
+        } else if (isHandover(target)
+                && !marks.incompleteLines(tenantId, order.brandId(), orderId).isEmpty()) {
+            // ADR 0161: the same refusal for a marked line short of codes -- the ticket carries on holding
+            // the food it has, and the order stays at the pass until the units are scanned.
+            log.info("Order {} still has marked lines short of codes; refusing {}", orderId, target);
+            outcome = ProgressProposal.REFUSED;
+            resultStatus = order.status();
         } else {
             Optional<Integer> won = orders.transition(tenantId, orderId, order.status(), target, now);
             if (won.isEmpty()) {
@@ -1178,6 +1371,11 @@ public class OrderStateService {
                 correlationId,
                 now);
         orders.cancelTimer(tenantId, orderId, CheckoutService.APPROVAL_TIMER, now);
+        if (MarkCaptureStage.forStatus(order.status()).isPresent()) {
+            // ADR 0161: an order cancelled before the handover frees its marks, in this transaction; the
+            // status UPDATE above already holds the order row's lock.
+            marks.releaseForCancellation(tenantId, order.brandId(), order.locationId(), orderId, now);
+        }
 
         // With no registry reason the order was still unconfirmed, so the hold was
         // never committed: it goes back, and the tenant carries the cost of an
@@ -1267,6 +1465,47 @@ public class OrderStateService {
         return order.confirmedAt() != null;
     }
 
+    /** Whether the order may hold sold stock: confirmed, or carrying an amendment that committed an increase. */
+    private static boolean returnsStockByDisposal(OrderRow order, OrderOutcome outcome) {
+        return outcome.reservationCommitted() || order.currentRevision() > 1;
+    }
+
+    /**
+     * What the order still holds, as one instruction for the inventory process (ADR 0169): the whole units of
+     * each variant across its live lines, the quotes that own its reservations, and the outcome's disposition.
+     * A release is the only answer for a hold and is made by the verb itself, so {@code RELEASE} here means
+     * "put back" for the units that were sold.
+     */
+    private OrderInventoryProcess.DisposeInstruction disposalOf(OrderRow order, OrderOutcome outcome) {
+        Map<UUID, Integer> units = new LinkedHashMap<>();
+        for (JdbcOrderStore.OrderLineRow line : orders.lines(order.tenantId(), order.orderId())) {
+            units.merge(line.sourceVariantId(), Quantities.wholeUnitsCeiling(line.quantity()), Integer::sum);
+        }
+        Set<UUID> quoteIds = new LinkedHashSet<>();
+        orders.revisions(order.tenantId(), order.orderId()).stream()
+                .map(JdbcOrderStore.RevisionRow::pricingQuoteId)
+                .filter(Objects::nonNull)
+                .forEach(quoteIds::add);
+        quoteIds.add(order.pricingQuoteId());
+        String disposition =
+                switch (outcome.disposition()) {
+                    case RELEASE, RETURN_TO_STOCK -> "RETURN_TO_STOCK";
+                    case WRITE_OFF -> "WRITE_OFF";
+                    case NO_EFFECT -> "NO_EFFECT";
+                };
+        return new OrderInventoryProcess.DisposeInstruction(
+                order.brandId(),
+                order.locationId(),
+                List.copyOf(quoteIds),
+                disposition,
+                outcome.systemCategory().name(),
+                units.entrySet().stream()
+                        .filter(entry -> entry.getValue() > 0)
+                        .map(entry ->
+                                new OrderInventoryProcess.DisposeInstruction.Line(entry.getKey(), entry.getValue()))
+                        .toList());
+    }
+
     /**
      * Everything that follows from a status change, in the same transaction.
      *
@@ -1285,6 +1524,24 @@ public class OrderStateService {
             @Nullable String actorId,
             @Nullable OrderOutcome outcome,
             Instant now) {
+        applyConsequences(order, target, version, reasonCode, decisionChannel, actorType, actorId, outcome, now, 0);
+    }
+
+    /**
+     * @param paymentWindowMinutes the unpaid window that elapsed, carried on {@link OrderPaymentLapsed};
+     *                             zero for every other transition
+     */
+    private void applyConsequences(
+            OrderRow order,
+            OrderStatus target,
+            int version,
+            @Nullable String reasonCode,
+            @Nullable String decisionChannel,
+            @Nullable String actorType,
+            @Nullable String actorId,
+            @Nullable OrderOutcome outcome,
+            Instant now,
+            int paymentWindowMinutes) {
 
         // ADR 0039: every order ends in exactly one recorded outcome, written in
         // the same transaction as the transition. The table is primary-keyed on
@@ -1300,15 +1557,19 @@ public class OrderStateService {
                     now);
         }
 
-        // ADR 0017, and the reason the disposition is recorded rather than acted
-        // on here: a cancellation never reopens a committed reservation. The
-        // release below only runs for a hold that was never committed, and the two
-        // movements a committed disposition names — a return and a waste — need a
-        // fourth verb on the ADR 0017 port that inventory owns and does not yet
-        // expose. Until it does, the outcome row is the record and the movement is
-        // an open item on ADR 0039's checklist rather than a silent no-op.
+        // ADR 0017 and ADR 0169. A cancellation never reopens a committed reservation; what it does with the
+        // stock the order holds is the fourth verb, inventory's dispose, which reads the reservations itself
+        // and releases what is still a hold and applies the outcome's disposition to what was sold. An order
+        // that was confirmed (its commit may have run, or be queued) or amended (an increase commits at once,
+        // under a quote of its own) takes that path. An order that never reached either has one hold that was
+        // never a sale, and goes back as it always did.
         if (target.releasesInventory()) {
-            inventoryProcess.enqueueRelease(order.orderId(), order.tenantId(), order.pricingQuoteId(), now);
+            if (outcome != null && returnsStockByDisposal(order, outcome)) {
+                inventoryProcess.enqueueDispose(
+                        order.orderId(), order.tenantId(), order.pricingQuoteId(), disposalOf(order, outcome), now);
+            } else {
+                inventoryProcess.enqueueRelease(order.orderId(), order.tenantId(), order.pricingQuoteId(), now);
+            }
             // ADR 0072: an order that ends REJECTED, EXPIRED, CANCELLED or
             // PAYMENT_FAILED never completed, so any coupon redemption its
             // checkout took must go back the same way the inventory hold and
@@ -1429,6 +1690,17 @@ public class OrderStateService {
                         outcome == null || outcome.liabilityParty() == null
                                 ? null
                                 : outcome.liabilityParty().name()));
+            case PAYMENT_FAILED ->
+                events.publishEvent(new OrderPaymentLapsed(
+                        UUID.randomUUID(),
+                        tenant,
+                        order.orderId(),
+                        now,
+                        order.brandId(),
+                        order.locationId(),
+                        paymentWindowMinutes,
+                        target.name(),
+                        version));
             case COMPLETED ->
                 events.publishEvent(new OrderCompleted(
                         UUID.randomUUID(),
@@ -1599,6 +1871,27 @@ public class OrderStateService {
         }
 
         /** The order lines still priced against their nominal weight. */
+        public List<UUID> lineIds() {
+            return lineIds;
+        }
+    }
+
+    /**
+     * ADR 0161's {@code MARKS_INCOMPLETE}: the order cannot be handed over because these marked lines hold
+     * fewer scanned units than they have.
+     */
+    public static class MarksIncompleteException extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+
+        private final transient List<UUID> lineIds;
+
+        public MarksIncompleteException(List<UUID> lineIds) {
+            super("%d marked line(s) are short of scanned units".formatted(lineIds.size()));
+            this.lineIds = List.copyOf(lineIds);
+        }
+
+        /** The order lines still short of codes. */
         public List<UUID> lineIds() {
             return lineIds;
         }

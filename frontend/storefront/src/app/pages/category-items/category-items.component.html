@@ -43,9 +43,46 @@
     }
 
     @if (!loading() && !error()) {
+      @if (filterOptions().length > 0) {
+        <nav
+          class="flex flex-wrap items-center gap-2"
+          [attr.aria-label]="'menu.filter.title' | t"
+          data-testid="tag-filter"
+        >
+          @for (tag of filterOptions(); track tag.id) {
+            <button
+              type="button"
+              class="rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors"
+              [class.bg-brand-accent]="selectedTags().has(tag.id)"
+              [class.text-white]="selectedTags().has(tag.id)"
+              [class.bg-surface-raised]="!selectedTags().has(tag.id)"
+              [class.text-zinc-200]="!selectedTags().has(tag.id)"
+              [attr.aria-pressed]="selectedTags().has(tag.id)"
+              [attr.data-tag]="tag.code"
+              (click)="toggleTag(tag.id)"
+            >
+              {{ tag.name }}
+            </button>
+          }
+          @if (selectedTags().size > 0) {
+            <button
+              type="button"
+              class="px-2 py-1.5 text-[12px] text-zinc-400 underline"
+              data-testid="tag-filter-clear"
+              (click)="clearTags()"
+            >
+              {{ 'menu.filter.clear' | t }}
+            </button>
+          }
+        </nav>
+      }
       <div class="flex flex-col">
-        @for (item of items(); track item.id) {
+        @for (item of visibleItems(); track item.id) {
           <app-food-card [item]="item" />
+        } @empty {
+          <p class="py-8 text-center text-sm text-zinc-400" data-testid="tag-filter-empty">
+            {{ 'menu.filter.empty' | t }}
+          </p>
         }
       </div>
     }

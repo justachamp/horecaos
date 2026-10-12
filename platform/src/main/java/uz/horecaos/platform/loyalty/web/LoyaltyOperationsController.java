@@ -20,6 +20,7 @@ import uz.horecaos.platform.audit.api.ApprovalOutcome;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
+import uz.horecaos.platform.loyalty.application.AdjustmentReasonPolicyService;
 import uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService;
 import uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService.AdjustmentCommand;
 import uz.horecaos.platform.loyalty.application.LoyaltyQueryService;
@@ -51,12 +52,17 @@ public class LoyaltyOperationsController {
 
     private final LoyaltyQueryService loyalty;
     private final LoyaltyAdjustmentService adjustments;
+    private final AdjustmentReasonPolicyService reasonCodes;
     private final CurrentActor currentActor;
 
     public LoyaltyOperationsController(
-            LoyaltyQueryService loyalty, LoyaltyAdjustmentService adjustments, CurrentActor currentActor) {
+            LoyaltyQueryService loyalty,
+            LoyaltyAdjustmentService adjustments,
+            AdjustmentReasonPolicyService reasonCodes,
+            CurrentActor currentActor) {
         this.loyalty = loyalty;
         this.adjustments = adjustments;
+        this.reasonCodes = reasonCodes;
         this.currentActor = currentActor;
     }
 
@@ -74,6 +80,23 @@ public class LoyaltyOperationsController {
                 .toList());
     }
 
+    @GetMapping("/tenants/{tenantId}/loyalty/adjustment-reason-codes")
+    @RequiresCapability(value = Capability.LOYALTY_ADJUST, scope = ScopeType.TENANT)
+    @Operation(
+            summary = "The reason codes a manual adjustment may carry",
+            description = "ADR 0165. Points are not money, and the one way to sell them is a label "
+                    + "of the operator's choosing, so the platform keeps a closed list. In REPORT_ONLY "
+                    + "mode any code is accepted and the ones off the list are counted, so the "
+                    + "console offers the list as suggestions; in ENFORCE mode a code off the list is "
+                    + "refused with 400 VALIDATION_FAILED and an errors[] entry for reasonCode, so the "
+                    + "console offers a closed choice. The list is the platform's and the same for "
+                    + "every tenant; a tenant cannot widen it. reasonCode stays a plain string in the "
+                    + "request, because a list that changes by policy must not change the contract. "
+                    + "Needs loyalty.adjust: only someone who can adjust needs the list.")
+    public ResponseEntity<ReasonCodesResponse> adjustmentReasonCodes(@PathVariable UUID tenantId) {
+        return ResponseEntity.ok(ReasonCodesResponse.of(reasonCodes.effective()));
+    }
+
     @PostMapping("/tenants/{tenantId}/customers/{customerId}/loyalty/adjustments")
     @RequiresCapability(value = Capability.LOYALTY_ADJUST, scope = ScopeType.TENANT, mutating = true)
     @Operation(
@@ -83,7 +106,10 @@ public class LoyaltyOperationsController {
                     + "person decides it. There is no paired form and no transfer: two offsetting "
                     + "adjustments are two separate approved acts. The audit trail's actor is "
                     + "always the authenticated caller, never the request body's actorSubject — "
-                    + "see that field's own doc.")
+                    + "see that field's own doc. reasonCode is applied to the platform's closed list "
+                    + "(GET .../loyalty/adjustment-reason-codes): once the list is enforced a code "
+                    + "off it answers 400 VALIDATION_FAILED with an errors[] entry for reasonCode "
+                    + "(REASON_CODE_NOT_PERMITTED), and the detail does not repeat the code.")
     public ResponseEntity<AdjustmentResponse> adjust(
             @PathVariable UUID tenantId, @PathVariable UUID customerId, @RequestBody AdjustmentRequest request) {
 
@@ -157,6 +183,22 @@ public class LoyaltyOperationsController {
             String correlationId) {}
 
     /**
+     * The list a manual adjustment's reason code is checked against (ADR 0165).
+     *
+     * @param mode          REPORT_ONLY (any code accepted, the unlisted ones counted) or ENFORCE
+     * @param codes         the permitted codes, the same for every tenant
+     * @param policyVersion the version of the platform document in force; 0 while the built-in
+     *                      default applies and nothing has been stored
+     */
+    public record ReasonCodesResponse(String mode, List<String> codes, int policyVersion) {
+
+        static ReasonCodesResponse of(AdjustmentReasonPolicyService.Effective effective) {
+            return new ReasonCodesResponse(
+                    effective.policy().mode().name(), effective.policy().codes(), effective.policyVersion());
+        }
+    }
+
+    /**
      * What an adjustment decided.
      *
      * @param status NOT_REQUIRED, PENDING, APPROVED, or DECLINED (ADR 0027)
@@ -208,14 +250,20 @@ public class LoyaltyOperationsController {
         }
     }
 
-    public record LiabilityResponse(UUID brandId, ApiMoney outstanding, ApiMoney held, long accountCount) {
+    /**
+     * @param tillAbsorbed what till spends took beyond a balance (ADR 0171): points spent at a terminal that the
+     *                     ledger could not cover, carried by the brand. Beside the outstanding figure and never in it
+     */
+    public record LiabilityResponse(
+            UUID brandId, ApiMoney outstanding, ApiMoney held, long accountCount, ApiMoney tillAbsorbed) {
 
         static LiabilityResponse of(LiabilityRow row) {
             return new LiabilityResponse(
                     row.brandId(),
                     ApiMoney.of(row.outstandingMinor(), row.currency()),
                     ApiMoney.of(row.heldMinor(), row.currency()),
-                    row.accountCount());
+                    row.accountCount(),
+                    ApiMoney.of(row.tillAbsorbedMinor(), row.currency()));
         }
     }
 }

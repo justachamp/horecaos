@@ -247,7 +247,11 @@ public final class ReportingFacts {
             @Nullable UUID comboSelectionId,
             @Nullable UUID comboContainerVariantId,
             @Nullable Integer comboQuantity,
-            @Nullable String comboNameSnapshot) {}
+            @Nullable String comboNameSnapshot,
+            // ADR 0158 (V0538): CUSTOMER for a line the customer chose, AUTO_ADD for one a rule added,
+            // and the rule behind it, so a report can say which lines a rule put in the basket.
+            String lineOrigin,
+            @Nullable UUID autoAddRuleId) {}
 
     /**
      * The slice a branch-day aggregate is keyed by.
@@ -475,6 +479,18 @@ public final class ReportingFacts {
      *                            our own screen-pop acknowledgment could
      *                            name) is still a real call for the location,
      *                            and a primary key cannot hold a null column
+     * @param talkDurationSeconds ADR 0175: despite the name, the call's length -- the first
+     *                            event to {@code ENDED}, ring and queue time inside it
+     * @param answeredCallCount   ADR 0175: calls first answered in this hour by this operator;
+     *                            {@code null} means the row was closed before the measure
+     *                            existed ("not measured"), never zero
+     * @param ringSecondsTotal    ADR 0175: whole seconds from {@code OFFERED} to the first
+     *                            {@code ANSWERED}, over the sampled calls; null with the count
+     * @param ringSampleCount     ADR 0175: calls with a sane offered-to-answered pair
+     * @param ringSecondsMax      ADR 0175: the longest sampled interval; null exactly when
+     *                            there is no sample
+     * @param convertedCount      ADR 0175: answered calls with an order placed from them, in
+     *                            any status
      */
     public record CallHourFact(
             UUID tenantId,
@@ -489,7 +505,12 @@ public final class ReportingFacts {
             int answeredCount,
             int missedCount,
             int transferredCount,
-            long talkDurationSeconds) {
+            long talkDurationSeconds,
+            @Nullable Integer answeredCallCount,
+            @Nullable Long ringSecondsTotal,
+            @Nullable Integer ringSampleCount,
+            @Nullable Integer ringSecondsMax,
+            @Nullable Integer convertedCount) {
 
         public CallHourFact {
             Objects.requireNonNull(tenantId, "A fact is tenant-owned");
@@ -500,6 +521,55 @@ public final class ReportingFacts {
             // No answered-vs-offered check here: those two counts share a
             // location-hour, not a row — see fact_call_hour's own migration
             // comment for why that invariant is a rollup, not a per-row one.
+            boolean measured = answeredCallCount != null;
+            if (measured != (ringSecondsTotal != null)
+                    || measured != (ringSampleCount != null)
+                    || measured != (convertedCount != null)) {
+                throw new IllegalArgumentException(
+                        "The call KPI columns are measured together or not at all (ck_fact_call_hour_kpi)");
+            }
+            if (ringSampleCount != null && (ringSampleCount > 0) != (ringSecondsMax != null)) {
+                throw new IllegalArgumentException("ringSecondsMax is set exactly when there is a ring sample");
+            }
+            if (!measured && ringSecondsMax != null) {
+                throw new IllegalArgumentException("A row that was not measured has no ring maximum");
+            }
+        }
+
+        /** A row of the pre-ADR 0175 shape: every call KPI is "not measured". */
+        public CallHourFact(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                LocalDate businessDate,
+                int hourOfDay,
+                String operatorPrincipalId,
+                int boundaryVersion,
+                int metricCalculationVersion,
+                int offeredCount,
+                int answeredCount,
+                int missedCount,
+                int transferredCount,
+                long talkDurationSeconds) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    businessDate,
+                    hourOfDay,
+                    operatorPrincipalId,
+                    boundaryVersion,
+                    metricCalculationVersion,
+                    offeredCount,
+                    answeredCount,
+                    missedCount,
+                    transferredCount,
+                    talkDurationSeconds,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
         }
     }
 
@@ -542,6 +612,182 @@ public final class ReportingFacts {
             if ((couponId != null) != "COUPON".equals(sourceKind)) {
                 throw new IllegalArgumentException("couponId is set exactly for a COUPON redemption");
             }
+        }
+    }
+
+    /**
+     * ADR 0156, ADR 0043: one closed staff shift on the business date its start belongs to -- the hours a
+     * payroll conversation needs, built at day close from {@code workforce}'s port and never by a report
+     * reading a workforce table.
+     *
+     * <p>Holds {@code CLOSED} shifts only; an open shift or one awaiting approval is not a fact until it
+     * settles. {@code staffDisplayReference} («S-0142») is the non-personal handle ADR 0029 allows in a
+     * fact: there is no name and no employee number here, and the payroll export is the one place identity
+     * meets hours. Null is not zero: {@code plannedSeconds} and {@code varianceSeconds} are null together,
+     * exactly when no roster entry was matched.
+     */
+    public record StaffShiftFact(
+            UUID tenantId,
+            LocalDate businessDate,
+            UUID shiftId,
+            int boundaryVersion,
+            int metricCalculationVersion,
+            UUID brandId,
+            UUID locationId,
+            UUID staffMemberId,
+            String staffDisplayReference,
+            @Nullable Long plannedSeconds,
+            long workedSeconds,
+            int breakSeconds,
+            long paidSeconds,
+            @Nullable Long varianceSeconds,
+            String approvalStatus,
+            boolean hadRosterEntry,
+            Instant startedAt,
+            Instant endedAt) {
+
+        public StaffShiftFact {
+            Objects.requireNonNull(tenantId, "A fact is tenant-owned");
+            Objects.requireNonNull(shiftId, "A staff shift fact names its shift");
+            if ((plannedSeconds == null) != (varianceSeconds == null)) {
+                throw new IllegalArgumentException("plannedSeconds and varianceSeconds are null together");
+            }
+        }
+    }
+
+    /**
+     * ADR 0159 / ADR 0043: one review, on the business day it was submitted.
+     *
+     * <p>Built at day close from the {@code ReviewFactSource} port, never by a report reading
+     * {@code reviews} tables (ADR 0023). {@code customerSubjectHash} is the ADR 0029 keyed
+     * pseudonym and never an account id. No comment, no tag label and no courier reaches a fact:
+     * {@code hasComment} says whether words exist and nothing about what they say.
+     *
+     * <p>Every review is one row, whatever became of its comment. The average rating that leaves out
+     * the unwelcome ones is not an average (ADR 0159, Decision 5).
+     */
+    public record ReviewFact(
+            UUID tenantId,
+            UUID reviewId,
+            LocalDate businessDate,
+            int boundaryVersion,
+            int metricCalculationVersion,
+            UUID brandId,
+            UUID locationId,
+            UUID orderId,
+            @Nullable String customerSubjectHash,
+            int rating,
+            boolean hasComment,
+            int tagCount) {
+
+        public ReviewFact {
+            Objects.requireNonNull(tenantId, "A fact is tenant-owned");
+            Objects.requireNonNull(reviewId, "A review fact names its review");
+            if (rating < 1 || rating > 5) {
+                throw new IllegalArgumentException("A rating is one to five stars, not " + rating);
+            }
+        }
+    }
+
+    /** One tag a review carries, by the two code-owned dimensions a report groups by. */
+    public record ReviewTagFact(
+            UUID tenantId,
+            UUID reviewId,
+            UUID tagId,
+            LocalDate businessDate,
+            int boundaryVersion,
+            int metricCalculationVersion,
+            UUID brandId,
+            UUID locationId,
+            String category,
+            String sentiment) {
+
+        public ReviewTagFact {
+            Objects.requireNonNull(tenantId, "A fact is tenant-owned");
+            Objects.requireNonNull(reviewId, "A tag fact names its review");
+            Objects.requireNonNull(tagId, "A tag fact names its tag");
+        }
+    }
+
+    /**
+     * ADR 0159 / ADR 0043: one service-recovery case. Counted as opened on its opening date and
+     * closed on its closing date, as a refund lands on its own date, so one row carries both and is
+     * rewritten when a later close sees the case finish.
+     *
+     * <p>Remedy money is the amount and currency copied onto the compensation link when it was
+     * attached; a benefit grant is a count and never money.
+     */
+    public record RecoveryCaseFact(
+            UUID tenantId,
+            UUID caseId,
+            LocalDate openedBusinessDate,
+            @Nullable LocalDate closedBusinessDate,
+            int boundaryVersion,
+            int metricCalculationVersion,
+            UUID brandId,
+            UUID locationId,
+            UUID orderId,
+            UUID reviewId,
+            int rating,
+            String state,
+            @Nullable String outcomeCode,
+            @Nullable Long secondsToFirstResponse,
+            @Nullable Long secondsToClose,
+            boolean firstResponseBreached,
+            boolean resolutionBreached,
+            int compensationCount,
+            long remedyMoneyMinor,
+            @Nullable String currency) {
+
+        public RecoveryCaseFact {
+            Objects.requireNonNull(tenantId, "A fact is tenant-owned");
+            Objects.requireNonNull(caseId, "A case fact names its case");
+            if (remedyMoneyMinor < 0 || (remedyMoneyMinor > 0 && currency == null)) {
+                throw new IllegalArgumentException("Remedy money is non-negative and names its currency");
+            }
+        }
+    }
+
+    /**
+     * ADR 0163: the portions one kitchen station fired in one operating hour of one business day.
+     *
+     * <p>Counted at the ticket's fire instant ({@code kitchen.tickets.released_at}), because that is when a
+     * cook starts work, not at the order's creation, which would put a 20:00 pre-order in the 11:00 hour. The
+     * station's code and role are stored as they were that day, so renaming or archiving a station never
+     * rewrites last quarter's planning. No order identifier and no person is stored.
+     *
+     * @param operatingHour 0 is the business day's own start ({@code BusinessDayBoundary}), not the wall clock
+     * @param portions      three decimals, exactly the sum of {@code ticket_items.quantity} (ADR 0137)
+     * @param tickets       how many tickets fired at this station in this hour
+     */
+    public record StationLoadFact(
+            UUID tenantId,
+            LocalDate businessDate,
+            UUID locationId,
+            UUID stationId,
+            String stationCode,
+            String stationRole,
+            int operatingHour,
+            BigDecimal portions,
+            int tickets,
+            int boundaryVersion,
+            int metricCalculationVersion) {
+
+        public StationLoadFact {
+            Objects.requireNonNull(tenantId, "A fact is tenant-owned");
+            Objects.requireNonNull(businessDate, "A fact is dated");
+            Objects.requireNonNull(stationId, "A fact names its station");
+            if (operatingHour < 0 || operatingHour > 23) {
+                throw new IllegalArgumentException("An operating hour is 0 to 23, was " + operatingHour);
+            }
+            if (portions.signum() < 0) {
+                throw new IllegalArgumentException("Fired portions cannot be negative");
+            }
+        }
+
+        /** The portions in thousandths, which is exact (three decimals) and fits the divergence columns. */
+        public long thousandths() {
+            return portions.movePointRight(3).longValueExact();
         }
     }
 }

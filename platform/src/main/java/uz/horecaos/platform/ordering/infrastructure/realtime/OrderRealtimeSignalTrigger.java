@@ -10,6 +10,7 @@ import uz.horecaos.platform.ordering.api.OrderCancelled;
 import uz.horecaos.platform.ordering.api.OrderCompleted;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderExpired;
+import uz.horecaos.platform.ordering.api.OrderPaymentLapsed;
 import uz.horecaos.platform.ordering.api.OrderReceived;
 import uz.horecaos.platform.ordering.api.OrderRejected;
 import uz.horecaos.platform.ordering.api.OrderingEvent;
@@ -122,6 +123,7 @@ public class OrderRealtimeSignalTrigger {
             case OrderConfirmed e -> new Transition(e.brandId(), e.locationId(), (long) e.orderVersion());
             case OrderRejected e -> new Transition(e.brandId(), e.locationId(), (long) e.orderVersion());
             case OrderExpired e -> new Transition(e.brandId(), e.locationId(), (long) e.orderVersion());
+            case OrderPaymentLapsed e -> new Transition(e.brandId(), e.locationId(), (long) e.orderVersion());
             case OrderCancelled e -> new Transition(e.brandId(), e.locationId(), (long) e.orderVersion());
             case OrderCompleted e -> new Transition(e.brandId(), e.locationId(), (long) e.orderVersion());
             default -> null;

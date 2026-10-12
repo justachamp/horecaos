@@ -1,0 +1,70 @@
+<div class="link-picker" data-testid="content-link-picker">
+  <label class="link-picker__field">
+    <span class="q-caption">{{ label() ?? ('marketing.content.link.label' | t) }}</span>
+    <select
+      class="link-picker__select"
+      [value]="link().type"
+      [disabled]="disabled()"
+      (change)="setType($any($event.target).value)"
+      data-testid="content-link-type"
+    >
+      @for (type of types; track type) {
+        <option [value]="type" [selected]="type === link().type">{{ typeKey(type) | t }}</option>
+      }
+    </select>
+  </label>
+
+  @if (needsTarget()) {
+    @if (targetLabel(); as chosen) {
+      <p class="q-body-sm link-picker__chosen" data-testid="content-link-chosen">
+        {{ 'marketing.content.link.chosen' | t: { label: chosen } }}
+        <button
+          type="button"
+          class="link-picker__clear"
+          [disabled]="disabled()"
+          (click)="clearTarget()"
+          data-testid="content-link-clear"
+        >
+          {{ 'marketing.content.link.clear' | t }}
+        </button>
+      </p>
+    } @else {
+      <q-combobox
+        [query]="query()"
+        [options]="options()"
+        [placeholder]="placeholderKey() | t"
+        [ariaLabel]="placeholderKey() | t"
+        (queryChange)="query.set($event)"
+        (optionSelected)="choose($event)"
+      />
+    }
+  }
+
+  @if (link().type === 'EXTERNAL') {
+    <label class="link-picker__field">
+      <span class="q-caption">{{ 'marketing.content.link.url' | t }}</span>
+      <input
+        type="url"
+        class="link-picker__input"
+        placeholder="https://"
+        [value]="link().url"
+        [disabled]="disabled()"
+        [attr.aria-invalid]="urlState() === 'notHttps'"
+        (input)="setUrl($any($event.target).value)"
+        data-testid="content-link-url"
+      />
+    </label>
+    @switch (urlState()) {
+      @case ('notHttps') {
+        <p class="q-caption link-picker__warn" role="alert" data-testid="content-link-not-https">
+          {{ 'marketing.content.link.notHttps' | t }}
+        </p>
+      }
+      @case ('hostNotAllowed') {
+        <p class="q-caption link-picker__warn" role="alert" data-testid="content-link-host">
+          {{ 'marketing.content.link.hostNotAllowed' | t }}
+        </p>
+      }
+    }
+  }
+</div>

@@ -13,6 +13,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import uz.horecaos.platform.iam.api.accounts.StaffAccounts;
+import uz.horecaos.platform.iam.api.accounts.StaffSessions;
 import uz.horecaos.platform.iam.api.organizations.OrganizationDirectory;
 import uz.horecaos.platform.iam.api.organizations.OrganizationProvisioner;
 import uz.horecaos.platform.iam.api.secrets.SecretCategory;
@@ -81,6 +82,29 @@ public class KeycloakConfiguration {
                 // Not this bean's own credential: the client whose offline
                 // grants a password reset revokes (ADR 0098).
                 staffLoginClientId);
+    }
+
+    /**
+     * A staff account's live sessions (ADR 0176), on the same provisioning credential as {@link
+     * #staffAccounts}: the list and the single delete were probed live to work on {@code
+     * manage-users} and {@code view-users}, so no role is granted. The sign-in client's UUID is a
+     * deployment property because reading it would need {@code view-clients}; unset, listing is
+     * reported unavailable and the screen shows the platform's own record.
+     */
+    @Bean
+    StaffSessions staffSessions(
+            SecretResolver secrets,
+            Clock clock,
+            @Value("${horecaos.keycloak.base-url:http://localhost:8081}") String baseUrl,
+            @Value("${horecaos.keycloak.realm:horecaos}") String realm,
+            @Value("${horecaos.keycloak.provisioning-client-id:horecaos-provisioning}") String clientId,
+            @Value("${horecaos.keycloak.staff-login-client-uuid:}") String staffLoginClientUuid,
+            @Value("${horecaos.environment:local}") String environment) {
+
+        return new KeycloakStaffSessions(
+                authenticatedClient(secrets, clock, baseUrl, realm, clientId, "provisioning-secret", environment),
+                realm,
+                staffLoginClientUuid);
     }
 
     /**

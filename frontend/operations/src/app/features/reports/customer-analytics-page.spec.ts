@@ -8,7 +8,9 @@ import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
 import { CustomerAnalyticsPage } from './customer-analytics-page';
 import {
+  AcquisitionSourcesResponse,
   CohortListResponse,
+  CustomerFunnelResponse,
   CustomerKpiResponse,
   MetricResponse,
   ProvenanceResponse,
@@ -159,6 +161,63 @@ function rfmGrid(): RfmGridResponse {
   };
 }
 
+/** ADR 0167: visits are not measured, one stage is partial, and every count is a plain number. */
+function customerFunnel(overrides: Partial<CustomerFunnelResponse> = {}): CustomerFunnelResponse {
+  return {
+    from: '2026-09-01',
+    to: '2026-09-07',
+    stages: [
+      { stage: 'VISITS', measured: false, reason: 'NOT_COLLECTED', count: null, unrecordedDays: 0 },
+      { stage: 'REGISTERED', measured: true, reason: null, count: 9, unrecordedDays: 0 },
+      { stage: 'BASKET_STARTED', measured: true, reason: null, count: 15, unrecordedDays: 1 },
+      { stage: 'CHECKOUT_STARTED', measured: true, reason: null, count: 8, unrecordedDays: 1 },
+      { stage: 'ORDERED', measured: true, reason: null, count: 8, unrecordedDays: 0 },
+    ],
+    days: [],
+    registrations: [],
+    provenance: provenance(),
+    ...overrides,
+  };
+}
+
+function acquisitionSources(
+  overrides: Partial<AcquisitionSourcesResponse> = {},
+): AcquisitionSourcesResponse {
+  return {
+    from: '2026-09-01',
+    to: '2026-09-07',
+    registrationsByOrigin: [
+      { origin: 'SELF_SERVICE', registered: 7 },
+      { origin: 'OPERATOR', registered: 2 },
+    ],
+    clicksByLink: [
+      {
+        linkId: 'l1',
+        brandId: 'b1',
+        label: 'Instagram: Aziza',
+        channel: 'WEB',
+        status: 'ACTIVE',
+        clicks: 42,
+      },
+      {
+        linkId: 'l2',
+        brandId: 'b1',
+        label: 'Old flyer',
+        channel: 'WEB',
+        status: 'ARCHIVED',
+        clicks: 5,
+      },
+    ],
+    ordersByChannel: [
+      { channelCode: 'WEB', ordered: 5 },
+      { channelCode: 'TELEGRAM', ordered: 3 },
+    ],
+    attributesCustomerToLink: false,
+    provenance: provenance(),
+    ...overrides,
+  };
+}
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -172,6 +231,8 @@ describe('CustomerAnalyticsPage', () => {
     query: ReturnType<typeof vi.fn>;
     customerCohorts: ReturnType<typeof vi.fn>;
     customerRfm: ReturnType<typeof vi.fn>;
+    customerFunnel: ReturnType<typeof vi.fn>;
+    acquisitionSources: ReturnType<typeof vi.fn>;
   };
 
   async function render(
@@ -184,6 +245,8 @@ describe('CustomerAnalyticsPage', () => {
       query: vi.fn().mockResolvedValue(revenueByCustomerType()),
       customerCohorts: vi.fn().mockResolvedValue(cohorts()),
       customerRfm: vi.fn().mockResolvedValue(rfmGrid()),
+      customerFunnel: vi.fn().mockResolvedValue(customerFunnel()),
+      acquisitionSources: vi.fn().mockResolvedValue(acquisitionSources()),
       ...overrides,
     };
 
@@ -319,6 +382,191 @@ describe('CustomerAnalyticsPage', () => {
     await render();
     const host = fixture.nativeElement as HTMLElement;
     expect(host.textContent).toContain('segment builder');
+  });
+
+  // --------------------------------------------------------------------------- 7.6c funnel (ADR 0167)
+
+  describe('customer funnel', () => {
+    function funnelBand(): HTMLElement {
+      return (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="customer-funnel"]',
+      ) as HTMLElement;
+    }
+
+    it('reads the funnel for the filter range, tenant-wide', async () => {
+      await render();
+      expect(reportingApi.customerFunnel).toHaveBeenCalledTimes(1);
+      expect(reportingApi.customerFunnel).toHaveBeenCalledWith(
+        SCOPE.tenantId,
+        expect.objectContaining({ from: expect.any(String), to: expect.any(String) }),
+      );
+    });
+
+    it('draws the four measured stages as counts and labels them as daily counts, not a cohort', async () => {
+      await render();
+      const band = funnelBand();
+      expect(band.querySelector('q-funnel-chart')).not.toBeNull();
+      expect(band.querySelectorAll('.q-funnel__bar').length).toBe(4);
+      const note = band.querySelector('[data-testid="funnel-activity-note"]') as HTMLElement;
+      expect(note.textContent).toContain('counts of distinct events');
+      expect(note.textContent).toContain('not a cohort');
+      expect(note.textContent).toContain('not the probability');
+    });
+
+    it('prints no percentage between stages: they are independent daily counts', async () => {
+      await render();
+      const table = funnelBand().querySelector(
+        '[data-testid="q-funnel-chart-table"]',
+      ) as HTMLElement;
+      expect(table.textContent).not.toContain('%');
+      expect(table.textContent).toContain('Registered');
+      expect(table.textContent).toContain('Started a basket');
+      expect(table.textContent).toContain('Reached checkout');
+      expect(table.textContent).toContain('Ordered');
+    });
+
+    it('shows visits as "not measured" with the reason, and never as a bar or a zero', async () => {
+      await render();
+      const band = funnelBand();
+      const notMeasured = band.querySelector(
+        '[data-testid="funnel-visits-not-measured"]',
+      ) as HTMLElement;
+      expect(notMeasured.textContent).toContain('not measured');
+      expect(notMeasured.textContent).toContain('Nothing is collected from a browser');
+      const table = band.querySelector('[data-testid="q-funnel-chart-table"]') as HTMLElement;
+      expect(table.textContent).not.toContain('Visits');
+    });
+
+    it('says how many days of a stage were never recorded instead of presenting a partial total as whole', async () => {
+      await render();
+      const gaps = Array.from(
+        funnelBand().querySelectorAll('[data-testid="funnel-unrecorded"]'),
+      ).map((el) => el.textContent ?? '');
+      expect(gaps.length).toBe(2);
+      expect(
+        gaps.some((text) => text.includes('Started a basket') && text.includes('1 days')),
+      ).toBe(true);
+      expect(gaps.every((text) => text.includes('partial'))).toBe(true);
+    });
+
+    it('names a stage left out for another reason (registrations under a channel cut)', async () => {
+      await render(SCOPE, {
+        customerFunnel: vi.fn().mockResolvedValue(
+          customerFunnel({
+            stages: [
+              {
+                stage: 'VISITS',
+                measured: false,
+                reason: 'NOT_COLLECTED',
+                count: null,
+                unrecordedDays: 0,
+              },
+              {
+                stage: 'REGISTERED',
+                measured: false,
+                reason: 'NOT_BY_CHANNEL',
+                count: null,
+                unrecordedDays: 0,
+              },
+              { stage: 'ORDERED', measured: true, reason: null, count: 3, unrecordedDays: 0 },
+            ],
+          }),
+        ),
+      });
+      const reason = funnelBand().querySelector('[data-testid="funnel-stage-reason"]');
+      expect(reason?.textContent).toContain('no sales channel');
+    });
+
+    it('shows an honest empty state when nothing has been recorded, still saying visits are not measured', async () => {
+      await render(SCOPE, {
+        customerFunnel: vi.fn().mockResolvedValue(
+          customerFunnel({
+            stages: [
+              {
+                stage: 'VISITS',
+                measured: false,
+                reason: 'NOT_COLLECTED',
+                count: null,
+                unrecordedDays: 0,
+              },
+              { stage: 'REGISTERED', measured: true, reason: null, count: 0, unrecordedDays: 0 },
+              { stage: 'ORDERED', measured: true, reason: null, count: 0, unrecordedDays: 0 },
+            ],
+          }),
+        ),
+      });
+      const band = funnelBand();
+      expect(band.querySelector('[data-testid="funnel-empty"]')).not.toBeNull();
+      expect(band.querySelector('q-funnel-chart')).toBeNull();
+      expect(band.querySelector('[data-testid="funnel-visits-not-measured"]')).not.toBeNull();
+    });
+
+    it('leaves every other band standing when only the funnel read is refused', async () => {
+      await render(SCOPE, {
+        customerFunnel: vi
+          .fn()
+          .mockRejectedValue(new ApiError('INTERNAL_ERROR', 500, { status: 500 }, null)),
+      });
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelectorAll('[data-testid="q-kpi-tile"]').length).toBe(6);
+      expect(host.querySelector('[data-testid="funnel-error"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="customer-acquisition"] q-bar-chart')).not.toBeNull();
+    });
+  });
+
+  // ------------------------------------------------------------ 7.6c acquisition source (ADR 0167)
+
+  describe('acquisition source', () => {
+    function acquisitionBand(): HTMLElement {
+      return (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="customer-acquisition"]',
+      ) as HTMLElement;
+    }
+
+    it('shows registrations by origin, clicks by link and orders by channel side by side', async () => {
+      await render();
+      const band = acquisitionBand();
+      expect(band.querySelectorAll('q-bar-chart').length).toBe(3);
+      const registrations = band.querySelector(
+        '[data-testid="acquisition-registrations"]',
+      ) as HTMLElement;
+      expect(registrations.textContent).toContain('Signed up themselves');
+      expect(registrations.textContent).toContain('Created by staff');
+      const clicks = band.querySelector('[data-testid="acquisition-clicks"]') as HTMLElement;
+      expect(clicks.textContent).toContain('Instagram: Aziza');
+      expect(clicks.textContent).toContain('Old flyer (archived)');
+      const orders = band.querySelector('[data-testid="acquisition-orders"]') as HTMLElement;
+      expect(orders.textContent).toContain('WEB');
+      expect(orders.textContent).toContain('TELEGRAM');
+    });
+
+    it('carries the sentence that it does not attribute a customer to a link', async () => {
+      await render();
+      const sentence = acquisitionBand().querySelector(
+        '[data-testid="acquisition-no-attribution"]',
+      ) as HTMLElement;
+      expect(sentence.textContent).toContain('does not attribute a customer or an order to a link');
+    });
+
+    it('says so in an empty column instead of drawing an empty chart', async () => {
+      await render(SCOPE, {
+        acquisitionSources: vi.fn().mockResolvedValue(acquisitionSources({ clicksByLink: [] })),
+      });
+      const clicks = acquisitionBand().querySelector('[data-testid="acquisition-clicks"]');
+      expect(clicks?.querySelector('q-bar-chart')).toBeNull();
+      expect(clicks?.textContent).toContain('Nothing to show in this period');
+    });
+
+    it('leaves the funnel standing when only the acquisition read is refused', async () => {
+      await render(SCOPE, {
+        acquisitionSources: vi
+          .fn()
+          .mockRejectedValue(new ApiError('INTERNAL_ERROR', 500, { status: 500 }, null)),
+      });
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[data-testid="acquisition-error"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="customer-funnel"] q-funnel-chart')).not.toBeNull();
+    });
   });
 
   // --------------------------------------------------------------------------- states

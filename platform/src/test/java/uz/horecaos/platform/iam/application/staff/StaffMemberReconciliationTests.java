@@ -404,6 +404,45 @@ class StaffMemberReconciliationTests {
                 .isZero();
     }
 
+    @Test
+    @DisplayName(
+            "enforcing also deletes the person's stored interface preferences (ADR 0160), and report-only leaves them")
+    void enforcingDeletesThePreferencesToo() {
+        endedLongAgo("ended-old", LocalDate.parse("2024-06-01"));
+        endedLongAgo("ended-recent", LocalDate.parse("2026-08-01"));
+        String label = "{\"savedViews\":[{\"id\":\"0198a3c0-0000-7000-8000-000000000001\",\"label\":\"Mine\","
+                + "\"tab\":\"all\",\"filters\":{}}]}";
+        for (String subject : new String[] {"ended-old", "ended-recent"}) {
+            kit.preferences.write(
+                    StaffKit.TENANT_A,
+                    subject,
+                    StaffPreferenceSurface.ORDER_BOARD,
+                    StaffPreferenceSchemas.mapper().readTree(label),
+                    null);
+        }
+
+        sweeper(Mode.REPORT_ONLY).runOnce();
+        assertThat(preferenceRows("ended-old")).as("report-only writes nothing").isEqualTo(1);
+
+        sweeper(Mode.ENFORCE).runOnce();
+
+        assertThat(preferenceRows("ended-old"))
+                .as("the anonymised member's preferences go with their personal data")
+                .isZero();
+        assertThat(preferenceRows("ended-recent"))
+                .as("a member still inside retention keeps theirs")
+                .isEqualTo(1);
+    }
+
+    private int preferenceRows(String subject) {
+        return kit.jdbc
+                .sql("SELECT count(*) FROM iam.staff_preferences WHERE tenant_id = :t AND principal_subject = :s")
+                .param("t", StaffKit.TENANT_A)
+                .param("s", subject)
+                .query(Integer.class)
+                .single();
+    }
+
     private StaffMemberRetentionSweeper sweeper(Mode mode) {
         return new StaffMemberRetentionSweeper(kit.store, kit.members, kit.clock, meters, mode, 24, 100);
     }

@@ -27,7 +27,10 @@
         text-anchor="end"
         dominant-baseline="middle"
       >
-        {{ bar.value }} · {{ bar.sharePercent }}%
+        {{ bar.value }}
+        @if (showShare()) {
+          · {{ bar.sharePercent }}%
+        }
       </text>
     }
 
@@ -83,7 +86,9 @@
       <tr>
         <th scope="col"></th>
         <th scope="col">{{ 'ui.charts.table.count' | t }}</th>
-        <th scope="col">{{ 'ui.charts.table.share' | t }}</th>
+        @if (showShare()) {
+          <th scope="col">{{ 'ui.charts.table.share' | t }}</th>
+        }
       </tr>
     </thead>
     <tbody>
@@ -91,7 +96,9 @@
         <tr>
           <th scope="row">{{ bar.label }}</th>
           <td>{{ bar.value }}</td>
-          <td>{{ bar.sharePercent }}%</td>
+          @if (showShare()) {
+            <td>{{ bar.sharePercent }}%</td>
+          }
         </tr>
       }
       @for (row of dropOffRows(); track row.key) {

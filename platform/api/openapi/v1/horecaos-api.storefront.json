@@ -45,6 +45,19 @@
         },
         "type" : "object"
       },
+      "AcceptedResponse" : {
+        "properties" : {
+          "accepted" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rejected" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "AddRoundRequest" : {
         "properties" : {
           "orderId" : {
@@ -145,6 +158,17 @@
         },
         "type" : "object"
       },
+      "AlbumImage" : {
+        "properties" : {
+          "caption" : {
+            "type" : "string"
+          },
+          "media" : {
+            "$ref" : "#/components/schemas/Media"
+          }
+        },
+        "type" : "object"
+      },
       "AnalyticsConfigResponse" : {
         "properties" : {
           "ga4MeasurementId" : {
@@ -186,6 +210,17 @@
         },
         "type" : "object"
       },
+      "Apply" : {
+        "properties" : {
+          "type" : {
+            "type" : "string"
+          },
+          "value" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApplyPromoCodeRequest" : {
         "properties" : {
           "code" : {
@@ -195,6 +230,32 @@
           }
         },
         "required" : [ "code" ],
+        "type" : "object"
+      },
+      "AutoAddLineResponse" : {
+        "properties" : {
+          "customerText" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "mandatory" : {
+            "type" : "boolean"
+          },
+          "maximumQuantity" : {
+            "type" : "number"
+          },
+          "minimumQuantity" : {
+            "type" : "number"
+          },
+          "removable" : {
+            "type" : "boolean"
+          },
+          "ruleCode" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "BalanceResponse" : {
@@ -249,6 +310,24 @@
         },
         "type" : "object"
       },
+      "Branch" : {
+        "properties" : {
+          "addressLine" : {
+            "type" : "string"
+          },
+          "city" : {
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "CallbackRequestResponse" : {
         "properties" : {
           "leadId" : {
@@ -259,8 +338,57 @@
         "required" : [ "leadId" ],
         "type" : "object"
       },
+      "Cap" : {
+        "properties" : {
+          "mode" : {
+            "type" : "string"
+          },
+          "n" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "CarouselItem" : {
+        "properties" : {
+          "ctaLabel" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "link" : {
+            "$ref" : "#/components/schemas/Link"
+          },
+          "media" : {
+            "$ref" : "#/components/schemas/Media"
+          },
+          "revisionNo" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "subtitle" : {
+            "type" : "string"
+          },
+          "textLocale" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "CartLineResponse" : {
         "properties" : {
+          "autoAdd" : {
+            "$ref" : "#/components/schemas/AutoAddLineResponse"
+          },
           "comboPicks" : {
             "items" : {
               "$ref" : "#/components/schemas/ComboPickResponse"
@@ -291,6 +419,9 @@
               "$ref" : "#/components/schemas/NestedModifierResponse"
             },
             "type" : "array"
+          },
+          "origin" : {
+            "type" : "string"
           },
           "quantity" : {
             "type" : "number"
@@ -608,6 +739,24 @@
         },
         "type" : "object"
       },
+      "Daily" : {
+        "properties" : {
+          "daysOfWeek" : {
+            "items" : {
+              "format" : "int32",
+              "type" : "integer"
+            },
+            "type" : "array"
+          },
+          "from" : {
+            "type" : "string"
+          },
+          "until" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "DeliveryChargeResponse" : {
         "properties" : {
           "feeMinor" : {
@@ -700,6 +849,131 @@
         },
         "type" : "object"
       },
+      "EntryDetail" : {
+        "properties" : {
+          "blocks" : {
+            "items" : {
+              "additionalProperties" : { },
+              "type" : "object"
+            },
+            "type" : "array"
+          },
+          "bodyLocale" : {
+            "type" : "string"
+          },
+          "cover" : {
+            "$ref" : "#/components/schemas/Media"
+          },
+          "images" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AlbumImage"
+            },
+            "type" : "array"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "publishedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "slug" : {
+            "type" : "string"
+          },
+          "summary" : {
+            "type" : "string"
+          },
+          "textLocale" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "vacancy" : {
+            "$ref" : "#/components/schemas/Vacancy"
+          }
+        },
+        "type" : "object"
+      },
+      "EntryPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/EntrySummary"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "EntrySummary" : {
+        "properties" : {
+          "cover" : {
+            "$ref" : "#/components/schemas/Media"
+          },
+          "employmentType" : {
+            "type" : "string"
+          },
+          "publishedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "slug" : {
+            "type" : "string"
+          },
+          "summary" : {
+            "type" : "string"
+          },
+          "textLocale" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "EventEntry" : {
+        "properties" : {
+          "event" : {
+            "pattern" : "IMPRESSION|CLICK|DISMISSAL|COMPLETION",
+            "type" : "string"
+          },
+          "itemId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "revisionNo" : {
+            "format" : "int32",
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "event", "itemId", "revisionNo" ],
+        "type" : "object"
+      },
+      "EventsRequest" : {
+        "properties" : {
+          "channel" : {
+            "maxLength" : 32,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "events" : {
+            "items" : {
+              "$ref" : "#/components/schemas/EventEntry"
+            },
+            "maxItems" : 20,
+            "minItems" : 1,
+            "type" : "array"
+          }
+        },
+        "required" : [ "channel", "events" ],
+        "type" : "object"
+      },
       "ExchangeRequest" : {
         "properties" : {
           "tableToken" : {
@@ -758,6 +1032,53 @@
               "type" : "string"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "Features" : {
+        "properties" : {
+          "gallery" : {
+            "type" : "boolean"
+          },
+          "news" : {
+            "type" : "boolean"
+          },
+          "recipes" : {
+            "type" : "boolean"
+          },
+          "vacancies" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "FeedbackConfigResponse" : {
+        "properties" : {
+          "consentTextKey" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "maxTagsPerReview" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "negative" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OfferedTag"
+            },
+            "type" : "array"
+          },
+          "positive" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OfferedTag"
+            },
+            "type" : "array"
+          },
+          "publicComments" : {
+            "type" : "boolean"
           }
         },
         "type" : "object"
@@ -833,6 +1154,43 @@
             "type" : "string"
           },
           "grant" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "Group" : {
+        "properties" : {
+          "categoryId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "limit" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "order" : {
+            "type" : "string"
+          },
+          "productIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "revisionNo" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "textLocale" : {
+            "type" : "string"
+          },
+          "title" : {
             "type" : "string"
           }
         },
@@ -937,6 +1295,41 @@
         },
         "type" : "object"
       },
+      "HomeDocument" : {
+        "properties" : {
+          "carousel" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CarouselItem"
+            },
+            "type" : "array"
+          },
+          "groups" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Group"
+            },
+            "type" : "array"
+          },
+          "locale" : {
+            "type" : "string"
+          },
+          "popup" : {
+            "$ref" : "#/components/schemas/Popup"
+          },
+          "promoGrid" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CarouselItem"
+            },
+            "type" : "array"
+          },
+          "stories" : {
+            "items" : {
+              "$ref" : "#/components/schemas/StoryGroup"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "HostnameLookupView" : {
         "properties" : {
           "channelId" : {
@@ -949,6 +1342,21 @@
           },
           "verified" : {
             "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "Link" : {
+        "properties" : {
+          "targetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -1011,6 +1419,41 @@
           },
           "type" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "Media" : {
+        "properties" : {
+          "alt" : {
+            "type" : "string"
+          },
+          "durationMs" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "heightPx" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "posterUrl" : {
+            "type" : "string"
+          },
+          "renditions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Rendition"
+            },
+            "type" : "array"
+          },
+          "url" : {
+            "type" : "string"
+          },
+          "widthPx" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -1119,6 +1562,21 @@
           "sortOrder" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "MenuIngredient" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "ingredientId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -1234,6 +1692,12 @@
             },
             "type" : "array"
           },
+          "ingredients" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuIngredient"
+            },
+            "type" : "array"
+          },
           "mediaAssetIds" : {
             "items" : {
               "type" : "string"
@@ -1260,11 +1724,45 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "tags" : {
+            "items" : {
+              "$ref" : "#/components/schemas/MenuTag"
+            },
+            "type" : "array"
+          },
           "variants" : {
             "items" : {
               "$ref" : "#/components/schemas/MenuVariant"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "MenuTag" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "icon" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "showAsBadge" : {
+            "type" : "boolean"
+          },
+          "showAsFilter" : {
+            "type" : "boolean"
+          },
+          "sortOrder" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "tagId" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -1290,6 +1788,9 @@
               "$ref" : "#/components/schemas/MenuModifierGroupPolicy"
             },
             "type" : "array"
+          },
+          "name" : {
+            "type" : "string"
           },
           "onSaleNow" : {
             "type" : "boolean"
@@ -1391,6 +1892,30 @@
         },
         "type" : "object"
       },
+      "OfferedTag" : {
+        "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "iconUrl" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
       "OrderLineResponse" : {
         "properties" : {
           "autoSelectedCharges" : {
@@ -1435,6 +1960,9 @@
               "type" : "string"
             },
             "type" : "array"
+          },
+          "origin" : {
+            "type" : "string"
           },
           "productId" : {
             "format" : "uuid",
@@ -1661,6 +2189,26 @@
         },
         "type" : "object"
       },
+      "PendingReviewResponse" : {
+        "properties" : {
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "placedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "publicOrderNumber" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PhysicalFacts" : {
         "properties" : {
           "catchweight" : {
@@ -1823,6 +2371,50 @@
         },
         "type" : "object"
       },
+      "Popup" : {
+        "properties" : {
+          "body" : {
+            "type" : "string"
+          },
+          "cap" : {
+            "$ref" : "#/components/schemas/Cap"
+          },
+          "ctaLabel" : {
+            "type" : "string"
+          },
+          "daily" : {
+            "$ref" : "#/components/schemas/Daily"
+          },
+          "dismiss" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "link" : {
+            "$ref" : "#/components/schemas/Link"
+          },
+          "media" : {
+            "$ref" : "#/components/schemas/Media"
+          },
+          "revisionNo" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "showAfterSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "textLocale" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PricedCartResponse" : {
         "properties" : {
           "appliedPromotions" : {
@@ -1838,6 +2430,9 @@
           "cartVersion" : {
             "format" : "int32",
             "type" : "integer"
+          },
+          "changedByPricing" : {
+            "type" : "boolean"
           },
           "contextHash" : {
             "type" : "string"
@@ -1943,6 +2538,115 @@
         },
         "type" : "object"
       },
+      "PublicComment" : {
+        "properties" : {
+          "branchName" : {
+            "type" : "string"
+          },
+          "comment" : {
+            "type" : "string"
+          },
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "rating" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "tags" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PublicTag"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "PublicDisplayResponse" : {
+        "properties" : {
+          "reasonCode" : {
+            "type" : "string"
+          },
+          "state" : {
+            "enum" : [ "NOT_SHARED", "PENDING", "PUBLISHED", "HIDDEN" ],
+            "type" : "string"
+          },
+          "withdrawable" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "PublicList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PublicComment"
+            },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          },
+          "visibility" : {
+            "enum" : [ "NONE", "RATING_ONLY", "RATING_AND_COMMENTS" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PublicSummary" : {
+        "properties" : {
+          "average" : {
+            "type" : "number"
+          },
+          "count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "distribution" : {
+            "items" : {
+              "format" : "int64",
+              "type" : "integer"
+            },
+            "type" : "array"
+          },
+          "ready" : {
+            "type" : "boolean"
+          },
+          "visibility" : {
+            "enum" : [ "NONE", "RATING_ONLY", "RATING_AND_COMMENTS" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PublicTag" : {
+        "properties" : {
+          "category" : {
+            "enum" : [ "FOOD", "SERVICE", "COURIER", "DELIVERY_TIME", "OTHER" ],
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "iconUrl" : {
+            "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "sentiment" : {
+            "enum" : [ "POSITIVE", "NEGATIVE" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PutLineRequest" : {
         "properties" : {
           "comboPicks" : {
@@ -1996,6 +2700,32 @@
         "required" : [ "variantId" ],
         "type" : "object"
       },
+      "ReceiptResponse" : {
+        "properties" : {
+          "kind" : {
+            "type" : "string"
+          },
+          "registeredAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ReceiptsResponse" : {
+        "properties" : {
+          "receipts" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ReceiptResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "RedeemRequest" : {
         "properties" : {
           "code" : {
@@ -2045,6 +2775,18 @@
           },
           "created" : {
             "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "Rendition" : {
+        "properties" : {
+          "url" : {
+            "type" : "string"
+          },
+          "widthPx" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -2145,6 +2887,34 @@
           }
         },
         "required" : [ "phone" ],
+        "type" : "object"
+      },
+      "ReviewTag" : {
+        "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "iconAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "labels" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "sentiment" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "SaveAddressRequest" : {
@@ -2268,6 +3038,24 @@
           }
         },
         "required" : [ "grant" ],
+        "type" : "object"
+      },
+      "Slide" : {
+        "properties" : {
+          "caption" : {
+            "type" : "string"
+          },
+          "durationSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "link" : {
+            "$ref" : "#/components/schemas/Link"
+          },
+          "media" : {
+            "$ref" : "#/components/schemas/Media"
+          }
+        },
         "type" : "object"
       },
       "SocialLinkResponse" : {
@@ -2581,12 +3369,49 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "publicDisplay" : {
+            "$ref" : "#/components/schemas/PublicDisplayResponse"
+          },
           "rating" : {
             "format" : "int32",
             "type" : "integer"
           },
           "submittedAt" : {
             "format" : "date-time",
+            "type" : "string"
+          },
+          "tags" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ReviewTag"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "StoryGroup" : {
+        "properties" : {
+          "avatar" : {
+            "$ref" : "#/components/schemas/Media"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "revisionNo" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "slides" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Slide"
+            },
+            "type" : "array"
+          },
+          "textLocale" : {
+            "type" : "string"
+          },
+          "title" : {
             "type" : "string"
           }
         },
@@ -2610,11 +3435,23 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "publicConsent" : {
+            "type" : "boolean"
+          },
           "rating" : {
             "format" : "int32",
             "maximum" : 5,
             "minimum" : 1,
             "type" : "integer"
+          },
+          "tagIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 5,
+            "minItems" : 0,
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -2633,6 +3470,20 @@
           "version" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "Vacancy" : {
+        "properties" : {
+          "apply" : {
+            "$ref" : "#/components/schemas/Apply"
+          },
+          "branch" : {
+            "$ref" : "#/components/schemas/Branch"
+          },
+          "employmentType" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -3058,6 +3909,44 @@
         },
         "summary" : "This brand's analytics installs, for client-side injection",
         "tags" : [ "Storefront analytics" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/attribution-links/{token}/clicks" : {
+      "post" : {
+        "description" : "Public. Answers 202 whether or not the token names a live link of this brand (unknown, archived, expired and other-brand tokens count nothing and say nothing), so the endpoint cannot be used to probe which tokens exist. Records no address, user agent or cookie. Non-idempotent by design: each open is one click. Limited per token and visitor.",
+        "operationId" : "click",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "token",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Count one open of an attribution link",
+        "tags" : [ "Attribution link clicks" ],
         "x-horecaos-surface" : "published"
       }
     },
@@ -3786,6 +4675,679 @@
         },
         "summary" : "Turn a priced cart into an order",
         "tags" : [ "Storefront ordering" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/careers" : {
+      "get" : {
+        "description" : "A listing only. A vacancy carries one outbound contact the tenant chose to publish (a phone number, an e-mail address, a Telegram or web address) and nothing of a candidate: the platform has no application form and stores no applicant data.",
+        "operationId" : "listVacancies",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A brand's published vacancies, newest first",
+        "tags" : [ "Storefront editorial" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/careers/{slug}" : {
+      "get" : {
+        "operationId" : "getVacancy",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One vacancy, with its branch and its one contact",
+        "tags" : [ "Storefront editorial" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/events" : {
+      "post" : {
+        "description" : "A batch of at most 20 {itemId, revisionNo, event}, event one of IMPRESSION, CLICK, DISMISSAL (a pop-up) and COMPLETION (a story). Counted per item, revision, tenant day and channel; no identifier of any kind is stored. Client-reported and labelled so: anyone can inflate them, and they are not a metric the reporting layer consumes. An event naming an item or revision the brand does not have, or one that makes no sense for the kind, is rejected and counted and the rest of the batch is kept.",
+        "operationId" : "recordContentEvents",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/EventsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AcceptedResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Report anonymous view counts",
+        "tags" : [ "Storefront content" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/features" : {
+      "get" : {
+        "description" : "News, gallery, recipes and vacancies, each true only while the tenant's plan includes the editorial tier and the brand has turned the kind on. All false when it has not; an unknown brand is a 404.",
+        "operationId" : "editorialFeatures",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Features"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Which editorial kinds a brand runs",
+        "tags" : [ "Storefront editorial" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/gallery" : {
+      "get" : {
+        "operationId" : "listGallery",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A brand's published gallery albums, newest first",
+        "tags" : [ "Storefront editorial" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/gallery/{slug}" : {
+      "get" : {
+        "operationId" : "getGalleryAlbum",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One gallery album with its images",
+        "tags" : [ "Storefront editorial" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/home" : {
+      "get" : {
+        "description" : "Banners and promo cards in the carousel, product groups, and from later releases stories, a promo grid and a pop-up, in order, with ready-made image rendition URLs. `channel` is the tenant's channel code, as the menu read takes it; `locale` is a BCP 47 tag, a bare `uz` read as `uz-Latn`. A text the visitor's language lacks is served in the brand's default and `textLocale` says which. The same for every visitor; an unknown brand, a brand of another tenant and an unknown channel are one 404.",
+        "operationId" : "contentHome",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HomeDocument"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The home content of a brand on a channel",
+        "tags" : [ "Storefront content" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/news" : {
+      "get" : {
+        "operationId" : "listNews",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A brand's published news, newest first",
+        "tags" : [ "Storefront editorial" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/news/{slug}" : {
+      "get" : {
+        "operationId" : "getNews",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One news article, its body as typed blocks",
+        "tags" : [ "Storefront editorial" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/recipes" : {
+      "get" : {
+        "operationId" : "listRecipes",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A brand's published recipes, newest first",
+        "tags" : [ "Storefront editorial" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/content/recipes/{slug}" : {
+      "get" : {
+        "operationId" : "getRecipe",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channel",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "locale",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EntryDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One recipe, its body as typed blocks",
+        "tags" : [ "Storefront editorial" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/feedback/config" : {
+      "get" : {
+        "description" : "Anonymous and cached for a minute. enabled is false, with no tags, while the tenant's feedback settings are off. Otherwise the active tags, split by sentiment (at most eight each, in the tenant's order), each with its wording in every locale and its icon. The storefront shows the positive tags for 4-5 stars, the negative for 1-2 and both for 3, and at most maxTagsPerReview may be sent. publicComments is true only when the brand shows comments publicly, which is when the consent box means anything; consentTextKey names the storefront's own translated sentence.",
+        "operationId" : "config",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FeedbackConfigResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The feedback tags a customer is offered, and whether to show the public-display box",
+        "tags" : [ "Public reviews" ],
         "x-horecaos-surface" : "published"
       }
     },
@@ -5109,6 +6671,52 @@
         "x-horecaos-surface" : "published"
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/receipts" : {
+      "get" : {
+        "description" : "A list, possibly empty: an order paid in cash has no receipt from a payment provider, and a card payment has none until the provider reports it. A Payme refund is a second receipt beside the first, and a split payment can settle on two paths, so the answer is always a list. Only receipts still in force are listed (a receipt that has been corrected or voided is replaced by the document that corrected it), and only an https link. The link is the one the customer was sent when the receipt was issued; nothing else about the receipt is returned, and the customer's account is a predicate of the check, so another customer's order and a missing one are both 404.",
+        "operationId" : "receipts",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReceiptsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The links to the receipts filed for one of the caller's own orders",
+        "tags" : [ "Storefront receipts" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/reorder" : {
       "get" : {
         "description" : "ADR 0074. Resolves each line's stored variant and modifier ids against the menu as it stands now for this order's own location and channel, and answers READY, PARTIAL or UNAVAILABLE. A client shows its repeat button on the verdict rather than matching names against a menu it loaded separately. This is a read: apply it through the ordinary cart path, POST /carts then PUT /carts/{cartId}/lines/{lineKey} with the ids returned here, so a repeated basket is priced and checked out by the same code every other basket travels. The plan is a snapshot — a dish can be 86'd between reading it and rebuilding the cart, and pricing stays the authority that refuses.",
@@ -5157,7 +6765,7 @@
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/review" : {
       "post" : {
-        "description" : "Refused with RESOURCE_NOT_FOUND when the order is not the caller's own, UNPROCESSABLE_STATE when it has not reached COMPLETED yet, and RESOURCE_CONFLICT when it already has a review. There is no endpoint to edit or withdraw a review once submitted (ADR 0071's own open input).",
+        "description" : "Refused with RESOURCE_NOT_FOUND when the order is not the caller's own, UNPROCESSABLE_STATE when it has not reached COMPLETED yet, and RESOURCE_CONFLICT when it already has a review. tagIds are the tags the customer tapped: at most five, active, this tenant's, and matching the rating (positive for 4-5, negative for 1-2, either for 3); anything else is VALIDATION_FAILED. publicConsent is whether the customer ticked the box allowing their words on the restaurant's public page; it counts only with a comment. Both are ignored while the tenant's feedback settings are off. There is no endpoint to edit or withdraw a review once submitted (ADR 0071); only the public display of its comment can be withdrawn.",
         "operationId" : "submit",
         "parameters" : [ {
           "in" : "path",
@@ -5386,7 +6994,7 @@
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews" : {
       "get" : {
-        "description" : "Cursor-paginated per ADR 0031: pass the previous page's nextCursor, and a null nextCursor is the end.",
+        "description" : "Cursor-paginated per ADR 0031: pass the previous page's nextCursor, and a null nextCursor is the end. Each row carries its tags and where its comment stands for the public page (publicDisplay.state, and the reason code when it is hidden).",
         "operationId" : "myReviews",
         "parameters" : [ {
           "in" : "path",
@@ -5434,6 +7042,184 @@
           }
         },
         "summary" : "The caller's own reviews at this brand, newest first",
+        "tags" : [ "Reviews" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews/pending" : {
+      "get" : {
+        "description" : "The storefront's own rating prompt (ADR 0159, Decision 4): the caller's COMPLETED orders at this brand, newest first, that carry no review and were placed within the brand's inlineWindowDays (seven unless the rating-prompt policy says otherwise). Empty while the tenant's feedback settings are off, so the storefront shows exactly what it showed before.",
+        "operationId" : "pending",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PendingReviewResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Completed orders the caller has not yet rated, still inside the prompt window",
+        "tags" : [ "Reviews" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews/public" : {
+      "get" : {
+        "description" : "Anonymous, cached for a minute and evicted by every hide, withdrawal and erasure, rate limited. Empty unless the brand's public visibility is RATING_AND_COMMENTS. Each entry is a comment its author agreed to show and a moderator (or the brand's own setting) approved, with its rating, tags, the day it was written and the branch name: no name, no customer, no order number, no review id, no time of day. The cursor is opaque. A tenant cannot filter this list by rating, pin, reorder or feature a comment, or reply to one.",
+        "operationId" : "comments",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PublicList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The brand's published comments, newest first",
+        "tags" : [ "Public reviews" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews/public/summary" : {
+      "get" : {
+        "description" : "Anonymous, cached for five minutes, rate limited. While the brand's public visibility is NONE, or it has fewer than its minimum count of reviews, ready is false and every figure is null. Otherwise the count, the average to one decimal and the five-bar distribution (index 0 is one star). The average counts every review of the brand, whatever became of its comment: a rating is not words.",
+        "operationId" : "summary",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PublicSummary"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The brand's rating summary, or nothing but a flag",
+        "tags" : [ "Public reviews" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews/{reviewId}/public-display/withdrawal" : {
+      "post" : {
+        "description" : "The customer's own withdrawal of the consent they gave (ADR 0159, Decision 6): records a WITHDRAWN decision, hides the comment for CUSTOMER_WITHDREW and cannot be reversed by a moderator. Refused with UNPROCESSABLE_STATE for a comment that was never shared or is already off the page. Touches nothing else: the rating, the comment the restaurant's staff see and any case stay as they were.",
+        "operationId" : "withdraw",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "reviewId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PublicDisplayResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Take a comment off the restaurant's public page",
         "tags" : [ "Reviews" ],
         "x-horecaos-surface" : "published"
       }
@@ -6058,7 +7844,7 @@
     },
     "/api/v1/storefront/tenants/{tenantId}/media/{assetId}" : {
       "get" : {
-        "description" : "302 to a short-lived signed URL. Only a PUBLIC, displayable asset resolves; anything else is not found, and private, missing and unverified are one answer so an id cannot be probed.",
+        "description" : "302 to a short-lived signed URL. Only a PUBLIC, displayable asset resolves; anything else is not found, and private, missing and unverified are one answer so an id cannot be probed. `variant` (thumb, w400, w800, w1600) asks for a rendition instead of the original (ADR 0157): the closed set the platform renders, never an arbitrary width. A rendition that has not rendered, or that this asset is not owed, is not found, like any other asset that cannot be served.",
         "operationId" : "image",
         "parameters" : [ {
           "in" : "path",
@@ -6074,6 +7860,13 @@
           "required" : true,
           "schema" : {
             "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "variant",
+          "required" : false,
+          "schema" : {
             "type" : "string"
           }
         } ],
@@ -6096,20 +7889,11 @@
     "url" : "http://localhost"
   } ],
   "tags" : [ {
-    "description" : "Requesting a one-time code, proving a phone number, and becoming a customer",
-    "name" : "Customer identity"
-  }, {
-    "description" : "Continue with Telegram: mint a sign-in code and poll it into a session (ADR 0063)",
-    "name" : "Telegram sign-in"
-  }, {
     "description" : "A customer's own profile, their own saved addresses, and the products they marked",
     "name" : "Customer self-service"
   }, {
-    "description" : "Public, non-secret analytics identifiers for a brand",
-    "name" : "Storefront analytics"
-  }, {
-    "description" : "What delivery costs here, and the evidence for it",
-    "name" : "Delivery fee"
+    "description" : "The home content a brand has published",
+    "name" : "Storefront content"
   }, {
     "description" : "Opening a payment attempt and getting the checkout surface for it",
     "name" : "Storefront payments"
@@ -6119,9 +7903,6 @@
   }, {
     "description" : "Pictures on the published menu",
     "name" : "Storefront media"
-  }, {
-    "description" : "Scanning a table code, and the bill it leads to",
-    "name" : "QR dine-in"
   }, {
     "description" : "Row 10.5: resolve a Host header to a tenant and channel",
     "name" : "Storefront channel hostname lookup"
@@ -6138,12 +7919,6 @@
     "description" : "In-app offers a scenario has made a guest eligible to see (ADR 0112)",
     "name" : "Presented offers"
   }, {
-    "description" : "A customer's own referral code, and redeeming a friend's",
-    "name" : "Referrals"
-  }, {
-    "description" : "The tenant's own document, or the platform default (ADR 0068)",
-    "name" : "Storefront terms of service"
-  }, {
     "description" : "Availability and remaining quantity a customer can see",
     "name" : "Storefront inventory"
   }, {
@@ -6156,16 +7931,49 @@
     "description" : "The published menu a customer sees",
     "name" : "Storefront catalog"
   }, {
-    "description" : "A customer's points balance and its movements",
-    "name" : "Loyalty"
+    "description" : "Anonymous click counting for ?ref= landings (ADR 0167)",
+    "name" : "Attribution link clicks"
   }, {
     "description" : "A customer's own 1:1 chat with the brand's bot (ADR 0058 stage 2)",
     "name" : "Customer Telegram linking"
   }, {
-    "description" : "Whether a location serves this channel and mode now",
-    "name" : "Serviceability"
-  }, {
     "description" : "A brand's FAQ and its social links",
     "name" : "Storefront support"
+  }, {
+    "description" : "Requesting a one-time code, proving a phone number, and becoming a customer",
+    "name" : "Customer identity"
+  }, {
+    "description" : "News, gallery, recipes and vacancies a brand has published",
+    "name" : "Storefront editorial"
+  }, {
+    "description" : "The links to the receipts filed for a customer's own order",
+    "name" : "Storefront receipts"
+  }, {
+    "description" : "Continue with Telegram: mint a sign-in code and poll it into a session (ADR 0063)",
+    "name" : "Telegram sign-in"
+  }, {
+    "description" : "Public, non-secret analytics identifiers for a brand",
+    "name" : "Storefront analytics"
+  }, {
+    "description" : "What delivery costs here, and the evidence for it",
+    "name" : "Delivery fee"
+  }, {
+    "description" : "Scanning a table code, and the bill it leads to",
+    "name" : "QR dine-in"
+  }, {
+    "description" : "A restaurant's review summary, published comments and feedback tags",
+    "name" : "Public reviews"
+  }, {
+    "description" : "A customer's own referral code, and redeeming a friend's",
+    "name" : "Referrals"
+  }, {
+    "description" : "The tenant's own document, or the platform default (ADR 0068)",
+    "name" : "Storefront terms of service"
+  }, {
+    "description" : "A customer's points balance and its movements",
+    "name" : "Loyalty"
+  }, {
+    "description" : "Whether a location serves this channel and mode now",
+    "name" : "Serviceability"
   } ]
 }

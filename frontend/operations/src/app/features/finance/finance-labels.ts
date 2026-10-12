@@ -78,9 +78,22 @@ export const TENDER_STATUS_KEYS: Readonly<Record<TenderStatus, MessageKey>> = {
   FAILED: 'finance.tenderStatus.FAILED',
 };
 
-/** Mirrors `FiscalDocumentState` (Java, ADR 0038) -- fiscal-api.ts carries no such union. */
+/**
+ * Mirrors `FiscalDocumentState` (Java, ADR 0038) -- fiscal-api.ts carries no such union. The last four
+ * are ADR 0166's: a correction or a void is asked of the tenant's own fiscal agent, and the original
+ * document ends `CORRECTED` or `VOIDED` beside the document that replaced it.
+ */
 export type FiscalDocumentStatus =
-  'NOT_APPLICABLE' | 'PENDING' | 'SUBMITTED' | 'ISSUED' | 'FAILED' | 'BLOCKED';
+  | 'NOT_APPLICABLE'
+  | 'PENDING'
+  | 'SUBMITTED'
+  | 'ISSUED'
+  | 'FAILED'
+  | 'BLOCKED'
+  | 'CORRECTION_REQUESTED'
+  | 'VOID_REQUESTED'
+  | 'CORRECTED'
+  | 'VOIDED';
 
 /**
  * `FiscalDocumentState` (Java, ADR 0038) -- the six-value lifecycle a fiscal
@@ -98,6 +111,10 @@ export const FISCAL_DOCUMENT_STATUS_KEYS: Readonly<Record<FiscalDocumentStatus, 
   ISSUED: 'finance.fiscalDocumentStatus.ISSUED',
   FAILED: 'finance.fiscalDocumentStatus.FAILED',
   BLOCKED: 'finance.fiscalDocumentStatus.BLOCKED',
+  CORRECTION_REQUESTED: 'finance.fiscalDocumentStatus.CORRECTION_REQUESTED',
+  VOID_REQUESTED: 'finance.fiscalDocumentStatus.VOID_REQUESTED',
+  CORRECTED: 'finance.fiscalDocumentStatus.CORRECTED',
+  VOIDED: 'finance.fiscalDocumentStatus.VOIDED',
 };
 
 const KNOWN_FISCAL_DOCUMENT_STATUSES: ReadonlySet<string> = new Set(

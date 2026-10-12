@@ -10,6 +10,7 @@ import {
 
 import { formatQuantity } from '../core/format/quantity';
 import { I18n } from '../core/i18n/i18n';
+import { MessageKey } from '../core/i18n/messages.en';
 import { TPipe } from '../core/i18n/t.pipe';
 import { LatenessPolicy, PLATFORM_DEFAULT_LATENESS_POLICY } from '../core/lateness-policy';
 import { latenessPolicyFromWire } from '../core/lateness-policy-api';
@@ -23,6 +24,8 @@ import { VduWall, VduWallPhase, WallboardVduFreshness } from '../wallboard-shell
 import { DeviceBoardError, DeviceBoardApi } from './device-board-api';
 import { DeviceClass } from './device-profile';
 import { DeviceAuthError, DeviceSession } from './device-session';
+import { TerminalSession } from './terminal-session';
+import { TerminalUnlock } from './terminal-unlock';
 
 const BOARD_POLL_MS = 10_000;
 /** A wall re-reads its own record this often, so a station a manager changes shows its new name (ADR 0151). */
@@ -30,6 +33,8 @@ const PROFILE_REFRESH_MS = 60_000;
 const FRESH_THRESHOLD_MS = BOARD_POLL_MS * 1.5;
 const STALE_THRESHOLD_MS = BOARD_POLL_MS * 3;
 const CLOCK_TICK_MS = 1_000;
+/** A kiosk re-reads its own record this often, which is also how the registry knows it is alive (ADR 0162, Decision 5). */
+const KIOSK_POLL_MS = 60_000;
 
 type ProfilePhase = 'idle' | 'loading' | 'failed';
 
@@ -39,6 +44,10 @@ interface EnrolmentState {
   readonly deviceCode: string;
   readonly userCode: string;
   readonly pollIntervalSeconds: number;
+  /** For a kiosk: the console page the QR opens, with the user code in it and never the device code (ADR 0162). */
+  readonly approvalUrl: string | null;
+  readonly expiresAt: string;
+  readonly deviceClass: DeviceClass;
 }
 
 /**
@@ -77,7 +86,7 @@ interface EnrolmentState {
  */
 @Component({
   selector: 'app-device-shell',
-  imports: [TPipe, QQrCode, VduWall],
+  imports: [TPipe, QQrCode, VduWall, TerminalUnlock],
   templateUrl: './device-shell.html',
   styleUrl: './device-shell.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -86,6 +95,7 @@ export class DeviceShell implements OnInit {
   private readonly session = inject(DeviceSession);
   private readonly boardApi = inject(DeviceBoardApi);
   private readonly destroyRef = inject(DestroyRef);
+  protected readonly terminal = inject(TerminalSession);
   protected readonly i18n = inject(I18n);
 
   protected readonly isSetUp = this.session.isSetUp;
@@ -99,6 +109,17 @@ export class DeviceShell implements OnInit {
 
   /** Whether the server enrolled this device as a wall display (the class it was approved as, not the one it asked for). */
   protected readonly isWall = computed(() => this.profile()?.deviceClass === 'KITCHEN_VDU');
+
+  /** Whether the server enrolled this device as a kiosk (ADR 0162): it pairs and shows its status, and nothing else yet. */
+  protected readonly isKiosk = computed(() => this.profile()?.deviceClass === 'KIOSK');
+  protected readonly kioskChannel = computed(() => this.profile()?.kiosk ?? null);
+
+  /** The unlock screen is open on request (`PERSON_OPTIONAL`, or a PIN change); `PERSON_REQUIRED` opens it by itself. */
+  protected readonly unlockOpen = signal(false);
+  protected readonly changePinOpen = signal(false);
+  protected readonly showUnlock = computed(
+    () => this.terminal.lockRequired() || this.unlockOpen() || this.changePinOpen(),
+  );
 
   /**
    * Driven by `navigator.onLine` plus the `online`/`offline` window events —
@@ -114,6 +135,24 @@ export class DeviceShell implements OnInit {
 
   protected readonly enrolmentPhase = signal<EnrolmentPhase>('idle');
   protected readonly enrolment = signal<EnrolmentState | null>(null);
+  /** The clock the pairing countdown reads; ticks only while a code is on screen. */
+  protected readonly enrolNow = signal(Date.now());
+  protected readonly secondsLeft = computed(() => {
+    const pending = this.enrolment();
+    if (!pending) {
+      return 0;
+    }
+    return Math.max(0, Math.ceil((Date.parse(pending.expiresAt) - this.enrolNow()) / 1000));
+  });
+  protected readonly countdownText = computed(() => {
+    const seconds = this.secondsLeft();
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  });
+  /** What the QR encodes: the approval link for a kiosk, the user code for the others (ADR 0162). */
+  protected readonly pairingQrValue = computed(() => {
+    const pending = this.enrolment();
+    return pending ? (pending.approvalUrl ?? pending.userCode) : '';
+  });
 
   protected readonly ticketsLoaded = signal(false);
   protected readonly tickets = signal<readonly TicketResponse[]>([]);
@@ -168,7 +207,10 @@ export class DeviceShell implements OnInit {
   private boardInterval: ReturnType<typeof setInterval> | null = null;
   private wallInterval: ReturnType<typeof setInterval> | null = null;
   private clockInterval: ReturnType<typeof setInterval> | null = null;
+  private kioskInterval: ReturnType<typeof setInterval> | null = null;
+  private enrolClock: ReturnType<typeof setInterval> | null = null;
   private lastProfileReadAt = 0;
+  private lastRosterReadAt = 0;
 
   private readonly onOnline = (): void => this.online.set(true);
   private readonly onOffline = (): void => this.online.set(false);
@@ -182,6 +224,8 @@ export class DeviceShell implements OnInit {
       this.stopEnrolmentPoll();
       this.stopBoardPoll();
       this.stopWallPoll();
+      this.stopKioskPoll();
+      this.stopEnrolClock();
     });
 
     if (this.session.isEnrolled()) {
@@ -230,11 +274,77 @@ export class DeviceShell implements OnInit {
   private startFor(deviceClass: DeviceClass): void {
     if (deviceClass === 'KITCHEN_VDU') {
       this.stopBoardPoll();
+      this.stopKioskPoll();
       this.startWallPoll();
+    } else if (deviceClass === 'KIOSK') {
+      this.stopBoardPoll();
+      this.stopWallPoll();
+      this.startKioskPoll();
     } else {
       this.stopWallPoll();
+      this.stopKioskPoll();
       this.startBoardPoll();
+      this.refreshRoster();
     }
+  }
+
+  // ---------------------------------------------------------------------
+  // The kiosk (`KIOSK`, ADR 0162): its record once a minute, and a status screen
+  // ---------------------------------------------------------------------
+
+  private startKioskPoll(): void {
+    this.stopKioskPoll();
+    this.kioskInterval = setInterval(() => void this.refreshKiosk(), KIOSK_POLL_MS);
+  }
+
+  private stopKioskPoll(): void {
+    if (this.kioskInterval !== null) {
+      clearInterval(this.kioskInterval);
+      this.kioskInterval = null;
+    }
+  }
+
+  /** Reading its own record is the kiosk's presence signal; a refusal means its grant is gone and the pairing screen returns. */
+  private async refreshKiosk(): Promise<void> {
+    try {
+      this.session.saveProfile(await this.boardApi.me());
+    } catch (error) {
+      if (this.isAuthRejection(error)) {
+        this.forgetEverything();
+      }
+      // Any other failure keeps the last status on screen; the next minute asks again.
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Who is at a touch terminal (ADR 0155)
+  // ---------------------------------------------------------------------
+
+  /** Reads the roster and the attribution mode; at most once a minute so a manager's change reaches the screen. */
+  private refreshRoster(force = false): void {
+    const scope = this.session.setup();
+    if (!scope || (!force && Date.now() - this.lastRosterReadAt < PROFILE_REFRESH_MS)) {
+      return;
+    }
+    this.lastRosterReadAt = Date.now();
+    void this.terminal.refresh(scope);
+  }
+
+  protected openUnlock(): void {
+    this.unlockOpen.set(true);
+  }
+
+  protected openChangePin(): void {
+    this.changePinOpen.set(true);
+  }
+
+  protected closeUnlock(): void {
+    this.unlockOpen.set(false);
+    this.changePinOpen.set(false);
+  }
+
+  protected lockTerminal(): void {
+    void this.terminal.lock();
   }
 
   protected showManualSetup(): void {
@@ -317,7 +427,9 @@ export class DeviceShell implements OnInit {
   private forgetEverything(): void {
     this.stopBoardPoll();
     this.stopWallPoll();
+    this.stopKioskPoll();
     this.session.forgetCredential();
+    void this.terminal.lock();
     this.profilePhase.set('idle');
   }
 
@@ -358,8 +470,16 @@ export class DeviceShell implements OnInit {
     this.enrolmentPhase.set('beginning');
     try {
       const result = await this.session.beginEnrolment(null, deviceClass);
-      this.enrolment.set(result);
+      this.enrolment.set({
+        deviceCode: result.deviceCode,
+        userCode: result.userCode,
+        pollIntervalSeconds: result.pollIntervalSeconds,
+        approvalUrl: result.approvalUrl ?? null,
+        expiresAt: result.expiresAt,
+        deviceClass,
+      });
       this.enrolmentPhase.set('waiting');
+      this.startEnrolClock();
       this.scheduleNextPoll(result.deviceCode, result.pollIntervalSeconds);
     } catch {
       this.enrolmentPhase.set('error');
@@ -377,14 +497,22 @@ export class DeviceShell implements OnInit {
       if (result.status === 'APPROVED' && result.credential) {
         this.enrolment.set(null);
         this.enrolmentPhase.set('idle');
+        this.stopEnrolClock();
         void this.enter();
         return;
       }
       if (result.status === 'DENIED') {
+        this.stopEnrolClock();
         this.enrolmentPhase.set('denied');
         return;
       }
       if (result.status === 'EXPIRED') {
+        // A kiosk in a lobby has nobody to press «try again»: it asks for a fresh code by itself (ADR 0162, Decision 4).
+        if (this.enrolment()?.deviceClass === 'KIOSK') {
+          void this.beginEnrolment('KIOSK');
+          return;
+        }
+        this.stopEnrolClock();
         this.enrolmentPhase.set('expired');
         return;
       }
@@ -406,7 +534,21 @@ export class DeviceShell implements OnInit {
     }
   }
 
+  private startEnrolClock(): void {
+    this.stopEnrolClock();
+    this.enrolNow.set(Date.now());
+    this.enrolClock = setInterval(() => this.enrolNow.set(Date.now()), CLOCK_TICK_MS);
+  }
+
+  private stopEnrolClock(): void {
+    if (this.enrolClock !== null) {
+      clearInterval(this.enrolClock);
+      this.enrolClock = null;
+    }
+  }
+
   protected retryEnrolment(): void {
+    this.stopEnrolClock();
     this.stopEnrolmentPoll();
     this.enrolment.set(null);
     this.enrolmentPhase.set('idle');
@@ -444,6 +586,7 @@ export class DeviceShell implements OnInit {
       const response = await this.boardApi.board(scope);
       this.tickets.set(response.tickets);
       this.boardError.set(null);
+      this.refreshRoster();
     } catch (error) {
       if (this.isAuthRejection(error)) {
         // The device's own grant is gone — revoked, most likely (ADR 0079:
@@ -470,7 +613,11 @@ export class DeviceShell implements OnInit {
     if (error instanceof DeviceAuthError) {
       return true;
     }
-    return error instanceof DeviceBoardError && (error.status === 401 || error.status === 403);
+    return (
+      error instanceof DeviceBoardError &&
+      (error.status === 401 || error.status === 403) &&
+      !error.isTerminalRefusal
+    );
   }
 
   protected async advance(item: TicketItemView, action: 'start' | 'ready'): Promise<void> {
@@ -487,6 +634,14 @@ export class DeviceShell implements OnInit {
       }
       await this.refreshBoard();
     } catch (error) {
+      if (error instanceof DeviceBoardError && error.isTerminalRefusal) {
+        // The device is fine; the person is not (no unlock, an ended session, a job that does not reach this action).
+        // The screen follows the server: it locks, re-reads who may unlock, and says why the tap did nothing.
+        this.terminal.endedByServer();
+        this.refreshRoster(true);
+        this.boardError.set(this.i18n.t(terminalRefusalKey(error.code)));
+        return;
+      }
       if (this.isAuthRejection(error)) {
         this.stopBoardPoll();
         this.session.forgetCredential();
@@ -508,8 +663,11 @@ export class DeviceShell implements OnInit {
 
   protected resetDevice(): void {
     this.stopEnrolmentPoll();
+    this.stopEnrolClock();
     this.stopBoardPoll();
     this.stopWallPoll();
+    this.stopKioskPoll();
+    void this.terminal.lock();
     this.session.forgetCredential();
     this.session.clearSetup();
     this.tickets.set([]);
@@ -522,6 +680,20 @@ export class DeviceShell implements OnInit {
   /** `0,5`, `2` — never `2.000` (ADR 0137). */
   protected quantityText(quantity: number): string {
     return formatQuantity(quantity, this.i18n.locale());
+  }
+}
+
+/** The sentence for a refusal about the person at the terminal: literal keys, so a missing translation is a compile error. */
+function terminalRefusalKey(code: string | null): MessageKey {
+  switch (code) {
+    case 'TERMINAL_UNLOCK_REQUIRED':
+      return 'device.terminal.refusal.TERMINAL_UNLOCK_REQUIRED';
+    case 'TERMINAL_SESSION_ENDED':
+      return 'device.terminal.refusal.TERMINAL_SESSION_ENDED';
+    case 'TERMINAL_PERSON_NOT_AUTHORIZED':
+      return 'device.terminal.refusal.TERMINAL_PERSON_NOT_AUTHORIZED';
+    default:
+      return 'device.board.error';
   }
 }
 

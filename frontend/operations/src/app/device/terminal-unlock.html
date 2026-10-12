@@ -1,0 +1,177 @@
+<div class="unlock" role="dialog" aria-modal="true" data-testid="terminal-unlock">
+  @if (canClose()) {
+    <button
+      type="button"
+      class="unlock__close"
+      (click)="close()"
+      data-testid="terminal-unlock-close"
+    >
+      {{ 'device.terminal.close' | t }}
+    </button>
+  }
+
+  @switch (step()) {
+    @case ('roster') {
+      <h1 class="unlock__title">{{ 'device.terminal.who' | t }}</h1>
+      @if (members().length === 0) {
+        <p class="unlock__hint" data-testid="terminal-roster-empty">
+          {{ 'device.terminal.rosterEmpty' | t }}
+        </p>
+      } @else {
+        <ul class="unlock__roster" data-testid="terminal-roster">
+          @for (member of members(); track member.memberId) {
+            <li>
+              <button
+                type="button"
+                class="unlock__person"
+                (click)="choose(member)"
+                [attr.data-testid]="'terminal-person-' + member.memberId"
+              >
+                <span class="unlock__label">{{ member.label }}</span>
+                @if (member.pinState === 'NOT_SET') {
+                  <span class="unlock__state">{{ 'device.terminal.state.NOT_SET' | t }}</span>
+                } @else if (member.pinState === 'LOCKED') {
+                  <span class="unlock__state unlock__state--locked">{{
+                    'device.terminal.state.LOCKED' | t
+                  }}</span>
+                }
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    }
+
+    @case ('pin') {
+      <q-pin-keypad
+        [title]="'device.terminal.enterPin' | t: { who: chosen()?.label ?? '' }"
+        [minLength]="4"
+        [maxLength]="12"
+        [busy]="busy()"
+        [error]="message()"
+        [cancelLabel]="'device.terminal.back' | t"
+        (submitted)="onPin($event)"
+        (cancelled)="backToRoster()"
+      />
+      <button
+        type="button"
+        class="unlock__link"
+        (click)="startActivation()"
+        data-testid="terminal-have-code"
+      >
+        {{ 'device.terminal.haveCode' | t }}
+      </button>
+    }
+
+    @case ('locked') {
+      <h1 class="unlock__title">{{ chosen()?.label }}</h1>
+      <p class="unlock__hint" data-testid="terminal-locked">
+        {{ message() ?? ('device.terminal.lockedUntilReset' | t) }}
+      </p>
+      <!-- ADR 0155, Decision 4: «a person with no PIN, or a locked one» types an activation code here. The credential
+           locked for the day dropped its digest, so a code is the only way to replace it at the terminal. -->
+      <button
+        type="button"
+        class="unlock__action unlock__action--primary"
+        (click)="startActivation()"
+        data-testid="terminal-locked-code"
+      >
+        {{ 'device.terminal.haveCode' | t }}
+      </button>
+      <button type="button" class="unlock__action" (click)="backToRoster()">
+        {{ 'device.terminal.back' | t }}
+      </button>
+    }
+
+    @case ('noPin') {
+      <h1 class="unlock__title">{{ chosen()?.label }}</h1>
+      <p class="unlock__hint" data-testid="terminal-no-pin">{{ 'device.terminal.noPin' | t }}</p>
+      <button
+        type="button"
+        class="unlock__action unlock__action--primary"
+        (click)="startActivation()"
+        data-testid="terminal-set-pin"
+      >
+        {{ 'device.terminal.setPin' | t }}
+      </button>
+      <button type="button" class="unlock__action" (click)="backToRoster()">
+        {{ 'device.terminal.back' | t }}
+      </button>
+    }
+
+    @case ('code') {
+      <q-pin-keypad
+        [title]="'device.terminal.enterCode' | t"
+        [minLength]="8"
+        [maxLength]="8"
+        [reveal]="true"
+        [busy]="busy()"
+        [error]="message()"
+        [cancelLabel]="'device.terminal.back' | t"
+        (submitted)="onCode($event)"
+        (cancelled)="backToRoster()"
+      />
+    }
+
+    @case ('newPin') {
+      <q-pin-keypad
+        [title]="'device.terminal.chooseNewPin' | t: { digits: pinLength() }"
+        [minLength]="pinLength()"
+        [maxLength]="pinLength()"
+        [busy]="busy()"
+        [error]="message()"
+        (submitted)="onNewPin($event)"
+      />
+    }
+
+    @case ('confirmPin') {
+      <q-pin-keypad
+        [title]="'device.terminal.confirmNewPin' | t"
+        [minLength]="pinLength()"
+        [maxLength]="pinLength()"
+        [busy]="busy()"
+        [error]="message()"
+        (submitted)="onConfirmPin($event)"
+      />
+    }
+
+    @case ('currentPin') {
+      <q-pin-keypad
+        [title]="'device.terminal.enterCurrentPin' | t"
+        [minLength]="4"
+        [maxLength]="12"
+        [busy]="busy()"
+        [error]="message()"
+        [cancelLabel]="'device.terminal.back' | t"
+        (submitted)="onCurrentPin($event)"
+        (cancelled)="close()"
+      />
+    }
+
+    @case ('changeNew') {
+      <q-pin-keypad
+        [title]="'device.terminal.chooseNewPin' | t: { digits: pinLength() }"
+        [minLength]="pinLength()"
+        [maxLength]="pinLength()"
+        [busy]="busy()"
+        [error]="message()"
+        (submitted)="onChangeNew($event)"
+      />
+    }
+
+    @case ('changeConfirm') {
+      <q-pin-keypad
+        [title]="'device.terminal.confirmNewPin' | t"
+        [minLength]="pinLength()"
+        [maxLength]="pinLength()"
+        [busy]="busy()"
+        [error]="message()"
+        (submitted)="onChangeConfirm($event)"
+      />
+    }
+
+    @case ('done') {
+      <p class="unlock__hint" role="status" data-testid="terminal-done">{{ message() }}</p>
+    }
+  }
+</div>

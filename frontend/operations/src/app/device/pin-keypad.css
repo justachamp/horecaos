@@ -1,0 +1,85 @@
+:host {
+  display: block;
+}
+
+.keypad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.keypad__title {
+  margin: 0;
+  font-size: var(--q-type-headline);
+  text-align: center;
+}
+
+.keypad__entry {
+  min-height: 56px;
+  min-width: 260px;
+  padding: 8px 16px;
+  border-bottom: 3px solid var(--q-hairline);
+  font-size: 2rem;
+  letter-spacing: 0.4em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.keypad__error {
+  margin: 0;
+  color: var(--q-error-text);
+  text-align: center;
+}
+
+.keypad__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  width: 100%;
+}
+
+.keypad__key {
+  min-height: 72px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-surface-1);
+  color: var(--q-ink);
+  font-size: 1.75rem;
+  cursor: pointer;
+}
+
+.keypad__key--aux {
+  font-size: 1.1rem;
+  color: var(--q-ink-subtle);
+}
+
+.keypad__actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.keypad__action {
+  flex: 1;
+  min-height: 56px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-surface-1);
+  color: var(--q-ink);
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+
+.keypad__action--primary {
+  border: none;
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

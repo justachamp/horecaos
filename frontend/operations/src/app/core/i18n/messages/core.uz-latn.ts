@@ -27,6 +27,9 @@ export const coreUzLatn: AreaMessages<typeof coreEn> = {
   'shell.nav.inbox': 'Suhbatlar',
   'shell.nav.kitchen': 'Oshxona',
   'shell.nav.delivery': 'Yetkazib berish',
+  'shell.nav.deliveries': 'Yetkazmalar',
+  'shell.profile.showAll': 'Hammasini koʻrsatish',
+  'shell.profile.hideAgain': 'Ortiqchasini yashirish',
   'shell.nav.couriers': 'Kuryerlar',
   'shell.nav.customers': 'Mijozlar',
   'shell.nav.staff': 'Xodimlar va ruxsatlar',
@@ -56,7 +59,7 @@ export const coreUzLatn: AreaMessages<typeof coreEn> = {
   'orders.status.RECEIVED': 'Qabul qilindi',
   'orders.status.PAYMENT_AUTHORIZING': 'Toʻlov',
   'orders.status.AWAITING_APPROVAL': 'Tasdiqlashda',
-  'orders.status.PAYMENT_FAILED': 'Toʻlov oʻtmadi',
+  'orders.status.PAYMENT_FAILED': 'Bekor qilindi: toʻlanmagan',
   'orders.status.CONFIRMED': 'Tasdiqlangan',
   'orders.status.REJECTED': 'Rad etilgan',
   'orders.status.EXPIRED': 'Muddati oʻtgan',
@@ -98,6 +101,8 @@ export const coreUzLatn: AreaMessages<typeof coreEn> = {
   'orders.table.chip': 'Stol {tables}',
   'orders.action.catchweightNotReconciled':
     'Buyurtmani topshirishdan oldin ogʻirlik boʻyicha sotiladigan pozitsiyalarni torting',
+  'orders.action.marksIncomplete':
+    'Buyurtmani topshirishdan oldin markirovkalangan pozitsiyalarni skanerlang',
 
   'notBuilt.title': 'Hali qurilmagan',
   'notBuilt.body': 'Boʻlim tavsiflangan, lekin ekranlar yoʻq. Spetsifikatsiya: {spec}.',
@@ -208,6 +213,21 @@ export const coreUzLatn: AreaMessages<typeof coreEn> = {
   'ui.mediaUploader.confirm': 'Kesishni qoʻllash',
   'ui.mediaUploader.cancel': 'Bekor qilish',
   'ui.mediaUploader.uploading': 'Yuklanmoqda…',
+  'ui.mediaUploader.videoNotMp4':
+    'Faqat MP4 video qabul qilinadi — rolikni MP4 (H.264) formatida eksport qiling',
+  'ui.mediaUploader.videoTooLarge': 'Video 12 MB dan katta — kichikroq qilib eksport qiling',
+  'ui.mediaUploader.videoTooLong': 'Video 20 soniyadan uzun — uni qirqing',
+  'ui.mediaUploader.videoDimensions':
+    'Videoning uzun tomoni koʻpi bilan 1920, qisqa tomoni kamida 480 piksel boʻlishi kerak',
+  'ui.mediaUploader.videoUnreadable':
+    'Brauzer bu videoni oʻqiy olmadi — uni H.264 videoli MP4 sifatida eksport qiling',
+  'ui.mediaUploader.videoRejectedByServer':
+    'Platforma bu videoni rad etdi. Uni H.264 videoli MP4 sifatida (AAC ovozi bilan yoki ovozsiz), koʻpi bilan 12 MB, 20 soniya va 1920 piksel qilib, “tez boshlash” (veb uchun optimallash) yoqilgan holda eksport qiling va qayta yuklang',
+  'ui.mediaUploader.posterFailed': 'Bu videodan muqova kadrini olib boʻlmadi',
+  'ui.mediaUploader.posterHint':
+    'Video boshlanishidan oldin mijozlar koʻradigan kadrni tanlang (telefonda harakat kamaytirilgan boʻlsa, video oʻrniga ham shu koʻrsatiladi)',
+  'ui.mediaUploader.posterFrame': 'Muqova kadri',
+  'ui.mediaUploader.posterConfirm': 'Shu kadrni olish',
   'ui.mappingPane.unmappedOnly': 'Faqat bogʻlanmaganlarni koʻrsatish',
   'ui.mappingPane.bulkAutoMatch': 'Nomi boʻyicha avtomatik bogʻlash',
   'ui.mappingPane.loading': 'Moslashtirish yuklanmoqda…',
@@ -435,4 +455,17 @@ export const coreUzLatn: AreaMessages<typeof coreEn> = {
   'settings.orderPolicy.field.reason': 'Oʻzgarish sababi',
   'settings.orderPolicy.publish': 'Eʻlon qilish',
   'settings.orderPolicy.publishing': 'Eʻlon qilinmoqda…',
+
+  'shared.columnPicker.toggle': 'Ustunlar',
+  'shared.columnPicker.label': 'Jadval ustunlari',
+  'shared.columnPicker.reset': 'Ustunlarni standart holatga qaytarish',
+  'shared.columnPicker.saved':
+    'Tanlovingiz hisobingizda saqlanadi va barcha qurilmalaringizda koʻrinadi.',
+  'shared.columnPicker.session': 'Tanlov faqat shu seans tugaguncha amal qiladi.',
+  'shared.columnPicker.writeFailed':
+    'Soʻnggi oʻzgarishni hisobingizga saqlab boʻlmadi. U faqat shu ekranda amal qiladi.',
+  'shell.localeScope.thisDevice': 'Til faqat shu qurilma uchun tanlandi.',
+  'shell.localeScope.allDevices': 'Barcha qurilmalarim uchun',
+  'shell.localeScope.keep': 'Faqat shu qurilmada',
+  'shell.localeScope.failed': 'Tilni saqlab boʻlmadi. U faqat shu qurilmada qoladi.',
 };

@@ -175,6 +175,9 @@ describe('CustomerDetailPane', () => {
       loyaltyBalances: vi.fn().mockResolvedValue([]),
       loyaltyEntries: vi.fn().mockResolvedValue([]),
       adjustLoyalty: vi.fn().mockResolvedValue({ status: 'NOT_REQUIRED', approvalRequestId: null }),
+      adjustmentReasonCodes: vi
+        .fn()
+        .mockResolvedValue({ mode: 'REPORT_ONLY', codes: [], policyVersion: 0 }),
       ordersPage: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
       revealBlacklistHistory: vi.fn().mockResolvedValue([]),
       discountHistory: vi.fn().mockResolvedValue({ redemptions: [], totalsRedeemed: [] }),
@@ -663,6 +666,167 @@ describe('CustomerDetailPane', () => {
     });
     expect(amountCell.textContent).toContain(expectedFormatted);
     expect(amountCell.textContent?.trim()).not.toBe('5000');
+  });
+
+  /**
+   * ADR 0165, Decision 3: the adjustment dialog takes its reason codes from the platform's list,
+   * read when the form opens, and never from a copy in this source. In report-only mode the field
+   * stays free text with the list offered as suggestions (so the server's counter measures what
+   * operators really type); once the list is enforced it is a closed choice.
+   */
+  describe('the adjustment reason code (ADR 0165)', () => {
+    const BALANCE: LoyaltyBalance = {
+      accountId: 'loy-1',
+      brandId: 'brand-burger',
+      balance: { amountMinor: 10_000, currency: 'UZS' },
+      spendable: { amountMinor: 10_000, currency: 'UZS' },
+      held: { amountMinor: 0, currency: 'UZS' },
+      nextExpiryAt: null,
+      nextExpiryAmount: { amountMinor: 0, currency: 'UZS' },
+    };
+    const LIST = ['GOODWILL', 'SERVICE_RECOVERY', 'CORRECTION'];
+
+    async function openAdjustForm(
+      reasonCodes: ReturnType<typeof vi.fn>,
+      adjustLoyalty: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue({
+        status: 'NOT_REQUIRED',
+        approvalRequestId: null,
+      }),
+    ): Promise<{ host: HTMLElement; form: ComponentFixture<CustomerDetailPane> }> {
+      const reasonApi = {
+        ...api,
+        loyaltyBalances: vi.fn().mockResolvedValue([BALANCE]),
+        adjustmentReasonCodes: reasonCodes,
+        adjustLoyalty,
+      };
+      await TestBed.resetTestingModule()
+        .configureTestingModule({
+          imports: [CustomerDetailPane],
+          providers: [
+            provideRouter([]),
+            { provide: CustomersApi, useValue: reasonApi },
+            { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+            { provide: Auth, useValue: FAKE_AUTH },
+            { provide: SessionCapabilities, useValue: fakeCapabilities() },
+            { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+            { provide: LeadsApi, useValue: FAKE_LEADS_API },
+            { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
+          ],
+        })
+        .compileComponents();
+      TestBed.inject(I18n).setLocale('en');
+      const form = TestBed.createComponent(CustomerDetailPane);
+      form.componentRef.setInput('accountId', 'customer-1');
+      form.detectChanges();
+      await flushMicrotasks();
+      form.detectChanges();
+      const host: HTMLElement = form.nativeElement;
+      tabByLabel(host, 'Cashback').click();
+      form.detectChanges();
+      await flushMicrotasks();
+      form.detectChanges();
+      (host.querySelector('[data-testid="cashback-adjust-open"]') as HTMLButtonElement).click();
+      form.detectChanges();
+      await flushMicrotasks();
+      form.detectChanges();
+      return { host, form };
+    }
+
+    it('offers the list as suggestions while it is only reported, and the field stays free text', async () => {
+      const reasonCodes = vi
+        .fn()
+        .mockResolvedValue({ mode: 'REPORT_ONLY', codes: LIST, policyVersion: 1 });
+      const { host } = await openAdjustForm(reasonCodes);
+
+      expect(reasonCodes).toHaveBeenCalledTimes(1);
+      expect(host.querySelector('[data-testid="cashback-adjust-reason-code-select"]')).toBeNull();
+      const input = host.querySelector(
+        '[data-testid="cashback-adjust-reason-code-input"]',
+      ) as HTMLInputElement;
+      expect(input.getAttribute('list')).toBe('cashback-adjust-reason-codes');
+      const suggestions = Array.from(
+        host.querySelectorAll('#cashback-adjust-reason-codes option'),
+      ).map((option) => option.getAttribute('value'));
+      expect(suggestions).toEqual(LIST);
+    });
+
+    it('is a closed choice once the list is enforced, and sends the code that was chosen', async () => {
+      const reasonCodes = vi
+        .fn()
+        .mockResolvedValue({ mode: 'ENFORCE', codes: LIST, policyVersion: 2 });
+      const adjustLoyalty = vi.fn().mockResolvedValue({
+        status: 'NOT_REQUIRED',
+        approvalRequestId: null,
+      });
+      const { host, form } = await openAdjustForm(reasonCodes, adjustLoyalty);
+
+      expect(host.querySelector('[data-testid="cashback-adjust-reason-code-input"]')).toBeNull();
+      const select = host.querySelector(
+        '[data-testid="cashback-adjust-reason-code-select"]',
+      ) as HTMLSelectElement;
+      expect(Array.from(select.options).map((option) => option.value)).toEqual(['', ...LIST]);
+
+      select.value = 'SERVICE_RECOVERY';
+      select.dispatchEvent(new Event('change'));
+      form.componentInstance['adjustAmountMinor'].set(5_000);
+      form.componentInstance['adjustReason'].set('Cold delivery');
+      form.detectChanges();
+      (host.querySelector('[data-testid="cashback-adjust-submit"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+
+      expect(adjustLoyalty).toHaveBeenCalledTimes(1);
+      expect(adjustLoyalty.mock.calls[0][2]).toMatchObject({
+        reasonCode: 'SERVICE_RECOVERY',
+        amountMinor: 5_000,
+        currency: 'UZS',
+      });
+    });
+
+    it('shows a refused code as a field error on the reason code, not as a failed form, and re-reads the list', async () => {
+      const reasonCodes = vi
+        .fn()
+        .mockResolvedValueOnce({ mode: 'REPORT_ONLY', codes: LIST, policyVersion: 1 })
+        .mockResolvedValue({ mode: 'ENFORCE', codes: LIST, policyVersion: 2 });
+      const refusal = new ApiError(
+        'VALIDATION_FAILED',
+        400,
+        {
+          status: 400,
+          code: 'VALIDATION_FAILED',
+          errors: [{ field: 'reasonCode', code: 'REASON_CODE_NOT_PERMITTED' }],
+        },
+        null,
+      );
+      const adjustLoyalty = vi.fn().mockRejectedValue(refusal);
+      const { host, form } = await openAdjustForm(reasonCodes, adjustLoyalty);
+
+      form.componentInstance['adjustReasonCode'].set('CASH_RECEIVED');
+      form.componentInstance['adjustAmountMinor'].set(5_000);
+      form.componentInstance['adjustReason'].set('Took cash at the counter');
+      form.detectChanges();
+      (host.querySelector('[data-testid="cashback-adjust-submit"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+      form.detectChanges();
+
+      expect(
+        host.querySelector('[data-testid="cashback-adjust-reason-code-refused"]'),
+      ).not.toBeNull();
+      expect(host.querySelector('[data-testid="cashback-adjust-form"]')).not.toBeNull();
+      expect(reasonCodes).toHaveBeenCalledTimes(2);
+      expect(
+        host.querySelector('[data-testid="cashback-adjust-reason-code-select"]'),
+      ).not.toBeNull();
+    });
+
+    it('leaves the field free text when the list cannot be read, so the form still works', async () => {
+      const reasonCodes = vi.fn().mockRejectedValue(new ApiError('SERVER_ERROR', 500, null, null));
+      const { host } = await openAdjustForm(reasonCodes);
+
+      expect(
+        host.querySelector('[data-testid="cashback-adjust-reason-code-input"]'),
+      ).not.toBeNull();
+      expect(host.querySelector('[data-testid="cashback-adjust-reason-code-select"]')).toBeNull();
+    });
   });
 
   /**

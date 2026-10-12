@@ -349,8 +349,17 @@ docker compose -f deploy/compose.production.yml --env-file /etc/horecaos/product
     bao kv put horecaos/production/data_encryption/platform/backup-passphrase \
       value="'"$(head -c 32 /dev/urandom | base64)"'"
     bao kv put horecaos/production/data_encryption/platform/handover-pepper \
+      value="'"$(head -c 32 /dev/urandom | base64)"'"
+    bao kv put horecaos/production/data_encryption/platform/terminal-pin-pepper \
       value="'"$(head -c 32 /dev/urandom | base64)"'"'
 ```
+
+`HORECAOS_TERMINAL_PIN_PEPPER_REF` (ADR 0155) goes in `/etc/horecaos/production.env`
+beside `HORECAOS_HANDOVER_PEPPER_REF`, naming
+`horecaos:production:data_encryption:platform:terminal-pin-pepper`. The application
+refuses to start without it. The terminal pepper keys every staff PIN's digest: lose
+it and no PIN verifies, so every person sets a new one with a new activation code.
+[terminals-and-kiosks.md](terminals-and-kiosks.md) has the rotation.
 
 **Print and seal both the KEK and the backup passphrase, in an envelope kept
 somewhere other than this building.** Losing the KEK makes every

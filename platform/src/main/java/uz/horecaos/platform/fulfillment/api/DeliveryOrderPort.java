@@ -203,6 +203,21 @@ public interface DeliveryOrderPort {
     }
 
     /**
+     * The one fact the grouping feed needs of an order's door: where it is, and nothing else (ADR 0170
+     * Decision 9). Decrypts the address document under {@code purpose} and returns a latitude and a longitude;
+     * no address line, no instructions, no name, no telephone number. Never logged, stored, evented or carried
+     * into a metric by the caller: it is compared and dropped.
+     *
+     * @return empty when the order is not this tenant's, is not a delivery, holds no address, or its address
+     *         has no coordinate ({@code 0,0} is treated as none: a delivery to the Gulf of Guinea is a
+     *         geocoding that never happened)
+     */
+    default Optional<uz.horecaos.platform.tenancy.api.GeoPoint> dropoffPoint(
+            UUID tenantId, UUID orderId, String purpose) {
+        return Optional.empty();
+    }
+
+    /**
      * The door a courier is sent to. Personal data throughout, so it prints as nothing.
      *
      * @param instructions the customer's own words about how to reach them ("ring twice",

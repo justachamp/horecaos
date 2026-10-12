@@ -1,0 +1,128 @@
+<div class="hold" data-testid="paid-hold">
+  <h3 class="q-body hold__title">{{ 'kitchen.paidHold.title' | t }}</h3>
+  <p class="q-caption hold__lead">{{ 'kitchen.paidHold.lead' | t }}</p>
+
+  @if (loadError(); as message) {
+    <p class="q-body-sm hold__error" role="alert" data-testid="paid-hold-load-error">
+      {{ message }}
+    </p>
+  } @else if (!editing()) {
+    @if (canManage()) {
+      <q-inherited-field
+        [label]="'kitchen.paidHold.field' | t"
+        [resolution]="resolution()"
+        [loading]="loading()"
+        currentScopeType="LOCATION"
+        [settableScopes]="editableScopes"
+        [formatValue]="formatValue"
+        [revertable]="false"
+        (override)="startEditing()"
+        (setValueRequested)="startEditing()"
+      />
+    } @else {
+      <p class="q-body-sm" data-testid="paid-hold-readonly">
+        {{ resolution()?.value }}
+      </p>
+    }
+    @if (view(); as current) {
+      @if (current.mode === 'SHADOW') {
+        <p class="q-caption hold__lead" data-testid="paid-hold-trial">
+          {{ 'kitchen.paidHold.trial' | t }}
+        </p>
+      }
+    }
+    @if (justSaved()) {
+      <p class="q-caption hold__saved" role="status" data-testid="paid-hold-saved">
+        {{ 'kitchen.paidHold.saved' | t }}
+      </p>
+    }
+  } @else {
+    <div class="hold__form" data-testid="paid-hold-form">
+      <label class="hold__field">
+        <span class="q-caption">{{ 'kitchen.paidHold.scope' | t }}</span>
+        <select
+          [value]="level()"
+          (change)="onLevelChange($any($event.target).value)"
+          data-testid="paid-hold-level"
+        >
+          @for (option of levels; track option) {
+            <option [value]="option" [selected]="option === level()">
+              {{ levelLabel(option) }}
+            </option>
+          }
+        </select>
+      </label>
+      <p class="q-caption hold__lead">{{ 'kitchen.paidHold.replaces' | t }}</p>
+
+      <label class="hold__field">
+        <span class="q-caption">{{ 'kitchen.paidHold.mode' | t }}</span>
+        <select
+          [value]="modeDraft()"
+          (change)="modeDraft.set($any($event.target).value)"
+          data-testid="paid-hold-mode"
+        >
+          @for (option of modes; track option) {
+            <option [value]="option" [selected]="option === modeDraft()">
+              {{ modeLabel(option) }}
+            </option>
+          }
+        </select>
+      </label>
+
+      <label class="hold__field">
+        <span class="q-caption">{{ 'kitchen.paidHold.overdue' | t }}</span>
+        <input
+          type="number"
+          [attr.min]="overdueMin"
+          [attr.max]="overdueMax"
+          step="1"
+          [value]="overdueDraft()"
+          (input)="overdueDraft.set($any($event.target).value)"
+          data-testid="paid-hold-overdue"
+        />
+      </label>
+
+      <label class="hold__field">
+        <span class="q-caption">{{ 'kitchen.paidHold.reason' | t }}</span>
+        <input
+          type="text"
+          maxlength="1000"
+          [value]="reason()"
+          (input)="reason.set($any($event.target).value)"
+          data-testid="paid-hold-reason"
+        />
+      </label>
+
+      @if (!overdueValid()) {
+        <p class="q-caption hold__hint" data-testid="paid-hold-invalid">
+          {{ 'kitchen.paidHold.invalid' | t }}
+        </p>
+      }
+      @if (stale()) {
+        <p class="q-caption hold__error" role="alert" data-testid="paid-hold-stale">
+          {{ 'kitchen.paidHold.stale' | t }}
+        </p>
+      }
+      @if (saveError(); as message) {
+        <p class="q-caption hold__error" role="alert" data-testid="paid-hold-save-error">
+          {{ message }}
+        </p>
+      }
+
+      <div class="hold__actions">
+        <button
+          type="button"
+          class="primary"
+          [disabled]="!canSave()"
+          (click)="save()"
+          data-testid="paid-hold-save"
+        >
+          {{ saving() ? ('kitchen.paidHold.saving' | t) : ('kitchen.paidHold.save' | t) }}
+        </button>
+        <button type="button" (click)="cancelEditing()" data-testid="paid-hold-cancel">
+          {{ 'kitchen.paidHold.cancel' | t }}
+        </button>
+      </div>
+    </div>
+  }
+</div>

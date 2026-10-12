@@ -26,6 +26,16 @@ public enum ApprovalAction {
     COURIER_ADJUSTMENT_CREATE("courier.adjustment.create", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
 
     /**
+     * ADR 0170: moving the tenant's pay for a run of several orders to {@code FIRST_FULL_THEN_INCREMENT}.
+     * It changes what a self-employed courier earns for the same kilometres, so it is a labour-relations
+     * decision as much as a configuration one. A brand-new action with no prior single-signature behaviour to
+     * preserve, so {@code ALLOW_WITHOUT_APPROVAL} is the honest starting mode ADR 0050 asks of a new action: the
+     * publisher's explicit acknowledgement of the engagement terms is recorded either way, and a tenant that
+     * wants two signatures authors an {@code audit.approval_policies} row naming this code.
+     */
+    COURIER_RUN_PAY_CHANGE("courier.run-pay.change", MissingPolicyMode.ALLOW_WITHOUT_APPROVAL),
+
+    /**
      * ADR 0042 already makes a manual penalty four-eyes unconditionally. Its
      * missing-policy mode is therefore fail closed from the outset; this replaces
      * the former generic "not granted" error with a stable configuration error.
@@ -166,7 +176,33 @@ public enum ApprovalAction {
      * perform them alone. A platform-scope request is HorecaOS's own decision about its own
      * staff, so it is raised at platform scope and listed on the platform queue.
      */
-    IAM_STAFF_MFA_RESET("iam.staff.mfa.reset", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY, Worklist.PLATFORM);
+    IAM_STAFF_MFA_RESET("iam.staff.mfa.reset", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY, Worklist.PLATFORM),
+
+    /**
+     * ADR 0166, Decision 8: asking the tenant's own fiscal agent to correct or void an issued
+     * receipt. HorecaOS records the request and never issues the correction, but it moves the
+     * document out of {@code ISSUED}, and what the tenant then files with the tax authority cannot
+     * be taken back, so a second person signs.
+     *
+     * <p>Fail-closed, like {@link #PRICING_PROMOTION_ACTIVATE}, and governed from the first day by
+     * the platform-scope floor {@code V0551} seeds; the request itself is the tenant's own decision,
+     * raised in a tenant-owned scope and listed on that tenant's worklist. A deployment that
+     * deleted the policy should stop corrections, not let one person decide them alone.
+     */
+    FISCAL_CORRECTION_REQUEST("fiscal.correction.request", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
+
+    /**
+     * ADR 0166, Decision 8: attaching the reference the tenant's fiscal agent returned to a correction or
+     * void request. It creates a linked {@code CORRECTION} or {@code REFUND} document, moves the original
+     * to {@code CORRECTED} or {@code VOIDED}, and puts the receipt link in front of the customer, all on
+     * what one person typed; so a second person signs the reference itself, and the signature is bound to
+     * it by the parameters hash.
+     *
+     * <p>Fail-closed, like {@link #FISCAL_CORRECTION_REQUEST}, and governed from the first day by the
+     * platform-scope floor {@code V0642} seeds; the attachment is the tenant's own decision, raised in a
+     * tenant-owned scope and listed on that tenant's worklist.
+     */
+    FISCAL_CORRECTION_ATTACH("fiscal.correction.attach", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY);
 
     /**
      * Which worklist a request for the action reaches once it is {@code PENDING}.

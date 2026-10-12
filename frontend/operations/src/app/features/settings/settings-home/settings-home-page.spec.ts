@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfigurationKeyView } from '../../../core/api/configuration';
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
+import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { I18n } from '../../../core/i18n/i18n';
 import { ShortcutRegistry } from '../../../shared/keyboard/shortcut-registry';
 import { ConfigurationApi } from '../configuration-api';
@@ -55,6 +56,7 @@ async function render(
           ensureLoaded: () => Promise.resolve(),
         },
       },
+      { provide: SessionCapabilities, useValue: { has: () => true } },
       { provide: ReadinessApi, useValue: readiness },
       {
         provide: ConfigurationApi,

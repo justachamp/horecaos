@@ -9,6 +9,7 @@ import {
 import { firstValueFrom } from 'rxjs';
 
 import { CurrentLocation } from '../../core/auth/current-location';
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { ApiError } from '../../core/api/problem-details';
@@ -21,6 +22,7 @@ import {
   CapacityWindowResponse,
   NewCapacityWindow,
 } from './capacity-api';
+import { HeadcountCard } from './headcount-card';
 import { KitchenApi, StationResponse } from './kitchen-api';
 
 /**
@@ -45,19 +47,18 @@ import { KitchenApi, StationResponse } from './kitchen-api';
  * window from ever being authored — deleting the wrong one is what frees
  * the slot.
  *
- * **Not built (Card 2), and named rather than faked**: "cook headcount
- * output." Computing a cook count needs two things nothing in this build
- * supplies — a demand forecast (there is no forecasting model anywhere in the
- * platform; `statistics.md`'s own scope excludes it) and a policy for how many
- * portions one cook produces an hour (a business decision nobody has made,
- * varies by station and cuisine, and is not this wave's to invent). Delever's
- * own "Прогнозирование" is marked unverified in the parity matrix for the same
- * reason. This card says so rather than rendering a number this build cannot
- * honestly compute.
+ * **Built (Card 2): cook headcount** (ADR 0163, gap map row `2.6a`). Cooks are
+ * `ceil(expected portions in the hour ÷ the portions one cook produces in an hour)`, per station and per
+ * operating hour. The demand side is a forecast that does exist: the branch forecast
+ * (`reporting.fact_forecast`, ADR 0043's seasonal-naive model, rows `7.8`/`7.8a`/`7.8b`) counts orders and
+ * so cannot feed a cook, and ADR 0163 adds the same method at station grain from `reporting.fact_station_load`,
+ * computed on read. The pace side is a tenant policy (`kitchen.station_productivity`) the platform never
+ * fills in: until a manager states one the card says so and shows no number. It is a planning aid and never
+ * a rota; see {@link HeadcountCard}.
  */
 @Component({
   selector: 'q-capacity-page',
-  imports: [TPipe, DayOfWeekToggle, TimeInput],
+  imports: [TPipe, DayOfWeekToggle, TimeInput, HeadcountCard],
   templateUrl: './capacity-page.html',
   styleUrl: './capacity-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -66,7 +67,14 @@ export class CapacityPage implements OnInit {
   private readonly location = inject(CurrentLocation);
   private readonly capacityApi = inject(CapacityApi);
   private readonly kitchenApi = inject(KitchenApi);
+  private readonly capabilities = inject(SessionCapabilities);
   protected readonly i18n = inject(I18n);
+
+  protected readonly scope = this.location.scope;
+  /** May state the cook pace (`kitchen.productivity.manage`); reading the plan needs only `kitchen.headcount.read`. */
+  protected readonly canManagePace = computed(() =>
+    this.capabilities.has('KITCHEN_PRODUCTIVITY_MANAGE'),
+  );
 
   protected readonly firstLoadComplete = signal(false);
   protected readonly denied = signal(false);
