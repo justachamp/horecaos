@@ -202,14 +202,7 @@ public class KioskDeviceService implements KioskDeviceLookup {
         List<DevicePrincipalView> kiosks = kiosksAt(tenantId, brandId, locationId);
         Map<UUID, BindingRow> bindings = store.forLocation(tenantId, locationId).stream()
                 .collect(Collectors.toMap(BindingRow::deviceId, row -> row));
-        Set<String> subjects = new java.util.LinkedHashSet<>();
-        kiosks.forEach(device -> {
-            subjects.add(device.enrolledBy());
-            if (device.revokedBy() != null) {
-                subjects.add(device.revokedBy());
-            }
-        });
-        Map<String, String> names = staff.namesOf(tenantId, subjects);
+        Map<String, String> names = namesAround(tenantId, kiosks);
         List<KioskDeviceView> views = new ArrayList<>();
         for (DevicePrincipalView device : kiosks) {
             views.add(viewOf(device, bindings.get(device.id()), names));
@@ -247,7 +240,7 @@ public class KioskDeviceService implements KioskDeviceLookup {
         boolean renamed = !device.displayName().equals(displayName);
         boolean moved = before == null || !before.channelId().equals(channelId);
         if (!renamed && !moved) {
-            return viewOf(device, before, Map.of());
+            return viewOf(device, before, namesAround(tenantId, List.of(device)));
         }
         if (renamed) {
             enrolment.rename(tenantId, deviceId, displayName);
@@ -286,7 +279,7 @@ public class KioskDeviceService implements KioskDeviceLookup {
                 .build());
 
         DevicePrincipalView after = enrolment.find(tenantId, deviceId).orElse(device);
-        return viewOf(after, store.find(tenantId, deviceId).orElse(null), Map.of());
+        return viewOf(after, store.find(tenantId, deviceId).orElse(null), namesAround(tenantId, List.of(after)));
     }
 
     /**
@@ -450,6 +443,22 @@ public class KioskDeviceService implements KioskDeviceLookup {
 
     private @Nullable String nameOf(UUID tenantId, String subject) {
         return staff.nameOf(tenantId, subject);
+    }
+
+    /**
+     * The display names of the people who approved or revoked these kiosks, in one directory read. Every response that
+     * carries a kiosk row resolves them: the console replaces a row with the response to a rename, so a response that
+     * left them out would blank «paired by» (and «revoked by») in the row until the list is read again.
+     */
+    private Map<String, String> namesAround(UUID tenantId, List<DevicePrincipalView> devices) {
+        Set<String> subjects = new java.util.LinkedHashSet<>();
+        devices.forEach(device -> {
+            subjects.add(device.enrolledBy());
+            if (device.revokedBy() != null) {
+                subjects.add(device.revokedBy());
+            }
+        });
+        return staff.namesOf(tenantId, subjects);
     }
 
     private KioskDeviceView viewOf(
