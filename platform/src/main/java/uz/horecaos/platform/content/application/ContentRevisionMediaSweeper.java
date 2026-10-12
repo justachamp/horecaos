@@ -4,10 +4,13 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,8 +36,8 @@ import uz.horecaos.platform.media.api.MediaRelease;
  * then refused with {@code CONTENT_REVISION_MEDIA_RELEASED}.
  *
  * <p>Safe to repeat and to run twice: an asset already released is skipped (it is no longer displayable),
- * a refusal changes nothing, and a pass that stops half way leaves the rest for the next. One pass at a
- * time in a process.
+ * a refusal changes nothing, and a pass that stops half way leaves the rest for the next, which goes on
+ * from there. One pass at a time in a process.
  */
 @Component
 @ConditionalOnProperty(name = "horecaos.content.media-sweep.enabled", havingValue = "true", matchIfMissing = true)
@@ -52,6 +55,11 @@ public class ContentRevisionMediaSweeper {
     private final Clock clock;
     private final int batchSize;
     private final AtomicBoolean running = new AtomicBoolean();
+
+    /** Per tenant, where the last pass that ran out of budget stopped. Touched only by the pass that holds {@link #running}. */
+    private final Map<UUID, Cursor> cursors = new ConcurrentHashMap<>();
+
+    private volatile @Nullable UUID lastTenantSpentIn;
 
     public ContentRevisionMediaSweeper(
             JdbcContentStore store,
@@ -87,6 +95,15 @@ public class ContentRevisionMediaSweeper {
     /**
      * Works one pass.
      *
+     * <p>A pass spends at most {@code batchSize} release requests, and an asset some module still uses
+     * is a request that changes nothing: it is still a candidate on the next pass, and the one after.
+     * Starting every pass from the oldest candidate would therefore let the oldest {@code batchSize}
+     * held-back assets spend every budget for good, and the tenant that holds them would keep every other
+     * tenant waiting. So a pass that runs out of budget remembers where it stopped, per tenant, and the
+     * next one goes on from there; the tenant it stopped in goes to the back of the line; and a tenant
+     * whose candidates have all been looked at starts again from the oldest, because what held an asset
+     * back may be gone by then.
+     *
      * @return the outcome counts of the release requests this pass made
      */
     public Result sweepOnce() {
@@ -99,14 +116,22 @@ public class ContentRevisionMediaSweeper {
             int skipped = 0;
             int budget = batchSize;
             Instant now = clock.instant();
-            for (UUID tenantId : store.tenantsWithSupersededMedia()) {
+            @Nullable UUID spentIn = null;
+            for (UUID tenantId : inTurn(store.tenantsWithSupersededMedia())) {
                 if (budget <= 0) {
                     break;
                 }
                 Instant cutoff = now.minus(Duration.ofDays(environment.revisionMediaRetentionDays(tenantId)));
-                Instant afterAt = Instant.EPOCH;
-                UUID afterAsset = new UUID(0L, 0L);
-                while (budget > 0) {
+                Cursor from = cursors.getOrDefault(tenantId, Cursor.START);
+                Instant afterAt = from.at();
+                UUID afterAsset = from.asset();
+                boolean stoppedForBudget = false;
+                scan:
+                while (true) {
+                    if (budget <= 0) {
+                        stoppedForBudget = true;
+                        break;
+                    }
                     List<SupersededAsset> page = store.supersededAssets(tenantId, cutoff, afterAt, afterAsset, PAGE);
                     if (page.isEmpty()) {
                         break;
@@ -117,31 +142,42 @@ public class ContentRevisionMediaSweeper {
                     }
                     Map<UUID, MediaCreativeLookup.Creative> described = media.describe(tenantId, ids);
                     for (SupersededAsset candidate : page) {
-                        afterAt = candidate.supersededAt();
-                        afterAsset = candidate.assetId();
                         MediaCreativeLookup.Creative creative = described.get(candidate.assetId());
-                        if (budget <= 0) {
-                            break;
-                        }
                         if (creative == null || !creative.status().isDisplayable()) {
                             // Already released or deleted, or not a thing media still holds: nothing to do.
                             skipped++;
-                            continue;
-                        }
-                        budget--;
-                        MediaRelease.Outcome outcome = release.release(tenantId, candidate.assetId(), REASON);
-                        metrics.mediaRelease(outcome.name());
-                        if (outcome == MediaRelease.Outcome.RELEASED) {
-                            released++;
                         } else {
-                            kept++;
+                            if (budget <= 0) {
+                                // Not looked at: the next pass starts with this one.
+                                stoppedForBudget = true;
+                                break scan;
+                            }
+                            budget--;
+                            MediaRelease.Outcome outcome = release.release(tenantId, candidate.assetId(), REASON);
+                            metrics.mediaRelease(outcome.name());
+                            if (outcome == MediaRelease.Outcome.RELEASED) {
+                                released++;
+                            } else {
+                                kept++;
+                            }
                         }
+                        afterAt = candidate.supersededAt();
+                        afterAsset = candidate.assetId();
                     }
                     if (page.size() < PAGE) {
                         break;
                     }
                 }
+                if (stoppedForBudget) {
+                    cursors.put(tenantId, new Cursor(afterAt, afterAsset));
+                } else {
+                    cursors.remove(tenantId);
+                }
+                if (budget <= 0) {
+                    spentIn = tenantId;
+                }
             }
+            lastTenantSpentIn = spentIn;
             if (released > 0 || kept > 0) {
                 log.info("Content media sweep released {} asset(s) and kept {}", released, kept);
             }
@@ -149,6 +185,32 @@ public class ContentRevisionMediaSweeper {
         } finally {
             running.set(false);
         }
+    }
+
+    /**
+     * The tenants in the order this pass takes them: in a fixed order, starting after the tenant the last
+     * pass spent its budget in, so the tenants take turns and none is left waiting behind another's
+     * held-back assets.
+     */
+    private List<UUID> inTurn(List<UUID> tenants) {
+        List<UUID> ordered = new ArrayList<>(tenants);
+        ordered.sort(Comparator.naturalOrder());
+        UUID after = lastTenantSpentIn;
+        if (after == null) {
+            return ordered;
+        }
+        int start = 0;
+        while (start < ordered.size() && ordered.get(start).compareTo(after) <= 0) {
+            start++;
+        }
+        List<UUID> turn = new ArrayList<>(ordered.subList(start, ordered.size()));
+        turn.addAll(ordered.subList(0, start));
+        return turn;
+    }
+
+    /** Where a pass that ran out of budget stopped in one tenant's candidates: the last one it dealt with. */
+    private record Cursor(Instant at, UUID asset) {
+        static final Cursor START = new Cursor(Instant.EPOCH, new UUID(0L, 0L));
     }
 
     /** What a pass did: assets released, assets some module still uses, candidates that needed nothing. */

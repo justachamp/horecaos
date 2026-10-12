@@ -1057,6 +1057,15 @@ extracted by the same extractor that fills `revision_media` at publish (at most 
 per brand). Until Release 3 nothing is released, and superseded creatives are metered by
 the storage entitlement.
 
+A pass makes at most `batchSize` release requests, and an asset some module still uses is a
+request that changes nothing and stays a candidate. So a pass that runs out of budget
+remembers where it stopped in that tenant's candidates (oldest first) and the next goes on
+from there; the tenants take turns, the next pass starting after the one the last spent its
+budget in; and a tenant whose candidates have all been looked at starts again from the
+oldest, because what held an asset back may be gone. Without that, the oldest `batchSize`
+held-back assets would spend every pass for good and their tenant would keep every other
+waiting. The position is kept in memory, so a restart begins again from the oldest.
+
 ### Caching and performance (ADR 0033)
 
 `Cache-Control: public, max-age=60` and a body-digest `ETag` (the digest approach
