@@ -184,6 +184,14 @@ class LoyaltyPosSyncHttpTests {
     @SuppressWarnings("NullAway")
     private uz.horecaos.platform.tenancy.api.ConfigurationResolver configuration;
 
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private uz.horecaos.platform.loyalty.application.AdjustmentReasonPolicyService reasonCodes;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private io.micrometer.core.instrument.MeterRegistry meters;
+
     private ListAppender<ILoggingEvent> logCapture;
 
     @BeforeEach
@@ -193,7 +201,8 @@ class LoyaltyPosSyncHttpTests {
         jdbc.sql("TRUNCATE TABLE iam.grants CASCADE").update();
         jdbc.sql("TRUNCATE TABLE integration.provider_entity_mappings").update();
         jdbc.sql("TRUNCATE TABLE tenant.configuration_values").update();
-        jdbc.sql("TRUNCATE TABLE loyalty.pos_sync_discrepancies, loyalty.pos_sync_movements, "
+        jdbc.sql("TRUNCATE TABLE loyalty.pos_sync_run_findings, loyalty.pos_sync_match_progress, "
+                        + "loyalty.pos_sync_discrepancies, loyalty.pos_sync_movements, "
                         + "loyalty.pos_balance_sync_state, loyalty.pos_sync_runs")
                 .update();
         jdbc.sql("DELETE FROM integration.binding_capabilities").update();
@@ -225,6 +234,18 @@ class LoyaltyPosSyncHttpTests {
     @AfterEach
     void detachLogCapture() {
         ((Logger) LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME)).detachAppender(logCapture);
+    }
+
+    /** The platform document is not tenant data, so the reset above does not reach it: put the rollout's start back. */
+    @AfterEach
+    void putTheOperatorReasonCodeListBackToReportOnly() {
+        if (reasonCodes.currentVersion() > 0) {
+            reasonCodes.author(
+                    uz.horecaos.platform.loyalty.domain.AdjustmentReasonPolicy.platformDefault(),
+                    reasonCodes.currentVersion(),
+                    ActorRef.user("platform-admin", "Platform"),
+                    "test: back to report-only");
+        }
     }
 
     // ------------------------------------------------------------------ the vendor is told apart
@@ -696,6 +717,112 @@ class LoyaltyPosSyncHttpTests {
             reportOnlyTheReasonList();
         }
         assertThat(balanceOf(DILYA)).isEqualTo(10_000);
+
+        // and the resolution's own entry point is not a way round the list for a code a person chose, or for the
+        // sync's own spend, which no person resolves into
+        for (String notAResolutionCode : List.of("GOODWILL", "POS_SYNC_SPEND")) {
+            assertThatThrownBy(() -> adjustments.adjustForTillResolution(new AdjustmentCommand(
+                            TENANT,
+                            BRAND,
+                            DILYA,
+                            500,
+                            "UZS",
+                            notAResolutionCode,
+                            "not a resolution's",
+                            ActorRef.user(FINANCE, null),
+                            "resolution-" + notAResolutionCode,
+                            "")))
+                    .as("%s is not a code a till resolution writes", notAResolutionCode)
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        assertThat(balanceOf(DILYA)).isEqualTo(10_000);
+    }
+
+    @Test
+    @DisplayName(
+            "accepting the till's number is not an operator-typed reason: with the ADR 0165 list enforced a held credit and a till-higher difference both still resolve, and the unlisted-code counter does not move")
+    void acceptTillIsNotAnOperatorTypedReasonUnderReportOnlyAndEnforce() throws Exception {
+        pointsAccount(AZIZA, PHONE_AZIZA, 40_000);
+        pointsAccount(DILYA, PHONE_DILYA, 10_000);
+        till.tillCustomer("T-AZIZA", PHONE_AZIZA, 40_000).tillCustomer("T-DILYA", PHONE_DILYA, 25_000);
+        brandPolicy("loyalty.pos_sync.max_auto_credit_minor", 8_000);
+        mode("PULL");
+        reconcile(FAKE_BINDING);
+        till.tillEarn("T-AZIZA", 9_000);
+        reconcile(FAKE_BINDING);
+        String open =
+                get(BASE + "/discrepancies?status=OPEN", FINANCE).getResponse().getContentAsString(UTF_8);
+        Map<String, Object> held = discrepancy(open, "CREDIT_HELD");
+        Map<String, Object> higher = discrepancyOfTillCustomer(open, "TILL_HIGHER", "T-DILYA");
+        double offListBefore = unlistedReasonCodes("REPORT_ONLY") + unlistedReasonCodes("ENFORCE");
+
+        MvcResult reportOnly =
+                resolve(idOf(higher), intOf(higher.get("version")), "ACCEPT_TILL", "Counted at the till", FINANCE);
+
+        assertThat(reportOnly.getResponse().getStatus()).isEqualTo(200);
+        assertThat(balanceOf(DILYA)).isEqualTo(25_000);
+        assertThat(unlistedReasonCodes("REPORT_ONLY") + unlistedReasonCodes("ENFORCE"))
+                .as("the sync's own reason code is not an off-list label an operator typed")
+                .isEqualTo(offListBefore);
+
+        double enforcedBefore = unlistedReasonCodes("ENFORCE");
+
+        MvcResult enforced;
+        enforceTheReasonList();
+        try {
+            enforced = resolve(idOf(held), intOf(held.get("version")), "ACCEPT_TILL", "Aziza earned this", FINANCE);
+        } finally {
+            reportOnlyTheReasonList();
+        }
+
+        assertThat(enforced.getResponse().getStatus())
+                .as(enforced.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        assertThat(balanceOf(AZIZA)).isEqualTo(49_000);
+        assertThat(unlistedReasonCodes("ENFORCE"))
+                .as("an enforcing list refused nothing the sync wrote")
+                .isEqualTo(enforcedBefore);
+        assertInvariants(AZIZA, DILYA);
+    }
+
+    @Test
+    @DisplayName(
+            "a person cannot reach the sync's reason codes by typing them: enforcing the list still refuses POS_SYNC_EARN on an operator adjustment")
+    void anOperatorCannotTypeASyncReasonCodeAndTheResolutionPathRefusesOthers() {
+        pointsAccount(AZIZA, PHONE_AZIZA, 1_000);
+        enforceTheReasonList();
+        try {
+            assertThatThrownBy(() -> adjustments.adjust(new AdjustmentCommand(
+                            TENANT,
+                            BRAND,
+                            AZIZA,
+                            500,
+                            "UZS",
+                            uz.horecaos.platform.loyalty.application.PosBalanceSyncReasons.EARN,
+                            "typed by a person",
+                            ActorRef.user(FINANCE, null),
+                            "typed-" + UUID.randomUUID(),
+                            "")))
+                    .isInstanceOf(uz.horecaos.platform.web.api.ApiException.class);
+        } finally {
+            reportOnlyTheReasonList();
+        }
+        assertThat(balanceOf(AZIZA)).isEqualTo(1_000);
+
+        // and the sync's own path does not become a way round the list for a code a person chose
+        assertThatThrownBy(() -> adjustments.adjustForTillResolution(new AdjustmentCommand(
+                        TENANT,
+                        BRAND,
+                        AZIZA,
+                        500,
+                        "UZS",
+                        "GOODWILL",
+                        "not the sync's",
+                        ActorRef.user(FINANCE, null),
+                        "goodwill-" + UUID.randomUUID(),
+                        "")))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(balanceOf(AZIZA)).isEqualTo(1_000);
     }
 
     @Test
@@ -783,6 +910,273 @@ class LoyaltyPosSyncHttpTests {
                         .getResponse()
                         .getStatus())
                 .isEqualTo(200);
+    }
+
+    // ------------------------------------------------------------------ absorbing is durable
+
+    @Test
+    @DisplayName(
+            "a till customer with no account, and an ambiguous match, that a person absorbed are not reopened by the next"
+                    + " passes, still count and are listed in the run, and stop being carried when the customer is matched")
+    void absorbingATillCustomerDifferenceIsDurable() throws Exception {
+        pointsAccount(TWIN_ONE, PHONE_SHARED, 5_000);
+        pointsAccount(TWIN_TWO, PHONE_SHARED, 6_000);
+        till.tillCustomer("T-STRANGER", PHONE_STRANGER, 9_000).tillCustomer("T-TWINS", PHONE_SHARED, 7_000);
+        reconcile(FAKE_BINDING);
+        String open = openDiscrepancies();
+        Map<String, Object> stranger = discrepancyOfTillCustomer(open, "TILL_ONLY", "T-STRANGER");
+        Map<String, Object> twins = discrepancyOfTillCustomer(open, "AMBIGUOUS_MATCH", "T-TWINS");
+        assertThat(resolve(idOf(stranger), intOf(stranger.get("version")), "ABSORB", "not our customer", FINANCE)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+        assertThat(resolve(idOf(twins), intOf(twins.get("version")), "ABSORB", "one phone, two households", FINANCE)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+
+        MvcResult second = reconcile(FAKE_BINDING);
+        MvcResult third = reconcile(FAKE_BINDING);
+
+        assertThat(JsonPath.<List<Object>>read(openDiscrepancies(), "$"))
+                .as("what a person absorbed is not asked about again")
+                .isEmpty();
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'TILL_ONLY'"))
+                .isEqualTo(1);
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'AMBIGUOUS_MATCH'"))
+                .isEqualTo(1);
+        assertThat(counted(second, "tillOnly") + counted(third, "tillOnly"))
+                .as("the till still has this customer, so the run still counts it")
+                .isEqualTo(2);
+        assertThat(listed(runIdOf(second), "TILL_ONLY"))
+                .as("and the run lists what it counted")
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row).containsEntry("status", "RESOLVED").containsEntry("resolutionCode", "ABSORB");
+                    assertThat(row.get("discrepancyId")).isEqualTo(stranger.get("discrepancyId"));
+                });
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE carried")).isEqualTo(2);
+
+        pointsAccount(FARRUKH, PHONE_STRANGER, 1_000);
+        MvcResult matched = reconcile(FAKE_BINDING);
+
+        assertThat(count("loyalty.pos_balance_sync_state"))
+                .as("the stranger became a customer")
+                .isEqualTo(1);
+        assertThat(counted(matched, "tillOnly")).isZero();
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'TILL_ONLY' AND carried"))
+                .as("the condition ended, so the absorption ended with it")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "a customer the till forgot, and a balance that could not be read, stay absorbed while that holds, and the same"
+                    + " thing happening again after the till answered is reported as the new difference it is")
+    void absorbingAnAccountConditionHoldsUntilItEnds() throws Exception {
+        pointsAccount(AZIZA, PHONE_AZIZA, 40_000);
+        pointsAccount(DILYA, PHONE_DILYA, 10_000);
+        till.tillCustomer("T-AZIZA", PHONE_AZIZA, 40_000).tillCustomer("T-DILYA", PHONE_DILYA, 10_000);
+        reconcile(FAKE_BINDING);
+
+        till.removeTillCustomer("T-AZIZA");
+        reconcile(FAKE_BINDING);
+        Map<String, Object> forgotten = onlyDiscrepancy();
+        assertThat(forgotten).containsEntry("kind", "PLATFORM_ONLY");
+        resolve(idOf(forgotten), intOf(forgotten.get("version")), "ABSORB", "closed her card at the till", FINANCE);
+
+        MvcResult again = reconcile(FAKE_BINDING);
+
+        assertThat(JsonPath.<List<Object>>read(openDiscrepancies(), "$")).isEmpty();
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'PLATFORM_ONLY'"))
+                .isEqualTo(1);
+        assertThat(counted(again, "platformOnly")).isEqualTo(1);
+
+        till.tillCustomer("T-AZIZA", PHONE_AZIZA, 40_000);
+        reconcile(FAKE_BINDING);
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE carried"))
+                .as("the till knows her again")
+                .isZero();
+        till.removeTillCustomer("T-AZIZA");
+        reconcile(FAKE_BINDING);
+        assertThat(openOfKind("PLATFORM_ONLY"))
+                .as("losing her a second time is a second difference")
+                .hasSize(1);
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'PLATFORM_ONLY'"))
+                .isEqualTo(2);
+
+        till.tillCustomer("T-AZIZA", PHONE_AZIZA, 40_000).balanceInCurrency("USD");
+        reconcile(FAKE_BINDING);
+        Map<String, Object> dilya = discrepancyOfTillCustomer(openDiscrepancies(), "UNVERIFIABLE", "T-DILYA");
+        resolve(idOf(dilya), intOf(dilya.get("version")), "ABSORB", "known till fault", FINANCE);
+
+        reconcile(FAKE_BINDING);
+
+        assertThat(openOfKind("UNVERIFIABLE"))
+                .as("only Aziza's is still waiting; Dilya's was absorbed")
+                .singleElement()
+                .satisfies(row -> assertThat(row).containsEntry("externalCustomerId", "T-AZIZA"));
+        till.balanceInCurrency(null);
+        reconcile(FAKE_BINDING);
+        assertThat(openOfKind("UNVERIFIABLE")).isEmpty();
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'UNVERIFIABLE' AND carried"))
+                .isZero();
+        till.balanceInCurrency("USD");
+        reconcile(FAKE_BINDING);
+        assertThat(openOfKind("UNVERIFIABLE"))
+                .as("unreadable again, after the till answered, is unreadable again")
+                .hasSize(2);
+    }
+
+    @Test
+    @DisplayName("an absorbed difference of a size is that size only: the same gap is not reopened and a bigger one is")
+    void absorbingADifferenceIsAbsorbingThatAmount() throws Exception {
+        pointsAccount(DILYA, PHONE_DILYA, 10_000);
+        till.tillCustomer("T-DILYA", PHONE_DILYA, 25_000);
+        reconcile(FAKE_BINDING);
+        Map<String, Object> gap = onlyDiscrepancy();
+        resolve(idOf(gap), intOf(gap.get("version")), "ABSORB", "the till carries a promotion", FINANCE);
+
+        MvcResult same = reconcile(FAKE_BINDING);
+
+        assertThat(JsonPath.<List<Object>>read(openDiscrepancies(), "$")).isEmpty();
+        assertThat(counted(same, "tillHigher")).isEqualTo(1);
+        till.corruptTillBalance("T-DILYA", 30_000);
+
+        reconcile(FAKE_BINDING);
+
+        Map<String, Object> bigger = onlyDiscrepancy();
+        assertThat(bigger).containsEntry("kind", "TILL_HIGHER").containsEntry("deltaMinor", 20_000);
+        assertThat(bigger.get("discrepancyId")).isNotEqualTo(gap.get("discrepancyId"));
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE carried"))
+                .as("what was accepted was fifteen thousand, not every gap after it")
+                .isZero();
+    }
+
+    // ------------------------------------------------------------------ the walk of the till's customers
+
+    @Test
+    @DisplayName(
+            "a till with more customers than one pass reads is walked over several passes: the customers beyond the first"
+                    + " pages are matched and reported, and a finished walk starts again at the top")
+    void aLongCustomerListIsWalkedOverSeveralPasses() throws Exception {
+        pointsAccount(AZIZA, PHONE_AZIZA, 40_000);
+        till.walletPageSize(1);
+        for (int i = 0; i < 55; i++) {
+            till.tillCustomer("T-FILL-%03d".formatted(i), null, 0);
+        }
+        till.tillCustomer("T-AZIZA", PHONE_AZIZA, 40_000); // the 56th: beyond the first fifty pages
+
+        MvcResult first = reconcile(FAKE_BINDING);
+
+        assertThat(counted(first, "tillOnly")).isEqualTo(50);
+        assertThat(count("loyalty.pos_balance_sync_state"))
+                .as("not reached yet")
+                .isZero();
+        assertThat(count("loyalty.pos_sync_match_progress WHERE customer_cursor IS NOT NULL"))
+                .isEqualTo(1);
+
+        MvcResult second = reconcile(FAKE_BINDING);
+
+        assertThat(counted(second, "tillOnly")).as("the five that were left").isEqualTo(5);
+        assertThat(count("loyalty.pos_balance_sync_state"))
+                .as("Aziza was reached")
+                .isEqualTo(1);
+        assertThat(counted(second, "matched")).isEqualTo(1);
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'TILL_ONLY'"))
+                .as("every customer seen once, none twice")
+                .isEqualTo(55);
+        assertThat(count("loyalty.pos_sync_match_progress WHERE customer_cursor IS NOT NULL"))
+                .isZero();
+
+        MvcResult third = reconcile(FAKE_BINDING);
+
+        assertThat(counted(third, "tillOnly"))
+                .as("the walk starts at the top again")
+                .isEqualTo(50);
+    }
+
+    // ------------------------------------------------------------------ the report is history and its counts are its
+    // rows
+
+    @Test
+    @DisplayName(
+            "a run's report is still that run's after later passes see the same difference: its rows, its numbers and its"
+                    + " counts agree for good")
+    void aRunsReportIsHistory() throws Exception {
+        pointsAccount(DILYA, PHONE_DILYA, 10_000);
+        till.tillCustomer("T-DILYA", PHONE_DILYA, 25_000);
+        MvcResult a = reconcile(FAKE_BINDING);
+        till.corruptTillBalance("T-DILYA", 27_000);
+        MvcResult b = reconcile(FAKE_BINDING);
+
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'TILL_HIGHER'"))
+                .as("one standing difference, seen by two runs")
+                .isEqualTo(1);
+        assertThat(listed(runIdOf(a), "TILL_HIGHER"))
+                .singleElement()
+                .satisfies(row -> assertThat(row)
+                        .containsEntry("tillBalanceMinor", 25_000)
+                        .containsEntry("deltaMinor", 15_000));
+        assertThat(listed(runIdOf(b), "TILL_HIGHER"))
+                .singleElement()
+                .satisfies(row -> assertThat(row)
+                        .containsEntry("tillBalanceMinor", 27_000)
+                        .containsEntry("deltaMinor", 17_000));
+        assertThat(counted(a, "tillHigher"))
+                .isEqualTo(listed(runIdOf(a), "TILL_HIGHER").size());
+        assertThat(counted(b, "tillHigher"))
+                .isEqualTo(listed(runIdOf(b), "TILL_HIGHER").size());
+        assertThat(onlyDiscrepancy()).containsEntry("tillBalanceMinor", 27_000);
+    }
+
+    @Test
+    @DisplayName(
+            "each till customer that leads to an already paired account is its own ambiguous match, and the count is the rows")
+    void everyAmbiguousTillCustomerIsItsOwnRow() throws Exception {
+        pointsAccount(AZIZA, PHONE_AZIZA, 40_000);
+        till.tillCustomer("T-AZIZA", PHONE_AZIZA, 40_000)
+                .tillCustomer("T-AZIZA-2", PHONE_AZIZA, 0)
+                .tillCustomer("T-AZIZA-3", PHONE_AZIZA, 0);
+
+        MvcResult first = reconcile(FAKE_BINDING);
+        MvcResult second = reconcile(FAKE_BINDING);
+
+        assertThat(counted(first, "ambiguous")).isEqualTo(2);
+        assertThat(listed(runIdOf(first), "AMBIGUOUS_MATCH")).hasSize(2);
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'AMBIGUOUS_MATCH'"))
+                .isEqualTo(2);
+        assertThat(counted(second, "ambiguous")).isEqualTo(2);
+        assertThat(listed(runIdOf(second), "AMBIGUOUS_MATCH")).hasSize(2);
+        assertThat(count("loyalty.pos_sync_discrepancies WHERE kind = 'AMBIGUOUS_MATCH'"))
+                .as("the second pass refreshed them and opened nothing")
+                .isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName(
+            "unverifiable is the accounts (and the customer list) the run could not vouch for, each once, each listed;"
+                    + " when the till answers again they close")
+    void unverifiableIsWhatTheRunCouldNotVouchForAndListsIt() throws Exception {
+        pointsAccount(AZIZA, PHONE_AZIZA, 40_000);
+        pointsAccount(DILYA, PHONE_DILYA, 10_000);
+        till.tillCustomer("T-AZIZA", PHONE_AZIZA, 40_000).tillCustomer("T-DILYA", PHONE_DILYA, 10_000);
+        mode("PULL");
+        assertThat(counted(reconcile(FAKE_BINDING), "unverifiable")).isZero();
+        till.movementFeedUnreadable(true).customerListUnreadable(true).balanceInCurrency("USD");
+
+        MvcResult broken = reconcile(FAKE_BINDING);
+
+        assertThat(counted(broken, "unverifiable"))
+                .as("two accounts, each unreadable in the feed and in the balance but one account each, and the list")
+                .isEqualTo(3);
+        assertThat(listed(runIdOf(broken), "UNVERIFIABLE")).hasSize(3);
+
+        till.movementFeedUnreadable(false).customerListUnreadable(false).balanceInCurrency(null);
+        MvcResult healed = reconcile(FAKE_BINDING);
+
+        assertThat(counted(healed, "unverifiable")).isZero();
+        assertThat(openOfKind("UNVERIFIABLE")).isEmpty();
     }
 
     // ------------------------------------------------------------------ push
@@ -1064,6 +1458,14 @@ class LoyaltyPosSyncHttpTests {
                 "pos sync test: " + mode);
     }
 
+    private double unlistedReasonCodes(String mode) {
+        var counter = meters.find(
+                        uz.horecaos.platform.loyalty.application.AdjustmentReasonPolicyService.UNLISTED_COUNTER_NAME)
+                .tag("mode", mode)
+                .counter();
+        return counter == null ? 0.0 : counter.count();
+    }
+
     private double unlistedCodes() {
         return meters.find(AdjustmentReasonPolicyService.UNLISTED_COUNTER_NAME).counters().stream()
                 .mapToDouble(io.micrometer.core.instrument.Counter::count)
@@ -1085,6 +1487,28 @@ class LoyaltyPosSyncHttpTests {
                 .andReturn();
     }
 
+    private String openDiscrepancies() throws Exception {
+        return get(BASE + "/discrepancies?status=OPEN", FINANCE).getResponse().getContentAsString(UTF_8);
+    }
+
+    private List<Map<String, Object>> openOfKind(String kind) throws Exception {
+        return JsonPath.read(openDiscrepancies(), "$[?(@.kind=='" + kind + "')]");
+    }
+
+    /** What a run lists under one kind, read from the report of that run and no other. */
+    private List<Map<String, Object>> listed(UUID runId, String kind) throws Exception {
+        String report = get(BASE + "/runs/" + runId, FINANCE).getResponse().getContentAsString(UTF_8);
+        return JsonPath.read(report, "$.discrepancies[?(@.kind=='" + kind + "')]");
+    }
+
+    private static UUID runIdOf(MvcResult run) throws Exception {
+        return UUID.fromString(JsonPath.read(run.getResponse().getContentAsString(UTF_8), "$.runId"));
+    }
+
+    private static int counted(MvcResult run, String field) throws Exception {
+        return JsonPath.<Integer>read(run.getResponse().getContentAsString(UTF_8), "$." + field);
+    }
+
     private Map<String, Object> onlyDiscrepancy() throws Exception {
         List<Map<String, Object>> all = JsonPath.read(
                 get(BASE + "/discrepancies?status=OPEN", FINANCE).getResponse().getContentAsString(UTF_8), "$");
@@ -1098,6 +1522,16 @@ class LoyaltyPosSyncHttpTests {
             found = JsonPath.read(body, "$[?(@.kind=='" + kind + "')]");
         }
         assertThat(found).as("a %s discrepancy in %s", kind, body).hasSize(1);
+        return found.getFirst();
+    }
+
+    /** The one difference of this kind for one till customer, when several customers share the kind. */
+    private Map<String, Object> discrepancyOfTillCustomer(String body, String kind, String externalCustomerId) {
+        List<Map<String, Object>> found = JsonPath.read(
+                body, "$[?(@.kind=='" + kind + "' && @.externalCustomerId=='" + externalCustomerId + "')]");
+        assertThat(found)
+                .as("a %s discrepancy for %s in %s", kind, externalCustomerId, body)
+                .hasSize(1);
         return found.getFirst();
     }
 

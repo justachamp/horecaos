@@ -385,14 +385,30 @@ public class JdbcPosBalanceSyncStore {
             @Nullable Instant resolvedAt,
             @Nullable UUID approvalId,
             Instant observedAt,
-            int version) {}
+            int version,
+            boolean carried) {}
 
     private static final String DISCREPANCY_SELECT = """
             SELECT id, tenant_id, brand_id, binding_id, account_id, run_id, external_customer_id, kind,
                    platform_balance_minor, till_balance_minor, delta_minor, movement_id, status, resolution_code,
-                   resolution_reason, resolved_by, resolved_at, approval_id, observed_at, version
+                   resolution_reason, resolved_by, resolved_at, approval_id, observed_at, version, carried
               FROM loyalty.pos_sync_discrepancies
             """;
+
+    /**
+     * What a difference is about, which is what makes two observations of it the same difference.
+     *
+     * <p>A balance difference, a customer the till no longer knows and a balance that could not be read are about
+     * one points account; a till customer with no account and an ambiguous match are about one till customer, whatever
+     * account the phone led to; a programme whose unit is not one point to one som, and a customer list that could not
+     * be read, are about the binding. Matching on anything else stacks a row for one subject or folds two subjects into
+     * one.
+     */
+    public enum Subject {
+        ACCOUNT,
+        TILL_CUSTOMER,
+        BINDING
+    }
 
     public void insertDiscrepancy(
             UUID id,
@@ -430,51 +446,127 @@ public class JdbcPosBalanceSyncStore {
                 VALUES (:id, :tenantId, :brandId, :bindingId, :accountId, :runId, :externalId, :kind,
                         :platform, :till, :delta, :movementId, 'OPEN', :observedAt, 1)
                 """).params(p).update();
+        if (runId != null) {
+            recordFinding(tenantId, runId, id, platformBalanceMinor, tillBalanceMinor, deltaMinor, observedAt);
+        }
     }
 
     /**
-     * An open discrepancy of this kind for the same account (or, for one with no account, the same till customer),
-     * so a pass that finds the same difference again refreshes it instead of stacking a second row.
+     * Records that a run observed a difference, with the numbers that run saw. Once per (run, difference): a pass
+     * that meets the same subject twice has still found one difference.
      */
-    public Optional<DiscrepancyRow> findOpen(
-            UUID tenantId, UUID bindingId, @Nullable UUID accountId, @Nullable String externalCustomerId, String kind) {
-        return jdbc.sql(DISCREPANCY_SELECT + """
-                 WHERE tenant_id = :tenantId AND binding_id = :bindingId AND kind = :kind AND status = 'OPEN'
-                   AND (CAST(:accountId AS uuid) IS NULL OR account_id = CAST(:accountId AS uuid))
-                   AND (CAST(:accountId AS uuid) IS NOT NULL OR external_customer_id = CAST(:externalId AS varchar))
-                   AND movement_id IS NULL
-                 ORDER BY observed_at DESC LIMIT 1
-                """)
-                .param("tenantId", tenantId)
-                .param("bindingId", bindingId)
-                .param("accountId", accountId)
-                .param("externalId", externalCustomerId)
-                .param("kind", kind)
-                .query(JdbcPosBalanceSyncStore::toDiscrepancy)
-                .optional();
+    public void recordFinding(
+            UUID tenantId,
+            UUID runId,
+            UUID discrepancyId,
+            @Nullable Long platformBalanceMinor,
+            @Nullable Long tillBalanceMinor,
+            @Nullable Long deltaMinor,
+            Instant observedAt) {
+        Map<String, Object> p = new HashMap<>();
+        p.put("tenantId", tenantId);
+        p.put("runId", runId);
+        p.put("discrepancyId", discrepancyId);
+        p.put("platform", platformBalanceMinor);
+        p.put("till", tillBalanceMinor);
+        p.put("delta", deltaMinor);
+        p.put("observedAt", utc(observedAt));
+        jdbc.sql("""
+                INSERT INTO loyalty.pos_sync_run_findings
+                    (tenant_id, run_id, discrepancy_id, platform_balance_minor, till_balance_minor, delta_minor,
+                     observed_at)
+                VALUES (:tenantId, :runId, :discrepancyId, :platform, :till, :delta, :observedAt)
+                ON CONFLICT ON CONSTRAINT pk_pos_sync_run_finding DO NOTHING
+                """).params(p).update();
     }
 
+    private static String subjectPredicate(Subject subject) {
+        return switch (subject) {
+            case ACCOUNT -> " AND account_id = :accountId";
+            case TILL_CUSTOMER -> " AND external_customer_id = :externalId";
+            case BINDING -> " AND account_id IS NULL AND external_customer_id IS NULL";
+        };
+    }
+
+    private Optional<DiscrepancyRow> findFor(
+            String state,
+            UUID tenantId,
+            UUID bindingId,
+            String kind,
+            Subject subject,
+            @Nullable UUID accountId,
+            @Nullable String externalCustomerId) {
+        var statement = jdbc.sql(DISCREPANCY_SELECT + " WHERE tenant_id = :tenantId AND binding_id = :bindingId"
+                        + " AND kind = :kind AND movement_id IS NULL AND " + state + subjectPredicate(subject)
+                        + " ORDER BY observed_at DESC, id LIMIT 1")
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .param("kind", kind);
+        if (subject == Subject.ACCOUNT) {
+            statement = statement.param("accountId", java.util.Objects.requireNonNull(accountId));
+        } else if (subject == Subject.TILL_CUSTOMER) {
+            statement = statement.param("externalId", java.util.Objects.requireNonNull(externalCustomerId));
+        }
+        return statement.query(JdbcPosBalanceSyncStore::toDiscrepancy).optional();
+    }
+
+    /**
+     * The open difference of this kind about this subject, so a pass that finds it again refreshes it instead of
+     * stacking a second row. Differences that came from one movement are never found here: each movement is its own.
+     */
+    public Optional<DiscrepancyRow> findOpen(
+            UUID tenantId,
+            UUID bindingId,
+            String kind,
+            Subject subject,
+            @Nullable UUID accountId,
+            @Nullable String externalCustomerId) {
+        return findFor("status = 'OPEN'", tenantId, bindingId, kind, subject, accountId, externalCustomerId);
+    }
+
+    /** The difference of this kind about this subject that a person absorbed and that is still carried. */
+    public Optional<DiscrepancyRow> findCarried(
+            UUID tenantId,
+            UUID bindingId,
+            String kind,
+            Subject subject,
+            @Nullable UUID accountId,
+            @Nullable String externalCustomerId) {
+        return findFor("carried", tenantId, bindingId, kind, subject, accountId, externalCustomerId);
+    }
+
+    /**
+     * Brings the numbers of an open difference up to date. The row is not re-pointed at the run that saw it again:
+     * the run that opened it stays its opener, and each run's own sight of it is a finding.
+     */
     public void refreshDiscrepancy(
             UUID tenantId,
             UUID id,
-            @Nullable UUID runId,
             @Nullable Long platformBalanceMinor,
             @Nullable Long tillBalanceMinor,
             @Nullable Long deltaMinor,
             Instant observedAt) {
         jdbc.sql("""
                 UPDATE loyalty.pos_sync_discrepancies
-                   SET run_id = :runId, platform_balance_minor = :platform, till_balance_minor = :till,
+                   SET platform_balance_minor = :platform, till_balance_minor = :till,
                        delta_minor = :delta, observed_at = :observedAt, version = version + 1
                  WHERE tenant_id = :tenantId AND id = :id AND status = 'OPEN'
                 """)
                 .param("tenantId", tenantId)
                 .param("id", id)
-                .param("runId", runId)
                 .param("platform", platformBalanceMinor)
                 .param("till", tillBalanceMinor)
                 .param("delta", deltaMinor)
                 .param("observedAt", utc(observedAt))
+                .update();
+    }
+
+    /** A carried difference whose condition has ended, or whose size has changed, is carried no longer. */
+    public void uncarry(UUID tenantId, UUID id) {
+        jdbc.sql("UPDATE loyalty.pos_sync_discrepancies SET carried = false"
+                        + " WHERE tenant_id = :tenantId AND id = :id AND carried")
+                .param("tenantId", tenantId)
+                .param("id", id)
                 .update();
     }
 
@@ -501,10 +593,20 @@ public class JdbcPosBalanceSyncStore {
                 .list();
     }
 
+    /**
+     * What one run found, as that run saw it: the difference's identity and standing now, with the numbers and the
+     * time the run recorded. A later pass that refreshes the same difference changes the row and not this answer.
+     */
     public List<DiscrepancyRow> discrepanciesOfRun(UUID tenantId, UUID runId) {
-        return jdbc.sql(DISCREPANCY_SELECT + """
-                 WHERE tenant_id = :tenantId AND run_id = :runId
-                 ORDER BY kind, observed_at, id
+        return jdbc.sql("""
+                SELECT d.id, d.tenant_id, d.brand_id, d.binding_id, d.account_id, d.run_id, d.external_customer_id,
+                       d.kind, f.platform_balance_minor, f.till_balance_minor, f.delta_minor, d.movement_id,
+                       d.status, d.resolution_code, d.resolution_reason, d.resolved_by, d.resolved_at,
+                       d.approval_id, f.observed_at, d.version, d.carried
+                  FROM loyalty.pos_sync_run_findings f
+                  JOIN loyalty.pos_sync_discrepancies d ON d.tenant_id = f.tenant_id AND d.id = f.discrepancy_id
+                 WHERE f.tenant_id = :tenantId AND f.run_id = :runId
+                 ORDER BY d.kind, f.observed_at, d.id
                 """)
                 .param("tenantId", tenantId)
                 .param("runId", runId)
@@ -531,6 +633,8 @@ public class JdbcPosBalanceSyncStore {
     /**
      * Resolves a discrepancy exactly once, against the version the caller read.
      *
+     * @param carried true for a person's ABSORB of a difference that no movement stands behind: the brand carries it,
+     *                and a later pass that sees the same condition does not reopen it
      * @return true when this call resolved it; false when it was already resolved or has moved on
      */
     public boolean resolve(
@@ -541,11 +645,13 @@ public class JdbcPosBalanceSyncStore {
             @Nullable String reason,
             String resolvedBy,
             @Nullable UUID approvalId,
+            boolean carried,
             Instant at) {
         return jdbc.sql("""
                 UPDATE loyalty.pos_sync_discrepancies
                    SET status = 'RESOLVED', resolution_code = :code, resolution_reason = :reason,
-                       resolved_by = :by, resolved_at = :at, approval_id = :approvalId, version = version + 1
+                       resolved_by = :by, resolved_at = :at, approval_id = :approvalId, carried = :carried,
+                       version = version + 1
                  WHERE tenant_id = :tenantId AND id = :id AND status = 'OPEN' AND version = :version
                 """)
                         .param("tenantId", tenantId)
@@ -555,6 +661,7 @@ public class JdbcPosBalanceSyncStore {
                         .param("reason", reason)
                         .param("by", resolvedBy)
                         .param("approvalId", approvalId)
+                        .param("carried", carried)
                         .param("at", utc(at))
                         .update()
                 == 1;
@@ -696,6 +803,36 @@ public class JdbcPosBalanceSyncStore {
                 .single();
     }
 
+    // ============================================================ the customer walk
+
+    /**
+     * Where this binding's walk of the till's customers resumes, or empty when the next pass starts at the top. One
+     * pass reads a bounded number of pages, and a till with more customers than that is walked over several.
+     */
+    public Optional<String> matchCursor(UUID tenantId, UUID bindingId) {
+        return jdbc.sql("SELECT customer_cursor FROM loyalty.pos_sync_match_progress"
+                        + " WHERE tenant_id = :tenantId AND binding_id = :bindingId")
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .query(String.class)
+                .optional();
+    }
+
+    /** Keeps the cursor the next pass resumes at; null when the walk reached the end. */
+    public void saveMatchCursor(UUID tenantId, UUID bindingId, @Nullable String cursor, Instant now) {
+        jdbc.sql("""
+                INSERT INTO loyalty.pos_sync_match_progress (tenant_id, binding_id, customer_cursor, updated_at)
+                VALUES (:tenantId, :bindingId, :cursor, :now)
+                ON CONFLICT ON CONSTRAINT pk_pos_sync_match_progress
+                DO UPDATE SET customer_cursor = EXCLUDED.customer_cursor, updated_at = EXCLUDED.updated_at
+                """)
+                .param("tenantId", tenantId)
+                .param("bindingId", bindingId)
+                .param("cursor", cursor)
+                .param("now", utc(now))
+                .update();
+    }
+
     // ================================================================== tenancy
 
     /** The tenant's own timezone, which a "business day" cap window is read in. */
@@ -771,7 +908,8 @@ public class JdbcPosBalanceSyncStore {
                 instant(row.getObject("resolved_at", OffsetDateTime.class)),
                 row.getObject("approval_id", UUID.class),
                 row.getObject("observed_at", OffsetDateTime.class).toInstant(),
-                row.getInt("version"));
+                row.getInt("version"),
+                row.getBoolean("carried"));
     }
 
     private static RunRow toRun(ResultSet row, int number) throws SQLException {

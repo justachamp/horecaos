@@ -40,12 +40,11 @@ export class AttributionLanding {
     }
     this.remember(token);
     try {
-      await this.api.mutate<void>(
-        'POST',
+      // `report`, not `mutate`: no Idempotency-Key, no bearer, and no toast when it fails.
+      await this.api.report(
         `/storefront/tenants/${encodeURIComponent(this.config.tenantId)}` +
           `/brands/${encodeURIComponent(this.config.brandId)}` +
           `/attribution-links/${encodeURIComponent(token)}/clicks`,
-        { anonymous: true },
       );
     } catch {
       // See the class comment: a counter must never become the customer's problem.

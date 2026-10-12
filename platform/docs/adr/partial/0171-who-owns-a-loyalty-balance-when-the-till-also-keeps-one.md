@@ -32,7 +32,18 @@
   instead); the consent gate (`NOT_CONSENTED`); fan-out of `LoyaltySyncDiscrepancyOpened`
   to the operations alerts (the event is published in-process, with no consumer); and a
   console control for a binding's sync mode and for `till_keeps_balance`, which are
-  configuration keys only.
+  configuration keys only. Corrected after review (2026-10-12, V0600; no decision here
+  changed, each correction makes the code do what the decisions below already say):
+  an ABSORB of a difference that no movement stands behind is
+  durable (`carried`): the next pass records it in its own run and does not reopen it, and
+  the pass that sees the condition end lets go of it; a pass resumes the walk of the till's
+  customers where the last stopped (`pos_sync_match_progress`), so a till with more
+  customers than one pass reads is walked over several; a run's report is that run's own
+  (`pos_sync_run_findings`: the discrepancy keeps the run that opened it, each run keeps what
+  it saw and with which numbers); one ambiguous match is one row per till customer; and
+  `unverifiable` (Decision 6's «unverifiable accounts») is the matched accounts the run could
+  not vouch for, each once, plus the customer list when it could not be read, each of them
+  a listed row that closes when the till answers again.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
@@ -312,6 +323,14 @@ loyalty.pos_sync_discrepancies
   platform_balance_minor null, till_balance_minor null, delta_minor null
   status (OPEN|RESOLVED), resolution_code null (ACCEPT_TILL|ACCEPT_PLATFORM|ABSORB|SUSPEND)
   resolved_by, resolved_at, approval_id null, observed_at, version
+  carried (V0600)    -- a resolved ABSORB that still holds: a later pass does not reopen it
+  run_id             -- the run that OPENED it; never re-pointed
+
+loyalty.pos_sync_run_findings (V0600)   what one run saw: (run_id, discrepancy_id) with the
+  platform_balance_minor, till_balance_minor, delta_minor and observed_at of THAT run
+
+loyalty.pos_sync_match_progress (V0600) the cursor at which a binding's next matching pass
+  resumes reading the till's customers; null when the last walk reached the end
 
 loyalty.pos_sync_runs                   the reconciliation report's header
   id, tenant_id, binding_id, kind (PUSH|PULL|RECONCILE), started_at, finished_at
