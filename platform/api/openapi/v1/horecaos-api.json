@@ -74031,7 +74031,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/dispatch-rules/simulations" : {
       "post" : {
-        "description" : "Evaluates the document in force at the branch -- or the unsaved draft in the body -- against typed facts or a recent plan's, with the very evaluator the live path runs. Returns the matched rule, why each earlier rule did not match (its first failing condition), the resolved action, the partners in the order they would be tried, what could not be honoured, and when sourcing would start. It calls no provider, asks no quote and writes nothing.",
+        "description" : "Evaluates the document in force at the branch -- or the unsaved draft in the body -- against typed facts or a recent plan's, with the very evaluator the live path runs. Returns the matched rule, why each earlier rule did not match (its first failing condition), the resolved action, the partners in the order they would be tried, what could not be honoured, and when sourcing would start. It calls no provider and asks no quote. A rule that groups, simulated against a recent plan, measures the courier feed as sourcing does: the drop-off of that plan and of the orders the candidates carry are read for the purpose DISPATCH_GROUPING, each read recorded in the audit trail as yours, and only distances are returned.",
         "operationId" : "simulate",
         "parameters" : [ {
           "in" : "path",
