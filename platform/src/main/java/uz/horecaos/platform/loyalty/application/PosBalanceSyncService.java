@@ -777,7 +777,8 @@ public class PosBalanceSyncService {
             }
         }
 
-        ApprovalOutcome outcome = adjustments.adjust(new AdjustmentCommand(
+        // Not adjust(): the reason code is the sync's own, and the operator list of ADR 0165 does not govern it.
+        ApprovalOutcome outcome = adjustments.adjustFromTillSync(new AdjustmentCommand(
                 tenantId,
                 brandId,
                 account.customerAccountId(),

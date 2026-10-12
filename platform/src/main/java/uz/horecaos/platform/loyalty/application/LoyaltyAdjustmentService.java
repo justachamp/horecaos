@@ -175,7 +175,41 @@ public class LoyaltyAdjustmentService {
         // anything else happens, so a refused code costs no approval request and no row. In
         // report-only mode it is counted and goes through; the policy that permitted it is
         // what the audit fact below records.
-        AdjustmentReasonPolicyService.Effective permittedBy = reasons.admit(command.reasonCode());
+        return adjustUnder(command, reasons.admit(command.reasonCode()));
+    }
+
+    /**
+     * A person's resolution of a difference between the platform and a till (ADR 0171 Decision 6): the same movement,
+     * approval and audit as {@link #adjust}, under a reason code the sync alone writes.
+     *
+     * <p>It does not ask the operator reason-code list of ADR 0165, and that is the point. The list closes the back
+     * door of an operator-typed label; {@code POS_SYNC_CORRECTION} and {@code POS_SYNC_EARN} are not typed by anyone
+     * and cannot be on a menu a person chooses from ({@link PosBalanceSyncReasons}). Asking the list about them would
+     * count each resolution as an operator who strayed off it, in report-only mode, and refuse every one of them the
+     * day the list is enforced -- a finance user could then neither accept the till's number nor release a held
+     * credit. The door stays shut from the other side: {@link #adjust} still refuses these codes once the list is
+     * enforced, and this method refuses every code that is not one of the sync's, so neither entry point reaches the
+     * other's codes.
+     *
+     * @throws IllegalArgumentException for a reason code the sync does not write
+     */
+    @Transactional
+    public ApprovalOutcome adjustFromTillSync(AdjustmentCommand command) {
+        if (!PosBalanceSyncReasons.isSyncReason(command.reasonCode())) {
+            throw new IllegalArgumentException("Only a reason code the till sync writes is applied without the list");
+        }
+        if (command.amountMinor() == 0) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "An adjustment moves a non-zero amount");
+        }
+        return adjustUnder(command, null);
+    }
+
+    /**
+     * @param permittedBy the operator reason-code policy the code was admitted under, for the audit fact; null for a
+     *                    code the list does not govern
+     */
+    private ApprovalOutcome adjustUnder(
+            AdjustmentCommand command, AdjustmentReasonPolicyService.@Nullable Effective permittedBy) {
         Instant now = clock.instant();
 
         ResourceScope scope = ResourceScope.brand(command.tenantId(), command.brandId());
@@ -209,7 +243,7 @@ public class LoyaltyAdjustmentService {
             AdjustmentCommand command,
             ResourceScope scope,
             @Nullable UUID approvalId,
-            AdjustmentReasonPolicyService.Effective permittedBy,
+            AdjustmentReasonPolicyService.@Nullable Effective permittedBy,
             Instant now) {
 
         AccountRow account = store.openAccount(
@@ -286,7 +320,7 @@ public class LoyaltyAdjustmentService {
         change.put("amountMinor", command.amountMinor());
         change.put("reasonCode", command.reasonCode());
         change.put("balanceAfterMinor", balanceAfter);
-        if (permittedBy.policyId() != null) {
+        if (permittedBy != null && permittedBy.policyId() != null) {
             change.put("policyId", permittedBy.policyId().toString());
             change.put("policyVersion", permittedBy.policyVersion());
         }

@@ -18,5 +18,10 @@ public final class PosBalanceSyncReasons {
     /** A person accepted the till's number over the platform's, under approval where it credits above the threshold. */
     public static final String CORRECTION = "POS_SYNC_CORRECTION";
 
+    /** Whether the code is one only the sync writes: the one test the sync's own adjustment path admits by. */
+    public static boolean isSyncReason(String reasonCode) {
+        return EARN.equals(reasonCode) || SPEND.equals(reasonCode) || CORRECTION.equals(reasonCode);
+    }
+
     private PosBalanceSyncReasons() {}
 }

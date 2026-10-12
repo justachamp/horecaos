@@ -173,6 +173,14 @@ class LoyaltyPosSyncHttpTests {
     @SuppressWarnings("NullAway")
     private uz.horecaos.platform.tenancy.api.ConfigurationResolver configuration;
 
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private uz.horecaos.platform.loyalty.application.AdjustmentReasonPolicyService reasonCodes;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private io.micrometer.core.instrument.MeterRegistry meters;
+
     private ListAppender<ILoggingEvent> logCapture;
 
     @BeforeEach
@@ -214,6 +222,18 @@ class LoyaltyPosSyncHttpTests {
     @AfterEach
     void detachLogCapture() {
         ((Logger) LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME)).detachAppender(logCapture);
+    }
+
+    /** The platform document is not tenant data, so the reset above does not reach it: put the rollout's start back. */
+    @AfterEach
+    void putTheOperatorReasonCodeListBackToReportOnly() {
+        if (reasonCodes.currentVersion() > 0) {
+            reasonCodes.author(
+                    uz.horecaos.platform.loyalty.domain.AdjustmentReasonPolicy.platformDefault(),
+                    reasonCodes.currentVersion(),
+                    ActorRef.user("platform-admin", "Platform"),
+                    "test: back to report-only");
+        }
     }
 
     // ------------------------------------------------------------------ the vendor is told apart
@@ -601,6 +621,86 @@ class LoyaltyPosSyncHttpTests {
     }
 
     @Test
+    @DisplayName(
+            "accepting the till's number is not an operator-typed reason: with the ADR 0165 list enforced a held credit and a till-higher difference both still resolve, and the unlisted-code counter does not move")
+    void acceptTillNeverPassesThroughTheOperatorReasonCodeList() throws Exception {
+        pointsAccount(AZIZA, PHONE_AZIZA, 40_000);
+        pointsAccount(DILYA, PHONE_DILYA, 10_000);
+        till.tillCustomer("T-AZIZA", PHONE_AZIZA, 40_000).tillCustomer("T-DILYA", PHONE_DILYA, 25_000);
+        brandPolicy("loyalty.pos_sync.max_auto_credit_minor", 8_000);
+        mode("PULL");
+        reconcile(FAKE_BINDING);
+        till.tillEarn("T-AZIZA", 9_000);
+        reconcile(FAKE_BINDING);
+        String open =
+                get(BASE + "/discrepancies?status=OPEN", FINANCE).getResponse().getContentAsString(UTF_8);
+        Map<String, Object> held = discrepancy(open, "CREDIT_HELD");
+        Map<String, Object> higher = discrepancyOfTillCustomer(open, "TILL_HIGHER", "T-DILYA");
+        double offListBefore = unlistedReasonCodes("REPORT_ONLY") + unlistedReasonCodes("ENFORCE");
+
+        MvcResult reportOnly =
+                resolve(idOf(higher), intOf(higher.get("version")), "ACCEPT_TILL", "Counted at the till", FINANCE);
+
+        assertThat(reportOnly.getResponse().getStatus()).isEqualTo(200);
+        assertThat(balanceOf(DILYA)).isEqualTo(25_000);
+        assertThat(unlistedReasonCodes("REPORT_ONLY") + unlistedReasonCodes("ENFORCE"))
+                .as("the sync's own reason code is not an off-list label an operator typed")
+                .isEqualTo(offListBefore);
+
+        enforceTheOperatorReasonCodeList();
+        double enforcedBefore = unlistedReasonCodes("ENFORCE");
+
+        MvcResult enforced =
+                resolve(idOf(held), intOf(held.get("version")), "ACCEPT_TILL", "Aziza earned this", FINANCE);
+
+        assertThat(enforced.getResponse().getStatus())
+                .as(enforced.getResponse().getContentAsString(UTF_8))
+                .isEqualTo(200);
+        assertThat(balanceOf(AZIZA)).isEqualTo(49_000);
+        assertThat(unlistedReasonCodes("ENFORCE"))
+                .as("an enforcing list refused nothing the sync wrote")
+                .isEqualTo(enforcedBefore);
+        assertInvariants(AZIZA, DILYA);
+    }
+
+    @Test
+    @DisplayName(
+            "a person cannot reach the sync's reason codes by typing them: enforcing the list still refuses POS_SYNC_EARN on an operator adjustment")
+    void anOperatorStillCannotTypeASyncReasonCode() {
+        pointsAccount(AZIZA, PHONE_AZIZA, 1_000);
+        enforceTheOperatorReasonCodeList();
+
+        assertThatThrownBy(() -> adjustments.adjust(new AdjustmentCommand(
+                        TENANT,
+                        BRAND,
+                        AZIZA,
+                        500,
+                        "UZS",
+                        uz.horecaos.platform.loyalty.application.PosBalanceSyncReasons.EARN,
+                        "typed by a person",
+                        ActorRef.user(FINANCE, null),
+                        "typed-" + UUID.randomUUID(),
+                        "")))
+                .isInstanceOf(uz.horecaos.platform.web.api.ApiException.class);
+        assertThat(balanceOf(AZIZA)).isEqualTo(1_000);
+
+        // and the sync's own path does not become a way round the list for a code a person chose
+        assertThatThrownBy(() -> adjustments.adjustFromTillSync(new AdjustmentCommand(
+                        TENANT,
+                        BRAND,
+                        AZIZA,
+                        500,
+                        "UZS",
+                        "GOODWILL",
+                        "not the sync's",
+                        ActorRef.user(FINANCE, null),
+                        "goodwill-" + UUID.randomUUID(),
+                        "")))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(balanceOf(AZIZA)).isEqualTo(1_000);
+    }
+
+    @Test
     @DisplayName("accepting the platform's number pushes it to the till and leaves the ledger alone")
     void acceptPlatformPushesTheLedgerNumber() throws Exception {
         pointsAccount(DILYA, PHONE_DILYA, 10_000);
@@ -934,6 +1034,24 @@ class LoyaltyPosSyncHttpTests {
 
     // ------------------------------------------------------------------ helpers
 
+    private void enforceTheOperatorReasonCodeList() {
+        reasonCodes.author(
+                new uz.horecaos.platform.loyalty.domain.AdjustmentReasonPolicy(
+                        uz.horecaos.platform.loyalty.domain.AdjustmentReasonPolicy.Mode.ENFORCE,
+                        uz.horecaos.platform.loyalty.domain.AdjustmentReasonPolicy.DEFAULT_CODES),
+                reasonCodes.currentVersion(),
+                ActorRef.user("platform-admin", "Platform"),
+                "test: the next step of ADR 0165");
+    }
+
+    private double unlistedReasonCodes(String mode) {
+        var counter = meters.find(
+                        uz.horecaos.platform.loyalty.application.AdjustmentReasonPolicyService.UNLISTED_COUNTER_NAME)
+                .tag("mode", mode)
+                .counter();
+        return counter == null ? 0.0 : counter.count();
+    }
+
     private String overview() throws Exception {
         MvcResult result = get(BASE, FINANCE);
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
@@ -977,6 +1095,16 @@ class LoyaltyPosSyncHttpTests {
             found = JsonPath.read(body, "$[?(@.kind=='" + kind + "')]");
         }
         assertThat(found).as("a %s discrepancy in %s", kind, body).hasSize(1);
+        return found.getFirst();
+    }
+
+    /** The one difference of this kind for one till customer, when several customers share the kind. */
+    private Map<String, Object> discrepancyOfTillCustomer(String body, String kind, String externalCustomerId) {
+        List<Map<String, Object>> found = JsonPath.read(
+                body, "$[?(@.kind=='" + kind + "' && @.externalCustomerId=='" + externalCustomerId + "')]");
+        assertThat(found)
+                .as("a %s discrepancy for %s in %s", kind, externalCustomerId, body)
+                .hasSize(1);
         return found.getFirst();
     }
 
