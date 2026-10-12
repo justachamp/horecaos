@@ -17,7 +17,20 @@
         @if (review.tags && review.tags.length > 0) {
           <div class="my-review__tags">
             @for (tag of review.tags; track tag.id) {
-              <span class="tag-chip tag-chip--static">{{ wording(tag) }}</span>
+              <span class="tag-chip tag-chip--static">
+                @if (tag.iconUrl) {
+                  <img
+                    class="tag-icon"
+                    [src]="tag.iconUrl"
+                    alt=""
+                    width="16"
+                    height="16"
+                    loading="lazy"
+                    data-testid="tag-icon"
+                  />
+                }
+                {{ wording(tag) }}
+              </span>
             }
           </div>
         }

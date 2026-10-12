@@ -4,6 +4,7 @@ import { ApiClient } from '../core/api/api-client';
 import { APP_CONFIG } from '../core/config/app-config';
 import { newIdempotencyKey } from '../core/api/idempotency';
 import type { Page } from '../core/api/page';
+import { tagIconSrc } from '../utils/tag-icon';
 
 /**
  * ADR 0071's customer reviews as this storefront consumes them, `Reviews` on
@@ -23,6 +24,10 @@ import type { Page } from '../core/api/page';
  * - **`myReviews` is cursor-paginated** (ADR 0031) and answers newest first.
  * - **The public reads are anonymous.** They carry no bearer token: a customer's identity is
  *   neither needed nor wanted by a page everybody can read.
+ * - **A tag's icon arrives as the platform's own site-relative media path** (or, on the customer's own
+ *   review, as an asset id). Every tag leaves this service with `iconUrl` already put on the origin the
+ *   API is served from, or `null` when it has no icon or the path is not one of the platform's own, so a
+ *   component draws `iconUrl` and never has to know where media lives.
  */
 @Injectable({ providedIn: 'root' })
 export class ReviewsService {
@@ -40,7 +45,8 @@ export class ReviewsService {
    * rating reads a handful of the most recent reviews, not a full history.
    */
   async myReviews(limit = 20): Promise<Page<ReviewResponse>> {
-    return this.api.list<ReviewResponse>(`${this.brandPath}/reviews`, { limit });
+    const page = await this.api.list<ReviewResponse>(`${this.brandPath}/reviews`, { limit });
+    return { ...page, items: page.items.map((review) => this.withIcons(review)) };
   }
 
   /**
@@ -59,20 +65,32 @@ export class ReviewsService {
   ): Promise<ReviewResponse> {
     const trimmed = comment?.trim();
     const tagIds = options.tagIds ?? [];
-    return this.api.mutate<ReviewResponse>('POST', `${this.brandPath}/orders/${orderId}/review`, {
-      body: {
-        rating,
-        comment: trimmed ? trimmed : undefined,
-        tagIds: tagIds.length > 0 ? [...tagIds] : undefined,
-        publicConsent: options.publicConsent ? true : undefined,
+    const submitted = await this.api.mutate<ReviewResponse>(
+      'POST',
+      `${this.brandPath}/orders/${orderId}/review`,
+      {
+        body: {
+          rating,
+          comment: trimmed ? trimmed : undefined,
+          tagIds: tagIds.length > 0 ? [...tagIds] : undefined,
+          publicConsent: options.publicConsent ? true : undefined,
+        },
+        idempotencyKey: newIdempotencyKey(),
       },
-      idempotencyKey: newIdempotencyKey(),
-    });
+    );
+    return this.withIcons(submitted);
   }
 
   /** The tags a customer may tap and whether the public-display box means anything, or `enabled: false`. */
   async feedbackConfig(): Promise<FeedbackConfig> {
-    return this.api.get<FeedbackConfig>(`${this.brandPath}/feedback/config`, { anonymous: true });
+    const config = await this.api.get<FeedbackConfig>(`${this.brandPath}/feedback/config`, {
+      anonymous: true,
+    });
+    return {
+      ...config,
+      positive: (config.positive ?? []).map((tag) => ({ ...tag, iconUrl: this.iconSrc(tag) })),
+      negative: (config.negative ?? []).map((tag) => ({ ...tag, iconUrl: this.iconSrc(tag) })),
+    };
   }
 
   /** Completed orders the caller has not rated, newest first, inside the brand's prompt window. Empty while feedback settings are off. */
@@ -98,10 +116,31 @@ export class ReviewsService {
 
   /** Published comments, newest first. The cursor is opaque. */
   async publicComments(cursor?: string | null, limit = 10): Promise<PublicCommentPage> {
-    return this.api.get<PublicCommentPage>(`${this.brandPath}/reviews/public`, {
+    const page = await this.api.get<PublicCommentPage>(`${this.brandPath}/reviews/public`, {
       anonymous: true,
       query: { cursor: cursor ?? undefined, limit },
     });
+    return {
+      ...page,
+      items: (page.items ?? []).map((comment) => ({
+        ...comment,
+        tags: (comment.tags ?? []).map((tag) => ({ ...tag, iconUrl: this.iconSrc(tag) })),
+      })),
+    };
+  }
+
+  /** The tag's icon as the browser can load it, or null. */
+  private iconSrc(tag: {
+    readonly iconUrl?: string | null;
+    readonly iconAssetId?: string | null;
+  }): string | null {
+    return tagIconSrc(tag, this.config);
+  }
+
+  private withIcons(review: ReviewResponse): ReviewResponse {
+    return review.tags === undefined
+      ? review
+      : { ...review, tags: review.tags.map((tag) => ({ ...tag, iconUrl: this.iconSrc(tag) })) };
   }
 }
 
@@ -125,6 +164,8 @@ export interface ReviewTag {
   readonly sentiment: 'POSITIVE' | 'NEGATIVE';
   readonly labels: Readonly<Record<string, string>>;
   readonly iconAssetId?: string | null;
+  /** The icon where the browser can load it (see the service's own note), or null. */
+  readonly iconUrl?: string | null;
 }
 
 /** `StorefrontReviewController.ReviewResponse`, transcribed from the OpenAPI schema. */

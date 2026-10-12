@@ -20,12 +20,12 @@ class FakeApiClient {
   mutate = vi.fn();
 }
 
-function setUp(): { service: ReviewsService; api: FakeApiClient } {
+function setUp(config: AppConfig = CONFIG): { service: ReviewsService; api: FakeApiClient } {
   const api = new FakeApiClient();
   TestBed.configureTestingModule({
     providers: [
       { provide: ApiClient, useValue: api },
-      { provide: APP_CONFIG, useValue: CONFIG },
+      { provide: APP_CONFIG, useValue: config },
     ],
   });
   return { service: TestBed.inject(ReviewsService), api };
@@ -205,5 +205,114 @@ describe('ReviewsService -- the feedback surface (ADR 0159)', () => {
     await service.publicComments();
 
     expect(api.get.mock.calls[0][1]?.query).toEqual({ cursor: undefined, limit: 10 });
+  });
+});
+
+describe('ReviewsService -- tag icons (ADR 0159)', () => {
+  const CROSS_ORIGIN: AppConfig = { ...CONFIG, apiBaseUrl: 'https://api.example.uz/api/v1' };
+  const ICON = '/api/v1/storefront/tenants/10000000-0000-0000-0000-000000000001/media/a-1';
+
+  function offered(iconUrl: string | null) {
+    return { id: 't1', code: 'tasty', category: 'FOOD', labels: { en: 'Tasty' }, iconUrl };
+  }
+
+  it('puts the icon of a tag the customer is offered on the origin the API is served from', async () => {
+    const { service, api } = setUp(CROSS_ORIGIN);
+    api.get.mockResolvedValue({
+      enabled: true,
+      maxTagsPerReview: 5,
+      publicComments: false,
+      consentTextKey: null,
+      positive: [offered(ICON), offered(null)],
+      negative: [offered(ICON)],
+    });
+
+    const config = await service.feedbackConfig();
+
+    expect(config.positive.map((tag) => tag.iconUrl)).toEqual([
+      `https://api.example.uz${ICON}`,
+      null,
+    ]);
+    expect(config.negative[0].iconUrl).toBe(`https://api.example.uz${ICON}`);
+  });
+
+  it('does the same for the tags on the published comments', async () => {
+    const { service, api } = setUp(CROSS_ORIGIN);
+    api.get.mockResolvedValue({
+      visibility: 'RATING_AND_COMMENTS',
+      nextCursor: null,
+      items: [
+        {
+          rating: 5,
+          comment: 'Lovely',
+          date: '2026-10-08',
+          branchName: null,
+          tags: [
+            { code: 'tasty', category: 'FOOD', sentiment: 'POSITIVE', labels: {}, iconUrl: ICON },
+          ],
+        },
+      ],
+    });
+
+    const page = await service.publicComments();
+
+    expect(page.items[0].tags[0].iconUrl).toBe(`https://api.example.uz${ICON}`);
+  });
+
+  it('builds the address from the asset id on the customer’s own review, which carries no path', async () => {
+    const { service, api } = setUp(CROSS_ORIGIN);
+    const own = {
+      id: 'r1',
+      orderId: 'order-1',
+      rating: 5,
+      comment: null,
+      submittedAt: '2026-10-08T10:00:00Z',
+      tags: [
+        {
+          id: 't1',
+          code: 'tasty',
+          category: 'FOOD',
+          sentiment: 'POSITIVE',
+          labels: {},
+          iconAssetId: 'a-1',
+        },
+        {
+          id: 't2',
+          code: 'fast',
+          category: 'SERVICE',
+          sentiment: 'POSITIVE',
+          labels: {},
+          iconAssetId: null,
+        },
+      ],
+    };
+    api.list.mockResolvedValue({ items: [own], nextCursor: null });
+    api.mutate.mockResolvedValue(own);
+
+    const listed = await service.myReviews();
+    const submitted = await service.submit('order-1', 5);
+
+    for (const review of [listed.items[0], submitted]) {
+      expect(review.tags?.map((tag) => tag.iconUrl)).toEqual([
+        `https://api.example.uz${ICON}`,
+        null,
+      ]);
+    }
+  });
+
+  it('shows no icon for a path that is not the platform’s own', async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({
+      enabled: true,
+      maxTagsPerReview: 5,
+      publicComments: false,
+      consentTextKey: null,
+      positive: [offered('https://evil.example/x.svg'), offered('//evil.example/x.svg')],
+      negative: [],
+    });
+
+    const config = await service.feedbackConfig();
+
+    expect(config.positive.map((tag) => tag.iconUrl)).toEqual([null, null]);
   });
 });

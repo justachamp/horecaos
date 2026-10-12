@@ -215,3 +215,26 @@ describe('PublicReviewsComponent', () => {
     expect(host.querySelector('[data-testid="public-comment"]')).toBeNull();
   });
 });
+
+describe('PublicReviewsComponent -- tag icons', () => {
+  it('draws the icon a tenant uploaded for a tag beside its wording, and nothing for a tag without one', async () => {
+    const icon = '/api/v1/storefront/tenants/t-1/media/a-1';
+    const { host } = await setUp(
+      ready({ visibility: 'RATING_AND_COMMENTS' }),
+      comments([
+        {
+          ...COMMENT,
+          tags: [
+            { ...COMMENT.tags[0], iconUrl: icon },
+            { ...COMMENT.tags[0], code: 'food_hot', iconUrl: null },
+          ],
+        },
+      ]),
+    );
+
+    const icons = host.querySelectorAll('[data-testid="public-comment"] [data-testid="tag-icon"]');
+    expect(icons).toHaveLength(1);
+    expect(icons[0].getAttribute('src')).toBe(icon);
+    expect(icons[0].getAttribute('alt')).toBe('');
+  });
+});
