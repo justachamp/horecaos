@@ -99,6 +99,7 @@ export const coreEn = {
   'orders.table.chip': 'Table {tables}',
   'orders.action.catchweightNotReconciled':
     'Weigh the items sold by weight before handing the order over',
+  'orders.action.marksIncomplete': 'Scan the marked items before handing the order over',
 
   'notBuilt.title': 'Not built yet',
   'notBuilt.body':

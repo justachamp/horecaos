@@ -101,6 +101,8 @@ export const coreUzLatn: AreaMessages<typeof coreEn> = {
   'orders.table.chip': 'Stol {tables}',
   'orders.action.catchweightNotReconciled':
     'Buyurtmani topshirishdan oldin ogʻirlik boʻyicha sotiladigan pozitsiyalarni torting',
+  'orders.action.marksIncomplete':
+    'Buyurtmani topshirishdan oldin markirovkalangan pozitsiyalarni skanerlang',
 
   'notBuilt.title': 'Hali qurilmagan',
   'notBuilt.body': 'Boʻlim tavsiflangan, lekin ekranlar yoʻq. Spetsifikatsiya: {spec}.',
