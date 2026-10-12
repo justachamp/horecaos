@@ -333,6 +333,32 @@ class DeliverySourcingServiceTests {
         });
     }
 
+    @Test
+    @DisplayName("ADR 0170 Decision 6: with the kill switch off, a grouping the plan was created with is not measured,"
+            + " not revealed and not stamped -- the offer is an ordinary DIRECT one")
+    void theKillSwitchStopsAGroupingAlreadyInThePlan() {
+        // The plan's decision carries the grouping because it was published while the switch was on.
+        MeasuringFleet fleet = new MeasuringFleet(
+                List.of(new InternalFleetPort.FleetCandidate(COURIER, 60, 1, 3, 400, 1)),
+                List.of(new InternalFleetPort.FleetCandidate(COURIER, 60, 1, 3, 400, 1, 250, LEAD, true)));
+        RecordingSourcingJournal journal = new RecordingSourcingJournal();
+        DeliverySourcingService service =
+                service(fleet, new RecordingBookingPort(List.of(NOOR)), sourceAt(), journal, false);
+
+        service.source(groupedRequest());
+
+        assertThat(fleet.probes)
+                .as("a probe is what decrypts customers' drop-offs: none may be asked once grouping is off")
+                .isEmpty();
+        assertThat(fleet.plainCalls).isEqualTo(1);
+        assertThat(journal.offers).singleElement().satisfies(offer -> {
+            assertThat(offer.runStamp()).isEqualTo(SourcingJournal.RunStamp.DIRECT);
+            assertThat(offer.decisionReason())
+                    .as("nothing is said about grouping on an attempt that was not grouped")
+                    .isEqualTo(SourcingDecision.FLEET_AVAILABLE);
+        });
+    }
+
     private static Instant sourceAt() {
         return plan().sourceAt();
     }
@@ -401,8 +427,24 @@ class DeliverySourcingServiceTests {
 
     private static DeliverySourcingService service(
             InternalFleetPort fleet, ShipmentBookingPort bookings, Instant now, RecordingSourcingJournal journal) {
+        return service(fleet, bookings, now, journal, true);
+    }
+
+    private static DeliverySourcingService service(
+            InternalFleetPort fleet,
+            ShipmentBookingPort bookings,
+            Instant now,
+            RecordingSourcingJournal journal,
+            boolean groupingAllowed) {
         return new DeliverySourcingService(
-                fleet, bookings, journal, unconfigured(), fact -> {}, Clock.fixed(now, ZoneOffset.UTC));
+                fleet,
+                bookings,
+                journal,
+                unconfigured(),
+                fact -> {},
+                Clock.fixed(now, ZoneOffset.UTC),
+                null,
+                groupingAllowed);
     }
 
     private static InternalFleetPort emptyFleet() {

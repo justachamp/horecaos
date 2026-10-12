@@ -60,6 +60,7 @@ const NOTE_LABELS: Readonly<Record<string, MessageKey>> = {
   GROUPING_CEILING_BELOW_RUN: 'delivery.rules.sim.note.GROUPING_CEILING_BELOW_RUN',
   GROUPING_NEEDS_A_PLAN_TO_MEASURE: 'delivery.rules.sim.note.GROUPING_NEEDS_A_PLAN_TO_MEASURE',
   FLEET_NOT_MEASURABLE: 'delivery.rules.sim.note.FLEET_NOT_MEASURABLE',
+  GROUPING_SWITCHED_OFF: 'delivery.rules.sim.note.GROUPING_SWITCHED_OFF',
 };
 
 /** The platform is Uzbekistan-only and Uzbekistan has no DST, so a bare wall-clock time is read here until a result reports the branch's own zone. */

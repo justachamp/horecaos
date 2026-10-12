@@ -159,6 +159,7 @@ class OrderPaymentProcessTests {
         OrderPaymentProcess sweeping = cancelling(cancelWindow(), meters);
         when(processes.claim(eq(OrderPaymentProcess.PROCESS_NAME), any(), anyInt()))
                 .thenReturn(List.of(row(NOW.minus(Duration.ofMinutes(21)), 0, 1)));
+        when(processes.tryLockForLapse(TENANT, ORDER)).thenReturn(true);
         when(processes.hasUncertainPaymentAttempt(TENANT, ORDER)).thenReturn(false);
         OrderPaymentProcess.Lapse lapse = mock(OrderPaymentProcess.Lapse.class);
         when(lapse.apply(TENANT, ORDER, 20, 3)).thenReturn(true);
@@ -179,6 +180,7 @@ class OrderPaymentProcessTests {
         OrderPaymentProcess sweeping = cancelling(cancelWindow(), meters);
         when(processes.claim(eq(OrderPaymentProcess.PROCESS_NAME), any(), anyInt()))
                 .thenReturn(List.of(row(NOW.minus(Duration.ofMinutes(21)), 0, 1)));
+        when(processes.tryLockForLapse(TENANT, ORDER)).thenReturn(true);
         OrderPaymentProcess.Lapse lapse = mock(OrderPaymentProcess.Lapse.class);
         when(lapse.apply(any(), any(), anyInt(), anyInt())).thenReturn(false);
 
@@ -189,6 +191,36 @@ class OrderPaymentProcessTests {
                         .count())
                 .as("counted only when this call ended the order")
                 .isZero();
+    }
+
+    @Test
+    @DisplayName("an order a capture or a person holds is not waited for: the sweep holds the process row, so it "
+            + "leaves the order, counts it and looks again on the next tick")
+    void anOrderSomeoneElseHoldsIsNotWaitedFor() {
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        OrderPaymentProcess sweeping = cancelling(cancelWindow(), meters);
+        when(processes.claim(eq(OrderPaymentProcess.PROCESS_NAME), any(), anyInt()))
+                .thenReturn(List.of(row(NOW.minus(Duration.ofMinutes(21)), 0, 1)));
+        when(processes.tryLockForLapse(TENANT, ORDER)).thenReturn(false);
+        OrderPaymentProcess.Lapse lapse = mock(OrderPaymentProcess.Lapse.class);
+
+        sweeping.sweep(NOW, Duration.ofMinutes(30), Duration.ofMinutes(1), 50, lapse);
+
+        verify(lapse, never()).apply(any(), any(), anyInt(), anyInt());
+        verify(processes, never()).hasUncertainPaymentAttempt(any(), any());
+        verify(processes)
+                .settle(
+                        eq(ORDER),
+                        eq(OrderPaymentProcess.PROCESS_NAME),
+                        eq(1),
+                        eq("WAITING"),
+                        anyString(),
+                        eq(NOW.plus(Duration.ofMinutes(1))),
+                        eq(null),
+                        eq(NOW));
+        assertThat(meters.counter("ordering.payment_window", "outcome", "skipped_contended")
+                        .count())
+                .isEqualTo(1.0);
     }
 
     @Test

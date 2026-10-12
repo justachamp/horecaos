@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import uz.horecaos.platform.audit.api.ActorRef;
 
 /**
  * The one thing sourcing asks of ADR 0042 before it offers anybody an order
@@ -67,8 +68,21 @@ public interface InternalFleetPort {
      *                          measured against
      * @param mergeRadiusMeters the rule's radius: a carried drop-off further away than this does not count
      * @param maxOrdersPerRun   the rule's ceiling on orders carried at once: a courier at it is not groupable
+     * @param requestedBy       the person on whose request the drop-offs are read (the dispatch-rule simulator),
+     *                          so that the recorded reveal names them; null for sourcing, which reads them as a
+     *                          system job
      */
-    record GroupingProbe(UUID planId, int mergeRadiusMeters, int maxOrdersPerRun) {}
+    record GroupingProbe(
+            UUID planId,
+            int mergeRadiusMeters,
+            int maxOrdersPerRun,
+            @Nullable ActorRef requestedBy) {
+
+        /** A probe sourcing makes on its own account. */
+        public GroupingProbe(UUID planId, int mergeRadiusMeters, int maxOrdersPerRun) {
+            this(planId, mergeRadiusMeters, maxOrdersPerRun, null);
+        }
+    }
 
     /**
      * One courier who could take this order now.
@@ -227,6 +241,22 @@ public interface InternalFleetPort {
         default Map<UUID, Groupable> groupable(
                 UUID tenantId, UUID planId, Collection<UUID> courierIds, int radiusMeters, int maxOrdersPerRun) {
             return Map.of();
+        }
+
+        /**
+         * The same question asked on a person's behalf: the reveals it makes are recorded as theirs. An
+         * implementation that records nothing about who asked answers as the overload above does.
+         *
+         * @param requestedBy who the reveals are recorded against; null records them as the sourcing job's
+         */
+        default Map<UUID, Groupable> groupable(
+                UUID tenantId,
+                UUID planId,
+                Collection<UUID> courierIds,
+                int radiusMeters,
+                int maxOrdersPerRun,
+                @Nullable ActorRef requestedBy) {
+            return groupable(tenantId, planId, courierIds, radiusMeters, maxOrdersPerRun);
         }
     }
 

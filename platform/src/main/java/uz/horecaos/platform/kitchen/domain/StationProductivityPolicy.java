@@ -1,10 +1,12 @@
 package uz.horecaos.platform.kitchen.domain;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.regex.Pattern;
 
 /**
@@ -33,8 +35,17 @@ public record StationProductivityPolicy(int schema, Map<String, Integer> roles, 
     public static final StationProductivityPolicy EMPTY = new StationProductivityPolicy(SCHEMA, Map.of(), Map.of());
 
     public StationProductivityPolicy {
-        roles = Map.copyOf(Objects.requireNonNullElse(roles, Map.of()));
-        stations = Map.copyOf(Objects.requireNonNullElse(stations, Map.of()));
+        roles = snapshot(roles);
+        stations = snapshot(stations);
+    }
+
+    /**
+     * An unmodifiable, sorted copy that <em>keeps a null figure</em> ({@code {"GRILL": null}} is a document an
+     * author can send): {@code Map.copyOf} throws on one, and a constructor that throws turns a request the
+     * validator exists to refuse into a 500 before {@link #violations} is ever asked.
+     */
+    private static Map<String, Integer> snapshot(Map<String, Integer> figures) {
+        return Collections.unmodifiableMap(new TreeMap<>(Objects.requireNonNullElse(figures, Map.of())));
     }
 
     /** The figure for a station: its own code's, else its role's, else none. */

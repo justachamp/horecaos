@@ -176,6 +176,8 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
   'delivery.rules.sim.note.GROUPING_NEEDS_A_PLAN_TO_MEASURE':
     'Выберите недавний заказ, чтобы увидеть, каких курьеров измерят: у набранного вручную сценария нет адреса.',
   'delivery.rules.sim.note.FLEET_NOT_MEASURABLE': 'Курьеров здесь измерить не удалось.',
+  'delivery.rules.sim.note.GROUPING_SWITCHED_OFF':
+    'Объединение выключено для всей платформы, поэтому заказы предлагаются по одному и курьеры не измеряются.',
   'delivery.rules.sim.grouping.heading': 'Курьеры, измеренные для объединения',
   'delivery.rules.sim.grouping.empty': 'Нет курьеров на смене, которых можно измерить.',
   'delivery.rules.sim.grouping.carrying': 'везёт {n} из {max}',

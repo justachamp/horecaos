@@ -52,7 +52,9 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderProcess
  *       ("cancel it"). A published {@code CANCEL} ends the order as {@code PAYMENT_FAILED} only when the
  *       caller supplied a {@link Lapse} (the deployment's {@code cancel.mode} is {@code ENFORCE}), the order
  *       is still authorizing, and no payment attempt is {@code UNCERTAIN}; in {@code SHADOW} it counts what
- *       it would have ended and flags as it always did.</li>
+ *       it would have ended and flags as it always did. The sweep holds the process row while it works, so it
+ *       never <em>waits</em> for what ending an order needs ({@code JdbcOrderProcessStore#tryLockForLapse}):
+ *       an order a capture is moving is left to it and looked at again on the next tick.</li>
  * </ol>
  */
 @Service
@@ -195,6 +197,22 @@ public class OrderPaymentProcess {
                     // SHADOW: say what would have ended and end nothing. The order is flagged as FLAG_ONLY
                     // does, so the fortnight of counts costs the stuck list nothing it did not already hold.
                     count("would_lapse");
+                } else if (!processes.tryLockForLapse(row.tenantId(), row.orderId())) {
+                    // A capture (or a person's decision) holds what ending the order needs. This sweep holds the
+                    // payment process row, so it must not wait for them: a capture waiting for that row and this
+                    // sweep waiting for the order is a deadlock whose victim can be the capture. Leave the order
+                    // to whoever has it and look again on the next tick, holding nothing.
+                    count("skipped_contended");
+                    processes.settle(
+                            row.orderId(),
+                            PROCESS_NAME,
+                            row.version(),
+                            "WAITING",
+                            enteredCheckpoint(enteredAt),
+                            now.plus(recheckInterval),
+                            null,
+                            now);
+                    return;
                 } else if (processes.hasUncertainPaymentAttempt(row.tenantId(), row.orderId())) {
                     // ADR 0007: a question about money is owned by its resolver. The order stays flagged
                     // as a problem and comes back on the next tick, when the answer may have arrived.

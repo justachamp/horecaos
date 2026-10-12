@@ -456,14 +456,16 @@ class KitchenHeadcountHttpTests {
     }
 
     @Test
-    @DisplayName("a figure outside 1..1000, EXPO, an unknown role and a malformed station code are refused")
+    @DisplayName("a figure outside 1..1000 or missing, EXPO, an unknown role and a malformed station code are refused")
     void invalidDocumentsAreRefused() throws Exception {
         for (String body : List.of(
                 document("\"roles\":{\"GRILL\":0}"),
                 document("\"roles\":{\"GRILL\":1001}"),
                 document("\"roles\":{\"EXPO\":10}"),
                 document("\"roles\":{\"SORCERER\":10}"),
-                document("\"stations\":{\"grill 1\":10}"))) {
+                document("\"stations\":{\"grill 1\":10}"),
+                document("\"roles\":{\"GRILL\":null}"),
+                document("\"stations\":{\"GRILL-1\":null}"))) {
             Response refused = send(policyPath(null, null), OWNER, "bad-" + body.hashCode(), "0", body);
             assertThat(refused.status()).as(body).isEqualTo(400);
             assertThat(refused.json().path("code").asText()).as(body).isEqualTo("VALIDATION_FAILED");

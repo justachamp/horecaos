@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.fulfillment.api.DeliveryOrderPort;
 import uz.horecaos.platform.fulfillment.api.DeliveryOrderPort.DispatchOrderFacts;
 import uz.horecaos.platform.fulfillment.api.InternalFleetPort;
@@ -60,10 +61,18 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * anything -- its channel, zone and prepayment come from {@link DeliveryOrderPort#dispatchFacts} -- so
  * asking "which rule would this order match today" never reveals where a customer lives.
  *
- * <p>It calls no provider, requests no quote, writes nothing and publishes no signal, and the response
- * says so. A {@code CHEAPEST} rule's winner is decided by quotes at the moment of booking, which a
- * simulator cannot and must not ask for; it names the candidates in the order the booking would consider
- * them and says the choice among them is made then.
+ * <p>It calls no provider, requests no quote and publishes no signal, and the response says so. A {@code
+ * CHEAPEST} rule's winner is decided by quotes at the moment of booking, which a simulator cannot and must
+ * not ask for; it names the candidates in the order the booking would consider them and says the choice among
+ * them is made then.
+ *
+ * <p><strong>The one exception is a rule that groups, simulated against a recent plan</strong> (ADR 0170): the
+ * feed is measured exactly as sourcing measures it, which reads the drop-off point of that plan and of the
+ * orders the candidate couriers carry, under the purpose {@code DISPATCH_GROUPING}. Each read is a recorded
+ * reveal in the audit trail, attributed to the person who asked, and what leaves is a distance, never a place.
+ * It is done for the document in force only while the platform's grouping switch is on, because only then does
+ * the live path do it; a draft is measured either way, since previewing the feed before the switch is turned on
+ * is how the record rolls grouping out.
  */
 @Service
 public class DispatchRuleSimulator {
@@ -126,6 +135,24 @@ public class DispatchRuleSimulator {
             @Nullable DispatchRulesDocument draft,
             @Nullable Scenario scenario,
             @Nullable UUID planId) {
+        return simulate(tenantId, brandId, locationId, editingScope, draft, scenario, planId, null);
+    }
+
+    /**
+     * The same, on behalf of a person: when a rule that groups is measured against a recent plan, the drop-offs
+     * that measurement reveals are recorded as read for them (ADR 0029).
+     *
+     * @param requestedBy who asked; null records the reveals as the sourcing job's
+     */
+    public Simulation simulate(
+            UUID tenantId,
+            UUID brandId,
+            UUID locationId,
+            ResourceScope editingScope,
+            @Nullable DispatchRulesDocument draft,
+            @Nullable Scenario scenario,
+            @Nullable UUID planId,
+            @Nullable ActorRef requestedBy) {
 
         if ((scenario == null) == (planId == null)) {
             throw new ApiException(
@@ -186,7 +213,8 @@ public class DispatchRuleSimulator {
         }
 
         List<String> notes = new ArrayList<>(notesFor(decision, ladder, facts));
-        GroupingFeed feed = groupingFeed(tenantId, brandId, locationId, planId, decision, notes);
+        GroupingFeed feed = groupingFeed(
+                tenantId, brandId, locationId, planId, decision, "DRAFT".equals(source), requestedBy, notes);
         return new Simulation(
                 source,
                 policyId,
@@ -217,10 +245,21 @@ public class DispatchRuleSimulator {
             UUID locationId,
             @Nullable UUID planId,
             DispatchDecision decision,
+            boolean draft,
+            @Nullable ActorRef requestedBy,
             List<String> notes) {
 
         DispatchRulesDocument.Grouping grouping = decision.grouping();
         if (grouping == null || !decision.mode().usesFleet()) {
+            return null;
+        }
+        if (!draft && !rules.groupingAllowed()) {
+            // The kill switch (ADR 0170 Decision 6) is off, so the live path ignores the grouping of the
+            // document in force: it would not be measured, ranked on or stamped. Showing a feed for it would
+            // be a simulation of something that does not happen, and a read of customers' doors for nothing.
+            // A draft is different on purpose: previewing the feed with the switch still off is the rollout's
+            // own step (ADR 0170, rollout), and the draft's violations already say it cannot be published yet.
+            notes.add("GROUPING_SWITCHED_OFF");
             return null;
         }
         int ceiling = store.highestCourierConcurrency(tenantId);
@@ -244,7 +283,8 @@ public class DispatchRuleSimulator {
                 brandId,
                 locationId,
                 plan.distanceMeters() == null ? 0 : plan.distanceMeters(),
-                new InternalFleetPort.GroupingProbe(planId, grouping.mergeRadiusMeters(), grouping.maxOrdersPerRun()));
+                new InternalFleetPort.GroupingProbe(
+                        planId, grouping.mergeRadiusMeters(), grouping.maxOrdersPerRun(), requestedBy));
         List<GroupedCandidate> measured = candidates.stream()
                 .map(candidate -> new GroupedCandidate(
                         candidate.courierId(),

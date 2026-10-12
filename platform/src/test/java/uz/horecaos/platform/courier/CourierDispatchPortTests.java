@@ -698,9 +698,37 @@ class CourierDispatchPortTests {
                             .doesNotContain("69.24")
                             .doesNotContain("41.3");
                     assertThat(fact.scope().locationId()).isEqualTo(branch);
+                    assertThat(fact.actor().type())
+                            .as("sourcing reads these on its own account, as the job it is")
+                            .isEqualTo(ActorRef.Type.SYSTEM_JOB);
                 })
                 .extracting(fact -> fact.targetId())
                 .containsExactlyInAnyOrder(plan.orderId(), carried.orderId());
+    }
+
+    @Test
+    @DisplayName("a reveal made because a person asked (the dispatch-rule simulator) is recorded as that person's, not"
+            + " as the sourcing job's")
+    void aRevealOnBehalfOfAPersonNamesThePerson() {
+        shifts.open(openCommand(alisher, branch));
+        Doors doors = new Doors();
+        Carried carried = carryingShipment(alisher, "ASSIGNED");
+        Carried plan = planToSource();
+        doors.at(plan, metresNorth(2_000));
+        doors.at(carried, metresNorth(2_300));
+        ActorRef dispatcher = ActorRef.user("dispatcher-7", null);
+
+        groupingFleet(doors)
+                .candidates(
+                        TENANT,
+                        BRAND,
+                        branch,
+                        4_000,
+                        new InternalFleetPort.GroupingProbe(plan.planId(), 700, 3, dispatcher));
+
+        assertThat(reveals.facts)
+                .hasSize(2)
+                .allSatisfy(fact -> assertThat(fact.actor()).isEqualTo(dispatcher));
     }
 
     @Test

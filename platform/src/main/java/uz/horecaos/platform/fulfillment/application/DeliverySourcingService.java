@@ -13,6 +13,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.AuditClass;
@@ -107,7 +108,9 @@ public class DeliverySourcingService {
     private final AuditRecorder audit;
     private final Clock clock;
     private final @Nullable MeterRegistry meters;
+    private final boolean groupingAllowed;
 
+    /** Grouping live and no meters: the tests that predate the kill switch, which build their own fixtures. */
     public DeliverySourcingService(
             InternalFleetPort fleet,
             ShipmentBookingPort bookings,
@@ -115,7 +118,7 @@ public class DeliverySourcingService {
             PolicyResolver policies,
             AuditRecorder audit,
             Clock clock) {
-        this(fleet, bookings, journal, policies, audit, clock, null);
+        this(fleet, bookings, journal, policies, audit, clock, null, true);
     }
 
     @Autowired
@@ -126,7 +129,12 @@ public class DeliverySourcingService {
             PolicyResolver policies,
             AuditRecorder audit,
             Clock clock,
-            @Nullable MeterRegistry meters) {
+            @Nullable MeterRegistry meters,
+            // ADR 0170 Decision 6: the platform's kill switch for grouping. It is read here, on the live path, and
+            // not only where a rule is published: the rule document a plan was created with can carry a
+            // grouping that was published while the switch was on, and switching it off must stop the
+            // behaviour (the drop-off reveals and the run-increment stamp), not only new publications.
+            @Value("${horecaos.fulfillment.dispatch.grouping-enabled:false}") boolean groupingAllowed) {
         this.fleet = fleet;
         this.bookings = bookings;
         this.journal = journal;
@@ -134,6 +142,7 @@ public class DeliverySourcingService {
         this.audit = audit;
         this.clock = clock;
         this.meters = meters;
+        this.groupingAllowed = groupingAllowed;
     }
 
     /** The first tick for a plan nothing has been tried for yet. */
@@ -148,7 +157,10 @@ public class DeliverySourcingService {
 
         // ADR 0170: the grouping feed is asked only when the resolved action has a grouping, so a tenant
         // with no rule for it reads nothing and decrypts nothing. Otherwise the plain overload, exactly as before.
-        Grouping grouping = dispatch.grouping();
+        // The deploy-level kill switch is applied here, to what the plan was created with: a grouping published
+        // while the switch was on does nothing once it is off (no probe, so no drop-off is decrypted; no bias; no
+        // run stamp), and a plan already in flight is offered DIRECT from its next tick.
+        Grouping grouping = groupingOf(dispatch);
         List<FleetCandidate> candidates;
         if (!request.mode().usesFleet()) {
             candidates = List.of();
@@ -176,14 +188,7 @@ public class DeliverySourcingService {
                 : List.of();
 
         SourcingDecision decision = SourcingPlanner.decide(
-                request.plan(),
-                policy.document(),
-                request.mode(),
-                candidates,
-                partners,
-                progress,
-                now,
-                dispatch.grouping());
+                request.plan(), policy.document(), request.mode(), candidates, partners, progress, now, grouping);
 
         List<ScoredPartner> scored = List.of();
         boolean mayQuote = dispatch.partners().selection() == DispatchRulesDocument.PartnerSelection.CHEAPEST;
@@ -205,7 +210,7 @@ public class DeliverySourcingService {
                     QuoteScoring.ranked(scored),
                     ineligibleAsAttempted(progress, scored),
                     now,
-                    dispatch.grouping());
+                    grouping);
         }
 
         return switch (decision) {
@@ -345,14 +350,15 @@ public class DeliverySourcingService {
             List<FleetCandidate> candidates,
             Instant now) {
 
-        SourcingJournal.RunStamp stamp = runStampOf(request.dispatch().grouping(), decision.courierId(), candidates);
+        Grouping grouping = groupingOf(request.dispatch());
+        SourcingJournal.RunStamp stamp = runStampOf(grouping, decision.courierId(), candidates);
         SourcingJournal.OpenAttempt attempt = journal.openInternalOffer(new SourcingJournal.InternalOffer(
                 request.tenantId(),
                 request.planId(),
                 decision.courierId(),
                 offerKey(request.planId(), decision.courierId()),
                 decision.expiresAt(),
-                reasonOf(decision.reason(), request.dispatch().grouping(), decision.courierId(), candidates),
+                reasonOf(decision.reason(), grouping, decision.courierId(), candidates),
                 policy.policyId(),
                 policy.policyVersion(),
                 now,
@@ -373,6 +379,17 @@ public class DeliverySourcingService {
                 policy.policyVersion(),
                 attempt.attemptId(),
                 false);
+    }
+
+    /**
+     * The grouping this tick may act on: the one the plan's decision carries, unless the platform's kill switch
+     * ({@code horecaos.fulfillment.dispatch.grouping-enabled}, ADR 0170 Decision 6) is off. The switch is read
+     * here, on every tick, because publishing is not the only moment grouping does anything: a rule published
+     * while the switch was on keeps ranking, decrypting and stamping until something on this path says stop.
+     * Runs already stamped finish on the basis they were stamped with (ADR 0170, rollback).
+     */
+    private @Nullable Grouping groupingOf(DispatchDecision dispatch) {
+        return groupingAllowed ? dispatch.grouping() : null;
     }
 
     /**

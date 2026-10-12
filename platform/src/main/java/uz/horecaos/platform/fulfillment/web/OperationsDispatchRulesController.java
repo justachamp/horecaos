@@ -90,8 +90,9 @@ import uz.horecaos.platform.web.idempotency.Idempotent;
  * version they already did.
  *
  * <p>The simulator is a {@code POST} because its body can carry a whole draft document. It declares the
- * read capability, writes nothing, calls no provider and asks no quote, so ADR 0031's idempotency rules do
- * not apply to it.
+ * read capability, changes no state, calls no provider and asks no quote, so ADR 0031's idempotency rules do
+ * not apply to it. (A rule that groups, simulated against a plan, reads drop-offs under a named purpose, and
+ * that reveal is recorded in the audit trail as the caller's: see {@link DispatchRuleSimulator}.)
  *
  * <p>Request bodies box every optional field: Jackson 3 refuses a missing primitive as a malformed body,
  * and an editor that leaves an offset blank is not malformed.
@@ -236,7 +237,10 @@ public class OperationsDispatchRulesController {
                     + "against typed facts or a recent plan's, with the very evaluator the live path runs. Returns "
                     + "the matched rule, why each earlier rule did not match (its first failing condition), the "
                     + "resolved action, the partners in the order they would be tried, what could not be honoured, "
-                    + "and when sourcing would start. It calls no provider, asks no quote and writes nothing.")
+                    + "and when sourcing would start. It calls no provider and asks no quote. A rule that groups, "
+                    + "simulated against a recent plan, measures the courier feed as sourcing does: the drop-off of "
+                    + "that plan and of the orders the candidates carry are read for the purpose DISPATCH_GROUPING, "
+                    + "each read recorded in the audit trail as yours, and only distances are returned.")
     public SimulationResponse simulate(@PathVariable UUID tenantId, @Valid @RequestBody SimulationRequest body) {
 
         ResourceScope location = ResourceScope.location(tenantId, body.brandId(), body.locationId());
@@ -249,7 +253,8 @@ public class OperationsDispatchRulesController {
                 editingScope,
                 body.draft() == null ? null : body.draft().toDocument(),
                 body.scenario() == null ? null : body.scenario().toScenario(),
-                body.planId());
+                body.planId(),
+                ActorRef.user(currentActor.get().subject(), null));
         return SimulationResponse.of(result);
     }
 
