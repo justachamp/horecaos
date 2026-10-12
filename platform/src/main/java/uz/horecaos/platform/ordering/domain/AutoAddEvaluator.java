@@ -67,7 +67,7 @@ public final class AutoAddEvaluator {
      * Evaluates every rule whose context matches.
      *
      * <p>A rule that does not fire (a zero raw quantity, no band containing the total, a context
-     * that does not match) produces no outcome at all. The result is ordered by the rule's code so
+     * that does not match, or a basket the customer has put nothing in) produces no outcome at all. The result is ordered by the rule's code so
      * the same basket always yields the same list.
      *
      * @param declined rules the customer removed from this cart; each yields {@link Skipped}
@@ -79,6 +79,13 @@ public final class AutoAddEvaluator {
             Context context,
             java.util.Set<UUID> declined,
             Eligibility eligibility) {
+        if (basket.lines().isEmpty()) {
+            // Packaging goes with something the customer chose, never alone: a basket with nothing in it
+            // fires no rule of any kind, even a PLAIN rule whose context matches. Without this the last
+            // dish could never be removed (the rule would write its line straight back) and a cart
+            // holding only a bag could be priced and paid for.
+            return List.of();
+        }
         List<Outcome> outcomes = new ArrayList<>();
         List<PublishedAutoAddRule> ordered = rules.stream()
                 .sorted(Comparator.comparing(PublishedAutoAddRule::code).thenComparing(PublishedAutoAddRule::ruleId))

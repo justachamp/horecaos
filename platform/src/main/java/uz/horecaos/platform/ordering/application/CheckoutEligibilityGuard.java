@@ -178,7 +178,8 @@ class CheckoutEligibilityGuard {
         }
 
         List<CartLineRow> cartLines = cartService.lines(command.tenantId(), command.cartId());
-        if (cartLines.isEmpty()) {
+        if (cartLines.stream().allMatch(CartLineRow::injected)) {
+            // ADR 0158: a cart holding only lines a rule added is an empty cart.
             return Result.rejected("CART_EMPTY", "An empty cart cannot be checked out");
         }
 

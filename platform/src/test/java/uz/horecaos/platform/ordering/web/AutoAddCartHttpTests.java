@@ -801,6 +801,91 @@ class AutoAddCartHttpTests {
     }
 
     @Test
+    @DisplayName("taking the last dish out of the cart takes the packaging with it: the cart is empty, nothing is "
+            + "priced and the customer can always empty it")
+    void thePackagingNeverOutlivesTheLastDish() throws Exception {
+        UUID rule = activeRule(plainRule("cutlery", cutlery, "[\"PICKUP\"]"));
+        publish("STOREFRONT");
+        gate(true, false);
+        UUID cart = openCart("STOREFRONT", "PICKUP");
+        String key = "aa:" + rule;
+        JsonNode view = putLine(cart, 1, "burger", burger, "1");
+        assertThat(lineKeys(view)).containsExactly(key, "burger");
+
+        view = removeLine(cart, view.get("version").asInt(), "burger");
+
+        assertThat(lineKeys(view)).as("a rule's line is never the whole cart").isEmpty();
+        assertThat(count("ordering.cart_lines")).isZero();
+        assertThat(count("ordering.cart_auto_add_declines"))
+                .as("the customer removed a dish, not the packaging: nothing is remembered as declined")
+                .isZero();
+        MvcResult priced = rawPrice(cart, view.get("version").asInt());
+        assertThat(priced.getResponse().getStatus()).isNotEqualTo(200);
+        assertThat(priced.getResponse().getContentAsString()).contains("CART_EMPTY");
+
+        view = putLine(cart, view.get("version").asInt(), "plov", plov, "1");
+        assertThat(lineKeys(view))
+                .as("the rule applies again to the next thing the customer chooses")
+                .containsExactly(key, "plov");
+    }
+
+    @Test
+    @DisplayName("a mandatory line is dropped with the last dish, so a cart can be emptied one line at a time")
+    void aMandatoryLineGoesWithTheLastDish() throws Exception {
+        mandatoryAllowed(true);
+        UUID rule = activeRule(mandatory(plainRule("packaging", bag, "[\"PICKUP\"]")));
+        publish("STOREFRONT");
+        gate(true, false);
+        UUID cart = openCart("STOREFRONT", "PICKUP");
+        String key = "aa:" + rule;
+        JsonNode view = putLine(cart, 1, "burger", burger, "1");
+        view = putLine(cart, view.get("version").asInt(), "plov", plov, "1");
+        assertThat(lineOf(view, key).get("autoAdd").get("mandatory").asBoolean())
+                .isTrue();
+
+        view = removeLine(cart, view.get("version").asInt(), "burger");
+        assertThat(lineKeys(view)).contains(key, "plov");
+        view = removeLine(cart, view.get("version").asInt(), "plov");
+
+        assertThat(lineKeys(view))
+                .as("the mandatory line cannot be removed by the customer, and is not left behind either")
+                .isEmpty();
+        assertThat(count("ordering.cart_lines")).isZero();
+    }
+
+    @Test
+    @DisplayName("a cart that holds nothing but a rule's line is neither priced nor checked out, "
+            + "whatever state the rules were left in")
+    void aCartOfOnlyPackagingIsRefused() throws Exception {
+        UUID rule = activeRule(plainRule("cutlery", cutlery, "[\"PICKUP\"]"));
+        publish("STOREFRONT");
+        gate(true, false);
+        UUID cart = openCart("STOREFRONT", "PICKUP");
+        JsonNode view = putLine(cart, 1, "burger", burger, "1");
+        JsonNode priced = price(cart, view.get("version").asInt());
+        assertThat(lineKeys(view)).contains("aa:" + rule);
+
+        // The gate is closed and the customer's dish disappears underneath the cart (a stale row left by the
+        // closed gate, which neither adds nor removes): only the rule's line is left, at the quoted version.
+        gate(false, false);
+        jdbc.sql("DELETE FROM ordering.cart_lines WHERE cart_id = :c AND line_key = 'burger'")
+                .param("c", cart)
+                .update();
+        assertThat(count("ordering.cart_lines")).isEqualTo(1);
+
+        MvcResult checkout = rawCheckout(cart, priced, "checkout-" + requests++);
+        assertThat(checkout.getResponse().getStatus()).isNotIn(200, 201);
+        assertThat(checkout.getResponse().getContentAsString()).contains("CART_EMPTY");
+        assertThat(count("ordering.orders"))
+                .as("no packaging-only order was placed")
+                .isZero();
+
+        MvcResult repriced = rawPrice(cart, priced.get("cartVersion").asInt());
+        assertThat(repriced.getResponse().getStatus()).isNotEqualTo(200);
+        assertThat(repriced.getResponse().getContentAsString()).contains("CART_EMPTY");
+    }
+
+    @Test
     @DisplayName("the operator's composer can take a rule's line off by sending its rule back as declined")
     void theOperatorCanTakeAnAutoAddedLineOff() throws Exception {
         UUID rule = activeRule(plainRule("cutlery", cutlery, "[\"PICKUP\"]", "[\"WEB\",\"CALL_CENTRE\"]"));
@@ -965,6 +1050,14 @@ class AutoAddCartHttpTests {
                 .as(result.getResponse().getContentAsString())
                 .isEqualTo(200);
         return JSON.readTree(result.getResponse().getContentAsString());
+    }
+
+    private MvcResult rawPrice(UUID cart, int version) throws Exception {
+        return mvc.perform(post(storefront() + "/carts/" + cart + "/pricing")
+                        .with(customer())
+                        .header(IDEMPOTENCY_HEADER, "price-" + requests++)
+                        .header("If-Match", "\"" + version + "\""))
+                .andReturn();
     }
 
     private UUID checkout(UUID cart, JsonNode priced) throws Exception {

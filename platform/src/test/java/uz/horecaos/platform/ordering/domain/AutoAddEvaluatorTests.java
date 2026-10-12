@@ -207,6 +207,25 @@ class AutoAddEvaluatorTests {
     }
 
     @Test
+    @DisplayName("a basket with nothing the customer chose fires no rule of any kind: packaging is never the order")
+    void anEmptyBasketFiresNothing() {
+        List<PublishedAutoAddRule> rules = List.of(
+                plain("cutlery", CUTLERY, "1"),
+                new Builder("floor-zero", Kind.PLAIN)
+                        .variant(BAG)
+                        .quantity("2")
+                        .bounds("1", "5")
+                        .build(),
+                triggered("bag", BAG, "1", "1", false, new Trigger(BURGER, null, null)),
+                bands("sets", new Band(BigDecimal.ZERO, null, CUTLERY, BigDecimal.ONE)));
+
+        assertThat(evaluate(rules, new BasketFacts(List.of()), DELIVERY_ON_WEB)).isEmpty();
+        assertThat(evaluate(rules, basket(line(BURGER, "1")), DELIVERY_ON_WEB))
+                .as("the same rules do fire the moment the customer has chosen something")
+                .isNotEmpty();
+    }
+
+    @Test
     @DisplayName("a gap between bands injects nothing for a total that falls in it")
     void aGapInjectsNothing() {
         PublishedAutoAddRule rule = bands(

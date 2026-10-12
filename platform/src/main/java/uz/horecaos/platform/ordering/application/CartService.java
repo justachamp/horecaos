@@ -1100,7 +1100,10 @@ public class CartService {
         }
 
         List<CartLineRow> lines = lines(tenantId, cartId);
-        if (lines.isEmpty()) {
+        if (lines.stream().allMatch(CartLineRow::injected)) {
+            // ADR 0158: a rule's line goes with something the customer chose, never alone. The rules
+            // drop it with the customer's last line; this holds for a cart they could not (a closed
+            // gate neither adds nor removes), so a basket of packaging is never priced.
             throw new CartRefusedException("CART_EMPTY", "An empty cart has nothing to price");
         }
         // Row 4.2g: re-checked here, not only at putLine. A line added inside its
