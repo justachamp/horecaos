@@ -777,7 +777,7 @@ public class PosBalanceSyncService {
             }
         }
 
-        ApprovalOutcome outcome = adjustments.adjust(new AdjustmentCommand(
+        ApprovalOutcome outcome = adjustments.adjustForTillResolution(new AdjustmentCommand(
                 tenantId,
                 brandId,
                 account.customerAccountId(),

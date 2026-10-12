@@ -4420,6 +4420,21 @@
         "required" : [ "endReason", "reason" ],
         "type" : "object"
       },
+      "CloseRequestBody" : {
+        "properties" : {
+          "note" : {
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "outcome" : {
+            "enum" : [ "DECLINED", "CANCELLED" ],
+            "type" : "string"
+          }
+        },
+        "required" : [ "note", "outcome" ],
+        "type" : "object"
+      },
       "CloseResponse" : {
         "properties" : {
           "breakSeconds" : {
@@ -4451,6 +4466,18 @@
             "maxLength" : 64,
             "minLength" : 0,
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ClosedResponse" : {
+        "properties" : {
+          "documentVersion" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "request" : {
+            "$ref" : "#/components/schemas/CorrectionRequestResponse"
           }
         },
         "type" : "object"
@@ -5641,6 +5668,10 @@
           },
           "attachedDocumentId" : {
             "format" : "uuid",
+            "type" : "string"
+          },
+          "closedAt" : {
+            "format" : "date-time",
             "type" : "string"
           },
           "documentId" : {
@@ -9148,6 +9179,22 @@
         },
         "type" : "object"
       },
+      "EarlierRequestResponse" : {
+        "properties" : {
+          "attempt" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lines" : {
+            "$ref" : "#/components/schemas/LinesResponse"
+          },
+          "sentAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "EditorResponse" : {
         "properties" : {
           "atRiskDefault" : {
@@ -9539,6 +9586,12 @@
           },
           "documentType" : {
             "type" : "string"
+          },
+          "earlierRequests" : {
+            "items" : {
+              "$ref" : "#/components/schemas/EarlierRequestResponse"
+            },
+            "type" : "array"
           },
           "hasEvidence" : {
             "type" : "boolean"
@@ -14593,6 +14646,9 @@
       "OperationsFiscalEvidenceControllerLineResponse" : {
         "properties" : {
           "barcode" : {
+            "type" : "string"
+          },
+          "commissionTin" : {
             "type" : "string"
           },
           "discount" : {
@@ -30658,7 +30714,7 @@
     "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/close" : {
       "post" : {
         "description" : "Ends any open break first, so its seconds are not paid.",
-        "operationId" : "close_3",
+        "operationId" : "close_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -32494,7 +32550,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/close" : {
       "post" : {
         "description" : "Any non-CLOSED state may close. A new inbound message afterward reopens it to HANDED_TO_OPERATOR rather than being answered with silence. Requires If-Match against the conversation's current version.",
-        "operationId" : "close_2",
+        "operationId" : "close_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -37418,7 +37474,7 @@
     "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/staff/shifts/{shiftId}/closures" : {
       "post" : {
         "description" : "Closes an open shift at endedAt (needs If-Match). The break defaults to the matched roster entry's planned break unless breakSeconds is set. Over the variance threshold the shift waits in AWAITING_APPROVAL and is out of payroll facts until approved.",
-        "operationId" : "close_1",
+        "operationId" : "close_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -44275,7 +44331,7 @@
     },
     "/api/v1/operations/tenants/{tenantId}/fiscal/correction-requests/{requestId}/attachments" : {
       "post" : {
-        "description" : "Creates the linked CORRECTION or REFUND document from the reference the tenant's agent filed and moves the original to CORRECTED or VOIDED. It never edits the original's evidence. If-Match is the original document's version.",
+        "description" : "Creates the linked CORRECTION or REFUND document from the reference the tenant's agent filed and moves the original to CORRECTED or VOIDED. It never edits the original's evidence. Under an ADR 0027 approval bound to the reference typed: the first call answers 422 SECOND_APPROVER_REQUIRED naming approvalRequestId, and once a second person has approved it the same reference goes through (a different one needs its own approval). The link must be an https page of the tax authority's own site, else 400 VALIDATION_FAILED on receiptUrl before any approval is asked for. If-Match is the original document's version.",
         "operationId" : "attach",
         "parameters" : [ {
           "in" : "path",
@@ -44317,6 +44373,53 @@
           }
         },
         "summary" : "Attach the reference the agent returned, closing a correction or void request",
+        "tags" : [ "Fiscal evidence" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/fiscal/correction-requests/{requestId}/closures" : {
+      "post" : {
+        "description" : "The way out of a request that is not going to be attached: the tenant's fiscal agent declined to issue it (DECLINED) or it was raised in error (CANCELLED). The document returns to ISSUED with its evidence exactly as it was; nothing is filed, attached or invented, and the request leaves the worklist. A note says why. A request that has been attached or already closed answers 409. If-Match is the document's version, as for an attachment.",
+        "operationId" : "close_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "requestId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CloseRequestBody"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ClosedResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Close a correction or void request without a receipt",
         "tags" : [ "Fiscal evidence" ]
       }
     },

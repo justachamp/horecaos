@@ -803,8 +803,15 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
     'Bu chek uchun qatorlar yozilmagan: yo hali hech narsa yuborilmagan, yo yuborilgani saqlanmagan. Oʻrniga hech narsa koʻrsatilmaydi.',
   'finance.fiscalEvidence.lines.notReadable':
     'Qatorlar yozilgan, lekin ularni ochib boʻlmadi. Oʻrniga hech narsa koʻrsatilmaydi.',
+  'finance.fiscalEvidence.lines.filedUnder': 'Qatorlar {tin} STIR ostida topshirilgan.',
+  'finance.fiscalEvidence.lines.filedUnderDiffers':
+    'Qatorlar {filed} STIR ostida topshirilgan, bu hujjat ochilgan STIR ({opened}) emas. Ikkalasi ham yozilganidek koʻrsatilgan; bu yerda hech narsa tuzatilmagan.',
   'finance.fiscalEvidence.lines.marksTransmitted':
     'Bu chek bilan {count} ta markirovka kodi yuborilgan. Ekranda faqat son qoladi.',
+  'finance.fiscalEvidence.earlier.title': 'Shu chek boʻyicha ketgan oldingi soʻrovlar ({count})',
+  'finance.fiscalEvidence.earlier.lead':
+    'Yuqoridagi qatorlar — oxirgi soʻrov. Bular undan oldin yuborilgan va u bilan almashtirilgan. Provayder ularning istalganini olgan boʻlishi mumkin: kelmagan javob nima yetib borganini isbotlamaydi, shuning uchun ular yuborilganidek saqlanadi.',
+  'finance.fiscalEvidence.earlier.attempt': '{attempt}-soʻrov, {at} da yuborilgan',
   'finance.fiscalEvidence.correction.state':
     '{kind}: {at} da soʻralgan. Restoranning fiskal agenti hali javob bermagan.',
   'finance.fiscalEvidence.correction.action': 'Tuzatish yoki bekor qilishni soʻrash',
@@ -833,12 +840,36 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
     'Soʻrov yozildi. Endi restoranning fiskal agenti uni bajarishi kerak; bajargach, agentning havolasini shu yerga biriktiring.',
   'finance.fiscalEvidence.correction.attach.action': 'Agent havolasini biriktirish',
   'finance.fiscalEvidence.correction.attach.lead':
-    'Restoranning fiskal agenti qaytargan maʻlumotlarni kiriting. HorecaOS ularni bogʻlangan hujjat sifatida saqlaydi va asl chekni hech qachon oʻzgartirmaydi.',
+    'Restoranning fiskal agenti qaytargan maʻlumotlarni kiriting. Ikkinchi xodim aynan siz kiritganni tasdiqlaydi va shundan keyingina biriktiriladi; HorecaOS ularni bogʻlangan hujjat sifatida saqlaydi va asl chekni hech qachon oʻzgartirmaydi.',
+  'finance.fiscalEvidence.correction.attach.pending':
+    'Ikkinchi tasdiqlovchi kutilmoqda. {id} tasdiqlash soʻrovi hal etilmagan; u tasdiqlangach maʻlumotlarni aynan kiritilganidek yana biriktiring.',
+  'finance.fiscalEvidence.correction.attach.declined':
+    'Ikkinchi tasdiqlovchi {id} tasdiqlash soʻrovini rad etdi, shuning uchun bu maʻlumotlar biriktirilmadi.',
+  'finance.fiscalEvidence.correction.attach.urlRefused':
+    'Havola soliq organi saytining sahifasiga olib borishi kerak (https, soliq.uz). Chekning oʻzi beradigan havoladan foydalaning.',
   'finance.fiscalEvidence.correction.attach.url': 'Chek havolasi (https)',
   'finance.fiscalEvidence.correction.attach.terminal': 'Terminal (ixtiyoriy)',
   'finance.fiscalEvidence.correction.attach.submit': 'Biriktirish',
   'finance.fiscalEvidence.correction.attached':
     'Maʻlumotlar bogʻlangan hujjat sifatida biriktirildi, asl chek esa endi tuzatilgan yoki bekor qilingan deb belgilandi.',
+  'finance.fiscalEvidence.correction.state.ATTACHED':
+    '{kind}: fiskal agentning havolasi bogʻlangan hujjat sifatida biriktirilgan.',
+  'finance.fiscalEvidence.correction.state.DECLINED':
+    '{kind}: yopildi, fiskal agent chiqarishdan bosh tortdi. Chek topshirilganidek qoladi.',
+  'finance.fiscalEvidence.correction.state.CANCELLED':
+    '{kind}: soʻrov qaytarib olindi. Chek topshirilganidek qoladi.',
+  'finance.fiscalEvidence.correction.close.action': 'Soʻrovni chek chiqarmasdan yopish',
+  'finance.fiscalEvidence.correction.close.lead':
+    'Restoranning fiskal agenti chiqarishdan bosh tortgan yoki soʻrov xato yuborilgan boʻlsa shundan foydalaning. Chek topshirilganidek qoladi, soliq organiga hech narsa yuborilmaydi, soʻrov roʻyxatdan chiqadi.',
+  'finance.fiscalEvidence.correction.close.outcome.label': 'Nega yopilmoqda',
+  'finance.fiscalEvidence.correction.close.outcome.choose': 'Sababni tanlang',
+  'finance.fiscalEvidence.correction.close.outcome.DECLINED':
+    'Fiskal agent chiqarishdan bosh tortdi',
+  'finance.fiscalEvidence.correction.close.outcome.CANCELLED':
+    'Xato yuborilgan yoki endi kerak emas',
+  'finance.fiscalEvidence.correction.close.note.label': 'Nima boʻldi (255 belgigacha)',
+  'finance.fiscalEvidence.correction.close.submit': 'Soʻrovni yopish',
+  'finance.fiscalEvidence.correction.closed': 'Soʻrov yopildi. Chek topshirilganidek qoladi.',
   'finance.fiscalEvidence.paymentTypes.title': 'Fiskallashtiriladigan toʻlov turlari',
   'finance.fiscalEvidence.paymentTypes.lead':
     'Toʻlov usullari roʻyxati, merchant hisoblari va fiskal terminallardan olinadi va sozlanmaydi: ulardan farq qiladigan sozlama soliq hujjati haqida yolgʻon maʻlumot boʻlar edi. Yoʻli yoʻq usul — restoranning oʻz chek berilmagan majburiyati; HorecaOS uni fiskallashtirmaydi.',

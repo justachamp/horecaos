@@ -189,7 +189,20 @@ public enum ApprovalAction {
      * raised in a tenant-owned scope and listed on that tenant's worklist. A deployment that
      * deleted the policy should stop corrections, not let one person decide them alone.
      */
-    FISCAL_CORRECTION_REQUEST("fiscal.correction.request", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY);
+    FISCAL_CORRECTION_REQUEST("fiscal.correction.request", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY),
+
+    /**
+     * ADR 0166, Decision 8: attaching the reference the tenant's fiscal agent returned to a correction or
+     * void request. It creates a linked {@code CORRECTION} or {@code REFUND} document, moves the original
+     * to {@code CORRECTED} or {@code VOIDED}, and puts the receipt link in front of the customer, all on
+     * what one person typed; so a second person signs the reference itself, and the signature is bound to
+     * it by the parameters hash.
+     *
+     * <p>Fail-closed, like {@link #FISCAL_CORRECTION_REQUEST}, and governed from the first day by the
+     * platform-scope floor {@code V0642} seeds; the attachment is the tenant's own decision, raised in a
+     * tenant-owned scope and listed on that tenant's worklist.
+     */
+    FISCAL_CORRECTION_ATTACH("fiscal.correction.attach", MissingPolicyMode.REQUIRE_CONFIGURED_POLICY);
 
     /**
      * Which worklist a request for the action reaches once it is {@code PENDING}.

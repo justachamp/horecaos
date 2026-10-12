@@ -38,6 +38,7 @@ import uz.horecaos.platform.payments.application.ProtectedSentEvidenceRecorder;
 import uz.horecaos.platform.payments.application.SyntheticLineGate;
 import uz.horecaos.platform.payments.domain.CaptureTiming;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
+import uz.horecaos.platform.payments.domain.FiscalReceiptLine;
 import uz.horecaos.platform.payments.domain.FiscalStatus;
 import uz.horecaos.platform.payments.domain.FiscalSubmission;
 import uz.horecaos.platform.payments.domain.PaymentIntent;
@@ -59,8 +60,6 @@ import uz.horecaos.platform.support.InMemoryPlatformPolicies;
 import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.support.TestProtection;
-import uz.horecaos.platform.tenancy.api.LegalEntityDirectory;
-import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcLegalEntityStore;
 
 /**
  * {@link PartnerFiscalizationBridge}'s own decisions, in isolation from the
@@ -93,7 +92,6 @@ class PartnerFiscalizationBridgeTests {
     private PaymentFiscalService fiscalService;
     private PaymentBindingResolver bindings;
     private OrderDirectory orders;
-    private LegalEntityDirectory legalEntities;
     private SyntheticLineGate syntheticLines = binding -> true;
 
     @BeforeAll
@@ -139,7 +137,6 @@ class PartnerFiscalizationBridgeTests {
         documents = new JdbcFiscalDocumentStore(jdbc);
         intents = new JdbcPaymentIntentStore(jdbc);
         bindings = new JdbcPaymentBindingResolver(jdbc);
-        legalEntities = new JdbcLegalEntityStore(jdbc);
         orders = (tenantId, orderId) -> Optional.of(new OrderDirectory.OrderSummary(
                 orderId, TENANT, BRAND, LOCATION, "BR-1", null, "guest-hash", "COMPLETED", "UZS", 15_000L, 1));
 
@@ -218,7 +215,7 @@ class PartnerFiscalizationBridgeTests {
         };
 
         PartnerFiscalizationBridge bridge = new PartnerFiscalizationBridge(
-                fiscalService, refusingResolver, intents, orders, legalEntities, binding -> true, CLOCK);
+                fiscalService, refusingResolver, intents, orders, binding -> true, CLOCK);
 
         Outcome outcome = bridge.retry(TENANT, documentId, "idem-2");
 
@@ -460,12 +457,47 @@ class PartnerFiscalizationBridgeTests {
                 "protected-response-1",
                 CLOCK.instant());
 
-        boolean rewritten =
-                documents.recordSentEvidence(TENANT, documentId, INTEGRATION_BINDING, false, "other", "other");
+        boolean rewritten = documents.recordSentEvidence(
+                TENANT, documentId, INTEGRATION_BINDING, false, "other", "other", CLOCK.instant());
 
         assertThat(rewritten).isFalse();
         assertThat(sentEvidenceOf(documentId).get("protected_request_reference"))
                 .isEqualTo(first);
+        assertThat(sentRequestsOf(documentId))
+                .as("and a request refused is not added to the history either")
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName(
+            "a request that left and was never answered is kept when the document is asked again, beside the one that replaced it")
+    void aRequestThatMayHaveReachedTheProviderIsKeptWhenTheDocumentIsSubmittedAgain() throws Exception {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        ScriptedClick click = new ScriptedClick();
+        InMemoryPlatformPolicies allowed = platformAllowsPlaceholders(true);
+
+        realGateBridge(allowed, click).retry(TENANT, documentId, "idem-lost-1");
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .as("asked, and no answer: the request may well have arrived")
+                .isEqualTo(FiscalStatus.SUBMITTED);
+        // The order is known by another number when the document is asked again, so the second request is not
+        // the first.
+        orders = (tenantId, orderId) -> Optional.of(new OrderDirectory.OrderSummary(
+                orderId, TENANT, BRAND, LOCATION, "BR-1-REVISED", null, "guest-hash", "COMPLETED", "UZS", 15_000L, 1));
+        realGateBridge(allowed, click).retry(TENANT, documentId, "idem-lost-2");
+
+        List<Map<String, Object>> kept = sentRequestsOf(documentId);
+        assertThat(kept).extracting(row -> row.get("attempt")).containsExactly(1, 2);
+        assertThat(sentLineNames(documentId, kept.get(0)))
+                .as("the first request is what Click may hold, and it is still here")
+                .containsExactly("Order BR-1");
+        assertThat(sentLineNames(documentId, kept.get(1))).containsExactly("Order BR-1-REVISED");
+        assertThat(sentEvidenceOf(documentId).get("protected_request_reference"))
+                .as("the document's own column keeps meaning the latest request")
+                .isEqualTo(kept.get(1).get("protected_request_reference"));
+        assertThat(kept.get(0).get("protected_request_reference"))
+                .isNotEqualTo(kept.get(1).get("protected_request_reference"));
     }
 
     // -----------------------------------------------------------------------
@@ -569,6 +601,139 @@ class PartnerFiscalizationBridgeTests {
         assertThat(click.sent.get(0).lines().get(0).mxikCode()).isEqualTo("00000000000000000");
     }
 
+    // -----------------------------------------------------------------------
+    // The TIN a receipt is filed under is the one its document was opened under (V0551's snapshot),
+    // never today's resolution of the order's location
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+            "a marked order is filed under the seller its document was opened under, after the branch changed hands")
+    void aMarkedOrderIsFiledUnderTheSnapshotSellerAfterTheBranchChangedHands() {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        String openedUnder = taxpayerNumberOf(CLICK_ENTITY);
+        handTheBranchOverTo(SUCCESSOR_ENTITY, "SUCCESSOR");
+        CapturingClickPort click = new CapturingClickPort();
+
+        Outcome outcome = markedBridge(click, completeVodka(2)).retry(TENANT, documentId, "idem-handover");
+
+        assertThat(outcome).isEqualTo(Outcome.ISSUED);
+        assertThat(click.sent.get(0).lines())
+                .as("the receipt names the taxpayer the sale was opened under, and is not zeros")
+                .extracting(FiscalReceiptLine::commissionTin)
+                .containsOnly(openedUnder);
+    }
+
+    @Test
+    @DisplayName(
+            "a marked order is filed under the TIN its document snapshotted when the entity's TIN has since changed")
+    void aMarkedOrderIsFiledUnderTheSnapshotTinAfterTheEntityWasReRegistered() {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        String openedUnder = taxpayerNumberOf(CLICK_ENTITY);
+        jdbc.sql("UPDATE tenant.legal_entities SET tin = '987654321' WHERE tenant_id = :t AND id = :id")
+                .param("t", TENANT)
+                .param("id", CLICK_ENTITY)
+                .update();
+        CapturingClickPort click = new CapturingClickPort();
+
+        Outcome outcome = markedBridge(click, completeVodka(2)).retry(TENANT, documentId, "idem-reregistered");
+
+        assertThat(outcome).isEqualTo(Outcome.ISSUED);
+        assertThat(click.sent.get(0).lines())
+                .extracting(FiscalReceiptLine::commissionTin)
+                .containsOnly(openedUnder)
+                .doesNotContain("987654321");
+    }
+
+    @Test
+    @DisplayName("a marked order whose document holds no seller snapshot sends nothing, rather than filing zeros")
+    void aMarkedOrderWithNoSellerSnapshotIsNotFiledUnderZeros() {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        withoutSellerSnapshot(documentId);
+        CapturingClickPort click = new CapturingClickPort();
+
+        Outcome outcome = markedBridge(click, completeVodka(2)).retry(TENANT, documentId, "idem-no-snapshot");
+
+        assertThat(outcome).isEqualTo(Outcome.REJECTED);
+        assertThat(click.sent)
+                .as("a real receipt with real codes is never filed under a TIN of zeros")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("the sandbox placeholder carries the snapshot seller's TIN too, after the branch changed hands")
+    void thePlaceholderCarriesTheSnapshotSellersTin() {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        String openedUnder = taxpayerNumberOf(CLICK_ENTITY);
+        handTheBranchOverTo(SUCCESSOR_ENTITY, "SUCCESSOR");
+        ScriptedClick click = new ScriptedClick();
+
+        realGateBridge(platformAllowsPlaceholders(true), click).retry(TENANT, documentId, "idem-placeholder-tin");
+
+        assertThat(click.submitted)
+                .singleElement()
+                .satisfies(sent ->
+                        assertThat(sent.lines().getFirst().commissionTin()).isEqualTo(openedUnder));
+    }
+
+    private static final UUID SUCCESSOR_ENTITY = UUID.randomUUID();
+
+    private static String taxpayerNumberOf(UUID legalEntityId) {
+        return jdbc.sql("SELECT tin FROM tenant.legal_entities WHERE tenant_id = :t AND id = :id")
+                .param("t", TENANT)
+                .param("id", legalEntityId)
+                .query(String.class)
+                .single();
+    }
+
+    /** The branch's assignment ends on 1 August and another company's starts: today resolves to the successor. */
+    private static void handTheBranchOverTo(UUID successor, String code) {
+        jdbc.sql("""
+                UPDATE tenant.location_fiscal_assignments SET effective_until = DATE '2026-08-01'
+                 WHERE tenant_id = :t AND location_id = :l AND effective_until IS NULL
+                """).param("t", TENANT).param("l", LOCATION).update();
+        jdbc.sql("""
+                INSERT INTO tenant.legal_entities (id, tenant_id, code, legal_name, tin, vat_registered, status)
+                VALUES (:id, :t, :code, :name, '123456789', false, 'ACTIVE')
+                """)
+                .param("id", successor)
+                .param("t", TENANT)
+                .param("code", code)
+                .param("name", code + " LLC")
+                .update();
+        jdbc.sql("""
+                INSERT INTO tenant.location_fiscal_assignments (id, tenant_id, brand_id, location_id,
+                    legal_entity_id, effective_from, approved_by)
+                VALUES (:id, :t, :b, :l, :e, DATE '2026-08-01', 'PartnerFiscalizationBridgeTests')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("l", LOCATION)
+                .param("e", successor)
+                .update();
+    }
+
+    /** A row from before the snapshot existed: V0551's keep-trigger refuses a rewrite, so it is lifted for one statement. */
+    private static void withoutSellerSnapshot(UUID documentId) {
+        jdbc.sql("ALTER TABLE fiscal.fiscal_documents DISABLE TRIGGER trg_fiscal_document_keep_seller_snapshot")
+                .update();
+        try {
+            jdbc.sql("""
+                    UPDATE fiscal.fiscal_documents
+                       SET seller_tin = NULL, seller_name = NULL, seller_snapshot_source = NULL
+                     WHERE id = :id
+                    """).param("id", documentId).update();
+        } finally {
+            jdbc.sql("ALTER TABLE fiscal.fiscal_documents ENABLE TRIGGER trg_fiscal_document_keep_seller_snapshot")
+                    .update();
+        }
+    }
+
     private static final UUID VODKA_VARIANT = UUID.randomUUID();
     private static final String MARK_CODE_1 = "010460000000001521BridgeSerial0001";
     private static final String MARK_CODE_2 = "010460000000001521BridgeSerial0002";
@@ -668,8 +833,7 @@ class PartnerFiscalizationBridgeTests {
                                 "22030000000000000", "123456", 796, "Vodka", "4600000000015", true));
         MarkedOrderReceiptProjection projection =
                 new MarkedOrderReceiptProjection(marks, classifications, service, protection, fact -> {}, CLOCK);
-        return new PartnerFiscalizationBridge(
-                service, bindings, intents, orders, legalEntities, binding -> true, CLOCK, projection);
+        return new PartnerFiscalizationBridge(service, bindings, intents, orders, binding -> true, CLOCK, projection);
     }
 
     /** A Click port that says it can carry codes and remembers every document it is asked to send. */
@@ -727,7 +891,31 @@ class PartnerFiscalizationBridgeTests {
                         documents,
                         tools.jackson.databind.json.JsonMapper.builder().build()));
         return new PartnerFiscalizationBridge(
-                service, bindings, intents, orders, legalEntities, new JdbcSyntheticLineGate(jdbc, policies), CLOCK);
+                service, bindings, intents, orders, new JdbcSyntheticLineGate(jdbc, policies), CLOCK);
+    }
+
+    /** Every request that left for the document, oldest first (V0643). */
+    private List<Map<String, Object>> sentRequestsOf(UUID documentId) {
+        return jdbc.sql("""
+                        SELECT attempt, sent_at, protected_request_reference
+                          FROM fiscal.fiscal_sent_requests WHERE document_id = :id ORDER BY attempt
+                        """).param("id", documentId).query().listOfRows();
+    }
+
+    private List<String> sentLineNames(UUID documentId, Map<String, Object> kept) throws Exception {
+        String plain = protection.reveal(
+                TENANT,
+                ProtectedValue.deserialize(
+                        java.util.Objects.requireNonNull((String) kept.get("protected_request_reference"))),
+                SentReceiptEvidence.requestRecord(documentId),
+                "bridge-test");
+        return tools.jackson.databind.json.JsonMapper.builder()
+                .build()
+                .readValue(plain, SentReceiptEvidence.Lines.class)
+                .lines()
+                .stream()
+                .map(SentReceiptEvidence.Line::name)
+                .toList();
     }
 
     private Map<String, Object> sentEvidenceOf(UUID documentId) {
@@ -762,8 +950,7 @@ class PartnerFiscalizationBridgeTests {
     }
 
     private PartnerFiscalizationBridge bridge() {
-        return new PartnerFiscalizationBridge(
-                fiscalService, bindings, intents, orders, legalEntities, syntheticLines, CLOCK);
+        return new PartnerFiscalizationBridge(fiscalService, bindings, intents, orders, syntheticLines, CLOCK);
     }
 
     /** Fails the test if the fake provider transport is ever reached. */

@@ -274,6 +274,24 @@
                 </tbody>
               </table>
             </div>
+            @if (filedTins(document); as filed) {
+              @if (filed.length > 0) {
+                <p class="q-body-sm" data-testid="fiscal-evidence-filed-inn">
+                  {{ 'finance.fiscalEvidence.lines.filedUnder' | t: { tin: filed.join(', ') } }}
+                </p>
+                @if (filedTinDiffers(document)) {
+                  <p
+                    class="q-body-sm evidence__warning"
+                    data-testid="fiscal-evidence-filed-inn-differs"
+                  >
+                    {{
+                      'finance.fiscalEvidence.lines.filedUnderDiffers'
+                        | t: { filed: filed.join(', '), opened: document.seller.tin ?? '—' }
+                    }}
+                  </p>
+                }
+              }
+            }
             @if ((document.lines.markingCodesTransmitted ?? 0) > 0) {
               <p class="q-body-sm" data-testid="fiscal-evidence-codes-sent">
                 {{
@@ -295,13 +313,75 @@
           }
         }
 
+        <!-- ============================================================ requests the latest one replaced -->
+        @if ((document.earlierRequests?.length ?? 0) > 0) {
+          <details class="evidence__earlier" data-testid="fiscal-evidence-earlier">
+            <summary class="q-body-sm">
+              {{
+                'finance.fiscalEvidence.earlier.title'
+                  | t: { count: document.earlierRequests?.length ?? 0 }
+              }}
+            </summary>
+            <p class="q-body-sm evidence__hint">
+              {{ 'finance.fiscalEvidence.earlier.lead' | t }}
+            </p>
+            @for (request of document.earlierRequests; track request.attempt) {
+              <div data-testid="fiscal-evidence-earlier-request">
+                <p class="q-body-sm">
+                  {{
+                    'finance.fiscalEvidence.earlier.attempt'
+                      | t: { attempt: request.attempt, at: request.sentAt }
+                  }}
+                </p>
+                @if (request.lines.state === 'AVAILABLE') {
+                  <div class="evidence__scroll">
+                    <table class="evidence__table">
+                      <thead>
+                        <tr>
+                          <th class="q-caption">
+                            {{ 'finance.fiscalEvidence.lines.column.name' | t }}
+                          </th>
+                          <th class="q-caption">
+                            {{ 'finance.fiscalEvidence.lines.column.ikpu' | t }}
+                          </th>
+                          <th class="q-caption">
+                            {{ 'finance.fiscalEvidence.lines.column.quantity' | t }}
+                          </th>
+                          <th class="q-caption">
+                            {{ 'finance.fiscalEvidence.lines.column.price' | t }}
+                          </th>
+                          <th class="q-caption">
+                            {{ 'finance.fiscalEvidence.field.inn' | t }}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (line of request.lines.items; track $index) {
+                          <tr data-testid="fiscal-evidence-earlier-line">
+                            <td class="q-body-sm">{{ line.name }}</td>
+                            <td class="q-body-sm q-mono">{{ line.ikpu }}</td>
+                            <td class="q-body-sm q-mono">{{ line.quantity }}</td>
+                            <td class="q-body-sm q-mono">{{ money(line.unitPrice) }}</td>
+                            <td class="q-body-sm q-mono">{{ line.commissionTin ?? '—' }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                } @else {
+                  <p class="q-body-sm evidence__hint">
+                    {{ 'finance.fiscalEvidence.lines.notReadable' | t }}
+                  </p>
+                }
+              </div>
+            }
+          </details>
+        }
+
         <!-- ============================================================ corrections: HorecaOS records, the agent issues -->
         @if (document.correction; as correction) {
           <p class="q-body-sm" data-testid="fiscal-evidence-correction">
-            {{
-              'finance.fiscalEvidence.correction.state'
-                | t: { kind: kindLabel(correction.kind), at: correction.requestedAt }
-            }}
+            {{ correctionSentence(correction) }}
           </p>
         }
         @if (canRequestCorrection(document) && requestingFor() !== document.documentId) {
@@ -322,6 +402,17 @@
             data-testid="fiscal-evidence-attach-toggle"
           >
             {{ 'finance.fiscalEvidence.correction.attach.action' | t }}
+          </button>
+        }
+
+        @if (canClose(document) && closingFor() !== document.documentId) {
+          <button
+            type="button"
+            class="evidence__link"
+            (click)="openClose(document)"
+            data-testid="fiscal-evidence-close-toggle"
+          >
+            {{ 'finance.fiscalEvidence.correction.close.action' | t }}
           </button>
         }
 
@@ -473,6 +564,15 @@
                 data-testid="fiscal-evidence-attach-terminal"
               />
             </label>
+            @if (attachWaiting(); as message) {
+              <p
+                class="q-body-sm evidence__warning"
+                role="status"
+                data-testid="fiscal-evidence-attach-waiting"
+              >
+                {{ message }}
+              </p>
+            }
             @if (attachError(); as message) {
               <p
                 class="q-body-sm evidence__error"
@@ -502,6 +602,77 @@
                   attachSubmitting()
                     ? ('finance.fiscalEvidence.correction.submitting' | t)
                     : ('finance.fiscalEvidence.correction.attach.submit' | t)
+                }}
+              </button>
+            </div>
+          </div>
+        }
+
+        @if (closingFor() === document.documentId) {
+          <div class="evidence__form" data-testid="fiscal-evidence-close-form">
+            <p class="q-body-sm evidence__hint">
+              {{ 'finance.fiscalEvidence.correction.close.lead' | t }}
+            </p>
+            <label class="evidence__field">
+              <span class="q-body-sm">{{
+                'finance.fiscalEvidence.correction.close.outcome.label' | t
+              }}</span>
+              <select
+                class="evidence__input"
+                [value]="closeOutcome()"
+                (change)="closeOutcome.set($any($event.target).value)"
+                data-testid="fiscal-evidence-close-outcome"
+              >
+                <option value="">
+                  {{ 'finance.fiscalEvidence.correction.close.outcome.choose' | t }}
+                </option>
+                @for (closure of closures; track closure) {
+                  <option [value]="closure">{{ closureLabel(closure) }}</option>
+                }
+              </select>
+            </label>
+            <label class="evidence__field">
+              <span class="q-body-sm">{{
+                'finance.fiscalEvidence.correction.close.note.label' | t
+              }}</span>
+              <input
+                type="text"
+                class="evidence__input"
+                maxlength="255"
+                [value]="closeNote()"
+                (input)="closeNote.set($any($event.target).value)"
+                data-testid="fiscal-evidence-close-note"
+              />
+            </label>
+            @if (closeError(); as message) {
+              <p
+                class="q-body-sm evidence__error"
+                role="alert"
+                data-testid="fiscal-evidence-close-error"
+              >
+                {{ message }}
+              </p>
+            }
+            <div class="evidence__form-actions">
+              <button
+                type="button"
+                class="evidence__button evidence__button--secondary"
+                (click)="closeForms()"
+                [disabled]="closeSubmitting()"
+              >
+                {{ 'finance.fiscal.cancel' | t }}
+              </button>
+              <button
+                type="button"
+                class="evidence__button"
+                [disabled]="!canSubmitClose()"
+                (click)="submitClose(document)"
+                data-testid="fiscal-evidence-close-submit"
+              >
+                {{
+                  closeSubmitting()
+                    ? ('finance.fiscalEvidence.correction.submitting' | t)
+                    : ('finance.fiscalEvidence.correction.close.submit' | t)
                 }}
               </button>
             </div>

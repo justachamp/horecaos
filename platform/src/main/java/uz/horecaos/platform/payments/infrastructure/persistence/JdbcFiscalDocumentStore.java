@@ -15,6 +15,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import uz.horecaos.platform.configuration.Ids;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.domain.FiscalDocumentType;
 import uz.horecaos.platform.payments.domain.FiscalStatus;
@@ -88,6 +89,26 @@ public class JdbcFiscalDocumentStore {
                 .param("id", documentId)
                 .query(JdbcFiscalDocumentStore::map)
                 .optional();
+    }
+
+    /**
+     * The INN this document was opened under: the snapshot V0551's trigger took when the row was
+     * inserted (ADR 0166, Decision 3), read through the compatibility view V0640 widened.
+     *
+     * <p>Empty when the document holds no snapshot (a row from before the snapshot existed whose entity
+     * could not be read), which is a different fact from "the entity's INN is X today": the caller must
+     * not substitute a resolution made now for a sale made then.
+     */
+    public Optional<String> sellerTin(UUID tenantId, UUID documentId) {
+        return jdbc
+                .sql("SELECT seller_tin FROM payments.fiscal_documents WHERE tenant_id = :tenantId AND id = :id")
+                .param("tenantId", tenantId)
+                .param("id", documentId)
+                .query((row, number) -> row.getString("seller_tin"))
+                .list()
+                .stream()
+                .filter(Objects::nonNull)
+                .findFirst();
     }
 
     /**
@@ -213,11 +234,15 @@ public class JdbcFiscalDocumentStore {
      * Keeps what was sent: the protected lines, the protected tender split, whether the lines were
      * the placeholder, and the merchant account the request went through (ADR 0166).
      *
-     * <p>Last write wins while the document owes a receipt: a resubmission replaces the sent
-     * request with the one that actually went, and the earlier request is no longer what the
-     * provider holds. Refused once the document holds a receipt, for the reason
-     * {@link #recordEvidence} is: what is on file with the tax authority is not rewritten by a late
-     * duplicate. Does not touch the status or the version; the status write that follows is the
+     * <p>The document's own columns hold the <em>latest</em> request, and every request that left is also
+     * added to {@code fiscal.fiscal_sent_requests}, numbered from 1 and never rewritten. A resubmission used
+     * to replace the request outright on the reasoning that the earlier one "is no longer what the provider
+     * holds", which is true of a request the provider refused and false of one whose reply never came: the
+     * provider may well hold it, and the evidence of what was filed then showed only the second.
+     *
+     * <p>Refused once the document holds a receipt, for the reason {@link #recordEvidence} is: what is on
+     * file with the tax authority is not rewritten by a late duplicate, and a refused request is not added to
+     * the history either. Does not touch the status or the version; the status write that follows is the
      * transition.
      */
     public boolean recordSentEvidence(
@@ -226,8 +251,9 @@ public class JdbcFiscalDocumentStore {
             UUID merchantBindingId,
             boolean linesSynthetic,
             String protectedRequestReference,
-            String sentTenderSplitReference) {
-        return jdbc.sql("""
+            String sentTenderSplitReference,
+            Instant sentAt) {
+        boolean recorded = jdbc.sql("""
                 UPDATE payments.fiscal_documents
                 SET protected_request_reference = :request,
                     sent_tender_split_reference = :split,
@@ -245,6 +271,31 @@ public class JdbcFiscalDocumentStore {
                         .param("binding", merchantBindingId)
                         .update()
                 == 1;
+        if (recorded) {
+            // Numbered inside the statement that inserts it, and conflict-tolerant: a second writer racing
+            // for the same number must not poison the surrounding transaction, whose other statements carry
+            // the provider's answer.
+            jdbc.sql("""
+                    INSERT INTO payments.fiscal_sent_requests (
+                        id, tenant_id, document_id, attempt, sent_at, protected_request_reference,
+                        sent_tender_split_reference, lines_synthetic, merchant_binding_id)
+                    SELECT :newId, :tenantId, :id, COALESCE(MAX(attempt), 0) + 1, :sentAt, :request, :split,
+                           :synthetic, :binding
+                      FROM payments.fiscal_sent_requests
+                     WHERE tenant_id = :tenantId AND document_id = :id
+                    ON CONFLICT DO NOTHING
+                    """)
+                    .param("newId", Ids.newId())
+                    .param("tenantId", tenantId)
+                    .param("id", documentId)
+                    .param("sentAt", utc(sentAt))
+                    .param("request", protectedRequestReference)
+                    .param("split", sentTenderSplitReference)
+                    .param("synthetic", linesSynthetic)
+                    .param("binding", merchantBindingId)
+                    .update();
+        }
+        return recorded;
     }
 
     /**

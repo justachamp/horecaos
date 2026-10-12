@@ -798,8 +798,15 @@ export const financeRu: AreaMessages<typeof financeEn> = {
     'Строки по этому чеку не записаны: либо ещё ничего не отправлено, либо отправленное не сохранилось. Вместо них ничего не показывается.',
   'finance.fiscalEvidence.lines.notReadable':
     'Строки записаны, но их не удаётся открыть. Вместо них ничего не показывается.',
+  'finance.fiscalEvidence.lines.filedUnder': 'Строки поданы под ИНН {tin}.',
+  'finance.fiscalEvidence.lines.filedUnderDiffers':
+    'Строки поданы под ИНН {filed}, а это не тот ИНН, под которым открыт документ ({opened}). Оба показаны как записано; здесь ничего не исправлялось.',
   'finance.fiscalEvidence.lines.marksTransmitted':
     'С этим чеком передано кодов маркировки: {count}. На экране остаётся только число.',
+  'finance.fiscalEvidence.earlier.title': 'Более ранние запросы, ушедшие по этому чеку ({count})',
+  'finance.fiscalEvidence.earlier.lead':
+    'Строки выше — последний запрос. Эти были отправлены раньше и заменены им. Провайдер мог получить любой из них: ответ, который не пришёл, ничего не говорит о том, что дошло, поэтому они хранятся такими, какими ушли.',
+  'finance.fiscalEvidence.earlier.attempt': 'Запрос {attempt}, отправлен {at}',
   'finance.fiscalEvidence.correction.state':
     '{kind}: запрошено {at}. Фискальный агент ресторана пока не ответил.',
   'finance.fiscalEvidence.correction.action': 'Запросить коррекцию или отмену',
@@ -828,12 +835,36 @@ export const financeRu: AreaMessages<typeof financeEn> = {
     'Запрос записан. Теперь фискальный агент ресторана должен его выполнить; когда выполнит, приложите здесь его ссылку на чек.',
   'finance.fiscalEvidence.correction.attach.action': 'Приложить ссылку от агента',
   'finance.fiscalEvidence.correction.attach.lead':
-    'Введите данные, которые вернул фискальный агент ресторана. HorecaOS сохранит их как связанный документ и никогда не меняет исходный чек.',
+    'Введите данные, которые вернул фискальный агент ресторана. Второй сотрудник одобряет именно то, что вы ввели, и только потом данные прикладываются; HorecaOS сохраняет их как связанный документ и никогда не меняет исходный чек.',
+  'finance.fiscalEvidence.correction.attach.pending':
+    'Ждём второго согласующего. Запрос на одобрение {id} ожидает решения; приложите данные ещё раз, ровно как введено, когда его одобрят.',
+  'finance.fiscalEvidence.correction.attach.declined':
+    'Второй согласующий отклонил запрос на одобрение {id}, поэтому эти данные не приложены.',
+  'finance.fiscalEvidence.correction.attach.urlRefused':
+    'Ссылка должна вести на страницу сайта налоговой службы (https, soliq.uz). Используйте ссылку, которую даёт сам чек.',
   'finance.fiscalEvidence.correction.attach.url': 'Ссылка на чек (https)',
   'finance.fiscalEvidence.correction.attach.terminal': 'Терминал (необязательно)',
   'finance.fiscalEvidence.correction.attach.submit': 'Приложить',
   'finance.fiscalEvidence.correction.attached':
     'Данные приложены как связанный документ, а исходный чек теперь помечен как скорректированный или аннулированный.',
+  'finance.fiscalEvidence.correction.state.ATTACHED':
+    '{kind}: ссылка фискального агента приложена как связанный документ.',
+  'finance.fiscalEvidence.correction.state.DECLINED':
+    '{kind}: закрыто, фискальный агент отказался выпускать документ. Чек остаётся таким, каким был подан.',
+  'finance.fiscalEvidence.correction.state.CANCELLED':
+    '{kind}: запрос отозван. Чек остаётся таким, каким был подан.',
+  'finance.fiscalEvidence.correction.close.action': 'Закрыть запрос без чека',
+  'finance.fiscalEvidence.correction.close.lead':
+    'Используйте, если фискальный агент ресторана отказался выпускать документ или запрос создан по ошибке. Чек остаётся ровно таким, каким был подан, в налоговую ничего не отправляется, запрос уходит из списка.',
+  'finance.fiscalEvidence.correction.close.outcome.label': 'Почему закрыт',
+  'finance.fiscalEvidence.correction.close.outcome.choose': 'Выберите причину',
+  'finance.fiscalEvidence.correction.close.outcome.DECLINED':
+    'Фискальный агент отказался выпускать документ',
+  'finance.fiscalEvidence.correction.close.outcome.CANCELLED':
+    'Создан по ошибке или больше не нужен',
+  'finance.fiscalEvidence.correction.close.note.label': 'Что произошло (до 255 символов)',
+  'finance.fiscalEvidence.correction.close.submit': 'Закрыть запрос',
+  'finance.fiscalEvidence.correction.closed': 'Запрос закрыт. Чек остаётся таким, каким был подан.',
   'finance.fiscalEvidence.paymentTypes.title': 'Фискализируемые способы оплаты',
   'finance.fiscalEvidence.paymentTypes.lead':
     'Выводится из справочника способов оплаты, мерчант-аккаунтов и фискальных терминалов и не настраивается: настройка, расходящаяся с ними, была бы ложным заявлением о налоговом документе. Способ без пути — собственное необеспеченное чеком обязательство ресторана; HorecaOS его не фискализирует.',

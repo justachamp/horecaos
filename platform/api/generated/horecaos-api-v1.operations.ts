@@ -1386,6 +1386,11 @@ export interface CloseRequest {
   reason: string;
 }
 
+export interface CloseRequestBody {
+  note: string;
+  outcome: "DECLINED" | "CANCELLED";
+}
+
 export interface CloseResponse {
   breakSeconds?: number;
   cashHandoverId?: string;
@@ -1396,6 +1401,11 @@ export interface CloseResponse {
 export interface CloseShiftRequest {
   currency?: string;
   point?: string;
+}
+
+export interface ClosedResponse {
+  documentVersion?: number;
+  request?: CorrectionRequestResponse;
 }
 
 export interface CloseperiodRequest {
@@ -1788,6 +1798,7 @@ export interface CorrectionRequestResponse {
   approvalId?: string;
   attachedAt?: string;
   attachedDocumentId?: string;
+  closedAt?: string;
   documentId?: string;
   kind?: string;
   orderId?: string;
@@ -2865,6 +2876,12 @@ export interface DutySessionResponse {
   status?: string;
 }
 
+export interface EarlierRequestResponse {
+  attempt?: number;
+  lines?: LinesResponse;
+  sentAt?: string;
+}
+
 export interface EditorResponse {
   atRiskDefault?: AtRiskDefaultResponse;
   currentVersionAtScope?: number;
@@ -3001,6 +3018,7 @@ export interface EvidenceDocumentResponse {
   createdAt?: string;
   documentId?: string;
   documentType?: string;
+  earlierRequests?: Array<EarlierRequestResponse>;
   hasEvidence?: boolean;
   identifiers?: IdentifiersResponse;
   issuedAt?: string;
@@ -4624,6 +4642,7 @@ export interface OperationsDispatchRulesControllerUsageResponse {
 
 export interface OperationsFiscalEvidenceControllerLineResponse {
   barcode?: string;
+  commissionTin?: string;
   discount?: ApiMoney;
   ikpu?: string;
   kind?: string;
@@ -9498,7 +9517,7 @@ export interface Operations {
   "open_4": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: OpenShiftRequest }; responses: { "200": CourierShiftControllerShiftResponse } };
   "startBreak": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/breaks"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } } }; responses: { "200": unknown } };
   "endBreak": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/breaks/end"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } } }; responses: { "200": unknown } };
-  "close_3": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/close"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } }; body: CloseShiftRequest }; responses: { "200": CloseResponse } };
+  "close_4": { method: "POST"; path: "/api/v1/courier/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/shifts/{shiftId}/close"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } }; body: CloseShiftRequest }; responses: { "200": CloseResponse } };
   "me_1": { method: "GET"; path: "/api/v1/devices/me"; request: { parameters: Record<string, never> }; responses: { "200": DeviceSelfResponse } };
   "ownOperations": { method: "GET"; path: "/api/v1/operations/auth/mfa/authenticators"; request: { parameters: Record<string, never> }; responses: { "200": OwnMfaResponse } };
   "removeOperations": { method: "DELETE"; path: "/api/v1/operations/auth/mfa/authenticators/{authenticatorId}"; request: { parameters: { path: { authenticatorId: string } }; body: RemoveAuthenticatorRequest }; responses: { "200": unknown } };
@@ -9545,7 +9564,7 @@ export interface Operations {
   "mint_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/benefit-grants"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: MintBenefitGrantRequest }; responses: { "200": MintBenefitGrantResponse } };
   "list_36": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { limit?: number } } }; responses: { "200": Array<ConversationSummaryResponse> } };
   "detail_6": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}"; request: { parameters: { path: { brandId: string; conversationId: string; tenantId: string } } }; responses: { "200": ConversationDetailResponse } };
-  "close_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/close"; request: { parameters: { path: { brandId: string; conversationId: string; tenantId: string }; query: { reason?: string } } }; responses: { "200": ConversationResponse } };
+  "close_3": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/close"; request: { parameters: { path: { brandId: string; conversationId: string; tenantId: string }; query: { reason?: string } } }; responses: { "200": ConversationResponse } };
   "reply": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/replies"; request: { parameters: { path: { brandId: string; conversationId: string; tenantId: string } }; body: SendReplyRequest }; responses: { "200": ConversationMessageResponse } };
   "returnToFlow": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/return-to-flow"; request: { parameters: { path: { brandId: string; conversationId: string; tenantId: string } } }; responses: { "200": ConversationResponse } };
   "takeover": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/conversations/{conversationId}/takeover"; request: { parameters: { path: { brandId: string; conversationId: string; tenantId: string }; query: { reason?: string } } }; responses: { "200": ConversationResponse } };
@@ -9640,7 +9659,7 @@ export interface Operations {
   "today_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/staff/shifts/today"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": TodayResponse } };
   "correct": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/staff/shifts/{shiftId}"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } }; body: CorrectionRequest }; responses: { "200": StaffShiftResponse } };
   "approve_3": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/staff/shifts/{shiftId}/approvals"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } }; body: ShiftReasonRequest }; responses: { "200": StaffShiftResponse } };
-  "close_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/staff/shifts/{shiftId}/closures"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } }; body: ShiftCloseRequest }; responses: { "200": StaffShiftResponse } };
+  "close_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/staff/shifts/{shiftId}/closures"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } }; body: ShiftCloseRequest }; responses: { "200": StaffShiftResponse } };
   "voidShift": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/staff/shifts/{shiftId}/voidings"; request: { parameters: { path: { brandId: string; locationId: string; shiftId: string; tenantId: string } }; body: ShiftReasonRequest }; responses: { "200": StaffShiftResponse } };
   "recent": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/voice/call-log"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<CallLogEntryResponse> } };
   "forDate": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/voice/call-stats"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { businessDate: string } } }; responses: { "200": Array<CallHourResponse> } };
@@ -9785,6 +9804,7 @@ export interface Operations {
   "updateTag": { method: "PUT"; path: "/api/v1/operations/tenants/{tenantId}/feedback/tags/{tagId}"; request: { parameters: { path: { tagId: string; tenantId: string } }; body: UpdateTagRequest }; responses: { "200": FeedbackTagResponse } };
   "openRequests": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/fiscal/correction-requests"; request: { parameters: { path: { tenantId: string }; query: { limit?: number } } }; responses: { "200": Array<CorrectionRequestResponse> } };
   "attach": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/fiscal/correction-requests/{requestId}/attachments"; request: { parameters: { path: { requestId: string; tenantId: string } }; body: AttachmentBody }; responses: { "200": AttachedResponse } };
+  "close_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/fiscal/correction-requests/{requestId}/closures"; request: { parameters: { path: { requestId: string; tenantId: string } }; body: CloseRequestBody }; responses: { "200": ClosedResponse } };
   "request_1": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/fiscal/documents/{documentId}/correction-requests"; request: { parameters: { path: { documentId: string; tenantId: string } }; body: CorrectionRequestBody }; responses: { "200": CorrectionRequestedResponse } };
   "paymentTypes": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/fiscal/payment-types"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": PaymentTypesResponse } };
   "list_19": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/integrations"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": PageInstallationView } };

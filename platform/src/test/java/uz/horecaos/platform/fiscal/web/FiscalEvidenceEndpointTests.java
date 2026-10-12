@@ -251,6 +251,13 @@ class FiscalEvidenceEndpointTests {
         assertThat(first.path("unitPrice").path("amountMinor").asLong()).isEqualTo(25_000L);
         assertThat(first.path("unitPrice").path("currency").asText()).isEqualTo("UZS");
         assertThat(first.path("vatPercent").asInt()).isEqualTo(12);
+        assertThat(first.path("commissionTin").asText())
+                .as("the INN the line was filed under (Click's CommissionInfo), as sent")
+                .isEqualTo(TIN_A);
+        assertThat(document.path("earlierRequests").isArray())
+                .as("one request left, so none was replaced: the list is there and empty")
+                .isTrue();
+        assertThat(document.path("earlierRequests")).isEmpty();
 
         JsonNode split = document.path("tenderSplit");
         assertThat(split.path("card").path("amountMinor").asLong())
@@ -263,6 +270,65 @@ class FiscalEvidenceEndpointTests {
         assertThat(body.path("retention").path("provisional").asBoolean())
                 .as("a seven-year default nobody has confirmed says so")
                 .isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "every request that left is shown: the latest as the lines, the ones it replaced beside them, oldest first")
+    void everyRequestThatLeftIsShown() throws Exception {
+        UUID orderId = seedOrder("E-103");
+        UUID documentId = submittedClickDocument(orderId, ENTITY_A);
+        // The first request left and was never answered; the document was asked again and a second one left.
+        recordRequest(documentId, orderId, ENTITY_A, line("First attempt", 1, 25_000L, List.of()));
+        recordRequest(documentId, orderId, ENTITY_A, line("Second attempt", 2, 25_000L, List.of()));
+        markIssued(documentId);
+
+        JsonNode document = evidence(FINANCE, orderId, null).path("documents").path(0);
+
+        assertThat(document.path("lines").path("items").path(0).path("name").asText())
+                .as("the lines are the latest request, as they always were")
+                .isEqualTo("Second attempt");
+        JsonNode earlier = document.path("earlierRequests");
+        assertThat(earlier.isArray()).isTrue();
+        assertThat(earlier).hasSize(1);
+        assertThat(earlier.path(0).path("attempt").asInt()).isEqualTo(1);
+        assertThat(earlier.path(0).path("sentAt").asText()).isNotBlank();
+        assertThat(earlier.path(0).path("lines").path("state").asText()).isEqualTo("AVAILABLE");
+        assertThat(earlier.path(0)
+                        .path("lines")
+                        .path("items")
+                        .path(0)
+                        .path("name")
+                        .asText())
+                .as("the request the second one replaced is not lost")
+                .isEqualTo("First attempt");
+        assertThat(earlier.path(0)
+                        .path("lines")
+                        .path("items")
+                        .path(0)
+                        .path("quantity")
+                        .asInt())
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName(
+            "the INN a line was filed under is shown beside the INN the document was opened under, so a difference is visible")
+    void theFiledInnIsShownBesideTheOpeningInn() throws Exception {
+        UUID orderId = seedOrder("E-102");
+        // The document names entity A (snapshot TIN_A) but the request that left carried entity B's INN:
+        // the surface must be able to say so rather than let the snapshot stand for what was filed.
+        issuedClickDocument(orderId, ENTITY_A, lineFiledUnder("Lavash classic", TIN_B));
+
+        JsonNode document = evidence(FINANCE, orderId, null).path("documents").path(0);
+
+        assertThat(document.path("seller").path("tin").asText()).isEqualTo(TIN_A);
+        assertThat(document.path("lines")
+                        .path("items")
+                        .path(0)
+                        .path("commissionTin")
+                        .asText())
+                .isEqualTo(TIN_B);
     }
 
     @Test
@@ -748,18 +814,7 @@ class FiscalEvidenceEndpointTests {
         UUID requestId =
                 UUID.fromString(lastBody.path("request").path("requestId").asText());
 
-        MvcResult attached = mvc.perform(post("/api/v1/operations/tenants/" + TENANT + "/fiscal/correction-requests/"
-                                + requestId + "/attachments")
-                        .with(tokenFor(FINANCE))
-                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "attach-1")
-                        .header("If-Match", "W/\"2\"")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"fiscalSign":"SIGN-NEW-CORRECTION","receiptNumber":"R-9990001",
-                                 "receiptUrl":"https://ofd.soliq.uz/epi?r=R-9990001",
-                                 "terminalId":"TERM-0042"}
-                                """))
-                .andReturn();
+        MvcResult attached = attachApproved(requestId, 2, "attach-1", "SIGN-NEW-CORRECTION", "R-9990001", "TERM-0042");
 
         assertThat(attached.getResponse().getStatus()).isEqualTo(200);
         JsonNode body = json.readTree(attached.getResponse().getContentAsString());
@@ -797,17 +852,7 @@ class FiscalEvidenceEndpointTests {
         assertThat(auditFacts("fiscal.correction.attached", documentId)).hasSize(1);
 
         // The request is closed: a second attachment is a conflict, and nothing is created.
-        MvcResult again = mvc.perform(post("/api/v1/operations/tenants/" + TENANT + "/fiscal/correction-requests/"
-                                + requestId + "/attachments")
-                        .with(tokenFor(FINANCE))
-                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "attach-2")
-                        .header("If-Match", "W/\"3\"")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"fiscalSign":"SIGN-AGAIN","receiptNumber":"R-9990002",
-                                 "receiptUrl":"https://ofd.soliq.uz/epi?r=R-9990002"}
-                                """))
-                .andReturn();
+        MvcResult again = attach(requestId, 3, "attach-2", "SIGN-AGAIN", "R-9990002", null);
         assertThat(again.getResponse().getStatus()).isEqualTo(409);
         assertThat(jdbc.sql("SELECT count(*) FROM fiscal.fiscal_documents WHERE order_id = :o")
                         .param("o", orderId)
@@ -827,17 +872,7 @@ class FiscalEvidenceEndpointTests {
         UUID requestId =
                 UUID.fromString(lastBody.path("request").path("requestId").asText());
 
-        MvcResult attached = mvc.perform(post("/api/v1/operations/tenants/" + TENANT + "/fiscal/correction-requests/"
-                                + requestId + "/attachments")
-                        .with(tokenFor(FINANCE))
-                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "void-attach")
-                        .header("If-Match", "W/\"2\"")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"fiscalSign":"SIGN-VOID","receiptNumber":"R-9990003",
-                                 "receiptUrl":"https://ofd.soliq.uz/epi?r=R-9990003"}
-                                """))
-                .andReturn();
+        MvcResult attached = attachApproved(requestId, 2, "void-attach", "SIGN-VOID", "R-9990003", null);
 
         assertThat(attached.getResponse().getStatus()).isEqualTo(200);
         assertThat(documentStatus(documentId)).isEqualTo("VOIDED");
@@ -846,6 +881,296 @@ class FiscalEvidenceEndpointTests {
                         .query(String.class)
                         .single())
                 .isEqualTo("REFUND");
+    }
+
+    @Test
+    @DisplayName(
+            "a request raised in error is cancelled by a person: the document is issued again, nothing is filed, and it can be asked about afresh")
+    void aRequestRaisedInErrorCanBeCancelled() throws Exception {
+        UUID orderId = seedOrder("E-207");
+        UUID documentId = issuedClickDocument(orderId, ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        approveAndRaise(documentId, 1, "CORRECTION", "WRONG_LINES", "cancel");
+        assertThat(lastStatus).as(lastBody.toString()).isEqualTo(200);
+        UUID requestId =
+                UUID.fromString(lastBody.path("request").path("requestId").asText());
+        assertThat(documentStatus(documentId)).isEqualTo("CORRECTION_REQUESTED");
+
+        MvcResult closed = mvc.perform(
+                        closure(FINANCE, requestId, 2, "CANCELLED", "Raised against the wrong order", "close-1"))
+                .andReturn();
+
+        assertThat(closed.getResponse().getStatus())
+                .as(closed.getResponse().getContentAsString())
+                .isEqualTo(200);
+        JsonNode body = json.readTree(closed.getResponse().getContentAsString());
+        assertThat(body.path("request").path("status").asText()).isEqualTo("CANCELLED");
+        assertThat(body.path("request").path("publicOrderNumber").asText()).isEqualTo("E-207");
+        assertThat(body.path("documentVersion").asInt()).isEqualTo(3);
+        assertThat(documentStatus(documentId))
+                .as("the receipt is the one in force again")
+                .isEqualTo("ISSUED");
+
+        Map<String, Object> original = jdbc.sql(
+                        "SELECT fiscal_sign, receipt_url FROM fiscal.fiscal_documents WHERE id = :id")
+                .param("id", documentId)
+                .query()
+                .singleRow();
+        assertThat(original.get("fiscal_sign"))
+                .as("closing never edits the evidence")
+                .isEqualTo(FISCAL_SIGN);
+        assertThat(original.get("receipt_url")).isEqualTo(RECEIPT_URL);
+        assertThat(jdbc.sql("SELECT count(*) FROM fiscal.fiscal_documents WHERE order_id = :o")
+                        .param("o", orderId)
+                        .query(Long.class)
+                        .single())
+                .as("nothing was filed and nothing was invented to close the request with")
+                .isEqualTo(1L);
+
+        Map<String, Object> request =
+                jdbc.sql("""
+                        SELECT status, closed_by, closed_at, closed_note, attached_document_id
+                          FROM fiscal.fiscal_correction_requests WHERE id = :id
+                        """).param("id", requestId).query().singleRow();
+        assertThat(request.get("status")).isEqualTo("CANCELLED");
+        assertThat(request.get("closed_by")).isEqualTo(FINANCE);
+        assertThat(request.get("closed_at")).isNotNull();
+        assertThat(request.get("closed_note")).isEqualTo("Raised against the wrong order");
+        assertThat(request.get("attached_document_id")).isNull();
+
+        assertThat(auditFacts("fiscal.correction.closed", documentId))
+                .singleElement()
+                .satisfies(fact -> {
+                    assertThat(fact.get("audit_class")).isEqualTo("BUSINESS");
+                    assertThat((String) fact.get("change_document"))
+                            .contains("CORRECTION_REQUESTED")
+                            .contains("ISSUED")
+                            .contains("CANCELLED")
+                            .doesNotContain(FISCAL_SIGN);
+                });
+
+        JsonNode worklist =
+                json.readTree(mvc.perform(get("/api/v1/operations/tenants/" + TENANT + "/fiscal/correction-requests")
+                                .with(tokenFor(FINANCE)))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString());
+        assertThat(worklist).as("a closed request is not waiting for the agent").isEmpty();
+        assertThat(evidence(FINANCE, orderId, null)
+                        .path("documents")
+                        .path(0)
+                        .path("correction")
+                        .path("status")
+                        .asText())
+                .isEqualTo("CANCELLED");
+
+        approveAndRaise(documentId, 3, "VOID", "CUSTOMER_REFUND", "again");
+        assertThat(lastStatus)
+                .as("a cancelled request leaves the document free to be asked about again")
+                .isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName(
+            "the agent declining is recorded as DECLINED; closing needs fiscal.document.resolve, a note, the document's version, and an open request")
+    void aDeclinedRequestIsRecordedAndClosingIsGuarded() throws Exception {
+        UUID orderId = seedOrder("E-208");
+        UUID documentId = issuedClickDocument(orderId, ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        approveAndRaise(documentId, 1, "VOID", "DUPLICATE_RECEIPT", "decline");
+        assertThat(lastStatus).as(lastBody.toString()).isEqualTo(200);
+        UUID requestId =
+                UUID.fromString(lastBody.path("request").path("requestId").asText());
+
+        MvcResult reader = mvc.perform(closure(ADMIN, requestId, 2, "DECLINED", "The agent refused", "close-reader"))
+                .andReturn();
+        assertThat(reader.getResponse().getStatus()).isEqualTo(403);
+        assertThat(reader.getResponse().getContentAsString())
+                .contains("INSUFFICIENT_CAPABILITY")
+                .contains("fiscal.document.resolve");
+
+        MvcResult noNote = mvc.perform(closure(FINANCE, requestId, 2, "DECLINED", "  ", "close-blank"))
+                .andReturn();
+        assertThat(noNote.getResponse().getStatus())
+                .as("a closure without its reason")
+                .isEqualTo(400);
+
+        MvcResult stale = mvc.perform(closure(FINANCE, requestId, 9, "DECLINED", "The agent refused", "close-stale"))
+                .andReturn();
+        assertThat(stale.getResponse().getStatus()).isEqualTo(409);
+        assertThat(json.readTree(stale.getResponse().getContentAsString())
+                        .path("code")
+                        .asText())
+                .isEqualTo("STALE_VERSION");
+        assertThat(documentStatus(documentId))
+                .as("a refused closure moves nothing")
+                .isEqualTo("VOID_REQUESTED");
+
+        MvcResult declined = mvc.perform(closure(FINANCE, requestId, 2, "DECLINED", "The agent refused", "close-ok"))
+                .andReturn();
+        assertThat(declined.getResponse().getStatus())
+                .as(declined.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(json.readTree(declined.getResponse().getContentAsString())
+                        .path("request")
+                        .path("status")
+                        .asText())
+                .isEqualTo("DECLINED");
+        assertThat(documentStatus(documentId)).isEqualTo("ISSUED");
+
+        MvcResult twice = mvc.perform(closure(FINANCE, requestId, 3, "CANCELLED", "Again", "close-twice"))
+                .andReturn();
+        assertThat(twice.getResponse().getStatus())
+                .as("a closed request is not closed a second time")
+                .isEqualTo(409);
+    }
+
+    @Test
+    @DisplayName("a request that has been attached cannot be closed: the corrected receipt is not taken back")
+    void anAttachedRequestCannotBeClosed() throws Exception {
+        UUID orderId = seedOrder("E-209");
+        UUID documentId = issuedClickDocument(orderId, ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        approveAndRaise(documentId, 1, "CORRECTION", "WRONG_AMOUNT", "attached");
+        UUID requestId =
+                UUID.fromString(lastBody.path("request").path("requestId").asText());
+        assertThat(attachApproved(requestId, 2, "attach-then-close", "SIGN-NEW", "R-9990009", "TERM-0042")
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+
+        MvcResult closed = mvc.perform(closure(FINANCE, requestId, 3, "CANCELLED", "Changed my mind", "close-attached"))
+                .andReturn();
+
+        assertThat(closed.getResponse().getStatus()).isEqualTo(409);
+        assertThat(documentStatus(documentId)).isEqualTo("CORRECTED");
+    }
+
+    @Test
+    @DisplayName(
+            "attaching the agent's reference needs a second person too, and the approval is bound to the reference the checker was shown")
+    void attachingNeedsASecondPersonAndTheReferenceTheyApproved() throws Exception {
+        UUID orderId = seedOrder("E-210");
+        UUID documentId = issuedClickDocument(orderId, ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        approveAndRaise(documentId, 1, "CORRECTION", "WRONG_LINES", "second-person");
+        UUID requestId =
+                UUID.fromString(lastBody.path("request").path("requestId").asText());
+
+        MvcResult waiting = attach(requestId, 2, "att-1", "SIGN-NEW", "R-9990010", "TERM-0042");
+
+        assertThat(waiting.getResponse().getStatus()).isEqualTo(422);
+        JsonNode problem = json.readTree(waiting.getResponse().getContentAsString());
+        assertThat(problem.path("code").asText()).isEqualTo("SECOND_APPROVER_REQUIRED");
+        UUID approvalRequestId =
+                UUID.fromString(problem.path("approvalRequestId").asText());
+        assertThat(documentStatus(documentId))
+                .as("nothing was attached while the checker has not decided")
+                .isEqualTo("CORRECTION_REQUESTED");
+        assertThat(jdbc.sql("SELECT count(*) FROM fiscal.fiscal_documents WHERE order_id = :o")
+                        .param("o", orderId)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1L);
+
+        assertThatThrownBy(() -> approvals.decide(
+                        approvalRequestId, ApprovalService.Decision.APPROVE, ActorRef.user(FINANCE, null), "self"))
+                .as("the person who typed the reference cannot be the one who signs it")
+                .isInstanceOf(ApprovalService.SelfApprovalException.class);
+        approvals.decide(approvalRequestId, ApprovalService.Decision.APPROVE, ActorRef.user(CHECKER, null), "ok");
+
+        MvcResult swapped = attach(requestId, 2, "att-2", "SIGN-NEW", "R-9990011", "TERM-0042");
+        assertThat(swapped.getResponse().getStatus())
+                .as("an approval covers the reference that was shown, not whichever is typed after it")
+                .isEqualTo(422);
+        assertThat(json.readTree(swapped.getResponse().getContentAsString())
+                        .path("approvalRequestId")
+                        .asText())
+                .isNotEqualTo(approvalRequestId.toString());
+        assertThat(documentStatus(documentId)).isEqualTo("CORRECTION_REQUESTED");
+
+        MvcResult attached = attach(requestId, 2, "att-3", "SIGN-NEW", "R-9990010", "TERM-0042");
+        assertThat(attached.getResponse().getStatus())
+                .as(attached.getResponse().getContentAsString())
+                .isEqualTo(200);
+        assertThat(documentStatus(documentId)).isEqualTo("CORRECTED");
+        assertThat(auditFacts("fiscal.correction.attached", documentId))
+                .singleElement()
+                .satisfies(fact -> assertThat(fact.get("approval_request_id"))
+                        .as("the attachment is audited under the second person's approval, not the request's")
+                        .isEqualTo(approvalRequestId));
+
+        MvcResult replay = attach(requestId, 3, "att-4", "SIGN-NEW", "R-9990010", "TERM-0042");
+        assertThat(replay.getResponse().getStatus())
+                .as("one signature is one attachment")
+                .isEqualTo(409);
+    }
+
+    @Test
+    @DisplayName(
+            "the receipt link an operator types must be the tax authority's: any other host is refused before an approval is even raised")
+    void anAttachedLinkMustBeTheTaxAuthoritys() throws Exception {
+        UUID orderId = seedOrder("E-211");
+        UUID documentId = issuedClickDocument(orderId, ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        approveAndRaise(documentId, 1, "CORRECTION", "WRONG_LINES", "link");
+        UUID requestId =
+                UUID.fromString(lastBody.path("request").path("requestId").asText());
+        long approvalsBefore = jdbc.sql("SELECT count(*) FROM audit.approval_requests WHERE tenant_id = :t")
+                .param("t", TENANT)
+                .query(Long.class)
+                .single();
+
+        int n = 0;
+        for (String refused : List.of(
+                "https://evil.example/epi?r=1",
+                "https://ofd.soliq.uz.evil.example/epi?r=1",
+                "https://evilsoliq.uz/epi?r=1",
+                "https://ofd.soliq.uz@evil.example/epi?r=1",
+                "https://user:secret@ofd.soliq.uz/epi?r=1",
+                "https://ofd.soliq.uz:8443/epi?r=1")) {
+            MvcResult result = attachLink(requestId, 2, "link-" + n++, "SIGN-X", "R-9990012", refused, null);
+            assertThat(result.getResponse().getStatus()).as(refused).isEqualTo(400);
+            JsonNode problem = json.readTree(result.getResponse().getContentAsString());
+            assertThat(problem.path("code").asText()).as(refused).isEqualTo("VALIDATION_FAILED");
+            assertThat(problem.path("errors").path(0).path("field").asText())
+                    .as(refused)
+                    .isEqualTo("receiptUrl");
+            assertThat(result.getResponse().getContentAsString())
+                    .as("the refusal does not repeat the link a person typed")
+                    .doesNotContain("evil");
+        }
+
+        assertThat(jdbc.sql("SELECT count(*) FROM audit.approval_requests WHERE tenant_id = :t")
+                        .param("t", TENANT)
+                        .query(Long.class)
+                        .single())
+                .as("a link that cannot be attached costs the second person nothing to decide")
+                .isEqualTo(approvalsBefore);
+        assertThat(documentStatus(documentId)).isEqualTo("CORRECTION_REQUESTED");
+
+        // The tax authority's own host, in any case and on any of its subdomains, is accepted.
+        MvcResult accepted = attachLink(
+                requestId, 2, "link-ok", "SIGN-OK", "R-9990013", "https://OFD.Soliq.uz/epi?r=R-9990013", null);
+        assertThat(accepted.getResponse().getStatus())
+                .as("a good link goes on to the second signature")
+                .isEqualTo(422);
+        assertThat(json.readTree(accepted.getResponse().getContentAsString())
+                        .path("code")
+                        .asText())
+                .isEqualTo("SECOND_APPROVER_REQUIRED");
+    }
+
+    @Test
+    @DisplayName("a customer is never shown a link an operator typed that is not the tax authority's")
+    void aCustomerIsNotShownATypedLinkThatIsNotTheTaxAuthoritys() throws Exception {
+        UUID account = customerAccount(CUSTOMER);
+        UUID orderId = ownOrder("E-302", account);
+        UUID saleId = issuedClickDocument(orderId, ENTITY_A, line("Lavash classic", 1, 25_000L, List.of()));
+        // A refund attached before the link was checked at the door, and one attached after.
+        insertAttachedRefund(saleId, orderId, "VOID_ATTACHED", "https://evil.example/epi?r=1");
+        insertAttachedRefund(saleId, orderId, "VOID_ATTACHED", "https://ofd.soliq.uz/epi?r=R-9990014");
+
+        JsonNode receipts = receiptsOf(orderId);
+
+        assertThat(receipts.findValuesAsString("url"))
+                .contains(RECEIPT_URL, "https://ofd.soliq.uz/epi?r=R-9990014")
+                .noneMatch(url -> url.contains("evil"));
     }
 
     @Test
@@ -1180,6 +1505,89 @@ class FiscalEvidenceEndpointTests {
                         .formatted(kind, reason));
     }
 
+    private MockHttpServletRequestBuilder closure(
+            String subject, UUID requestId, int documentVersion, String outcome, String note, String key) {
+        return post("/api/v1/operations/tenants/" + TENANT + "/fiscal/correction-requests/" + requestId + "/closures")
+                .with(tokenFor(subject))
+                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, key)
+                .header("If-Match", "W/\"" + documentVersion + "\"")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"outcome\":\"%s\",\"note\":\"%s\"}".formatted(outcome, note));
+    }
+
+    /** The agent's reference, attached by the finance role: one call, as the server sees it. */
+    private MvcResult attach(
+            UUID requestId, int documentVersion, String key, String sign, String number, @Nullable String terminal)
+            throws Exception {
+        return attachLink(
+                requestId, documentVersion, key, sign, number, "https://ofd.soliq.uz/epi?r=" + number, terminal);
+    }
+
+    private MvcResult attachLink(
+            UUID requestId,
+            int documentVersion,
+            String key,
+            String sign,
+            String number,
+            String url,
+            @Nullable String terminal)
+            throws Exception {
+        String body = terminal == null
+                ? "{\"fiscalSign\":\"%s\",\"receiptNumber\":\"%s\",\"receiptUrl\":\"%s\"}".formatted(sign, number, url)
+                : "{\"fiscalSign\":\"%s\",\"receiptNumber\":\"%s\",\"receiptUrl\":\"%s\",\"terminalId\":\"%s\"}"
+                        .formatted(sign, number, url, terminal);
+        return mvc.perform(post("/api/v1/operations/tenants/" + TENANT + "/fiscal/correction-requests/" + requestId
+                                + "/attachments")
+                        .with(tokenFor(FINANCE))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, key)
+                        .header("If-Match", "W/\"" + documentVersion + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andReturn();
+    }
+
+    /**
+     * The reference attached the way the platform asks for it: the first call names an approval a second
+     * person must decide, and once they have, the same call goes through.
+     */
+    private MvcResult attachApproved(
+            UUID requestId, int documentVersion, String key, String sign, String number, @Nullable String terminal)
+            throws Exception {
+        MvcResult first = attach(requestId, documentVersion, key + "-1", sign, number, terminal);
+        JsonNode body = json.readTree(first.getResponse().getContentAsString());
+        if (first.getResponse().getStatus() == 422
+                && "SECOND_APPROVER_REQUIRED".equals(body.path("code").asText())) {
+            approvals.decide(
+                    UUID.fromString(body.path("approvalRequestId").asText()),
+                    ApprovalService.Decision.APPROVE,
+                    ActorRef.user(CHECKER, null),
+                    "the reference matches the agent's cabinet");
+            return attach(requestId, documentVersion, key + "-2", sign, number, terminal);
+        }
+        return first;
+    }
+
+    /** A REFUND the way an attachment writes it, with whatever link its row holds. */
+    private void insertAttachedRefund(UUID originalId, UUID orderId, String reasonCode, String url) {
+        jdbc.sql("""
+                INSERT INTO fiscal.fiscal_documents (id, tenant_id, order_id, legal_entity_id, provider_type,
+                    document_type, corrects_document_id, status, reason_code, reason_note,
+                    external_receipt_id, fiscal_sign, terminal_id, receipt_reference, registered_at, receipt_url,
+                    submitted_at, issued_at, created_at, updated_at)
+                SELECT :id, tenant_id, order_id, legal_entity_id, provider_type, 'REFUND', id, 'ISSUED', :reason,
+                       'attached', :number, :sign, terminal_id, :number, :now, :url, :now, :now, :now, :now
+                  FROM fiscal.fiscal_documents WHERE id = :original
+                """)
+                .param("id", UUID.randomUUID())
+                .param("original", originalId)
+                .param("reason", reasonCode)
+                .param("number", "R-" + UUID.randomUUID().toString().substring(0, 8))
+                .param("sign", "SIGN-" + UUID.randomUUID().toString().substring(0, 8))
+                .param("url", url)
+                .param("now", NOW.atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
     private static String receiptsUrl(UUID brandId, UUID orderId) {
         return "/api/v1/storefront/tenants/" + TENANT + "/brands/" + brandId + "/orders/" + orderId + "/receipts";
     }
@@ -1287,6 +1695,24 @@ class FiscalEvidenceEndpointTests {
                 .listOfRows();
     }
 
+    private FiscalReceiptLine lineFiledUnder(String name, String commissionTin) {
+        FiscalReceiptLine base = line(name, 1, 25_000L, List.of());
+        return new FiscalReceiptLine(
+                base.fiscalName(),
+                base.mxikCode(),
+                base.packageCode(),
+                base.unitCode(),
+                base.quantity(),
+                base.unitPrice(),
+                base.taxAmount(),
+                base.vatPercent(),
+                base.discount(),
+                base.barcode(),
+                base.markingCodes(),
+                commissionTin,
+                null);
+    }
+
     private FiscalReceiptLine line(String name, int quantity, long unitPrice, List<String> markingCodes) {
         return new FiscalReceiptLine(
                 name,
@@ -1310,6 +1736,14 @@ class FiscalEvidenceEndpointTests {
      * evidence.
      */
     private UUID issuedClickDocument(UUID orderId, UUID entityId, FiscalReceiptLine... lines) {
+        UUID documentId = submittedClickDocument(orderId, entityId);
+        recordRequest(documentId, orderId, entityId, lines);
+        markIssued(documentId);
+        return documentId;
+    }
+
+    /** A Click document that has been asked for its receipt and has not answered. */
+    private UUID submittedClickDocument(UUID orderId, UUID entityId) {
         UUID documentId = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO fiscal.fiscal_documents (id, tenant_id, order_id, legal_entity_id, provider_type,
@@ -1322,7 +1756,11 @@ class FiscalEvidenceEndpointTests {
                 .param("e", entityId)
                 .param("now", NOW.atOffset(ZoneOffset.UTC))
                 .update();
+        return documentId;
+    }
 
+    /** One request that left for the provider, kept the way the platform keeps it (real recorder, real protection). */
+    private void recordRequest(UUID documentId, UUID orderId, UUID entityId, FiscalReceiptLine... lines) {
         FiscalDocument document = new FiscalDocument(
                 documentId,
                 TENANT,
@@ -1349,8 +1787,11 @@ class FiscalEvidenceEndpointTests {
                 merchantBinding(entityId),
                 new SentReceipt(
                         List.of(lines), new SomAmount(total, "UZS"), new SomAmount(0, "UZS"), new SomAmount(0, "UZS")),
-                false);
+                false,
+                NOW);
+    }
 
+    private void markIssued(UUID documentId) {
         jdbc.sql("""
                 UPDATE fiscal.fiscal_documents
                    SET status = 'ISSUED', reason_code = 'PARTNER_FISCALIZED', reason_note = 'issued',
@@ -1365,7 +1806,6 @@ class FiscalEvidenceEndpointTests {
                 .param("url", RECEIPT_URL)
                 .param("now", NOW.atOffset(ZoneOffset.UTC))
                 .update();
-        return documentId;
     }
 
     private void allowPlaceholders(boolean allowed) {

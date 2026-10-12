@@ -18,7 +18,13 @@
   each difference with both balances and the delta and changes neither side, and the
   resolutions (accept the till, accept the platform, absorb, suspend) are guarded by
   `loyalty.sync.manage`, If-Match and, above the manual-adjustment threshold, a second
-  signature. The loyalty page has a till-sync tab and the liability report shows the spend
+  signature. A person's resolution writes its `POS_SYNC_EARN` or `POS_SYNC_CORRECTION` entry
+  through `LoyaltyAdjustmentService.adjustForTillResolution`, an entry point of its own that
+  fixes the code and does not put it to ADR 0165's operator list (Decision 5), so flipping
+  that list to `ENFORCE` cannot make a difference unresolvable and a resolution is not
+  counted as an operator typing an unlisted code; the manual `adjust` still applies the list
+  to every code, the sync's three included, so typing one there is no way round it. The
+  loyalty page has a till-sync tab and the liability report shows the spend
   the till absorbed beyond a balance; the old "not built" card is gone. Not built: a real
   iiko, R-Keeper or Clopos adapter (each needs a provider note and an assessed ceiling row
   first, and the record defers to what the vendor exposes); the push as an outbox command

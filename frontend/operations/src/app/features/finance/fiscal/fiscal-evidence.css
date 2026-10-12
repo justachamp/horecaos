@@ -104,6 +104,14 @@
   margin: 12px 0 6px;
 }
 
+.evidence__earlier {
+  margin-top: 12px;
+}
+
+.evidence__earlier summary {
+  cursor: pointer;
+}
+
 .evidence__scroll {
   overflow-x: auto;
 }

@@ -29,6 +29,7 @@ import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalEvidence
 import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalEvidenceStore.EvidenceRow;
 import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalEvidenceStore.MethodRow;
 import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalEvidenceStore.PartnerPathRow;
+import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalEvidenceStore.SentRequestRow;
 import uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalEvidenceStore.TerminalPathRow;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
@@ -85,6 +86,7 @@ public class FiscalEvidenceService {
     private final PolicyResolver policies;
     private final OrderMarkCounts marks;
     private final Clock clock;
+    private final FiscalReceiptLinks receiptLinks;
 
     public FiscalEvidenceService(
             JdbcFiscalEvidenceStore store,
@@ -93,7 +95,8 @@ public class FiscalEvidenceService {
             AuditRecorder audit,
             PolicyResolver policies,
             OrderMarkCounts marks,
-            Clock clock) {
+            Clock clock,
+            FiscalReceiptLinks receiptLinks) {
         this.store = store;
         this.protection = protection;
         this.json = json;
@@ -101,6 +104,7 @@ public class FiscalEvidenceService {
         this.policies = policies;
         this.marks = marks;
         this.clock = clock;
+        this.receiptLinks = receiptLinks;
     }
 
     /** Why an identifier is being looked at in full. A closed set, never free text. */
@@ -156,7 +160,15 @@ public class FiscalEvidenceService {
     /** The merchant account the submission went through. The reference names it; it does not authenticate. */
     public record MerchantAccount(UUID bindingId, @Nullable String accountReferenceMasked) {}
 
-    /** One line as filed. {@code markingCodeCount} is a number of codes, never a code. */
+    /**
+     * One line as filed. {@code markingCodeCount} is a number of codes, never a code.
+     *
+     * @param commissionTin the seller's TIN the line was sent with (Click's {@code CommissionInfo}), as
+     *     sent: a business identifier. Shown beside {@link Seller#tin()} so the INN a document was opened
+     *     under and the INN its receipt was filed under can be read side by side, and a difference between
+     *     the two is visible and not silently resolved in favour of the snapshot. Null on a provider that
+     *     has no such field, and on a request that predates it
+     */
     public record Line(
             String kind,
             String name,
@@ -169,7 +181,8 @@ public class FiscalEvidenceService {
             int vatPercent,
             @Nullable Money discount,
             @Nullable String barcode,
-            int markingCodeCount) {}
+            int markingCodeCount,
+            @Nullable String commissionTin) {}
 
     /**
      * The lines of a filed receipt.
@@ -183,6 +196,17 @@ public class FiscalEvidenceService {
             boolean synthetic,
             List<Line> items,
             @Nullable Integer markingCodesTransmitted) {}
+
+    /**
+     * A request that left for the provider and was later replaced by another, kept as it was sent.
+     *
+     * <p>Oldest first. A reply that never came proves nothing about what the provider received, so the request
+     * a resubmission replaced may be the one that is on file with the tax authority, and the evidence of an
+     * incorrect receipt is what was sent. The latest request is {@link Document#lines()}.
+     *
+     * @param attempt 1 for the first request that left
+     */
+    public record EarlierRequest(int attempt, Instant sentAt, Lines lines) {}
 
     /** How the provider was told the payment was split. */
     public record TenderSplit(Money card, Money cash, Money ecash) {}
@@ -213,6 +237,7 @@ public class FiscalEvidenceService {
             @Nullable Instant registeredAt,
             @Nullable String providerStatusCode,
             Lines lines,
+            List<EarlierRequest> earlierRequests,
             @Nullable TenderSplit tenderSplit,
             @Nullable CorrectionView correction,
             @Nullable Instant submittedAt,
@@ -253,6 +278,12 @@ public class FiscalEvidenceService {
             UUID tenantId, UUID orderId, @Nullable Purpose reveal, ActorRef actor, @Nullable String correlationId) {
 
         List<EvidenceRow> rows = store.documentsOfOrder(tenantId, orderId);
+        Map<UUID, List<SentRequestRow>> sentRequests = new LinkedHashMap<>();
+        for (SentRequestRow sent : store.sentRequestsOfOrder(tenantId, orderId)) {
+            sentRequests
+                    .computeIfAbsent(sent.documentId(), id -> new ArrayList<>())
+                    .add(sent);
+        }
         Map<UUID, CorrectionRow> latestCorrection = new LinkedHashMap<>();
         for (CorrectionRow request : store.correctionsOfOrder(tenantId, orderId)) {
             // Newest first: the first one seen per document is the one that is shown.
@@ -261,7 +292,12 @@ public class FiscalEvidenceService {
 
         List<Document> documents = new ArrayList<>(rows.size());
         for (EvidenceRow row : rows) {
-            Document document = describe(tenantId, row, reveal != null, latestCorrection.get(row.id()));
+            Document document = describe(
+                    tenantId,
+                    row,
+                    reveal != null,
+                    latestCorrection.get(row.id()),
+                    sentRequests.getOrDefault(row.id(), List.of()));
             documents.add(document);
             if (reveal != null) {
                 recordReveal(tenantId, orderId, row, reveal, actor, correlationId);
@@ -272,7 +308,12 @@ public class FiscalEvidenceService {
                 orderId, retention(tenantId), marksOf(tenantId, orderId), reveal != null, reveal, documents);
     }
 
-    private Document describe(UUID tenantId, EvidenceRow row, boolean reveal, @Nullable CorrectionRow correction) {
+    private Document describe(
+            UUID tenantId,
+            EvidenceRow row,
+            boolean reveal,
+            @Nullable CorrectionRow correction,
+            List<SentRequestRow> sentRequests) {
         Lines lines = linesOf(tenantId, row);
         return new Document(
                 row.id(),
@@ -294,6 +335,7 @@ public class FiscalEvidenceService {
                 row.registeredAt(),
                 row.providerStatusCode(),
                 lines,
+                earlierRequestsOf(tenantId, row, sentRequests),
                 splitOf(tenantId, row),
                 correction == null
                         ? null
@@ -343,18 +385,41 @@ public class FiscalEvidenceService {
     // ------------------------------------------------------------------- lines
 
     private Lines linesOf(UUID tenantId, EvidenceRow row) {
-        if (row.protectedRequestReference() == null) {
-            return new Lines("NOT_SENT", row.linesSynthetic(), List.of(), null);
+        return linesOf(tenantId, row.id(), row.protectedRequestReference(), row.linesSynthetic());
+    }
+
+    /**
+     * The requests the latest one replaced: every row of the document's history but the newest, which is the
+     * document's own columns and so {@link #linesOf(UUID, EvidenceRow)}. A document written before the history
+     * existed has one backfilled row and so none here.
+     */
+    private List<EarlierRequest> earlierRequestsOf(UUID tenantId, EvidenceRow row, List<SentRequestRow> sent) {
+        if (sent.size() < 2) {
+            return List.of();
+        }
+        List<EarlierRequest> earlier = new ArrayList<>(sent.size() - 1);
+        for (SentRequestRow request : sent.subList(0, sent.size() - 1)) {
+            earlier.add(new EarlierRequest(
+                    request.attempt(),
+                    request.sentAt(),
+                    linesOf(tenantId, row.id(), request.protectedRequestReference(), request.linesSynthetic())));
+        }
+        return List.copyOf(earlier);
+    }
+
+    private Lines linesOf(UUID tenantId, UUID documentId, @Nullable String reference, boolean synthetic) {
+        if (reference == null) {
+            return new Lines("NOT_SENT", synthetic, List.of(), null);
         }
         try {
             String plain = protection.reveal(
                     tenantId,
-                    ProtectedValue.deserialize(row.protectedRequestReference()),
-                    SentReceiptEvidence.requestRecord(row.id()),
+                    ProtectedValue.deserialize(reference),
+                    SentReceiptEvidence.requestRecord(documentId),
                     LINES_READ_PURPOSE);
             SentReceiptEvidence.Lines sent = json.readValue(plain, SentReceiptEvidence.Lines.class);
             if (sent.version() != SentReceiptEvidence.VERSION) {
-                return unreadable(row, "an unknown version");
+                return unreadable(documentId, synthetic, "an unknown version");
             }
             List<Line> items = new ArrayList<>(sent.lines().size());
             int codes = 0;
@@ -372,18 +437,19 @@ public class FiscalEvidenceService {
                         line.vatPercent(),
                         line.discountMinor() == null ? null : new Money(line.discountMinor(), sent.currency()),
                         line.barcode(),
-                        line.markingCodeCount()));
+                        line.markingCodeCount(),
+                        line.commissionTin()));
             }
             return new Lines("AVAILABLE", sent.synthetic(), items, codes);
         } catch (RuntimeException unreadable) {
             // No payload and no exception message: either could carry the thing that failed to parse.
-            return unreadable(row, unreadable.getClass().getSimpleName());
+            return unreadable(documentId, synthetic, unreadable.getClass().getSimpleName());
         }
     }
 
-    private static Lines unreadable(EvidenceRow row, String why) {
-        log.warn("The sent lines of fiscal document {} could not be read: {}", row.id(), why);
-        return new Lines("NOT_READABLE", row.linesSynthetic(), List.of(), null);
+    private static Lines unreadable(UUID documentId, boolean synthetic, String why) {
+        log.warn("The sent lines of fiscal document {} could not be read: {}", documentId, why);
+        return new Lines("NOT_READABLE", synthetic, List.of(), null);
     }
 
     private @Nullable TenderSplit splitOf(UUID tenantId, EvidenceRow row) {
@@ -507,8 +573,20 @@ public class FiscalEvidenceService {
     @Transactional(readOnly = true)
     public List<CustomerReceipt> customerReceipts(UUID tenantId, UUID orderId) {
         return store.receiptLinksOfOrder(tenantId, orderId).stream()
+                .filter(row ->
+                        !typedByAnOperator(row.reasonCode()) || receiptLinks.isTaxAuthorityLink(row.receiptUrl()))
                 .map(row -> new CustomerReceipt(row.documentType(), row.receiptUrl(), row.registeredAt()))
                 .toList();
+    }
+
+    /**
+     * Whether the document's link is one a person typed when attaching the agent's reference, and not one a
+     * provider reported. A provider's link is the provider's; a typed one is shown to a customer only if it
+     * is the tax authority's, whether or not it was checked at the door (the check is newer than some rows).
+     */
+    private static boolean typedByAnOperator(String reasonCode) {
+        return FiscalCorrectionService.CORRECTION_ATTACHED.equals(reasonCode)
+                || FiscalCorrectionService.VOID_ATTACHED.equals(reasonCode);
     }
 
     // ------------------------------------------------------------ payment types

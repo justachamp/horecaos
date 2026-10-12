@@ -1,5 +1,6 @@
 package uz.horecaos.platform.payments.application;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Component;
@@ -40,7 +41,12 @@ public class ProtectedSentEvidenceRecorder implements SentEvidenceRecorder {
     }
 
     @Override
-    public void record(FiscalDocument document, ProviderBinding binding, SentReceipt sent, boolean linesSynthetic) {
+    public void record(
+            FiscalDocument document,
+            ProviderBinding binding,
+            SentReceipt sent,
+            boolean linesSynthetic,
+            Instant sentAt) {
         String currency = sent.receivedCard().currency();
 
         List<SentReceiptEvidence.Line> lines = new ArrayList<>(sent.lines().size());
@@ -90,6 +96,7 @@ public class ProtectedSentEvidenceRecorder implements SentEvidenceRecorder {
                 binding.bindingId(),
                 linesSynthetic,
                 requestReference,
-                splitReference);
+                splitReference,
+                sentAt);
     }
 }

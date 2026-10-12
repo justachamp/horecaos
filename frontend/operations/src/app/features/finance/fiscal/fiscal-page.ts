@@ -18,6 +18,7 @@ export const BLOCKING_REASON_CODES = [
   'MARKS_INCOMPLETE',
   'NO_FISCAL_PATH',
   'TERMINAL_OFFLINE',
+  'LINES_NOT_BUILT',
 ] as const;
 
 type ResolveAction = 'retry' | 'unblock';

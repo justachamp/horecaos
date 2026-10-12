@@ -49,6 +49,33 @@
   customer the same link ADR 0058 already sends them, for the receipts still in force and nothing
   else about them, and the storefront's order page shows it (`storefront-milliy` has no order
   detail page to show it on).
+  The seller a receipt is filed under is the snapshot and nothing else (Decisions 3 and 9):
+  `PartnerFiscalizationBridge` reads `seller_tin` through `payments.fiscal_documents` (V0640 appends
+  the column to the compatibility view) and never resolves the order's location a second time, so a
+  branch that has changed hands or an entity re-registered since the sale does not move the INN a
+  receipt is filed under; a marked order whose document holds no snapshot is not sent at all (nothing
+  is filed under a TIN of zeros), and only a sandbox placeholder may carry the visibly synthetic zero.
+  Each line of the evidence read carries the INN it was filed under (`commissionTin`, as sent), and the
+  console states it beside the INN the document was opened under and says so when the two differ.
+  A correction or void request has an exit that files nothing: `POST
+  .../fiscal/correction-requests/{requestId}/closures` closes it as `DECLINED` (the agent would not issue
+  it) or `CANCELLED` (raised in error), returns the document to `ISSUED` with its evidence untouched, keeps
+  who closed it and why (V0641), and leaves the document free to be asked about again; before it the only
+  way out was to attach a reference, that is to record a receipt nobody had issued. Attaching the agent's
+  reference is itself an ADR 0027 approval action, `fiscal.correction.attach` (V0642, fail-closed like the
+  request's), bound by the parameters hash to the exact reference typed, so the second person signs what is
+  attached and not only that it was asked for; the link must be an `https` page of the tax authority's own
+  site (`soliq.uz` and its subdomains, `horecaos.fiscal.receipt-link-host-suffixes`), refused with 400 on
+  `receiptUrl` before any approval is raised, and a customer is never shown a typed link that is not.
+  Decision 8 puts the approval on the request; this extends it to the step that files the reference as a
+  document and shows its link to a customer, and is the one thing here the owner may want to confirm.
+  Every request that left for a provider is kept: V0643 adds `fiscal.fiscal_sent_requests`, append-only
+  (the application role may insert and select and nothing else), one numbered row per request holding the
+  same ADR 0029 protected references, backfilled from what each document held. The document's own columns
+  keep meaning the latest request; a resubmission used to overwrite it, which is right for a request the
+  provider refused and wrong for one whose reply never came, because the provider may hold that one and the
+  evidence then showed only the second. The evidence read lists the ones a later request replaced as
+  `earlierRequests`, oldest first, and the console shows them under the lines.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides

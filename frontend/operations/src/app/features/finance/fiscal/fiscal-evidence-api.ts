@@ -36,6 +36,13 @@ export const FISCAL_CORRECTION_REASONS = [
 export type FiscalCorrectionReason = (typeof FISCAL_CORRECTION_REASONS)[number];
 
 /**
+ * Why a request is closed without a receipt: the restaurant's fiscal agent would not issue it, or a person
+ * withdrew it. Mirrors `FiscalCorrectionService.Closure`.
+ */
+export const FISCAL_CLOSURES = ['DECLINED', 'CANCELLED'] as const;
+export type FiscalClosure = (typeof FISCAL_CLOSURES)[number];
+
+/**
  * `OPENING` is the INN taken when the document was opened; `BACKFILL` was resolved from the entity as it stood
  * when the snapshot was added (a weaker claim, and said so); `UNRESOLVED` means no entity, so nobody can be said
  * to have issued it.
@@ -87,6 +94,21 @@ export interface FiscalEvidenceLineView {
   readonly discount: Money | null;
   readonly barcode: string | null;
   readonly markingCodeCount: number;
+  /**
+   * The INN this line was filed under (Click's `CommissionInfo`), as sent. Shown beside `seller.tin`, the INN the
+   * document was opened under, so a difference between the two is visible and not resolved in either one's favour.
+   */
+  readonly commissionTin?: string | null;
+}
+
+/**
+ * A request that left for the provider and was later replaced by another, kept because the provider may hold it
+ * (a reply that never came proves nothing about what arrived). Oldest first; the latest is the document's `lines`.
+ */
+export interface FiscalEarlierRequestView {
+  readonly attempt: number;
+  readonly sentAt: string;
+  readonly lines: FiscalEvidenceLinesView;
 }
 
 export interface FiscalEvidenceLinesView {
@@ -131,6 +153,8 @@ export interface FiscalEvidenceDocumentView {
   readonly registeredAt: string | null;
   readonly providerStatusCode: string | null;
   readonly lines: FiscalEvidenceLinesView;
+  /** Every earlier request the latest one replaced; absent from a server that predates the history. */
+  readonly earlierRequests?: readonly FiscalEarlierRequestView[];
   readonly tenderSplit: FiscalTenderSplitView | null;
   readonly correction: FiscalCorrectionSummaryView | null;
   readonly submittedAt: string | null;
@@ -198,6 +222,8 @@ export interface FiscalCorrectionRequestView {
   readonly requestedAt: string;
   readonly attachedDocumentId: string | null;
   readonly attachedAt: string | null;
+  /** When it was closed without a receipt (`DECLINED` or `CANCELLED`); null while open or once attached. */
+  readonly closedAt?: string | null;
   readonly version: number;
 }
 
@@ -210,6 +236,16 @@ export interface FiscalCorrectionAttachedView {
   readonly request: FiscalCorrectionRequestView;
   readonly linkedDocumentId: string;
   readonly documentVersion: number;
+}
+
+export interface FiscalCorrectionClosedView {
+  readonly request: FiscalCorrectionRequestView;
+  readonly documentVersion: number;
+}
+
+export interface FiscalCorrectionCloseBody {
+  readonly outcome: FiscalClosure;
+  readonly note: string;
 }
 
 export interface FiscalCorrectionRequestBody {
@@ -286,6 +322,25 @@ export class FiscalEvidenceApi {
     return firstValueFrom(
       this.api.post<FiscalCorrectionRequestBody, FiscalCorrectionRaisedView>(
         financePaths.fiscalDocumentCorrectionRequests(tenantId, documentId),
+        { key: newIdempotencyKey(), body },
+        { expectedVersion },
+      ),
+    );
+  }
+
+  /**
+   * Closes a request that will not be attached: the agent declined, or it was raised in error. The document is
+   * issued again with its evidence as it was, and nothing is filed. `expectedVersion` is the document's version.
+   */
+  async closeRequest(
+    tenantId: string,
+    requestId: string,
+    expectedVersion: number,
+    body: FiscalCorrectionCloseBody,
+  ): Promise<FiscalCorrectionClosedView> {
+    return firstValueFrom(
+      this.api.post<FiscalCorrectionCloseBody, FiscalCorrectionClosedView>(
+        financePaths.fiscalCorrectionClosures(tenantId, requestId),
         { key: newIdempotencyKey(), body },
         { expectedVersion },
       ),

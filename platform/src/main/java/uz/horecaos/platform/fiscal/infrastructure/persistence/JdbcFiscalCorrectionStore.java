@@ -163,6 +163,39 @@ public class JdbcFiscalCorrectionStore {
                 == 1;
     }
 
+    /**
+     * Closes a request without a receipt: {@code DECLINED} (the tenant's agent would not issue it) or
+     * {@code CANCELLED} (a person withdrew it). Conditional on the request still being open at the version
+     * the caller read, so a closure racing an attachment has one winner.
+     *
+     * @return true when this call closed it
+     */
+    public boolean closeRequest(
+            UUID tenantId,
+            UUID requestId,
+            int expectedVersion,
+            String closedStatus,
+            String closedBy,
+            String closedNote,
+            Instant now) {
+        return jdbc.sql("""
+                        UPDATE fiscal.fiscal_correction_requests
+                           SET status = :status, closed_by = :closedBy, closed_at = :now,
+                               closed_note = :closedNote, version = version + 1, updated_at = :now
+                         WHERE tenant_id = :tenantId AND id = :id
+                           AND status = 'REQUESTED' AND version = :expectedVersion
+                        """)
+                        .param("tenantId", tenantId)
+                        .param("id", requestId)
+                        .param("expectedVersion", expectedVersion)
+                        .param("status", closedStatus)
+                        .param("closedBy", closedBy)
+                        .param("closedNote", closedNote)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
     private static OffsetDateTime utc(Instant instant) {
         return instant.atOffset(ZoneOffset.UTC);
     }

@@ -46,8 +46,16 @@ import uz.horecaos.platform.iam.api.ResourceScope;
  * enforces no deadline either; the legal deadline per path is not HorecaOS's to decide, so the
  * request is aged on a worklist and the question stays with finance.
  *
+ * <p>A request has three ways out and no others: an attachment (the agent issued it), a closure as
+ * {@code DECLINED} (the agent would not) and a closure as {@code CANCELLED} (it was raised in error). The
+ * two closures file nothing and put the document back to {@code ISSUED}; before they existed the only exit
+ * was to attach a reference, which an operator who merely wanted the request gone could only do by
+ * recording a receipt nobody had issued.
+ *
  * <p>The approval is a second person, and it is spent in the same transaction as the move it
- * authorises, so one signature covers one request. A request waiting for its checker is answered by
+ * authorises, so one signature covers one request. The attachment needs its own, bound to the reference
+ * typed ({@link ApprovalAction#FISCAL_CORRECTION_ATTACH}): it files a fiscal document, moves the original
+ * to {@code CORRECTED} or {@code VOIDED} and puts a link in front of the customer, on what one person typed. A request waiting for its checker is answered by
  * the caller (the controller maps it to {@code SECOND_APPROVER_REQUIRED} <em>after</em> this
  * transaction commits), because the approval request this method opened must survive the answer.
  */
@@ -81,6 +89,21 @@ public class FiscalCorrectionService {
         OTHER
     }
 
+    /**
+     * Why a request is closed without a receipt: the tenant's fiscal agent would not issue it, or a person
+     * withdrew it.
+     */
+    public enum Closure {
+        DECLINED,
+        CANCELLED
+    }
+
+    /** The reason code of a linked {@code CORRECTION} document an attachment created. */
+    public static final String CORRECTION_ATTACHED = "CORRECTION_ATTACHED";
+
+    /** The reason code of a linked {@code REFUND} document an attachment created. */
+    public static final String VOID_ATTACHED = "VOID_ATTACHED";
+
     /** The decision the approval model came back with, or the request it allowed. */
     public sealed interface RequestResult {
 
@@ -94,12 +117,37 @@ public class FiscalCorrectionService {
     /** What the second person signs: the document, the kind of request, and why. Public so the hash can read it. */
     public record Proposal(UUID tenantId, UUID documentId, String kind, String reasonCode) {}
 
+    /**
+     * What the second person signs when a reference is attached: the request and every field of the
+     * reference. Public so the hash can read it. Typing a different number or link afterwards is a different
+     * proposal, with a signature of its own.
+     */
+    public record AttachProposal(
+            UUID tenantId,
+            UUID requestId,
+            String fiscalSign,
+            String receiptNumber,
+            String receiptUrl,
+            @Nullable String terminalId,
+            @Nullable Instant registeredAt) {}
+
+    /** The attachment that was made, or the approval it is waiting for. */
+    public sealed interface AttachResult {
+
+        /** The reference is attached and the original has moved. */
+        record Done(Attached attached) implements AttachResult {}
+
+        /** The attachment needs a second person, or the second person said no. Nothing else happened. */
+        record Awaiting(ApprovalOutcome outcome) implements AttachResult {}
+    }
+
     private final JdbcFiscalLifecycleStore documents;
     private final JdbcFiscalCorrectionStore corrections;
     private final JdbcFiscalEvidenceStore evidence;
     private final ApprovalService approvals;
     private final AuditRecorder audit;
     private final Clock clock;
+    private final FiscalReceiptLinks receiptLinks;
 
     public FiscalCorrectionService(
             JdbcFiscalLifecycleStore documents,
@@ -107,13 +155,15 @@ public class FiscalCorrectionService {
             JdbcFiscalEvidenceStore evidence,
             ApprovalService approvals,
             AuditRecorder audit,
-            Clock clock) {
+            Clock clock,
+            FiscalReceiptLinks receiptLinks) {
         this.documents = documents;
         this.corrections = corrections;
         this.evidence = evidence;
         this.approvals = approvals;
         this.audit = audit;
         this.clock = clock;
+        this.receiptLinks = receiptLinks;
     }
 
     @Transactional
@@ -212,11 +262,17 @@ public class FiscalCorrectionService {
      * Records the reference the tenant's agent returned: creates the linked document and moves the
      * original and the request to their last status.
      *
+     * <p>Under a second person's approval, bound to the reference itself. An attachment is a fiscal
+     * document HorecaOS records on what one person typed, moves the original to {@code CORRECTED} or {@code
+     * VOIDED}, and shows the customer the link; the request's own approval said nothing about any of the
+     * three. The link has to be the tax authority's, checked before an approval is asked for so that a
+     * refused link costs the second person nothing to decide.
+     *
      * @param expectedVersion the version of the <em>original</em> document the operator read; the
      *     request is closed at the version it was read at inside this transaction
      */
     @Transactional
-    public Attached attach(
+    public AttachResult attach(
             UUID tenantId,
             UUID requestId,
             int expectedVersion,
@@ -239,6 +295,41 @@ public class FiscalCorrectionService {
         if (original.version() != expectedVersion) {
             throw new FiscalDocumentService.StaleDocumentException(expectedVersion, original.version());
         }
+        if (!receiptLinks.isTaxAuthorityLink(reference.receiptUrl())) {
+            throw new ReceiptLinkRefusedException();
+        }
+        String host = receiptLinks.hostOf(reference.receiptUrl()).orElseThrow();
+
+        ApprovalOutcome outcome = approvals.requireApproval(new ApprovalRequestCommand(
+                ApprovalAction.FISCAL_CORRECTION_ATTACH.code(),
+                ApprovalParameters.of(new AttachProposal(
+                                tenantId,
+                                requestId,
+                                reference.fiscalSign(),
+                                reference.receiptNumber(),
+                                reference.receiptUrl(),
+                                reference.terminalId(),
+                                reference.registeredAt()))
+                        .excluding()
+                        .hash(),
+                ResourceScope.tenant(tenantId),
+                actor,
+                // What the checker is shown to decide on: enough of the reference to compare with the
+                // agent's own cabinet, masked as the evidence surface masks it (ADR 0166, Decision 5).
+                "Attach the %s reference (receipt %s, link on %s) to the %s request %s"
+                        .formatted(
+                                kind == Kind.CORRECTION ? "correction" : "void",
+                                FiscalEvidenceService.mask(reference.receiptNumber()),
+                                host,
+                                request.reasonCode(),
+                                requestId),
+                ApprovalRequestCommand.DEFAULT_VALIDITY));
+        if (!outcome.mayProceed()) {
+            return new AttachResult.Awaiting(outcome);
+        }
+        // Spent in this transaction before anything is written, so one signature is one attachment.
+        outcome.consume();
+        UUID approvalId = approvalIdOf(outcome);
 
         Instant now = clock.instant();
         UUID linkedId = UUID.randomUUID();
@@ -247,7 +338,7 @@ public class FiscalCorrectionService {
                 tenantId,
                 original.id(),
                 kind.linkedDocumentType,
-                kind == Kind.CORRECTION ? "CORRECTION_ATTACHED" : "VOID_ATTACHED",
+                kind == Kind.CORRECTION ? CORRECTION_ATTACHED : VOID_ATTACHED,
                 "the tenant's fiscal agent issued it; the operator attached its reference",
                 reference,
                 now);
@@ -266,7 +357,7 @@ public class FiscalCorrectionService {
                 .targetVersion((long) expectedVersion)
                 .because("The agent's reference was attached to the "
                         + request.kind().toLowerCase(java.util.Locale.ROOT) + " request")
-                .underApproval(request.approvalId())
+                .underApproval(approvalId)
                 .changed(ChangeDocuments.diff(
                         Map.of(
                                 "status",
@@ -285,8 +376,90 @@ public class FiscalCorrectionService {
                 .build());
 
         CorrectionRow attached = evidence.findCorrection(tenantId, requestId).orElseThrow();
-        return new Attached(attached, linkedId, expectedVersion + 1);
+        return new AttachResult.Done(new Attached(attached, linkedId, expectedVersion + 1));
     }
+
+    /**
+     * Closes an open request without a receipt: the tenant's agent declined to issue it, or it was raised in
+     * error. The document returns to {@code ISSUED} with its evidence exactly as it was, and nothing is filed,
+     * attached or invented. Without this a request had one exit, an attachment, and an operator who only
+     * wanted the request off the worklist was left to record a reference nobody had issued.
+     *
+     * <p>One signature, not two. The approval guards what the tenant files with the tax authority and this
+     * files nothing: it puts the document back where it was before anyone asked.
+     *
+     * @param expectedVersion the version of the <em>document</em> the operator read, as for an attachment
+     */
+    @Transactional
+    public Closed close(
+            UUID tenantId,
+            UUID requestId,
+            int expectedVersion,
+            Closure closure,
+            String note,
+            ActorRef actor,
+            @Nullable String correlationId) {
+
+        CorrectionRow request =
+                evidence.findCorrection(tenantId, requestId).orElseThrow(() -> new UnknownRequestException(requestId));
+        if (!"REQUESTED".equals(request.status())) {
+            throw new RequestNotOpenException(request.status());
+        }
+        FiscalDocumentRow original = documents
+                .find(tenantId, request.documentId())
+                .orElseThrow(() -> new FiscalDocumentService.UnknownDocumentException(request.documentId()));
+        Kind kind = Kind.valueOf(request.kind());
+        if (original.state() != kind.requested) {
+            throw new NotCorrectableException(original.state(), original.documentType());
+        }
+        if (original.version() != expectedVersion) {
+            throw new FiscalDocumentService.StaleDocumentException(expectedVersion, original.version());
+        }
+
+        Instant now = clock.instant();
+        if (!corrections.moveDocument(
+                tenantId,
+                original.id(),
+                kind.requested.name(),
+                FiscalDocumentState.ISSUED.name(),
+                expectedVersion,
+                now)) {
+            throw new FiscalDocumentService.StaleDocumentException(expectedVersion, original.version());
+        }
+        if (!corrections.closeRequest(
+                tenantId, requestId, request.version(), closure.name(), actor.subject(), note, now)) {
+            throw new RequestNotOpenException("CHANGED");
+        }
+
+        audit.record(AuditFact.of("fiscal.correction.closed", AuditClass.BUSINESS)
+                .by(actor)
+                .at(ResourceScope.tenant(tenantId))
+                .target("fiscal_document", original.id())
+                .targetVersion((long) expectedVersion)
+                .because(note)
+                .changed(ChangeDocuments.diff(
+                        Map.of(
+                                "status",
+                                kind.requested.name(),
+                                "orderId",
+                                original.orderId().toString()),
+                        Map.of(
+                                "status", FiscalDocumentState.ISSUED.name(),
+                                "kind", kind.name(),
+                                "closure", closure.name(),
+                                "reasonCode", request.reasonCode(),
+                                "requestId", requestId.toString(),
+                                "orderId", original.orderId().toString())))
+                .correlatedBy(correlationId == null ? original.id().toString() : correlationId)
+                .occurredAt(now)
+                .build());
+
+        CorrectionRow closed = evidence.findCorrection(tenantId, requestId).orElseThrow();
+        return new Closed(closed, expectedVersion + 1);
+    }
+
+    /** What a closure produced. */
+    public record Closed(CorrectionRow request, int documentVersion) {}
 
     /** What an attachment produced. */
     public record Attached(CorrectionRow request, UUID linkedDocumentId, int documentVersion) {}
@@ -311,6 +484,13 @@ public class FiscalCorrectionService {
         }
     }
 
+    /** The link is not an https page of the tax authority's own site. Carries no link: a person typed it. */
+    public static class ReceiptLinkRefusedException extends RuntimeException {
+        public ReceiptLinkRefusedException() {
+            super("The receipt link must be an https page of the tax authority's own site");
+        }
+    }
+
     /** No such request for this tenant. */
     public static class UnknownRequestException extends RuntimeException {
         public UnknownRequestException(UUID requestId) {
@@ -323,7 +503,7 @@ public class FiscalCorrectionService {
         private final String status;
 
         public RequestNotOpenException(String status) {
-            super("A correction request that is %s cannot take an attachment".formatted(status));
+            super("A correction request that is %s is no longer open to an attachment or a closure".formatted(status));
             this.status = status;
         }
 

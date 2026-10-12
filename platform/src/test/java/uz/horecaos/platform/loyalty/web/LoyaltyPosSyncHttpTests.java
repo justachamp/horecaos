@@ -48,11 +48,14 @@ import uz.horecaos.platform.customers.api.CustomerAccountRef;
 import uz.horecaos.platform.customers.api.CustomerPhoneLookup;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
+import uz.horecaos.platform.loyalty.application.AdjustmentReasonPolicyService;
 import uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService;
 import uz.horecaos.platform.loyalty.application.LoyaltyAdjustmentService.AdjustmentCommand;
+import uz.horecaos.platform.loyalty.domain.AdjustmentReasonPolicy;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore;
 import uz.horecaos.platform.pos.FakePosAdapter;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.web.api.ApiException;
 
 /**
  * ADR 0171 (row 6.3b): keeping a till's bonus balance a mirror of the platform's loyalty ledger, over HTTP, against a real
@@ -156,6 +159,14 @@ class LoyaltyPosSyncHttpTests {
     @Autowired
     @SuppressWarnings("NullAway")
     private ApprovalService approvals;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private AdjustmentReasonPolicyService reasonCodes;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private io.micrometer.core.instrument.MeterRegistry meters;
 
     @Autowired
     @SuppressWarnings("NullAway")
@@ -601,6 +612,93 @@ class LoyaltyPosSyncHttpTests {
     }
 
     @Test
+    @DisplayName(
+            "accepting the till's number still works once the operator reason list is enforced: a sync reason is not an operator's choice")
+    void acceptTillIsNotHeldToTheOperatorReasonList() throws Exception {
+        pointsAccount(DILYA, PHONE_DILYA, 10_000);
+        till.tillCustomer("T-DILYA", PHONE_DILYA, 25_000);
+        reconcile(FAKE_BINDING);
+        Map<String, Object> difference = onlyDiscrepancy();
+        double unlistedBefore = unlistedCodes();
+
+        MvcResult resolved;
+        enforceTheReasonList();
+        try {
+            resolved = resolve(
+                    idOf(difference), intOf(difference.get("version")), "ACCEPT_TILL", "Counted at the till", FINANCE);
+        } finally {
+            reportOnlyTheReasonList();
+        }
+
+        assertThat(resolved.getResponse().getStatus())
+                .as("ADR 0171 Decision 5: the sync's reason codes never pass through the ADR 0165 list")
+                .isEqualTo(200);
+        assertThat(balanceOf(DILYA)).isEqualTo(25_000);
+        assertThat(count("loyalty.entries WHERE reason_code = 'POS_SYNC_CORRECTION'"))
+                .isEqualTo(1);
+        assertThat(unlistedCodes() - unlistedBefore)
+                .as("a code the sync wrote is not an operator typing something off the list, so it is not counted")
+                .isZero();
+        assertInvariants(DILYA);
+    }
+
+    @Test
+    @DisplayName("accepting a held credit still works once the operator reason list is enforced")
+    void acceptingAHeldCreditIsNotHeldToTheOperatorReasonList() throws Exception {
+        pointsAccount(AZIZA, PHONE_AZIZA, 40_000);
+        till.tillCustomer("T-AZIZA", PHONE_AZIZA, 40_000);
+        brandPolicy("loyalty.pos_sync.max_auto_credit_minor", 8_000);
+        mode("PULL");
+        reconcile(FAKE_BINDING);
+        till.tillEarn("T-AZIZA", 20_000);
+        reconcile(FAKE_BINDING);
+        Map<String, Object> held = discrepancy(
+                get(BASE + "/discrepancies?status=OPEN", FINANCE).getResponse().getContentAsString(UTF_8),
+                "CREDIT_HELD");
+
+        MvcResult resolved;
+        enforceTheReasonList();
+        try {
+            resolved = resolve(idOf(held), intOf(held.get("version")), "ACCEPT_TILL", "A wedding party", FINANCE);
+        } finally {
+            reportOnlyTheReasonList();
+        }
+
+        assertThat(resolved.getResponse().getStatus()).isEqualTo(200);
+        assertThat(balanceOf(AZIZA)).isEqualTo(60_000);
+        assertThat(count("loyalty.entries WHERE reason_code = 'POS_SYNC_EARN'")).isEqualTo(1);
+        assertInvariants(AZIZA);
+    }
+
+    @Test
+    @DisplayName(
+            "the exemption is the sync's own entry point: an operator who types a sync reason code is still held to the list")
+    void anOperatorTypingASyncReasonIsStillHeldToTheList() {
+        pointsAccount(DILYA, PHONE_DILYA, 10_000);
+        enforceTheReasonList();
+        try {
+            for (String syncReason : List.of("POS_SYNC_CORRECTION", "POS_SYNC_EARN", "POS_SYNC_SPEND")) {
+                assertThatThrownBy(() -> adjustments.adjust(new AdjustmentCommand(
+                                TENANT,
+                                BRAND,
+                                DILYA,
+                                1_000,
+                                "UZS",
+                                syncReason,
+                                "typed by a person",
+                                ActorRef.user(FINANCE, null),
+                                "typed-" + syncReason,
+                                "")))
+                        .as("%s typed through the operator's adjustment is an unlisted code", syncReason)
+                        .isInstanceOf(ApiException.class);
+            }
+        } finally {
+            reportOnlyTheReasonList();
+        }
+        assertThat(balanceOf(DILYA)).isEqualTo(10_000);
+    }
+
+    @Test
     @DisplayName("accepting the platform's number pushes it to the till and leaves the ledger alone")
     void acceptPlatformPushesTheLedgerNumber() throws Exception {
         pointsAccount(DILYA, PHONE_DILYA, 10_000);
@@ -947,6 +1045,29 @@ class LoyaltyPosSyncHttpTests {
     private static Object state(String body, UUID bindingId, String field) {
         List<Object> found = JsonPath.read(body, binding(bindingId) + "." + field);
         return found.getFirst();
+    }
+
+    private void enforceTheReasonList() {
+        setReasonList(AdjustmentReasonPolicy.Mode.ENFORCE);
+    }
+
+    private void reportOnlyTheReasonList() {
+        setReasonList(AdjustmentReasonPolicy.Mode.REPORT_ONLY);
+    }
+
+    /** The list is a platform document that outlives a test's tenant rows, so every test that flips it flips it back. */
+    private void setReasonList(AdjustmentReasonPolicy.Mode mode) {
+        reasonCodes.author(
+                new AdjustmentReasonPolicy(mode, AdjustmentReasonPolicy.DEFAULT_CODES),
+                reasonCodes.currentVersion(),
+                ActorRef.user("platform-admin", "Platform"),
+                "pos sync test: " + mode);
+    }
+
+    private double unlistedCodes() {
+        return meters.find(AdjustmentReasonPolicyService.UNLISTED_COUNTER_NAME).counters().stream()
+                .mapToDouble(io.micrometer.core.instrument.Counter::count)
+                .sum();
     }
 
     private MvcResult reconcile(UUID bindingId) throws Exception {

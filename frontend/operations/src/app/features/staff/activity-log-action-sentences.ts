@@ -1110,6 +1110,11 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Приложена ссылка фискального агента на коррекцию чека',
       'uz-Latn': 'Fiskal agentning tuzatish havolasi biriktirildi',
     },
+    'fiscal.correction.closed': {
+      en: 'Fiscal receipt correction request closed without a receipt',
+      ru: 'Запрос на коррекцию чека закрыт без чека',
+      'uz-Latn': 'Chekni tuzatish soʻrovi chek chiqarilmasdan yopildi',
+    },
     'fiscal.correction.requested': {
       en: 'Fiscal receipt correction or void requested',
       ru: 'Запрошена коррекция или аннулирование чека',

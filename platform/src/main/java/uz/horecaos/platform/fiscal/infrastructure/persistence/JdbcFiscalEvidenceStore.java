@@ -124,6 +124,7 @@ public class JdbcFiscalEvidenceStore {
     public record CustomerReceiptRow(
             String documentType,
             String receiptUrl,
+            String reasonCode,
             @Nullable Instant registeredAt) {}
 
     /**
@@ -138,7 +139,7 @@ public class JdbcFiscalEvidenceStore {
      */
     public List<CustomerReceiptRow> receiptLinksOfOrder(UUID tenantId, UUID orderId) {
         return jdbc.sql("""
-                        SELECT document_type, receipt_url, COALESCE(registered_at, issued_at) AS registered
+                        SELECT document_type, receipt_url, reason_code, COALESCE(registered_at, issued_at) AS registered
                           FROM fiscal.fiscal_documents
                          WHERE tenant_id = :tenantId AND order_id = :orderId
                            AND status IN ('ISSUED', 'CORRECTION_REQUESTED', 'VOID_REQUESTED')
@@ -148,7 +149,37 @@ public class JdbcFiscalEvidenceStore {
                 .param("tenantId", tenantId)
                 .param("orderId", orderId)
                 .query((row, number) -> new CustomerReceiptRow(
-                        row.getString("document_type"), row.getString("receipt_url"), instant(row, "registered")))
+                        row.getString("document_type"),
+                        row.getString("receipt_url"),
+                        row.getString("reason_code"),
+                        instant(row, "registered")))
+                .list();
+    }
+
+    /** One request that left for the provider, as kept (V0643). The ciphertext is the document's to open. */
+    public record SentRequestRow(
+            UUID documentId, int attempt, Instant sentAt, String protectedRequestReference, boolean linesSynthetic) {}
+
+    /**
+     * Every request that left for any document of an order, oldest first within a document. The newest of a
+     * document's requests is the one its own columns hold; the ones before it are the ones it replaced.
+     */
+    public List<SentRequestRow> sentRequestsOfOrder(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                        SELECT s.document_id, s.attempt, s.sent_at, s.protected_request_reference, s.lines_synthetic
+                          FROM fiscal.fiscal_sent_requests s
+                          JOIN fiscal.fiscal_documents d ON d.tenant_id = s.tenant_id AND d.id = s.document_id
+                         WHERE s.tenant_id = :tenantId AND d.order_id = :orderId
+                         ORDER BY s.document_id, s.attempt
+                        """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, number) -> new SentRequestRow(
+                        row.getObject("document_id", UUID.class),
+                        row.getInt("attempt"),
+                        requiredInstant(row, "sent_at"),
+                        row.getString("protected_request_reference"),
+                        row.getBoolean("lines_synthetic")))
                 .list();
     }
 
@@ -165,11 +196,12 @@ public class JdbcFiscalEvidenceStore {
             Instant requestedAt,
             @Nullable UUID attachedDocumentId,
             @Nullable Instant attachedAt,
+            @Nullable Instant closedAt,
             int version) {}
 
     private static final String CORRECTION_COLUMNS = """
             r.id, r.document_id, d.order_id, r.kind, r.reason_code, r.status, r.requested_by,
-            r.approval_id, r.requested_at, r.attached_document_id, r.attached_at, r.version
+            r.approval_id, r.requested_at, r.attached_document_id, r.attached_at, r.closed_at, r.version
             """;
 
     /** Every request raised against any document of an order, newest first. */
@@ -356,6 +388,7 @@ public class JdbcFiscalEvidenceStore {
                 requiredInstant(row, "requested_at"),
                 row.getObject("attached_document_id", UUID.class),
                 instant(row, "attached_at"),
+                instant(row, "closed_at"),
                 row.getInt("version"));
     }
 
