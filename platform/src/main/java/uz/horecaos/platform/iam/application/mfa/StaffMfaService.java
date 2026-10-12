@@ -35,6 +35,7 @@ import uz.horecaos.platform.iam.application.mfa.MfaMetrics.Outcome;
 import uz.horecaos.platform.iam.application.mfa.MfaMetrics.Step;
 import uz.horecaos.platform.iam.application.mfa.SealedTokens.Opened;
 import uz.horecaos.platform.iam.application.mfa.SealedTokens.Purpose;
+import uz.horecaos.platform.iam.application.sessions.StaffSessionLedger;
 import uz.horecaos.platform.iam.infrastructure.keycloak.StaffDirectGrantClient;
 import uz.horecaos.platform.iam.infrastructure.keycloak.StaffPasswordCheckClient;
 import uz.horecaos.platform.iam.infrastructure.keycloak.StaffPasswordCheckClient.PasswordCheck;
@@ -97,6 +98,7 @@ public class StaffMfaService implements StaffMfaAdministration {
     private final StaffAccountFacts facts;
     private final MfaMetrics metrics;
     private final StaffSecurityAudit audit;
+    private final StaffSessionLedger sessionLedger;
     private final StaffEmailSender mail;
     private final RateLimiter limiter;
     private final CacheManager caches;
@@ -115,6 +117,7 @@ public class StaffMfaService implements StaffMfaAdministration {
             StaffAccountFacts facts,
             MfaMetrics metrics,
             StaffSecurityAudit audit,
+            StaffSessionLedger sessionLedger,
             StaffEmailSender mail,
             RateLimiter limiter,
             CacheManager caches,
@@ -131,6 +134,7 @@ public class StaffMfaService implements StaffMfaAdministration {
         this.facts = facts;
         this.metrics = metrics;
         this.audit = audit;
+        this.sessionLedger = sessionLedger;
         this.mail = mail;
         this.limiter = limiter;
         this.caches = caches;
@@ -208,6 +212,26 @@ public class StaffMfaService implements StaffMfaAdministration {
             String code,
             String password,
             @Nullable String label) {
+        return confirm(subjectId, viaTicket, sealedSecret, code, password, label, null);
+    }
+
+    /**
+     * {@link #confirm(String, boolean, String, String, String, String)}, and when the enrolment began
+     * from a ticket the session it hands back is a sign-in like any other and is recorded for the
+     * sessions card (ADR 0176) -- the person is now signed in on this device and must be able to see it
+     * and end it. A confirmation from a session revokes its proof grant on the spot and records nothing.
+     *
+     * @param userAgent the request's {@code User-Agent}, read only to be reduced to a closed device
+     *     label by {@link StaffSessionLedger}; never stored, logged or returned
+     */
+    public Confirmation confirm(
+            String subjectId,
+            boolean viaTicket,
+            String sealedSecret,
+            String code,
+            String password,
+            @Nullable String label,
+            @Nullable String userAgent) {
         pace(subjectId);
         Opened opened = tokens.open(Purpose.ENROLMENT, subjectId, sealedSecret);
         StaffAccount account = accountOf(subjectId);
@@ -252,6 +276,9 @@ public class StaffMfaService implements StaffMfaAdministration {
         StaffSession session = null;
         if (viaTicket) {
             session = StaffSession.of(issued, false);
+            // The person arrives signed in, which is a sign-in like the one in StaffAuthService and the
+            // sessions card must show it. Never fails the confirmation (ADR 0176 Decision 2).
+            sessionLedger.recordSignIn(subjectId, issued.organizationIds(), issued.sessionId(), userAgent);
         } else {
             keycloak.revoke(issued.refreshToken());
         }
