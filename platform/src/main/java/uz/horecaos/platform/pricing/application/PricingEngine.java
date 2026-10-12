@@ -107,7 +107,7 @@ public class PricingEngine {
         // Stage 2b (ADR 0140). A markup is a price-plane step: it uplifts the
         // lines before any discount looks at them, so a discount is computed on
         // the price the customer would otherwise have paid.
-        PromotionEvaluator.MarkupOutcome markups = evaluateMarkups(inputs, lines, now);
+        PromotionEvaluator.MarkupOutcome markups = evaluateMarkups(inputs, lines, autoAddedLineIds(request), now);
         if (!markups.isEmpty()) {
             List<Quote.QuoteLine> uplifted = new ArrayList<>(lines.size());
             for (Quote.QuoteLine line : lines) {
@@ -150,7 +150,7 @@ public class PricingEngine {
         // extracted, because VAT is owed on what the customer actually pays.
         // Extracting first and discounting after would charge tax on money
         // nobody handed over, and the receipt would not reconcile.
-        PromotionEvaluator.Outcome offers = evaluateOffers(inputs, lines, grossTotal, now);
+        PromotionEvaluator.Outcome offers = evaluateOffers(inputs, lines, grossTotal, autoAddedLineIds(request), now);
 
         long lineDiscountTotal = 0;
         if (!offers.isEmpty()) {
@@ -863,7 +863,11 @@ public class PricingEngine {
      * engine stays a pure function.
      */
     private PromotionEvaluator.Outcome evaluateOffers(
-            PricingInputs inputs, List<Quote.QuoteLine> lines, long grossTotal, java.time.Instant now) {
+            PricingInputs inputs,
+            List<Quote.QuoteLine> lines,
+            long grossTotal,
+            java.util.Set<String> autoAdded,
+            java.time.Instant now) {
 
         PromotionInputs offers = inputs.promotions();
         if (offers == null || offers.promotions().isEmpty()) {
@@ -877,7 +881,8 @@ public class PricingEngine {
 
         return promotions.evaluate(
                 offers.promotions(),
-                new PromotionEvaluator.Basket(inputs.currency(), basketLinesOf(offers, lines), grossTotal, deliveryFee),
+                new PromotionEvaluator.Basket(
+                        inputs.currency(), basketLinesOf(offers, lines, autoAdded), grossTotal, deliveryFee),
                 offers.context(),
                 now);
     }
@@ -887,7 +892,7 @@ public class PricingEngine {
      * priced it, before any discount has touched a line.
      */
     private PromotionEvaluator.MarkupOutcome evaluateMarkups(
-            PricingInputs inputs, List<Quote.QuoteLine> lines, java.time.Instant now) {
+            PricingInputs inputs, List<Quote.QuoteLine> lines, java.util.Set<String> autoAdded, java.time.Instant now) {
 
         PromotionInputs offers = inputs.promotions();
         if (offers == null
@@ -900,13 +905,24 @@ public class PricingEngine {
                 .sum();
         return promotions.evaluateMarkups(
                 offers.promotions(),
-                new PromotionEvaluator.Basket(inputs.currency(), basketLinesOf(offers, lines), goods, 0L),
+                new PromotionEvaluator.Basket(inputs.currency(), basketLinesOf(offers, lines, autoAdded), goods, 0L),
                 offers.context(),
                 now);
     }
 
+    /**
+     * The ids of the request lines an auto-add rule put in the basket (ADR 0158). A rule only ever adds a
+     * plain variant, never a combo, so the quote line carries the request line's own id.
+     */
+    private static java.util.Set<String> autoAddedLineIds(QuoteRequest request) {
+        return request.lines().stream()
+                .filter(QuoteRequest.Line::autoAdded)
+                .map(QuoteRequest.Line::lineId)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
     private static List<PromotionEvaluator.BasketLine> basketLinesOf(
-            PromotionInputs offers, List<Quote.QuoteLine> lines) {
+            PromotionInputs offers, List<Quote.QuoteLine> lines, java.util.Set<String> autoAdded) {
         List<PromotionEvaluator.BasketLine> basketLines = new ArrayList<>(lines.size());
         for (Quote.QuoteLine line : lines) {
             if (line.type() != Quote.LineType.ITEM) {
@@ -925,7 +941,8 @@ public class PricingEngine {
                     membership == null ? java.util.Set.of() : membership.categoryIds(),
                     line.quantity(),
                     line.unitAmount().minor(),
-                    line.finalAmount().minor()));
+                    line.finalAmount().minor(),
+                    autoAdded.contains(line.lineId())));
         }
         return basketLines;
     }
@@ -1134,6 +1151,12 @@ public class PricingEngine {
                             .append(Quantities.plain(line.quantity()));
                     if (line.actualWeightGrams() != null) {
                         canonical.append("@").append(line.actualWeightGrams()).append("g");
+                    }
+                    // ADR 0158. Written only for a line a rule added, so a cart with none hashes exactly as
+                    // it did before: the origin decides which promotions count the line, so a quote priced
+                    // with the line as the customer's must not be accepted for the same line as a rule's.
+                    if (line.autoAdded()) {
+                        canonical.append("!aa");
                     }
                     line.modifierOptionIds().stream()
                             .map(UUID::toString)

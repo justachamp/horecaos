@@ -631,7 +631,8 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 item.nestedModifiers().stream()
                         .map(nested -> new QuoteRequest.NestedModifier(nested.parentOptionId(), nested.optionId()))
                         .toList(),
-                item.actualWeightGrams());
+                item.actualWeightGrams(),
+                item.autoAdded());
     }
 
     /**

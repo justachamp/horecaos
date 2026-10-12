@@ -293,6 +293,10 @@ public record QuoteRequest(
      *               is priced provisionally against its nominal weight. Only
      *               meaningful for a catchweight variant; pricing refuses it on
      *               any other
+     * @param autoAdded ADR 0158 (open input 2): an auto-add rule put this line in the basket. It is
+     *               priced like any other line and counts as one for every money condition, but it
+     *               never counts toward a promotion that names products, variants or categories. It
+     *               enters the context hash, because it changes which promotions apply
      */
     public record Line(
             String lineId,
@@ -301,7 +305,8 @@ public record QuoteRequest(
             List<UUID> modifierOptionIds,
             List<ComboPick> comboPicks,
             List<NestedModifier> nestedModifiers,
-            @Nullable Integer actualWeightGrams) {
+            @Nullable Integer actualWeightGrams,
+            boolean autoAdded) {
 
         public Line {
             Objects.requireNonNull(lineId, "A line id is required");
@@ -328,6 +333,18 @@ public record QuoteRequest(
 
         /** 64 for {@code quote_lines.line_id}, less {@code ~} and a three-digit position. */
         public static final int MAX_COMBO_LINE_ID_LENGTH = 60;
+
+        /** A line the customer chose, which is every line before ADR 0158. */
+        public Line(
+                String lineId,
+                UUID variantId,
+                BigDecimal quantity,
+                List<UUID> modifierOptionIds,
+                List<ComboPick> comboPicks,
+                List<NestedModifier> nestedModifiers,
+                @Nullable Integer actualWeightGrams) {
+            this(lineId, variantId, quantity, modifierOptionIds, comboPicks, nestedModifiers, actualWeightGrams, false);
+        }
 
         /** A line priced provisionally (no weight captured), with no combo and no nested selection. */
         public Line(String lineId, UUID variantId, BigDecimal quantity, List<UUID> modifierOptionIds) {

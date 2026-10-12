@@ -322,6 +322,79 @@ class PromotionEvaluatorRuleEngineTests {
         assertThat(outcome.totalDiscountMinor()).isEqualTo(12_000L);
     }
 
+    /** A pizza box a rule added: it sits in the Pizza category, so a category predicate would match it. */
+    private static BasketLine box(boolean addedByARule) {
+        BasketLine box = new BasketLine(
+                "box", UUID.nameUUIDFromBytes("box".getBytes()), null, Set.of(PIZZA_CATEGORY), 1, 1_000L, 1_000L);
+        return addedByARule ? box.asAutoAdded() : box;
+    }
+
+    private Basket pizzaBoxAndColas(int pizzas, int colas, boolean boxAddedByARule) {
+        return new Basket(
+                "UZS",
+                List.of(
+                        new BasketLine(
+                                "pizza",
+                                MARGHERITA_VARIANT,
+                                MARGHERITA,
+                                Set.of(PIZZA_CATEGORY),
+                                pizzas,
+                                45_000L,
+                                45_000L * pizzas),
+                        box(boxAddedByARule),
+                        new BasketLine("cola", COLA_VARIANT, COLA, Set.of(), colas, 12_000L, 12_000L * colas)),
+                45_000L * pizzas + 1_000L + 12_000L * colas,
+                0L);
+    }
+
+    @Test
+    @DisplayName("ADR 0158: a line a rule added never counts in M of a promotion that names a category, so a box "
+            + "cannot earn a free Cola")
+    void anAutoAddedLineDoesNotTipAGiftTrigger() {
+        Promotion perTwoPizzas = freeCola(3, 2, "PER_MULTIPLE");
+
+        Outcome chosen =
+                evaluator.evaluate(List.of(perTwoPizzas), pizzaBoxAndColas(3, 3, false), clickContext(Set.of()), NOW);
+        Outcome added =
+                evaluator.evaluate(List.of(perTwoPizzas), pizzaBoxAndColas(3, 3, true), clickContext(Set.of()), NOW);
+
+        assertThat(chosen.totalDiscountMinor())
+                .as("control: three pizzas and a box the customer chose are four units, so floor(4 / 2) = 2 Colas")
+                .isEqualTo(24_000L);
+        assertThat(added.totalDiscountMinor())
+                .as("three pizzas are three units, so floor(3 / 2) = 1 Cola, whatever a rule added beside them")
+                .isEqualTo(12_000L);
+    }
+
+    @Test
+    @DisplayName("ADR 0158: a promotion that names no item counts a line a rule added like any other")
+    void anAutoAddedLineCountsForAPromotionThatNamesNoItem() {
+        Promotion anyTwo = rule(
+                "FREECOLA-ANY",
+                Promotion.Scope.ITEM,
+                "gift",
+                false,
+                0,
+                new Action(
+                        1,
+                        Action.Type.FREE_ITEM,
+                        ops(
+                                "variantIds",
+                                List.of(COLA_VARIANT.toString()),
+                                "quantity",
+                                3L,
+                                "triggerQuantity",
+                                2L,
+                                "mode",
+                                "PER_MULTIPLE")));
+
+        Outcome added = evaluator.evaluate(List.of(anyTwo), pizzaBoxAndColas(1, 2, true), clickContext(Set.of()), NOW);
+
+        assertThat(added.totalDiscountMinor())
+                .as("one pizza, the box and two Colas are four units: floor(4 / 2) = 2 free Colas")
+                .isEqualTo(24_000L);
+    }
+
     @Test
     @DisplayName("PER_MULTIPLE: five pizzas, trigger 2, quantity 3 gives two free on one line or on five")
     void perMultipleIsPerPromotionNotPerLine() {

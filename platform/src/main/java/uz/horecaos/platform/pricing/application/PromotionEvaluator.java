@@ -515,22 +515,35 @@ public class PromotionEvaluator {
 
     // -------------------------------------------------------------- matching
 
-    /** Which of the basket's lines this promotion's item conditions name. */
+    /**
+     * Which of the basket's lines this promotion's item conditions name.
+     *
+     * <p>ADR 0158 (open input 2): a line an auto-add rule put in the basket is an ordinary line for a
+     * promotion that names no product, variant or category, and is never matched by one that does. This
+     * is the one place the lines a promotion counts and discounts are chosen, so {@code M} in ADR
+     * 0140's gift rule, a minimum quantity and the lines a percentage comes off all follow it, and a bag
+     * cannot tip a "three for two". That holds for an {@code exclude} predicate as well: it names a
+     * category, and the bag is not one of the customer's choices it was written for.
+     */
     private Set<String> matchingLines(Promotion promotion, Basket basket) {
         Set<String> matched =
                 basket.lines().stream().map(BasketLine::lineId).collect(Collectors.toCollection(LinkedHashSet::new));
 
+        boolean namesAnItem = false;
         for (Condition condition : promotion.conditions()) {
             switch (condition.type()) {
                 case PRODUCT -> {
+                    namesAnItem = true;
                     Set<UUID> ids = condition.operands().requireIds("productIds");
                     apply(matched, condition, idsOf(basket, line -> ids.contains(line.productId())));
                 }
                 case VARIANT -> {
+                    namesAnItem = true;
                     Set<UUID> ids = condition.operands().requireIds("variantIds");
                     apply(matched, condition, idsOf(basket, line -> ids.contains(line.variantId())));
                 }
                 case CATEGORY -> {
+                    namesAnItem = true;
                     Set<UUID> ids = condition.operands().requireIds("categoryIds");
                     apply(
                             matched,
@@ -541,6 +554,9 @@ public class PromotionEvaluator {
                     /* Not a line predicate. Handled in firstFailingCondition. */
                 }
             }
+        }
+        if (namesAnItem) {
+            matched.removeAll(idsOf(basket, BasketLine::autoAdded));
         }
         return matched;
     }
@@ -1114,6 +1130,9 @@ public class PromotionEvaluator {
      * One priced line of the basket, as stages 3 and 4 see it.
      *
      * @param productId null when the variant matched no catalog membership row.
+     * @param autoAdded ADR 0158 (open input 2): an auto-add rule put this line in the basket. It is an
+     *        ordinary line for every money condition, and for the quantity and lines of a promotion
+     *        that names no product, variant or category; a promotion that names one never counts it
      */
     public record BasketLine(
             String lineId,
@@ -1122,11 +1141,30 @@ public class PromotionEvaluator {
             Set<UUID> categoryIds,
             BigDecimal quantity,
             long unitAmountMinor,
-            long lineGrossMinor) {
+            long lineGrossMinor,
+            boolean autoAdded) {
 
         public BasketLine {
             categoryIds = categoryIds == null ? Set.of() : Set.copyOf(categoryIds);
             quantity = Quantities.normalise(quantity);
+        }
+
+        /** A line the customer chose, which is every line before ADR 0158. */
+        public BasketLine(
+                String lineId,
+                UUID variantId,
+                @Nullable UUID productId,
+                Set<UUID> categoryIds,
+                BigDecimal quantity,
+                long unitAmountMinor,
+                long lineGrossMinor) {
+            this(lineId, variantId, productId, categoryIds, quantity, unitAmountMinor, lineGrossMinor, false);
+        }
+
+        /** The same line, marked as one an auto-add rule put in the basket. */
+        public BasketLine asAutoAdded() {
+            return new BasketLine(
+                    lineId, variantId, productId, categoryIds, quantity, unitAmountMinor, lineGrossMinor, true);
         }
 
         /** A whole number of units, which is every line there was before ADR 0137. */

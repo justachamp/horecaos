@@ -1509,13 +1509,16 @@ public class CartService {
 
     /** One cart line, as pricing is asked about it: the single place a stored line becomes a pricing item. */
     CartPricingPort.PricingCommand.Item pricingItemOf(CartLineRow line) {
-        return new CartPricingPort.PricingCommand.Item(
+        CartPricingPort.PricingCommand.Item item = new CartPricingPort.PricingCommand.Item(
                 line.lineKey(),
                 line.variantId(),
                 line.quantity(),
                 modifierIdsOf(line),
                 pricingPicks(comboPicksOf(line)),
                 pricingNested(nestedModifiersOf(line)));
+        // ADR 0158 (open input 2): pricing is told a line's origin, never the rule behind it, so a promotion
+        // that names products, variants or categories can leave a rule's line out of what it counts.
+        return line.injected() ? item.asAutoAdded() : item;
     }
 
     private static List<CartPricingPort.PricingCommand.ComboPick> pricingPicks(List<ComboPick> picks) {

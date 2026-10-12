@@ -231,8 +231,12 @@ final class AmendmentBasket {
         Integer captured = capturedWeights.get(line.lineId());
         Integer weight = captured != null ? captured : changed ? null : line.actualWeightGrams();
 
-        return new PricingCommand.Item(
+        PricingCommand.Item item = new PricingCommand.Item(
                 line.lineId().toString(), line.sourceVariantId(), quantity, chosen, List.of(), nested, weight);
+        // ADR 0158 (open input 2): an amended order is repriced as it was bought, so a line a rule added is
+        // still the rule's line, and a promotion that names products, variants or categories still does not
+        // count it.
+        return line.autoAdded() ? item.asAutoAdded() : item;
     }
 
     private static PricingCommand.Item comboItem(
