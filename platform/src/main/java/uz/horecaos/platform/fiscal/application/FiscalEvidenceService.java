@@ -85,6 +85,7 @@ public class FiscalEvidenceService {
     private final PolicyResolver policies;
     private final OrderMarkCounts marks;
     private final Clock clock;
+    private final FiscalReceiptLinks receiptLinks;
 
     public FiscalEvidenceService(
             JdbcFiscalEvidenceStore store,
@@ -93,7 +94,8 @@ public class FiscalEvidenceService {
             AuditRecorder audit,
             PolicyResolver policies,
             OrderMarkCounts marks,
-            Clock clock) {
+            Clock clock,
+            FiscalReceiptLinks receiptLinks) {
         this.store = store;
         this.protection = protection;
         this.json = json;
@@ -101,6 +103,7 @@ public class FiscalEvidenceService {
         this.policies = policies;
         this.marks = marks;
         this.clock = clock;
+        this.receiptLinks = receiptLinks;
     }
 
     /** Why an identifier is being looked at in full. A closed set, never free text. */
@@ -517,8 +520,20 @@ public class FiscalEvidenceService {
     @Transactional(readOnly = true)
     public List<CustomerReceipt> customerReceipts(UUID tenantId, UUID orderId) {
         return store.receiptLinksOfOrder(tenantId, orderId).stream()
+                .filter(row ->
+                        !typedByAnOperator(row.reasonCode()) || receiptLinks.isTaxAuthorityLink(row.receiptUrl()))
                 .map(row -> new CustomerReceipt(row.documentType(), row.receiptUrl(), row.registeredAt()))
                 .toList();
+    }
+
+    /**
+     * Whether the document's link is one a person typed when attaching the agent's reference, and not one a
+     * provider reported. A provider's link is the provider's; a typed one is shown to a customer only if it
+     * is the tax authority's, whether or not it was checked at the door (the check is newer than some rows).
+     */
+    private static boolean typedByAnOperator(String reasonCode) {
+        return FiscalCorrectionService.CORRECTION_ATTACHED.equals(reasonCode)
+                || FiscalCorrectionService.VOID_ATTACHED.equals(reasonCode);
     }
 
     // ------------------------------------------------------------ payment types

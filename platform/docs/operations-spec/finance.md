@@ -125,7 +125,11 @@ split, marking as a count, identifiers masked unless the caller holds
 `fiscal.evidence.reveal` and states a purpose), `GET .../fiscal/payment-types`
 (derived, not settable), and the correction and void requests
 (`POST .../fiscal/documents/{documentId}/correction-requests`,
-`POST .../fiscal/correction-requests/{requestId}/attachments`,
+`POST .../fiscal/correction-requests/{requestId}/attachments` — under a second
+person's approval of the exact reference typed, and only with a link on the tax
+authority's own site —, `POST .../fiscal/correction-requests/{requestId}/closures`
+— the way out of a request that will not be attached: the agent declined it, or it was
+raised in error; the document is issued again and nothing is filed —, and
 `GET .../fiscal/correction-requests`). `retry` now answers 409 with `reasonCode
 FISCAL_LINES_NOT_BUILT` where only the one-line placeholder receipt could be
 filed and the environment is not a sandbox the platform has allowed it in.

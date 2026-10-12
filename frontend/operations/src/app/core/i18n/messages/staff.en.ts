@@ -421,6 +421,8 @@ export const staffEn = {
 
   // Fiscal receipt correction approval (ADR 0166)
   'staff.approvals.action.fiscalCorrectionRequest': 'Fiscal receipt correction or void',
+  'staff.approvals.action.fiscalCorrectionAttach':
+    'Attaching a fiscal agent’s reference to a receipt',
   // end: Fiscal receipt correction approval (ADR 0166)
   'staff.approvals.tab.pending': 'Waiting',
   'staff.approvals.tab.decided': 'Decided',

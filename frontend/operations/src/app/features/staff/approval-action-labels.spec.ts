@@ -16,6 +16,15 @@ describe('approvalActionLabelKey', () => {
     expect(messagesUzLatn[key!]).not.toBe(messagesEn[key!]);
   });
 
+  it('names the attachment of the agent’s reference, which a second approver also decides (ADR 0166)', () => {
+    const key = approvalActionLabelKey('fiscal.correction.attach');
+
+    expect(key).toBe('staff.approvals.action.fiscalCorrectionAttach');
+    expect(messagesEn[key!]).toBe('Attaching a fiscal agent’s reference to a receipt');
+    expect(messagesRu[key!]).not.toBe(messagesEn[key!]);
+    expect(messagesUzLatn[key!]).not.toBe(messagesEn[key!]);
+  });
+
   it('answers null for a code it does not name, so the page shows the code and not a blank', () => {
     expect(approvalActionLabelKey('something.new.entirely')).toBeNull();
   });

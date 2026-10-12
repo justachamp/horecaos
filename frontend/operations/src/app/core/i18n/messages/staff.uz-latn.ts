@@ -425,6 +425,7 @@ export const staffUzLatn: AreaMessages<typeof staffEn> = {
 
   // Fiscal receipt correction approval (ADR 0166)
   'staff.approvals.action.fiscalCorrectionRequest': 'Fiskal chekni tuzatish yoki bekor qilish',
+  'staff.approvals.action.fiscalCorrectionAttach': 'Fiskal agent maʻlumotlarini chekka biriktirish',
   // end: Fiscal receipt correction approval (ADR 0166)
   'staff.approvals.tab.pending': 'Kutilmoqda',
   'staff.approvals.tab.decided': 'Hal qilingan',

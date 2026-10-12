@@ -424,6 +424,7 @@ export const staffRu: AreaMessages<typeof staffEn> = {
 
   // Fiscal receipt correction approval (ADR 0166)
   'staff.approvals.action.fiscalCorrectionRequest': 'Коррекция или аннулирование фискального чека',
+  'staff.approvals.action.fiscalCorrectionAttach': 'Привязка данных фискального агента к чеку',
   // end: Fiscal receipt correction approval (ADR 0166)
   'staff.approvals.tab.pending': 'Ожидают',
   'staff.approvals.tab.decided': 'Решённые',

@@ -42,6 +42,7 @@ import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.web.api.AggregateVersion;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ApiMoney;
+import uz.horecaos.platform.web.api.ApiProblem;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
@@ -245,7 +246,12 @@ public class OperationsFiscalEvidenceController {
             summary = "Attach the reference the agent returned, closing a correction or void request",
             description = "Creates the linked CORRECTION or REFUND document from the reference the "
                     + "tenant's agent filed and moves the original to CORRECTED or VOIDED. It never "
-                    + "edits the original's evidence. If-Match is the original document's version.")
+                    + "edits the original's evidence. Under an ADR 0027 approval bound to the reference "
+                    + "typed: the first call answers 422 SECOND_APPROVER_REQUIRED naming approvalRequestId, "
+                    + "and once a second person has approved it the same reference goes through (a different "
+                    + "one needs its own approval). The link must be an https page of the tax authority's own "
+                    + "site, else 400 VALIDATION_FAILED on receiptUrl before any approval is asked for. "
+                    + "If-Match is the original document's version.")
     public ResponseEntity<AttachedResponse> attach(
             @PathVariable UUID tenantId,
             @PathVariable UUID requestId,
@@ -254,7 +260,7 @@ public class OperationsFiscalEvidenceController {
 
         long expected = AggregateVersion.requireIfMatch(httpRequest);
         try {
-            FiscalCorrectionService.Attached attached = corrections.attach(
+            FiscalCorrectionService.AttachResult result = corrections.attach(
                     tenantId,
                     requestId,
                     (int) expected,
@@ -268,14 +274,74 @@ public class OperationsFiscalEvidenceController {
                             body.registeredAt()),
                     actor(),
                     httpRequest.getHeader("X-Correlation-Id"));
-            return ResponseEntity.ok(AttachedResponse.of(
-                    attached,
-                    publicNumberOf(tenantId, attached.request().orderId()).orElse(null)));
+            return switch (result) {
+                case FiscalCorrectionService.AttachResult.Done done ->
+                    ResponseEntity.ok(AttachedResponse.of(
+                            done.attached(),
+                            publicNumberOf(tenantId, done.attached().request().orderId())
+                                    .orElse(null)));
+                case FiscalCorrectionService.AttachResult.Awaiting awaiting ->
+                    throw awaitingApproval(awaiting.outcome(), "attached");
+            };
         } catch (FiscalCorrectionService.UnknownRequestException
                 | FiscalDocumentService.UnknownDocumentException missing) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
         } catch (FiscalCorrectionService.RequestNotOpenException closed) {
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, closed.getMessage(), Map.of("status", closed.status()));
+        } catch (FiscalCorrectionService.NotCorrectableException refused) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT,
+                    refused.getMessage(),
+                    Map.of("status", refused.state().name()));
+        } catch (FiscalCorrectionService.ReceiptLinkRefusedException notTheTaxAuthority) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    notTheTaxAuthority.getMessage(),
+                    Map.of(
+                            "errors",
+                            List.of(new ApiProblem.FieldError(
+                                    "receiptUrl",
+                                    "RECEIPT_URL_NOT_TAX_AUTHORITY",
+                                    "Use the link of the tax authority's own page for the receipt"))));
+        } catch (FiscalDocumentService.StaleDocumentException stale) {
+            throw ApiException.staleVersion(stale.expected(), stale.actual());
+        }
+    }
+
+    @PostMapping("/fiscal/correction-requests/{requestId}/closures")
+    @RequiresCapability(value = Capability.FISCAL_DOCUMENT_RESOLVE, scope = ScopeType.TENANT, mutating = true)
+    @Operation(
+            summary = "Close a correction or void request without a receipt",
+            description = "The way out of a request that is not going to be attached: the tenant's fiscal "
+                    + "agent declined to issue it (DECLINED) or it was raised in error (CANCELLED). The "
+                    + "document returns to ISSUED with its evidence exactly as it was; nothing is filed, "
+                    + "attached or invented, and the request leaves the worklist. A note says why. "
+                    + "A request that has been attached or already closed answers 409. If-Match is the "
+                    + "document's version, as for an attachment.")
+    public ResponseEntity<ClosedResponse> close(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID requestId,
+            @Valid @RequestBody CloseRequestBody body,
+            HttpServletRequest httpRequest) {
+
+        long expected = AggregateVersion.requireIfMatch(httpRequest);
+        try {
+            FiscalCorrectionService.Closed closed = corrections.close(
+                    tenantId,
+                    requestId,
+                    (int) expected,
+                    body.outcome(),
+                    body.note().strip(),
+                    actor(),
+                    httpRequest.getHeader("X-Correlation-Id"));
+            return ResponseEntity.ok(ClosedResponse.of(
+                    closed, publicNumberOf(tenantId, closed.request().orderId()).orElse(null)));
+        } catch (FiscalCorrectionService.UnknownRequestException
+                | FiscalDocumentService.UnknownDocumentException missing) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, missing.getMessage());
+        } catch (FiscalCorrectionService.RequestNotOpenException closedAlready) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_CONFLICT, closedAlready.getMessage(), Map.of("status", closedAlready.status()));
         } catch (FiscalCorrectionService.NotCorrectableException refused) {
             throw new ApiException(
                     ErrorCode.RESOURCE_CONFLICT,
@@ -291,18 +357,24 @@ public class OperationsFiscalEvidenceController {
      * is named, and the remedy is to wait for it, not to change the call.
      */
     private static ApiException awaitingApproval(ApprovalOutcome outcome) {
+        return awaitingApproval(outcome, "corrected");
+    }
+
+    /** @param what what the decision is about, in the past participle: {@code corrected} or {@code attached} */
+    private static ApiException awaitingApproval(ApprovalOutcome outcome, String what) {
+        String subject = "attached".equals(what) ? "Attaching the agent's reference" : "Correcting a fiscal receipt";
         return switch (outcome) {
             case ApprovalOutcome.Pending pending ->
                 new ApiException(
                         ErrorCode.SECOND_APPROVER_REQUIRED,
-                        "Correcting a fiscal receipt needs a second approver. Approval request %s is pending."
-                                .formatted(pending.requestId()),
+                        "%s needs a second approver. Approval request %s is pending."
+                                .formatted(subject, pending.requestId()),
                         Map.of("approvalRequestId", pending.requestId().toString(), "approvalStatus", "PENDING"));
             case ApprovalOutcome.Declined declined ->
                 new ApiException(
                         ErrorCode.SECOND_APPROVER_REQUIRED,
-                        "Approval request %s was declined, so this receipt is not corrected."
-                                .formatted(declined.requestId()),
+                        "Approval request %s was declined, so this receipt is not %s."
+                                .formatted(declined.requestId(), what),
                         Map.of("approvalRequestId", declined.requestId().toString(), "approvalStatus", "DECLINED"));
             default -> new ApiException(ErrorCode.SECOND_APPROVER_REQUIRED, "A second approver is required");
         };
@@ -580,6 +652,16 @@ public class OperationsFiscalEvidenceController {
             @Nullable @Size(max = 64) String terminalId,
             @Nullable Instant registeredAt) {}
 
+    /**
+     * Why a request is closed without a receipt, and the sentence that says so.
+     *
+     * @param outcome {@code DECLINED} (the tenant's fiscal agent would not issue it) or {@code CANCELLED}
+     *     (raised in error, or no longer needed)
+     */
+    public record CloseRequestBody(
+            @NotNull FiscalCorrectionService.Closure outcome,
+            @NotBlank @Size(max = 255) String note) {}
+
     /** @param publicOrderNumber the number the order is known by, null only if the order cannot be resolved */
     public record CorrectionRequestResponse(
             UUID requestId,
@@ -594,6 +676,7 @@ public class OperationsFiscalEvidenceController {
             Instant requestedAt,
             @Nullable UUID attachedDocumentId,
             @Nullable Instant attachedAt,
+            @Nullable Instant closedAt,
             int version) {
 
         static CorrectionRequestResponse of(CorrectionRow row, @Nullable String publicOrderNumber) {
@@ -610,6 +693,7 @@ public class OperationsFiscalEvidenceController {
                     row.requestedAt(),
                     row.attachedDocumentId(),
                     row.attachedAt(),
+                    row.closedAt(),
                     row.version());
         }
     }
@@ -620,6 +704,14 @@ public class OperationsFiscalEvidenceController {
                 CorrectionRow row, int documentVersion, @Nullable String publicOrderNumber) {
             return new CorrectionRequestedResponse(
                     CorrectionRequestResponse.of(row, publicOrderNumber), documentVersion);
+        }
+    }
+
+    public record ClosedResponse(CorrectionRequestResponse request, int documentVersion) {
+
+        static ClosedResponse of(FiscalCorrectionService.Closed closed, @Nullable String publicOrderNumber) {
+            return new ClosedResponse(
+                    CorrectionRequestResponse.of(closed.request(), publicOrderNumber), closed.documentVersion());
         }
     }
 

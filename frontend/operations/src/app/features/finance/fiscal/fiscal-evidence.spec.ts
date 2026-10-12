@@ -127,6 +127,7 @@ type EvidenceApiMock = {
   forOrder: ReturnType<typeof vi.fn>;
   requestCorrection: ReturnType<typeof vi.fn>;
   attach: ReturnType<typeof vi.fn>;
+  closeRequest: ReturnType<typeof vi.fn>;
 };
 
 function configure(options: {
@@ -144,6 +145,7 @@ function configure(options: {
     attach: vi
       .fn()
       .mockResolvedValue({ request: {}, linkedDocumentId: 'linked-1', documentVersion: 5 }),
+    closeRequest: vi.fn().mockResolvedValue({ request: {}, documentVersion: 6 }),
   };
   const held = new Set<string>(options.capabilities ?? []);
   TestBed.configureTestingModule({
@@ -917,6 +919,117 @@ describe('FiscalEvidence: the fiscal evidence of one order (row X.2, ADR 0166)',
       expect(byTestId(fixture, 'fiscal-evidence-attach-toggle')).not.toBeNull();
     });
 
+    describe('a request that will not be attached has a way out that files nothing', () => {
+      const waiting = (overrides: Partial<FiscalEvidenceDocumentView> = {}) =>
+        document_({
+          status: 'CORRECTION_REQUESTED',
+          version: 5,
+          correction: {
+            requestId: 'req-1',
+            kind: 'CORRECTION',
+            status: 'REQUESTED',
+            requestedAt: '2026-10-08T10:00:00Z',
+            attachedDocumentId: null,
+          },
+          ...overrides,
+        });
+
+      it('offers it only for a request still waiting, and only to a role that can resolve', async () => {
+        configure({ masked: view([waiting()]) });
+        expect(byTestId(await render(), 'fiscal-evidence-close-toggle')).toBeNull();
+
+        TestBed.resetTestingModule();
+        configure({ masked: view([document_()]), capabilities: ['FISCAL_DOCUMENT_RESOLVE'] });
+        expect(byTestId(await render(), 'fiscal-evidence-close-toggle')).toBeNull();
+
+        TestBed.resetTestingModule();
+        configure({ masked: view([waiting()]), capabilities: ['FISCAL_DOCUMENT_RESOLVE'] });
+        const fixture = await render();
+        expect(byTestId(fixture, 'fiscal-evidence-close-toggle')).not.toBeNull();
+        expect(
+          byTestId(fixture, 'fiscal-evidence-attach-toggle'),
+          'closing is offered beside attaching and does not replace it',
+        ).not.toBeNull();
+      });
+
+      it('needs a reason from the two it knows and a note, and closes at the document’s version', async () => {
+        const api = configure({
+          masked: view([waiting()]),
+          capabilities: ['FISCAL_DOCUMENT_RESOLVE'],
+        });
+        const fixture = await render();
+        (byTestId(fixture, 'fiscal-evidence-close-toggle') as HTMLButtonElement).click();
+        fixture.detectChanges();
+
+        const submit = byTestId(fixture, 'fiscal-evidence-close-submit') as HTMLButtonElement;
+        expect(submit.disabled).toBe(true);
+        choose(fixture, 'fiscal-evidence-close-outcome', 'DECLINED');
+        expect(submit.disabled, 'a reason alone is not a closure').toBe(true);
+        type(fixture, 'fiscal-evidence-close-note', '  The agent refused  ');
+        expect(submit.disabled).toBe(false);
+        submit.click();
+        await settle(fixture);
+
+        expect(api.closeRequest).toHaveBeenCalledWith(TENANT, 'req-1', 5, {
+          outcome: 'DECLINED',
+          note: 'The agent refused',
+        });
+        expect(api.attach).not.toHaveBeenCalled();
+        expect(api.forOrder).toHaveBeenCalledTimes(2);
+        expect(byTestId(fixture, 'fiscal-evidence-close-form')).toBeNull();
+        expect(textOf(fixture, 'fiscal-evidence-notice')).toContain('The request is closed');
+      });
+
+      it('says why a closure was refused and keeps what was typed', async () => {
+        const api = configure({
+          masked: view([waiting()]),
+          capabilities: ['FISCAL_DOCUMENT_RESOLVE'],
+        });
+        api.closeRequest.mockRejectedValue(
+          new ApiError(ApiErrorCode.STALE_VERSION, 409, null, null),
+        );
+        const fixture = await render();
+        (byTestId(fixture, 'fiscal-evidence-close-toggle') as HTMLButtonElement).click();
+        fixture.detectChanges();
+        choose(fixture, 'fiscal-evidence-close-outcome', 'CANCELLED');
+        type(fixture, 'fiscal-evidence-close-note', 'Wrong order');
+        (byTestId(fixture, 'fiscal-evidence-close-submit') as HTMLButtonElement).click();
+        await settle(fixture);
+
+        expect(byTestId(fixture, 'fiscal-evidence-close-error')).not.toBeNull();
+        expect((byTestId(fixture, 'fiscal-evidence-close-note') as HTMLInputElement).value).toBe(
+          'Wrong order',
+        );
+      });
+
+      it('says what a closed request was, and offers neither to attach nor to close it again', async () => {
+        configure({
+          masked: view([
+            document_({
+              correction: {
+                requestId: 'req-2',
+                kind: 'VOID',
+                status: 'DECLINED',
+                requestedAt: '2026-10-08T10:00:00Z',
+                attachedDocumentId: null,
+              },
+            }),
+          ]),
+          capabilities: ['FISCAL_DOCUMENT_RESOLVE'],
+        });
+        const fixture = await render();
+
+        expect(textOf(fixture, 'fiscal-evidence-correction')).toContain('fiscal agent declined');
+        expect(textOf(fixture, 'fiscal-evidence-correction')).not.toContain('has not answered');
+        expect(byTestId(fixture, 'fiscal-evidence-close-toggle')).toBeNull();
+        expect(byTestId(fixture, 'fiscal-evidence-attach-toggle')).toBeNull();
+        expect(
+          byTestId(fixture, 'fiscal-evidence-request-toggle'),
+          'the receipt is in force again, so it can be asked about afresh',
+        ).not.toBeNull();
+      });
+    });
+
     it('attaches only a reference with an https link, to the request, at the original’s version', async () => {
       const api = configure({
         masked: view([
@@ -957,6 +1070,97 @@ describe('FiscalEvidence: the fiscal evidence of one order (row X.2, ADR 0166)',
       });
       expect(textOf(fixture, 'fiscal-evidence-notice')).toContain('attached as a linked document');
       expect(api.forOrder).toHaveBeenCalledTimes(2);
+    });
+
+    describe('the attachment is approved by a second person', () => {
+      async function openAttachForm(): Promise<{
+        fixture: ComponentFixture<FiscalEvidence>;
+        api: EvidenceApiMock;
+      }> {
+        const api = configure({
+          masked: view([
+            document_({
+              status: 'CORRECTION_REQUESTED',
+              correction: {
+                requestId: 'req-1',
+                kind: 'CORRECTION',
+                status: 'REQUESTED',
+                requestedAt: '2026-10-08T10:00:00Z',
+                attachedDocumentId: null,
+              },
+            }),
+          ]),
+          capabilities: ['FISCAL_DOCUMENT_RESOLVE'],
+        });
+        const fixture = await render();
+        (byTestId(fixture, 'fiscal-evidence-attach-toggle') as HTMLButtonElement).click();
+        fixture.detectChanges();
+        type(fixture, 'fiscal-evidence-attach-sign', 'SIGN-NEW');
+        type(fixture, 'fiscal-evidence-attach-number', 'R-NEW');
+        type(fixture, 'fiscal-evidence-attach-url', 'https://ofd.soliq.uz/epi?t=NEW');
+        return { fixture, api };
+      }
+
+      it('says a second approver is needed, names the approval, and keeps what was typed', async () => {
+        const { fixture, api } = await openAttachForm();
+        api.attach.mockRejectedValue(
+          new ApiError(
+            'SECOND_APPROVER_REQUIRED',
+            422,
+            { status: 422, approvalRequestId: 'approval-91', approvalStatus: 'PENDING' },
+            null,
+          ),
+        );
+        (byTestId(fixture, 'fiscal-evidence-attach-submit') as HTMLButtonElement).click();
+        await settle(fixture);
+
+        expect(textOf(fixture, 'fiscal-evidence-attach-waiting')).toContain('approval-91');
+        expect(textOf(fixture, 'fiscal-evidence-attach-waiting')).toContain(
+          'Waiting for a second approver',
+        );
+        expect(byTestId(fixture, 'fiscal-evidence-attach-error')).toBeNull();
+        expect((byTestId(fixture, 'fiscal-evidence-attach-number') as HTMLInputElement).value).toBe(
+          'R-NEW',
+        );
+      });
+
+      it('says a declined approval is a refusal and not a wait', async () => {
+        const { fixture, api } = await openAttachForm();
+        api.attach.mockRejectedValue(
+          new ApiError(
+            'SECOND_APPROVER_REQUIRED',
+            422,
+            { status: 422, approvalRequestId: 'approval-92', approvalStatus: 'DECLINED' },
+            null,
+          ),
+        );
+        (byTestId(fixture, 'fiscal-evidence-attach-submit') as HTMLButtonElement).click();
+        await settle(fixture);
+
+        expect(textOf(fixture, 'fiscal-evidence-attach-waiting')).toContain('declined');
+        expect(textOf(fixture, 'fiscal-evidence-attach-waiting')).toContain('not attached');
+      });
+
+      it('says a link that is not the tax authority’s was refused, without echoing it', async () => {
+        const { fixture, api } = await openAttachForm();
+        type(fixture, 'fiscal-evidence-attach-url', 'https://elsewhere.example/receipt');
+        api.attach.mockRejectedValue(
+          new ApiError(
+            'VALIDATION_FAILED',
+            400,
+            {
+              status: 400,
+              errors: [{ field: 'receiptUrl', code: 'RECEIPT_URL_NOT_TAX_AUTHORITY' }],
+            },
+            null,
+          ),
+        );
+        (byTestId(fixture, 'fiscal-evidence-attach-submit') as HTMLButtonElement).click();
+        await settle(fixture);
+
+        expect(textOf(fixture, 'fiscal-evidence-attach-error')).toContain('soliq.uz');
+        expect(byTestId(fixture, 'fiscal-evidence-attach-waiting')).toBeNull();
+      });
     });
 
     it('says why an attachment was refused', async () => {

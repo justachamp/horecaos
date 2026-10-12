@@ -116,6 +116,11 @@ export const financePaths = {
     return `${OPERATIONS}/${enc(tenantId)}/fiscal/correction-requests/${enc(requestId)}/attachments`;
   },
 
+  /** `OperationsFiscalEvidenceController.close` -- the way out of a request that will not be attached. */
+  fiscalCorrectionClosures(tenantId: string, requestId: string): string {
+    return `${OPERATIONS}/${enc(tenantId)}/fiscal/correction-requests/${enc(requestId)}/closures`;
+  },
+
   // ---------------------------------------------------------- 8.3 Cash reconciliation
 
   /** `OperationsCourierController.cashHandovers` / the fleet worklist — wave 39. */

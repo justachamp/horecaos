@@ -20,11 +20,14 @@ import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
 import { FISCAL_DOCUMENT_STATUS_KEYS, isFiscalDocumentStatus } from '../finance-labels';
 import {
+  FISCAL_CLOSURES,
   FISCAL_CORRECTION_KINDS,
   FISCAL_CORRECTION_REASONS,
   FISCAL_EVIDENCE_PURPOSES,
+  FiscalClosure,
   FiscalCorrectionKind,
   FiscalCorrectionReason,
+  FiscalCorrectionSummaryView,
   FiscalEvidenceApi,
   FiscalEvidenceDocumentView,
   FiscalEvidenceLineView,
@@ -61,6 +64,19 @@ const REASON_KEYS: Readonly<Record<FiscalCorrectionReason, MessageKey>> = {
   DUPLICATE_RECEIPT: 'finance.fiscalEvidence.correction.reason.DUPLICATE_RECEIPT',
   CUSTOMER_REFUND: 'finance.fiscalEvidence.correction.reason.CUSTOMER_REFUND',
   OTHER: 'finance.fiscalEvidence.correction.reason.OTHER',
+};
+
+const CLOSURE_KEYS: Readonly<Record<FiscalClosure, MessageKey>> = {
+  DECLINED: 'finance.fiscalEvidence.correction.close.outcome.DECLINED',
+  CANCELLED: 'finance.fiscalEvidence.correction.close.outcome.CANCELLED',
+};
+
+/** What a request that is no longer waiting says of itself; `REQUESTED` is the long-standing sentence. */
+const CORRECTION_STATE_KEYS: Readonly<Record<string, MessageKey>> = {
+  REQUESTED: 'finance.fiscalEvidence.correction.state',
+  ATTACHED: 'finance.fiscalEvidence.correction.state.ATTACHED',
+  DECLINED: 'finance.fiscalEvidence.correction.state.DECLINED',
+  CANCELLED: 'finance.fiscalEvidence.correction.state.CANCELLED',
 };
 
 const DOCUMENT_TYPE_KEYS: Readonly<Record<string, MessageKey>> = {
@@ -161,6 +177,7 @@ export class FiscalEvidence {
   protected readonly purposes = FISCAL_EVIDENCE_PURPOSES;
   protected readonly kinds = FISCAL_CORRECTION_KINDS;
   protected readonly reasons = FISCAL_CORRECTION_REASONS;
+  protected readonly closures = FISCAL_CLOSURES;
 
   protected readonly loading = signal(true);
   protected readonly denied = signal(false);
@@ -202,6 +219,14 @@ export class FiscalEvidence {
   protected readonly attachTerminalId = signal('');
   protected readonly attachSubmitting = signal(false);
   protected readonly attachError = signal<string | null>(null);
+  protected readonly attachWaiting = signal<string | null>(null);
+
+  // ------------------------------------------------------------ closing a request without a receipt
+  protected readonly closingFor = signal<string | null>(null);
+  protected readonly closeOutcome = signal<FiscalClosure | ''>('');
+  protected readonly closeNote = signal('');
+  protected readonly closeSubmitting = signal(false);
+  protected readonly closeError = signal<string | null>(null);
 
   protected readonly notice = signal<string | null>(null);
 
@@ -365,10 +390,15 @@ export class FiscalEvidence {
     }
   }
 
-  private approvalSentence(error: ApiError): string {
+  private approvalSentence(error: ApiError, step: 'request' | 'attach' = 'request'): string {
     const id = error.problem?.['approvalRequestId'];
     const declined = error.problem?.['approvalStatus'] === 'DECLINED';
     const values = { id: typeof id === 'string' ? id : '' };
+    if (step === 'attach') {
+      return declined
+        ? this.i18n.t('finance.fiscalEvidence.correction.attach.declined', values)
+        : this.i18n.t('finance.fiscalEvidence.correction.attach.pending', values);
+    }
     return declined
       ? this.i18n.t('finance.fiscalEvidence.correction.declined', values)
       : this.i18n.t('finance.fiscalEvidence.correction.pending', values);
@@ -410,6 +440,7 @@ export class FiscalEvidence {
     }
     this.attachSubmitting.set(true);
     this.attachError.set(null);
+    this.attachWaiting.set(null);
     try {
       await this.api.attach(this.tenantId(), requestId, document.version, {
         fiscalSign: this.attachFiscalSign().trim(),
@@ -421,13 +452,85 @@ export class FiscalEvidence {
       this.notice.set(this.i18n.t('finance.fiscalEvidence.correction.attached'));
       await this.reloadAfterWrite();
     } catch (error) {
-      this.attachError.set(this.describe(error));
+      if (error instanceof ApiError && error.code === 'SECOND_APPROVER_REQUIRED') {
+        // Not a failure: the reference is recorded as the thing a second person is asked to approve, and the
+        // maker sends the same reference again once they have. The form stays open with what was typed.
+        this.attachWaiting.set(this.approvalSentence(error, 'attach'));
+      } else if (
+        error instanceof ApiError &&
+        error.problem?.errors?.some((e) => e.field === 'receiptUrl')
+      ) {
+        this.attachError.set(this.i18n.t('finance.fiscalEvidence.correction.attach.urlRefused'));
+      } else {
+        this.attachError.set(this.describe(error));
+      }
     } finally {
       this.attachSubmitting.set(false);
     }
   }
 
+  // ------------------------------------------------------------ closing without a receipt
+
+  /**
+   * A request that will not be attached still has a way out: the restaurant's agent declined, or it was raised
+   * in error. Without it the only exit was to attach a reference, that is to record a receipt nobody issued.
+   */
+  protected canClose(document: FiscalEvidenceDocumentView): boolean {
+    return this.canResolve() && document.correction?.status === 'REQUESTED';
+  }
+
+  protected openClose(document: FiscalEvidenceDocumentView): void {
+    this.closeForms();
+    this.closingFor.set(document.documentId);
+  }
+
+  protected canSubmitClose(): boolean {
+    return (
+      !this.closeSubmitting() &&
+      this.closeOutcome() !== '' &&
+      this.closeNote().trim().length > 0 &&
+      this.closeNote().trim().length <= 255
+    );
+  }
+
+  protected async submitClose(document: FiscalEvidenceDocumentView): Promise<void> {
+    const requestId = document.correction?.requestId;
+    const outcome = this.closeOutcome();
+    if (!this.canSubmitClose() || !requestId || outcome === '') {
+      return;
+    }
+    this.closeSubmitting.set(true);
+    this.closeError.set(null);
+    try {
+      await this.api.closeRequest(this.tenantId(), requestId, document.version, {
+        outcome,
+        note: this.closeNote().trim(),
+      });
+      this.closeForms();
+      this.notice.set(this.i18n.t('finance.fiscalEvidence.correction.closed'));
+      await this.reloadAfterWrite();
+    } catch (error) {
+      this.closeError.set(this.describe(error));
+    } finally {
+      this.closeSubmitting.set(false);
+    }
+  }
+
+  protected closureLabel(closure: FiscalClosure): string {
+    return this.i18n.t(CLOSURE_KEYS[closure]);
+  }
+
+  /** What a request says of itself: waiting, attached, declined by the agent or withdrawn. */
+  protected correctionSentence(correction: FiscalCorrectionSummaryView): string {
+    const key = CORRECTION_STATE_KEYS[correction.status] ?? CORRECTION_STATE_KEYS['REQUESTED'];
+    return this.i18n.t(key, { kind: this.kindLabel(correction.kind), at: correction.requestedAt });
+  }
+
   protected closeForms(): void {
+    this.closingFor.set(null);
+    this.closeOutcome.set('');
+    this.closeNote.set('');
+    this.closeError.set(null);
     this.requestingFor.set(null);
     this.requestKind.set('CORRECTION');
     this.requestReason.set('');
@@ -440,6 +543,7 @@ export class FiscalEvidence {
     this.attachReceiptUrl.set('');
     this.attachTerminalId.set('');
     this.attachError.set(null);
+    this.attachWaiting.set(null);
   }
 
   /** A write changes a document's version and status, and an opened read is stale with it: drop it and re-read. */

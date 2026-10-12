@@ -829,12 +829,37 @@ export const financeEn = {
     'The request is recorded. The restaurant’s fiscal agent now has to issue it; attach the agent’s reference here when it has.',
   'finance.fiscalEvidence.correction.attach.action': 'Attach the agent’s reference',
   'finance.fiscalEvidence.correction.attach.lead':
-    'Enter the reference the restaurant’s fiscal agent returned. HorecaOS stores it as a linked document and never edits the original receipt.',
+    'Enter the reference the restaurant’s fiscal agent returned. A second person approves exactly what you type before it is attached; HorecaOS then stores it as a linked document and never edits the original receipt.',
+  'finance.fiscalEvidence.correction.attach.pending':
+    'Waiting for a second approver. Approval request {id} is pending; attach the reference again, exactly as typed, once it has been approved.',
+  'finance.fiscalEvidence.correction.attach.declined':
+    'The second approver declined approval request {id}, so this reference is not attached.',
+  'finance.fiscalEvidence.correction.attach.urlRefused':
+    'The link must be a page of the tax authority’s own site (https, soliq.uz). Use the link the receipt itself gives.',
   'finance.fiscalEvidence.correction.attach.url': 'Receipt link (https)',
   'finance.fiscalEvidence.correction.attach.terminal': 'Terminal (optional)',
   'finance.fiscalEvidence.correction.attach.submit': 'Attach the reference',
   'finance.fiscalEvidence.correction.attached':
     'The reference is attached as a linked document, and the original receipt now reads as corrected or voided.',
+  'finance.fiscalEvidence.correction.state.ATTACHED':
+    '{kind}: the fiscal agent’s reference is attached as a linked document.',
+  'finance.fiscalEvidence.correction.state.DECLINED':
+    '{kind}: closed because the fiscal agent declined to issue it. The receipt stands as it was filed.',
+  'finance.fiscalEvidence.correction.state.CANCELLED':
+    '{kind}: withdrawn. The receipt stands as it was filed.',
+  'finance.fiscalEvidence.correction.close.action': 'Close the request without a receipt',
+  'finance.fiscalEvidence.correction.close.lead':
+    'Use this when the restaurant’s fiscal agent declined to issue it, or the request was raised by mistake. The receipt stays exactly as it was filed, nothing is sent to the tax authority, and the request leaves the worklist.',
+  'finance.fiscalEvidence.correction.close.outcome.label': 'Why it is closed',
+  'finance.fiscalEvidence.correction.close.outcome.choose': 'Choose why',
+  'finance.fiscalEvidence.correction.close.outcome.DECLINED':
+    'The fiscal agent declined to issue it',
+  'finance.fiscalEvidence.correction.close.outcome.CANCELLED':
+    'Raised by mistake, or no longer needed',
+  'finance.fiscalEvidence.correction.close.note.label': 'What happened (up to 255 characters)',
+  'finance.fiscalEvidence.correction.close.submit': 'Close the request',
+  'finance.fiscalEvidence.correction.closed':
+    'The request is closed. The receipt stands as it was filed.',
   'finance.fiscalEvidence.paymentTypes.title': 'Fiscalized payment types',
   'finance.fiscalEvidence.paymentTypes.lead':
     'Derived from the payment-method registry, the merchant accounts and the fiscal terminals, and it cannot be set: a setting that disagreed with them would be a false statement about a tax document. A method with no path is the restaurant’s own unreceipted obligation — HorecaOS does not fiscalize it.',

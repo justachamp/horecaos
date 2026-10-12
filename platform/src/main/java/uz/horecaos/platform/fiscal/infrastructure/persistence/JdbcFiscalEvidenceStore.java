@@ -124,6 +124,7 @@ public class JdbcFiscalEvidenceStore {
     public record CustomerReceiptRow(
             String documentType,
             String receiptUrl,
+            String reasonCode,
             @Nullable Instant registeredAt) {}
 
     /**
@@ -138,7 +139,7 @@ public class JdbcFiscalEvidenceStore {
      */
     public List<CustomerReceiptRow> receiptLinksOfOrder(UUID tenantId, UUID orderId) {
         return jdbc.sql("""
-                        SELECT document_type, receipt_url, COALESCE(registered_at, issued_at) AS registered
+                        SELECT document_type, receipt_url, reason_code, COALESCE(registered_at, issued_at) AS registered
                           FROM fiscal.fiscal_documents
                          WHERE tenant_id = :tenantId AND order_id = :orderId
                            AND status IN ('ISSUED', 'CORRECTION_REQUESTED', 'VOID_REQUESTED')
@@ -148,7 +149,10 @@ public class JdbcFiscalEvidenceStore {
                 .param("tenantId", tenantId)
                 .param("orderId", orderId)
                 .query((row, number) -> new CustomerReceiptRow(
-                        row.getString("document_type"), row.getString("receipt_url"), instant(row, "registered")))
+                        row.getString("document_type"),
+                        row.getString("receipt_url"),
+                        row.getString("reason_code"),
+                        instant(row, "registered")))
                 .list();
     }
 
@@ -165,11 +169,12 @@ public class JdbcFiscalEvidenceStore {
             Instant requestedAt,
             @Nullable UUID attachedDocumentId,
             @Nullable Instant attachedAt,
+            @Nullable Instant closedAt,
             int version) {}
 
     private static final String CORRECTION_COLUMNS = """
             r.id, r.document_id, d.order_id, r.kind, r.reason_code, r.status, r.requested_by,
-            r.approval_id, r.requested_at, r.attached_document_id, r.attached_at, r.version
+            r.approval_id, r.requested_at, r.attached_document_id, r.attached_at, r.closed_at, r.version
             """;
 
     /** Every request raised against any document of an order, newest first. */
@@ -356,6 +361,7 @@ public class JdbcFiscalEvidenceStore {
                 requiredInstant(row, "requested_at"),
                 row.getObject("attached_document_id", UUID.class),
                 instant(row, "attached_at"),
+                instant(row, "closed_at"),
                 row.getInt("version"));
     }
 
