@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
 import { TermsOfConditionsComponent } from './terms-of-conditions.component';
@@ -50,9 +50,13 @@ function document(overrides: Partial<TermsDocument> = {}): TermsDocument {
   };
 }
 
-async function flush(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
+/**
+ * Waits for the load to leave `loading`. How many microtask turns the fake service's
+ * promise needs before the state changes is the runtime's, so this waits for the
+ * state itself rather than counting turns.
+ */
+async function loaded(fixture: ComponentFixture<TermsOfConditionsComponent>): Promise<void> {
+  await vi.waitFor(() => expect(fixture.componentInstance.state()).not.toBe('loading'));
 }
 
 describe('TermsOfConditionsComponent', () => {
@@ -61,7 +65,7 @@ describe('TermsOfConditionsComponent', () => {
     terms.current.mockResolvedValue(document({ body: 'Our own words, not a legacy brand.' }));
 
     fixture.detectChanges();
-    await flush();
+    await loaded(fixture);
     fixture.detectChanges();
 
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
@@ -75,7 +79,7 @@ describe('TermsOfConditionsComponent', () => {
     );
 
     fixture.detectChanges();
-    await flush();
+    await loaded(fixture);
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -90,7 +94,7 @@ describe('TermsOfConditionsComponent', () => {
     terms.current.mockResolvedValue(document({ body: '1. First point. 2. Second point.' }));
 
     fixture.detectChanges();
-    await flush();
+    await loaded(fixture);
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -103,7 +107,7 @@ describe('TermsOfConditionsComponent', () => {
     terms.current.mockResolvedValue(document({ isPlatformDefault: true }));
 
     fixture.detectChanges();
-    await flush();
+    await loaded(fixture);
     fixture.detectChanges();
 
     expect(fixture.componentInstance.isPlatformDefault()).toBe(true);
@@ -114,7 +118,7 @@ describe('TermsOfConditionsComponent', () => {
     terms.current.mockRejectedValue(new Error('network'));
 
     fixture.detectChanges();
-    await flush();
+    await loaded(fixture);
     fixture.detectChanges();
 
     expect(fixture.componentInstance.state()).toBe('error');
@@ -125,7 +129,7 @@ describe('TermsOfConditionsComponent', () => {
     terms.current.mockResolvedValue(document());
 
     fixture.detectChanges();
-    await flush();
+    await loaded(fixture);
     fixture.detectChanges();
 
     expect(fixture.componentInstance.mustAccept).toBe(false);
@@ -140,7 +144,7 @@ describe('TermsOfConditionsComponent', () => {
     terms.accept.mockResolvedValue('v1:en');
 
     fixture.detectChanges();
-    await flush();
+    await loaded(fixture);
     fixture.detectChanges();
 
     expect(fixture.componentInstance.mustAccept).toBe(true);
@@ -157,7 +161,7 @@ describe('TermsOfConditionsComponent', () => {
     terms.accept.mockResolvedValue('default-v1:en');
 
     fixture.detectChanges();
-    await flush();
+    await loaded(fixture);
     fixture.detectChanges();
 
     await fixture.componentInstance.agree();

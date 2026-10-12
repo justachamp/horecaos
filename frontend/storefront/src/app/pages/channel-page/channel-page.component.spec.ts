@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 
 import { HorecaOSApiError } from '../../core/api/problem-details';
@@ -46,9 +46,13 @@ function setUp(slug: string | null) {
   return { fixture, pages };
 }
 
-async function flush(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
+/**
+ * Waits for the load to leave `loading`. How many microtask turns the fake service's
+ * promise needs before the state changes is the runtime's, so this waits for the
+ * state itself rather than counting turns.
+ */
+async function loaded(fixture: ComponentFixture<ChannelPageComponent>): Promise<void> {
+  await vi.waitFor(() => expect(fixture.componentInstance.state()).not.toBe('loading'));
 }
 
 describe('ChannelPageComponent', () => {
@@ -57,7 +61,7 @@ describe('ChannelPageComponent', () => {
     pages.page.mockResolvedValue(page({ body: 'First paragraph.\n\nSecond paragraph.' }));
 
     fixture.detectChanges();
-    await flush();
+    await loaded(fixture);
     fixture.detectChanges();
 
     expect(pages.page).toHaveBeenCalledWith('about');
@@ -75,7 +79,7 @@ describe('ChannelPageComponent', () => {
     pages.page.mockResolvedValue(page({ body: '<script>alert(1)</script> is not code here.' }));
 
     fixture.detectChanges();
-    await flush();
+    await loaded(fixture);
     fixture.detectChanges();
 
     const host = fixture.nativeElement as HTMLElement;
@@ -87,7 +91,7 @@ describe('ChannelPageComponent', () => {
     const { fixture, pages } = setUp('not-a-real-page');
 
     fixture.detectChanges();
-    await flush();
+    await loaded(fixture);
     fixture.detectChanges();
 
     expect(pages.page).not.toHaveBeenCalled();
@@ -101,7 +105,7 @@ describe('ChannelPageComponent', () => {
     );
 
     fixture.detectChanges();
-    await flush();
+    await loaded(fixture);
     fixture.detectChanges();
 
     expect(fixture.componentInstance.state()).toBe('not-found');
@@ -112,7 +116,7 @@ describe('ChannelPageComponent', () => {
     pages.page.mockRejectedValue(new Error('network'));
 
     fixture.detectChanges();
-    await flush();
+    await loaded(fixture);
     fixture.detectChanges();
 
     expect(fixture.componentInstance.state()).toBe('error');

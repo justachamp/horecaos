@@ -304,11 +304,12 @@ describe('AuthLoginComponent Continue with Telegram', () => {
     telegram.pollOnce.mockRejectedValue(new TelegramSignInExpiredError());
 
     await comp.continueWithTelegram();
-    await Promise.resolve();
-    await Promise.resolve();
+    // The poll's rejection is handled a runtime-defined number of microtask turns after
+    // continueWithTelegram resolves; wait for the message (the code was set before it, so
+    // a null code alone would not prove the failure has been handled).
+    await vi.waitFor(() => expect(comp.telegramError()).toBe('auth.errors.telegramExpired'));
 
     expect(comp.telegramCode()).toBeNull();
-    expect(comp.telegramError()).toBe('auth.errors.telegramExpired');
   });
 
   it('an unavailable-platform failure at poll time is reported the same as at mint time', async () => {
