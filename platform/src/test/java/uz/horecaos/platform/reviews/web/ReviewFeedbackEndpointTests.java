@@ -603,6 +603,47 @@ class ReviewFeedbackEndpointTests {
 
     @Test
     @DisplayName(
+            "a customer who shared two comments can take back both, one after the other: the consent evidence is kept per review, not per purpose")
+    void aSecondSharedCommentCanBeTakenBackToo() throws Exception {
+        switchOn("feature.feedback_settings");
+        setBrandSetting("feedback.public_visibility", "stringValue", "\"RATING_AND_COMMENTS\"");
+        UUID first = review(5, "The plov was the best in town", List.of(), true);
+        UUID second = review(4, "The samsa too", List.of(), true);
+        decide(first, "{\"to\":\"PUBLISHED\"}", 1);
+        decide(second, "{\"to\":\"PUBLISHED\"}", 1);
+        assertThat(publicList().path("items")).hasSize(2);
+
+        assertThat(postAs(GUEST, storefront() + "/reviews/" + first + "/public-display/withdrawal", null)
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(200);
+        MvcResult secondWithdrawn =
+                postAs(GUEST, storefront() + "/reviews/" + second + "/public-display/withdrawal", null);
+        assertThat(secondWithdrawn.getResponse().getStatus())
+                .as(secondWithdrawn.getResponse().getContentAsString())
+                .isEqualTo(200);
+
+        assertThat(publicList().path("items"))
+                .as("both comments are off the page")
+                .isEmpty();
+        var evidence = jdbc.sql("SELECT decision, evidence_reference FROM customer.consent_decisions "
+                        + "WHERE purpose = 'review.public_display' AND decision = 'WITHDRAWN'")
+                .query()
+                .listOfRows();
+        assertThat(evidence)
+                .extracting(row -> row.get("evidence_reference"))
+                .as("each withdrawal is evidence for its own review")
+                .containsExactlyInAnyOrder(first.toString(), second.toString());
+        assertThat(jdbc.sql("SELECT count(DISTINCT withdrawal_decision_id) FROM reviews.review_publications "
+                                + "WHERE withdrawal_decision_id IS NOT NULL")
+                        .query(Long.class)
+                        .single())
+                .as("each publication row points at its own withdrawal decision")
+                .isEqualTo(2L);
+    }
+
+    @Test
+    @DisplayName(
             "an erasure nulls the comment and the case notes, hides the public comment, evicts the page, and keeps the rating and the average")
     void erasure() throws Exception {
         switchOn("feature.feedback_settings");

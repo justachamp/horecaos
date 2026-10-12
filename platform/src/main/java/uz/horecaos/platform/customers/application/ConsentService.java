@@ -162,6 +162,10 @@ public class ConsentService implements ConsentDirectory, ConsentRecorder {
      * migration, a support agent or an API client cannot withdraw a customer's consent through the port;
      * and only when the purpose is currently {@code GRANTED}, so the append-only evidence never records a
      * withdrawal of something that was not given. It is dated now.
+     *
+     * <p>"Currently granted" is asked of the grant the withdrawal answers: when {@code evidenceReference} is
+     * given it is the latest decision carrying that same reference, so a purpose granted once per review is
+     * withdrawn once per review; without one it is the purpose's latest decision in the scope.
      */
     @Override
     @Transactional
@@ -178,9 +182,13 @@ public class ConsentService implements ConsentDirectory, ConsentRecorder {
             throw new IllegalArgumentException(
                     "Only a customer's own storefront withdrawal is recorded through this port, not " + source);
         }
-        boolean granted = store.currentConsent(tenantId, accountId, brandId, purpose, channel)
-                .map(row -> "GRANTED".equals(row.decision()))
-                .orElse(false);
+        // A grant that names its evidence (a review's public display is granted once per review) is
+        // withdrawn on its own evidence: the purpose's latest decision would be the other review's
+        // withdrawal, and the customer could never take back a second comment.
+        var live = evidenceReference == null
+                ? store.currentConsent(tenantId, accountId, brandId, purpose, channel)
+                : store.currentConsentForEvidence(tenantId, accountId, brandId, purpose, channel, evidenceReference);
+        boolean granted = live.map(row -> "GRANTED".equals(row.decision())).orElse(false);
         if (!granted) {
             throw new IllegalStateException("There is no granted consent for " + purpose + " to withdraw");
         }
