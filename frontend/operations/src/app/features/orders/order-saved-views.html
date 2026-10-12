@@ -100,7 +100,14 @@
       }
 
       <p class="order-saved-views__note q-caption" data-testid="saved-views-note">
-        {{ (persistent() ? 'orders.queue.views.saved' : 'orders.queue.views.session') | t }}
+        {{
+          (persistent()
+            ? writeFailed()
+              ? 'orders.queue.views.writeFailed'
+              : 'orders.queue.views.saved'
+            : 'orders.queue.views.session'
+          ) | t
+        }}
       </p>
     </div>
   }

@@ -880,6 +880,10 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   'orders.queue.views.limit': '20 tadan ortiq koʻrinish boʻlmaydi. Keraksizini oʻchiring.',
   'orders.queue.views.saved': 'Koʻrinishlar hisobingizda saqlanadi.',
   'orders.queue.views.session': 'Koʻrinishlar faqat shu seans tugaguncha amal qiladi.',
+  'orders.queue.views.writeFailed':
+    'Soʻnggi oʻzgarishni hisobingizga saqlab boʻlmadi. U faqat shu ekranda amal qiladi.',
+  'orders.queue.preferences.writeFailed':
+    'Ustunlar yoki saqlangan koʻrinishlardagi soʻnggi oʻzgarish hisobingizga tushmadi. U faqat shu ekranda amal qiladi, boshqa qurilmalaringizda koʻrinmasligi mumkin.',
   // ---------------------------------------------------------------- ADR 0161 marked goods (X.35)
   'orders.queue.bulk.problem.MARKS_INCOMPLETE':
     'Markirovkalangan pozitsiyalar hali toʻliq skanerlanmagan',

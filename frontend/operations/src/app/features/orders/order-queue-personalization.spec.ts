@@ -513,6 +513,72 @@ describe('OrderQueue: the column picker (ADR 0160)', () => {
   });
 });
 
+describe('OrderQueue: a change that did not reach the account (ADR 0160)', () => {
+  const SAVED_NOTE = 'is saved to your account';
+
+  it('says nothing while writes land, and says so on the board, in the picker and in the views once one is dropped', async () => {
+    const { preferences } = configure({ rows: [FULL_ROW] });
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await settle();
+    const host = harness.routeNativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="order-queue-preferences-write-failed"]')).toBeNull();
+
+    preferences.writeFailed.set(true);
+    await settle();
+    harness.detectChanges();
+
+    const band = host.querySelector('[data-testid="order-queue-preferences-write-failed"]');
+    expect(
+      band,
+      'the failure is on the board itself, not only inside a closed menu',
+    ).not.toBeNull();
+    expect(band?.getAttribute('role')).toBe('alert');
+    expect(band?.textContent).toContain('did not reach your account');
+
+    pick(host, 'column-picker-toggle');
+    await settle();
+    harness.detectChanges();
+    expect(cell(host, 'column-picker-note')).toContain('could not be saved to your account');
+    expect(cell(host, 'column-picker-note')).not.toContain(SAVED_NOTE);
+
+    pick(host, 'saved-views-toggle');
+    await settle();
+    harness.detectChanges();
+    expect(cell(host, 'saved-views-note')).toContain('could not be saved to your account');
+    expect(cell(host, 'saved-views-note')).not.toContain('are kept in your account');
+  });
+
+  it('goes back to saying it is saved when the next write lands', async () => {
+    const { preferences } = configure({ rows: [FULL_ROW] });
+    const harness = await RouterTestingHarness.create('/orders?tab=all');
+    await settle();
+    const host = harness.routeNativeElement as HTMLElement;
+    preferences.writeFailed.set(true);
+    await settle();
+    harness.detectChanges();
+    pick(host, 'column-picker-toggle');
+    await settle();
+    harness.detectChanges();
+
+    preferences.writeFailed.set(false);
+    await settle();
+    harness.detectChanges();
+
+    expect(host.querySelector('[data-testid="order-queue-preferences-write-failed"]')).toBeNull();
+    expect(cell(host, 'column-picker-note')).toContain(SAVED_NOTE);
+  });
+
+  it('does not claim a failure for an account that never writes: that one says the choice lasts for the session', async () => {
+    configure({ rows: [FULL_ROW], persistent: false });
+    const host = await open();
+    pick(host, 'column-picker-toggle');
+    await settle();
+
+    expect(host.querySelector('[data-testid="order-queue-preferences-write-failed"]')).toBeNull();
+    expect(cell(host, 'column-picker-note')).toContain('only until this session ends');
+  });
+});
+
 describe('OrderQueue: saved views (ADR 0160, gap map row 0.2d)', () => {
   const DELIVERY_TODAY: SavedView = {
     id: '0198a3c0-0000-7000-8000-000000000001',

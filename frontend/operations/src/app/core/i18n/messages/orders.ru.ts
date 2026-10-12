@@ -867,6 +867,10 @@ export const ordersRu: AreaMessages<typeof ordersEn> = {
   'orders.queue.views.limit': 'Не больше 20 видов. Удалите ненужный.',
   'orders.queue.views.saved': 'Виды хранятся в вашей учётной записи.',
   'orders.queue.views.session': 'Виды действуют только до конца этого сеанса.',
+  'orders.queue.views.writeFailed':
+    'Последнее изменение не удалось сохранить в вашей учётной записи. Оно действует только на этом экране.',
+  'orders.queue.preferences.writeFailed':
+    'Последнее изменение столбцов или сохранённых видов не попало в вашу учётную запись. Оно действует только на этом экране, на других ваших устройствах его может не быть.',
   // ---------------------------------------------------------------- ADR 0161 marked goods (X.35)
   'orders.queue.bulk.problem.MARKS_INCOMPLETE': 'Не все маркированные позиции отсканированы',
   'orders.marking.title': 'Маркированные товары',

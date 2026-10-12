@@ -460,6 +460,8 @@ export const coreUzLatn: AreaMessages<typeof coreEn> = {
   'shared.columnPicker.saved':
     'Tanlovingiz hisobingizda saqlanadi va barcha qurilmalaringizda koʻrinadi.',
   'shared.columnPicker.session': 'Tanlov faqat shu seans tugaguncha amal qiladi.',
+  'shared.columnPicker.writeFailed':
+    'Soʻnggi oʻzgarishni hisobingizga saqlab boʻlmadi. U faqat shu ekranda amal qiladi.',
   'shell.localeScope.thisDevice': 'Til faqat shu qurilma uchun tanlandi.',
   'shell.localeScope.allDevices': 'Barcha qurilmalarim uchun',
   'shell.localeScope.keep': 'Faqat shu qurilmada',

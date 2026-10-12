@@ -254,6 +254,7 @@
     <q-order-saved-views
       [views]="savedViews()"
       [persistent]="preferencesPersistent()"
+      [writeFailed]="preferencesWriteFailed()"
       [leftOut]="viewsLeftOut()"
       (applied)="onViewApplied($event)"
       (saved)="onViewSaved($event)"
@@ -262,11 +263,22 @@
     <q-column-picker
       [columns]="pickerColumns()"
       [persistent]="preferencesPersistent()"
+      [writeFailed]="preferencesWriteFailed()"
       [canReset]="canResetColumns()"
       (toggled)="onColumnToggled($event)"
       (resetRequested)="onColumnsReset()"
     />
   </q-order-queue-toolbar>
+
+  @if (preferencesWriteFailed()) {
+    <div
+      class="order-queue__error-band"
+      role="alert"
+      data-testid="order-queue-preferences-write-failed"
+    >
+      <span class="q-body-sm">{{ 'orders.queue.preferences.writeFailed' | t }}</span>
+    </div>
+  }
 
   @if (lastError(); as error) {
     <div class="order-queue__error-band" role="alert">

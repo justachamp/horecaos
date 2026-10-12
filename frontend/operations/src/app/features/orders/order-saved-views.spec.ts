@@ -187,4 +187,14 @@ describe('OrderSavedViews (ADR 0160)', () => {
     fixture.detectChanges();
     expect(query('saved-views-note')?.textContent).toContain('only until this session ends');
   });
+
+  it('stops saying views are kept in the account once the host says the last save failed', async () => {
+    await render([], { persistent: true });
+    open();
+
+    fixture.componentRef.setInput('writeFailed', true);
+    fixture.detectChanges();
+    expect(query('saved-views-note')?.textContent).toContain('could not be saved to your account');
+    expect(query('saved-views-note')?.textContent).not.toContain('kept in your account');
+  });
 });

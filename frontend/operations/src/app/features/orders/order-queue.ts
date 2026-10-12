@@ -444,6 +444,13 @@ export class OrderQueue implements OnInit {
   /** False for an account the tenant keeps no record for: its choices then last for the session only. */
   protected readonly preferencesPersistent = this.preferences.persistent;
 
+  /**
+   * True after a change to the columns or the saved views was dropped on its way to the account (a second
+   * device won twice, or the platform refused it): the screen still shows it, the account does not hold it.
+   * Said on the board itself, not only in a menu that is usually closed.
+   */
+  protected readonly preferencesWriteFailed = this.preferences.writeFailed;
+
   /** The board has a filter on that a saved view cannot hold, so «Сохранить вид» says it is left out. */
   protected readonly viewsLeftOut = computed(
     () => viewFiltersFrom(this.filters(), new Date()).leftOut,
