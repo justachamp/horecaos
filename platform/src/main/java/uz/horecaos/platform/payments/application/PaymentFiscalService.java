@@ -193,7 +193,7 @@ public class PaymentFiscalService {
         SentReceipt wire = submission.sent();
         if (wire != null) {
             try {
-                sentEvidence.record(document, binding, wire, linesSynthetic);
+                sentEvidence.record(document, binding, wire, linesSynthetic, now);
             } catch (RuntimeException unrecorded) {
                 // Losing the record costs the detail and not the answer. The request has left; the
                 // provider's reply is the outcome that must survive, and a failure here that rolled

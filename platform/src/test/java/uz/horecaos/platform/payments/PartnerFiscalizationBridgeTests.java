@@ -457,12 +457,47 @@ class PartnerFiscalizationBridgeTests {
                 "protected-response-1",
                 CLOCK.instant());
 
-        boolean rewritten =
-                documents.recordSentEvidence(TENANT, documentId, INTEGRATION_BINDING, false, "other", "other");
+        boolean rewritten = documents.recordSentEvidence(
+                TENANT, documentId, INTEGRATION_BINDING, false, "other", "other", CLOCK.instant());
 
         assertThat(rewritten).isFalse();
         assertThat(sentEvidenceOf(documentId).get("protected_request_reference"))
                 .isEqualTo(first);
+        assertThat(sentRequestsOf(documentId))
+                .as("and a request refused is not added to the history either")
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName(
+            "a request that left and was never answered is kept when the document is asked again, beside the one that replaced it")
+    void aRequestThatMayHaveReachedTheProviderIsKeptWhenTheDocumentIsSubmittedAgain() throws Exception {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        ScriptedClick click = new ScriptedClick();
+        InMemoryPlatformPolicies allowed = platformAllowsPlaceholders(true);
+
+        realGateBridge(allowed, click).retry(TENANT, documentId, "idem-lost-1");
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .as("asked, and no answer: the request may well have arrived")
+                .isEqualTo(FiscalStatus.SUBMITTED);
+        // The order is known by another number when the document is asked again, so the second request is not
+        // the first.
+        orders = (tenantId, orderId) -> Optional.of(new OrderDirectory.OrderSummary(
+                orderId, TENANT, BRAND, LOCATION, "BR-1-REVISED", null, "guest-hash", "COMPLETED", "UZS", 15_000L, 1));
+        realGateBridge(allowed, click).retry(TENANT, documentId, "idem-lost-2");
+
+        List<Map<String, Object>> kept = sentRequestsOf(documentId);
+        assertThat(kept).extracting(row -> row.get("attempt")).containsExactly(1, 2);
+        assertThat(sentLineNames(documentId, kept.get(0)))
+                .as("the first request is what Click may hold, and it is still here")
+                .containsExactly("Order BR-1");
+        assertThat(sentLineNames(documentId, kept.get(1))).containsExactly("Order BR-1-REVISED");
+        assertThat(sentEvidenceOf(documentId).get("protected_request_reference"))
+                .as("the document's own column keeps meaning the latest request")
+                .isEqualTo(kept.get(1).get("protected_request_reference"));
+        assertThat(kept.get(0).get("protected_request_reference"))
+                .isNotEqualTo(kept.get(1).get("protected_request_reference"));
     }
 
     // -----------------------------------------------------------------------
@@ -857,6 +892,30 @@ class PartnerFiscalizationBridgeTests {
                         tools.jackson.databind.json.JsonMapper.builder().build()));
         return new PartnerFiscalizationBridge(
                 service, bindings, intents, orders, new JdbcSyntheticLineGate(jdbc, policies), CLOCK);
+    }
+
+    /** Every request that left for the document, oldest first (V0643). */
+    private List<Map<String, Object>> sentRequestsOf(UUID documentId) {
+        return jdbc.sql("""
+                        SELECT attempt, sent_at, protected_request_reference
+                          FROM fiscal.fiscal_sent_requests WHERE document_id = :id ORDER BY attempt
+                        """).param("id", documentId).query().listOfRows();
+    }
+
+    private List<String> sentLineNames(UUID documentId, Map<String, Object> kept) throws Exception {
+        String plain = protection.reveal(
+                TENANT,
+                ProtectedValue.deserialize(
+                        java.util.Objects.requireNonNull((String) kept.get("protected_request_reference"))),
+                SentReceiptEvidence.requestRecord(documentId),
+                "bridge-test");
+        return tools.jackson.databind.json.JsonMapper.builder()
+                .build()
+                .readValue(plain, SentReceiptEvidence.Lines.class)
+                .lines()
+                .stream()
+                .map(SentReceiptEvidence.Line::name)
+                .toList();
     }
 
     private Map<String, Object> sentEvidenceOf(UUID documentId) {

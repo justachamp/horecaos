@@ -9152,6 +9152,22 @@
         },
         "type" : "object"
       },
+      "EarlierRequestResponse" : {
+        "properties" : {
+          "attempt" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lines" : {
+            "$ref" : "#/components/schemas/LinesResponse"
+          },
+          "sentAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "EditorResponse" : {
         "properties" : {
           "atRiskDefault" : {
@@ -9543,6 +9559,12 @@
           },
           "documentType" : {
             "type" : "string"
+          },
+          "earlierRequests" : {
+            "items" : {
+              "$ref" : "#/components/schemas/EarlierRequestResponse"
+            },
+            "type" : "array"
           },
           "hasEvidence" : {
             "type" : "boolean"

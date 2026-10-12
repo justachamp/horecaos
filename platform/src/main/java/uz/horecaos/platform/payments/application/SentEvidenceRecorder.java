@@ -1,5 +1,6 @@
 package uz.horecaos.platform.payments.application;
 
+import java.time.Instant;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.domain.ProviderBinding;
 import uz.horecaos.platform.payments.domain.SentReceipt;
@@ -13,11 +14,17 @@ import uz.horecaos.platform.payments.domain.SentReceipt;
 public interface SentEvidenceRecorder {
 
     /**
+     * Keeps the request that left, beside every one that left before it for this document: a reply that
+     * never came proves nothing about what the provider received, so a resubmission adds to the history and
+     * does not replace it.
+     *
      * @param linesSynthetic true when the lines were the bridge's one-line placeholder and not lines
      *                       built from the sale
+     * @param sentAt         when the request left, by the platform's clock
      */
-    void record(FiscalDocument document, ProviderBinding binding, SentReceipt sent, boolean linesSynthetic);
+    void record(
+            FiscalDocument document, ProviderBinding binding, SentReceipt sent, boolean linesSynthetic, Instant sentAt);
 
     /** Records nothing: for the suites that predate the evidence surface and assert nothing about it. */
-    SentEvidenceRecorder NONE = (document, binding, sent, linesSynthetic) -> {};
+    SentEvidenceRecorder NONE = (document, binding, sent, linesSynthetic, sentAt) -> {};
 }

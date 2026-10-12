@@ -156,6 +156,33 @@ public class JdbcFiscalEvidenceStore {
                 .list();
     }
 
+    /** One request that left for the provider, as kept (V0643). The ciphertext is the document's to open. */
+    public record SentRequestRow(
+            UUID documentId, int attempt, Instant sentAt, String protectedRequestReference, boolean linesSynthetic) {}
+
+    /**
+     * Every request that left for any document of an order, oldest first within a document. The newest of a
+     * document's requests is the one its own columns hold; the ones before it are the ones it replaced.
+     */
+    public List<SentRequestRow> sentRequestsOfOrder(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                        SELECT s.document_id, s.attempt, s.sent_at, s.protected_request_reference, s.lines_synthetic
+                          FROM fiscal.fiscal_sent_requests s
+                          JOIN fiscal.fiscal_documents d ON d.tenant_id = s.tenant_id AND d.id = s.document_id
+                         WHERE s.tenant_id = :tenantId AND d.order_id = :orderId
+                         ORDER BY s.document_id, s.attempt
+                        """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, number) -> new SentRequestRow(
+                        row.getObject("document_id", UUID.class),
+                        row.getInt("attempt"),
+                        requiredInstant(row, "sent_at"),
+                        row.getString("protected_request_reference"),
+                        row.getBoolean("lines_synthetic")))
+                .list();
+    }
+
     /** One correction or void request, as the surface and the worklist show it. */
     public record CorrectionRow(
             UUID id,

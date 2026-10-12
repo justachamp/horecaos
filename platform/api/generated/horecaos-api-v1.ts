@@ -4390,6 +4390,12 @@ export interface EInvoicingReasonRequest {
   reason: string;
 }
 
+export interface EarlierRequestResponse {
+  attempt?: number;
+  lines?: LinesResponse;
+  sentAt?: string;
+}
+
 export interface EditorResponse {
   atRiskDefault?: AtRiskDefaultResponse;
   currentVersionAtScope?: number;
@@ -4639,6 +4645,7 @@ export interface EvidenceDocumentResponse {
   createdAt?: string;
   documentId?: string;
   documentType?: string;
+  earlierRequests?: Array<EarlierRequestResponse>;
   hasEvidence?: boolean;
   identifiers?: IdentifiersResponse;
   issuedAt?: string;

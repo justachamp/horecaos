@@ -313,6 +313,71 @@
           }
         }
 
+        <!-- ============================================================ requests the latest one replaced -->
+        @if ((document.earlierRequests?.length ?? 0) > 0) {
+          <details class="evidence__earlier" data-testid="fiscal-evidence-earlier">
+            <summary class="q-body-sm">
+              {{
+                'finance.fiscalEvidence.earlier.title'
+                  | t: { count: document.earlierRequests?.length ?? 0 }
+              }}
+            </summary>
+            <p class="q-body-sm evidence__hint">
+              {{ 'finance.fiscalEvidence.earlier.lead' | t }}
+            </p>
+            @for (request of document.earlierRequests; track request.attempt) {
+              <div data-testid="fiscal-evidence-earlier-request">
+                <p class="q-body-sm">
+                  {{
+                    'finance.fiscalEvidence.earlier.attempt'
+                      | t: { attempt: request.attempt, at: request.sentAt }
+                  }}
+                </p>
+                @if (request.lines.state === 'AVAILABLE') {
+                  <div class="evidence__scroll">
+                    <table class="evidence__table">
+                      <thead>
+                        <tr>
+                          <th class="q-caption">
+                            {{ 'finance.fiscalEvidence.lines.column.name' | t }}
+                          </th>
+                          <th class="q-caption">
+                            {{ 'finance.fiscalEvidence.lines.column.ikpu' | t }}
+                          </th>
+                          <th class="q-caption">
+                            {{ 'finance.fiscalEvidence.lines.column.quantity' | t }}
+                          </th>
+                          <th class="q-caption">
+                            {{ 'finance.fiscalEvidence.lines.column.price' | t }}
+                          </th>
+                          <th class="q-caption">
+                            {{ 'finance.fiscalEvidence.field.inn' | t }}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (line of request.lines.items; track $index) {
+                          <tr data-testid="fiscal-evidence-earlier-line">
+                            <td class="q-body-sm">{{ line.name }}</td>
+                            <td class="q-body-sm q-mono">{{ line.ikpu }}</td>
+                            <td class="q-body-sm q-mono">{{ line.quantity }}</td>
+                            <td class="q-body-sm q-mono">{{ money(line.unitPrice) }}</td>
+                            <td class="q-body-sm q-mono">{{ line.commissionTin ?? '—' }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                } @else {
+                  <p class="q-body-sm evidence__hint">
+                    {{ 'finance.fiscalEvidence.lines.notReadable' | t }}
+                  </p>
+                }
+              </div>
+            }
+          </details>
+        }
+
         <!-- ============================================================ corrections: HorecaOS records, the agent issues -->
         @if (document.correction; as correction) {
           <p class="q-body-sm" data-testid="fiscal-evidence-correction">

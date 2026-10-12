@@ -101,6 +101,16 @@ export interface FiscalEvidenceLineView {
   readonly commissionTin?: string | null;
 }
 
+/**
+ * A request that left for the provider and was later replaced by another, kept because the provider may hold it
+ * (a reply that never came proves nothing about what arrived). Oldest first; the latest is the document's `lines`.
+ */
+export interface FiscalEarlierRequestView {
+  readonly attempt: number;
+  readonly sentAt: string;
+  readonly lines: FiscalEvidenceLinesView;
+}
+
 export interface FiscalEvidenceLinesView {
   readonly state: FiscalLinesState;
   /** True when the one-line placeholder was filed (a sandbox only): its zeroes are not a sale. */
@@ -143,6 +153,8 @@ export interface FiscalEvidenceDocumentView {
   readonly registeredAt: string | null;
   readonly providerStatusCode: string | null;
   readonly lines: FiscalEvidenceLinesView;
+  /** Every earlier request the latest one replaced; absent from a server that predates the history. */
+  readonly earlierRequests?: readonly FiscalEarlierRequestView[];
   readonly tenderSplit: FiscalTenderSplitView | null;
   readonly correction: FiscalCorrectionSummaryView | null;
   readonly submittedAt: string | null;

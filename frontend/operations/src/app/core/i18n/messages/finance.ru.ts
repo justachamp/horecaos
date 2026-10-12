@@ -803,6 +803,10 @@ export const financeRu: AreaMessages<typeof financeEn> = {
     'Строки поданы под ИНН {filed}, а это не тот ИНН, под которым открыт документ ({opened}). Оба показаны как записано; здесь ничего не исправлялось.',
   'finance.fiscalEvidence.lines.marksTransmitted':
     'С этим чеком передано кодов маркировки: {count}. На экране остаётся только число.',
+  'finance.fiscalEvidence.earlier.title': 'Более ранние запросы, ушедшие по этому чеку ({count})',
+  'finance.fiscalEvidence.earlier.lead':
+    'Строки выше — последний запрос. Эти были отправлены раньше и заменены им. Провайдер мог получить любой из них: ответ, который не пришёл, ничего не говорит о том, что дошло, поэтому они хранятся такими, какими ушли.',
+  'finance.fiscalEvidence.earlier.attempt': 'Запрос {attempt}, отправлен {at}',
   'finance.fiscalEvidence.correction.state':
     '{kind}: запрошено {at}. Фискальный агент ресторана пока не ответил.',
   'finance.fiscalEvidence.correction.action': 'Запросить коррекцию или отмену',

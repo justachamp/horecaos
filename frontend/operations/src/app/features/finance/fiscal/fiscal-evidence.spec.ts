@@ -295,6 +295,53 @@ describe('FiscalEvidence: the fiscal evidence of one order (row X.2, ADR 0166)',
       expect(differs).toContain('123456789');
     });
 
+    it('keeps the requests the latest one replaced in view, oldest first, and says why they are kept', async () => {
+      configure({
+        masked: view([
+          document_({
+            lines: {
+              ...document_().lines,
+              items: [line({ name: 'Second attempt', commissionTin: '123456789' })],
+            },
+            earlierRequests: [
+              {
+                attempt: 1,
+                sentAt: '2026-10-08T08:59:00Z',
+                lines: {
+                  state: 'AVAILABLE',
+                  synthetic: false,
+                  markingCodesTransmitted: 0,
+                  items: [line({ name: 'First attempt', commissionTin: '987654321' })],
+                },
+              },
+            ],
+          }),
+        ]),
+      });
+      const fixture = await render();
+
+      const earlier = byTestId(fixture, 'fiscal-evidence-earlier');
+      expect(earlier).not.toBeNull();
+      expect(earlier?.textContent).toContain('Earlier requests that also left');
+      expect(earlier?.textContent).toContain('The provider may hold any of them');
+      const rows = allByTestId(fixture, 'fiscal-evidence-earlier-line');
+      expect(rows).toHaveLength(1);
+      expect(rows[0].textContent).toContain('First attempt');
+      expect(rows[0].textContent).toContain('987654321');
+      expect(textOf(fixture, 'fiscal-evidence-earlier')).toContain('Request 1');
+      // The lines proper are still the latest request.
+      expect(allByTestId(fixture, 'fiscal-evidence-line')[0].textContent).toContain(
+        'Second attempt',
+      );
+    });
+
+    it('draws no section for a receipt only one request ever left for', async () => {
+      configure({ masked: view([document_({ earlierRequests: [] })]) });
+      const fixture = await render();
+
+      expect(byTestId(fixture, 'fiscal-evidence-earlier')).toBeNull();
+    });
+
     it('states no filed INN when none was recorded, rather than assuming the document’s', async () => {
       configure({ masked: view([document_()]) });
       const fixture = await render();

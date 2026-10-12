@@ -254,6 +254,10 @@ class FiscalEvidenceEndpointTests {
         assertThat(first.path("commissionTin").asText())
                 .as("the INN the line was filed under (Click's CommissionInfo), as sent")
                 .isEqualTo(TIN_A);
+        assertThat(document.path("earlierRequests").isArray())
+                .as("one request left, so none was replaced: the list is there and empty")
+                .isTrue();
+        assertThat(document.path("earlierRequests")).isEmpty();
 
         JsonNode split = document.path("tenderSplit");
         assertThat(split.path("card").path("amountMinor").asLong())
@@ -266,6 +270,45 @@ class FiscalEvidenceEndpointTests {
         assertThat(body.path("retention").path("provisional").asBoolean())
                 .as("a seven-year default nobody has confirmed says so")
                 .isTrue();
+    }
+
+    @Test
+    @DisplayName(
+            "every request that left is shown: the latest as the lines, the ones it replaced beside them, oldest first")
+    void everyRequestThatLeftIsShown() throws Exception {
+        UUID orderId = seedOrder("E-103");
+        UUID documentId = submittedClickDocument(orderId, ENTITY_A);
+        // The first request left and was never answered; the document was asked again and a second one left.
+        recordRequest(documentId, orderId, ENTITY_A, line("First attempt", 1, 25_000L, List.of()));
+        recordRequest(documentId, orderId, ENTITY_A, line("Second attempt", 2, 25_000L, List.of()));
+        markIssued(documentId);
+
+        JsonNode document = evidence(FINANCE, orderId, null).path("documents").path(0);
+
+        assertThat(document.path("lines").path("items").path(0).path("name").asText())
+                .as("the lines are the latest request, as they always were")
+                .isEqualTo("Second attempt");
+        JsonNode earlier = document.path("earlierRequests");
+        assertThat(earlier.isArray()).isTrue();
+        assertThat(earlier).hasSize(1);
+        assertThat(earlier.path(0).path("attempt").asInt()).isEqualTo(1);
+        assertThat(earlier.path(0).path("sentAt").asText()).isNotBlank();
+        assertThat(earlier.path(0).path("lines").path("state").asText()).isEqualTo("AVAILABLE");
+        assertThat(earlier.path(0)
+                        .path("lines")
+                        .path("items")
+                        .path(0)
+                        .path("name")
+                        .asText())
+                .as("the request the second one replaced is not lost")
+                .isEqualTo("First attempt");
+        assertThat(earlier.path(0)
+                        .path("lines")
+                        .path("items")
+                        .path(0)
+                        .path("quantity")
+                        .asInt())
+                .isEqualTo(1);
     }
 
     @Test
@@ -1693,6 +1736,14 @@ class FiscalEvidenceEndpointTests {
      * evidence.
      */
     private UUID issuedClickDocument(UUID orderId, UUID entityId, FiscalReceiptLine... lines) {
+        UUID documentId = submittedClickDocument(orderId, entityId);
+        recordRequest(documentId, orderId, entityId, lines);
+        markIssued(documentId);
+        return documentId;
+    }
+
+    /** A Click document that has been asked for its receipt and has not answered. */
+    private UUID submittedClickDocument(UUID orderId, UUID entityId) {
         UUID documentId = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO fiscal.fiscal_documents (id, tenant_id, order_id, legal_entity_id, provider_type,
@@ -1705,7 +1756,11 @@ class FiscalEvidenceEndpointTests {
                 .param("e", entityId)
                 .param("now", NOW.atOffset(ZoneOffset.UTC))
                 .update();
+        return documentId;
+    }
 
+    /** One request that left for the provider, kept the way the platform keeps it (real recorder, real protection). */
+    private void recordRequest(UUID documentId, UUID orderId, UUID entityId, FiscalReceiptLine... lines) {
         FiscalDocument document = new FiscalDocument(
                 documentId,
                 TENANT,
@@ -1732,8 +1787,11 @@ class FiscalEvidenceEndpointTests {
                 merchantBinding(entityId),
                 new SentReceipt(
                         List.of(lines), new SomAmount(total, "UZS"), new SomAmount(0, "UZS"), new SomAmount(0, "UZS")),
-                false);
+                false,
+                NOW);
+    }
 
+    private void markIssued(UUID documentId) {
         jdbc.sql("""
                 UPDATE fiscal.fiscal_documents
                    SET status = 'ISSUED', reason_code = 'PARTNER_FISCALIZED', reason_note = 'issued',
@@ -1748,7 +1806,6 @@ class FiscalEvidenceEndpointTests {
                 .param("url", RECEIPT_URL)
                 .param("now", NOW.atOffset(ZoneOffset.UTC))
                 .update();
-        return documentId;
     }
 
     private void allowPlaceholders(boolean allowed) {

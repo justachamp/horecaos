@@ -69,6 +69,13 @@
   `receiptUrl` before any approval is raised, and a customer is never shown a typed link that is not.
   Decision 8 puts the approval on the request; this extends it to the step that files the reference as a
   document and shows its link to a customer, and is the one thing here the owner may want to confirm.
+  Every request that left for a provider is kept: V0643 adds `fiscal.fiscal_sent_requests`, append-only
+  (the application role may insert and select and nothing else), one numbered row per request holding the
+  same ADR 0029 protected references, backfilled from what each document held. The document's own columns
+  keep meaning the latest request; a resubmission used to overwrite it, which is right for a request the
+  provider refused and wrong for one whose reply never came, because the provider may hold that one and the
+  evidence then showed only the second. The evidence read lists the ones a later request replaced as
+  `earlierRequests`, oldest first, and the console shows them under the lines.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides

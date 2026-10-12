@@ -467,6 +467,13 @@ public class OperationsFiscalEvidenceController {
             List<LineResponse> items,
             @Nullable Integer markingCodesTransmitted) {}
 
+    /**
+     * A request that left for the provider and was later replaced by another, kept as it was sent.
+     *
+     * @param attempt 1 for the first request that left; the latest is the document's {@code lines}
+     */
+    public record EarlierRequestResponse(int attempt, Instant sentAt, LinesResponse lines) {}
+
     public record TenderSplitResponse(ApiMoney card, ApiMoney cash, ApiMoney ecash) {}
 
     public record CorrectionSummaryResponse(
@@ -494,6 +501,7 @@ public class OperationsFiscalEvidenceController {
             @Nullable Instant registeredAt,
             @Nullable String providerStatusCode,
             LinesResponse lines,
+            List<EarlierRequestResponse> earlierRequests,
             @Nullable TenderSplitResponse tenderSplit,
             @Nullable CorrectionSummaryResponse correction,
             @Nullable Instant submittedAt,
@@ -533,13 +541,11 @@ public class OperationsFiscalEvidenceController {
                             identifiers.terminalId()),
                     document.registeredAt(),
                     document.providerStatusCode(),
-                    new LinesResponse(
-                            lines.state(),
-                            lines.synthetic(),
-                            lines.items().stream()
-                                    .map(OperationsFiscalEvidenceController::line)
-                                    .toList(),
-                            lines.markingCodesTransmitted()),
+                    linesResponse(lines),
+                    document.earlierRequests().stream()
+                            .map(earlier -> new EarlierRequestResponse(
+                                    earlier.attempt(), earlier.sentAt(), linesResponse(earlier.lines())))
+                            .toList(),
                     document.tenderSplit() == null
                             ? null
                             : new TenderSplitResponse(
@@ -561,6 +567,16 @@ public class OperationsFiscalEvidenceController {
                     document.version(),
                     document.createdAt());
         }
+    }
+
+    private static LinesResponse linesResponse(FiscalEvidenceService.Lines lines) {
+        return new LinesResponse(
+                lines.state(),
+                lines.synthetic(),
+                lines.items().stream()
+                        .map(OperationsFiscalEvidenceController::line)
+                        .toList(),
+                lines.markingCodesTransmitted());
     }
 
     private static ApiMoney money(FiscalEvidenceService.Money value) {

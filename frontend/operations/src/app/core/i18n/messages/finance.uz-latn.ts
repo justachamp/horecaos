@@ -808,6 +808,10 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
     'Qatorlar {filed} STIR ostida topshirilgan, bu hujjat ochilgan STIR ({opened}) emas. Ikkalasi ham yozilganidek koʻrsatilgan; bu yerda hech narsa tuzatilmagan.',
   'finance.fiscalEvidence.lines.marksTransmitted':
     'Bu chek bilan {count} ta markirovka kodi yuborilgan. Ekranda faqat son qoladi.',
+  'finance.fiscalEvidence.earlier.title': 'Shu chek boʻyicha ketgan oldingi soʻrovlar ({count})',
+  'finance.fiscalEvidence.earlier.lead':
+    'Yuqoridagi qatorlar — oxirgi soʻrov. Bular undan oldin yuborilgan va u bilan almashtirilgan. Provayder ularning istalganini olgan boʻlishi mumkin: kelmagan javob nima yetib borganini isbotlamaydi, shuning uchun ular yuborilganidek saqlanadi.',
+  'finance.fiscalEvidence.earlier.attempt': '{attempt}-soʻrov, {at} da yuborilgan',
   'finance.fiscalEvidence.correction.state':
     '{kind}: {at} da soʻralgan. Restoranning fiskal agenti hali javob bermagan.',
   'finance.fiscalEvidence.correction.action': 'Tuzatish yoki bekor qilishni soʻrash',

@@ -801,6 +801,11 @@ export const financeEn = {
     'The lines were filed under TIN {filed}, which is not the TIN this document was opened under ({opened}). Both are shown as recorded; nothing here has been corrected.',
   'finance.fiscalEvidence.lines.marksTransmitted':
     '{count} marking codes were sent with this receipt. Only the number is kept on screen.',
+  'finance.fiscalEvidence.earlier.title':
+    'Earlier requests that also left for this receipt ({count})',
+  'finance.fiscalEvidence.earlier.lead':
+    'The lines above are the latest request. These were sent before it and replaced by it. The provider may hold any of them, because an answer that never came proves nothing about what arrived, so they are kept as they were sent.',
+  'finance.fiscalEvidence.earlier.attempt': 'Request {attempt}, sent {at}',
   'finance.fiscalEvidence.correction.state':
     '{kind} requested at {at}. The restaurant’s fiscal agent has not answered yet.',
   'finance.fiscalEvidence.correction.action': 'Request a correction or void',
