@@ -583,6 +583,12 @@ public final class FakeKeycloakMfaRealm implements AutoCloseable {
                 respond(exchange, 503, json(Map.of("error", "unavailable")));
                 return;
             }
+            // Keycloak 26.7: a client id it holds no client for is a 404 ("Client not found"), as an unknown
+            // account is; it is not an empty list. The adapter must tell the two apart.
+            if (!LOGIN_CLIENT_UUID.equals(parts[2])) {
+                respond(exchange, 404, json(Map.of("error", "Client not found")));
+                return;
+            }
             List<Map<String, Object>> list = new ArrayList<>();
             if (LOGIN_CLIENT_UUID.equals(parts[2])) {
                 for (Session session : offlineSessions.values()) {

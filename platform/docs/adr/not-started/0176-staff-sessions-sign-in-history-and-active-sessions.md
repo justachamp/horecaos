@@ -373,6 +373,14 @@ a fact the repository establishes. The client UUID is the deployment property na
 address field in a session is never copied out of the adapter. A call is made on demand
 when the screen opens and never in a loop.
 
+Keycloak answers `404` both for an account it does not know and, on the offline call, for a
+client id it holds no client for (it is the configured deployment property, and it goes stale
+when the client is recreated). The adapter asks the online list first and on its own, so that
+a `404` there is the account and means "no sessions", and a `404` on the offline call after it
+is the client id and means `unavailable`, the same answer as an unreachable Keycloak: the screen
+then shows the platform's own rows and says so, and never a confident empty list that would
+read every live row as ended. (Clarified 2026-10-12; no decision changes.)
+
 ### Policy key (ADR 0030)
 
 `iam.staff_sign_in_retention_days`, Integer, default 180, range 30 to 730, settable at
