@@ -184,14 +184,6 @@ class LoyaltyPosSyncHttpTests {
     @SuppressWarnings("NullAway")
     private uz.horecaos.platform.tenancy.api.ConfigurationResolver configuration;
 
-    @Autowired
-    @SuppressWarnings("NullAway")
-    private uz.horecaos.platform.loyalty.application.AdjustmentReasonPolicyService reasonCodes;
-
-    @Autowired
-    @SuppressWarnings("NullAway")
-    private io.micrometer.core.instrument.MeterRegistry meters;
-
     private ListAppender<ILoggingEvent> logCapture;
 
     @BeforeEach
