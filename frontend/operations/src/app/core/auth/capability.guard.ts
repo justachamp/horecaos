@@ -1,7 +1,7 @@
 import { inject } from '@angular/core';
 import { CanActivateChildFn, Router, UrlTree } from '@angular/router';
 
-import { NavItem, NAV_ITEMS, admitsSection } from '../../shell/navigation';
+import { NavItem, NAV_ITEMS, admitsUrl } from '../../shell/navigation';
 import { SessionCapabilities } from './session-capabilities';
 
 /**
@@ -47,7 +47,7 @@ export const capabilityGuard: CanActivateChildFn = async (_childRoute, state) =>
   const router = inject(Router);
 
   await capabilities.ensureLoaded();
-  if (admitsSection(item, (capability) => capabilities.has(capability))) {
+  if (admitsUrl(item, state.url, (capability) => capabilities.has(capability))) {
     return true;
   }
 

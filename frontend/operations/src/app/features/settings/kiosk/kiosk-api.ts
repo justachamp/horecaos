@@ -5,9 +5,27 @@ import { ApiClient } from '../../../core/api/api-client';
 import { command } from '../../../core/api/idempotency';
 import { LocationScope } from '../../../core/api/operations-paths';
 import { terminalPaths } from '../../../core/api/terminal-paths';
+import type { Capability } from '../../../core/auth/session-capabilities';
+import type { FeatureFlags } from '../../../core/feature-flags';
 
-/** The dark flag that holds kiosk pairing back until a pilot branch asks for it (ADR 0162, Decision 8). */
+/** The dark flag that holds kiosk pairing back until a pilot branch asks for it (ADR 0162, Decision 9). */
 export const KIOSK_FLAG = 'feature.kiosk_devices';
+
+/**
+ * Whether the kiosk screens are offered to this operator: the dark flag is on for the tenant, or she cannot see it.
+ *
+ * The console reads flags with `tenant.read` (ADR 0082), which a branch manager does not hold: the read is refused and,
+ * by that record's own consequence, every flag reads as off for a person whose only grant is at a location. She is the
+ * person ADR 0162 has pair kiosks, so for her the flag cannot decide what is drawn; the server is the gate, and it
+ * refuses a pairing while the flag is off (422, naming the flag), which the page shows as it is. A location-scoped flag
+ * read, which ADR 0082 says a location-level feature will need, would let the page say so before she types a code.
+ */
+export function kioskOffered(
+  flags: Pick<FeatureFlags, 'isOn'>,
+  holds: (capability: Capability) => boolean,
+): boolean {
+  return flags.isOn(KIOSK_FLAG) || !holds('TENANT_READ');
+}
 
 /** Mirrors `KioskDeviceController.PendingResponse`: what a pending code claims. The label is whatever the device sent. */
 export interface KioskPendingView {

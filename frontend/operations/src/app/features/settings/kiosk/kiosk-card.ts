@@ -17,7 +17,7 @@ import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
-import { KIOSK_FLAG, KioskApi, KioskChannelChoice, KioskView } from './kiosk-api';
+import { KioskApi, KioskChannelChoice, KioskView, kioskOffered } from './kiosk-api';
 
 /** How long a kiosk may go quiet before the list says so. A kiosk polls its record once a minute. */
 export const KIOSK_QUIET_AFTER_MINUTES = 5;
@@ -28,7 +28,8 @@ export const KIOSK_QUIET_AFTER_MINUTES = 5;
  * rename or move to another KIOSK channel at the same branch; revoke with a reason.
  *
  * It answers to the dark flag `feature.kiosk_devices`: with the flag off the card says the feature is not switched on and
- * asks the server for nothing. «Replace» is revoke and then pair, and the card says so: the kiosk displays its own code, so
+ * asks the server for nothing. An operator who cannot read flags (a branch manager, who does not hold `tenant.read`,
+ * {@link kioskOffered}) is shown the card, and the server refuses a pairing while the flag is off. «Replace» is revoke and then pair, and the card says so: the kiosk displays its own code, so
  * no console issues one.
  *
  * Changing anything needs `kiosk.device.manage` at the branch, which the list itself also needs; the card hides what the
@@ -50,7 +51,11 @@ export class KioskCard implements OnInit {
   readonly scope = input.required<LocationScope>();
 
   protected readonly flagLoaded = signal(false);
-  protected readonly enabled = computed(() => this.flagLoaded() && this.flags.isOn(KIOSK_FLAG));
+  protected readonly enabled = computed(
+    () =>
+      this.flagLoaded() &&
+      kioskOffered(this.flags, (capability) => this.capabilities.has(capability)),
+  );
   protected readonly canManage = computed(() => this.capabilities.has('KIOSK_DEVICE_MANAGE'));
 
   protected readonly state = signal<'loading' | 'ready' | 'denied' | 'error'>('loading');

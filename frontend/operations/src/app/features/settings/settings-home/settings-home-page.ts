@@ -14,6 +14,7 @@ import { ApiClient } from '../../../core/api/api-client';
 import { ConfigurationKeyView } from '../../../core/api/configuration';
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
+import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { FeatureFlags } from '../../../core/feature-flags';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
@@ -240,13 +241,19 @@ function tilePathOf(link: readonly string[] | null): string | null {
 })
 export class SettingsHomePage {
   private readonly flags = inject(FeatureFlags);
+  private readonly capabilities = inject(SessionCapabilities);
   private readonly tenant = inject(CurrentTenant);
   private readonly readinessApi = inject(ReadinessApi);
   private readonly configurationApi = inject(ConfigurationApi);
   private readonly router = inject(Router);
   protected readonly i18n = inject(I18n);
 
-  protected readonly groups = computed(() => visibleSettings((flag) => this.flags.isOn(flag)));
+  protected readonly groups = computed(() =>
+    visibleSettings(
+      (flag) => this.flags.isOn(flag),
+      (capability) => this.capabilities.has(capability),
+    ),
+  );
 
   protected readonly query = signal('');
   protected readonly searchHost = viewChild<ElementRef<HTMLElement>>('searchHost');

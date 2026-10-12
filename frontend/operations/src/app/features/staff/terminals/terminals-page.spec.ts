@@ -1,5 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -84,11 +85,17 @@ describe('TerminalsPage', () => {
 
   async function render(
     api: Partial<TerminalsApi>,
-    options: { scope?: LocationScope | null; denied?: boolean; manage?: boolean } = {},
+    options: {
+      scope?: LocationScope | null;
+      denied?: boolean;
+      manage?: boolean;
+      kiosks?: boolean;
+    } = {},
   ): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [TerminalsPage],
       providers: [
+        provideRouter([]),
         {
           provide: CurrentLocation,
           useValue: {
@@ -109,7 +116,8 @@ describe('TerminalsPage', () => {
             ensureLoaded: () => Promise.resolve(),
             has: (capability: string) =>
               capability === 'TERMINAL_READ' ||
-              (capability === 'TERMINAL_MANAGE' && options.manage !== false),
+              (capability === 'TERMINAL_MANAGE' && options.manage !== false) ||
+              (capability === 'KIOSK_DEVICE_MANAGE' && options.kiosks === true),
           },
         },
         { provide: TerminalsApi, useValue: { policy: () => Promise.resolve(POLICY), ...api } },
@@ -363,6 +371,29 @@ describe('TerminalsPage', () => {
     expect(sessions).toHaveBeenLastCalledWith(SCOPE, 'tablet-1', 'c2');
     expect(byId('terminals-history-tablet-1')?.textContent).toContain('Bakhrom T.');
     expect(byId('terminals-history-more')).toBeNull();
+  });
+
+  describe('the door to the branch’s kiosks (ADR 0162)', () => {
+    const KIOSK = device({ deviceId: 'kiosk-1', displayName: 'Lobby kiosk', deviceClass: 'KIOSK' });
+
+    it('links a person who may pair and revoke kiosks to them, once the branch has one', async () => {
+      await render({ list: () => Promise.resolve([device(), KIOSK]) }, { kiosks: true });
+
+      const link = byId('terminals-kiosks')?.querySelector('a');
+      expect(link?.getAttribute('href')).toBe('/settings/channel-setup/kiosks');
+    });
+
+    it('offers no link before the branch has a kiosk, so a branch outside the pilot is shown nothing of it', async () => {
+      await render({ list: () => Promise.resolve([device()]) }, { kiosks: true });
+
+      expect(byId('terminals-kiosks')).toBeNull();
+    });
+
+    it('offers no link to a person who may not pair kiosks', async () => {
+      await render({ list: () => Promise.resolve([device(), KIOSK]) }, { kiosks: false });
+
+      expect(byId('terminals-kiosks')).toBeNull();
+    });
   });
 
   describe('the Policy card', () => {

@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
+import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { FeatureFlags } from '../../../core/feature-flags';
 import { I18n } from '../../../core/i18n/i18n';
 import { KioskApi, KioskPendingView, KioskView } from './kiosk-api';
@@ -57,7 +58,13 @@ describe('KioskPairingPage (ADR 0162)', () => {
 
   async function render(
     api: Partial<KioskApi>,
-    options: { code?: string; flag?: boolean; scope?: LocationScope | null } = {},
+    options: {
+      code?: string;
+      flag?: boolean;
+      scope?: LocationScope | null;
+      /** Whether the operator holds `tenant.read`, which is what reads the flags (ADR 0082). A branch manager does not. */
+      readsFlags?: boolean;
+    } = {},
   ): Promise<void> {
     await TestBed.configureTestingModule({
       imports: [KioskPairingPage],
@@ -84,6 +91,15 @@ describe('KioskPairingPage (ADR 0162)', () => {
           useValue: {
             ensureLoaded: () => Promise.resolve(),
             isOn: (code: string) => code === 'feature.kiosk_devices' && options.flag !== false,
+          },
+        },
+        {
+          provide: SessionCapabilities,
+          useValue: {
+            ensureLoaded: () => Promise.resolve(),
+            has: (capability: string) =>
+              capability === 'KIOSK_DEVICE_MANAGE' ||
+              (capability === 'TENANT_READ' && options.readsFlags !== false),
           },
         },
         {
@@ -225,6 +241,58 @@ describe('KioskPairingPage (ADR 0162)', () => {
 
     expect(byId('pairing-off')).not.toBeNull();
     expect(pending).not.toHaveBeenCalled();
+  });
+
+  it('offers a branch manager the page though the console cannot read the flag for her (ADR 0082), and the server refuses a pairing while it is off', async () => {
+    // Flags are read with tenant.read, which she does not hold: every flag reads as off for her.
+    const refused = new ApiError(
+      'UNPROCESSABLE_STATE',
+      422,
+      {
+        status: 422,
+        detail: 'Kiosk pairing is not enabled for this tenant (feature.kiosk_devices)',
+      },
+      'c',
+    );
+    const approve = vi.fn().mockReturnValue(throwError(() => refused));
+    const pending = vi.fn().mockResolvedValue(PENDING);
+    await render({ pending, approve }, { code: 'ABCD1234', flag: false, readsFlags: false });
+
+    expect(byId('pairing-off')).toBeNull();
+    expect(pending).toHaveBeenCalledWith(SCOPE, 'ABCD1234');
+    type('pairing-name', 'Lobby kiosk');
+    const channel = byId('pairing-channel') as HTMLSelectElement;
+    channel.value = 'c1';
+    channel.dispatchEvent(new Event('change'));
+    const confirm = byId('pairing-confirm') as HTMLInputElement;
+    confirm.checked = true;
+    confirm.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    (byId('pairing-submit') as HTMLButtonElement).click();
+    await flush();
+    fixture.detectChanges();
+
+    expect(byId('pairing-error')?.textContent).toContain('feature.kiosk_devices');
+    expect(byId('pairing-done')).toBeNull();
+  });
+
+  it('sends the manager back to the branch’s kiosks, which she can open, once a kiosk is paired', async () => {
+    const approve = vi.fn().mockReturnValue(of(PAIRED));
+    await render({ pending: () => Promise.resolve(PENDING), approve }, { code: 'ABCD1234' });
+    type('pairing-name', 'Lobby kiosk');
+    const channel = byId('pairing-channel') as HTMLSelectElement;
+    channel.value = 'c1';
+    channel.dispatchEvent(new Event('change'));
+    const confirm = byId('pairing-confirm') as HTMLInputElement;
+    confirm.checked = true;
+    confirm.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    (byId('pairing-submit') as HTMLButtonElement).click();
+    await flush();
+    fixture.detectChanges();
+
+    expect(byId('pairing-done')).not.toBeNull();
+    expect(byId('pairing-back')?.getAttribute('href')).toBe('/settings/channel-setup/kiosks');
   });
 
   it('asks for a branch first when the scope bar names none', async () => {

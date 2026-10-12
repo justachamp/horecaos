@@ -551,6 +551,7 @@ export const staffUzLatn: AreaMessages<typeof staffEn> = {
   'staff.terminals.policy.saved': 'Saqlandi.',
   'staff.terminals.policy.saving': 'Saqlanmoqda',
   'staff.terminals.policy.retry': 'Qayta urinish',
+  'staff.terminals.kiosks.manage': 'Kiosklar: ulash, boshqa kanalga oʻtkazish yoki uzish',
   'staff.terminals.policy.save': 'Saqlash',
   'staff.terminals.active.title': 'Qurilmalar',
   'staff.terminals.active.empty':

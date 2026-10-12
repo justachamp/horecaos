@@ -36,6 +36,7 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.nav.locations': 'Филиалы',
   'settings.nav.salesChannels': 'Каналы продаж',
   'settings.nav.channelSetup': 'Настройка каналов',
+  'settings.nav.kiosks': 'Киоски',
   'settings.nav.orderPolicy': 'Правила заказа',
   'settings.nav.paymentMethods': 'Способы оплаты',
   'settings.nav.fiscalization': 'Фискализация',
@@ -102,6 +103,8 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.home.description.salesChannels':
     'Какие каналы продаж существуют и что каждому из них разрешено.',
   'settings.home.description.channelSetup': 'Настройка витрины за каждым каналом.',
+  'settings.home.description.kiosks':
+    'Подключить киоск по коду на его экране и видеть, переименовывать, переносить и отключать киоски филиала.',
   'settings.home.description.orderPolicy': 'Свод правил, по которым оценивается каждый заказ.',
   'settings.home.description.catalogBaseSettings':
     'Переключатели логики остатков и цен QR/киоска — общие для всей компании.',
@@ -1551,7 +1554,7 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.kioskPairing.done': '{name} теперь продаёт через канал {channel}.',
   'settings.kioskPairing.doneHint':
     'Киоск прочитает настройки и покажет статус в течение минуты. На нём ничего вводить не нужно.',
-  'settings.kioskPairing.back': 'К каналам продаж',
+  'settings.kioskPairing.back': 'К киоскам',
   'settings.kioskPairing.error.gone':
     'Код неизвестен, уже использован или истёк. Попросите киоск показать новый.',
   'settings.kioskPairing.error.tooMany':

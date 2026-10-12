@@ -58,12 +58,44 @@ export interface NavItem {
    * the section's representative one, and the screens inside still refuse what the server refuses.
    */
   readonly alsoAdmittedBy?: readonly Capability[];
+  /**
+   * Single screens under this section that a narrower capability admits to, without admitting to the section.
+   *
+   * {@link alsoAdmittedBy} opens the whole section and puts its entry on the rail; this opens only the named URLs and
+   * leaves the rail alone. It is for a screen that a role the section is not for must reach (ADR 0162: a branch
+   * manager pairs a kiosk from a QR that opens a Settings page, and holds nothing else Settings is for). `path` is
+   * matched against the URL's path exactly, so a sibling screen is not admitted by it.
+   */
+  readonly alsoAdmittedAt?: readonly NavAdmission[];
+}
+
+export interface NavAdmission {
+  readonly path: string;
+  readonly capability: Capability;
 }
 
 /** Whether `held` admits the operator to a rail section: its capability, or one of the alternatives. */
 export function admitsSection(item: NavItem, held: (capability: Capability) => boolean): boolean {
   return (
     held(item.capability) || (item.alsoAdmittedBy ?? []).some((capability) => held(capability))
+  );
+}
+
+/**
+ * Whether `held` admits the operator to this URL of the section: the section itself, or a screen of it that a narrower
+ * capability opens ({@link NavItem.alsoAdmittedAt}). `url` may carry a query and a fragment.
+ */
+export function admitsUrl(
+  item: NavItem,
+  url: string,
+  held: (capability: Capability) => boolean,
+): boolean {
+  if (admitsSection(item, held)) {
+    return true;
+  }
+  const path = url.split('?')[0].split('#')[0].replace(/\/+$/, '');
+  return (item.alsoAdmittedAt ?? []).some(
+    (admission) => admission.path === path && held(admission.capability),
   );
 }
 
@@ -221,6 +253,14 @@ export const NAVIGATION: readonly NavGroup[] = [
         // brand- or location-scoped bundle. P31's own operations
         // configuration surface names `TENANT_READ` for the same reason.
         capability: 'TENANT_READ',
+        // ADR 0162: a kiosk is paired by a branch manager (`kiosk.device.manage` is held by `location-manager`, who
+        // holds no `TENANT_READ`), from a QR that opens `/settings/channel-setup/kiosk-pairing`. The section is not
+        // hers and gets no rail entry (`alsoAdmittedBy` would give every branch manager of every tenant one, pilot or
+        // not); the two pages that are hers are admitted by their path.
+        alsoAdmittedAt: [
+          { path: '/settings/channel-setup/kiosk-pairing', capability: 'KIOSK_DEVICE_MANAGE' },
+          { path: '/settings/channel-setup/kiosks', capability: 'KIOSK_DEVICE_MANAGE' },
+        ],
       },
     ],
   },

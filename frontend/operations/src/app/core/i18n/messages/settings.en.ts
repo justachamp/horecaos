@@ -34,6 +34,7 @@ export const settingsEn = {
   'settings.nav.locations': 'Locations',
   'settings.nav.salesChannels': 'Sales channels',
   'settings.nav.channelSetup': 'Channel setup',
+  'settings.nav.kiosks': 'Kiosks',
   'settings.nav.orderPolicy': 'Order policy',
   'settings.nav.paymentMethods': 'Payment methods',
   'settings.nav.fiscalization': 'Fiscalization',
@@ -102,6 +103,8 @@ export const settingsEn = {
   'settings.home.description.salesChannels':
     'Which routes into the restaurant exist, and what each one is allowed to do.',
   'settings.home.description.channelSetup': 'Configure the storefront behind each channel.',
+  'settings.home.description.kiosks':
+    'Pair a kiosk with the code on its screen, and see, rename, move or revoke the branch’s kiosks.',
   'settings.home.description.orderPolicy': 'The rulebook every order is measured against.',
   'settings.home.description.catalogBaseSettings':
     'Company-wide stock logic and QR/kiosk pricing switches.',
@@ -1553,7 +1556,7 @@ export const settingsEn = {
   'settings.kioskPairing.done': '{name} now sells through {channel}.',
   'settings.kioskPairing.doneHint':
     'The kiosk reads its configuration and shows its status within a minute. Nothing needs to be typed on it.',
-  'settings.kioskPairing.back': 'Back to sales channels',
+  'settings.kioskPairing.back': 'Back to kiosks',
   'settings.kioskPairing.error.gone':
     'This code is unknown, already used or expired. Ask the kiosk for a new one.',
   'settings.kioskPairing.error.tooMany': 'Too many codes were tried. Wait a minute and try again.',

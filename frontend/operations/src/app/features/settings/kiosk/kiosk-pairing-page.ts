@@ -11,11 +11,18 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
+import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { FeatureFlags } from '../../../core/feature-flags';
 import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
-import { KIOSK_FLAG, KioskApi, KioskChannelChoice, KioskPendingView, KioskView } from './kiosk-api';
+import {
+  KioskApi,
+  KioskChannelChoice,
+  KioskPendingView,
+  KioskView,
+  kioskOffered,
+} from './kiosk-api';
 
 /** The longest display name the platform accepts. */
 const NAME_MAX = 120;
@@ -47,13 +54,17 @@ export class KioskPairingPage implements OnInit {
   private readonly api = inject(KioskApi);
   private readonly route = inject(ActivatedRoute);
   private readonly flags = inject(FeatureFlags);
+  private readonly capabilities = inject(SessionCapabilities);
   private readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
 
   protected readonly nameMax = NAME_MAX;
 
   protected readonly ready = signal(false);
-  protected readonly enabled = computed(() => this.ready() && this.flags.isOn(KIOSK_FLAG));
+  protected readonly enabled = computed(
+    () =>
+      this.ready() && kioskOffered(this.flags, (capability) => this.capabilities.has(capability)),
+  );
   protected readonly scope = this.location.scope;
   protected readonly branchName = computed(() => {
     const id = this.scope()?.locationId;
@@ -84,7 +95,11 @@ export class KioskPairingPage implements OnInit {
   );
 
   async ngOnInit(): Promise<void> {
-    await Promise.all([this.flags.ensureLoaded(), this.location.ensureLoaded()]);
+    await Promise.all([
+      this.flags.ensureLoaded(),
+      this.capabilities.ensureLoaded(),
+      this.location.ensureLoaded(),
+    ]);
     this.ready.set(true);
     const prefilled = this.route.snapshot.queryParamMap.get('code');
     if (prefilled !== null && prefilled.trim() !== '') {

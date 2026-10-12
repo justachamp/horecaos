@@ -551,6 +551,7 @@ export const staffRu: AreaMessages<typeof staffEn> = {
   'staff.terminals.policy.saved': 'Сохранено.',
   'staff.terminals.policy.saving': 'Сохраняем',
   'staff.terminals.policy.retry': 'Повторить',
+  'staff.terminals.kiosks.manage': 'Киоски: подключить, перенести или отключить киоски филиала',
   'staff.terminals.policy.save': 'Сохранить',
   'staff.terminals.active.title': 'Устройства',
   'staff.terminals.active.empty':

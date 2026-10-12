@@ -678,8 +678,10 @@ shows its own code and a QR of the console's approval page; the manager's phone 
 filled in, the manager chooses the channel and ticks that the code on the screen in front of them is the one shown,
 and nothing is paired before that. A kiosk has no credential to type: the device claims its own once, as a kitchen
 display does, and "service PIN" and "device login and password" are deliberately not fields (the lockdown is the
-operating system's, see `docs/runbooks/terminals-and-kiosks.md`). The printer, terminal and marking block is still a
-`LockedState`.
+operating system's, see `docs/runbooks/terminals-and-kiosks.md`). The people who pair kiosks are branch managers, who
+hold `kiosk.device.manage` and not `tenant.read` or `channel.read`: the approval page and a *Kiosks* screen that mounts
+this same section for the working branch (`settings/channel-setup/kiosks`) are admitted to them by their own paths, and
+the rest of Settings is not. The printer, terminal and marking block is still a `LockedState`.
 
 ### QR_TABLE
 

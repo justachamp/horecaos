@@ -6,6 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
@@ -70,7 +71,7 @@ export const UNSEEN_AFTER_MINUTES = 5;
  */
 @Component({
   selector: 'q-terminals-page',
-  imports: [TPipe],
+  imports: [TPipe, RouterLink],
   templateUrl: './terminals-page.html',
   styleUrl: './terminals-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -89,6 +90,17 @@ export class TerminalsPage implements OnInit {
   protected readonly devices = signal<readonly TerminalView[]>([]);
 
   protected readonly canManage = computed(() => this.capabilities.has('TERMINAL_MANAGE'));
+
+  /**
+   * The door to the branch's kiosks (ADR 0162): for a person who may pair and revoke them, once the branch has one. The
+   * kiosk screens are dark behind a flag that a branch manager cannot read (ADR 0082), so a kiosk in this very list is
+   * what tells her the branch is in the pilot; a link in every tenant would show a staged feature to all of them.
+   */
+  protected readonly kiosksLink = computed(
+    () =>
+      this.capabilities.has('KIOSK_DEVICE_MANAGE') &&
+      this.devices().some((device) => device.deviceClass === 'KIOSK'),
+  );
 
   // ----------------------------------------------------------------------------------- the policy card
   protected readonly policy = signal<TerminalPolicyView | null>(null);
