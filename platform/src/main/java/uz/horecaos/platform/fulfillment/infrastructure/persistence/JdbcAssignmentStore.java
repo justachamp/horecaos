@@ -281,6 +281,22 @@ public class JdbcAssignmentStore {
         if (stamp.isEmpty()) {
             return;
         }
+        // Offer the lead a key, then read back the one it has. Reading first and writing a key of our own
+        // loses a race that two followers accepted a moment apart always run: both read "no key", both mint
+        // one, the lead keeps the first writer's and the second follower is stamped with a key nobody else
+        // carries, which splits one run in two. The conditional write is what picks the winner (the second
+        // waits for the first to commit, finds the key set and changes nothing), and the read after it
+        // returns the winner's key to both.
+        UUID offered = UUID.randomUUID();
+        jdbc.sql("""
+                UPDATE fulfillment.shipments
+                SET run_key = :runKey
+                WHERE tenant_id = :tenantId AND id = :leadId AND run_key IS NULL
+                """)
+                .param("runKey", offered)
+                .param("tenantId", tenantId)
+                .param("leadId", stamp.get().leadShipmentId())
+                .update();
         UUID runKey = jdbc.sql("""
                         SELECT run_key FROM fulfillment.shipments
                         WHERE tenant_id = :tenantId AND id = :leadId
@@ -289,16 +305,7 @@ public class JdbcAssignmentStore {
                 .param("leadId", stamp.get().leadShipmentId())
                 .query((row, number) -> row.getObject("run_key", UUID.class))
                 .optional()
-                .orElseGet(UUID::randomUUID);
-        jdbc.sql("""
-                UPDATE fulfillment.shipments
-                SET run_key = :runKey
-                WHERE tenant_id = :tenantId AND id = :leadId AND run_key IS NULL
-                """)
-                .param("runKey", runKey)
-                .param("tenantId", tenantId)
-                .param("leadId", stamp.get().leadShipmentId())
-                .update();
+                .orElse(offered);
         jdbc.sql("""
                 UPDATE fulfillment.shipments
                 SET run_key = :runKey, run_merge_distance_m = :distance

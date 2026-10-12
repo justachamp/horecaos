@@ -13,9 +13,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
@@ -714,6 +716,90 @@ class DeliverySourcingTests {
                 .isEqualTo(SourceType.INTERNAL);
     }
 
+    @Test
+    @DisplayName("two followers accepted at the same moment on a lead with no run key yet end up in one run with it")
+    void twoFollowersOfAnUnkeyedLeadShareOneRunKey() throws Exception {
+        UUID courierThree = UUID.fromString("33333333-3333-3333-3333-333333333333");
+        seedCourier(COURIER_ONE, "C-001");
+        seedCourier(COURIER_TWO, "C-002");
+        seedCourier(courierThree, "C-003");
+
+        // The lead is carried on its own distance, so nothing has given it a run key.
+        DeliveryPlan leadPlan = planning.open(TENANT, BRAND, branch, seedDeliveryOrder(), CONFIRMED)
+                .orElseThrow();
+        UUID leadOffer = openInternalOffer(leadPlan, COURIER_ONE, "offer-lead");
+        assertThat(journal.acceptOffer(TENANT, leadOffer, COURIER_ONE, CONFIRMED))
+                .isTrue();
+        UUID lead = jdbc.sql("SELECT id FROM fulfillment.shipments")
+                .query(UUID.class)
+                .single();
+        assertThat(jdbc.sql("SELECT run_key FROM fulfillment.shipments WHERE id = :id")
+                        .param("id", lead)
+                        .query((row, number) -> row.getObject("run_key"))
+                        .optional())
+                .as("a lead nobody has joined has no key")
+                .isEmpty();
+
+        // Two other orders, offered to two couriers on the increment basis, both measured to that lead.
+        DeliveryPlan firstPlan = planning.open(TENANT, BRAND, branch, seedDeliveryOrder(), CONFIRMED)
+                .orElseThrow();
+        DeliveryPlan secondPlan = planning.open(TENANT, BRAND, branch, seedDeliveryOrder(), CONFIRMED)
+                .orElseThrow();
+        UUID firstOffer = openRunIncrementOffer(firstPlan, COURIER_TWO, "offer-first", lead);
+        UUID secondOffer = openRunIncrementOffer(secondPlan, courierThree, "offer-second", lead);
+
+        TransactionTemplate transactions = new TransactionTemplate(new DataSourceTransactionManager(db.dataSource()));
+        CountDownLatch leadHeld = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try (ExecutorService pool = Executors.newFixedThreadPool(3)) {
+            try {
+                // Hold the lead's row, so that both acceptances read its (absent) key before either can write it:
+                // the interleaving a pair of taps a few milliseconds apart produces, made certain.
+                Future<?> holder = pool.submit(() -> transactions.executeWithoutResult(status -> {
+                    jdbc.sql("SELECT id FROM fulfillment.shipments WHERE id = :id FOR NO KEY UPDATE")
+                            .param("id", lead)
+                            .query(UUID.class)
+                            .single();
+                    leadHeld.countDown();
+                    try {
+                        release.await(60, TimeUnit.SECONDS);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                    }
+                }));
+                assertThat(leadHeld.await(60, TimeUnit.SECONDS)).isTrue();
+                Future<Optional<UUID>> first = pool.submit(() -> transactions.execute(
+                        status -> assignmentStore.acceptOffer(TENANT, firstOffer, COURIER_TWO, CONFIRMED)));
+                Future<Optional<UUID>> second = pool.submit(() -> transactions.execute(
+                        status -> assignmentStore.acceptOffer(TENANT, secondOffer, courierThree, CONFIRMED)));
+                for (int i = 0; i < 600; i++) {
+                    if (jdbc.sql("SELECT count(*) FROM pg_locks WHERE NOT granted")
+                                    .query(Long.class)
+                                    .single()
+                            >= 2) {
+                        break;
+                    }
+                    Thread.sleep(50);
+                }
+                release.countDown();
+                holder.get(60, TimeUnit.SECONDS);
+                assertThat(first.get(60, TimeUnit.SECONDS)).isPresent();
+                assertThat(second.get(60, TimeUnit.SECONDS)).isPresent();
+            } finally {
+                release.countDown();
+            }
+        }
+
+        assertThat(jdbc.sql("SELECT count(DISTINCT run_key) FROM fulfillment.shipments WHERE run_key IS NOT NULL")
+                        .query(Long.class)
+                        .single())
+                .as("one run, one key: the lead and both followers carry the same one")
+                .isEqualTo(1L);
+        assertThat(countWhere("fulfillment.shipments", "run_key IS NOT NULL"))
+                .as("and all three carry it")
+                .isEqualTo(3);
+    }
+
     // -------------------------------------------------------------- helpers
 
     private UUID openPartnerAttempt(DeliveryPlan plan, UUID bindingId, String key) {
@@ -742,6 +828,22 @@ class DeliverySourcingTests {
                         null,
                         0,
                         CONFIRMED))
+                .attemptId();
+    }
+
+    private UUID openRunIncrementOffer(DeliveryPlan plan, UUID courierId, String key, UUID leadShipment) {
+        return journal.openInternalOffer(new uz.horecaos.platform.fulfillment.application.SourcingJournal.InternalOffer(
+                        TENANT,
+                        plan.id(),
+                        courierId,
+                        key,
+                        CONFIRMED.plusSeconds(60),
+                        SourcingDecision.FLEET_AVAILABLE,
+                        null,
+                        0,
+                        CONFIRMED,
+                        uz.horecaos.platform.fulfillment.application.SourcingJournal.RunStamp.runIncrement(
+                                300, leadShipment)))
                 .attemptId();
     }
 
