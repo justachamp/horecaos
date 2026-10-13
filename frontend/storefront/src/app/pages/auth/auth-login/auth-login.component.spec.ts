@@ -103,6 +103,12 @@ function setUp(brand: BrandConfig = TEST_BRAND) {
 }
 
 describe('AuthLoginComponent phone formatting', () => {
+  // A return destination (ReturnDestination, sessionStorage) left behind by another spec
+  // or case would send a successful sign-in somewhere other than /locations; every case
+  // starts and ends with an empty sessionStorage so the destination is always its own.
+  beforeEach(() => sessionStorage.clear());
+  afterEach(() => sessionStorage.clear());
+
   it('phoneValid is false under 9 digits and true at exactly 9', () => {
     const { comp } = setUp();
 

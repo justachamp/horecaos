@@ -55,6 +55,11 @@ async function letPendingWorkRun(): Promise<void> {
 }
 
 describe('DineInScanComponent', () => {
+  // The scan remembers the table as a return destination (ReturnDestination, sessionStorage)
+  // for a sign-in that this spec never performs; clear it so no later spec in the same
+  // worker inherits it (the storefront runner shares one document across spec files).
+  afterEach(() => sessionStorage.clear());
+
   it('exchanges the printed token and replaces the URL with the token-free table screen', async () => {
     const { fixture, dineIn, router } = setUp('printed-table-token');
     dineIn.exchange.mockResolvedValue({ mode: 'ORDER_AND_PAY' });

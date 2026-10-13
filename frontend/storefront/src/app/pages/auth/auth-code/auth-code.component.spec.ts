@@ -103,6 +103,12 @@ function validState(overrides: Partial<HistoryState> = {}): HistoryState {
 }
 
 describe('AuthCodeComponent.ngOnInit (missing challenge redirects)', () => {
+  // A return destination (ReturnDestination, sessionStorage) left behind by another spec
+  // or case would send a successful sign-in somewhere other than /locations; every case
+  // starts and ends with an empty sessionStorage so the destination is always its own.
+  beforeEach(() => sessionStorage.clear());
+  afterEach(() => sessionStorage.clear());
+
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
