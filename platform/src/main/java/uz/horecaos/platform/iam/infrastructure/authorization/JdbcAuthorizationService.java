@@ -353,7 +353,11 @@ public class JdbcAuthorizationService implements AuthorizationService {
     }
 
     /** Visible because Spring caching proxies cannot cache a private method. */
-    public record GrantRow(ResourceScope scope, String roleCode, Capability capability, @Nullable String roleName) {
+    public record GrantRow(
+            ResourceScope scope,
+            String roleCode,
+            Capability capability,
+            @Nullable String roleName) {
 
         public GrantRow(ResourceScope scope, String roleCode, Capability capability) {
             this(scope, roleCode, capability, null);

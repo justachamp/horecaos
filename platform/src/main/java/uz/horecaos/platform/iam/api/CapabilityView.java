@@ -38,7 +38,10 @@ public record CapabilityView(
      *                 show them a generated code.
      */
     public record ScopeGrant(
-            ResourceScope scope, String roleCode, Set<Capability> capabilities, @Nullable String roleName) {
+            ResourceScope scope,
+            String roleCode,
+            Set<Capability> capabilities,
+            @Nullable String roleName) {
 
         public ScopeGrant {
             capabilities = Set.copyOf(capabilities);
