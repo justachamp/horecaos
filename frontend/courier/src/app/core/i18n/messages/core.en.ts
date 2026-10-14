@@ -1,0 +1,28 @@
+export const coreEn = {
+  'app.title': 'HorecaOS Courier',
+  'shell.skip': 'Skip to content',
+  'shell.nav.label': 'Main navigation',
+  'shell.nav.home': 'Today',
+  'shell.nav.profile': 'Profile',
+  'shell.language': 'Language',
+  'shell.update.available': 'A new version of the app is available.',
+  'shell.update.reload': 'Update',
+  'common.retry': 'Try again',
+  'common.loading': 'Loading…',
+  'common.signOut': 'Sign out',
+  'common.signIn': 'Sign in',
+  'error.generic': 'Something went wrong. Please try again.',
+  'error.network': 'Cannot reach the server. Check your connection and try again.',
+  'error.forbidden': 'This account is not allowed to do that.',
+  'auth.callback.working': 'Signing you in…',
+  'auth.error.title': 'Could not sign in',
+  'auth.error.access_denied': 'Sign-in was cancelled.',
+  'auth.error.expired': 'The sign-in took too long or was started in another tab. Start again.',
+  'auth.error.storage_unavailable':
+    'Your browser will not keep the data sign-in needs. Turn off private browsing and try again.',
+  'auth.error.unavailable':
+    'The sign-in service is not available right now. Try again in a moment.',
+  'auth.error.default': 'Sign-in did not complete. Try again.',
+  'auth.signedOut.title': 'You are signed out',
+  'auth.signedOut.body': 'Sign in again to carry on working.',
+} as const;

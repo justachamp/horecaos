@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out-tsc/
+*.tsbuildinfo
+
+# Angular cache
+.angular/
+
+# Test & coverage
+coverage/
+
+# IDE & editors
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+*.pem

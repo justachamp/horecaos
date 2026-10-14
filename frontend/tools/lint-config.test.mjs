@@ -12,8 +12,8 @@
  *
  * The app is the working directory, and the expectations are per app: `control-plane`
  * vendors the design system's closed type scale, so it also bans a raw `font-size: Npx`
- * (the rule frontend/operations owns); the two storefronts are Tailwind/SCSS apps with no
- * such scale, so for them a raw px font-size is NOT a finding and this checks that it stays
+ * (the rule frontend/operations owns), and so does `courier`, which vendors the same sheet; the two
+ * storefronts are Tailwind/SCSS apps with no such scale, so for them a raw px font-size is NOT a finding and this checks that it stays
  * one that is not (a rule that fires where its premise is absent is noise that gets ignored).
  *
  * Node's built-in runner, no dependencies beyond the app's own eslint.
@@ -28,7 +28,7 @@ const app = basename(appDir);
 const requireFromApp = createRequire(join(appDir, 'package.json'));
 const { loadESLint } = requireFromApp('eslint');
 
-const BANS_RAW_PX = app === 'control-plane';
+const BANS_RAW_PX = app === 'control-plane' || app === 'courier';
 
 const eslint = await new (await loadESLint({ useFlatConfig: true }))({ cwd: appDir });
 

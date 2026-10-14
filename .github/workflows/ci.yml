@@ -376,8 +376,8 @@ jobs:
         # Every app under frontend/ that carries a package.json. storefront-milliy
         # was missing from this list while three customer features shipped into
         # it -- reviews, promo codes and referrals -- so none of them was ever
-        # built or tested by CI.
-        app: [control-plane, operations, storefront, storefront-milliy]
+        # built or tested by CI. courier (ADR 0179) joined with its first commit.
+        app: [control-plane, courier, operations, storefront, storefront-milliy]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -404,9 +404,9 @@ jobs:
           npm run lint:rules
           npm run i18n:dead:test
 
-      - name: Lint (control-plane, storefront, storefront-milliy)
+      - name: Lint (control-plane, courier, storefront, storefront-milliy)
         # ESLint 8.57 with the typescript-eslint recommended rules, plus (control-plane
-        # only, which vendors the closed type scale) the same horecaos px rule
+        # and courier, which vendor the closed type scale) the same horecaos px rule
         # operations enforces, imported from frontend/operations' plugin rather than
         # copied. Each app's tree was clean when this step was added. `lint:rules`
         # (frontend/tools/lint-config.test.mjs) feeds the configured linter code that
@@ -441,6 +441,15 @@ jobs:
         # sheet moved; the script's output says which and what not to do. The step
         # is pinned by frontend/tools/test_format_changed.py.
         if: matrix.app == 'control-plane'
+        working-directory: frontend/${{ matrix.app }}
+        run: npm run check:tokens
+
+      - name: Design tokens drift check (courier)
+        # courier vendors frontend/design-tokens/tokens.css the way control-plane does, and
+        # for the same reason its ESLint config and prettier ignore that copy: it is where the
+        # closed type scale is defined. Without this step an edit to the copy merges unlinted,
+        # unformatted and uncompared. The step is pinned by frontend/tools/test_format_changed.py.
+        if: matrix.app == 'courier'
         working-directory: frontend/${{ matrix.app }}
         run: npm run check:tokens
 
@@ -513,6 +522,8 @@ jobs:
           - { name: horecaos-storefront, context: frontend/storefront, dockerfile: frontend/storefront/Dockerfile }
           - { name: horecaos-control-plane, context: frontend/control-plane, dockerfile: frontend/control-plane/Dockerfile }
           - { name: horecaos-operations, context: frontend/operations, dockerfile: frontend/operations/Dockerfile }
+          # The courier PWA (ADR 0179): the same nginx + runtime-config shape as the three above.
+          - { name: horecaos-courier, context: frontend/courier, dockerfile: frontend/courier/Dockerfile }
     env:
       # ghcr.io is the recommendation (ADR 0061 leaves registry choice an
       # open input; ghcr costs nothing extra with the existing GitHub and

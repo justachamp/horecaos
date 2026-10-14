@@ -1,0 +1,37 @@
+<a class="skip-link" href="#main">{{ 'shell.skip' | t }}</a>
+
+<header class="topbar">
+  <span class="brand">{{ 'app.title' | t }}</span>
+  <label class="language">
+    <span class="visually-hidden">{{ 'shell.language' | t }}</span>
+    <select (change)="chooseLocale($event)">
+      @for (locale of locales; track locale.code) {
+        <option [value]="locale.code" [selected]="locale.code === i18n.locale()">
+          {{ locale.label }}
+        </option>
+      }
+    </select>
+  </label>
+</header>
+
+@if (updates.ready()) {
+  <div class="update" role="status">
+    <span>{{ 'shell.update.available' | t }}</span>
+    <button type="button" class="btn secondary" (click)="updates.apply()">
+      {{ 'shell.update.reload' | t }}
+    </button>
+  </div>
+}
+
+<main id="main" tabindex="-1">
+  <router-outlet />
+</main>
+
+@if (auth.signedIn()) {
+  <nav class="tabs" [attr.aria-label]="'shell.nav.label' | t">
+    <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
+      {{ 'shell.nav.home' | t }}
+    </a>
+    <a routerLink="/profile" routerLinkActive="active">{{ 'shell.nav.profile' | t }}</a>
+  </nav>
+}

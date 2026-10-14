@@ -33,7 +33,7 @@ import format_changed as fc  # noqa: E402
 REPO = HERE.parents[1]
 WORKFLOW = REPO / ".github" / "workflows" / "ci.yml"
 APP = "frontend/operations"
-APPS = ("operations", "control-plane", "storefront", "storefront-milliy")
+APPS = ("operations", "control-plane", "courier", "storefront", "storefront-milliy")
 
 
 def code(step: str) -> str:
@@ -482,8 +482,8 @@ class RealPrettierTests(unittest.TestCase):
         self.assertNotEqual(0, self.check())
 
 
-OTHER_APPS = ("control-plane", "storefront", "storefront-milliy")
-OTHER_LINT_STEP = "Lint (control-plane, storefront, storefront-milliy)"
+OTHER_APPS = ("control-plane", "courier", "storefront", "storefront-milliy")
+OTHER_LINT_STEP = "Lint (control-plane, courier, storefront, storefront-milliy)"
 # Every app's whole src/ tree is prettier-clean: CI runs each one's own `npm run format:check`.
 # control-plane was the last app on the changed-files ratchet and was reformatted in one commit.
 WHOLE_TREE_APPS = APPS
@@ -629,6 +629,35 @@ class WorkflowWiringTests(unittest.TestCase):
         config = (REPO / "frontend" / "control-plane" / "eslint.config.mjs").read_text(encoding="utf-8")
         self.assertIn("src/design-system/tokens.css", config)
         self.assertIn("check:tokens", config)
+
+    def test_courier_diffs_its_vendored_token_sheet_in_ci(self) -> None:
+        # courier vendors the same sheet as control-plane and its lint config and prettier ignore
+        # it on the same strength: `npm run check:tokens` keeping it a copy of the canonical sheet.
+        step = self.step("Design tokens drift check (courier)")
+        self.assertRegex(code(step), r"(?m)^        if: matrix\.app == 'courier'$")
+        self.assert_runs_in_the_app_directory(step)
+        self.assertEqual(["npm run check:tokens"], run_lines(step))
+        self.assertEqual("node scripts/check-tokens.mjs", self.scripts("courier")["check:tokens"])
+        self.assertTrue((REPO / "frontend" / "design-tokens" / "tokens.css").is_file())
+        names = re.findall(r"^      - name: (.+)$", self.block, re.MULTILINE)
+        order = {name: index for index, name in enumerate(names)}
+        self.assertGreater(order["Design tokens drift check (courier)"], order["Install"])
+        self.assertLess(order["Design tokens drift check (courier)"], order["Test and build"])
+        config = (REPO / "frontend" / "courier" / "eslint.config.mjs").read_text(encoding="utf-8")
+        self.assertIn("src/design-system/tokens.css", config)
+        self.assertIn("check:tokens", config)
+        ignore = (REPO / "frontend" / "courier" / ".prettierignore").read_text(encoding="utf-8")
+        self.assertIn("src/design-system/tokens.css", ignore)
+
+    def test_the_courier_image_is_published_beside_the_other_frontends(self) -> None:
+        # ADR 0179: a courier app nobody publishes is a courier app nobody can install. The image
+        # is built from the app's own directory, like the three frontends it sits beside.
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn(
+            "{ name: horecaos-courier, context: frontend/courier, dockerfile: frontend/courier/Dockerfile }",
+            text,
+        )
+        self.assertTrue((REPO / "frontend" / "courier" / "Dockerfile").is_file())
 
     def test_this_file_runs_in_ci_because_it_also_guards_the_wiring(self) -> None:
         step = self.step("Tooling tests (operations)")

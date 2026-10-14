@@ -1,0 +1,144 @@
+/* Application stylesheet.
+ *
+ * Three things happen here: the fonts are self-hosted, the vendored token sheet is pulled in, and
+ * the handful of rules shared by every screen of a phone-sized app are declared. A colour, a
+ * radius or a font size written literally below is a bug -- it belongs in the design system and
+ * reaches this app through src/design-system/tokens.css.
+ */
+
+/* Self-hosted: a courier's phone should not make a third-party request on every launch (ADR
+   0029), and a font that arrives over the network arrives after first paint. The package carries
+   latin, latin-ext and cyrillic behind unicode-range, so ru and uz-Latn each download only what
+   they need. Weights 400 and 600 are the two the app uses. */
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+
+@import './design-system/tokens.css';
+
+app-root {
+  display: block;
+  min-height: 100%;
+}
+
+body {
+  /* The token sheet sets the surface colour; this app is a single column, so it also keeps the
+     page from scrolling sideways on a narrow phone. */
+  overflow-x: hidden;
+  /* A courier uses this one-handed, outdoors. Never let a long press select a label. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+/* Focus is one of the four places the design system spends platform blue. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--q-primary);
+  outline-offset: 2px;
+}
+
+main:focus {
+  outline: none;
+}
+
+/* The shared page rhythm: a screen is a stack of cards with the design system's hairlines. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 16px calc(88px + env(safe-area-inset-bottom));
+  max-width: 640px;
+  margin-inline: auto;
+}
+
+.card {
+  background: var(--q-canvas);
+  border: 1px solid var(--q-hairline);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card > h2 {
+  color: var(--q-ink-muted);
+}
+
+/* 48px is the touch target the field surface asks for. */
+.btn {
+  min-height: 48px;
+  padding: 0 24px;
+  border: 1px solid transparent;
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--q-dur-base) var(--q-ease-productive);
+}
+
+.btn:hover {
+  background: var(--q-primary-hover);
+}
+
+.btn:active {
+  background: var(--q-primary-active);
+}
+
+.btn.secondary {
+  background: transparent;
+  color: var(--q-primary);
+  border-color: var(--q-primary);
+}
+
+.btn.secondary:hover {
+  background: var(--q-info-tint);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  background: var(--q-surface-1);
+  color: var(--q-ink-muted);
+}
+
+.notice {
+  padding: 12px 16px;
+  border-inline-start: 4px solid var(--q-info-text);
+  background: var(--q-info-tint);
+  color: var(--q-info-text);
+}
+
+.notice.warning {
+  border-inline-start-color: var(--q-warning);
+  background: var(--q-warning-tint);
+  color: var(--q-warning-text);
+}
+
+.notice.error {
+  border-inline-start-color: var(--q-error);
+  background: var(--q-error-tint);
+  color: var(--q-error-text);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+  }
+}

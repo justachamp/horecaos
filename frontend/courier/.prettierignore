@@ -1,0 +1,6 @@
+# Generated, not authored: a copy of frontend/design-tokens/tokens.css, kept honest by
+# `npm run check:tokens`. Formatting a vendored copy makes it stop being a copy.
+src/design-system/tokens.css
+
+dist
+.angular
