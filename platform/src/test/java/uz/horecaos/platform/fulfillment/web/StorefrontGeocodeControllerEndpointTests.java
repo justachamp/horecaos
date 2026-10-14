@@ -1,6 +1,7 @@
 package uz.horecaos.platform.fulfillment.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -36,6 +37,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.fulfillment.application.GeocodingService;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.integration.camel.geo.fake.FakeGeocoderAdapter;
 import uz.horecaos.platform.support.TestDatabase;
@@ -114,6 +116,10 @@ class StorefrontGeocodeControllerEndpointTests {
     @Autowired
     @SuppressWarnings("NullAway")
     private RecordingRateLimiter limiter;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
+    private GeocodingService geocoding;
 
     @BeforeEach
     void reset() {
@@ -260,6 +266,37 @@ class StorefrontGeocodeControllerEndpointTests {
 
         assertThat(refused.getResponse().getStatus()).isEqualTo(422);
         assertThat(refused.getResponse().getContentAsString()).contains("REGION_REQUIRED");
+    }
+
+    @Test
+    @DisplayName(
+            "the region a customer's lookups are made in is the tenant's own, else the platform's, and a tenant with neither is told so")
+    void theStorefrontRegionIsTheTenantsOwnElseThePlatforms() {
+        UUID platformRegion = UUID.fromString("018fa200-4000-7000-8000-0000000000e9");
+        jdbc.sql("""
+                INSERT INTO fulfillment.regions (
+                    id, tenant_id, code, display_name_ru, display_name_uz, display_name_en,
+                    centre_lat, centre_lon, bbox_sw_lat, bbox_sw_lon, bbox_ne_lat, bbox_ne_lon,
+                    status, version)
+                VALUES (:id, NULL, 'PLATFORM-TASHKENT', 'P', 'P', 'P',
+                    41.3, 69.2, 41.0, 69.0, 41.6, 69.6, 'ACTIVE', 1)
+                """).param("id", platformRegion).update();
+
+        assertThat(geocoding.primaryRegionId(TENANT))
+                .as("the tenant's own region wins although the platform's is listed first")
+                .isEqualTo(TASHKENT);
+
+        jdbc.sql("UPDATE fulfillment.regions SET status = 'ARCHIVED' WHERE id = :id")
+                .param("id", TASHKENT)
+                .update();
+        assertThat(geocoding.primaryRegionId(TENANT))
+                .as("a tenant with no region of its own is served by the platform's")
+                .isEqualTo(platformRegion);
+
+        jdbc.sql("UPDATE fulfillment.regions SET status = 'ARCHIVED' WHERE id = :id")
+                .param("id", platformRegion)
+                .update();
+        assertThatThrownBy(() -> geocoding.primaryRegionId(TENANT)).hasMessageContaining("no active region");
     }
 
     // ---------------------------------------------------------------- authorization
