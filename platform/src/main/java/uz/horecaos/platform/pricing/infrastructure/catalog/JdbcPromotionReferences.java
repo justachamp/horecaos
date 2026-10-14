@@ -119,6 +119,14 @@ public class JdbcPromotionReferences {
         };
     }
 
+    /**
+     * The dearest current unit price among these variants across the brand's active price books, or 0 when
+     * none is priced: what a gift of one unit of the variants could be worth at most.
+     */
+    public long highestUnitPrice(UUID tenantId, UUID brandId, Collection<UUID> variantIds, Instant now) {
+        return pricing.highestVariantPrice(tenantId, brandId, new HashSet<>(variantIds), now);
+    }
+
     private Set<UUID> brandOwned(String table, UUID tenantId, UUID brandId, Collection<UUID> ids) {
         if (ids.isEmpty()) {
             return Set.of();

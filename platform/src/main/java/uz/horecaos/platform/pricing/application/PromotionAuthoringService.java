@@ -519,8 +519,37 @@ public class PromotionAuthoringService {
             if (amount instanceof Number number) {
                 largestAmount = Math.max(largestAmount, number.longValue());
             }
+            // A gift carries neither a percentage nor an amount, so it used to pass this gate whatever it
+            // gave away. Its worth is what it could cost the tenant: the free quantity times the dearest
+            // gift variant's current unit price, judged against the same amount limit as a fixed discount.
+            if (action.type() == Promotion.Action.Type.FREE_ITEM) {
+                largestAmount = Math.max(largestAmount, giftValue(tenantId, brandId, action));
+            }
         }
         return largestPercentage > percentageThreshold || largestAmount > amountThreshold;
+    }
+
+    /**
+     * The most one redemption of a {@code FREE_ITEM} action can give away, in minor units: the bound on free units
+     * times the dearest current unit price among the gift variants (ADR 0140). An unpriced variant counts as nothing.
+     */
+    private long giftValue(UUID tenantId, UUID brandId, PromotionDefinition.ActionDefinition action) {
+        Object quantity = action.operands().get("quantity");
+        Object variants = action.operands().get("variantIds");
+        if (!(quantity instanceof Number bound) || !(variants instanceof List<?> raw)) {
+            return 0L;
+        }
+        List<UUID> variantIds = new ArrayList<>();
+        for (Object entry : raw) {
+            try {
+                variantIds.add(UUID.fromString(String.valueOf(entry)));
+            } catch (IllegalArgumentException malformed) {
+                // The validator refuses a malformed id; an activation never reaches here with one.
+                return 0L;
+            }
+        }
+        long unit = references.highestUnitPrice(tenantId, brandId, variantIds, clock.instant());
+        return Math.multiplyExact(Math.max(bound.longValue(), 0L), unit);
     }
 
     /** What a signature on an activation covers: which promotion, which definition version, which kind. */

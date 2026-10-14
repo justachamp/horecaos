@@ -362,6 +362,84 @@ class PromotionAuthoringTests {
     }
 
     @Test
+    @DisplayName("a gift worth more than the amount threshold waits for a second person; a cheaper one does not")
+    void aGiftIsJudgedByItsValueNotByTheAbsenceOfAnAmount() {
+        // A FREE_ITEM carries neither basisPoints nor amountMinor, so the activation gate used to wave it
+        // through whatever it gave away. Margherita is 45 000 som: two are 90 000 (under the 100 000 default),
+        // three are 135 000 (over).
+        var cheap = fixture.activate(definition(
+                "GIFT2",
+                Promotion.Scope.ITEM,
+                "gift2",
+                List.of(),
+                List.of(action(
+                        1,
+                        Promotion.Action.Type.FREE_ITEM,
+                        "variantIds",
+                        List.of(fixture.margheritaVariant.toString()),
+                        "quantity",
+                        2L))));
+        assertThat(cheap.approvalId())
+                .as("2 x 45 000 = 90 000 activates directly")
+                .isNull();
+
+        var dear = fixture.authoring.create(
+                TENANT,
+                BRAND,
+                definition(
+                        "GIFT3",
+                        Promotion.Scope.ITEM,
+                        "gift3",
+                        List.of(),
+                        List.of(action(
+                                1,
+                                Promotion.Action.Type.FREE_ITEM,
+                                "variantIds",
+                                List.of(fixture.margheritaVariant.toString()),
+                                "quantity",
+                                3L))));
+        var validated = fixture.authoring.validate(TENANT, BRAND, dear.id(), dear.version());
+        var pending = fixture.authoring.activate(
+                TENANT, BRAND, dear.id(), validated.promotion().version(), "three free pizzas");
+        assertThat(pending.isPending())
+                .as("3 x 45 000 = 135 000 is over the 100 000 default")
+                .isTrue();
+        assertThat(fixture.promotionStore
+                        .find(TENANT, BRAND, dear.id())
+                        .orElseThrow()
+                        .status())
+                .isEqualTo("VALIDATED");
+    }
+
+    @Test
+    @DisplayName("a gift offering several variants is judged by the dearest one")
+    void aGiftIsJudgedByTheDearestVariantItMayGive() {
+        var dear = fixture.authoring.create(
+                TENANT,
+                BRAND,
+                definition(
+                        "GIFTMIX",
+                        Promotion.Scope.ITEM,
+                        "giftmix",
+                        List.of(),
+                        List.of(action(
+                                1,
+                                Promotion.Action.Type.FREE_ITEM,
+                                "variantIds",
+                                List.of(fixture.colaVariant.toString(), fixture.margheritaVariant.toString()),
+                                "quantity",
+                                3L))));
+        var validated = fixture.authoring.validate(TENANT, BRAND, dear.id(), dear.version());
+
+        var pending = fixture.authoring.activate(
+                TENANT, BRAND, dear.id(), validated.promotion().version(), "pizza or cola");
+
+        assertThat(pending.isPending())
+                .as("three Colas would be 36 000, but the customer may be given three Margheritas: 135 000")
+                .isTrue();
+    }
+
+    @Test
     @DisplayName("an approval is spent by the activation it authorised")
     void anApprovalIsSingleUse() {
         var large = fixture.authoring.create(

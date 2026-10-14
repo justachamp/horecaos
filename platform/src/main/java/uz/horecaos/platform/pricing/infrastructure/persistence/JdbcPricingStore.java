@@ -144,6 +144,36 @@ public class JdbcPricingStore {
     }
 
     /**
+     * The dearest current unit price any of these variants has in any active price book of the brand,
+     * or 0 when none of them is priced (ADR 0140: the value an approval threshold judges a gift by).
+     *
+     * <p>The highest rather than the price of one book, because a gift is not tied to the channel or
+     * the branch it will be redeemed at: the approval judges the most the promotion could give away.
+     */
+    public long highestVariantPrice(UUID tenantId, UUID brandId, Set<UUID> variantIds, Instant at) {
+        if (variantIds.isEmpty()) {
+            return 0L;
+        }
+        Long highest = jdbc.sql("""
+                SELECT max(p.amount_minor)
+                FROM pricing.prices p
+                JOIN pricing.price_books pb ON pb.id = p.price_book_id
+                WHERE p.tenant_id = :tenantId AND p.brand_id = :brandId
+                  AND p.priceable_type = 'VARIANT' AND p.priceable_id = ANY(:ids)
+                  AND pb.status = 'ACTIVE'
+                  AND p.valid_from <= :at AND (p.valid_until IS NULL OR p.valid_until > :at)
+                """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("ids", variantIds.toArray(UUID[]::new))
+                .param("at", OffsetDateTime.ofInstant(at, ZoneOffset.UTC))
+                .query(Long.class)
+                .optional()
+                .orElse(null);
+        return highest == null ? 0L : highest;
+    }
+
+    /**
      * Which of these combo components (ADR 0136) have an active price in any active
      * price book of the brand -- {@link #pricedVariants}' question, asked of the
      * fourth priceable type.
