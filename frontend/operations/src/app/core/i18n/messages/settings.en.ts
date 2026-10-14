@@ -1320,6 +1320,14 @@ export const settingsEn = {
   'settings.integrations.detail.bindings.suspend.reasonPrompt':
     'Reason for suspending this binding:',
   'settings.integrations.detail.bindings.empty': 'No bindings yet.',
+  'settings.integrations.detail.ruleset.title': 'Marketplace content rules',
+  'settings.integrations.detail.ruleset.lead':
+    'The rules a branch’s menu is checked against before it is offered to this marketplace. “Universal rules only” checks nothing marketplace-specific.',
+  'settings.integrations.detail.ruleset.noneAuthored':
+    'No marketplace ruleset is authored yet, so every binding is checked against the universal rules only. A ruleset is added when a marketplace’s content requirements are agreed.',
+  'settings.integrations.detail.ruleset.label': 'Marketplace ruleset',
+  'settings.integrations.detail.ruleset.universalOnly': 'Universal rules only',
+  'settings.integrations.detail.ruleset.clear': 'Clear',
   'settings.integrations.detail.bindings.wholeTenant': 'Entire company',
   'settings.integrations.detail.cloposSettings.title': 'Order acceptance',
   'settings.integrations.detail.cloposSettings.requireClerkApproval':

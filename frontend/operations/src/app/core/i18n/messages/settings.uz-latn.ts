@@ -1339,6 +1339,14 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.integrations.detail.bindings.suspend.reasonPrompt':
     'Ushbu bogʻlanishni toʻxtatib turish sababi:',
   'settings.integrations.detail.bindings.empty': 'Hozircha bogʻlanishlar yoʻq.',
+  'settings.integrations.detail.ruleset.title': 'Marketpleys kontent qoidalari',
+  'settings.integrations.detail.ruleset.lead':
+    'Filial menyusi bu marketpleysga berilishidan oldin tekshiriladigan qoidalar. «Faqat umumiy qoidalar» marketpleysga xos hech narsani tekshirmaydi.',
+  'settings.integrations.detail.ruleset.noneAuthored':
+    'Marketpleys qoidalari hali yozilmagan, shuning uchun har bir bogʻlanish faqat umumiy qoidalar boʻyicha tekshiriladi. Marketpleysning kontent talablari kelishilganda qoidalar toʻplami qoʻshiladi.',
+  'settings.integrations.detail.ruleset.label': 'Marketpleys qoidalari toʻplami',
+  'settings.integrations.detail.ruleset.universalOnly': 'Faqat umumiy qoidalar',
+  'settings.integrations.detail.ruleset.clear': 'Tozalash',
   'settings.integrations.detail.bindings.wholeTenant': 'Butun kompaniya',
   'settings.integrations.detail.cloposSettings.title': 'Buyurtmani qabul qilish',
   'settings.integrations.detail.cloposSettings.requireClerkApproval':

@@ -519,6 +519,26 @@ export const settingsPaths = {
   },
 
   /**
+   * `MarketplaceRulesetController.known` — ADR 0138: the closed set of marketplace rulesets a binding may name.
+   * Empty until a per-marketplace ruleset is authored.
+   */
+  integrationMarketplaceRulesets(scope: LocationScope): string {
+    return `${this.integrationInstallations(scope)}/marketplace-rulesets`;
+  },
+
+  /**
+   * `MarketplaceRulesetController.set` — names, or (code null) clears, the ruleset a MARKETPLACE binding is checked
+   * against. `PUT`, under the binding's version in `If-Match`.
+   */
+  integrationBindingRuleset(
+    scope: LocationScope,
+    installationId: string,
+    bindingId: string,
+  ): string {
+    return `${this.integrationInstallationBindings(scope, installationId)}/${enc(bindingId)}/marketplace-ruleset`;
+  },
+
+  /**
    * `OperationsProviderInstallationController.effectiveBindings` — gap-map
    * row 10.8a's per-branch install model, surfaced: for every location of a
    * brand, which installation actually handles each capability there,

@@ -99,7 +99,11 @@ export interface AvailabilityExplanation {
   readonly stopsConsulted?: boolean;
 }
 
-export type PropagationMode = 'AUTOMATIC' | 'MANUAL' | 'SUSPENDED';
+/**
+ * `DRY_RUN` (ADR 0141 Phase 3): the binding rehearses. The platform has computed what it would send, recorded it,
+ * and sent nothing, so the manager compares the list with the partner portal before it goes live.
+ */
+export type PropagationMode = 'AUTOMATIC' | 'MANUAL' | 'SUSPENDED' | 'DRY_RUN';
 
 /** Mirrors `MarketplacePropagationController.ItemResponse`. */
 export interface PropagationItem {
@@ -109,6 +113,9 @@ export interface PropagationItem {
   readonly state: string;
   readonly since?: string | null;
   readonly lastFailureCode?: string | null;
+  /** Dry run: the value the rehearsal would have sent for this dish, and when it decided. Null otherwise. */
+  readonly wouldPushAvailable?: boolean | null;
+  readonly wouldPushAt?: string | null;
 }
 
 /** Mirrors `MarketplacePropagationController.BindingResponse`. */
@@ -128,6 +135,13 @@ export interface PropagationBinding {
   readonly lastFailureAt?: string | null;
   readonly lastFailureCode?: string | null;
   readonly unconfirmedItems: readonly PropagationItem[];
+  /** Dry run: how many dishes the rehearsal has recorded as would-be pushes. Absent on an older server. */
+  readonly wouldPush?: number;
+  /**
+   * ADR 0180 Decision 1: since when a stale-channel incident is open on this binding. It closes by itself when
+   * the partner confirms again or the binding stops being worked, so a value here is an open incident.
+   */
+  readonly incidentOpenSince?: string | null;
 }
 
 interface PropagationResponse {

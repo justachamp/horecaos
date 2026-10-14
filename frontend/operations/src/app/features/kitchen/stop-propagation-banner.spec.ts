@@ -119,6 +119,51 @@ describe('StopPropagationBanner (ADR 0141)', () => {
     ]);
   });
 
+  it('says a binding in dry run has sent nothing, and how many dishes it would have sent', async () => {
+    const host = await render(
+      vi.fn().mockResolvedValue([
+        binding({
+          mode: 'DRY_RUN',
+          displayName: 'Uzum Tezkor',
+          pending: 4,
+          unconfirmed: 4,
+          wouldPush: 3,
+        }),
+      ]),
+    );
+
+    const [line] = lines(host);
+    expect(line).toContain('Uzum Tezkor: dry run');
+    expect(line).toContain('3 items would be sent');
+    expect(line).toContain('nothing has been sent');
+    expect(line).toContain('Compare with the partner portal');
+    expect(host.querySelector('[data-mode="DRY_RUN"]')?.className).toContain(
+      'propagation__line--attention',
+    );
+  });
+
+  it('keeps an open stale-channel incident in view beside the count, and shows none once it has closed', async () => {
+    const open = await render(
+      vi.fn().mockResolvedValue([
+        binding({
+          pending: 2,
+          unconfirmed: 2,
+          oldestUnconfirmedSince: '2026-10-01T09:32:00Z',
+          incidentOpenSince: '2026-10-01T10:02:00Z',
+        }),
+      ]),
+    );
+    const incident = open.querySelector('[data-testid="stop-propagation-incident"]');
+    expect(incident?.textContent).toContain('Yandex Eda: the partner has not confirmed since');
+    expect(incident?.textContent).toContain('closes by itself');
+    TestBed.resetTestingModule();
+
+    const closed = await render(
+      vi.fn().mockResolvedValue([binding({ inSync: 3, incidentOpenSince: null })]),
+    );
+    expect(closed.querySelector('[data-testid="stop-propagation-incident"]')).toBeNull();
+  });
+
   it('renders nothing for a branch with no marketplace, or when the read fails', async () => {
     const none = await render(vi.fn().mockResolvedValue([]));
     expect(none.querySelector('[data-testid="stop-propagation"]')).toBeNull();

@@ -1,0 +1,97 @@
+.decommission {
+  margin: 24px 16px;
+  padding: 16px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+}
+
+.decommission__lead {
+  max-width: 720px;
+  color: var(--q-ink-muted);
+}
+
+.decommission__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+
+.decommission__hint {
+  color: var(--q-ink-subtle);
+}
+
+.decommission__button {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.decommission__button--primary {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.decommission__button:disabled {
+  border-color: var(--q-hairline);
+  background: var(--q-surface-2);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}
+
+.decommission__problem {
+  color: var(--q-error-text);
+  background: var(--q-error-tint);
+  padding: 8px 12px;
+  border-radius: var(--q-radius);
+  max-width: 720px;
+}
+
+.decommission__status {
+  margin: 8px 0;
+}
+
+.decommission__counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.decommission__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+}
+
+.decommission__table thead th {
+  text-align: start;
+  color: var(--q-ink-muted);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.decommission__table tbody td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+  vertical-align: top;
+}
+
+.decommission__accept {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 8px;
+}
+
+.decommission__done {
+  color: var(--q-success-text, var(--q-ink));
+}

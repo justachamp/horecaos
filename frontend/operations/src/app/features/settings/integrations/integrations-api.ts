@@ -103,6 +103,36 @@ export class IntegrationsApi {
     return result.value ?? [];
   }
 
+  /**
+   * ADR 0138: the marketplace rulesets a binding may name. The set is closed and code-owned, and empty until a
+   * per-marketplace ruleset is authored, so the screen says so instead of offering a choice that is not there.
+   */
+  async listMarketplaceRulesets(scope: LocationScope): Promise<readonly string[]> {
+    const result = await firstValueFrom(
+      this.api.get<{ readonly knownCodes: readonly string[] }>(
+        settingsPaths.integrationMarketplaceRulesets(scope),
+      ),
+    );
+    return result.value?.knownCodes ?? [];
+  }
+
+  /** Names (or, with null, clears) a MARKETPLACE binding's ruleset under the version the screen read. */
+  async setMarketplaceRuleset(
+    scope: LocationScope,
+    installationId: string,
+    bindingId: string,
+    code: string | null,
+    expectedVersion: number,
+  ): Promise<MarketplaceRulesetResult> {
+    return firstValueFrom(
+      this.api.put<{ code: string | null }, MarketplaceRulesetResult>(
+        settingsPaths.integrationBindingRuleset(scope, installationId, bindingId),
+        command({ code }),
+        { expectedVersion },
+      ),
+    );
+  }
+
   async activateBinding(
     scope: LocationScope,
     installationId: string,
@@ -601,6 +631,17 @@ export interface BindingView {
   readonly priority: number;
   readonly effectiveFrom: string;
   readonly effectiveUntil: string | null;
+  /** The binding's version, quoted in `If-Match` by a writer of the binding (batch 21); absent on an older server. */
+  readonly version?: number;
+  /** ADR 0138: the marketplace ruleset a MARKETPLACE binding names; null for none. Absent on an older server. */
+  readonly marketplaceRulesetCode?: string | null;
+}
+
+/** Mirrors `MarketplaceRulesetController.RulesetResponse`. */
+export interface MarketplaceRulesetResult {
+  readonly bindingId: string;
+  readonly rulesetCode: string | null;
+  readonly version: number;
 }
 
 /** Mirrors `ProviderInstallationController.EffectiveBindingView` (gap-map row 10.8a). */

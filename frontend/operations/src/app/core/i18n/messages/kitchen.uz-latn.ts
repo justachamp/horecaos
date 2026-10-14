@@ -54,6 +54,9 @@ export const kitchenUzLatn: AreaMessages<typeof kitchenEn> = {
   'kitchen.item.column.quantity': 'Soni',
   'kitchen.item.column.status': 'Holati',
   'kitchen.item.lineUnresolved': 'Qator —',
+  'kitchen.item.intake.stopped': 'Stopda: buyurtma qabul qilingan, pishirishdan oldin tekshiring',
+  'kitchen.item.intake.unmapped': 'Katalogda yoʻq: pozitsiyani agregatordan aniqlang',
+  'kitchen.item.intake.reference': 'Agregator pozitsiyasi {reference}',
   'kitchen.item.combo': 'Kombo',
   'kitchen.item.comboCaption': 'har bir qism oʻz stansiyasiga boradi',
   'kitchen.item.status.QUEUED': 'Navbatda',
@@ -162,6 +165,51 @@ export const kitchenUzLatn: AreaMessages<typeof kitchenEn> = {
   'kitchen.stopList.scope.brand': 'Butun brend',
   'kitchen.stopList.scope.menu': 'Menyu',
   'kitchen.stopList.scope.channel': 'Bitta kanal',
+  'kitchen.stopList.decommission.title': 'Stoplarni oʻchirish',
+  'kitchen.stopList.decommission.lead':
+    'Stoplarni oʻchirish stopdagi har bir taomni yana sotuvga qaytaradi. Platforma administratori buni qilishidan oldin materializatsiyani ishga tushiring: u har bir stopni imkon boricha aniq taomning oʻz pozitsiyasiga yozadi va oʻtkaza olmagan stoplarni sanaydi. Hisobotni oʻqing, qabul qiling va administratorga xabar bering.',
+  'kitchen.stopList.decommission.start': 'Materializatsiyani ishga tushirish',
+  'kitchen.stopList.decommission.starting': 'Bajarilmoqda…',
+  'kitchen.stopList.decommission.startHint':
+    'Takrorlash mumkin. Stopdagi taom stopda qoladi; ishga tushirish faqat stopni taomning pozitsiyasiga yozadi.',
+  'kitchen.stopList.decommission.loading': 'Oxirgi ishga tushirish yuklanmoqda…',
+  'kitchen.stopList.decommission.none': 'Hali ishga tushirilmagan.',
+  'kitchen.stopList.decommission.status.running': 'Bajarilmoqda',
+  'kitchen.stopList.decommission.status.completed': 'Tugadi, hisobot qabul qilinmagan',
+  'kitchen.stopList.decommission.status.acknowledged': 'Qabul qilindi',
+  'kitchen.stopList.decommission.status.failed': 'Muvaffaqiyatsiz',
+  'kitchen.stopList.decommission.started': '{when} boshlangan',
+  'kitchen.stopList.decommission.completed': '{when} tugagan',
+  'kitchen.stopList.decommission.count.seen': 'Koʻrib chiqilgan stoplar: {count}',
+  'kitchen.stopList.decommission.count.written': 'Pozitsiyaga yozilgan: {count}',
+  'kitchen.stopList.decommission.count.already': 'U yerda allaqachon mavjud emas: {count}',
+  'kitchen.stopList.decommission.count.notCarried': 'Oʻtkazilmagan: {count}',
+  'kitchen.stopList.decommission.failed':
+    'Yozib boʻlmagan stoplar: {count}. Keyingi ishga tushirish ularni oʻtkazmaguncha oʻchirish bloklangan: yana ishga tushiring.',
+  'kitchen.stopList.decommission.column.dish': 'Taom',
+  'kitchen.stopList.decommission.column.scope': 'Stop qamrovi',
+  'kitchen.stopList.decommission.column.branch': 'Filial',
+  'kitchen.stopList.decommission.column.reason': 'Nega oʻtkazilmagan',
+  'kitchen.stopList.decommission.everyBranch': 'Barcha filiallar',
+  'kitchen.stopList.decommission.more': 'Yana koʻrsatish',
+  'kitchen.stopList.decommission.nothingLost':
+    'Hech narsa tushib qolmadi: amaldagi har bir stop endi pozitsiyaga ham yozilgan.',
+  'kitchen.stopList.decommission.accept':
+    'Hisobotni oʻqidim va undagi taomlar stoplar oʻchirilgach yana sotuvga qaytishini qabul qilaman.',
+  'kitchen.stopList.decommission.acknowledge': 'Hisobotni qabul qilish',
+  'kitchen.stopList.decommission.acknowledging': 'Saqlanmoqda…',
+  'kitchen.stopList.decommission.acknowledged':
+    '{when} qabul qilindi. Endi platforma administratori stoplarni oʻchirishi mumkin. Shu ishga tushirishdan keyin qoʻyilgan stop yangi ishga tushirish qabul qilinmaguncha oʻchirishni bloklaydi.',
+  'kitchen.stopList.decommission.reason.UNTRACKED_ITEM':
+    'Taom qoldiqni yuritmaydi, yozish uchun pozitsiya yoʻq: u yana sotiladi',
+  'kitchen.stopList.decommission.reason.QUANTITY_ITEM':
+    'Miqdor boʻyicha hisoblanadigan taomda yoziladigan «stopda» holati yoʻq: u yana sotiladi',
+  'kitchen.stopList.decommission.reason.CHANNEL_SCOPE':
+    'Bitta kanal uchun stop: yozish taomni stop qamramagan kanallarda ham toʻxtatgan boʻlardi',
+  'kitchen.stopList.decommission.reason.MENU_NOT_EVERY_CHANNEL':
+    'Menyu bu yerda faqat baʼzi kanallarga chop etilgan: yozish taomni boshqalarida ham toʻxtatgan boʻlardi',
+  'kitchen.stopList.decommission.reason.WRITE_FAILED':
+    'Yozish muvaffaqiyatsiz: ishga tushirish bu stopni oʻtkazmaguncha oʻchirish bloklangan',
   'kitchen.stopList.stop.until': '{when} gacha',
   'kitchen.stopList.stop.indefinite': 'olib tashlanguncha',
   'kitchen.stopList.stop.lift': 'Bu stopni olib tashlash',
@@ -189,6 +237,10 @@ export const kitchenUzLatn: AreaMessages<typeof kitchenEn> = {
   'kitchen.stopList.propagation.pending':
     '{name}: {count} ta pozitsiya {since} dan beri tasdiqlanmagan — hamkor kabinetida yangilang',
   'kitchen.stopList.propagation.inSync': '{name}: sinxronlashgan',
+  'kitchen.stopList.propagation.dryRun':
+    '{name}: sinov rejimi — {count} ta pozitsiya yuborilgan boʻlardi, hech narsa yuborilmadi. Yoqishdan oldin hamkor kabineti bilan solishtiring',
+  'kitchen.stopList.propagation.incident':
+    '{name}: hamkor {since} dan beri tasdiqlamayapti. U tasdiqlamaguncha bu ochiq qoladi va oʻzi yopiladi.',
 
   // Sigʻim va bufer sozlamalari (2.6) — 43-toʻlqin
   'kitchen.capacity.title': 'Sigʻim va bufer sozlamalari',

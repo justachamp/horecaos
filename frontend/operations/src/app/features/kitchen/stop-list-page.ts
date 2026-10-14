@@ -28,6 +28,7 @@ import {
 } from '../../shared/ui/data-table/data-table-types';
 import { describeApiError } from '../orders/order-errors';
 import { StopExplainerDialog } from './stop-explainer-dialog';
+import { StopMaterialisationPanel } from './stop-materialisation-panel';
 import { StopPropagationBanner } from './stop-propagation-banner';
 import { StopInForce, StopScope, StopsApi } from './stop-scope-api';
 import { StopApplied, StopScopePanel } from './stop-scope-panel';
@@ -159,7 +160,15 @@ interface BulkAvailabilityResponse {
  */
 @Component({
   selector: 'q-stop-list-page',
-  imports: [TPipe, DataTable, QCellDef, StopScopePanel, StopPropagationBanner, StopExplainerDialog],
+  imports: [
+    TPipe,
+    DataTable,
+    QCellDef,
+    StopScopePanel,
+    StopPropagationBanner,
+    StopExplainerDialog,
+    StopMaterialisationPanel,
+  ],
   templateUrl: './stop-list-page.html',
   styleUrl: './stop-list-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

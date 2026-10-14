@@ -1322,6 +1322,14 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.integrations.detail.bindings.suspend.reasonPrompt':
     'Причина приостановки этой привязки:',
   'settings.integrations.detail.bindings.empty': 'Привязок пока нет.',
+  'settings.integrations.detail.ruleset.title': 'Правила содержимого маркетплейса',
+  'settings.integrations.detail.ruleset.lead':
+    'Правила, по которым меню филиала проверяется перед выдачей этому маркетплейсу. «Только общие правила» не проверяет ничего специфичного для маркетплейса.',
+  'settings.integrations.detail.ruleset.noneAuthored':
+    'Правил для маркетплейсов пока нет, поэтому каждая привязка проверяется только по общим правилам. Набор правил добавляется, когда согласованы требования маркетплейса к содержимому.',
+  'settings.integrations.detail.ruleset.label': 'Набор правил маркетплейса',
+  'settings.integrations.detail.ruleset.universalOnly': 'Только общие правила',
+  'settings.integrations.detail.ruleset.clear': 'Сбросить',
   'settings.integrations.detail.bindings.wholeTenant': 'Вся компания',
   'settings.integrations.detail.cloposSettings.title': 'Приём заказов',
   'settings.integrations.detail.cloposSettings.requireClerkApproval':

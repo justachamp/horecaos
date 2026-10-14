@@ -74,6 +74,11 @@ export class StopPropagationBanner {
         return this.i18n.t('kitchen.stopList.propagation.manual', { name });
       case 'SUSPENDED':
         return this.i18n.t('kitchen.stopList.propagation.suspended', { name });
+      case 'DRY_RUN':
+        return this.i18n.t('kitchen.stopList.propagation.dryRun', {
+          name,
+          count: binding.wouldPush ?? binding.unconfirmed,
+        });
       case 'AUTOMATIC':
         return binding.unconfirmed > 0
           ? this.i18n.t('kitchen.stopList.propagation.pending', {
@@ -87,6 +92,19 @@ export class StopPropagationBanner {
 
   protected needsAttention(binding: PropagationBinding): boolean {
     return binding.mode !== 'AUTOMATIC' || binding.unconfirmed > 0;
+  }
+
+  /**
+   * The open stale-channel incident of a binding, if one is open (ADR 0180 Decision 1): the alert the manager may
+   * have missed in the chat, kept in view until the partner confirms again, when it closes by itself.
+   */
+  protected incident(binding: PropagationBinding): string | null {
+    return binding.incidentOpenSince
+      ? this.i18n.t('kitchen.stopList.propagation.incident', {
+          name: binding.displayName || binding.providerType,
+          since: formatDateTime(new Date(binding.incidentOpenSince), PLACEHOLDER_TIME_ZONE),
+        })
+      : null;
   }
 
   private since(binding: PropagationBinding): string {
