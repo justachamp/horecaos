@@ -28,11 +28,24 @@ public record CapabilityView(
         scopes = List.copyOf(Objects.requireNonNull(scopes, "Scopes are required"));
     }
 
-    /** One scope a principal holds, with what it grants there. */
-    public record ScopeGrant(ResourceScope scope, String roleCode, Set<Capability> capabilities) {
+    /**
+     * One scope a principal holds, with what it grants there.
+     *
+     * @param roleName the company's own name for the job (ADR 0186) when it is a job the
+     *                 company defined; null for a code-owned job, whose name is a translation
+     *                 the console owns. Carried here because the person holding a custom job
+     *                 cannot read the company's job list, and «Мои должности» would otherwise
+     *                 show them a generated code.
+     */
+    public record ScopeGrant(
+            ResourceScope scope, String roleCode, Set<Capability> capabilities, @Nullable String roleName) {
 
         public ScopeGrant {
             capabilities = Set.copyOf(capabilities);
+        }
+
+        public ScopeGrant(ResourceScope scope, String roleCode, Set<Capability> capabilities) {
+            this(scope, roleCode, capabilities, null);
         }
     }
 }

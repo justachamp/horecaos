@@ -10,6 +10,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -169,35 +170,40 @@ class TenantRoleEndpointTests {
 
         assertThat(post(rolesPath(), OWNER, """
                         {"name":"No reason","scopeType":"LOCATION","capabilities":["order.read"]}
-                        """).getResponse().getStatus())
-                .isEqualTo(400);
+                        """).getResponse().getStatus()).isEqualTo(400);
         assertThat(post(rolesPath(), OWNER, """
                         {"name":"No level","capabilities":["order.read"],"reason":"x"}
-                        """).getResponse().getStatus())
-                .isEqualTo(400);
+                        """).getResponse().getStatus()).isEqualTo(400);
         assertThat(post(rolesPath(), OWNER, """
                         {"name":"Nothing","scopeType":"LOCATION","capabilities":[],"reason":"x"}
-                        """).getResponse().getStatus())
-                .isEqualTo(400);
+                        """).getResponse().getStatus()).isEqualTo(400);
     }
 
     @Test
-    @DisplayName("only iam.role.manage defines a job: an owner and an administrator may, a branch manager and a cook may not")
+    @DisplayName(
+            "only iam.role.manage defines a job: an owner and an administrator may, a branch manager and a cook may not")
     void onlyTheRoleManagersMay() throws Exception {
-        assertThat(post(rolesPath(), OWNER, createBody("From the owner")).getResponse().getStatus())
+        assertThat(post(rolesPath(), OWNER, createBody("From the owner"))
+                        .getResponse()
+                        .getStatus())
                 .isEqualTo(201);
-        assertThat(post(rolesPath(), ADMIN, createBody("From the administrator")).getResponse().getStatus())
+        assertThat(post(rolesPath(), ADMIN, createBody("From the administrator"))
+                        .getResponse()
+                        .getStatus())
                 .isEqualTo(201);
         assertThat(post(rolesPath(), BRANCH_MANAGER, createBody("From a branch manager"))
                         .getResponse()
                         .getStatus())
                 .isEqualTo(403);
-        assertThat(post(rolesPath(), COOK, createBody("From a cook")).getResponse().getStatus())
+        assertThat(post(rolesPath(), COOK, createBody("From a cook"))
+                        .getResponse()
+                        .getStatus())
                 .isEqualTo(403);
     }
 
     @Test
-    @DisplayName("a capability the author does not hold is a 403 naming it, and the deny-list is a 400 even for the owner")
+    @DisplayName(
+            "a capability the author does not hold is a 403 naming it, and the deny-list is a 400 even for the owner")
     void theAuthorHoldsWhatSheWritesAndTheDenyListHolds() throws Exception {
         MvcResult notHeld = post(rolesPath(), ADMIN, """
                 {"name":"Выгрузка","scopeType":"TENANT","capabilities":["order.read","customer.pii.export"],"reason":"x"}
@@ -219,7 +225,9 @@ class TenantRoleEndpointTests {
     void anEditIsVersioned() throws Exception {
         String code = create(OWNER, "Старший кассир");
 
-        assertThat(put(rolePath(code), OWNER, null, editBody("No version")).getResponse().getStatus())
+        assertThat(put(rolePath(code), OWNER, null, editBody("No version"))
+                        .getResponse()
+                        .getStatus())
                 .isEqualTo(400);
 
         MvcResult edited = put(rolePath(code), OWNER, "W/\"1\"", editBody("Главный кассир"));
@@ -233,7 +241,8 @@ class TenantRoleEndpointTests {
     }
 
     @Test
-    @DisplayName("a job can be given through the ordinary grant route, shows its holder, and cannot be closed while held")
+    @DisplayName(
+            "a job can be given through the ordinary grant route, shows its holder, and cannot be closed while held")
     void aJobIsGivenHeldAndCannotBeClosedWhileHeld() throws Exception {
         String code = create(OWNER, "Старший кассир");
 
@@ -243,7 +252,7 @@ class TenantRoleEndpointTests {
         assertThat(granted.getResponse().getStatus()).isEqualTo(200);
 
         MvcResult listed = get(rolesPath(), OWNER);
-        JsonNode mine = custom(json(listed), code);
+        JsonNode mine = java.util.Objects.requireNonNull(custom(json(listed), code));
         assertThat(mine.get("name").asText()).isEqualTo("Старший кассир");
         assertThat(mine.get("custom").asBoolean()).isTrue();
         assertThat(mine.get("grantable").asBoolean()).isTrue();
@@ -261,13 +270,16 @@ class TenantRoleEndpointTests {
         MvcResult closed = delete(rolePath(code), OWNER, "W/\"1\"", "{\"reason\":\"Closing\"}");
         assertThat(closed.getResponse().getStatus()).isEqualTo(200);
         assertThat(json(closed).get("status").asText()).isEqualTo("RETIRED");
-        assertThat(custom(json(get(rolesPath(), OWNER)), code)).as("a closed job leaves the list").isNull();
+        assertThat(custom(json(get(rolesPath(), OWNER)), code))
+                .as("a closed job leaves the list")
+                .isNull();
     }
 
     // -------------------------------------------------------- reads, isolation
 
     @Test
-    @DisplayName("the roles list carries the code-owned jobs and the company's own, and the capability catalogue says what is held")
+    @DisplayName(
+            "the roles list carries the code-owned jobs and the company's own, and the capability catalogue says what is held")
     void theReadSide() throws Exception {
         String code = create(OWNER, "Старший кассир");
 
@@ -297,7 +309,8 @@ class TenantRoleEndpointTests {
     }
 
     @Test
-    @DisplayName("a branch manager sees the company's jobs on her own branch route, with grantable read back from the grant rule")
+    @DisplayName(
+            "a branch manager sees the company's jobs on her own branch route, with grantable read back from the grant rule")
     void aBranchManagersRouteIncludesTheJobs() throws Exception {
         String branchJob = create(OWNER, "Старший кассир");
         MvcResult companyJob = post(rolesPath(), OWNER, """
@@ -305,8 +318,9 @@ class TenantRoleEndpointTests {
                 """);
         String companyCode = json(companyJob).get("code").asText();
 
-        MvcResult routed = get("/api/v1/operations/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION
-                + "/grant-roles", BRANCH_MANAGER);
+        MvcResult routed = get(
+                "/api/v1/operations/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION + "/grant-roles",
+                BRANCH_MANAGER);
 
         assertThat(routed.getResponse().getStatus()).isEqualTo(200);
         JsonNode roles = json(routed);
@@ -322,7 +336,9 @@ class TenantRoleEndpointTests {
     void anotherCompanyIsRefused() throws Exception {
         String code = create(OWNER, "Старший кассир");
 
-        assertThat(put(rolePath(code), OTHER_OWNER, "W/\"1\"", editBody("Stolen")).getResponse().getStatus())
+        assertThat(put(rolePath(code), OTHER_OWNER, "W/\"1\"", editBody("Stolen"))
+                        .getResponse()
+                        .getStatus())
                 .isEqualTo(403);
         assertThat(delete(rolePath(code), OTHER_OWNER, "W/\"1\"", "{\"reason\":\"x\"}")
                         .getResponse()
@@ -389,7 +405,7 @@ class TenantRoleEndpointTests {
                 .andReturn();
     }
 
-    private MvcResult put(String path, String subject, String ifMatch, String body) throws Exception {
+    private MvcResult put(String path, String subject, @Nullable String ifMatch, String body) throws Exception {
         var request = MockMvcRequestBuilders.put(path)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body)
@@ -401,7 +417,7 @@ class TenantRoleEndpointTests {
         return mvc.perform(request).andReturn();
     }
 
-    private MvcResult delete(String path, String subject, String ifMatch, String body) throws Exception {
+    private MvcResult delete(String path, String subject, @Nullable String ifMatch, String body) throws Exception {
         var request = MockMvcRequestBuilders.delete(path)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body)
@@ -432,7 +448,7 @@ class TenantRoleEndpointTests {
                 .orElseThrow(() -> new AssertionError("no entry " + code));
     }
 
-    private static JsonNode custom(JsonNode roles, String code) {
+    private static @Nullable JsonNode custom(JsonNode roles, String code) {
         return roles.valueStream()
                 .filter(node -> code.equals(node.get("code").asText()))
                 .findFirst()

@@ -22,9 +22,10 @@ import uz.horecaos.platform.iam.api.RoleChanged;
  * fact is written in the transaction that made the change, so a rolled-back edit leaves no
  * evidence and a committed one always has some.
  *
- * <p>The action codes are written as literals so the console's action-code dictionary, which
- * scans the sources for {@code AuditFact.of("...")}, finds them and fails its coverage spec for
- * a code without a sentence in all three languages.
+ * <p>The action codes are written as literals in the calls below so the console's action-code
+ * dictionary, which scans these sources for the literal first argument of each audit-fact
+ * builder call, finds them and fails its coverage spec for a code without a sentence in all
+ * three languages.
  */
 @Component
 public class RoleAuditListener {

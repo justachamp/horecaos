@@ -37,7 +37,8 @@ import uz.horecaos.platform.iam.api.TenantSuspensionLookup;
 public class JdbcAuthorizationService implements AuthorizationService {
 
     private static final String SELECT_GRANTS = """
-            SELECT g.scope_type, g.scope_id, g.tenant_id, r.code AS role_code, rc.capability_code
+            SELECT g.scope_type, g.scope_id, g.tenant_id, r.code AS role_code, rc.capability_code,
+                   CASE WHEN r.is_platform_defined THEN NULL ELSE r.name END AS role_name
               FROM iam.grants g
               JOIN iam.roles r ON r.id = g.role_id
               JOIN iam.role_capabilities rc ON rc.role_id = r.id
@@ -245,9 +246,12 @@ public class JdbcAuthorizationService implements AuthorizationService {
         grants.stream()
                 .collect(java.util.stream.Collectors.groupingBy(
                         grant -> java.util.Map.entry(grant.scope(), grant.roleCode()),
-                        java.util.stream.Collectors.mapping(GrantRow::capability, java.util.stream.Collectors.toSet())))
-                .forEach((key, capabilities) ->
-                        scopes.add(new CapabilityView.ScopeGrant(key.getKey(), key.getValue(), capabilities)));
+                        java.util.stream.Collectors.toList()))
+                .forEach((key, rows) -> scopes.add(new CapabilityView.ScopeGrant(
+                        key.getKey(),
+                        key.getValue(),
+                        rows.stream().map(GrantRow::capability).collect(java.util.stream.Collectors.toSet()),
+                        rows.getFirst().roleName())));
 
         return new CapabilityView(
                 subject,
@@ -290,9 +294,10 @@ public class JdbcAuthorizationService implements AuthorizationService {
                             // nothing. Throwing here would instead take away every capability the
                             // holder has, in every job, until somebody edited the job.
                             String roleCode = resultSet.getString("role_code");
+                            String roleName = resultSet.getString("role_name");
                             return Capability.find(resultSet.getString("capability_code"))
                                     .map(capability -> new GrantRow(
-                                            toScope(scopeType, grantTenant, scopeId), roleCode, capability));
+                                            toScope(scopeType, grantTenant, scopeId), roleCode, capability, roleName));
                         })
                         .list()
                         .stream()
@@ -348,5 +353,10 @@ public class JdbcAuthorizationService implements AuthorizationService {
     }
 
     /** Visible because Spring caching proxies cannot cache a private method. */
-    public record GrantRow(ResourceScope scope, String roleCode, Capability capability) {}
+    public record GrantRow(ResourceScope scope, String roleCode, Capability capability, @Nullable String roleName) {
+
+        public GrantRow(ResourceScope scope, String roleCode, Capability capability) {
+            this(scope, roleCode, capability, null);
+        }
+    }
 }

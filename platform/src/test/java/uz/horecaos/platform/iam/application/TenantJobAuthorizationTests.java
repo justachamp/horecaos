@@ -66,6 +66,27 @@ class TenantJobAuthorizationTests extends TenantJobFixture {
     }
 
     @Test
+    void theSessionViewNamesAJobTheCompanyDefinedAndNoCodeOwnedOne() {
+        TenantJob cashier = job("Старший кассир", ScopeType.LOCATION, OWNER, Capability.ORDER_READ);
+        grants.grant(new GrantCommand("cashier-1", cashier.code(), BRANCH, "New hire", null), OWNER);
+
+        var cashierView = authorization.viewFor("cashier-1", TENANT);
+        var cookView = authorization.viewFor(COOK, TENANT);
+
+        assertThat(cashierView.scopes()).singleElement().satisfies(scope -> {
+            assertThat(scope.roleCode()).isEqualTo(cashier.code());
+            assertThat(scope.roleName())
+                    .as("the person holding it cannot read the company's job list, and must not be shown its code")
+                    .isEqualTo("Старший кассир");
+        });
+        assertThat(cookView.scopes())
+                .singleElement()
+                .satisfies(scope -> assertThat(scope.roleName())
+                        .as("a code-owned job's name is a translation the console owns")
+                        .isNull());
+    }
+
+    @Test
     void aBranchManagerGivesABranchLevelJobAtHerBranchWhenSheHoldsEveryCapabilityInIt() {
         TenantJob cashier =
                 job("Старший кассир", ScopeType.LOCATION, OWNER, Capability.ORDER_READ, Capability.ORDER_CANCEL);
