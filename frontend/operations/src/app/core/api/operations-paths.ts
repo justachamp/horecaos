@@ -214,6 +214,14 @@ export const operationsPaths = {
     return `${this.orderIntakeCustomerAddresses(scope, accountId)}/${encodeURIComponent(addressId)}/pin`;
   },
 
+  /**
+   * ADR 0177: what this branch lets an operator do while keying an order in -- apply a promo code, flag a
+   * call back, record the cash tendered -- so the New order screen hides what the server would refuse.
+   */
+  orderEntryPolicy(scope: LocationScope): string {
+    return `${this.orders(scope)}/entry-policy`;
+  },
+
   /** Row 1.3g (ADR 0040): record an aggregator's own order by hand. */
   orderAggregatorEntries(scope: LocationScope): string {
     return `${this.orders(scope)}/aggregator-entries`;

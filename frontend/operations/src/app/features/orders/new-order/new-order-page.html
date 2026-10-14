@@ -697,16 +697,33 @@
             </select>
           </label>
 
-          <label class="new-order__field">
-            <span class="q-caption">{{ 'orders.newOrder.order.promoCode' | t }}</span>
-            <input
-              type="text"
-              class="new-order__input q-body-sm"
-              [value]="promoCode()"
-              (input)="promoCode.set($any($event.target).value)"
-              data-testid="new-order-promo-code"
-            />
-          </label>
+          @if (entryPolicy().promoCodeAllowed) {
+            <label class="new-order__field">
+              <span class="q-caption">{{ 'orders.newOrder.order.promoCode' | t }}</span>
+              <input
+                type="text"
+                class="new-order__input q-body-sm"
+                [value]="promoCode()"
+                (input)="promoCode.set($any($event.target).value)"
+                data-testid="new-order-promo-code"
+              />
+            </label>
+          } @else {
+            <p class="q-caption new-order__hint" data-testid="new-order-promo-code-off">
+              {{ 'orders.newOrder.order.promoCodeOff' | t }}
+            </p>
+          }
+          @if (entryPolicy().callbackFlagAllowed) {
+            <label class="new-order__pre-order-toggle q-caption">
+              <input
+                type="checkbox"
+                [checked]="callbackRequested()"
+                (change)="callbackRequested.set($any($event.target).checked)"
+                data-testid="new-order-callback"
+              />
+              {{ 'orders.newOrder.order.callback' | t }}
+            </label>
+          }
           @if (quoteRefusal(); as refusal) {
             <p
               class="q-caption new-order__error"
@@ -717,7 +734,7 @@
             </p>
           }
 
-          @if (paymentMethodCode() === 'CASH') {
+          @if (paymentMethodCode() === 'CASH' && entryPolicy().changeDueAllowed) {
             <label class="new-order__field">
               <span class="q-caption">{{ 'orders.newOrder.order.cashTendered' | t }}</span>
               <q-money-input

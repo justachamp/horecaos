@@ -23,17 +23,14 @@ import { MessageKey } from '../../core/i18n/messages.en';
  * item explains why it lives outside `/settings/**` at all.
  */
 export const CONFIGURATION_KEY_ROUTES: Readonly<Record<string, string>> = {
-  'ordering.business_day_start_hour': 'order-policy',
-  'ordering.average_order_minutes': 'order-policy',
-  'ordering.maximum_order_minutes': 'order-policy',
   'ordering.late_order_threshold_minutes': 'order-policy',
   'ordering.at_risk_before_minutes': 'order-policy',
   'ordering.late_colour': 'order-policy',
   'ordering.minimum_order_amount_minor': 'order-policy',
-  'ordering.vat_rate_percent': 'order-policy',
-  'ordering.routing_poll_interval_minutes': 'order-policy',
   'ordering.preorder_branch_resolution': 'order-policy',
   'ordering.operator_promo_code_allowed': 'order-policy',
+  'ordering.operator_callback_flag_allowed': 'order-policy',
+  'ordering.operator_change_due_allowed': 'order-policy',
   'ordering.auto_accept_eligible_channels': 'order-policy',
   'ordering.auto_accept_min_prior_orders': 'order-policy',
   'catalog.use_stock_logic': 'catalog',

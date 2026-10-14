@@ -334,6 +334,8 @@ export interface PlaceOrderRequest {
   readonly proposedLocationId?: string | null;
   readonly overrideReasonCode?: string | null;
   readonly overrideNote?: string | null;
+  /** ADR 0177: «Перезвонить клиенту» raised while the order is keyed in; omitted when not raised. */
+  readonly callbackRequested?: boolean | null;
   /**
    * DINE_IN only (ADR 0047): the live party whose bill the order goes on. The
    * platform puts the order on it inside the transaction that creates the order,
@@ -437,6 +439,8 @@ interface BranchResolutionRequest {
   readonly fulfillmentMode: string;
   readonly point?: { readonly latitude: number; readonly longitude: number } | null;
   readonly channelCode: string;
+  /** ADR 0177: the «Позже» time, so the branches are asked about that instant and not this one. */
+  readonly requestedFor?: string | null;
 }
 
 /**
@@ -455,6 +459,18 @@ export interface BranchCandidate {
   readonly zoneId: string | null;
   readonly zonePriority: number | null;
   readonly zoneAreaSquareMeters: number | null;
+  /** ADR 0177: when the branch next opens, and whether it takes a pre-order into a closed slot at all. */
+  readonly nextAvailableAt?: string | null;
+  readonly acceptsScheduledOrders?: boolean;
+  /** Straight-line metres from the delivery point; absent for a pickup. */
+  readonly distanceMeters?: number | null;
+}
+
+/** `OperatorOrderEntryPolicyController.EntryPolicyResponse` (ADR 0177): the three Card 5 toggles at this branch. */
+export interface EntryPolicy {
+  readonly promoCodeAllowed: boolean;
+  readonly callbackFlagAllowed: boolean;
+  readonly changeDueAllowed: boolean;
 }
 
 /** `OperationsOrderController.BranchResolutionResponse`. */
@@ -607,6 +623,7 @@ export class NewOrderApi {
     fulfillmentMode: string,
     point: { lat: number; lon: number } | null,
     channelCode: string,
+    requestedFor: string | null = null,
   ): Promise<BranchResolution> {
     return firstValueFrom(
       this.api.post<BranchResolutionRequest, BranchResolution>(
@@ -615,9 +632,18 @@ export class NewOrderApi {
           fulfillmentMode,
           point: point === null ? null : { latitude: point.lat, longitude: point.lon },
           channelCode,
+          ...(requestedFor === null ? {} : { requestedFor }),
         }),
       ),
     );
+  }
+
+  /** ADR 0177: what this branch lets an operator do while keying an order in; the server enforces the same three. */
+  async entryPolicy(scope: LocationScope): Promise<EntryPolicy> {
+    const result = await firstValueFrom(
+      this.api.get<EntryPolicy>(operationsPaths.orderEntryPolicy(scope)),
+    );
+    return result.value;
   }
 
   /** Row 1.3: the curated list the branch-override dialog picks from. */

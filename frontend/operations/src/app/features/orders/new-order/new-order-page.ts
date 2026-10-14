@@ -57,6 +57,7 @@ import {
   CommentPresetOption,
   CustomerLookupCandidate,
   DeliveryFeeQuote,
+  EntryPolicy,
   MaskedCustomerAddress,
   MenuComboGroup,
   MenuModifierGroup,
@@ -341,6 +342,7 @@ export class NewOrderPage implements OnInit {
     // no await ahead of it, while this method is still on its own first
     // await) and this must never stomp a proposal that already landed.
     this.selectedLocationId.update((current) => current ?? scope.locationId);
+    void this.loadEntryPolicy(scope);
     void this.api
       .branchOverrideReasons(scope)
       .then((reasons) => this.overrideReasons.set(reasons))
@@ -1392,6 +1394,39 @@ export class NewOrderPage implements OnInit {
   /** Whole som — UZS carries no minor unit (`q-money-input`'s own doc). */
   protected readonly cashTenderedMinor = signal(0);
 
+  /**
+   * ADR 0177: what this branch lets an operator do while keying an order in (Settings > Order policy, card
+   * 5). All three default to allowed -- what the screen always did -- until the read says otherwise, and a
+   * failed read leaves them allowed: the server enforces the same three on place and on quote, so this only
+   * decides what the screen shows.
+   */
+  protected readonly entryPolicy = signal<EntryPolicy>({
+    promoCodeAllowed: true,
+    callbackFlagAllowed: true,
+    changeDueAllowed: true,
+  });
+  /** «Перезвонить клиенту», raised while the order is keyed in. */
+  protected readonly callbackRequested = signal(false);
+
+  private async loadEntryPolicy(scope: LocationScope): Promise<void> {
+    try {
+      const policy = await this.api.entryPolicy(scope);
+      this.entryPolicy.set(policy);
+      if (!policy.promoCodeAllowed) {
+        this.promoCode.set('');
+      }
+      if (!policy.callbackFlagAllowed) {
+        this.callbackRequested.set(false);
+      }
+      if (!policy.changeDueAllowed) {
+        this.cashTenderedMinor.set(0);
+      }
+    } catch {
+      // A convenience, not a precondition: the screen keeps showing everything and the server refuses
+      // what the branch has turned off.
+    }
+  }
+
   private async loadPaymentMethods(
     scope: LocationScope,
     channel: ChannelView | undefined,
@@ -1573,8 +1608,12 @@ export class NewOrderPage implements OnInit {
       const mode = this.fulfillmentMode();
       const address = mode === 'DELIVERY' ? this.selectedAddress() : null;
       const channelCode = this.channelCode();
+      // ADR 0177: a pre-order is resolved at the time it is promised for -- a branch closed now and open
+      // then is a candidate, and when none is open then the brand's pre-order rule ranks them -- so the
+      // «Позже» time is part of the context, not a detail applied at «Создать».
+      const requestedFor = this.requestedForIso();
 
-      // A changed resolution context (mode, address or channel) retires
+      // A changed resolution context (mode, address, channel or promised time) retires
       // whatever the operator picked for the previous one — a manual choice
       // for one address should not silently carry over to a different one.
       this.branchManuallyOverridden = false;
@@ -1610,7 +1649,7 @@ export class NewOrderPage implements OnInit {
         mode === 'DELIVERY' && address
           ? { lat: address.latitude as number, lon: address.longitude as number }
           : null;
-      void this.refreshBranchResolution(mode, point, channelCode);
+      void this.refreshBranchResolution(mode, point, channelCode, requestedFor);
     });
   }
 
@@ -1771,6 +1810,7 @@ export class NewOrderPage implements OnInit {
     mode: 'PICKUP' | 'DELIVERY',
     point: { lat: number; lon: number } | null,
     channelCode: string,
+    requestedFor: string | null,
   ): Promise<void> {
     const scope = this.location.scope();
     if (!scope) {
@@ -1779,7 +1819,13 @@ export class NewOrderPage implements OnInit {
     this.branchResolutionLoading.set(true);
     this.branchResolutionError.set(false);
     try {
-      const resolution = await this.api.resolveBranches(scope, mode, point, channelCode);
+      const resolution = await this.api.resolveBranches(
+        scope,
+        mode,
+        point,
+        channelCode,
+        requestedFor,
+      );
       this.branchCandidates.set(resolution.candidates);
       this.proposedLocationId.set(resolution.proposedLocationId);
       if (!this.branchManuallyOverridden) {
@@ -1879,6 +1925,16 @@ export class NewOrderPage implements OnInit {
     const parsed = new Date(this.requestedForLocal());
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
+
+  /**
+   * The promised time as an instant the resolver can be asked about, or `null` for an order for now (the
+   * toggle is off, the input is empty or unparseable, or the time is not in the future -- «Создать» refuses
+   * that one itself). Driven by the input's signals, so it re-evaluates when the operator types a time.
+   */
+  protected readonly requestedForIso = computed<string | null>(() => {
+    const date = this.requestedForDate();
+    return date !== null && date.getTime() > Date.now() ? date.toISOString() : null;
+  });
 
   protected outOfHoursConfirmMessage(): string | null {
     return this.outOfHoursConfirmReason() === null
@@ -2002,7 +2058,7 @@ export class NewOrderPage implements OnInit {
       lines,
       destination,
       paymentMethodCode: this.paymentMethodCode(),
-      promoCode: this.promoCode().trim() || null,
+      promoCode: this.entryPolicy().promoCodeAllowed ? this.promoCode().trim() || null : null,
       requestedFor: requestedForDate ? requestedForDate.toISOString() : null,
       overrideOutOfHours: place && confirmingOutOfHours,
       proposedLocationId: this.proposedLocationId(),
@@ -2013,7 +2069,16 @@ export class NewOrderPage implements OnInit {
       // Row 1.3e: what the customer says they will hand over, written to the order in the
       // transaction that creates it. Only a cash order has one, and only an entered figure.
       cashTenderedMinor:
-        place && this.paymentMethodCode() === 'CASH' && tendered > 0 ? tendered : null,
+        place &&
+        this.entryPolicy().changeDueAllowed &&
+        this.paymentMethodCode() === 'CASH' &&
+        tendered > 0
+          ? tendered
+          : null,
+      // ADR 0177: raised on the order as it is written, only where the branch lets an operator.
+      ...(place && this.entryPolicy().callbackFlagAllowed && this.callbackRequested()
+        ? { callbackRequested: true }
+        : {}),
       // ADR 0158: what the operator declined, on the quote and on the order alike.
       ...(this.declinedAutoAdd().size > 0
         ? { declinedAutoAddRuleIds: [...this.declinedAutoAdd().keys()] }

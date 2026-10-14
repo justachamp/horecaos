@@ -42,6 +42,10 @@
   margin: 4px 0 0;
 }
 
+.warning {
+  color: var(--q-warning-text);
+}
+
 .field dt {
   color: var(--q-ink-muted);
   margin-bottom: 2px;

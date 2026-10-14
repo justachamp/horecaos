@@ -755,6 +755,9 @@ export const ordersRu: AreaMessages<typeof ordersEn> = {
   'orders.newOrder.order.branchOverrideReasonPlaceholder': 'Выберите причину',
   'orders.newOrder.order.branchOverrideNote': 'Комментарий',
   'orders.newOrder.order.promoCode': 'Промокод',
+  'orders.newOrder.order.promoCodeOff':
+    'Промокод нельзя применить к заказу, который вводит оператор (выключено в «Политике заказов»).',
+  'orders.newOrder.order.callback': 'Перезвонить клиенту',
   'orders.newOrder.order.cashTendered': 'Сдача с',
   'orders.newOrder.order.changeDue': 'Сдача',
   'orders.newOrder.order.deliveryFee': 'Стоимость доставки',

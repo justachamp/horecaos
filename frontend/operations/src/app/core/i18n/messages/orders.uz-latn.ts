@@ -766,6 +766,9 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   'orders.newOrder.order.branchOverrideReasonPlaceholder': 'Sababni tanlang',
   'orders.newOrder.order.branchOverrideNote': 'Izoh',
   'orders.newOrder.order.promoCode': 'Promokod',
+  'orders.newOrder.order.promoCodeOff':
+    'Bu yerda kiritilayotgan buyurtmaga promokod qoʻllab boʻlmaydi («Buyurtma siyosati»da oʻchirilgan).',
+  'orders.newOrder.order.callback': 'Mijozga qayta qoʻngʻiroq qilish',
   'orders.newOrder.order.cashTendered': 'Berilgan pul',
   'orders.newOrder.order.changeDue': 'Qaytim',
   'orders.newOrder.order.deliveryFee': 'Yetkazib berish narxi',

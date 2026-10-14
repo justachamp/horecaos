@@ -19,14 +19,14 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
-const VAT_RATE_KEY: ConfigurationKeyView = {
-  code: 'ordering.vat_rate_percent',
-  valueType: 'BigDecimal',
-  defaultValue: '12',
+const MINIMUM_ORDER_KEY: ConfigurationKeyView = {
+  code: 'ordering.minimum_order_amount_minor',
+  valueType: 'Long',
+  defaultValue: '0',
   settableScopes: ['TENANT', 'BRAND'],
   owningModule: 'ordering',
   explicitNullTerminates: false,
-  description: 'The VAT rate applied at checkout, as a percentage.',
+  description: 'The smallest order total accepted for pickup and dine-in, in minor units.',
 };
 
 /** A key `CONFIGURATION_KEY_ROUTES` names no screen for — must never appear as a search result. */
@@ -42,7 +42,7 @@ const UNROUTED_KEY: ConfigurationKeyView = {
 
 async function render(
   readiness: Partial<ReadinessApi>,
-  configurationKeys: readonly ConfigurationKeyView[] = [VAT_RATE_KEY, UNROUTED_KEY],
+  configurationKeys: readonly ConfigurationKeyView[] = [MINIMUM_ORDER_KEY, UNROUTED_KEY],
 ): Promise<ComponentFixture<SettingsHomePage>> {
   await TestBed.configureTestingModule({
     imports: [SettingsHomePage],
@@ -874,7 +874,7 @@ describe('SettingsHomePage', () => {
     const fixture = await render({ validate: () => Promise.resolve(PASSING) });
 
     const input = searchInput(fixture);
-    input.value = 'vat';
+    input.value = 'minimum';
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 
@@ -882,7 +882,7 @@ describe('SettingsHomePage', () => {
       ...fixture.nativeElement.querySelectorAll('[data-testid="q-combobox-option"]'),
     ];
     expect(options.map((option: Element) => option.textContent)).toEqual([
-      expect.stringContaining('ordering.vat_rate_percent'),
+      expect.stringContaining('ordering.minimum_order_amount_minor'),
     ]);
   });
 
@@ -892,7 +892,7 @@ describe('SettingsHomePage', () => {
     const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
 
     const input = searchInput(fixture);
-    input.value = 'vat';
+    input.value = 'minimum';
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
 

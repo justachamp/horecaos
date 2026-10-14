@@ -768,6 +768,9 @@ export const ordersEn = {
   'orders.newOrder.order.branchOverrideReasonPlaceholder': 'Pick a reason',
   'orders.newOrder.order.branchOverrideNote': 'Note',
   'orders.newOrder.order.promoCode': 'Promo code',
+  'orders.newOrder.order.promoCodeOff':
+    'A promo code cannot be applied to an order keyed in here (turned off in Order policy).',
+  'orders.newOrder.order.callback': 'Call the customer back',
   'orders.newOrder.order.cashTendered': 'Cash tendered',
   'orders.newOrder.order.changeDue': 'Change due',
   'orders.newOrder.order.deliveryFee': 'Delivery fee',

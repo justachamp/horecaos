@@ -259,6 +259,12 @@ describe('operationsPaths phone-order address capture (ADR 0177, OperationsCusto
     );
   });
 
+  it('builds the entry policy beside the orders it governs', () => {
+    expect(operationsPaths.orderEntryPolicy(SCOPE)).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/orders/entry-policy',
+    );
+  });
+
   it('is not the tenant-scoped address path a location grant cannot reach', () => {
     expect(operationsPaths.orderIntakeCustomerAddresses(SCOPE, 'c1')).not.toBe(
       operationsPaths.customerAddresses(SCOPE, 'c1'),

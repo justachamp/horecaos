@@ -271,6 +271,8 @@ describe('NewOrderPage', () => {
     branchOverrideReasons: ReturnType<typeof vi.fn>;
     aggregatorEntry: ReturnType<typeof vi.fn>;
     recordCallProvenance: ReturnType<typeof vi.fn>;
+    /** ADR 0177: what the branch lets an operator do while keying an order in. */
+    entryPolicy: ReturnType<typeof vi.fn>;
     /** ADR 0177: the masked list, the add and the pin, which `LOCATION_STAFF` is granted. */
     capturedAddresses: ReturnType<typeof vi.fn>;
     captureAddress: ReturnType<typeof vi.fn>;
@@ -338,6 +340,11 @@ describe('NewOrderPage', () => {
       recordCallProvenance: vi.fn().mockResolvedValue(undefined),
       // ADR 0177: the second argument of `render` also carries the address-pane mocks, which live on
       // NewOrderApi since the pane stopped using the tenant-scoped customer routes.
+      entryPolicy: vi.fn().mockResolvedValue({
+        promoCodeAllowed: true,
+        callbackFlagAllowed: true,
+        changeDueAllowed: true,
+      }),
       capturedAddresses: vi.fn().mockResolvedValue([]),
       captureAddress: vi.fn().mockResolvedValue('addr-new'),
       placeAddressPin: vi.fn().mockResolvedValue(address()),
@@ -434,6 +441,98 @@ describe('NewOrderPage', () => {
     expect(host.querySelector('[data-testid="new-order-mode-dine-in"]')).toBeNull();
     expect(host.querySelector('[data-testid="new-order-mode-delivery"]')).not.toBeNull();
     expect(fixture.componentInstance['fulfillmentMode']()).toBe('DELIVERY');
+  });
+
+  // -------------------------------------------- ADR 0177: what the branch lets an operator do
+
+  async function startPolicyBasket(): Promise<void> {
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['onItemSelected']({ id: 'v-1', label: 'Cheeseburger' });
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  }
+
+  const placed: PlaceOrderResult = {
+    orderId: 'order-1',
+    publicOrderNumber: '#0001',
+    status: 'CONFIRMED',
+    version: 1,
+    outcome: 'PLACED',
+    warnings: [],
+  };
+
+  it('shows the promo code, the call-back flag and the cash tendered while the branch allows them', async () => {
+    await render();
+    await startPolicyBasket();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(newOrderApi.entryPolicy).toHaveBeenCalledWith(SCOPE);
+    expect(host.querySelector('[data-testid="new-order-promo-code"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="new-order-callback"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="new-order-cash-tendered"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="new-order-promo-code-off"]')).toBeNull();
+  });
+
+  it('hides each control the branch has turned off, says why for the promo code, and sends none of them', async () => {
+    const placeOrder = vi.fn().mockResolvedValue(placed);
+    await render({
+      placeOrder,
+      entryPolicy: vi.fn().mockResolvedValue({
+        promoCodeAllowed: false,
+        callbackFlagAllowed: false,
+        changeDueAllowed: false,
+      }),
+    });
+    vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    await startPolicyBasket();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="new-order-promo-code"]')).toBeNull();
+    expect(host.querySelector('[data-testid="new-order-promo-code-off"]')?.textContent).toContain(
+      'cannot be applied',
+    );
+    expect(host.querySelector('[data-testid="new-order-callback"]')).toBeNull();
+    expect(host.querySelector('[data-testid="new-order-cash-tendered"]')).toBeNull();
+
+    // Whatever was typed before the read came back is not sent either.
+    fixture.componentInstance['promoCode'].set('TENPERCENT');
+    fixture.componentInstance['cashTenderedMinor'].set(60_000);
+    fixture.componentInstance['callbackRequested'].set(true);
+    await fixture.componentInstance['submit']();
+
+    const [, request] = placeOrder.mock.calls[0];
+    expect(request.promoCode).toBeNull();
+    expect(request.cashTenderedMinor).toBeNull();
+    expect(request.callbackRequested).toBeUndefined();
+  });
+
+  it('raises the call-back flag on the order only when the operator ticked it', async () => {
+    const placeOrder = vi.fn().mockResolvedValue(placed);
+    await render({ placeOrder });
+    vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    await startPolicyBasket();
+
+    await fixture.componentInstance['submit']();
+    expect(placeOrder.mock.calls[0][1].callbackRequested, 'not ticked: not sent').toBeUndefined();
+
+    const box = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="new-order-callback"]',
+    ) as HTMLInputElement;
+    box.checked = true;
+    box.dispatchEvent(new Event('change'));
+    await fixture.componentInstance['submit']();
+
+    expect(placeOrder.mock.calls[1][1].callbackRequested).toBe(true);
+  });
+
+  it('keeps showing everything, and lets the server refuse, when the policy cannot be read', async () => {
+    await render({ entryPolicy: vi.fn().mockRejectedValue(new Error('403')) });
+    await startPolicyBasket();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="new-order-promo-code"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="new-order-callback"]')).not.toBeNull();
   });
 
   // ------------------------------------------------------------------ search
@@ -1003,7 +1102,13 @@ describe('NewOrderPage', () => {
   it('resolves branches for PICKUP immediately, with no point', async () => {
     await render();
 
-    expect(newOrderApi.resolveBranches).toHaveBeenCalledWith(SCOPE, 'PICKUP', null, 'call-centre');
+    expect(newOrderApi.resolveBranches).toHaveBeenCalledWith(
+      SCOPE,
+      'PICKUP',
+      null,
+      'call-centre',
+      null,
+    );
   });
 
   it('renders every candidate with its load, marks the proposed one, and defaults the selection to it', async () => {
@@ -1083,6 +1188,7 @@ describe('NewOrderPage', () => {
       'DELIVERY',
       { lat: 41.31, lon: 69.28 },
       'call-centre',
+      null,
     );
   });
 
@@ -1555,6 +1661,75 @@ describe('NewOrderPage', () => {
     const [, request] = placeOrder.mock.calls[0];
     expect(request.requestedFor).toBe(new Date('2099-06-01T15:00').toISOString());
     expect(request.overrideOutOfHours).toBe(false);
+  });
+
+  // ---------------------- ADR 0177: the pre-order is resolved at the time it is promised for
+
+  it('asks the branch resolver about the promised time, and re-asks when the operator changes it', async () => {
+    await render();
+    fixture.componentInstance['selectCandidate'](candidate());
+    await flushMicrotasks();
+    expect(newOrderApi.resolveBranches).toHaveBeenLastCalledWith(
+      SCOPE,
+      'PICKUP',
+      null,
+      'call-centre',
+      null,
+    );
+
+    fixture.componentInstance['togglePreOrder']();
+    fixture.componentInstance['setRequestedForLocal']('2099-06-01T15:00');
+    fixture.detectChanges();
+    await flushMicrotasks();
+
+    expect(newOrderApi.resolveBranches).toHaveBeenLastCalledWith(
+      SCOPE,
+      'PICKUP',
+      null,
+      'call-centre',
+      new Date('2099-06-01T15:00').toISOString(),
+    );
+
+    fixture.componentInstance['setRequestedForLocal']('2099-06-02T09:30');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    expect(newOrderApi.resolveBranches).toHaveBeenLastCalledWith(
+      SCOPE,
+      'PICKUP',
+      null,
+      'call-centre',
+      new Date('2099-06-02T09:30').toISOString(),
+    );
+  });
+
+  it('asks about now again once the pre-order is switched off, and never about a time in the past', async () => {
+    await render();
+    fixture.componentInstance['selectCandidate'](candidate());
+    fixture.componentInstance['togglePreOrder']();
+    fixture.componentInstance['setRequestedForLocal']('2020-01-01T10:00');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    expect(newOrderApi.resolveBranches).toHaveBeenLastCalledWith(
+      SCOPE,
+      'PICKUP',
+      null,
+      'call-centre',
+      null,
+    );
+
+    fixture.componentInstance['setRequestedForLocal']('2099-06-01T15:00');
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.componentInstance['togglePreOrder']();
+    fixture.detectChanges();
+    await flushMicrotasks();
+    expect(newOrderApi.resolveBranches).toHaveBeenLastCalledWith(
+      SCOPE,
+      'PICKUP',
+      null,
+      'call-centre',
+      null,
+    );
   });
 
   it('cannot submit a pre-order with no time chosen', async () => {
