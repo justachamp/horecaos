@@ -43,4 +43,12 @@ export class OrderSummaryComponent {
    * nominal weight and the final weight and amount are determined at handover.
    */
   readonly provisional = input(false);
+  /**
+   * X.1 (ADR 0185): the points the customer is putting towards this order, already formatted, or
+   * null when none are spent. The rows below the total are the platform's own figures minus
+   * that, and appear only when it is there.
+   */
+  readonly pointsSpent = input<string | null>(null);
+  /** What is still paid in money once the points are out of the total; null with `pointsSpent`. */
+  readonly cashToPay = input<string | null>(null);
 }

@@ -1,0 +1,16 @@
+@if (rows().length > 0) {
+  <section class="split" data-testid="payment-split">
+    <h3 class="split__title">{{ 'split.title' | t }}</h3>
+    <ul class="split__list">
+      @for (row of rows(); track row.key) {
+        <li class="split__row" data-testid="payment-split-row">
+          <span class="split__what">
+            <span class="split__label">{{ row.label }}</span>
+            <span class="split__status">{{ row.statusKey | t }}</span>
+          </span>
+          <span class="split__amount">{{ row.amount }}</span>
+        </li>
+      }
+    </ul>
+  </section>
+}

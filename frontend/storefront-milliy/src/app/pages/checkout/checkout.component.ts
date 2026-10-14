@@ -15,6 +15,12 @@ import { IconComponent } from '../../shared/icon/icon.component';
 import { OrderSummaryComponent } from './order-summary/order-summary.component';
 import { PaymentListComponent, type PaymentChoice } from './payment-list/payment-list.component';
 import { PaymentSessionService } from '../../services/payment-session.service';
+import { PointsService } from '../../services/points.service';
+import {
+  NO_POINTS,
+  PointsRedemptionComponent,
+  type PointsSelection,
+} from '../../shared/points-redemption/points-redemption.component';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { UiCartService } from '../../services/ui-cart.service';
 import { newIdempotencyKey } from '../../core/api/idempotency';
@@ -76,6 +82,7 @@ const KNOWN_METHODS: Readonly<Record<string, PaymentOption>> = {
     IconComponent,
     OrderSummaryComponent,
     PaymentListComponent,
+    PointsRedemptionComponent,
     TranslatePipe,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -87,6 +94,7 @@ export class CheckoutComponent implements OnInit {
   protected readonly delivery = inject(DeliverySelectionService);
   private readonly addressBook = inject(AddressBookService);
   private readonly paymentSession = inject(PaymentSessionService);
+  private readonly points = inject(PointsService);
   private readonly router = inject(Router);
 
   protected readonly state = signal<LoadState>('loading');
@@ -96,6 +104,25 @@ export class CheckoutComponent implements OnInit {
   protected readonly promoInput = signal('');
   protected readonly submitting = signal(false);
   protected readonly submitErrorKey = signal<string | null>(null);
+
+  /**
+   * X.1 (ADR 0046, ADR 0185): the points the customer has put towards this order. The control
+   * owns the choice; this holds the last thing it said, for the totals and for the checkout.
+   */
+  protected readonly redemption = signal<PointsSelection>(NO_POINTS);
+
+  /** The points taken off the total, as the customer reads them; null when none are spent. */
+  protected readonly pointsSpent = computed(() => {
+    const minor = this.redemption().redeemMinor;
+    return minor > 0 ? this.cart.formatPrice(minor) : null;
+  });
+
+  /** What is still paid in money once the points are out of the total; null when none are spent. */
+  protected readonly cashToPay = computed(() => {
+    const minor = this.redemption().redeemMinor;
+    const priced = this.cart.priced();
+    return minor > 0 && priced ? this.cart.formatPrice(priced.totalMinor - minor) : null;
+  });
 
   /** Seeded from `DeliverySelectionService` and pushed back on every edit. */
   protected readonly recipientName = signal('');
@@ -129,6 +156,11 @@ export class CheckoutComponent implements OnInit {
 
   protected readonly canConfirm = computed(() => {
     if (this.submitting() || this.paymentMethods().length === 0 || !this.selectedPayment()) {
+      return false;
+    }
+    // Points switched on with an amount the platform did not offer: the control says so beside
+    // itself, and placing the order without them would be doing something nobody asked for.
+    if (this.redemption().blocked) {
       return false;
     }
     if (this.isDelivery()) {
@@ -287,10 +319,19 @@ export class CheckoutComponent implements OnInit {
         return;
       }
 
+      // The points are spent against the quote just made, which may allow less than the one the
+      // customer chose them against (a promotion landed, the price moved). Look again before
+      // spending: a smaller cap is something to tell them about, not to quietly lower.
+      const redeemMinor = this.redemption().redeemMinor;
+      if (redeemMinor > 0 && !(await this.pointsStillAllowed(priced.cartId, redeemMinor))) {
+        this.submitErrorKey.set('cart.pointsChanged');
+        return;
+      }
       const result = await this.cart.checkout({
         priced,
         paymentMethodCode,
         idempotencyKey: newIdempotencyKey(),
+        ...(redeemMinor > 0 ? { redeemFromBalanceMinor: redeemMinor } : {}),
       });
       if (result.outcome === 'REJECTED') {
         this.submitErrorKey.set('cart.orderRejected');
@@ -320,6 +361,24 @@ export class CheckoutComponent implements OnInit {
       );
     } finally {
       this.submitting.set(false);
+    }
+  }
+
+  protected onPointsChanged(selection: PointsSelection): void {
+    this.redemption.set(selection);
+  }
+
+  /**
+   * Whether the platform still offers at least `redeemMinor` against the cart's current quote.
+   * A second look that cannot be had is not a reason to refuse: the platform checks the amount
+   * itself at checkout and says no there, so an unreadable offer lets the order through.
+   */
+  private async pointsStillAllowed(cartId: string, redeemMinor: number): Promise<boolean> {
+    try {
+      const fresh = await this.points.redemptionOffer(cartId);
+      return fresh.offer.redeemable && fresh.offer.maximum.amountMinor >= redeemMinor;
+    } catch {
+      return true;
     }
   }
 
