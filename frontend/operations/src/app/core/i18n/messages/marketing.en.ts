@@ -1485,13 +1485,57 @@ export const marketingEn = {
   'marketing.storefront.tab.groups': 'Home groups',
   'marketing.storefront.tab.carousel': 'Offer carousel',
   'marketing.storefront.tab.preview': 'Preview',
-  'marketing.storefront.tab.switcher': 'Brand switcher',
+  'marketing.storefront.tab.switcher': 'Brand switcher and layout',
+  'marketing.storefront.tab.branches': 'Branch order',
   'marketing.storefront.groups.hint':
     'Titled rails of dishes on the home screen: hand-picked, or a whole category. Their order here is their order on the screen.',
   'marketing.storefront.carousel.hint':
     'The carousel at the top of the home screen is shared by banners and promo cards. Order it here; write and publish them under Content. It is the same for every customer — a personal offer for one guest is a separate thing.',
   'marketing.storefront.carousel.link': 'Open Content',
-  'marketing.storefront.switcher.title': 'Brand switcher and marketplace layout — not built',
-  'marketing.storefront.switcher.body':
-    'These wait until a tenant runs two brands on one storefront and asks for them (ADR 0157, Release 4). Until then there is nothing to configure, and no setting is reserved for it.',
+  'marketing.storefront.layout.title': 'Category layout',
+  'marketing.storefront.layout.hint':
+    'Standard is the category navigation customers have today. Marketplace shows a compact strip of categories and an “all categories” overlay, for a storefront with many of them. The choice applies to this brand as soon as you make it.',
+  'marketing.storefront.layout.standard': 'Standard',
+  'marketing.storefront.layout.marketplace': 'Marketplace',
+  'marketing.storefront.layout.saved': 'Layout saved.',
+  'marketing.storefront.switcher.title': 'Other brands on this storefront',
+  'marketing.storefront.switcher.hint':
+    'A strip of your other brands at the top of this storefront, each leading to that brand’s own website. The address is the website’s verified address, looked up every time; nothing is typed here and nothing goes stale.',
+  'marketing.storefront.switcher.empty':
+    'No brand is offered here. The storefront looks as it did before.',
+  'marketing.storefront.switcher.status.shown': 'Shown to customers',
+  'marketing.storefront.switcher.status.hidden': 'Hidden',
+  'marketing.storefront.switcher.status.noHostname':
+    'Not shown: this website has no verified address yet',
+  'marketing.storefront.switcher.status.inactive': 'Not shown: the brand is not active',
+  'marketing.storefront.switcher.up': 'Move up',
+  'marketing.storefront.switcher.down': 'Move down',
+  'marketing.storefront.switcher.hide': 'Hide',
+  'marketing.storefront.switcher.show': 'Show',
+  'marketing.storefront.switcher.remove': 'Remove',
+  'marketing.storefront.switcher.add.title': 'Offer another brand',
+  'marketing.storefront.switcher.add.target': 'Brand and website',
+  'marketing.storefront.switcher.add.choose': 'Choose a brand…',
+  'marketing.storefront.switcher.add.noAddress': 'no verified address yet',
+  'marketing.storefront.switcher.add.none':
+    'There is no other brand with a website to offer. Another brand needs an active website channel that sells at one of its branches.',
+  'marketing.storefront.switcher.add.submit': 'Add to the strip',
+  'marketing.storefront.switcher.added': 'Brand added.',
+  'marketing.storefront.switcher.updated': 'Saved.',
+  'marketing.storefront.switcher.removed': 'Brand removed.',
+  'marketing.storefront.switcher.reordered': 'Order saved.',
+  'marketing.storefront.branches.title': 'Order of branches',
+  'marketing.storefront.branches.hint':
+    'A customer who shares their location sees the nearest branch first; this order only breaks a tie. A customer who shares none sees the branches in exactly this order. A branch you leave out is listed last, by name.',
+  'marketing.storefront.branches.placed': 'In your order',
+  'marketing.storefront.branches.nonePlaced':
+    'No branch is placed. The storefront lists the branches by name.',
+  'marketing.storefront.branches.unplaced': 'Not placed (listed last, by name)',
+  'marketing.storefront.branches.noneUnplaced': 'Every branch is placed.',
+  'marketing.storefront.branches.place': 'Place',
+  'marketing.storefront.branches.unplace': 'Take out of the order',
+  'marketing.storefront.branches.inactive': 'not active, so customers do not see it',
+  'marketing.storefront.branches.save': 'Save order',
+  'marketing.storefront.branches.reset': 'Undo changes',
+  'marketing.storefront.branches.saved': 'Order saved.',
 } as const;

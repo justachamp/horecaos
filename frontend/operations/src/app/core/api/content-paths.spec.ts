@@ -37,5 +37,16 @@ describe('contentPaths (ADR 0157, Staff API)', () => {
     expect(contentPaths.policies(scope)).toBe(`${root}/policies`);
     expect(contentPaths.publishingPolicy(scope)).toBe(`${root}/policies/publishing`);
     expect(contentPaths.editorialPolicy(scope)).toBe(`${root}/policies/editorial`);
+    expect(contentPaths.layoutPolicy(scope)).toBe(`${root}/policies/layout`);
+  });
+
+  it('addresses the brand switcher and the storefront branch order (row 6.8)', () => {
+    expect(contentPaths.switcherEntries(scope)).toBe(`${root}/brand-switcher/entries`);
+    expect(contentPaths.switcherEntry(scope, 'e/1')).toBe(`${root}/brand-switcher/entries/e%2F1`);
+    expect(contentPaths.switcherCandidates(scope)).toBe(`${root}/brand-switcher/candidates`);
+    expect(contentPaths.switcherOrder(scope)).toBe(`${root}/brand-switcher/order`);
+    expect(contentPaths.branchOrder(scope)).toBe(
+      '/api/v1/operations/tenants/t-1/brands/b%202/storefront-branch-order',
+    );
   });
 });

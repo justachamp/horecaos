@@ -1511,14 +1511,57 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.storefront.tab.groups': 'Bosh sahifa guruhlari',
   'marketing.storefront.tab.carousel': 'Takliflar karuseli',
   'marketing.storefront.tab.preview': 'Koʻrib chiqish',
-  'marketing.storefront.tab.switcher': 'Brend almashtirgich',
+  'marketing.storefront.tab.switcher': 'Brend almashtirgich va joylashuv',
+  'marketing.storefront.tab.branches': 'Filiallar tartibi',
   'marketing.storefront.groups.hint':
     'Bosh ekrandagi nomli taomlar lentalari: qoʻlda tanlangan yoki butun toifa. Bu yerdagi tartib ekrandagi tartibdir.',
   'marketing.storefront.carousel.hint':
     'Bosh ekran tepasidagi karusel banner va promo-kartochkalar uchun umumiy. Tartibni shu yerda belgilang; ularni «Kontent» boʻlimida yozing va chop eting. U barcha mijozlar uchun bir xil — bitta mehmonga shaxsiy taklif esa boshqa narsa.',
   'marketing.storefront.carousel.link': '«Kontent»ni ochish',
-  'marketing.storefront.switcher.title':
-    'Brend almashtirgich va marketpleys joylashuvi — yaratilmagan',
-  'marketing.storefront.switcher.body':
-    'Ular ijarachi bitta vitrinada ikki brend yuritib, ularni soʻramaguncha kutadi (ADR 0157, 4-reliz). Shu paytgacha sozlanadigan narsa yoʻq va buning uchun hech qanday sozlama zaxiralanmagan.',
+  'marketing.storefront.layout.title': 'Toifalar joylashuvi',
+  'marketing.storefront.layout.hint':
+    'Standart — mijozlarda hozirgi toifalar navigatsiyasi. «Marketpleys» toifalarning ixcham lentasini va «barcha toifalar» oynasini koʻrsatadi — toifalari koʻp vitrina uchun. Tanlov saqlangach, shu brend uchun darhol kuchga kiradi.',
+  'marketing.storefront.layout.standard': 'Standart',
+  'marketing.storefront.layout.marketplace': 'Marketpleys',
+  'marketing.storefront.layout.saved': 'Joylashuv saqlandi.',
+  'marketing.storefront.switcher.title': 'Shu vitrinadagi boshqa brendlar',
+  'marketing.storefront.switcher.hint':
+    'Vitrina tepasida boshqa brendlaringiz lentasi; har biri brendning oʻz saytiga olib boradi. Manzil — saytning tasdiqlangan manzili, har safar oʻqiladi: bu yerda hech narsa kiritilmaydi va hech narsa eskirmaydi.',
+  'marketing.storefront.switcher.empty':
+    'Bu yerda hech qanday brend taklif etilmaydi. Vitrina avvalgidek koʻrinadi.',
+  'marketing.storefront.switcher.status.shown': 'Mijozlarga koʻrsatiladi',
+  'marketing.storefront.switcher.status.hidden': 'Yashirilgan',
+  'marketing.storefront.switcher.status.noHostname':
+    'Koʻrsatilmaydi: bu saytning tasdiqlangan manzili hali yoʻq',
+  'marketing.storefront.switcher.status.inactive': 'Koʻrsatilmaydi: brend faol emas',
+  'marketing.storefront.switcher.up': 'Yuqoriga',
+  'marketing.storefront.switcher.down': 'Pastga',
+  'marketing.storefront.switcher.hide': 'Yashirish',
+  'marketing.storefront.switcher.show': 'Koʻrsatish',
+  'marketing.storefront.switcher.remove': 'Olib tashlash',
+  'marketing.storefront.switcher.add.title': 'Boshqa brendni taklif qilish',
+  'marketing.storefront.switcher.add.target': 'Brend va sayt',
+  'marketing.storefront.switcher.add.choose': 'Brendni tanlang…',
+  'marketing.storefront.switcher.add.noAddress': 'tasdiqlangan manzil hali yoʻq',
+  'marketing.storefront.switcher.add.none':
+    'Taklif qilish mumkin boʻlgan sayti bor boshqa brend yoʻq. Boshqa brendning kamida bitta filialida sotadigan faol sayt kanali kerak.',
+  'marketing.storefront.switcher.add.submit': 'Lentaga qoʻshish',
+  'marketing.storefront.switcher.added': 'Brend qoʻshildi.',
+  'marketing.storefront.switcher.updated': 'Saqlandi.',
+  'marketing.storefront.switcher.removed': 'Brend olib tashlandi.',
+  'marketing.storefront.switcher.reordered': 'Tartib saqlandi.',
+  'marketing.storefront.branches.title': 'Filiallar tartibi',
+  'marketing.storefront.branches.hint':
+    'Joylashuvini ulashgan mijoz avval eng yaqin filialni koʻradi; bu tartib faqat teng masofada hal qiladi. Joylashuv ulashmagan mijoz filiallarni aynan shu tartibda koʻradi. Tartibga kiritmagan filialingiz oxirida, nomi boʻyicha turadi.',
+  'marketing.storefront.branches.placed': 'Sizning tartibingizda',
+  'marketing.storefront.branches.nonePlaced':
+    'Hech bir filial joylashtirilmagan. Vitrina filiallarni nomi boʻyicha koʻrsatadi.',
+  'marketing.storefront.branches.unplaced': 'Joylashtirilmagan (oxirida, nomi boʻyicha)',
+  'marketing.storefront.branches.noneUnplaced': 'Barcha filiallar joylashtirilgan.',
+  'marketing.storefront.branches.place': 'Joylashtirish',
+  'marketing.storefront.branches.unplace': 'Tartibdan chiqarish',
+  'marketing.storefront.branches.inactive': 'faol emas, mijozlar uni koʻrmaydi',
+  'marketing.storefront.branches.save': 'Tartibni saqlash',
+  'marketing.storefront.branches.reset': 'Oʻzgarishlarni bekor qilish',
+  'marketing.storefront.branches.saved': 'Tartib saqlandi.',
 };

@@ -1486,14 +1486,57 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.storefront.tab.groups': 'Группы на главной',
   'marketing.storefront.tab.carousel': 'Карусель предложений',
   'marketing.storefront.tab.preview': 'Предпросмотр',
-  'marketing.storefront.tab.switcher': 'Переключатель брендов',
+  'marketing.storefront.tab.switcher': 'Переключатель брендов и раскладка',
+  'marketing.storefront.tab.branches': 'Порядок филиалов',
   'marketing.storefront.groups.hint':
     'Именованные ленты блюд на главном экране: выбранные вручную или целая категория. Порядок здесь — это порядок на экране.',
   'marketing.storefront.carousel.hint':
     'Карусель вверху главного экрана общая для баннеров и промо-карточек. Порядок задаётся здесь; писать и публиковать их нужно в разделе «Контент». Она одинакова для всех клиентов — персональное предложение для одного гостя — это отдельное.',
   'marketing.storefront.carousel.link': 'Открыть «Контент»',
-  'marketing.storefront.switcher.title':
-    'Переключатель брендов и раскладка маркетплейса — не созданы',
-  'marketing.storefront.switcher.body':
-    'Они ждут, пока арендатор не начнёт вести два бренда на одной витрине и не попросит об этом (ADR 0157, релиз 4). До тех пор настраивать нечего, и под это не зарезервировано ни одной настройки.',
+  'marketing.storefront.layout.title': 'Раскладка категорий',
+  'marketing.storefront.layout.hint':
+    'Стандартная — навигация по категориям, как сейчас у клиентов. «Маркетплейс» показывает компактную полосу категорий и оверлей «все категории» — для витрины, где их много. Выбор действует для этого бренда сразу после сохранения.',
+  'marketing.storefront.layout.standard': 'Стандартная',
+  'marketing.storefront.layout.marketplace': 'Маркетплейс',
+  'marketing.storefront.layout.saved': 'Раскладка сохранена.',
+  'marketing.storefront.switcher.title': 'Другие бренды на этой витрине',
+  'marketing.storefront.switcher.hint':
+    'Полоса ваших других брендов вверху витрины; каждый ведёт на собственный сайт бренда. Адрес — подтверждённый адрес сайта, он читается каждый раз: здесь ничего не вводится и ничего не устаревает.',
+  'marketing.storefront.switcher.empty':
+    'Здесь не предлагается ни один бренд. Витрина выглядит как раньше.',
+  'marketing.storefront.switcher.status.shown': 'Показывается клиентам',
+  'marketing.storefront.switcher.status.hidden': 'Скрыт',
+  'marketing.storefront.switcher.status.noHostname':
+    'Не показывается: у этого сайта ещё нет подтверждённого адреса',
+  'marketing.storefront.switcher.status.inactive': 'Не показывается: бренд не активен',
+  'marketing.storefront.switcher.up': 'Выше',
+  'marketing.storefront.switcher.down': 'Ниже',
+  'marketing.storefront.switcher.hide': 'Скрыть',
+  'marketing.storefront.switcher.show': 'Показать',
+  'marketing.storefront.switcher.remove': 'Убрать',
+  'marketing.storefront.switcher.add.title': 'Предложить другой бренд',
+  'marketing.storefront.switcher.add.target': 'Бренд и сайт',
+  'marketing.storefront.switcher.add.choose': 'Выберите бренд…',
+  'marketing.storefront.switcher.add.noAddress': 'подтверждённого адреса ещё нет',
+  'marketing.storefront.switcher.add.none':
+    'Нет другого бренда с сайтом, который можно предложить. Нужен активный канал-сайт другого бренда, который продаёт хотя бы в одном его филиале.',
+  'marketing.storefront.switcher.add.submit': 'Добавить в полосу',
+  'marketing.storefront.switcher.added': 'Бренд добавлен.',
+  'marketing.storefront.switcher.updated': 'Сохранено.',
+  'marketing.storefront.switcher.removed': 'Бренд убран.',
+  'marketing.storefront.switcher.reordered': 'Порядок сохранён.',
+  'marketing.storefront.branches.title': 'Порядок филиалов',
+  'marketing.storefront.branches.hint':
+    'Клиент, который поделился местоположением, сначала видит ближайший филиал; этот порядок лишь разрешает ничью. Клиент без местоположения видит филиалы именно в этом порядке. Филиал, который вы не включили, идёт последним, по названию.',
+  'marketing.storefront.branches.placed': 'В вашем порядке',
+  'marketing.storefront.branches.nonePlaced':
+    'Ни один филиал не расставлен. Витрина показывает филиалы по названию.',
+  'marketing.storefront.branches.unplaced': 'Не расставлены (идут последними, по названию)',
+  'marketing.storefront.branches.noneUnplaced': 'Все филиалы расставлены.',
+  'marketing.storefront.branches.place': 'Поставить',
+  'marketing.storefront.branches.unplace': 'Убрать из порядка',
+  'marketing.storefront.branches.inactive': 'не активен, клиенты его не видят',
+  'marketing.storefront.branches.save': 'Сохранить порядок',
+  'marketing.storefront.branches.reset': 'Отменить изменения',
+  'marketing.storefront.branches.saved': 'Порядок сохранён.',
 };

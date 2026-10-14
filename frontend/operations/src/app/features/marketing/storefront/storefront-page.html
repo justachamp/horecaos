@@ -43,10 +43,10 @@
       <q-content-preview [locales]="locales()" [startLocale]="defaultLocale()" />
     }
     @case ('switcher') {
-      <section class="storefront__not-built" data-testid="storefront-switcher">
-        <h2 class="q-subhead">{{ 'marketing.storefront.switcher.title' | t }}</h2>
-        <p class="q-body-sm">{{ 'marketing.storefront.switcher.body' | t }}</p>
-      </section>
+      <q-storefront-switcher />
+    }
+    @case ('branches') {
+      <q-storefront-branch-order />
     }
   }
 </div>
