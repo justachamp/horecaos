@@ -635,8 +635,8 @@ links, `Предпросмотр` in the matching frame (`PhoneFrame`, `Telegram
 ### TELEGRAM
 
 Token paste + `Проверить` (validates and auto-fills bot display name and `@username`); menu
-button label and URL; mini-app mode; per-language texts; public-offer link; a dynamic button; the
-positive/negative review chat routing. Backing: `integration.installations` with
+button label and URL; mini-app mode; per-language texts; public-offer link; ~~a dynamic button~~ *(declined 2026-10-14, ADR 0187 D28: no app reads it; it goes with the wave that un-holds the mobile app)*; the
+positive/negative review chat routing *(built, ADR 0187: the event classes `REVIEW_POSITIVE`, 4 or 5 stars, and `REVIEW_NEGATIVE`, 1 to 3, a chat subscribes to in Notifications, routing; the message is the review's id and stars only)*. Backing: `integration.installations` with
 `provider_category='NOTIFICATION'`/`OTHER`, `secret_reference` for the token — **the token is never
 rendered after entry** (`SecretInput`, ADR 0028), which is a straight improvement on pasting it into
 a plain text field.
@@ -656,7 +656,7 @@ tenants, which is an XSS surface pointed at the tenant's own customers.
 
 Delever's kiosk form is the most completely documented page in its whole settings tree, and it is
 worth matching field for field because every field is a real Uzbek compliance or hardware fact:
-kiosk name, legal company name, branch, the customer profile orders are booked under, payment
+kiosk name, legal company name, branch, ~~the customer profile orders are booked under~~ *(struck 2026-10-14, ADR 0187 D26: it describes the kiosk ordering application's order booking, not the channel's setup; that application is its own row and record)*, payment
 types, order types, company address, **ИНН для фискализации**, printer width (58/80 mm), VAT rate,
 service PIN, device login and password, status; plus idle media (9:16, ≤1 MB), content type, fiscal
 operator, fiscal URL/IP, terminal protocol, marking endpoint, kiosk marking ID, marking toggle,
@@ -664,8 +664,7 @@ table service, available reports.
 
 HorecaOS's position: **the kiosk stays a first-class channel from day one — it costs one row — and the
 device/hardware integration is declined for now** (matrix: "Self-service kiosk hardware
-integration" is on the do-not-build list). So this form ships with identity, branch, booking
-customer profile, payment/order types and idle media; the fiscal identity comes from the location's
+integration" is on the do-not-build list). So this form ships with identity, branch, payment/order types and idle media; the fiscal identity comes from the location's
 legal entity rather than a typed-in ИНН (ADR 0038: a kiosk is a `fiscal_terminals` row of kind
 `KIOSK` bound to a location, "the whole of kiosk fiscal identity at the cost of one row"); and the
 printer/terminal/marking block renders as a `LockedState` naming what is not built.
@@ -681,7 +680,14 @@ display does, and "service PIN" and "device login and password" are deliberately
 operating system's, see `docs/runbooks/terminals-and-kiosks.md`). The people who pair kiosks are branch managers, who
 hold `kiosk.device.manage` and not `tenant.read` or `channel.read`: the approval page and a *Kiosks* screen that mounts
 this same section for the working branch (`settings/channel-setup/kiosks`) are admitted to them by their own paths, and
-the rest of Settings is not. The printer, terminal and marking block is still a `LockedState`.
+the rest of Settings is not. The printer, terminal and marking block is a `LockedState` that names what is not built (drawn since ADR 0187).
+
+**Idle media (ADR 0187, D25, built).** Below the registry, *Idle screen pictures*: up to eight pictures for the KIOSK channel, each 9:16 and at
+most 1 MB, JPEG, PNG or WebP, no video. The uploader crops to 9:16 in the manager's browser and refuses a file over the cap before an upload; the
+platform checks the shape again on the file's own header and again when a picture is attached. The list is the channel's, not a kiosk's: every
+kiosk on the channel plays it, at every branch where the channel sells, in the order shown, eight seconds a picture. A branch manager does the whole
+job under `kiosk.device.manage`; the upload is lent by the media module because she holds neither `channel.manage` nor `media.upload`. A kiosk
+that has no pictures, or whose channel is switched off here, shows the status screen it always showed.
 
 ### QR_TABLE
 
@@ -694,17 +700,21 @@ rather than letting an admin choose a mode that silently fails at a table.
 
 ### IOS / ANDROID
 
-Per platform and independent of each other: payment types, fulfilment types, app store links,
-version gating, push credentials (`SecretInput`).
+*Amended 2026-10-14 (ADR 0187, D28).* The customer mobile app is on hold (ADR 0055), so these forms are not built: the hub shows an honest
+`LockedState` for `IOS` and `ANDROID` and no field. What was specified here (per platform and independent of each other: payment types,
+fulfilment types, app store links, version gating, push credentials (`SecretInput`)), the dynamic button and a per-channel «languages offered»
+belong to the wave that un-holds the app, and push credentials will also need an Apple or Google account that is the owner's to open. Languages
+offered stays brand-level (10.12).
 
 ### AGGREGATOR
 
 Read-only here; configured in 10.8 because an aggregator channel is an installation with mappings,
-not a storefront. The channel page links to it.
+not a storefront. The channel page links to it *(built: a link to Integrations, the installation it rests on, and the *Предпросмотр* link to the
+catalog's channel preview)*.
 
 ### CALL_CENTRE
 
-Read-only summary of card 5 of 10.3.
+Read-only summary of card 5 of 10.3 *(built: the operator promo-code switch as the brand resolves it, with a link to Order policy)*.
 
 **States across all types.** A channel whose `provider_installation_id` points at an installation
 with `last_connection_status='FAILED'` shows a banner at the top of the form, not at the bottom.

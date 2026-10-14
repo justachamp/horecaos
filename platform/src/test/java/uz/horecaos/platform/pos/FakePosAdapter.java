@@ -95,6 +95,7 @@ public final class FakePosAdapter implements PosAdapter {
     private boolean duplicateNextMovementPage;
     private boolean movementFeedUnreadable;
     private boolean customerListUnreadable;
+    private boolean tillDown;
     private @Nullable String balanceCurrency;
     private @Nullable Runnable atNextBalanceWrite;
 
@@ -125,6 +126,7 @@ public final class FakePosAdapter implements PosAdapter {
         duplicateNextMovementPage = false;
         movementFeedUnreadable = false;
         customerListUnreadable = false;
+        tillDown = false;
         balanceCurrency = null;
         atNextBalanceWrite = null;
         return this;
@@ -212,6 +214,12 @@ public final class FakePosAdapter implements PosAdapter {
 
     public FakePosAdapter customerListUnreadable(boolean unreadable) {
         this.customerListUnreadable = unreadable;
+        return this;
+    }
+
+    /** Every balance write fails with a retryable fault, as a till that is down does: nothing is applied. */
+    public FakePosAdapter tillDown(boolean down) {
+        this.tillDown = down;
         return this;
     }
 
@@ -304,6 +312,9 @@ public final class FakePosAdapter implements PosAdapter {
         }
         synchronized (this) {
             balanceWrites.incrementAndGet();
+            if (tillDown) {
+                return ProviderOutcome.retryable("FAKE_DOWN", "the till is not answering", null);
+            }
             Wallet wallet = wallets.get(externalCustomerId);
             if (wallet == null) {
                 return ProviderOutcome.rejected("NOT_FOUND", "no such till customer");

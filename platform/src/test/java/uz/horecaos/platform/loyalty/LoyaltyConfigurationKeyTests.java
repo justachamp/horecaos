@@ -26,6 +26,27 @@ class LoyaltyConfigurationKeyTests {
                 .isEqualTo(LoyaltyConfigurationKeys.POS_TILL_KEEPS_BALANCE);
         assertThat(registered(LoyaltyConfigurationKeys.POS_SYNC_PULL_INTERVAL_SECONDS_CODE))
                 .isEqualTo(LoyaltyConfigurationKeys.POS_SYNC_PULL_INTERVAL_SECONDS);
+        assertThat(registered(LoyaltyConfigurationKeys.POS_SYNC_PUSH_INTERVAL_SECONDS_CODE))
+                .isEqualTo(LoyaltyConfigurationKeys.POS_SYNC_PUSH_INTERVAL_SECONDS);
+        assertThat(registered(LoyaltyConfigurationKeys.POS_SYNC_REQUIRE_CONSENT_CODE))
+                .isEqualTo(LoyaltyConfigurationKeys.POS_SYNC_REQUIRE_CONSENT);
+    }
+
+    @Test
+    @DisplayName(
+            "a platform movement reaches the till within 60 seconds: a thirty-second push sweep, and the consent gate is dark by default")
+    void thePushWindowAndTheDarkGateAreTheRecords() {
+        assertThat(LoyaltyConfigurationKeys.POS_SYNC_PUSH_INTERVAL_SECONDS.defaultValue())
+                .isEqualTo(30)
+                .as("half of the 60 seconds, so the sweep's own cadence and a pass's running time fit inside it")
+                .isLessThanOrEqualTo(30);
+        assertThat(LoyaltyConfigurationKeys.POS_SYNC_PUSH_INTERVAL_SECONDS.settableScopes())
+                .containsExactly(ScopeType.PLATFORM);
+        assertThat(LoyaltyConfigurationKeys.POS_SYNC_REQUIRE_CONSENT.defaultValue())
+                .as("counsel's accepted default: no consent purpose needed")
+                .isFalse();
+        assertThat(LoyaltyConfigurationKeys.POS_SYNC_REQUIRE_CONSENT.settableScopes())
+                .containsExactlyInAnyOrder(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND);
     }
 
     @Test

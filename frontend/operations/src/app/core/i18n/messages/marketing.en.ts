@@ -450,6 +450,23 @@ export const marketingEn = {
   'marketing.loyalty.posSync.mode.REPORT_ONLY': 'Report only: compares, applies and pushes nothing',
   'marketing.loyalty.posSync.mode.PULL': 'Imports what happens at the till',
   'marketing.loyalty.posSync.mode.PULL_AND_PUSH': 'Imports and sends the ledger’s balance',
+  // ------------------------------------------------------------------- staging the rollout (ADR 0171, row 6.3b)
+  'marketing.loyalty.posSync.stage.label': 'Stage of the rollout',
+  'marketing.loyalty.posSync.stage.hint':
+    'Report only first, then import, then send. Each step up is one stage; a step down is immediate.',
+  'marketing.loyalty.posSync.stage.reason': 'Why (kept in the activity log)',
+  'marketing.loyalty.posSync.stage.apply': 'Apply the stage',
+  'marketing.loyalty.posSync.stage.saved': 'The binding now runs: {mode}.',
+  'marketing.loyalty.posSync.stage.stale':
+    'Someone else changed this first. The page now shows what is true; make your change again.',
+  'marketing.loyalty.posSync.keeps.title': 'Does your till keep its own bonus balance?',
+  'marketing.loyalty.posSync.keeps.body':
+    'If it does and nothing here mirrors it, staff are told that a customer’s balance here and at the till can differ.',
+  'marketing.loyalty.posSync.keeps.label': 'The till keeps a bonus balance of its own',
+  'marketing.loyalty.posSync.keeps.save': 'Save',
+  'marketing.loyalty.posSync.keeps.saved': 'Saved.',
+  'marketing.loyalty.posSync.keeps.yes': 'Yes: the till keeps a bonus balance of its own.',
+  'marketing.loyalty.posSync.keeps.no': 'No: the till keeps none, or has not been asked.',
   'marketing.loyalty.posSync.reconcile.action': 'Reconcile now',
   'marketing.loyalty.posSync.reconcile.running': 'Reconciling…',
   'marketing.loyalty.posSync.runs.title': 'Reconciliation reports',

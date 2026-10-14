@@ -25,12 +25,26 @@ public final class LoyaltyConfigurationKeys {
 
     public static final String POS_SYNC_PULL_INTERVAL_SECONDS_CODE = "loyalty.pos_sync.pull_interval_seconds";
 
+    public static final String POS_SYNC_PUSH_INTERVAL_SECONDS_CODE = "loyalty.pos_sync.push_interval_seconds";
+
+    public static final String POS_SYNC_REQUIRE_CONSENT_CODE = "loyalty.pos_sync.require_consent";
+
+    /** The consent purpose the dark gate asks {@code ConsentDirectory} about (ADR 0171, open input 4). */
+    public static final String POS_SYNC_CONSENT_PURPOSE = "loyalty.pos_sync";
+
     /** The defaults as plain numbers, for a caller that must not unbox a nullable. */
     public static final long POS_SYNC_MAX_AUTO_CREDIT_DEFAULT = 100_000L;
 
     public static final long POS_SYNC_MAX_BINDING_CREDIT_PER_DAY_DEFAULT = 2_000_000L;
 
     public static final int POS_SYNC_PULL_INTERVAL_DEFAULT_SECONDS = 300;
+
+    /**
+     * Half the 60 seconds ADR 0171 promises a platform movement: the push sweep is asked every ten seconds and sends what has
+     * moved when 30 have passed since its last pass, so a movement reaches the till in under 60 with a pass's own running
+     * time to spare.
+     */
+    public static final int POS_SYNC_PUSH_INTERVAL_DEFAULT_SECONDS = 30;
 
     /**
      * The most points one customer may be credited from the till in one business day without a person looking
@@ -81,6 +95,36 @@ public final class LoyaltyConfigurationKeys {
             .ownedBy("loyalty")
             .settableAt(ScopeType.PLATFORM)
             .describedAs("Seconds between pulls of the movements that happened at a point-of-sale terminal.")
+            .build();
+
+    /**
+     * How often the platform sends a till the numbers that moved on the platform's side (ADR 0171 Decision 3 and the accepted
+     * convergence window: a platform movement reaches the till within 60 seconds): 30 seconds. A sweep of its own, not a
+     * step of the pull pass, which runs every five minutes.
+     */
+    public static final ConfigurationKey<Integer> POS_SYNC_PUSH_INTERVAL_SECONDS = ConfigurationKey.of(
+                    POS_SYNC_PUSH_INTERVAL_SECONDS_CODE, Integer.class)
+            .defaultValue(POS_SYNC_PUSH_INTERVAL_DEFAULT_SECONDS)
+            .ownedBy("loyalty")
+            .settableAt(ScopeType.PLATFORM)
+            .describedAs(
+                    "Seconds between sends to a point-of-sale terminal of the balances that moved on the platform.")
+            .build();
+
+    /**
+     * Whether syncing a customer's balance with the tenant's own till needs the customer's consent (ADR 0171, open input 4).
+     * Off: counsel's accepted default is that it does not, since no customer data is sent to the till. On: a customer whose
+     * consent for {@link #POS_SYNC_CONSENT_PURPOSE} is absent or withheld is not matched and appears in the reconciliation
+     * report as {@code NOT_CONSENTED}. Built dark so that a "yes" from counsel is a configuration flip and not a release.
+     */
+    public static final ConfigurationKey<Boolean> POS_SYNC_REQUIRE_CONSENT = ConfigurationKey.of(
+                    POS_SYNC_REQUIRE_CONSENT_CODE, Boolean.class)
+            .defaultValue(false)
+            .ownedBy("loyalty")
+            .tenantVisible()
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
+            .describedAs("Whether a customer must have consented before their balance is synced with the point-of-sale "
+                    + "terminal.")
             .build();
 
     private LoyaltyConfigurationKeys() {}

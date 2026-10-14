@@ -3,8 +3,9 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { describe, expect, it, vi } from 'vitest';
 
 import { BrandScope } from '../../../core/api/catalog-paths';
-import { ApiError } from '../../../core/api/problem-details';
+import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { CurrentBrand } from '../../../core/auth/current-brand';
+import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { I18n } from '../../../core/i18n/i18n';
 import {
   PosSyncApi,
@@ -25,6 +26,7 @@ function binding(overrides: Partial<PosSyncBindingView> = {}): PosSyncBindingVie
     providerType: 'fake-pos',
     locationId: null,
     bindingStatus: 'ACTIVE',
+    version: 4,
     capabilityState: 'SUPPORTED',
     enabled: true,
     syncing: true,
@@ -46,6 +48,7 @@ function binding(overrides: Partial<PosSyncBindingView> = {}): PosSyncBindingVie
 function overview(overrides: Partial<PosSyncOverview> = {}): PosSyncOverview {
   return {
     tillKeepsBalance: false,
+    tillKeepsBalanceVersion: 0,
     standingNotice: false,
     openDiscrepancies: 2,
     bindings: [binding()],
@@ -112,9 +115,15 @@ describe('PosSyncPanel', () => {
     discrepancies: ReturnType<typeof vi.fn>;
     reconcile: ReturnType<typeof vi.fn>;
     resolve: ReturnType<typeof vi.fn>;
+    setMode: ReturnType<typeof vi.fn>;
+    setTillKeepsBalance: ReturnType<typeof vi.fn>;
   };
 
-  async function render(overrides: Partial<typeof api> = {}, brandAllowed = true): Promise<void> {
+  async function render(
+    overrides: Partial<typeof api> = {},
+    brandAllowed = true,
+    manage = true,
+  ): Promise<void> {
     api = {
       overview: vi.fn().mockResolvedValue(overview()),
       runs: vi.fn().mockResolvedValue([run()]),
@@ -133,6 +142,10 @@ describe('PosSyncPanel', () => {
         }),
       ]),
       reconcile: vi.fn().mockResolvedValue(run()),
+      setMode: vi.fn().mockResolvedValue(binding({ mode: 'PULL', version: 5 })),
+      setTillKeepsBalance: vi
+        .fn()
+        .mockResolvedValue(overview({ tillKeepsBalance: true, tillKeepsBalanceVersion: 1 })),
       resolve: vi.fn().mockResolvedValue({
         discrepancy: difference({ status: 'RESOLVED' }),
         applied: true,
@@ -155,6 +168,10 @@ describe('PosSyncPanel', () => {
           },
         },
         { provide: PosSyncApi, useValue: api },
+        {
+          provide: SessionCapabilities,
+          useValue: { has: (capability: string) => manage && capability === 'LOYALTY_SYNC_MANAGE' },
+        },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -357,5 +374,168 @@ describe('PosSyncPanel', () => {
     await render({}, false);
     expect(host().querySelector('[data-testid="pos-sync-denied"]')).not.toBeNull();
     expect(api.overview).not.toHaveBeenCalled();
+  });
+  const byId = (id: string): HTMLElement | null => host().querySelector(`[data-testid="${id}"]`);
+
+  function type(id: string, value: string): void {
+    const field = byId(id) as HTMLInputElement;
+    field.value = value;
+    field.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  }
+
+  function choose(id: string, value: string): void {
+    const field = byId(id) as HTMLSelectElement;
+    field.value = value;
+    field.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+  }
+
+  describe('staging the rollout (ADR 0171, row 6.3b)', () => {
+    it('offers the three stages, lets a step up reach one stage only, and sends the version the operator read', async () => {
+      await render();
+      const select = byId('pos-sync-stage-select') as HTMLSelectElement;
+      const options = Array.from(select.options);
+      expect(options.map((option) => option.value)).toEqual([
+        'REPORT_ONLY',
+        'PULL',
+        'PULL_AND_PUSH',
+      ]);
+      expect(options.map((option) => option.disabled)).toEqual([false, false, true]);
+      expect((byId('pos-sync-stage-apply') as HTMLButtonElement).disabled).toBe(true);
+
+      choose('pos-sync-stage-select', 'PULL');
+      expect((byId('pos-sync-stage-apply') as HTMLButtonElement).disabled).toBe(true);
+      type('pos-sync-stage-reason', 'a week of reports read by finance');
+      expect((byId('pos-sync-stage-apply') as HTMLButtonElement).disabled).toBe(false);
+
+      (byId('pos-sync-stage-apply') as HTMLButtonElement).click();
+      await flush();
+      fixture.detectChanges();
+
+      expect(api.setMode).toHaveBeenCalledWith(
+        SCOPE,
+        expect.objectContaining({ bindingId: 'bind-1', version: 4 }),
+        'PULL',
+        'a week of reports read by finance',
+      );
+      expect(byId('pos-sync-saved')?.textContent).toContain('Imports what happens at the till');
+    });
+
+    it('allows any step down at once, and no step up from a binding that cannot sync', async () => {
+      await render({
+        overview: vi
+          .fn()
+          .mockResolvedValue(
+            overview({ bindings: [binding({ mode: 'PULL_AND_PUSH', syncing: true })] }),
+          ),
+      });
+      let options = Array.from((byId('pos-sync-stage-select') as HTMLSelectElement).options);
+      expect(options.map((option) => option.disabled)).toEqual([false, false, false]);
+
+      await render({
+        overview: vi
+          .fn()
+          .mockResolvedValue(
+            overview({
+              bindings: [binding({ mode: 'REPORT_ONLY', syncing: false, enabled: false })],
+            }),
+          ),
+      });
+      options = Array.from((byId('pos-sync-stage-select') as HTMLSelectElement).options);
+      expect(options.map((option) => option.disabled)).toEqual([false, true, true]);
+    });
+
+    it('offers no staging for a vendor nobody has assessed', async () => {
+      await render({
+        overview: vi.fn().mockResolvedValue(
+          overview({
+            bindings: [
+              binding({
+                providerType: 'clopos',
+                capabilityState: 'UNASSESSED',
+                enabled: false,
+                syncing: false,
+              }),
+            ],
+          }),
+        ),
+      });
+      expect(byId('pos-sync-stage')).toBeNull();
+    });
+
+    it('offers staging to someone who holds loyalty.sync.manage and not to a reader', async () => {
+      await render({}, true, false);
+      expect(byId('pos-sync-stage')).toBeNull();
+      expect(byId('pos-sync-keeps-save')).toBeNull();
+      expect(byId('pos-sync-keeps-readonly')).not.toBeNull();
+    });
+
+    it('reloads and says so when the binding was staged by someone else first', async () => {
+      const setMode = vi
+        .fn()
+        .mockRejectedValue(new ApiError(ApiErrorCode.STALE_VERSION, 409, { status: 409 }, 'c'));
+      await render({ setMode });
+      choose('pos-sync-stage-select', 'PULL');
+      type('pos-sync-stage-reason', 'why');
+
+      (byId('pos-sync-stage-apply') as HTMLButtonElement).click();
+      await flush();
+      fixture.detectChanges();
+
+      expect(api.overview).toHaveBeenCalledTimes(2);
+      expect(byId('pos-sync-action-error')?.textContent).toContain(
+        'Someone else changed this first',
+      );
+    });
+
+    it('shows the platform’s refusal of a stage in words and keeps the page', async () => {
+      const setMode = vi
+        .fn()
+        .mockRejectedValue(
+          new ApiError('UNPROCESSABLE_STATE', 422, { status: 422, detail: 'staged' }, 'c'),
+        );
+      await render({ setMode });
+      choose('pos-sync-stage-select', 'PULL');
+      type('pos-sync-stage-reason', 'why');
+
+      (byId('pos-sync-stage-apply') as HTMLButtonElement).click();
+      await flush();
+      fixture.detectChanges();
+
+      expect(byId('pos-sync-action-error')).not.toBeNull();
+      expect(byId('pos-sync-bindings')).not.toBeNull();
+    });
+  });
+
+  describe('what the till keeps (ADR 0171 Decision 8)', () => {
+    it('saves the statement against the version of the brand’s own row, with a reason', async () => {
+      await render({
+        overview: vi.fn().mockResolvedValue(overview({ tillKeepsBalanceVersion: 3 })),
+      });
+      expect((byId('pos-sync-keeps-save') as HTMLButtonElement).disabled).toBe(true);
+
+      const box = byId('pos-sync-keeps-value') as HTMLInputElement;
+      box.checked = true;
+      box.dispatchEvent(new Event('change'));
+      type('pos-sync-keeps-reason', 'iiko loyalty is on');
+      expect((byId('pos-sync-keeps-save') as HTMLButtonElement).disabled).toBe(false);
+
+      (byId('pos-sync-keeps-save') as HTMLButtonElement).click();
+      await flush();
+      fixture.detectChanges();
+
+      expect(api.setTillKeepsBalance).toHaveBeenCalledWith(SCOPE, true, 3, 'iiko loyalty is on');
+      expect(byId('pos-sync-saved')?.textContent).toContain('Saved');
+    });
+
+    it('says plainly what the brand has said, to someone who may not change it', async () => {
+      await render(
+        { overview: vi.fn().mockResolvedValue(overview({ tillKeepsBalance: true })) },
+        true,
+        false,
+      );
+      expect(byId('pos-sync-keeps-readonly')?.textContent).toContain('Yes');
+    });
   });
 });

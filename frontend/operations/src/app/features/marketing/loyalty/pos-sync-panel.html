@@ -17,6 +17,12 @@
       </div>
     }
 
+    @if (stagedNotice(); as saved) {
+      <div class="pos-sync__saved" role="status" data-testid="pos-sync-saved">
+        <p class="q-body-sm">{{ saved }}</p>
+      </div>
+    }
+
     @if (standingNotice()) {
       <div class="pos-sync__notice" role="status" data-testid="pos-sync-standing-notice">
         <p class="q-body-sm">{{ 'marketing.loyalty.posSync.notice' | t }}</p>
@@ -26,6 +32,51 @@
     <p class="q-caption pos-sync__lag" data-testid="pos-sync-lag">
       {{ 'marketing.loyalty.posSync.lag' | t }}
     </p>
+
+    <!-- Does this brand's till keep a bonus balance of its own? The statement behind the standing notice -->
+    <section class="pos-sync__section" data-testid="pos-sync-keeps">
+      <h2 class="q-body pos-sync__title">{{ 'marketing.loyalty.posSync.keeps.title' | t }}</h2>
+      <p class="q-caption pos-sync__note">{{ 'marketing.loyalty.posSync.keeps.body' | t }}</p>
+      @if (canManage()) {
+        <label class="pos-sync__check">
+          <input
+            type="checkbox"
+            data-testid="pos-sync-keeps-value"
+            [checked]="keepsValue()"
+            (change)="keepsDraft.set($any($event.target).checked)"
+          />
+          <span class="q-body-sm">{{ 'marketing.loyalty.posSync.keeps.label' | t }}</span>
+        </label>
+        <label class="pos-sync__reason">
+          <span class="q-caption">{{ 'marketing.loyalty.posSync.stage.reason' | t }}</span>
+          <input
+            type="text"
+            maxlength="500"
+            data-testid="pos-sync-keeps-reason"
+            [value]="keepsReason()"
+            (input)="keepsReason.set($any($event.target).value)"
+          />
+        </label>
+        <button
+          type="button"
+          class="pos-sync__action"
+          data-testid="pos-sync-keeps-save"
+          [disabled]="!canSaveKeeps()"
+          (click)="saveKeeps()"
+        >
+          {{ 'marketing.loyalty.posSync.keeps.save' | t }}
+        </button>
+      } @else {
+        <p class="q-body-sm" data-testid="pos-sync-keeps-readonly">
+          {{
+            (overview()?.tillKeepsBalance
+              ? 'marketing.loyalty.posSync.keeps.yes'
+              : 'marketing.loyalty.posSync.keeps.no'
+            ) | t
+          }}
+        </p>
+      }
+    </section>
 
     <!-- Per binding: can this point of sale mirror a balance at all, and how is it doing -->
     <section class="pos-sync__section" data-testid="pos-sync-bindings">
@@ -74,6 +125,54 @@
               </dd>
             </div>
           </dl>
+          @if (
+            canManage() &&
+            binding.capabilityState !== 'UNSUPPORTED' &&
+            binding.capabilityState !== 'UNASSESSED'
+          ) {
+            <div class="pos-sync__stage" data-testid="pos-sync-stage">
+              <label class="pos-sync__reason">
+                <span class="q-caption">{{ 'marketing.loyalty.posSync.stage.label' | t }}</span>
+                <select
+                  data-testid="pos-sync-stage-select"
+                  [value]="modeOf(binding)"
+                  (change)="chooseMode(binding, $any($event.target).value)"
+                >
+                  @for (stage of modes; track stage) {
+                    <option
+                      [value]="stage"
+                      [selected]="modeOf(binding) === stage"
+                      [disabled]="!modeAllowed(binding, stage)"
+                    >
+                      {{ modeLabelKey(stage) | t }}
+                    </option>
+                  }
+                </select>
+              </label>
+              <p class="q-caption pos-sync__note">
+                {{ 'marketing.loyalty.posSync.stage.hint' | t }}
+              </p>
+              <label class="pos-sync__reason">
+                <span class="q-caption">{{ 'marketing.loyalty.posSync.stage.reason' | t }}</span>
+                <input
+                  type="text"
+                  maxlength="500"
+                  data-testid="pos-sync-stage-reason"
+                  [value]="modeReasonOf(binding)"
+                  (input)="setModeReason(binding, $any($event.target).value)"
+                />
+              </label>
+              <button
+                type="button"
+                class="pos-sync__action"
+                data-testid="pos-sync-stage-apply"
+                [disabled]="!canStage(binding)"
+                (click)="stage(binding)"
+              >
+                {{ 'marketing.loyalty.posSync.stage.apply' | t }}
+              </button>
+            </div>
+          }
           @if (binding.syncing) {
             <button
               type="button"

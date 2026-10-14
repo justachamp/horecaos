@@ -453,6 +453,23 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
     'Только отчёт: сверяет, ничего не применяет и не отправляет',
   'marketing.loyalty.posSync.mode.PULL': 'Загружает то, что произошло на кассе',
   'marketing.loyalty.posSync.mode.PULL_AND_PUSH': 'Загружает и отправляет баланс журнала',
+  // ------------------------------------------------------------------- staging the rollout (ADR 0171, row 6.3b)
+  'marketing.loyalty.posSync.stage.label': 'Стадия внедрения',
+  'marketing.loyalty.posSync.stage.hint':
+    'Сначала только отчёт, потом загрузка, потом отправка. Вверх — по одной стадии, вниз — сразу.',
+  'marketing.loyalty.posSync.stage.reason': 'Почему (сохраняется в журнале действий)',
+  'marketing.loyalty.posSync.stage.apply': 'Применить стадию',
+  'marketing.loyalty.posSync.stage.saved': 'Теперь подключение работает так: {mode}.',
+  'marketing.loyalty.posSync.stage.stale':
+    'Кто-то изменил это раньше. Страница показывает актуальное; повторите своё изменение.',
+  'marketing.loyalty.posSync.keeps.title': 'Ведёт ли ваша касса собственный бонусный баланс?',
+  'marketing.loyalty.posSync.keeps.body':
+    'Если ведёт, а здесь ничто его не отражает, сотрудникам сообщается, что баланс клиента здесь и на кассе может расходиться.',
+  'marketing.loyalty.posSync.keeps.label': 'Касса ведёт собственный бонусный баланс',
+  'marketing.loyalty.posSync.keeps.save': 'Сохранить',
+  'marketing.loyalty.posSync.keeps.saved': 'Сохранено.',
+  'marketing.loyalty.posSync.keeps.yes': 'Да: касса ведёт собственный бонусный баланс.',
+  'marketing.loyalty.posSync.keeps.no': 'Нет: касса его не ведёт или об этом не говорили.',
   'marketing.loyalty.posSync.reconcile.action': 'Сверить сейчас',
   'marketing.loyalty.posSync.reconcile.running': 'Идёт сверка…',
   'marketing.loyalty.posSync.runs.title': 'Отчёты о сверке',

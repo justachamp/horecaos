@@ -19,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -167,6 +168,52 @@ public class LoyaltyPosSyncController {
         return ResponseEntity.ok(PosSyncResolutionResponse.of(result));
     }
 
+    @PutMapping("/bindings/{bindingId}/mode")
+    @RequiresCapability(value = Capability.LOYALTY_SYNC_MANAGE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            operationId = "loyaltyPosSyncSetMode",
+            summary = "Stage a binding's sync mode",
+            description = "REPORT_ONLY (compare and report, apply nothing), PULL (import what happened at the till) or "
+                    + "PULL_AND_PUSH (also send the platform's number to the till): the rollout ADR 0171 stages. "
+                    + "A step down is allowed at once; a step up is one stage at a time (422 naming both modes), and "
+                    + "anything above REPORT_ONLY needs a binding that can sync. Requires If-Match with the binding's "
+                    + "version, and writes an ADR 0027 fact with the reason.")
+    public ResponseEntity<PosSyncBindingResponse> setMode(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @PathVariable UUID bindingId,
+            @Valid @RequestBody PosSyncModeRequest body,
+            HttpServletRequest request) {
+
+        long expected = AggregateVersion.requireIfMatch(request);
+        BindingView view =
+                sync.setMode(tenantId, brandId, bindingId, body.mode(), expected, body.reason(), actorSubject());
+        return ResponseEntity.ok()
+                .eTag(AggregateVersion.toETag(view.binding().version()))
+                .body(PosSyncBindingResponse.of(view));
+    }
+
+    @PutMapping("/till-keeps-balance")
+    @RequiresCapability(value = Capability.LOYALTY_SYNC_MANAGE, scope = ScopeType.BRAND, mutating = true)
+    @Operation(
+            operationId = "loyaltyPosSyncSetTillKeepsBalance",
+            summary = "Say whether this brand's till keeps a bonus balance of its own",
+            description =
+                    "The statement behind the standing notice (ADR 0171 Decision 8): with no binding that mirrors "
+                            + "the till, the loyalty page tells staff that a customer's balance here and at the till can differ. "
+                            + "Requires If-Match with tillKeepsBalanceVersion from the overview (0 for a brand that has never "
+                            + "said). Answers the overview.")
+    public ResponseEntity<PosSyncOverviewResponse> setTillKeepsBalance(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @Valid @RequestBody PosSyncTillKeepsBalanceRequest body,
+            HttpServletRequest request) {
+
+        long expected = AggregateVersion.requireIfMatch(request);
+        return ResponseEntity.ok(PosSyncOverviewResponse.of(
+                sync.setTillKeepsBalance(tenantId, brandId, body.value(), expected, body.reason(), actorSubject())));
+    }
+
     @PostMapping("/runs")
     @RequiresCapability(value = Capability.LOYALTY_SYNC_MANAGE, scope = ScopeType.BRAND, mutating = true)
     @Operation(
@@ -198,6 +245,15 @@ public class LoyaltyPosSyncController {
 
     public record PosSyncReconcileRequest(@NotNull UUID bindingId) {}
 
+    public record PosSyncModeRequest(
+            @NotNull PosBalanceSyncService.Mode mode,
+            @NotBlank @Size(max = 500) String reason) {}
+
+    /** {@code value} is boxed: Jackson 3 refuses a body that omits a primitive, and a missing value is a 400 with a field name, not a guess. */
+    public record PosSyncTillKeepsBalanceRequest(
+            @NotNull Boolean value,
+            @NotBlank @Size(max = 500) String reason) {}
+
     // --------------------------------------------------------------- responses
 
     public record PosSyncRunSummary(
@@ -220,6 +276,7 @@ public class LoyaltyPosSyncController {
             String providerType,
             @Nullable UUID locationId,
             String bindingStatus,
+            long version,
             String capabilityState,
             boolean enabled,
             boolean syncing,
@@ -237,6 +294,7 @@ public class LoyaltyPosSyncController {
                     binding.providerType(),
                     binding.locationId(),
                     binding.bindingStatus(),
+                    binding.version(),
                     binding.state().name(),
                     binding.enabled(),
                     binding.syncing(),
@@ -250,6 +308,7 @@ public class LoyaltyPosSyncController {
 
     public record PosSyncOverviewResponse(
             boolean tillKeepsBalance,
+            long tillKeepsBalanceVersion,
             boolean standingNotice,
             long openDiscrepancies,
             List<PosSyncBindingResponse> bindings) {
@@ -257,6 +316,7 @@ public class LoyaltyPosSyncController {
         static PosSyncOverviewResponse of(Overview overview) {
             return new PosSyncOverviewResponse(
                     overview.tillKeepsBalance(),
+                    overview.tillKeepsBalanceVersion(),
                     overview.standingNotice(),
                     overview.openDiscrepancies(),
                     overview.bindings().stream().map(PosSyncBindingResponse::of).toList());

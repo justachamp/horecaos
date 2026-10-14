@@ -62,7 +62,15 @@
   0014's assignment; and the tax effect on the liability report. The storefront
   balance endpoints exist but require `LOYALTY_READ` at tenant scope, a staff
   capability no customer principal can hold, so there is still no
-  customer-facing balance surface.
+  customer-facing balance surface. Corrected 2026-10-14 against the code: expiry
+  warnings are no longer simply unbuilt — `LoyaltyMaintenanceService.warnExpiringLots`
+  decides to warn before the sweep destroys a lot and `LoggingLoyaltyExpiryWarningPort`
+  logs it, but no customer is told, because the template and channel ADR 0020 would
+  send it through do not exist; and a till's own bonus balance is now handled by
+  [ADR 0171](0171-who-owns-a-loyalty-balance-when-the-till-also-keeps-one.md) (the
+  ledger stays the one authority, a till's number is a mirror, a movement at the till
+  is an order-free `ADJUSTMENT` with reason `POS_SYNC_EARN` or `POS_SYNC_SPEND`), built
+  against a fake till.
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-23
 - Deciders: Ayubkhon Abbosov (platform architecture; loyalty scope and the withdrawal of stored value, 2026-08-23), finance (VAT treatment of a merchant-funded rebate), legal (terms, expiry, offboarding), product (accrual and redemption defaults)

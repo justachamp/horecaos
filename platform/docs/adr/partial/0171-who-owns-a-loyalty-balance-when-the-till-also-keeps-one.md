@@ -25,14 +25,16 @@
   counted as an operator typing an unlisted code; the manual `adjust` still applies the list
   to every code, the sync's three included, so typing one there is no way round it. The
   loyalty page has a till-sync tab and the liability report shows the spend
-  the till absorbed beyond a balance; the old "not built" card is gone. Not built: a real
-  iiko, R-Keeper or Clopos adapter (each needs a provider note and an assessed ceiling row
-  first, and the record defers to what the vendor exposes); the push as an outbox command
-  (`PosLoyaltyBalancePushRequested.v1`; built as a sweep over `loyalty.accounts.version`
-  instead); the consent gate (`NOT_CONSENTED`); fan-out of `LoyaltySyncDiscrepancyOpened`
-  to the operations alerts (the event is published in-process, with no consumer); and a
-  console control for a binding's sync mode and for `till_keeps_balance`, which are
-  configuration keys only. Corrected after review (2026-10-12, V0600; no decision here
+  the till absorbed beyond a balance; the old "not built" card is gone. Batch 21 (`w14-channel-setup-pos-loyalty`, 2026-10-14, [ADR 0187](../not-started/0187-kiosk-idle-media-and-the-channel-forms-the-console-does-not-owe.md) lists none of these as a new decision): a binding's mode is staged from the console
+  (`PUT .../loyalty/pos-sync/bindings/{id}/mode`: one stage up at a time, any stage down at once, `loyalty.sync.manage`, `If-Match`, an ADR 0027 fact with the
+  reason) and so is `loyalty.pos.till_keeps_balance` (`PUT .../till-keeps-balance`); the push is a sweep of its own every 30 seconds
+  (`loyalty.pos_sync.push_interval_seconds`, asked every 10), which meets the accepted 60-second window and so leaves the outbox command
+  `PosLoyaltyBalancePushRequested.v1` undone on purpose: the exit criterion is the window, not the mechanism; `LoyaltySyncDiscrepancyOpened` reaches the
+  brand's chats subscribed to `LOYALTY_SYNC_DISCREPANCY` (one alert per binding, kind and day, for the kinds that need a person, by ids and kind only);
+  and the consent gate is built dark (`loyalty.pos_sync.require_consent`, purpose `loyalty.pos_sync`, absence is withheld), so counsel's «yes» is a
+  configuration flip. Not built: a real iiko, R-Keeper or Clopos adapter (each needs a provider note and an assessed ceiling row first, and the record
+  defers to what the vendor exposes), and the wording of the consent type, which waits for counsel; see
+  `docs/runbooks/external-connections/w14-channel-setup-pos-loyalty.md`. Corrected after review (2026-10-12, V0600; no decision here
   changed, each correction makes the code do what the decisions below already say):
   an ABSORB of a difference that no movement stands behind is
   durable (`carried`): the next pass records it in its own run and does not reopen it, and

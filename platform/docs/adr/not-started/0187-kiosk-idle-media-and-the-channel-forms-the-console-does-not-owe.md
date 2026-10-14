@@ -127,6 +127,7 @@ app, with an honest locked state in the hub until then.**
 | Build the kiosk ordering application inside this row | It needs a payment and a fiscal path no record decides, and a pilot tenant to name the hardware (ADR 0162) | A pilot tenant names kiosk units |
 | Build the IOS/ANDROID forms now | A field with no app to read it; push credentials need an Apple or Google account that is the owner's to open | The Flutter app is revived (ADR 0055's revisit) |
 | Keep the booking-profile field as a disabled input | A disabled field is a promise; the application's record may not need it | The ordering record decides a booking profile exists |
+| Build `PosLoyaltyBalancePushRequested.v1` through the outbox now (ADR 0171 Decision 3) | A sweep over `loyalty.accounts.version` meets the 60-second window with no new event, schema or consumer; the record's exit criterion is the window | A vendor's write is slow enough that one sweep cannot finish inside the window |
 | Positive/negative thresholds as a brand policy | One more key declared twice (module and tenancy registry) for a boundary nobody has asked to move | A tenant asks to treat 3 stars as neutral |
 
 ## Consequences
@@ -190,7 +191,8 @@ record). V0696 restates `ck_telegram_binding_event_class` from the live constrai
 ```text
 GET    …/locations/{l}/kiosk/channels/{channelId}/idle-media               list + version (ETag) + the limits the screen shows
 POST   …/idle-media/upload-requests   { contentType, sizeBytes, filename } Idempotency-Key   a purposed upload ticket (TENANT-owned, PUBLIC, KIOSK_IDLE)
-POST   …/idle-media/uploads/{assetId}/finalize                              Idempotency-Key   the ordinary finalize, refused for an asset of another purpose
+GET    …/idle-media/uploads/{assetId}                                                         where verification stands (UPLOADED, AVAILABLE, REJECTED and why)
+POST   …/idle-media/uploads/{assetId}/finalize                              Idempotency-Key   the ordinary finalize, refused (404) for an asset of another purpose
 POST   …/idle-media                   { assetId }                           Idempotency-Key   If-Match   attach at the end
 PUT    …/idle-media/order             { itemIds: [...] }                    Idempotency-Key   If-Match   a permutation of the current list
 DELETE …/idle-media/{itemId}                                                Idempotency-Key   If-Match   remove
@@ -198,9 +200,9 @@ GET    …/kiosk/configuration          (existing)                            ga
 ```
 
 The channel must be an `ACTIVE` KIOSK channel with an `ACTIVE` binding at the branch in the path (the service's
-`KIOSK_CHANNEL_NOT_AVAILABLE`, as for pairing). Refusals carry stable codes: `IDLE_MEDIA_WRONG_ASPECT`, `IDLE_MEDIA_TOO_LARGE`,
-`IDLE_MEDIA_NOT_AN_IMAGE`, `IDLE_MEDIA_NOT_AVAILABLE` (not yet verified), `IDLE_MEDIA_LIMIT` (the ninth) and
-`VALIDATION_FAILED` for an asset of another purpose. Audit (ADR 0027): `kiosk.idle_media.attached` (`ChangeDocuments.created`),
+`KIOSK_CHANNEL_NOT_AVAILABLE`, as for pairing). A refusal is `IDLE_MEDIA_REFUSED` (422) with a `reason`: `WRONG_ASPECT_RATIO`, `TOO_LARGE`, `NOT_A_RASTER_IMAGE`, `NOT_AVAILABLE` (not yet
+verified), `UNKNOWN_ASSET` (no such picture of this tenant's, or one uploaded for another purpose: one answer, so an id is not an oracle), `LIMIT`
+(the ninth) and `DUPLICATE`; a reorder that is not a permutation is `VALIDATION_FAILED`. Audit (ADR 0027): `kiosk.idle_media.attached` (`ChangeDocuments.created`),
 `kiosk.idle_media.reordered` and `kiosk.idle_media.removed` (`ChangeDocuments.diff` of the ordered asset ids), each with the
 branch the manager acted from. A kiosk's configuration read lists the pictures by a URL on the existing anonymous storefront
 media route (`/api/v1/storefront/tenants/{t}/media/{assetId}`), which serves a PUBLIC displayable asset and nothing else.
@@ -218,6 +220,30 @@ The KIOSK card gains *Idle media*: the shared `q-media-uploader` with the 9:16 r
 of the list, move up and down, remove. The printer, terminal and marking block is a `LockedState`. The hub renders
 `AGGREGATOR`, `CALL_CENTRE`, `IOS`/`ANDROID` and `POS` as above, and a FAILED-installation banner for a channel whose installation
 failed its last connection check.
+
+### The till's loyalty balance: what this wave adds to ADR 0171 (row `6.3b`; no new decision)
+
+ADR 0171 is Accepted and none of its decisions changes. The wave builds the parts its status line listed as undone, and says where it chose
+between two ways to meet the record:
+
+- **Staging from the console.** `PUT …/loyalty/pos-sync/bindings/{id}/mode` (`REPORT_ONLY`, `PULL`, `PULL_AND_PUSH`) and `PUT …/till-keeps-balance`,
+  both `loyalty.sync.manage` at `BRAND`, `If-Match`, `Idempotency-Key`, a required reason, an ADR 0027 fact. The record's rollout is staged, so a
+  step up is one stage at a time and a step down is immediate; a stage above `REPORT_ONLY` needs a binding that is capable, enabled and active.
+  A binding's version is the `If-Match` of its mode; the brand's statement uses the configuration row's version plus one (the row starts at 0, and 0
+  means «never said»).
+- **Push convergence is a sweep, not the outbox command.** Decision 3 sketches `PosLoyaltyBalancePushRequested.v1` through the outbox, and the open input on
+  the convergence window accepts «a platform movement reaches the till within 60 seconds». The window is the exit criterion and the mechanism was a sketch:
+  the push is a sweep of its own, asked every 10 seconds and sending what has moved once `loyalty.pos_sync.push_interval_seconds` (30, platform scope) has
+  passed since its last pass, and only when an account has moved (an idle binding writes no run). A till that could not be written to last time is
+  asked no more often than the pull interval. The command is declined for now; it becomes worth building when a vendor's write is slow enough that
+  a sweep over many accounts cannot finish inside the window.
+- **A difference reaches the chats.** `LoyaltySyncDiscrepancyOpened` is told to the brand's chats subscribed to `LOYALTY_SYNC_DISCREPANCY`
+  (V0696), by ids and kind only (ADR 0029), for the kinds that need a person, one alert per binding, kind and day.
+- **The consent gate is built dark.** `loyalty.pos_sync.require_consent` (default off, counsel's accepted answer) makes absence count as withheld for the
+  purpose `loyalty.pos_sync`; a customer without it is not paired and appears as `NOT_CONSENTED`. The consent type's wording is counsel's and is not
+  written here.
+- **External facts**, built against the fake till and documented in `docs/runbooks/external-connections/w14-channel-setup-pos-loyalty.md`: a vendor
+  adapter for iiko and R-Keeper, Clopos's answer about a balance, counsel's consent answer, a kiosk unit under lockdown, and the BotFather round trip.
 
 ### Testing (each seen failing first)
 
@@ -240,6 +266,7 @@ V0695 and V0696 are additive and stay.
 ## Implementation checklist
 
 - [ ] V0695: the purpose column, its checks, the idle-media table and its versions table, granted.
+- [ ] Row `6.3b`: the staging endpoints and console control, the push sweep, the discrepancy alert, the dark consent gate.
 - [ ] `media`: the purposed upload and finalize port, the verification rule for ratio, the size rule at the request.
 - [ ] `tenancy`: the idle-media service and the endpoints; the configuration read; the usage probe; the audit facts.
 - [ ] V0696 and `TelegramEventClass`; the review trigger; the OPERATIONS_ALERT variable catalogue.
@@ -258,7 +285,7 @@ on hold.
 
 ## References
 
-- ADR 0010 (media), ADR 0025, ADR 0027, ADR 0031, ADR 0036, ADR 0055 (the app on hold), ADR 0058, ADR 0071, ADR 0079, ADR 0082, ADR 0119,
+- ADR 0010 (media), ADR 0171 (the till's loyalty balance), ADR 0025, ADR 0027, ADR 0031, ADR 0036, ADR 0055 (the app on hold), ADR 0058, ADR 0071, ADR 0079, ADR 0082, ADR 0119,
   ADR 0151, ADR 0157 (the tenant's media in content), ADR 0159 (the image check, the recovery trigger), ADR 0162
 - `platform/docs/operations-gap-map.md` row `10.5`; `platform/docs/operations-spec/settings.md` §10.5;
   `platform/docs/frontend-information-architecture.md` row `10.5`; `platform/docs/delever-parity-matrix.md` (kiosk)

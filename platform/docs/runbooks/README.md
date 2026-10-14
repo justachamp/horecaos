@@ -49,6 +49,7 @@ That shapes them more than any style guide would.
 | [staff-sessions.md](staff-sessions.md) | Setting the sign-in client's id so «Мой профиль» can list a person's sessions, what to do when «Выйти на всех устройствах» is refused, and what the history keeps (ADR 0176) |
 | [staff-shifts.md](staff-shifts.md) | Before switching attendance on for a company, a shift left open, reading a staff-hours divergence, why the payroll export refuses, and the partition hazard for the next fact table (ADR 0156) |
 | [marking-scanner-setup.md](marking-scanner-setup.md) | A branch that sells marked goods: the imager settings that matter, the one-minute self-test, the three preconditions for turning `feature.marked_goods` on, and what to do when a real code is refused (ADR 0161) |
+| [external-connections/w14-channel-setup-pos-loyalty.md](external-connections/w14-channel-setup-pos-loyalty.md) | The five facts only the owner can supply for kiosk idle media, the Telegram review routing and the till's loyalty balance: a kiosk unit under lockdown, a BotFather round trip, an iiko or R-Keeper wallet API, Clopos's answer, and counsel's consent answer (ADR 0187, ADR 0171) |
 | [print-agent-and-printers.md](print-agent-and-printers.md) | Paper: enrolling a print agent on a branch machine, registering and replacing a printer, routing documents, and reading a dead print job (ADR 0154) |
 
 **A runbook that has never been executed is a draft.** Each file above carries a
