@@ -955,18 +955,20 @@ export const operationsPaths = {
   },
 
   /**
-   * The dispatcher's live map (ADR 0045, `OperationsCourierPositionController`,
-   * IA 3.2) — on the ADR 0031 prefix, but under its own `operations/couriers`
-   * sub-path rather than beside `dispatch`, matching the controller's own
-   * `RequestMapping`.
+   * The dispatcher's live map (ADR 0045, `OperationsCourierPositionController`, IA 3.2) — on
+   * {@link LEGACY_TENANT_PREFIX} like `streams`, because the controller is mapped at
+   * `/api/v1/tenants/{t}/brands/{b}/locations/{l}/operations/couriers`, not under `/api/v1/operations`.
+   * For a release this builder said the second and every live-map call 404'd (batch-20 audit); the
+   * literal path is pinned in `operations-paths.spec.ts` and `courier-positions-api.spec.ts`, and the
+   * conformance gate (`path-conformance.spec.ts`) resolves it against the published baseline.
    */
   courierPositions(scope: LocationScope): string {
-    return `${OPERATIONS}${tenantBrandLocation(scope)}/operations/couriers/positions`;
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/operations/couriers/positions`;
   },
 
   /** Open one courier's stored track for a stated purpose. Mutation: key required, audited. */
   courierTrackReveals(scope: LocationScope, courierId: string): string {
-    return `${OPERATIONS}${tenantBrandLocation(scope)}/operations/couriers/${encodeURIComponent(courierId)}/track-reveals`;
+    return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/operations/couriers/${encodeURIComponent(courierId)}/track-reveals`;
   },
 
   /**

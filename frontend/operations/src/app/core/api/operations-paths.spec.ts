@@ -248,3 +248,27 @@ describe('operationsPaths kitchen headcount (ADR 0163)', () => {
     );
   });
 });
+
+/**
+ * Row 3.2's defect, found by the batch-20 audit: `courierPositions` and `courierTrackReveals` were
+ * built on `/api/v1/operations/tenants/...` while `OperationsCourierPositionController` is mapped at
+ * `/api/v1/tenants/{t}/brands/{b}/locations/{l}/operations/couriers`, so the live map and the track
+ * reveal 404'd on every real call while every mocked-API spec stayed green. These pin the literal
+ * path the controller maps.
+ */
+describe('operationsPaths courier positions (OperationsCourierPositionController)', () => {
+  it('courierPositions builds on the legacy tenant prefix the controller is mapped on', () => {
+    expect(operationsPaths.courierPositions(SCOPE)).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/operations/couriers/positions',
+    );
+  });
+
+  it('courierTrackReveals names the courier, encoded, under the same prefix', () => {
+    expect(operationsPaths.courierTrackReveals(SCOPE, 'c1')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/operations/couriers/c1/track-reveals',
+    );
+    expect(operationsPaths.courierTrackReveals(SCOPE, 'a/b')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/operations/couriers/a%2Fb/track-reveals',
+    );
+  });
+});
