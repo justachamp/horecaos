@@ -1,3 +1,4 @@
+import { brandListPath } from './brand-list-path';
 import { LocationScope } from './operations-paths';
 
 /**
@@ -60,7 +61,8 @@ export const settingsPaths = {
 
   /** `OperationsBrandController.list` — the scope bar's brand picker and 10.1's index. */
   brands(scope: LocationScope): string {
-    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/brands`;
+    // Held in a module of its own so the eager `CurrentBrand` need not import this whole table.
+    return brandListPath(scope);
   },
 
   /** `OperationsBrandController.get`. */
