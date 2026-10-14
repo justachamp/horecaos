@@ -45,7 +45,7 @@
 - Supersedes / Superseded by: — / ADR 0049 for non-staff relationship authorization; ADR 0079 for the device principal type; extended (not superseded) by [ADR 0155](../partial/0155-terminals-and-staff-pins.md): check 3, «an active grant gives the principal the required capability», is asked of a second subject, the person unlocked at a device, for requests that carry a terminal session, and both must hold the capability at the scope
 - Open inputs: none
 - Closed inputs: Capability catalogue and role bundles approved 2026-08-20 (granular role set; tenant executes refunds under ADR 0027 maker-checker; tenant owner and admin manage integrations; no tenant-defined roles in v1)
-- Status addition, 2026-10-14: the closed input «no tenant-defined roles in v1» is reversed by [ADR 0186](../0186-tenant-defined-jobs-composed-from-the-capability-catalogue.md) (accepted by the platform owner in batch 21). A tenant may define jobs as subsets of the capability catalogue that its author holds, minus a deny-list, under the new capability `iam.role.manage`; a tenant can still never invent a capability. This record's Decision, Alternatives and Consequences are unchanged and still describe the model ADR 0186 extends.
+- Status addition, 2026-10-14: the closed input «no tenant-defined roles in v1» is reversed by [ADR 0186](0186-tenant-defined-jobs-composed-from-the-capability-catalogue.md) (accepted by the platform owner in batch 21). A tenant may define jobs as subsets of the capability catalogue that its author holds, minus a deny-list, under the new capability `iam.role.manage`; a tenant can still never invent a capability. This record's Decision, Alternatives and Consequences are unchanged and still describe the model ADR 0186 extends.
 
 ## Context
 

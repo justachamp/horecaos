@@ -1,9 +1,26 @@
 # ADR 0186: Tenant-defined jobs, composed from the capability catalogue
 
 - Decision status: Accepted
-- Implementation status: Partial — the decision is recorded and the build is in
-  progress in batch 21 (wave `w13-staff-access`, gap-map row `9.1b`); nothing below
-  is claimed as built until the status line says so.
+- Implementation status: Built — an owner defines, copies, edits and closes the company's own
+  jobs from the console and gives them away, and the grants a job confers are exactly the
+  capabilities it carries. V0692 adds the author, copy-source and closing columns to `iam.roles`;
+  V0693 gives `iam.roles` and `iam.role_capabilities` row-level security (a tenant reads the
+  platform's jobs and its own and writes only its own; `RoleRegistrySynchronizer` writes the
+  platform's under the exempt role and prunes a capability code the build no longer declares from
+  tenant jobs). `TenantRoleService` and `TenantRoleController` (`POST`, `PUT .../{code}` under
+  `If-Match`, `DELETE .../{code}` on `/api/v1/control-plane/tenants/{tenantId}/roles`, and
+  `GET .../capabilities`) enforce `iam.role.manage` (the owner and the administrator), the author
+  holding every capability she writes, the deny-list derived in `TenantJobRules`, the twenty-job
+  ceiling and unique names, with `RoleChanged` audited as `iam.role.created|changed|retired`.
+  `GrantManagementService` lists the company's jobs with `grantable` read back from the grant rule
+  (one grants read per list) and reads a tenant job's own level in `requireGrantable`; every reader
+  of a grant's role binds the tenant (`IamRolesRowLevelSecurityTests` runs each as the application
+  role, bound and unbound). The session context names a job the company defined. In the console,
+  `/staff/roles/grid` (lazy) is «Таблица прав», with the job editor; the library marks «Своя».
+  What is not done: no tenant has defined a job in production; `iam.grants` has no row-level
+  security yet; a tenant job has no description and no translations; and nobody has driven the
+  branch console's invite dialog with a custom job and a real branch manager's token (the HTTP
+  tests cover the `grant-roles` route she reads).
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: Ayubkhon Abbosov (platform owner)
@@ -216,12 +233,18 @@ spec fails for a literal code without a sentence.
 
 ### Console
 
-A lazy route under the staff area: the job library gains «Создать должность» and, per
-custom job, «Изменить», «Копировать» and «Закрыть должность»; a **capability grid** (jobs
-across, capabilities down, grouped by area, the code-owned jobs read-only and the tenant's
-editable cell by cell) with a search over the catalogue itself — the sentence in the
-author's language or the dotted code — and the job editor with the holder count and a
-required reason. All strings are in the staff area's message files.
+A lazy route under the staff area, `/staff/roles/grid`, «Таблица прав»: every job across (the
+code-owned ones and the company's own) and every capability down in plain sentences, one
+read-only `q-matrix-grid` per area, with a search over the catalogue itself — the sentence in the
+reader's language, the dotted code or the area name. The job library gains, for a person holding
+`iam.role.manage`, «Новая должность» and, per job, «Копировать» (any job) and «Изменить» (the
+company's own), all of which open the editor beside the grid (`?new`, `?copy=<code>`,
+`?edit=<code>`, so a refresh keeps the form). The editor is a checklist grouped by area, not
+clickable matrix cells: an edit is one versioned write with a name and a reason, and a matrix of
+cells would invite ticking forty boxes across six jobs and saving none. It shows the number of
+people a change reaches, locks (with the reason) what the author does not hold or what a company's
+job can never carry, and closes a job nobody holds. All strings are in the staff area's message
+files, in ru, uz-Latn and en.
 
 ## Rollout and rollback
 
@@ -234,13 +257,13 @@ Keycloak role.
 ## Implementation checklist
 
 - [x] V0692 columns and checks; V0693 policies; `RoleRegistrySynchronizer` under the exempt role
-- [ ] `iam.role.manage` in `Capability`, `tenant-owner` and `tenant-admin`; sentences in three locales
-- [ ] `TenantRoleService` and the three endpoints; deny-list; subset-of-author; ceiling; duplicate name
-- [ ] Every reader of a grant's role binds the tenant (or the exempt role), proved as the application role
-- [ ] `GET roles`, `GET capabilities`, `grant-roles` with the tenant's jobs; `requireGrantable` reads a tenant job's level
-- [ ] `RoleChanged`, audit listener, action-code dictionary in three locales
-- [ ] Console: grid, search over the catalogue, editor, copy, retire, holders
-- [ ] ADR 0025 and ADR 0056 carry dated status additions pointing here
+- [x] `iam.role.manage` in `Capability`, `tenant-owner` and `tenant-admin`; sentences in three locales
+- [x] `TenantRoleService` and the three endpoints; deny-list; subset-of-author; ceiling; duplicate name
+- [x] Every reader of a grant's role binds the tenant (or the exempt role), proved as the application role
+- [x] `GET roles`, `GET capabilities`, `grant-roles` with the tenant's jobs; `requireGrantable` reads a tenant job's level
+- [x] `RoleChanged`, audit listener, action-code dictionary in three locales
+- [x] Console: grid, search over the catalogue, editor, copy, retire, holders
+- [x] ADR 0025, ADR 0056 and ADR 0103 carry dated status additions pointing here
 
 ## Exit criteria
 
@@ -252,10 +275,10 @@ against the table; and a retire with a holder is refused.
 
 ## References
 
-- [ADR 0025: Fine-grained authorization and the capability model](built/0025-fine-grained-authorization-and-capability-model.md)
-- [ADR 0027: Audit evidence and approval model](built/0027-audit-evidence-and-approval-model.md)
-- [ADR 0031: HTTP API conventions](built/0031-http-api-conventions.md)
-- [ADR 0033: Caching, rate limiting and shared runtime state](built/0033-caching-rate-limiting-and-shared-runtime-state.md)
-- [ADR 0056: Application-enforced tenant isolation, with RLS as a production backstop](partial/0056-tenant-isolation-enforcement-and-rls.md)
-- [ADR 0103: A branch manager's own scope should reach `iam.grant.manage`](built/0103-wave131-p30-a-branch-managers-own-scope-should-reach-iam-grant-manage.md)
+- [ADR 0025: Fine-grained authorization and the capability model](0025-fine-grained-authorization-and-capability-model.md)
+- [ADR 0027: Audit evidence and approval model](0027-audit-evidence-and-approval-model.md)
+- [ADR 0031: HTTP API conventions](0031-http-api-conventions.md)
+- [ADR 0033: Caching, rate limiting and shared runtime state](0033-caching-rate-limiting-and-shared-runtime-state.md)
+- [ADR 0056: Application-enforced tenant isolation, with RLS as a production backstop](../partial/0056-tenant-isolation-enforcement-and-rls.md)
+- [ADR 0103: A branch manager's own scope should reach `iam.grant.manage`](../not-started/0103-wave131-p30-a-branch-managers-own-scope-should-reach-iam-grant-manage.md)
 - `docs/operations-spec/staff-and-access.md` §5 and §11.4

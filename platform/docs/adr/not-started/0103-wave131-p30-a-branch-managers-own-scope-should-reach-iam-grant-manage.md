@@ -8,7 +8,7 @@
   and the route guard correctly hide Staff from `location-manager` and
   `brand-manager`, because the server genuinely refuses them today — and
   recorded the limit here rather than working around it in the frontend.
-- Status addition, 2026-10-14: [ADR 0186](../0186-tenant-defined-jobs-composed-from-the-capability-catalogue.md) reopens ADR 0025's «no tenant-defined roles» input that this record asked about. The rules this record settled apply unchanged to a tenant's own job: the granter must hold every capability of the job at the scope, and a granter whose `iam.grant.manage` stops short of the company may give a job only at a level no broader than the scope, now read from the job's own level.
+- Status addition, 2026-10-14: [ADR 0186](../built/0186-tenant-defined-jobs-composed-from-the-capability-catalogue.md) reopens ADR 0025's «no tenant-defined roles» input that this record asked about. The rules this record settled apply unchanged to a tenant's own job: the granter must hold every capability of the job at the scope, and a granter whose `iam.grant.manage` stops short of the company may give a job only at a level no broader than the scope, now read from the job's own level.
 - Date proposed: 2026-09-11
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude and built on the platform owner's instruction
