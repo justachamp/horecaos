@@ -17,6 +17,7 @@ import {
   type ReviewResponse,
 } from '../../services/reviews.service';
 import { TranslateService } from '../../services/translate.service';
+import { type PointsBalance, PointsService } from '../../services/points.service';
 import { HorecaOSApiError } from '../../core/api/problem-details';
 import type { CustomerProfile } from '../../core/api/customer-api';
 
@@ -75,6 +76,18 @@ class FakeCustomerProfileService {
   }
 }
 
+class FakePointsService {
+  balance = vi.fn(async (): Promise<PointsBalance> => ({
+    accountId: null,
+    brandId: 'brand-1',
+    balance: null,
+    spendable: null,
+    held: null,
+    nextExpiryAt: null,
+    nextExpiryAmount: null,
+  }));
+}
+
 class FakeCustomerOtp {
   signOut = vi.fn(async () => {});
 }
@@ -116,12 +129,15 @@ async function setUp(
     orders: FakeOrdersService,
     reviews: FakeReviewsService,
   ) => void = () => {},
+  configurePoints: (points: FakePointsService) => void = () => {},
 ) {
   const profileService = new FakeCustomerProfileService();
   const orders = new FakeOrdersService();
   const reviews = new FakeReviewsService();
   const customerOtp = new FakeCustomerOtp();
+  const points = new FakePointsService();
   configure(profileService, orders, reviews);
+  configurePoints(points);
 
   TestBed.configureTestingModule({
     imports: [ProfileComponent],
@@ -135,6 +151,7 @@ async function setUp(
       { provide: LangService, useValue: { langId: signal('uz') } },
       { provide: OrdersService, useValue: orders },
       { provide: ReviewsService, useValue: reviews },
+      { provide: PointsService, useValue: points },
       { provide: TranslateService, useClass: FakeTranslateService },
     ],
   });
@@ -150,6 +167,7 @@ async function setUp(
     orders,
     reviews,
     customerOtp,
+    points,
     translate: TestBed.inject(TranslateService) as unknown as FakeTranslateService,
     router: TestBed.inject(Router),
   };
@@ -727,5 +745,60 @@ describe('ProfileComponent -- the prompt, tags and the public-display box (ADR 0
 
       expect(fixture.nativeElement.querySelector('[data-testid="my-reviews"]')).toBeNull();
     });
+  });
+});
+
+describe('ProfileComponent -- the customer’s own points (ADR 0046, ADR 0185)', () => {
+  const balanceOf = (balance: number, spendable: number): PointsBalance => ({
+    accountId: 'pa-1',
+    brandId: 'brand-1',
+    balance: { amountMinor: balance, currency: 'UZS' },
+    spendable: { amountMinor: spendable, currency: 'UZS' },
+    held: { amountMinor: balance - spendable, currency: 'UZS' },
+    nextExpiryAt: null,
+    nextExpiryAmount: null,
+  });
+
+  const textOf = (fixture: { nativeElement: unknown }, id: string) =>
+    (
+      (fixture.nativeElement as HTMLElement).querySelector(`[data-testid="${id}"]`)?.textContent ??
+      ''
+    ).replace(/\s+/g, ' ');
+
+  it('shows what the customer can spend of their own points', async () => {
+    const { fixture, points } = await setUp(undefined, (p) =>
+      p.balance.mockResolvedValue(balanceOf(12_000, 12_000)),
+    );
+
+    expect(points.balance).toHaveBeenCalledTimes(1);
+    expect(textOf(fixture, 'profile-points-spendable')).toContain('12 000');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="profile-points-total"]'),
+      'nothing is held back, so there is only one figure',
+    ).toBeNull();
+  });
+
+  it('shows the total as well when some points are not spendable yet', async () => {
+    const { fixture } = await setUp(undefined, (p) =>
+      p.balance.mockResolvedValue(balanceOf(15_000, 12_000)),
+    );
+
+    expect(textOf(fixture, 'profile-points-spendable')).toContain('12 000');
+    expect(textOf(fixture, 'profile-points-total')).toContain('15 000');
+  });
+
+  it('shows nothing for a customer who has earned no points here', async () => {
+    const { fixture } = await setUp();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="profile-points"]')).toBeNull();
+  });
+
+  it('shows nothing, and does not disturb the screen, when the balance cannot be read', async () => {
+    const { fixture } = await setUp(undefined, (p) =>
+      p.balance.mockRejectedValue(new Error('offline')),
+    );
+
+    expect(fixture.nativeElement.querySelector('[data-testid="profile-points"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Jasur Rahimov');
   });
 });

@@ -37,6 +37,20 @@
         </div>
         <span class="text-zinc-400">›</span>
       </a>
+
+      @if (pointsLines(); as lines) {
+        <section class="rounded-2xl bg-surface-raised px-4 py-4" data-testid="profile-points">
+          <p class="text-sm font-bold text-text-primary">{{ 'points.profileTitle' | t }}</p>
+          <p class="mt-1 text-sm text-text-primary" data-testid="profile-points-spendable">
+            {{ 'points.profileSpendable' | t: { amount: lines.spendable } }}
+          </p>
+          @if (lines.total) {
+            <p class="mt-1 text-xs text-zinc-400" data-testid="profile-points-total">
+              {{ 'points.profileTotal' | t: { amount: lines.total } }}
+            </p>
+          }
+        </section>
+      }
     }
 
     <app-profile-menu [isAuthorized]="isAuthorized()" (logoutClick)="onLogout()" />

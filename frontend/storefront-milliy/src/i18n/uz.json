@@ -622,7 +622,10 @@
     "exceeds": "Bu buyurtma uchun ruxsat etilgan {{maximum}} dan ko'p.",
     "adjusted": "Eng ko'p miqdor o'zgargani uchun summa kamaytirildi.",
     "blockedByPromotion": "Bu buyurtmadagi aksiya bilan ballarni birga ishlatib bo'lmaydi.",
-    "spent": "Ball bilan to'landi"
+    "spent": "Ball bilan to'landi",
+    "profileTitle": "Mening ballarim",
+    "profileSpendable": "Sarflash mumkin bo'lgan ball: {{amount}}",
+    "profileTotal": "Jami ball: {{amount}}. Qolganlarini hozircha sarflab bo'lmaydi."
   },
   "split": {
     "title": "Bu buyurtma qanday to'lanadi",

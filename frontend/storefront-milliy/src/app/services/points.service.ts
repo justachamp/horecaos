@@ -32,6 +32,21 @@ export interface CartPointsOffer {
 
 export type TenderStatus = 'PLANNED' | 'RESERVED' | 'SETTLED' | 'RELEASED' | 'REVERSED' | 'FAILED';
 
+/**
+ * `LoyaltyCustomerController.CustomerBalanceResponse`: the caller's own points at this brand. A customer who has earned
+ * nothing here reads `accountId` null and no amounts, not a 404. `spendable` is what a checkout can use today; it is
+ * less than `balance` while points are held for an unfinished order or still inside the earn delay.
+ */
+export interface PointsBalance {
+  readonly accountId: string | null;
+  readonly brandId: string;
+  readonly balance: Money | null;
+  readonly spendable: Money | null;
+  readonly held: Money | null;
+  readonly nextExpiryAt: string | null;
+  readonly nextExpiryAmount: Money | null;
+}
+
 /** `StorefrontPaymentSplitController.TenderResponse`. */
 export interface PaymentTender {
   readonly kind: 'POINTS' | 'MONEY';
@@ -74,6 +89,11 @@ export class PointsService {
     return this.api.get<CartPointsOffer>(`${this.brandPath}/carts/${cartId}/redemption-offer`, {
       silent: true,
     });
+  }
+
+  /** The caller's own points at this brand. Never cached by the platform: it is the customer's. */
+  balance(): Promise<PointsBalance> {
+    return this.api.get<PointsBalance>(`${this.brandPath}/loyalty/balance`, { silent: true });
   }
 
   /**

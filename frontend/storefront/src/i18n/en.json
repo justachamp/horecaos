@@ -547,7 +547,10 @@
     "exceeds": "That is more than the {{maximum}} this order allows.",
     "adjusted": "The most you can use changed, so the amount was lowered.",
     "blockedByPromotion": "Points cannot be used together with the offer on this order.",
-    "spent": "Paid with points"
+    "spent": "Paid with points",
+    "profileTitle": "My points",
+    "profileSpendable": "Points you can spend: {{amount}}",
+    "profileTotal": "Total points: {{amount}}. The rest are not spendable yet."
   },
   "split": {
     "title": "How this order is paid",

@@ -8,12 +8,25 @@ import { FavouritesService } from '../../services/favourites.service';
 import { AvatarService } from '../../services/avatar.service';
 import { TelegramLinkService } from '../../services/telegram-link.service';
 import { TranslateService } from '../../services/translate.service';
+import { type PointsBalance, PointsService } from '../../services/points.service';
 import { ThemeService } from '../../services/theme.service';
 import { Session } from '../../core/auth/session';
 import type { CustomerProfile } from '../../core/api/customer-api';
 
 class FakeCustomerProfileService {
   readonly load = vi.fn(async (): Promise<CustomerProfile | null> => null);
+}
+
+class FakePointsService {
+  readonly balance = vi.fn(async (): Promise<PointsBalance> => ({
+    accountId: null,
+    brandId: 'brand-1',
+    balance: null,
+    spendable: null,
+    held: null,
+    nextExpiryAt: null,
+    nextExpiryAmount: null,
+  }));
 }
 
 class FakeCustomerOtp {
@@ -47,15 +60,15 @@ class FakeTranslateService {
   get(key: string): string {
     return key;
   }
-  getWithParams(key: string): string {
-    return key;
+  getWithParams(key: string, params?: Record<string, string | number>): string {
+    return params ? `${key}|${Object.values(params).join('|')}` : key;
   }
   current(): Record<string, unknown> {
     return {};
   }
 }
 
-function setUp() {
+function setUp(points = new FakePointsService()) {
   const profileService = new FakeCustomerProfileService();
 
   TestBed.configureTestingModule({
@@ -67,6 +80,7 @@ function setUp() {
       { provide: FavouritesService, useClass: FakeFavouritesService },
       { provide: AvatarService, useClass: FakeAvatarService },
       { provide: TelegramLinkService, useClass: FakeTelegramLinkService },
+      { provide: PointsService, useValue: points },
       { provide: TranslateService, useClass: FakeTranslateService },
       { provide: ThemeService, useClass: FakeThemeService },
     ],
@@ -75,7 +89,7 @@ function setUp() {
   const session = TestBed.inject(Session);
   const fixture = TestBed.createComponent(ProfileComponent);
 
-  return { fixture, comp: fixture.componentInstance, profileService, session };
+  return { fixture, comp: fixture.componentInstance, profileService, session, points };
 }
 
 function signIn(session: Session): void {
@@ -122,5 +136,92 @@ describe('ProfileComponent: signed in', () => {
 
     expect(comp.isAuthorized()).toBe(true);
     expect(profileService.load).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ProfileComponent: the customer’s own points (ADR 0046, ADR 0185)', () => {
+  beforeEach(() => localStorage.clear());
+
+  const balanceOf = (balance: number, spendable: number): PointsBalance => ({
+    accountId: 'pa-1',
+    brandId: 'brand-1',
+    balance: { amountMinor: balance, currency: 'UZS' },
+    spendable: { amountMinor: spendable, currency: 'UZS' },
+    held: { amountMinor: balance - spendable, currency: 'UZS' },
+    nextExpiryAt: null,
+    nextExpiryAmount: null,
+  });
+
+  const text = (fixture: ComponentFixture<unknown>, id: string) =>
+    (
+      (fixture.nativeElement as HTMLElement).querySelector(`[data-testid="${id}"]`)?.textContent ??
+      ''
+    )
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  it('shows what the customer can spend of their own points', async () => {
+    const points = new FakePointsService();
+    points.balance.mockResolvedValue(balanceOf(12_000, 12_000));
+    const { fixture, session } = setUp(points);
+    signIn(session);
+
+    await mount(fixture);
+    fixture.detectChanges();
+
+    expect(points.balance).toHaveBeenCalledTimes(1);
+    expect(text(fixture, 'profile-points-spendable')).toContain('12 000');
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="profile-points-total"]'),
+      'nothing is held back, so there is only one figure',
+    ).toBeNull();
+  });
+
+  it('shows the total as well when some points are not spendable yet', async () => {
+    const points = new FakePointsService();
+    points.balance.mockResolvedValue(balanceOf(15_000, 12_000));
+    const { fixture, session } = setUp(points);
+    signIn(session);
+
+    await mount(fixture);
+    fixture.detectChanges();
+
+    expect(text(fixture, 'profile-points-spendable')).toContain('12 000');
+    expect(text(fixture, 'profile-points-total')).toContain('15 000');
+  });
+
+  it('shows nothing for a customer who has earned no points here', async () => {
+    const { fixture, session } = setUp();
+    signIn(session);
+
+    await mount(fixture);
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="profile-points"]'),
+    ).toBeNull();
+  });
+
+  it('shows nothing, and does not disturb the screen, when the balance cannot be read', async () => {
+    const points = new FakePointsService();
+    points.balance.mockRejectedValue(new Error('offline'));
+    const { fixture, comp, session } = setUp(points);
+    signIn(session);
+
+    await mount(fixture);
+    fixture.detectChanges();
+
+    expect(comp.isAuthorized()).toBe(true);
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="profile-points"]'),
+    ).toBeNull();
+  });
+
+  it('asks nothing of a visitor who is not signed in', async () => {
+    const { fixture, points } = setUp();
+
+    await mount(fixture);
+
+    expect(points.balance).not.toHaveBeenCalled();
   });
 });

@@ -12,6 +12,9 @@ import { ProfileMenuComponent } from './profile-menu/profile-menu';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { Session } from '../../core/auth/session';
 import { CustomerProfileService } from '../../services/customer-profile.service';
+import { type PointsBalance, PointsService } from '../../services/points.service';
+import { TranslateService } from '../../services/translate.service';
+import { formatMoney } from '../../core/money/money';
 import { CustomerOtp } from '../../core/session/customer-otp';
 import { FavouritesService } from '../../services/favourites.service';
 import { AvatarService } from '../../services/avatar.service';
@@ -41,6 +44,32 @@ export class ProfileComponent implements OnInit {
   readonly isAuthorized = signal(false);
   readonly user = signal<UserProfile | null>(null);
 
+  /** The customer's own points at this brand (ADR 0046, ADR 0185), once read; null while unread or unreadable. */
+  readonly points = signal<PointsBalance | null>(null);
+
+  /**
+   * What the customer can spend, and their total when more is held back, as they read them. Null for a customer
+   * with no points to talk about, so the screen is exactly what it was.
+   */
+  readonly pointsLines = computed<{ spendable: string; total: string | null } | null>(() => {
+    const points = this.points();
+    if (points === null || points.accountId === null || points.balance === null) {
+      return null;
+    }
+    const spendable = points.spendable ?? points.balance;
+    if (points.balance.amountMinor <= 0 && spendable.amountMinor <= 0) {
+      return null;
+    }
+    const unit = this.translate.get('common.currency');
+    return {
+      spendable: formatMoney(spendable, unit),
+      total:
+        points.balance.amountMinor > spendable.amountMinor
+          ? formatMoney(points.balance, unit)
+          : null,
+    };
+  });
+
   /**
    * Always null: there is no customer-facing media endpoint on the platform.
    *
@@ -65,6 +94,8 @@ export class ProfileComponent implements OnInit {
   private readonly favourites = inject(FavouritesService);
   private readonly avatars = inject(AvatarService);
   private readonly telegramLink = inject(TelegramLinkService);
+  private readonly pointsService = inject(PointsService);
+  private readonly translate = inject(TranslateService);
 
   constructor(private router: Router) {}
 
@@ -92,6 +123,12 @@ export class ProfileComponent implements OnInit {
         .load()
         .then((profile) => this.user.set((profile ?? {}) as unknown as UserProfile))
         .catch(() => this.user.set(null));
+      // A convenience beside the profile: a customer with no points, or a platform that cannot be asked,
+      // sees the screen exactly as it was.
+      this.pointsService
+        .balance()
+        .then((balance) => this.points.set(balance))
+        .catch(() => this.points.set(null));
     }
   }
 
@@ -118,6 +155,7 @@ export class ProfileComponent implements OnInit {
     this.avatars.forget();
     this.telegramLink.forget();
     this.user.set(null);
+    this.points.set(null);
     this.isAuthorized.set(false);
     this.otp.signOut().finally(() => {
       this.router.navigate(['/auth/login']).catch(() => {});

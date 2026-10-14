@@ -53,6 +53,22 @@ describe('PointsService.redemptionOffer', () => {
   });
 });
 
+describe('PointsService.balance', () => {
+  it("reads the caller's own balance under this brand, and never toasts a failure", async () => {
+    const { service, api } = setUp();
+    api.get.mockResolvedValue({ accountId: 'pa-1', brandId: 'brand-1' });
+
+    await service.balance();
+
+    expect(api.get).toHaveBeenCalledWith(
+      '/storefront/tenants/tenant-1/brands/brand-1/loyalty/balance',
+      {
+        silent: true,
+      },
+    );
+  });
+});
+
 describe('PointsService.paymentSplit', () => {
   it("reads the order's split under this brand", async () => {
     const { service, api } = setUp();
