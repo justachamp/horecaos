@@ -134,7 +134,8 @@ class NotificationTemplateControllerTests {
                         "ru", new NotificationTemplateController.WordingRequest(null, "Код {{code}}"),
                         "uz-Latn", new NotificationTemplateController.WordingRequest(null, "Kod {{code}}"),
                         "en", new NotificationTemplateController.WordingRequest(null, "Code {{code}}")),
-                Map.of("code", "string"));
+                Map.of("code", "string"),
+                null);
 
         NotificationTemplateController.VersionResponse saved = Objects.requireNonNull(
                 controller.addVersion(tenantId, brandId, templateId, request).getBody());
@@ -204,7 +205,7 @@ class NotificationTemplateControllerTests {
     @DisplayName("the per-notification-class variable catalogue is real, fixing the empty-schema defect")
     void variableCatalogueIsPublished() {
         List<NotificationTemplateController.VariableCatalogueEntry> catalogue =
-                controller.variableCatalogue().getBody();
+                controller.variableCatalogue(null).getBody();
 
         assertThat(catalogue).isNotNull().isNotEmpty();
         assertThat(catalogue).anySatisfy(entry -> {
@@ -397,7 +398,7 @@ class NotificationTemplateControllerTests {
             byLocale.put(locale.tag(), new NotificationTemplateController.WordingRequest(null, body));
         }
         Map<String, String> schema = declaredVariable == null ? Map.of() : Map.of(declaredVariable, "string");
-        return new NotificationTemplateController.AddVersionRequest(byLocale, schema);
+        return new NotificationTemplateController.AddVersionRequest(byLocale, schema, null);
     }
 
     private void bindSmsTo(String environmentCode, boolean moderates) {

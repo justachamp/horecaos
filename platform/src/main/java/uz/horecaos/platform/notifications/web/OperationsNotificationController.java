@@ -111,6 +111,7 @@ public class OperationsNotificationController {
                 row.templateKey(),
                 row.templateId(),
                 row.templateVersion(),
+                row.platformDefaultVersion(),
                 row.locale(),
                 row.subjectType(),
                 row.subjectId(),
@@ -162,6 +163,9 @@ public class OperationsNotificationController {
      *
      * @param recipientEndpointId a reference. Resolving it to a contact value is a
      *                            separate, separately authorized act
+     * @param platformDefaultVersion ADR 0184: the version of the platform's bundled wording the message was sent
+     *                              from when no brand or tenant template applied, in place of {@code templateId}
+     *                              and {@code templateVersion}; null otherwise
      * @param renderedContentHash what was sent, as a hash. With the frozen template
      *                            version and the variables hash it reproduces the
      *                            message without this response carrying it
@@ -175,6 +179,7 @@ public class OperationsNotificationController {
             String templateKey,
             @Nullable UUID templateId,
             @Nullable Integer templateVersion,
+            @Nullable Integer platformDefaultVersion,
             @Nullable String locale,
             String subjectType,
             UUID subjectId,

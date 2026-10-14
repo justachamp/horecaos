@@ -48,6 +48,22 @@ public interface RecipientContactDirectory {
     /** The customer's chosen language, when they have chosen one. */
     Optional<String> preferredLocale(UUID tenantId, UUID accountId);
 
+    /**
+     * The name the customer gave themselves, for one message to them (ADR 0184, D21).
+     *
+     * <p>Like {@link #resolveValue}, a value for the length of one call that the caller must not write
+     * down: it is what makes the merge variable {@code customerName} a thing resolved at render and not
+     * a thing frozen onto a notification row. The name is the profile's display name as the customer
+     * entered it, and nothing is split or guessed from it.
+     *
+     * <p>Defaulted to empty for the several hand-written test doubles of this port that predate it.
+     *
+     * @return empty when the customer gave no name, or the account was anonymised
+     */
+    default Optional<String> displayName(UUID tenantId, UUID accountId) {
+        return Optional.empty();
+    }
+
     /** The kinds of contact a message can be addressed to. */
     enum ContactMethod {
         PHONE,

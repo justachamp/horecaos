@@ -58,6 +58,12 @@ public class RecipientContactService implements RecipientContactDirectory {
         return store.preferredLocale(tenantId, accountId).filter(locale -> !locale.isBlank());
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> displayName(UUID tenantId, UUID accountId) {
+        return store.displayName(tenantId, accountId).filter(name -> !name.isBlank());
+    }
+
     private String reveal(UUID tenantId, ContactPointRow row, String purpose) {
         // The record reference is rebuilt from the row rather than trusted from
         // the caller. It is bound into the AEAD associated data, so a ciphertext

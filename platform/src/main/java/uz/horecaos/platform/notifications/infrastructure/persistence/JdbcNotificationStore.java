@@ -178,7 +178,8 @@ public class JdbcNotificationStore {
                     LIMIT :batchSize
                 )
                 RETURNING id, tenant_id, brand_id, location_id, notification_class, channel,
-                          template_key, template_id, template_version, locale, subject_type,
+                          template_key, template_id, template_version, platform_default_version,
+                          locale, subject_type,
                           subject_id, recipient_endpoint_id, recipient_account_id,
                           trigger_event_id, idempotency_key, status, suppression_reason,
                           variables::text AS variables, variables_hash, rendered_content_hash,
@@ -205,20 +206,29 @@ public class JdbcNotificationStore {
             UUID tenantId,
             UUID notificationId,
             UUID claimToken,
-            UUID templateId,
-            int templateVersion,
+            @Nullable UUID templateId,
+            @Nullable Integer templateVersion,
+            @Nullable Integer platformDefaultVersion,
             String locale,
             @Nullable UUID accountId,
             UUID endpointId,
             String variablesJson,
             String variablesHash,
             Instant now) {
+        if ((templateId == null) == (platformDefaultVersion == null)) {
+            // Exactly one source of wording, for the reason V0677's check says: a message is sent from a
+            // template row or from the platform's bundled wording, and a row that names neither (or
+            // both) cannot be rendered or proved.
+            throw new IllegalArgumentException(
+                    "A notification names a template or a platform default, not both" + " and not neither");
+        }
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("tenantId", tenantId);
         parameters.put("id", notificationId);
         parameters.put("token", claimToken);
         parameters.put("templateId", templateId);
         parameters.put("templateVersion", templateVersion);
+        parameters.put("platformDefaultVersion", platformDefaultVersion);
         parameters.put("locale", locale);
         parameters.put("accountId", accountId);
         parameters.put("endpointId", endpointId);
@@ -229,7 +239,8 @@ public class JdbcNotificationStore {
         return jdbc.sql("""
                 UPDATE notifications.notifications
                 SET status = 'READY', template_id = :templateId,
-                    template_version = :templateVersion, locale = :locale,
+                    template_version = :templateVersion,
+                    platform_default_version = :platformDefaultVersion, locale = :locale,
                     recipient_account_id = :accountId,
                     recipient_endpoint_id = :endpointId, variables = CAST(:variables AS jsonb),
                     variables_hash = :variablesHash, version = version + 1, updated_at = :now
@@ -1012,7 +1023,8 @@ public class JdbcNotificationStore {
 
     private static final String SELECT_NOTIFICATION = """
             SELECT id, tenant_id, brand_id, location_id, notification_class, channel,
-                   template_key, template_id, template_version, locale, subject_type,
+                   template_key, template_id, template_version, platform_default_version,
+                   locale, subject_type,
                    subject_id, recipient_endpoint_id, recipient_account_id, trigger_event_id,
                    idempotency_key, status, suppression_reason, variables::text AS variables,
                    variables_hash, rendered_content_hash, scheduled_at, expires_at,
@@ -1043,6 +1055,7 @@ public class JdbcNotificationStore {
                 // to version 0 of a template and find nothing, presenting as a
                 // missing translation rather than as an unresolved message.
                 row.getObject("template_version", Integer.class),
+                row.getObject("platform_default_version", Integer.class),
                 row.getString("locale"),
                 row.getString("subject_type"),
                 row.getObject("subject_id", UUID.class),
@@ -1200,6 +1213,8 @@ public class JdbcNotificationStore {
             String templateKey,
             @Nullable UUID templateId,
             @Nullable Integer templateVersion,
+            /** ADR 0184: the bundled platform wording this was sent from; null when {@code templateId} is set. */
+            @Nullable Integer platformDefaultVersion,
             @Nullable String locale,
             String subjectType,
             UUID subjectId,

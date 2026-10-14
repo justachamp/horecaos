@@ -118,15 +118,57 @@ class TemplateVariantResolutionTests {
         activate(null, FulfillmentMode.DELIVERY, null, "Delivery wording");
         // ^ order deliberately mixed: creation order must not decide the winner.
 
-        // A delivery order placed on the storefront matches both rows (each
-        // pins down exactly one of the two dimensions), so this is a genuine
-        // tie on specificity. JdbcTemplateStore.activeTemplate's ORDER BY
-        // lists fulfillment_mode before channel_source, so the fulfilment
-        // variant wins — not because an ADR says fulfilment should outrank
-        // channel, but because of that column order. Pinned here so a
-        // reordering of those two ORDER BY columns is a visible, deliberate
-        // change rather than a silent one.
+        // A delivery order placed on the storefront matches both rows (each pins down exactly one of
+        // the two dimensions), so this is a genuine tie on how many variant dimensions are pinned.
+        // ADR 0184, D20 decides it: fulfilment mode outranks channel source. The ORDER BY lists
+        // fulfillment_mode before channel_source for that reason, no longer by accident of column
+        // order; this test is the other half of the decision.
         assertBody(resolve(FulfillmentMode.DELIVERY, SalesChannelSystemType.WEB), "Delivery wording");
+    }
+
+    @Test
+    @DisplayName("ADR 0184 D20: a brand-wide generic template beats a tenant-wide template pinned on both dimensions")
+    void aBrandWideGenericTemplateBeatsATenantWideTemplatePinnedOnBothDimensions() {
+        activate(null, FulfillmentMode.DELIVERY, SalesChannelSystemType.WEB, "Tenant delivery on the storefront");
+        activate(brandId, null, null, "Brand generic");
+        // ^ the case no earlier test pinned. The old ORDER BY summed brand_id as one more dimension, so
+        // the tenant row (two pinned dimensions) scored 2 against the brand row's 1 and the brand's
+        // own override was silently ignored for exactly the orders the tenant had pinned.
+
+        assertBody(resolve(FulfillmentMode.DELIVERY, SalesChannelSystemType.WEB), "Brand generic");
+        assertBody(resolve(FulfillmentMode.PICKUP, SalesChannelSystemType.WEB), "Brand generic");
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0184 D20: scope first, then how many dimensions are pinned, then fulfilment mode over channel source")
+    void scopeOutranksVariantAndVariantOutranksNothingElse() {
+        // Every row of the lattice that matches a delivery order on the storefront, created in an order
+        // that is the reverse of the order they should win in.
+        activate(null, null, null, "tenant, no dimension");
+        activate(null, null, SalesChannelSystemType.WEB, "tenant, channel");
+        activate(null, FulfillmentMode.DELIVERY, null, "tenant, mode");
+        activate(null, FulfillmentMode.DELIVERY, SalesChannelSystemType.WEB, "tenant, mode and channel");
+        activate(brandId, null, null, "brand, no dimension");
+        activate(brandId, null, SalesChannelSystemType.WEB, "brand, channel");
+        activate(brandId, FulfillmentMode.DELIVERY, null, "brand, mode");
+        activate(brandId, FulfillmentMode.DELIVERY, SalesChannelSystemType.WEB, "brand, mode and channel");
+
+        // Each step knocks out the winner and the next one must take over. Retiring is done through the
+        // template status because a template cannot be deleted; a RETIRED row never resolves.
+        java.util.List<String> expectedOrder = java.util.List.of(
+                "brand, mode and channel",
+                "brand, mode",
+                "brand, channel",
+                "brand, no dimension",
+                "tenant, mode and channel",
+                "tenant, mode",
+                "tenant, channel",
+                "tenant, no dimension");
+        for (String expected : expectedOrder) {
+            assertBody(resolve(FulfillmentMode.DELIVERY, SalesChannelSystemType.WEB), expected);
+            retire(expected);
+        }
     }
 
     @Test
@@ -199,6 +241,19 @@ class TemplateVariantResolutionTests {
         // named as the row's own scope.
         int versionNumber = templates.addVersion(tenantId, brandId, templateId, wordings, Map.of());
         templates.activate(tenantId, brandId, templateId, versionNumber, "tester");
+    }
+
+    /** Takes the template that carries this body out of resolution, to see which one wins next. */
+    private void retire(String body) {
+        int updated =
+                jdbc.sql("""
+                UPDATE notifications.templates t SET status = 'RETIRED'
+                WHERE t.tenant_id = :tenantId
+                  AND EXISTS (SELECT 1 FROM notifications.template_versions v
+                               WHERE v.tenant_id = t.tenant_id AND v.template_id = t.id
+                                 AND v.body_template = :body)
+                """).param("tenantId", tenantId).param("body", body).update();
+        assertThat(updated).as("exactly the template that carries '%s'", body).isEqualTo(1);
     }
 
     private NotificationTemplateService.Resolution resolve(

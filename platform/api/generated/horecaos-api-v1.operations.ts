@@ -165,6 +165,7 @@ export interface AddLineRequest {
 }
 
 export interface AddVersionRequest {
+  showItemPrices?: boolean;
   variablesSchema: { [key: string]: string };
   wordings: { [key: string]: WordingRequest };
 }
@@ -4421,6 +4422,7 @@ export interface NotificationResponse {
   locale?: string;
   locationId?: string;
   notificationClass?: string;
+  platformDefaultVersion?: number;
   recipientEndpointId?: string;
   renderedContentHash?: string;
   status?: string;
@@ -5210,6 +5212,17 @@ export interface OriginCountResponse {
   registered?: number;
 }
 
+export interface OtpSentenceResponse {
+  characters?: number;
+  locale?: string;
+  text?: string;
+}
+
+export interface OtpWordingResponse {
+  gatewayApproval?: string;
+  sentences?: Array<OtpSentenceResponse>;
+}
+
 export interface OutcomeListResponse {
   provenance?: ProvenanceResponse;
   rows?: Array<OutcomeRowResponse>;
@@ -5759,6 +5772,16 @@ export interface PlatformBounds {
   rolling30DayCapCeiling?: number;
   rolling7DayCapCeiling?: number;
   weeklyCapCeiling?: number;
+}
+
+export interface PlatformDefaultResponse {
+  bodies?: { [key: string]: string };
+  channels?: Array<string>;
+  consentPurpose?: string;
+  notificationClass?: string;
+  templateKey?: string;
+  variables?: Array<string>;
+  version?: number;
 }
 
 export interface PlatformLocaleEntryResponse {
@@ -8692,9 +8715,14 @@ export interface TemplateResponse {
   fulfillmentMode?: string;
   id?: string;
   notificationClass?: string;
+  origin?: string;
+  providerReview?: string;
+  requiredLocales?: Array<string>;
+  shownVersion?: number;
   status?: string;
   templateKey?: string;
   version?: number;
+  versionLocales?: Array<string>;
 }
 
 export interface TenantArrearsView {
@@ -9414,6 +9442,7 @@ export interface WordingResponse {
   providerReviewNote?: string;
   providerReviewReference?: string;
   providerReviewUpdatedAt?: string;
+  showItemPrices?: boolean;
   status?: string;
   subject?: string;
   variablesSchema?: { [key: string]: string };
@@ -10216,7 +10245,9 @@ export interface Operations {
   "eventClasses": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-routing/event-classes"; request: { parameters: Record<string, never> }; responses: { "200": Array<EventClassResponse> } };
   "list_2": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<TemplateResponse> } };
   "create": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateTemplateRequest }; responses: { "200": NotificationTemplateControllerIdResponse } };
-  "variableCatalogue": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/variable-catalogue"; request: { parameters: Record<string, never> }; responses: { "200": Array<VariableCatalogueEntry> } };
+  "otpWording": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/otp-wording"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OtpWordingResponse } };
+  "platformDefaults": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/platform-defaults"; request: { parameters: Record<string, never> }; responses: { "200": Array<PlatformDefaultResponse> } };
+  "variableCatalogue": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/variable-catalogue"; request: { parameters: { query: { templateKey?: string } } }; responses: { "200": Array<VariableCatalogueEntry> } };
   "versions": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/{templateId}/versions"; request: { parameters: { path: { brandId: string; templateId: string; tenantId: string } } }; responses: { "200": Array<WordingResponse> } };
   "addVersion": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/{templateId}/versions"; request: { parameters: { path: { brandId: string; templateId: string; tenantId: string } }; body: AddVersionRequest }; responses: { "200": NotificationTemplateControllerVersionResponse } };
   "version": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates/{templateId}/versions/{versionNumber}"; request: { parameters: { path: { brandId: string; templateId: string; tenantId: string; versionNumber: number } } }; responses: { "200": Array<WordingResponse> } };

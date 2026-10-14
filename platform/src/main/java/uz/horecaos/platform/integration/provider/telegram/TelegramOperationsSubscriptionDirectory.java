@@ -31,4 +31,10 @@ public class TelegramOperationsSubscriptionDirectory implements OperationsSubscr
     public List<ScopedBinding> platformDigestBindings(String eventClass) {
         return bindings.platformDigestBindings(eventClass);
     }
+
+    @Override
+    public boolean isActiveOperationsChat(UUID tenantId, UUID brandId, UUID bindingId) {
+        return bindings.listOperationsBindings(tenantId, brandId).stream()
+                .anyMatch(binding -> binding.bindingId().equals(bindingId) && binding.retiredAt() == null);
+    }
 }

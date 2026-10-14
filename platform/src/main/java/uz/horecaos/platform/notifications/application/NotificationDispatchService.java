@@ -20,13 +20,18 @@ import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory;
 import uz.horecaos.platform.marketing.api.DeliverabilityFeedbackPort;
 import uz.horecaos.platform.marketing.api.SmsSegments;
+import uz.horecaos.platform.notifications.api.CourierFirstNameDirectory;
 import uz.horecaos.platform.notifications.api.DispatchOutcome;
 import uz.horecaos.platform.notifications.api.NotificationDispatch;
 import uz.horecaos.platform.notifications.api.NotificationTransport;
 import uz.horecaos.platform.notifications.api.NotificationTransport.ReconcileRequest;
 import uz.horecaos.platform.notifications.domain.ContentHashes;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
+import uz.horecaos.platform.notifications.domain.NotificationClass;
 import uz.horecaos.platform.notifications.domain.NotificationStatus;
+import uz.horecaos.platform.notifications.domain.NotificationVariableCatalog;
+import uz.horecaos.platform.notifications.domain.OrderMessageValues;
+import uz.horecaos.platform.notifications.domain.PlatformDefaultTemplates;
 import uz.horecaos.platform.notifications.domain.TemplateRenderer;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcDeliveryReceiptStore;
 import uz.horecaos.platform.notifications.infrastructure.persistence.JdbcNotificationStore;
@@ -69,6 +74,7 @@ public class NotificationDispatchService {
     private final JdbcNotificationStore notifications;
     private final JdbcTemplateStore templates;
     private final RecipientContactDirectory contacts;
+    private final CourierFirstNameDirectory courierNames;
     private final NotificationTransport transport;
     private final CampaignBlockRateMonitor campaignBlockRate;
     private final DeliverabilityFeedbackPort deliverability;
@@ -97,10 +103,43 @@ public class NotificationDispatchService {
                 notifications,
                 templates,
                 contacts,
+                (tenantId, orderId) -> Optional.empty(),
                 transport,
                 campaignBlockRate,
                 (tenantId, brandId, accountId, channel, correlationId) -> false,
                 new SimpleMeterRegistry(),
+                objectMapper,
+                clock,
+                maximumAttempts,
+                retryBackoff);
+    }
+
+    /**
+     * The shape that predates ADR 0184: no courier directory, so a message that names {@code
+     * courierFirstName} reads the neutral phrase. For the callers and tests that build a dispatcher by hand
+     * and have no courier module to ask.
+     */
+    public NotificationDispatchService(
+            JdbcNotificationStore notifications,
+            JdbcTemplateStore templates,
+            RecipientContactDirectory contacts,
+            NotificationTransport transport,
+            CampaignBlockRateMonitor campaignBlockRate,
+            DeliverabilityFeedbackPort deliverability,
+            MeterRegistry meters,
+            ObjectMapper objectMapper,
+            Clock clock,
+            int maximumAttempts,
+            Duration retryBackoff) {
+        this(
+                notifications,
+                templates,
+                contacts,
+                (tenantId, orderId) -> Optional.empty(),
+                transport,
+                campaignBlockRate,
+                deliverability,
+                meters,
                 objectMapper,
                 clock,
                 maximumAttempts,
@@ -112,6 +151,7 @@ public class NotificationDispatchService {
             JdbcNotificationStore notifications,
             JdbcTemplateStore templates,
             RecipientContactDirectory contacts,
+            CourierFirstNameDirectory courierNames,
             NotificationTransport transport,
             CampaignBlockRateMonitor campaignBlockRate,
             DeliverabilityFeedbackPort deliverability,
@@ -123,6 +163,7 @@ public class NotificationDispatchService {
         this.notifications = notifications;
         this.templates = templates;
         this.contacts = contacts;
+        this.courierNames = courierNames;
         this.transport = transport;
         this.campaignBlockRate = campaignBlockRate;
         this.deliverability = deliverability;
@@ -535,28 +576,93 @@ public class NotificationDispatchService {
     }
 
     private Rendered render(NotificationRow row) {
-        // Eligibility is what freezes these three onto the row (markReady), and
-        // this method only ever runs on a row that reached READY; a row missing
-        // any of them here is a data fault rather than an unresolved message.
-        UUID templateId = Objects.requireNonNull(
-                row.templateId(), () -> "Notification %s has no template frozen onto it".formatted(row.id()));
-        int templateVersion = Objects.requireNonNull(
-                row.templateVersion(),
-                () -> "Notification %s has no template version frozen onto it".formatted(row.id()));
+        // Eligibility is what freezes the source of the wording onto the row (markReady), and this
+        // method only ever runs on a row that reached READY; a row missing it here is a data fault
+        // rather than an unresolved message.
         String locale = Objects.requireNonNull(
                 row.locale(), () -> "Notification %s has no locale frozen onto it".formatted(row.id()));
 
-        VersionRow version = templates
-                .version(row.tenantId(), templateId, templateVersion, locale)
-                .orElseThrow(() -> new IllegalStateException(
-                        "The template version frozen onto notification %s no longer exists".formatted(row.id())));
+        String subjectTemplate;
+        String bodyTemplate;
+        if (row.templateId() == null) {
+            // ADR 0184: sent from the platform's own bundled wording. The version frozen onto the row is
+            // the one handle on what the customer was sent, so a row from a version this release no longer
+            // carries is a fault and not a sentence to guess at.
+            int platformVersion = Objects.requireNonNull(
+                    row.platformDefaultVersion(),
+                    () -> "Notification %s has neither a template nor a platform default frozen onto it"
+                            .formatted(row.id()));
+            if (platformVersion != PlatformDefaultTemplates.VERSION) {
+                throw new IllegalStateException(
+                        "Notification %s was sent from platform default version %d, which this release does not carry"
+                                .formatted(row.id(), platformVersion));
+            }
+            bodyTemplate = PlatformDefaultTemplates.forKey(row.templateKey())
+                    .flatMap(entry -> entry.body(locale))
+                    .orElseThrow(() -> new IllegalStateException(
+                            "The platform default %s has no wording in %s".formatted(row.templateKey(), locale)));
+            subjectTemplate = null;
+        } else {
+            int templateVersion = Objects.requireNonNull(
+                    row.templateVersion(),
+                    () -> "Notification %s has no template version frozen onto it".formatted(row.id()));
+            VersionRow version = templates
+                    .version(row.tenantId(), row.templateId(), templateVersion, locale)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "The template version frozen onto notification %s no longer exists".formatted(row.id())));
+            subjectTemplate = version.subjectTemplate();
+            bodyTemplate = version.bodyTemplate();
+        }
 
-        Map<String, String> variables = objectMapper.readValue(row.variablesJson(), VARIABLES_TYPE);
+        Map<String, String> variables =
+                new java.util.LinkedHashMap<>(objectMapper.readValue(row.variablesJson(), VARIABLES_TYPE));
+        resolvePersonalValues(row, locale, bodyTemplate, subjectTemplate, variables);
         // The body template is never null (a template version cannot be saved
         // without one), so its rendering is asserted non-null even though
         // TemplateRenderer.render's return type is nullable for the subject case.
-        String body = Objects.requireNonNull(TemplateRenderer.render(version.bodyTemplate(), variables));
-        return new Rendered(TemplateRenderer.render(version.subjectTemplate(), variables), body);
+        String body = Objects.requireNonNull(TemplateRenderer.render(bodyTemplate, variables));
+        return new Rendered(TemplateRenderer.render(subjectTemplate, variables), body);
+    }
+
+    /**
+     * The two values that are about a person, put in the map for this render and nowhere else (ADR 0184,
+     * D21): the customer's name, and the first name of the courier carrying the order.
+     *
+     * <p>Asked for only when the wording names them, so a message that does not say a name never reads
+     * one. Each is allowed only where the decision allows it: the customer's name in a message addressed
+     * to the customer, the courier's first name in the on-the-way message. Anything else is left out of
+     * the map and the render refuses the missing value, which is the right outcome for a wording that
+     * got past authoring with a personal variable in the wrong place. Neither value is logged, hashed
+     * into a row, or kept: the map is this method's local.
+     */
+    private void resolvePersonalValues(
+            NotificationRow row,
+            String localeTag,
+            String bodyTemplate,
+            @Nullable String subjectTemplate,
+            Map<String, String> variables) {
+        java.util.Set<String> used = new java.util.LinkedHashSet<>(TemplateRenderer.variablesUsedIn(bodyTemplate));
+        used.addAll(TemplateRenderer.variablesUsedIn(subjectTemplate));
+        NotificationClass notificationClass = NotificationClass.valueOf(row.notificationClass());
+
+        if (used.contains("customerName") && NotificationVariableCatalog.isCustomerAddressed(notificationClass)) {
+            String name = row.recipientAccountId() == null
+                    ? null
+                    : contacts.displayName(row.tenantId(), row.recipientAccountId())
+                            .orElse(null);
+            variables.put("customerName", name != null ? name : OrderMessageValues.customerNameFallback(localeTag));
+        }
+        if (used.contains("courierFirstName")
+                && NotificationVariableCatalog.COURIER_NAME_TEMPLATE_KEY.equals(row.templateKey())
+                && (notificationClass == NotificationClass.TRANSACTIONAL_OPTIONAL
+                        || notificationClass == NotificationClass.TRANSACTIONAL_REQUIRED)) {
+            String firstName = courierNames
+                    .firstNameCarrying(row.tenantId(), row.subjectId())
+                    .orElse(null);
+            variables.put(
+                    "courierFirstName",
+                    firstName != null ? firstName : OrderMessageValues.courierFirstNameFallback(localeTag));
+        }
     }
 
     /**
