@@ -214,3 +214,10 @@
   margin: 0 0 6px;
   font-weight: 600;
 }
+
+.page-loads {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-block: 8px;
+}
