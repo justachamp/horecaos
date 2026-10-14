@@ -26,7 +26,7 @@ import {
   promoOutcomeKey as promoOutcomeKeyOf,
   type GiftOfferGroup,
 } from './applied-promotions';
-import { LangService } from './lang.service';
+import { LangService, platformTag } from './lang.service';
 import { DeliverySelectionService } from './delivery-selection.service';
 import { TranslateService } from './translate.service';
 import type { ComboPickWire } from '../utils/combo-selection';
@@ -265,7 +265,10 @@ export class UiCartService {
   readonly discountRows = computed<readonly PromotionRow[]>(() => {
     this.translate.current();
     const code = this.appliedPromoCode();
-    const lines = discountLinesOf(this.priced()?.appliedPromotions);
+    const lines = discountLinesOf(
+      this.priced()?.appliedPromotions,
+      platformTag(this.lang.langId()),
+    );
     if (lines.length === 0) {
       return this.hasDiscount()
         ? [
@@ -281,6 +284,7 @@ export class UiCartService {
       labelKey: line.labelKey,
       code: line.source === 'PROMO_CODE' ? code : null,
       amount: this.formatPrice(line.amountMinor),
+      ...(line.title ? { title: line.title } : {}),
     }));
   });
 
@@ -1118,6 +1122,8 @@ export interface PromotionRow {
   readonly labelKey: string;
   readonly code: string | null;
   readonly amount: string;
+  /** The marketer's wording in the customer's language (ADR 0140), printed instead of the label when present. */
+  readonly title?: string;
 }
 
 /** A benefit already inside the delivery price or the goods, to be read as a caption. */

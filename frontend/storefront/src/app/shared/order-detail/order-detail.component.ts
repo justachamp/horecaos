@@ -15,7 +15,7 @@ import { TranslateService } from '../../services/translate.service';
 import { TranslatePipe } from '../translate/translate.pipe';
 import { RateOrderComponent } from '../rate-order/rate-order.component';
 import { NavigationHistoryService } from '../../services/navigation-history.service';
-import { LangService } from '../../services/lang.service';
+import { LangService, platformTag } from '../../services/lang.service';
 import { formatQuantity, formatWeight } from '../../utils/physical';
 import { UiCartService } from '../../services/ui-cart.service';
 import {
@@ -332,7 +332,12 @@ export class OrderDetailComponent implements OnInit {
       deliveryFee: deliveryVal > 0 ? format(deliveryVal) : undefined,
       // ADR 0140: the discount the order was priced with, so the total is explained
       // by `subtotal + tax + delivery - discount` instead of sitting a gap below it.
-      discountRows: discountRowsFor(api.promotions, discountVal, format),
+      discountRows: discountRowsFor(
+        api.promotions,
+        discountVal,
+        format,
+        platformTag(this.lang.langId()),
+      ),
       promotionNotes: noteRowsFor(api.promotions, format),
       total: format(totalVal),
       packaging: packagingVal > 0 ? format(packagingVal) : undefined,

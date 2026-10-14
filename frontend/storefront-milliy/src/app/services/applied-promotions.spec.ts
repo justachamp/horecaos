@@ -1,5 +1,6 @@
 import {
   discountLines,
+  titleFor,
   giftOfferGroups,
   noteLines,
   promoOutcomeKey,
@@ -47,6 +48,37 @@ describe('discountLines', () => {
 
   it('drops an entry that took nothing off', () => {
     expect(discountLines([{ ...AUTO_DISCOUNT, amountMinor: 0 }])).toEqual([]);
+  });
+});
+
+describe('titles written for the customer (ADR 0140)', () => {
+  const WORDED: AppliedPromotion = {
+    ...AUTO_DISCOUNT,
+    titles: { ru: 'Скидка на ланч', 'uz-Latn': 'Tushlik chegirmasi', en: 'Lunch offer' },
+  };
+
+  it("prints the marketer's wording in the customer's language instead of the kind of benefit", () => {
+    expect(discountLines([WORDED], 'uz-Latn')).toEqual([
+      {
+        labelKey: 'cart.offerDiscount',
+        source: 'AUTOMATIC',
+        amountMinor: 4_000,
+        title: 'Tushlik chegirmasi',
+      },
+    ]);
+  });
+
+  it('falls back to the kind of benefit for a language nobody wrote for, never to another language', () => {
+    const russianOnly: AppliedPromotion = { ...AUTO_DISCOUNT, titles: { ru: 'Скидка' } };
+    expect(discountLines([russianOnly], 'en')).toEqual([
+      { labelKey: 'cart.offerDiscount', source: 'AUTOMATIC', amountMinor: 4_000 },
+    ]);
+  });
+
+  it('accepts a title written for the bare language and ignores a blank one', () => {
+    expect(titleFor({ uz: 'Chegirma' }, 'uz-Latn')).toBe('Chegirma');
+    expect(titleFor({ en: '   ' }, 'en')).toBeUndefined();
+    expect(titleFor(null, 'en')).toBeUndefined();
   });
 });
 

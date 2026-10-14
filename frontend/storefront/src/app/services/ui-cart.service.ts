@@ -33,7 +33,7 @@ import {
   type GiftOfferGroup,
   type PromotionRow,
 } from './applied-promotions';
-import { LangService } from './lang.service';
+import { LangService, platformTag } from './lang.service';
 import { DeliverySelectionService } from './delivery-selection.service';
 import { TranslateService } from './translate.service';
 import { lineAmountMinor, portionStep, type PhysicalFacts } from '../utils/physical';
@@ -243,6 +243,7 @@ export class UiCartService {
       this.priced()?.appliedPromotions,
       this.priced()?.discountMinor ?? 0,
       (minor) => this.formatPrice(minor),
+      platformTag(this.lang.langId()),
     );
   });
 
