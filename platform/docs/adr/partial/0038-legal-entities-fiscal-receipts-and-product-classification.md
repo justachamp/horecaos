@@ -91,6 +91,12 @@
   receipt must carry is an external input, and a branch prints a receipt only
   where a manager has routed one (Settings → Printing and receipts; automatic
   printing is off until switched on per route).
+  Addition, 2026-10-14: the source and refresh cadence of the IKPU/MXIK reference list, the one
+  open input of this record that named the list, is closed by
+  [ADR 0173](0173-the-ikpu-mxik-reference-dataset.md) (an uploaded official file, imported
+  as a two-step audited run, with a freshness alert); read that record for the dataset's
+  status. The product editor's fiscal tab and the fiscalization backfill editor now share one
+  reference picker ([ADR 0180](0180-stale-marketplace-channels-weighed-baskets-and-the-marketplace-menu-pull.md)).
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-22
 - Deciders: Ayubkhon Abbosov (platform architecture; cash fiscalization, 2026-08-22), finance (VAT registration, tax treatment, evidence retention), legal (fiscal agency per settlement path)
