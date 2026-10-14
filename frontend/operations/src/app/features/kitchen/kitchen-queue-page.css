@@ -263,6 +263,11 @@
   padding-left: 20px;
 }
 
+.ticket__intake {
+  font-weight: 600;
+  color: var(--q-warning-text);
+}
+
 .ticket__weight {
   color: var(--q-ink-subtle);
 }

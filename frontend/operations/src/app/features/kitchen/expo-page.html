@@ -91,6 +91,26 @@
                             {{ weight }}
                           </div>
                         }
+                        @if (line.intake; as flag) {
+                          <div
+                            class="q-caption expo__intake"
+                            role="note"
+                            data-testid="expo-line-intake"
+                          >
+                            {{
+                              (flag.status === 'STOPPED'
+                                ? 'kitchen.item.intake.stopped'
+                                : 'kitchen.item.intake.unmapped'
+                              ) | t
+                            }}
+                            @if (flag.externalItemReference) {
+                              <span class="q-mono">{{
+                                'kitchen.item.intake.reference'
+                                  | t: { reference: flag.externalItemReference }
+                              }}</span>
+                            }
+                          </div>
+                        }
                       } @else {
                         <span class="q-caption">{{ 'kitchen.item.lineUnresolved' | t }}</span>
                       }
@@ -115,6 +135,11 @@
               [lines]="order.value.lines"
               [currency]="order.value.summary.currency"
               (orderChanged)="onOrderChanged(ticket.orderId)"
+            />
+            <q-till-revision-banner
+              [scope]="expoScope()"
+              [orderId]="ticket.orderId"
+              [orderVersion]="order.value.summary.version ?? order.version ?? 0"
             />
           }
           @if (weighingState(ticket) === 'pending') {

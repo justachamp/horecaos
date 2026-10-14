@@ -38,6 +38,28 @@
             @if (row.line.variantName) {
               <div class="q-caption pane__line-variant">{{ row.line.variantName }}</div>
             }
+            @if (row.line.intake; as flag) {
+              <!-- ADR 0040 / ADR 0141: the aggregator order was accepted with this line; the flag says why a
+                   person looks at it before it is cooked. -->
+              <div
+                class="q-caption pane__line-intake"
+                role="note"
+                data-testid="order-detail-line-intake"
+              >
+                {{
+                  (flag.status === 'STOPPED'
+                    ? 'orders.detail.lines.intake.stopped'
+                    : 'orders.detail.lines.intake.unmapped'
+                  ) | t
+                }}
+                @if (flag.externalItemReference) {
+                  <span class="q-mono">{{
+                    'orders.detail.lines.intake.reference'
+                      | t: { reference: flag.externalItemReference }
+                  }}</span>
+                }
+              </div>
+            }
             @if (row.line.catchweight; as weighed) {
               <div class="q-caption pane__line-weight" data-testid="order-detail-line-weight">
                 @if (weighed.provisional) {

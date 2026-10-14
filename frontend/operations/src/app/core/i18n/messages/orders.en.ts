@@ -243,6 +243,30 @@ export const ordersEn = {
   'orders.detail.lines.column.amount': 'Amount',
   'orders.detail.lines.combo.caption': 'Combo',
   'orders.detail.lines.autoAdded': 'added automatically',
+  'orders.detail.lines.intake.stopped': 'Stopped here: accepted, check before cooking',
+  'orders.detail.lines.intake.unmapped':
+    'Not in the catalogue: confirm the item with the aggregator',
+  'orders.detail.lines.intake.reference': 'Aggregator item {reference}',
+  'orders.tillRevision.title': 'The till still holds the old total',
+  'orders.tillRevision.body':
+    'The till holds {till}; after weighing the order is {revised} ({delta}). Change the till to {revised}, then confirm below.',
+  'orders.tillRevision.send': 'Send the new total to the till',
+  'orders.tillRevision.sending': 'Sending…',
+  'orders.tillRevision.acknowledge': 'I changed the till',
+  'orders.tillRevision.failed': 'The last try to tell the till did not go through.',
+  'orders.tillRevision.told': 'The till was sent the new total.',
+  'orders.tillRevision.acknowledged': 'Noted: the till was changed by hand.',
+  'orders.tillRevision.unreadable': 'Could not check whether the till agrees with this order.',
+  'orders.tillRevision.outcome.NO_OPEN_NOTICE':
+    'Nothing to change: the till and the order already agree.',
+  'orders.tillRevision.outcome.NOT_AVAILABLE':
+    'This till cannot be told a new total from here. Change it by hand, then confirm.',
+  'orders.tillRevision.outcome.REJECTED':
+    'The till refused the new total. Change it by hand, then confirm.',
+  'orders.tillRevision.outcome.RETRYABLE':
+    'The till could not be reached. Try again, or change it by hand.',
+  'orders.tillRevision.outcome.UNCERTAIN':
+    'The till may or may not have the new total. Check it before sending again.',
   'orders.detail.lines.snapshotNotice':
     'Names and prices are fixed at the moment the order was placed.',
   'orders.detail.lines.note.hidden': '💬 has a note',

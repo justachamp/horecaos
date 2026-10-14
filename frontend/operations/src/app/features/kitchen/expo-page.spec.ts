@@ -10,6 +10,7 @@ import { I18n } from '../../core/i18n/i18n';
 import { ChallengeState, OrderHandoverApi } from '../orders/order-handover-api';
 import { CapturedMark, OrderMarkingApi } from '../orders/order-marking-api';
 import { ActualWeightResult, OrderWeighingApi } from '../orders/order-weighing-api';
+import { TillRevisionApi } from '../orders/till-revision-api';
 import { BoardResponse, KitchenApi, TicketResponse } from './kitchen-api';
 import { ExpoPage } from './expo-page';
 
@@ -87,6 +88,11 @@ describe('ExpoPage', () => {
         {
           provide: OrderWeighingApi,
           useValue: weighingApi ?? { captureActualWeight: () => NEVER },
+        },
+        // ADR 0137, row 4.2c: the till-revision banner is drawn beside the scale.
+        {
+          provide: TillRevisionApi,
+          useValue: { forOrder: () => Promise.resolve({ notice: null, canTell: false }) },
         },
         // ADR 0161: the scanning panel is only drawn for an order with a marked line.
         {
@@ -487,6 +493,42 @@ describe('ExpoPage', () => {
       expect(weight?.textContent).toContain('1.34\u00a0kg');
       expect(weight?.textContent).toContain('weighed');
     });
+
+    // ADR 0040 / ADR 0141: an aggregator order is accepted with a stopped dish, and the pass is told.
+    it('flags a line that arrived for a stopped dish at the pass, with the aggregator’s own item', async () => {
+      await render(
+        kitchen(),
+        api(() => of(flaggedOrder({ status: 'STOPPED', externalItemReference: 'ye-4411' }))),
+      );
+
+      const flag = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="expo-line-intake"]',
+      );
+      expect(flag?.textContent).toContain('Stopped here');
+      expect(flag?.textContent).toContain('ye-4411');
+    });
+
+    it('flags nothing at the pass on a line that arrived sellable and mapped', async () => {
+      await render(
+        kitchen(),
+        api(() => of(flaggedOrder(null))),
+      );
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="expo-line-intake"]'),
+      ).toBeNull();
+    });
+
+    function flaggedOrder(intake: unknown) {
+      const order = weighedOrder(false);
+      return {
+        ...order,
+        value: {
+          ...order.value,
+          lines: [{ ...order.value.lines[0], catchweight: null, intake }],
+        },
+      };
+    }
 
     it('will not hand an order over while a weighed line is unweighed, and says why', async () => {
       const handOver = vi.fn().mockReturnValue(of({ ...ready({}), status: 'HANDED_OVER' }));

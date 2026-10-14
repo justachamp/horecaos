@@ -243,6 +243,28 @@ export const ordersRu: AreaMessages<typeof ordersEn> = {
   'orders.detail.lines.column.amount': 'Сумма',
   'orders.detail.lines.combo.caption': 'Комбо',
   'orders.detail.lines.autoAdded': 'добавлено автоматически',
+  'orders.detail.lines.intake.stopped': 'На стопе: заказ принят, проверьте перед приготовлением',
+  'orders.detail.lines.intake.unmapped': 'Нет в каталоге: уточните позицию у агрегатора',
+  'orders.detail.lines.intake.reference': 'Позиция агрегатора {reference}',
+  'orders.tillRevision.title': 'В кассе осталась старая сумма',
+  'orders.tillRevision.body':
+    'В кассе {till}; после взвешивания заказ стоит {revised} ({delta}). Измените сумму в кассе на {revised}, затем подтвердите ниже.',
+  'orders.tillRevision.send': 'Отправить новую сумму в кассу',
+  'orders.tillRevision.sending': 'Отправляем…',
+  'orders.tillRevision.acknowledge': 'Я изменил сумму в кассе',
+  'orders.tillRevision.failed': 'Последняя попытка сообщить кассе не удалась.',
+  'orders.tillRevision.told': 'Новая сумма отправлена в кассу.',
+  'orders.tillRevision.acknowledged': 'Принято: сумма в кассе исправлена вручную.',
+  'orders.tillRevision.unreadable': 'Не удалось проверить, совпадает ли касса с заказом.',
+  'orders.tillRevision.outcome.NO_OPEN_NOTICE': 'Менять нечего: касса и заказ уже совпадают.',
+  'orders.tillRevision.outcome.NOT_AVAILABLE':
+    'Этой кассе нельзя отправить новую сумму отсюда. Измените её вручную и подтвердите.',
+  'orders.tillRevision.outcome.REJECTED':
+    'Касса не приняла новую сумму. Измените её вручную и подтвердите.',
+  'orders.tillRevision.outcome.RETRYABLE':
+    'Не удалось связаться с кассой. Повторите или измените сумму вручную.',
+  'orders.tillRevision.outcome.UNCERTAIN':
+    'Касса могла принять новую сумму, а могла и нет. Проверьте её, прежде чем отправлять снова.',
   'orders.detail.lines.snapshotNotice': 'Названия и цены зафиксированы на момент оформления.',
   'orders.detail.lines.note.hidden': '💬 есть комментарий',
   'orders.detail.lines.note.empty': 'нет комментария',

@@ -29,6 +29,7 @@ import {
 import { OrderHandoverApi } from './order-handover-api';
 import { NewOrderApi } from './new-order/new-order-api';
 import { OrderPosExportApi, OrderPosExportView, PosExportView } from './order-pos-export-api';
+import { TillRevisionApi } from './till-revision-api';
 import { Toasts } from '../../shared/ui/toast';
 import { RejectReasonOption } from './order-reject-reason-dialog';
 import { RejectReasonsApi } from './order-reject-reasons-api';
@@ -169,6 +170,7 @@ function configure(options: {
   couriersApi?: Partial<CouriersApi>;
   kitchenApi?: Partial<KitchenApi>;
   posExportApi?: Partial<OrderPosExportApi>;
+  tillRevisionApi?: Partial<TillRevisionApi>;
   paymentsApi?: Partial<PaymentsApi>;
   newOrderApi?: Partial<NewOrderApi>;
   channelsApi?: Partial<SalesChannelsApi>;
@@ -238,6 +240,14 @@ function configure(options: {
         provide: OrderPosExportApi,
         useValue: options.posExportApi ?? {
           forOrder: () => Promise.resolve({ posCapable: false, export: null }),
+        },
+      },
+      // ADR 0137, row 4.2c: the till-revision banner is drawn for every weighed order; a test not about it
+      // gets "the till and the order agree".
+      {
+        provide: TillRevisionApi,
+        useValue: options.tillRevisionApi ?? {
+          forOrder: () => Promise.resolve({ notice: null, canTell: false }),
         },
       },
       // Row 1.1e (wave 16): only a test about «Выставить счёт» supplies the
@@ -2384,6 +2394,96 @@ describe('OrderDetailPane: §3.6 Комментарии — the amendment client
           modifierOptionIds: [],
           comboPicks: [{ componentId: 'burger', quantity: 1 }],
         },
+      ]);
+    });
+
+    // ADR 0137, row 4.2c: ADD_LINES adds a splittable dish by its portion, the step read off the channel menu.
+    it('reads the portion step off the menu and adds a dish by the half portion', async () => {
+      const addLines = vi.fn().mockReturnValue(
+        of(
+          amendmentResult({
+            status: 'PRICED',
+            deltaTotalMinor: 37_500,
+            requiresApproval: false,
+            amendmentVersion: 1,
+          }),
+        ),
+      );
+      const plovMenu = {
+        ...LUNCH_MENU,
+        comboGroups: [],
+        products: [
+          {
+            productId: 'plov',
+            code: 'PLOV',
+            name: 'Plov',
+            description: null,
+            imageUrls: [],
+            modifierGroupIds: [],
+            commentPresets: [],
+            variants: [
+              {
+                variantId: 'plov-v',
+                sku: null,
+                unitCode: 'PORTION',
+                isDefault: true,
+                orderable: true,
+                onSaleNow: true,
+                amountMinor: 75_000,
+                physical: { splittable: true, portionSize: 0.5, catchweight: false },
+              },
+            ],
+          },
+        ],
+      };
+      configure({
+        get: apiGet({
+          value: detail({
+            summary: {
+              ...detail().summary,
+              status: 'CONFIRMED',
+              channelCode: 'CALL_CENTRE',
+              actions: [{ action: 'AMEND' }],
+            },
+          }),
+          version: 3,
+        }),
+        amendmentsApi: { addLines },
+        newOrderApi: {
+          searchItems: vi.fn().mockResolvedValue({
+            items: [
+              {
+                variantId: 'plov-v',
+                productName: 'Plov',
+                category: 'Hot',
+                available: true,
+                trackingMode: null,
+              },
+            ],
+            nextCursor: null,
+          }),
+          menu: vi.fn().mockResolvedValue(plovMenu),
+        },
+      });
+      const fixture = await render();
+      const host: HTMLElement = fixture.nativeElement;
+
+      await openAndSearch(host, fixture);
+
+      const quantity = host.querySelector(
+        '[data-testid="order-add-lines-dialog-quantity-plov-v"]',
+      ) as HTMLInputElement;
+      expect(quantity.step).toBe('0.5');
+      quantity.value = '1.5';
+      quantity.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      (
+        host.querySelector('[data-testid="order-add-lines-dialog-confirm"]') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+
+      expect(addLines).toHaveBeenCalledWith(FAKE_SCOPE, 'order-1', 3, [
+        { variantId: 'plov-v', quantity: 1.5, modifierOptionIds: [] },
       ]);
     });
 

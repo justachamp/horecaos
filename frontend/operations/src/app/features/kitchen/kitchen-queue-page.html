@@ -196,6 +196,26 @@
                               {{ weight }}
                             </div>
                           }
+                          @if (line.intake; as flag) {
+                            <div
+                              class="q-caption ticket__intake"
+                              role="note"
+                              data-testid="kitchen-line-intake"
+                            >
+                              {{
+                                (flag.status === 'STOPPED'
+                                  ? 'kitchen.item.intake.stopped'
+                                  : 'kitchen.item.intake.unmapped'
+                                ) | t
+                              }}
+                              @if (flag.externalItemReference) {
+                                <span class="q-mono">{{
+                                  'kitchen.item.intake.reference'
+                                    | t: { reference: flag.externalItemReference }
+                                }}</span>
+                              }
+                            </div>
+                          }
                           @if (line.commentPresets.length > 0) {
                             <ul class="ticket__line-presets" data-testid="kitchen-line-presets">
                               @for (preset of line.commentPresets; track preset.code) {

@@ -183,6 +183,11 @@
   padding-left: 20px;
 }
 
+.expo__intake {
+  font-weight: 600;
+  color: var(--q-warning-text);
+}
+
 .expo__weight {
   color: var(--q-ink-subtle);
 }
