@@ -1047,6 +1047,22 @@ public final class ConfigurationKeys {
             .build();
 
     /**
+     * ADR 0140: whether an order-level markup (a service charge such as the common 10% «обслуживание») may be
+     * priced at all. <strong>Off, and meant to stay off</strong> until finance and counsel have answered how a
+     * service line is taxed, how it is carried on the fiscal receipt and whether a charge that depends on the
+     * payment method is lawful (ADR 0140 open input 3, the external-connections runbook for this wave). While it
+     * is off the validator refuses to author one, the engine is never handed one, and no total moves.
+     */
+    public static final ConfigurationKey<Boolean> ORDER_MARKUP_ENABLED = ConfigurationKey.of(
+                    "pricing.order_markup.enabled", Boolean.class)
+            .defaultValue(false)
+            .ownedBy("pricing")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs("An order-level markup (a service charge) may be authored and priced. Off until the fiscal "
+                    + "and tax treatment of a service line is answered (ADR 0140).")
+            .build();
+
+    /**
      * ADR 0112: the tenant's ranking of campaign purposes, most important first, as a
      * comma-separated list of consent purposes. When a scenario step and a broadcast are
      * both due for one guest on one channel, the higher-ranked purpose is sent and the
@@ -1334,6 +1350,7 @@ public final class ConfigurationKeys {
             PROMOTION_APPROVAL_AMOUNT_OVER_MINOR,
             PROMOTION_APPROVAL_ALWAYS_FOR_MARKUP,
             PROMOTION_SIMULATE_MAX_LINES,
+            ORDER_MARKUP_ENABLED,
             INVENTORY_RESERVATION_TTL_SECONDS,
             COMMERCIAL_ENFORCEMENT_CEILING,
             TELEMETRY_COLLECTION_GATE,

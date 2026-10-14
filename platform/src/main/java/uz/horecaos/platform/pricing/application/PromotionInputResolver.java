@@ -138,6 +138,7 @@ public class PromotionInputResolver {
             @Nullable ResolvedDeliveryCharge charge,
             Set<UUID> variantIds,
             String currency,
+            boolean orderMarkupEnabled,
             @Nullable Overrides overrides) {
 
         QuoteRequest.Frame frame = request.frame();
@@ -182,6 +183,12 @@ public class PromotionInputResolver {
         UUID deliveryZoneId = charge != null && charge.isResolved() ? charge.zoneId() : null;
 
         List<Promotion> pool = candidatePool(request, now, overrides, amendment);
+        if (!orderMarkupEnabled) {
+            // ADR 0140: a service charge is never handed to the engine while the key is off, whatever is stored,
+            // so a definition authored before the switch was turned back off cannot move a total.
+            pool.removeIf(promotion ->
+                    promotion.kind() == Promotion.Kind.MARKUP && promotion.scope() == Promotion.Scope.ORDER);
+        }
         UUID accountId = request.customerAccountId();
 
         // The history and the audiences are only consulted when something on offer reads

@@ -121,6 +121,61 @@ class AppliedPromotionTests {
     }
 
     @Test
+    @DisplayName("the wording the marketer wrote reaches the customer per locale, and an unworded offer is unchanged")
+    void aTitledOfferCarriesItsTitlesPerLocale() {
+        fixture.activate(titled(
+                "LUNCHTEN",
+                1_000L,
+                Map.of("ru", "Скидка на ланч", "uz-Latn", "Tushlik chegirmasi", "en", "Lunch offer")));
+
+        Quote quote = price(null);
+        AppliedPromotions result = applied.describe(TENANT, quote.quoteId(), null);
+
+        assertThat(result.applied()).singleElement().satisfies(entry -> {
+            assertThat(entry.source()).isEqualTo(Source.AUTOMATIC);
+            assertThat(entry.amountMinor()).isEqualTo(9_000L);
+            assertThat(entry.titles())
+                    .containsEntry("ru", "Скидка на ланч")
+                    .containsEntry("uz-Latn", "Tushlik chegirmasi")
+                    .containsEntry("en", "Lunch offer");
+        });
+    }
+
+    @Test
+    @DisplayName("two offers worded differently are two entries; two with no wording are still one")
+    void differentlyWordedOffersStaySeparate() {
+        fixture.activate(titled("WORDED", 1_000L, Map.of("en", "Lunch offer")));
+        fixture.activate(definition(
+                "PLAINFIXED",
+                Promotion.Scope.ORDER,
+                "plain-fixed",
+                List.of(),
+                List.of(action(1, Promotion.Action.Type.ORDER_FIXED_DISCOUNT, "amountMinor", 2_000L))));
+        fixture.activate(definition(
+                "PLAINFIXEDTWO",
+                Promotion.Scope.ORDER,
+                "plain-fixed-two",
+                List.of(),
+                List.of(action(1, Promotion.Action.Type.ORDER_FIXED_DISCOUNT, "amountMinor", 1_000L))));
+
+        Quote quote = price(null);
+        AppliedPromotions result = applied.describe(TENANT, quote.quoteId(), null);
+
+        assertThat(result.applied()).hasSize(2);
+        assertThat(result.applied())
+                .filteredOn(entry -> entry.titles().isEmpty())
+                .singleElement()
+                .satisfies(entry -> assertThat(entry.amountMinor()).isEqualTo(3_000L));
+        assertThat(result.applied())
+                .filteredOn(entry -> !entry.titles().isEmpty())
+                .singleElement()
+                .satisfies(entry -> assertThat(entry.titles()).containsEntry("en", "Lunch offer"));
+        assertThat(result.applied().stream().mapToLong(Applied::amountMinor).sum())
+                .as("the entries still add up to the quote's discount")
+                .isEqualTo(quote.discount().minor());
+    }
+
+    @Test
     @DisplayName("an item markup is a SURCHARGE entry and never part of the discount")
     void aMarkupIsASurcharge() {
         var markupConfiguration = new PromotionDbFixture(
@@ -360,6 +415,35 @@ class AppliedPromotionTests {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    private static PromotionDefinition titled(String code, long basisPoints, Map<String, String> titles) {
+        PromotionDefinition base = definition(
+                code,
+                Promotion.Scope.ORDER,
+                "titled-" + code,
+                List.of(),
+                List.of(action(1, Promotion.Action.Type.ORDER_PERCENTAGE_DISCOUNT, "basisPoints", basisPoints)));
+        return new PromotionDefinition(
+                base.code(),
+                base.name(),
+                base.kind(),
+                base.scope(),
+                base.stackingGroup(),
+                base.exclusive(),
+                base.priority(),
+                base.requiresCoupon(),
+                base.maximumDiscountMinor(),
+                base.currency(),
+                base.validFrom(),
+                base.validUntil(),
+                base.maximumRedemptions(),
+                base.maximumPerCustomer(),
+                base.loyaltyAccrual(),
+                base.loyaltyRedemption(),
+                base.conditions(),
+                base.actions(),
+                titles);
+    }
 
     private void automaticOrderDiscount(String code, long basisPoints) {
         fixture.activate(definition(

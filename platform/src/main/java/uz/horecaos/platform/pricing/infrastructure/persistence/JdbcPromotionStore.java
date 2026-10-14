@@ -148,11 +148,27 @@ public class JdbcPromotionStore {
                 .param("tenantId", tenantId)
                 .param("id", id)
                 .update();
+        jdbc.sql("DELETE FROM pricing.promotion_titles WHERE tenant_id = :tenantId AND promotion_id = :id")
+                .param("tenantId", tenantId)
+                .param("id", id)
+                .update();
         insertChildren(id, tenantId, brandId, definition);
         return true;
     }
 
     private void insertChildren(UUID id, UUID tenantId, UUID brandId, PromotionDefinition definition) {
+        definition
+                .titles()
+                .forEach((locale, title) -> jdbc.sql("""
+                        INSERT INTO pricing.promotion_titles (tenant_id, brand_id, promotion_id, locale, title)
+                        VALUES (:tenantId, :brandId, :promotionId, :locale, :title)
+                        """)
+                        .param("tenantId", tenantId)
+                        .param("brandId", brandId)
+                        .param("promotionId", id)
+                        .param("locale", locale)
+                        .param("title", title)
+                        .update());
         for (ConditionDefinition condition : definition.conditions()) {
             jdbc.sql("""
                     INSERT INTO pricing.promotion_conditions (promotion_id, sequence, tenant_id, brand_id, condition_type, attributes_json)
@@ -359,9 +375,24 @@ public class JdbcPromotionStore {
                     return 0;
                 })
                 .list();
+        Map<UUID, Map<String, String>> titles = new HashMap<>();
+        jdbc.sql("""
+                SELECT promotion_id, locale, title FROM pricing.promotion_titles
+                WHERE tenant_id = :tenantId AND promotion_id = ANY(:ids) ORDER BY promotion_id, locale
+                """)
+                .param("tenantId", tenantId)
+                .param("ids", ids)
+                .query((row, n) -> {
+                    titles.computeIfAbsent(row.getObject("promotion_id", UUID.class), k -> new java.util.TreeMap<>())
+                            .put(row.getString("locale"), row.getString("title"));
+                    return 0;
+                })
+                .list();
         return bases.stream()
                 .map(base -> base.withChildren(
-                        conditions.getOrDefault(base.id(), List.of()), actions.getOrDefault(base.id(), List.of())))
+                        conditions.getOrDefault(base.id(), List.of()),
+                        actions.getOrDefault(base.id(), List.of()),
+                        titles.getOrDefault(base.id(), Map.of())))
                 .toList();
     }
 
@@ -948,7 +979,8 @@ public class JdbcPromotionStore {
             Instant createdAt,
             Instant updatedAt) {
 
-        PromotionRow withChildren(List<ConditionDefinition> conditions, List<ActionDefinition> actions) {
+        PromotionRow withChildren(
+                List<ConditionDefinition> conditions, List<ActionDefinition> actions, Map<String, String> titles) {
             PromotionDefinition d = definition;
             return new PromotionRow(
                     id,
@@ -972,7 +1004,8 @@ public class JdbcPromotionStore {
                             d.loyaltyAccrual(),
                             d.loyaltyRedemption(),
                             conditions,
-                            actions),
+                            actions,
+                            titles),
                     status,
                     definitionVersion,
                     version,

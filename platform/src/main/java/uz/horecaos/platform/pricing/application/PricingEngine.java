@@ -288,6 +288,34 @@ public class PricingEngine {
                         ? java.util.Set.of()
                         : inputs.promotions().grantIds());
 
+        // Stage 5 (ADR 0140). The order-level markup: a service charge computed on the post-discount
+        // goods subtotal, written as its own line beside the delivery fee and reported inside the fees.
+        // Dark unless the resolver handed in an order-level markup, which it does only while
+        // pricing.order_markup.enabled is on. It carries no tax share: how a service line is taxed and
+        // carried on the fiscal receipt is an open finance and legal input (ADR 0140), and a wrong tax
+        // split is materially worse than an absent one.
+        PromotionEvaluator.OrderMarkupOutcome serviceCharge =
+                evaluateOrderMarkups(inputs, taxedLines, grossTotal, autoAddedLineIds(request), now);
+        long serviceChargeMinor = serviceCharge.totalMinor();
+        List<Quote.QuoteLine> pricedLines = delivery.lines();
+        if (!serviceCharge.isEmpty()) {
+            pricedLines = new ArrayList<>(delivery.lines());
+            pricedLines.add(serviceChargeLine(currency, serviceChargeMinor));
+            int next = adjustments.size();
+            for (PromotionEvaluator.AppliedOrderMarkup applied : serviceCharge.applied()) {
+                adjustments.add(new Adjustment(
+                        ++next,
+                        SERVICE_CHARGE_LINE_ID,
+                        Adjustment.Type.ORDER_MARKUP,
+                        PROMOTION_SOURCE,
+                        applied.promotionId(),
+                        applied.definitionVersion(),
+                        Money.of(applied.amountMinor(), currency),
+                        applied.code()));
+            }
+        }
+        long feeMinor = Math.addExact(delivery.feeMinor(), serviceChargeMinor);
+
         // Stage 8. subtotal is reported gross of the discount — derived from
         // preDiscountGrossTotal, not from the discounted grossTotal below —
         // while tax, delivery and the total keep discounting exactly as
@@ -306,11 +334,12 @@ public class PricingEngine {
                 ? Math.subtractExact(preDiscountGrossTotal, totalTax)
                 : preDiscountGrossTotal;
         long total = inputs.taxMode() == TaxMode.INCLUSIVE
-                ? Math.addExact(grossTotal, delivery.feeMinor())
-                : Math.addExact(Math.addExact(grossTotal, totalTax), delivery.feeMinor());
+                ? Math.addExact(grossTotal, feeMinor)
+                : Math.addExact(Math.addExact(grossTotal, totalTax), feeMinor);
 
         List<PromotionEvaluator.TraceEntry> trace = new ArrayList<>(markups.trace());
         trace.addAll(offers.trace());
+        trace.addAll(serviceCharge.trace());
 
         // The most restrictive value across every applied promotion wins, markups
         // included (ADR 0140): an order carrying any promotion that suppresses
@@ -319,19 +348,23 @@ public class PricingEngine {
         boolean accrualAllowed = offers.applied().stream()
                         .noneMatch(applied -> applied.loyaltyAccrual() == Promotion.LoyaltyAccrual.SUPPRESS)
                 && markups.applied().stream()
+                        .noneMatch(applied -> applied.loyaltyAccrual() == Promotion.LoyaltyAccrual.SUPPRESS)
+                && serviceCharge.applied().stream()
                         .noneMatch(applied -> applied.loyaltyAccrual() == Promotion.LoyaltyAccrual.SUPPRESS);
         boolean redemptionAllowed = offers.applied().stream()
                         .noneMatch(applied -> applied.loyaltyRedemption() == Promotion.LoyaltyRedemption.BLOCK)
                 && markups.applied().stream()
+                        .noneMatch(applied -> applied.loyaltyRedemption() == Promotion.LoyaltyRedemption.BLOCK)
+                && serviceCharge.applied().stream()
                         .noneMatch(applied -> applied.loyaltyRedemption() == Promotion.LoyaltyRedemption.BLOCK);
 
         return new Result(
                 Money.of(subtotal, currency),
                 Money.of(totalTax, currency),
-                Money.of(delivery.feeMinor(), currency),
+                Money.of(feeMinor, currency),
                 Money.of(discountTotal, currency),
                 Money.of(total, currency),
-                delivery.lines(),
+                pricedLines,
                 List.copyOf(adjustments),
                 delivery.shortfallMinor(),
                 contextHash(request, inputs),
@@ -963,6 +996,53 @@ public class PricingEngine {
                     autoAdded.contains(line.lineId())));
         }
         return basketLines;
+    }
+
+    /**
+     * Stage 5's read: the order-level markups, judged on the basket as the discounts left it. The goods
+     * subtotal handed to the evaluator is the post-discount one.
+     */
+    private PromotionEvaluator.OrderMarkupOutcome evaluateOrderMarkups(
+            PricingInputs inputs,
+            List<Quote.QuoteLine> lines,
+            long postDiscountGoods,
+            java.util.Set<String> autoAdded,
+            java.time.Instant now) {
+
+        PromotionInputs offers = inputs.promotions();
+        if (offers == null
+                || offers.promotions().stream()
+                        .noneMatch(promotion -> promotion.kind() == Promotion.Kind.MARKUP
+                                && promotion.scope() == Promotion.Scope.ORDER)) {
+            return EMPTY_ORDER_MARKUPS;
+        }
+        return promotions.evaluateOrderMarkups(
+                offers.promotions(),
+                new PromotionEvaluator.Basket(
+                        inputs.currency(), basketLinesOf(offers, lines, autoAdded), postDiscountGoods, 0L),
+                offers.context(),
+                now);
+    }
+
+    private static final PromotionEvaluator.OrderMarkupOutcome EMPTY_ORDER_MARKUPS =
+            new PromotionEvaluator.OrderMarkupOutcome(0L, List.of(), List.of());
+
+    /** The one service-charge line: a quote has at most one, so the key is fixed like the delivery fee's. */
+    public static final String SERVICE_CHARGE_LINE_ID = "service-charge";
+
+    private static final String SERVICE_CHARGE_DESCRIPTION = "SERVICE_CHARGE";
+
+    private static Quote.QuoteLine serviceChargeLine(String currency, long amountMinor) {
+        return new Quote.QuoteLine(
+                SERVICE_CHARGE_LINE_ID,
+                Quote.LineType.SERVICE_CHARGE,
+                null,
+                BigDecimal.ONE,
+                SERVICE_CHARGE_DESCRIPTION,
+                Money.of(amountMinor, currency),
+                Money.of(amountMinor, currency),
+                Money.of(amountMinor, currency),
+                Money.zero(currency));
     }
 
     private static final PromotionEvaluator.Outcome EMPTY_OFFERS =

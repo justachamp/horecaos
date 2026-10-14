@@ -468,8 +468,10 @@ public class PromotionAuthoringService {
                         other.definition().kind(),
                         other.definition().scope()))
                 .toList();
+        boolean orderMarkupEnabled = Boolean.TRUE.equals(configuration.value(
+                PricingConfigurationKeys.ORDER_MARKUP_ENABLED, ResourceScope.brand(tenantId, brandId)));
         return PromotionValidator.validate(
-                id, definition, peers, references.forBrand(tenantId, brandId, clock.instant()));
+                id, definition, peers, references.forBrand(tenantId, brandId, clock.instant()), orderMarkupEnabled);
     }
 
     /** The definition as the engine will read it: a handle with no stray whitespace, never coupon-gated from here. */
@@ -492,7 +494,20 @@ public class PromotionAuthoringService {
                 draft.loyaltyAccrual(),
                 draft.loyaltyRedemption(),
                 draft.conditions(),
-                draft.actions());
+                draft.actions(),
+                normalisedTitles(draft.titles()));
+    }
+
+    /** A title with no stray whitespace and a locale in its canonical case; a blank title is no title. */
+    private static Map<String, String> normalisedTitles(Map<String, String> titles) {
+        Map<String, String> clean = new java.util.TreeMap<>();
+        titles.forEach((locale, title) -> {
+            String text = title == null ? "" : title.strip();
+            if (!text.isEmpty()) {
+                clean.put(locale == null ? "" : locale.strip(), text);
+            }
+        });
+        return clean;
     }
 
     private boolean needsSecondPerson(UUID tenantId, UUID brandId, PromotionDefinition definition) {

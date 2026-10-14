@@ -138,6 +138,31 @@ public class JdbcPricingStore {
         return prices;
     }
 
+    /**
+     * The customer-facing titles (ADR 0140) of these promotions, per promotion and locale. A promotion with no
+     * title is absent. Read by the storefront description, which hands the whole map to the client: the client
+     * knows which locale the customer reads, and a title it has no entry for falls back to the kind of benefit.
+     */
+    public Map<UUID, Map<String, String>> promotionTitles(UUID tenantId, java.util.Collection<UUID> promotionIds) {
+        if (promotionIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Map<String, String>> found = new HashMap<>();
+        jdbc.sql("""
+                SELECT promotion_id, locale, title FROM pricing.promotion_titles
+                WHERE tenant_id = :tenantId AND promotion_id = ANY(:ids) ORDER BY promotion_id, locale
+                """)
+                .param("tenantId", tenantId)
+                .param("ids", promotionIds.toArray(UUID[]::new))
+                .query((row, number) -> {
+                    found.computeIfAbsent(row.getObject("promotion_id", UUID.class), k -> new java.util.TreeMap<>())
+                            .put(row.getString("locale"), row.getString("title"));
+                    return 0;
+                })
+                .list();
+        return found;
+    }
+
     /** Which of these variants have an active price anywhere in the brand. */
     public Set<UUID> pricedVariants(UUID tenantId, UUID brandId, Set<UUID> variantIds, Instant at) {
         return pricedAnywhere(tenantId, brandId, "VARIANT", variantIds, at);

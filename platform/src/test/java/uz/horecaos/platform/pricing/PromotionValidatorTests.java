@@ -127,6 +127,42 @@ class PromotionValidatorTests {
                 actions);
     }
 
+    @Test
+    @DisplayName("a title must be written for a well-formed locale and be printable")
+    void aTitleIsCheckedForItsLocaleAndLength() {
+        PromotionDefinition base = order(List.of(), List.of(percent(1_000)));
+        PromotionDefinition badLocale = withTitles(base, Map.of("RU_ru", "Скидка"));
+        PromotionDefinition tooLong = withTitles(base, Map.of("en", "x".repeat(121)));
+        PromotionDefinition fine = withTitles(base, Map.of("ru", "Скидка", "uz-Latn", "Chegirma", "en", "Offer"));
+
+        assertThat(refusals(badLocale)).contains("TITLE_LOCALE_INVALID");
+        assertThat(refusals(tooLong)).contains("TITLE_INVALID");
+        assertThat(refusals(fine)).doesNotContain("TITLE_LOCALE_INVALID", "TITLE_INVALID");
+    }
+
+    private static PromotionDefinition withTitles(PromotionDefinition base, Map<String, String> titles) {
+        return new PromotionDefinition(
+                base.code(),
+                base.name(),
+                base.kind(),
+                base.scope(),
+                base.stackingGroup(),
+                base.exclusive(),
+                base.priority(),
+                base.requiresCoupon(),
+                base.maximumDiscountMinor(),
+                base.currency(),
+                base.validFrom(),
+                base.validUntil(),
+                base.maximumRedemptions(),
+                base.maximumPerCustomer(),
+                base.loyaltyAccrual(),
+                base.loyaltyRedemption(),
+                base.conditions(),
+                base.actions(),
+                titles);
+    }
+
     private static List<String> refusals(PromotionDefinition definition, Peer... peers) {
         return PromotionValidator.validate(null, definition, List.of(peers), BRAND).refusals().stream()
                 .map(Issue::code)

@@ -16,6 +16,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -1286,9 +1287,10 @@ public class StorefrontOrderingController {
      * be shown (ADR 0140).
      *
      * <p>Deliberately no promotion name, code or id: the operator's name for a
-     * promotion is internal, and a customer-facing title is not yet a field of the
-     * promotion. {@code source} says whether the customer asked for it by typing a
-     * code; {@code effect} says what it did to the total.
+     * promotion is internal. What the marketer wrote for the customer is {@code
+     * titles}, per locale, when there is any. {@code source} says whether the
+     * customer asked for it by typing a code; {@code effect} says what it did to
+     * the total.
      *
      * @param source      {@code AUTOMATIC} or {@code PROMO_CODE}
      * @param effect      {@code DISCOUNT} (taken off the goods, part of {@code
@@ -1296,13 +1298,21 @@ public class StorefrontOrderingController {
      *                    delivery charge, already in {@code feeMinor}) or {@code
      *                    SURCHARGE} (added to the goods, already in the subtotal)
      * @param amountMinor always positive; the direction is the effect's
+     * @param titles      what the marketer wrote for the customer, by locale (ADR 0140); empty when the
+     *                    promotion has no wording, and then the entry is described by its kind of benefit.
+     *                    A client shows the entry for the language the customer reads and falls back
+     *                    to the kind of benefit for a language it has no entry for
      */
-    public record AppliedPromotionResponse(String source, String effect, long amountMinor) {
+    public record AppliedPromotionResponse(
+            String source,
+            String effect,
+            long amountMinor,
+            @Nullable Map<String, String> titles) {
 
         static List<AppliedPromotionResponse> of(AppliedPromotions promotions) {
             return promotions.applied().stream()
                     .map(entry -> new AppliedPromotionResponse(
-                            entry.source().name(), entry.effect().name(), entry.amountMinor()))
+                            entry.source().name(), entry.effect().name(), entry.amountMinor(), entry.titles()))
                     .toList();
         }
     }

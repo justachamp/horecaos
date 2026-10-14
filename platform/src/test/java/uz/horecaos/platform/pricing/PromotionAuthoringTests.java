@@ -87,6 +87,77 @@ class PromotionAuthoringTests {
                 List.of(action(1, Promotion.Action.Type.ORDER_PERCENTAGE_DISCOUNT, "basisPoints", 1_000L)));
     }
 
+    // ---------------------------------------------------------------- titles
+
+    @Test
+    @DisplayName("a customer-facing title per locale is part of the definition: stored, read back, and recorded"
+            + " with the version")
+    void titlesAreStoredReadBackAndVersioned() {
+        PromotionDefinition titled =
+                withTitles(tenPercent("TITLED10"), Map.of("ru", "  Скидка на ланч  ", "en", "Lunch"));
+
+        var drafted = fixture.authoring.create(TENANT, BRAND, titled);
+        var read = fixture.promotionStore.find(TENANT, BRAND, drafted.id()).orElseThrow();
+
+        assertThat(read.definition().titles())
+                .as("stray whitespace is stripped, nothing else is changed")
+                .containsExactlyInAnyOrderEntriesOf(Map.of("ru", "Скидка на ланч", "en", "Lunch"));
+
+        var validated = fixture.authoring.validate(TENANT, BRAND, drafted.id(), drafted.version());
+        assertThat(validated.report().isValid()).isTrue();
+        var activated = fixture.authoring.activate(
+                TENANT, BRAND, drafted.id(), validated.promotion().version(), "go live");
+        var detail = fixture.authoring.get(TENANT, BRAND, drafted.id());
+        assertThat(detail.versions())
+                .isNotEmpty()
+                .allSatisfy(version -> assertThat(version.definition().titles()).containsEntry("en", "Lunch"));
+        assertThat(promotionOf(activated).status()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    @DisplayName("editing the titles replaces them, and a blank title is no title")
+    void editingTheTitlesReplacesThem() {
+        var drafted = fixture.authoring.create(
+                TENANT, BRAND, withTitles(tenPercent("TITLED11"), Map.of("ru", "Скидка", "en", "Offer")));
+
+        var edited = fixture.authoring.update(
+                TENANT,
+                BRAND,
+                drafted.id(),
+                drafted.version(),
+                withTitles(tenPercent("TITLED11"), Map.of("en", "Better offer", "ru", "   ")));
+
+        assertThat(fixture.promotionStore
+                        .find(TENANT, BRAND, edited.id())
+                        .orElseThrow()
+                        .definition()
+                        .titles())
+                .containsExactlyInAnyOrderEntriesOf(Map.of("en", "Better offer"));
+    }
+
+    private static PromotionDefinition withTitles(PromotionDefinition base, Map<String, String> titles) {
+        return new PromotionDefinition(
+                base.code(),
+                base.name(),
+                base.kind(),
+                base.scope(),
+                base.stackingGroup(),
+                base.exclusive(),
+                base.priority(),
+                base.requiresCoupon(),
+                base.maximumDiscountMinor(),
+                base.currency(),
+                base.validFrom(),
+                base.validUntil(),
+                base.maximumRedemptions(),
+                base.maximumPerCustomer(),
+                base.loyaltyAccrual(),
+                base.loyaltyRedemption(),
+                base.conditions(),
+                base.actions(),
+                titles);
+    }
+
     // ------------------------------------------------------------- lifecycle
 
     @Test

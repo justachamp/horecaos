@@ -3,7 +3,7 @@ package uz.horecaos.platform.pricing.application;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -83,23 +83,30 @@ public class AppliedPromotionService implements AppliedPromotionPort {
         Set<UUID> gated = new LinkedHashSet<>(promoCodes.couponGatedPromotionIds(tenantId, appliedIds));
         gated.addAll(grantIds);
 
-        // One entry per (source, effect): "two offers applied" is a fact about the
-        // rule set, not about the basket, and a customer reads the sum.
-        Map<Effect, long[]> automatic = new EnumMap<>(Effect.class);
-        Map<Effect, long[]> coded = new EnumMap<>(Effect.class);
+        // One entry per (source, effect, titles): "two offers applied" is a fact about the rule set, not
+        // about the basket, and a customer reads the sum. Two promotions the marketer worded differently are
+        // two entries, because a customer reading «Скидка на ланч» and «Скидка постоянного гостя» should not
+        // see one of them vanish into the other; promotions with no title merge exactly as before.
+        Map<UUID, Map<String, String>> titles = pricing.promotionTitles(tenantId, appliedIds);
+        record Bucket(Source source, Effect effect, Map<String, String> titles) {}
+        Map<Bucket, long[]> sums = new LinkedHashMap<>();
         for (QuoteSnapshot.Adjustment adjustment : promotionRows) {
             Effect effect = effectOf(adjustment.adjustmentType());
             if (effect == null) {
                 continue;
             }
-            Map<Effect, long[]> bucket = gated.contains(adjustment.sourceId()) ? coded : automatic;
-            bucket.computeIfAbsent(effect, key -> new long[1])[0] += Math.abs(adjustment.amountMinor());
+            Source source = gated.contains(adjustment.sourceId()) ? Source.PROMO_CODE : Source.AUTOMATIC;
+            Map<String, String> wording = titles.getOrDefault(adjustment.sourceId(), Map.of());
+            sums.computeIfAbsent(new Bucket(source, effect, wording), key -> new long[1])[0] +=
+                    Math.abs(adjustment.amountMinor());
         }
         List<Applied> applied = new ArrayList<>();
-        automatic.forEach((effect, sum) -> applied.add(new Applied(Source.AUTOMATIC, effect, sum[0])));
-        coded.forEach((effect, sum) -> applied.add(new Applied(Source.PROMO_CODE, effect, sum[0])));
+        sums.forEach(
+                (bucket, sum) -> applied.add(new Applied(bucket.source(), bucket.effect(), sum[0], bucket.titles())));
         applied.removeIf(entry -> entry.amountMinor() <= 0);
-        applied.sort(Comparator.comparing(Applied::effect).thenComparing(Applied::source));
+        applied.sort(Comparator.comparing(Applied::effect)
+                .thenComparing(Applied::source)
+                .thenComparing(entry -> entry.titles().toString()));
 
         CouponOutcome outcome = presentedCouponCode == null || presentedCouponCode.isBlank()
                 ? null

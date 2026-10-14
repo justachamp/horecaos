@@ -387,8 +387,12 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         Map<UUID, String> descriptions = catalog.descriptions(request.tenantId(), request.brandId(), pricedVariantIds);
         ResolvedDeliveryCharge charge = resolveDeliveryCharge(request, quoteId, priceBook.currency(), now);
 
+        // ADR 0140: an order-level markup is dark until finance and counsel answer how a service line is taxed.
+        boolean orderMarkupEnabled = Boolean.TRUE.equals(configuration.value(
+                PricingConfigurationKeys.ORDER_MARKUP_ENABLED,
+                ResourceScope.brand(request.tenantId(), request.brandId())));
         PromotionInputResolver.Resolved resolved = promotionInputs.resolve(
-                request, now, channel, charge, pricedVariantIds, priceBook.currency(), overrides);
+                request, now, channel, charge, pricedVariantIds, priceBook.currency(), orderMarkupEnabled, overrides);
 
         var inputs = new PricingEngine.PricingInputs(
                 priceBook.currency(),
