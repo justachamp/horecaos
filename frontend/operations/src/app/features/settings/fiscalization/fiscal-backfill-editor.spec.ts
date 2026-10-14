@@ -663,7 +663,7 @@ describe('FiscalBackfillEditor', () => {
     it('lists an option beside the dishes and says which kind each row is', async () => {
       await render([BARE, CHEESE]);
 
-      const kinds = [...el().querySelectorAll('[data-testid="backfill-row"] td:first-child')].map(
+      const kinds = [...el().querySelectorAll('[data-testid="backfill-row"] td:nth-child(2)')].map(
         (cell) => cell.textContent?.trim(),
       );
       expect(kinds).toEqual(['Dish', 'Modifier']);
@@ -979,6 +979,283 @@ describe('FiscalBackfillEditor', () => {
       expect(input('backfill-mxik-bare').matches(':disabled')).toBe(true);
       release([{ nodeType: 'VARIANT', nodeId: 'bare', status: 'CLASSIFIED' }]);
       await flush();
+    });
+  });
+
+  // ------------------------------------------ bulk assignment (row 10.7c, batch 21)
+
+  describe('bulk assignment across a filtered selection', () => {
+    const MILK: MxikReferenceRow = {
+      code: MXIK_A,
+      labelRu: 'Молоко',
+      labelUz: 'Sut',
+      labelEn: 'Milk',
+      defaultPackageCodes: [PACKAGE_A],
+      validFrom: '2024-01-01',
+    };
+    const BREAD: MxikReferenceRow = {
+      code: MXIK_B,
+      labelRu: 'Хлеб',
+      labelUz: 'Non',
+      labelEn: 'Bread',
+      defaultPackageCodes: ['1500175', '1500999'],
+      validFrom: '2024-01-01',
+    };
+    const CHEESE: FiscalCoverageNode = {
+      nodeType: 'MODIFIER_OPTION',
+      nodeId: 'cheese',
+      name: 'Cheese',
+      categoryName: null,
+      locationCount: 0,
+      categoryId: null,
+      mxikCode: null,
+      packageCode: null,
+    };
+    const WIDE = variant('wide', { name: 'Wide burger', locationCount: 5 });
+    const NARROW = variant('narrow', { name: 'Narrow burger', locationCount: 1 });
+    const FIZZ = variant('fizz', {
+      name: 'Fizz',
+      categoryName: 'Drinks',
+      categoryId: 'cat-drinks',
+      locationCount: 3,
+    });
+
+    afterEach(() => vi.useRealTimers());
+
+    function select(testId: string, value: string): void {
+      const control = byId(testId) as HTMLSelectElement;
+      control.value = value;
+      control.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+    }
+
+    function tick(nodeId: string, checked = true): void {
+      const box = byId(`backfill-select-${nodeId}`) as HTMLInputElement;
+      box.checked = checked;
+      box.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+    }
+
+    function setText(testId: string, value: string): void {
+      const target = byId(testId) as HTMLInputElement;
+      target.value = value;
+      target.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    }
+
+    async function lookUpBulk(text: string, rows: readonly MxikReferenceRow[]): Promise<void> {
+      reference.searchMxikReference.mockReturnValue(of(rows));
+      vi.useFakeTimers();
+      type('backfill-bulk-mxik', text);
+      await vi.advanceTimersByTimeAsync(300);
+      fixture.detectChanges();
+      vi.useRealTimers();
+    }
+
+    function chooseBulk(index: number): void {
+      (
+        el().querySelectorAll(
+          '[data-testid="backfill-bulk-mxik"] [data-testid="q-combobox-option"]',
+        )[index] as HTMLElement
+      ).click();
+      fixture.detectChanges();
+    }
+
+    it('filters by kind, category, a piece of the name and how many branches offer the dish', async () => {
+      await render([WIDE, NARROW, FIZZ, CHEESE]);
+      expect(rowIds()).toEqual(['wide', 'narrow', 'fizz', 'cheese']);
+
+      select('backfill-filter-type', 'MODIFIER_OPTION');
+      expect(rowIds()).toEqual(['cheese']);
+      select('backfill-filter-type', 'ALL');
+
+      select('backfill-filter-category', 'cat-drinks');
+      expect(rowIds()).toEqual(['fizz']);
+      select('backfill-filter-category', '__none__');
+      expect(rowIds()).toEqual(['cheese']);
+      select('backfill-filter-category', '');
+
+      setText('backfill-filter-name', 'BURGER');
+      expect(rowIds()).toEqual(['wide', 'narrow']);
+      setText('backfill-filter-locations', '2');
+      expect(rowIds()).toEqual(['wide']);
+
+      (byId('backfill-filter-clear') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(rowIds()).toEqual(['wide', 'narrow', 'fizz', 'cheese']);
+      expect(byId('backfill-filter-clear')).toBeNull();
+    });
+
+    it('says when the filter hides every row, and counts what is shown and ticked', async () => {
+      await render([WIDE, NARROW]);
+      tick('wide');
+
+      expect(byId('backfill-bulk-counts')?.textContent).toContain('Showing 2 of 2; 1 ticked');
+      setText('backfill-filter-name', 'zzz');
+
+      expect(byId('backfill-no-match')).not.toBeNull();
+      expect(byId('backfill-bulk-counts')?.textContent).toContain('Showing 0 of 2; 0 ticked');
+    });
+
+    it('ticks every row the filter shows from the header box, and only those', async () => {
+      await render([WIDE, NARROW, FIZZ]);
+      setText('backfill-filter-name', 'burger');
+
+      const all = byId('backfill-select-all') as HTMLInputElement;
+      all.checked = true;
+      all.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+
+      expect((byId('backfill-select-wide') as HTMLInputElement).checked).toBe(true);
+      expect((byId('backfill-select-narrow') as HTMLInputElement).checked).toBe(true);
+      setText('backfill-filter-name', '');
+      expect((byId('backfill-select-fizz') as HTMLInputElement).checked).toBe(false);
+      expect((byId('backfill-select-all') as HTMLInputElement).checked).toBe(false);
+    });
+
+    it('writes one ИКПУ and one package code into the ticked rows’ empty cells as unsaved edits, and sends them with the ordinary save', async () => {
+      await render([WIDE, NARROW, FIZZ]);
+      tick('wide');
+      tick('fizz');
+
+      type('backfill-bulk-mxik', MXIK_A);
+      setText('backfill-bulk-package', PACKAGE_A);
+      (byId('backfill-bulk-apply') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      expect(input('backfill-mxik-wide').value).toBe(MXIK_A);
+      expect(input('backfill-package-wide').value).toBe(PACKAGE_A);
+      expect(input('backfill-mxik-fizz').value).toBe(MXIK_A);
+      expect(input('backfill-mxik-narrow').value).toBe('');
+      expect(byId('backfill-bulk-summary')?.textContent).toContain(
+        'Filled 4 empty cells in 2 rows',
+      );
+      expect(api.backfillCodes).not.toHaveBeenCalled();
+
+      await save();
+
+      expect(api.backfillCodes).toHaveBeenCalledTimes(1);
+      expect(itemsOfCall(0)).toEqual([
+        { nodeType: 'VARIANT', nodeId: 'wide', mxikCode: MXIK_A, packageCode: PACKAGE_A },
+        { nodeType: 'VARIANT', nodeId: 'fizz', mxikCode: MXIK_A, packageCode: PACKAGE_A },
+      ]);
+    });
+
+    it('never replaces a cell that already holds a code, and says how many it left alone', async () => {
+      await render([
+        variant('has-pkg', { packageCode: '1500777' }),
+        variant('has-mxik', { mxikCode: MXIK_B }),
+        BARE,
+      ]);
+      tick('has-pkg');
+      tick('has-mxik');
+      tick('bare');
+
+      type('backfill-bulk-mxik', MXIK_A);
+      setText('backfill-bulk-package', PACKAGE_A);
+      (byId('backfill-bulk-apply') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      expect(input('backfill-package-has-pkg').value).toBe('1500777');
+      expect(input('backfill-mxik-has-pkg').value).toBe(MXIK_A);
+      expect(input('backfill-mxik-has-mxik').value).toBe(MXIK_B);
+      expect(input('backfill-package-has-mxik').value).toBe(PACKAGE_A);
+      expect(byId('backfill-bulk-summary')?.textContent).toContain(
+        'Filled 4 empty cells in 3 rows',
+      );
+      expect(byId('backfill-bulk-summary')?.textContent).toContain('2 cells already held a code');
+    });
+
+    it('acts only on the ticked rows the filter still shows', async () => {
+      await render([WIDE, NARROW]);
+      tick('wide');
+      tick('narrow');
+      setText('backfill-filter-name', 'wide');
+
+      type('backfill-bulk-mxik', MXIK_A);
+      (byId('backfill-bulk-apply') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      setText('backfill-filter-name', '');
+
+      expect(input('backfill-mxik-wide').value).toBe(MXIK_A);
+      expect(input('backfill-mxik-narrow').value).toBe('');
+    });
+
+    it('is not offered until a row is ticked and a code is chosen, and refuses a malformed code', async () => {
+      await render([WIDE]);
+      const apply = byId('backfill-bulk-apply') as HTMLButtonElement;
+      expect(apply.disabled).toBe(true);
+
+      type('backfill-bulk-mxik', MXIK_A);
+      expect(apply.disabled).toBe(true);
+      tick('wide');
+      expect(apply.disabled).toBe(false);
+
+      type('backfill-bulk-mxik', '1070600100100000');
+      expect(byId('backfill-bulk-mxik-error')?.textContent).toContain('exactly 17 digits');
+      expect(apply.disabled).toBe(true);
+
+      type('backfill-bulk-mxik', MXIK_A);
+      setText('backfill-bulk-package', 'pack-1');
+      expect(byId('backfill-bulk-package-error')?.textContent).toContain('digits only');
+      expect(apply.disabled).toBe(true);
+    });
+
+    it('picks the ИКПУ in the reference typeahead, fills the one package code it lists, and offers several', async () => {
+      await render([WIDE, NARROW]);
+      tick('wide');
+      tick('narrow');
+
+      await lookUpBulk('milk', [MILK]);
+      chooseBulk(0);
+      expect((byId('backfill-bulk-package') as HTMLInputElement).value).toBe(PACKAGE_A);
+      expect(byId('backfill-bulk-suggestions')).toBeNull();
+
+      setText('backfill-bulk-package', '');
+      await lookUpBulk('bread', [BREAD]);
+      chooseBulk(0);
+      expect((byId('backfill-bulk-package') as HTMLInputElement).value).toBe('');
+      expect(byId('backfill-bulk-suggestions')).not.toBeNull();
+      (byId('backfill-bulk-suggestion-1500999') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect((byId('backfill-bulk-package') as HTMLInputElement).value).toBe('1500999');
+
+      (byId('backfill-bulk-apply') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      await save();
+
+      expect(itemsOfCall(0)).toEqual([
+        { nodeType: 'VARIANT', nodeId: 'wide', mxikCode: MXIK_B, packageCode: '1500999' },
+        { nodeType: 'VARIANT', nodeId: 'narrow', mxikCode: MXIK_B, packageCode: '1500999' },
+      ]);
+    });
+
+    it('fills down a pasted column into the rows on the screen, not the rows the filter hides', async () => {
+      await render([WIDE, NARROW, FIZZ]);
+      setText('backfill-filter-name', 'burger');
+
+      paste('backfill-mxik-wide', `${MXIK_A}\n${MXIK_B}\n`);
+
+      expect(input('backfill-mxik-wide').value).toBe(MXIK_A);
+      expect(input('backfill-mxik-narrow').value).toBe(MXIK_B);
+      setText('backfill-filter-name', '');
+      expect(input('backfill-mxik-fizz').value).toBe('');
+    });
+
+    it('drops the ticks and the chosen codes with the rest when the edits are discarded', async () => {
+      await render([WIDE]);
+      tick('wide');
+      type('backfill-bulk-mxik', MXIK_A);
+      (byId('backfill-bulk-apply') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      (byId('backfill-discard') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      expect((byId('backfill-select-wide') as HTMLInputElement).checked).toBe(false);
+      expect(input('backfill-bulk-mxik').value).toBe('');
+      expect(byId('backfill-bulk-summary')).toBeNull();
+      expect(input('backfill-mxik-wide').value).toBe('');
     });
   });
 });

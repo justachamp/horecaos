@@ -807,6 +807,8 @@
         (saved)="onBackfillSaved()"
       />
 
+      <q-fiscal-unit-name-gaps [nodes]="summary.nodes" (saved)="onBackfillSaved()" />
+
       @if (listedNodes(summary.nodes).length > 0 || summary.nodes.length === 0) {
         <table class="table">
           <thead>

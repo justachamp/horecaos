@@ -1529,6 +1529,166 @@ describe('ProductEditorPage', () => {
     expect(searchMxikReference).toHaveBeenCalledWith(BRAND_SCOPE, '01234');
   });
 
+  describe('the fiscal tab shares q-mxik-picker with the backfill editor (rows 4.2e and 10.7c)', () => {
+    const MILK = {
+      code: '04001001001000000',
+      labelRu: 'Молоко',
+      labelUz: 'Sut',
+      defaultPackageCodes: ['1500316'],
+      defaultUnitCodes: [1500],
+      validFrom: '2020-01-01',
+    };
+    const BREAD = {
+      code: '10701001001000000',
+      labelRu: 'Хлеб',
+      labelUz: 'Non',
+      defaultPackageCodes: ['1500175', '1500999'],
+      defaultUnitCodes: [1500, 1501],
+      validFrom: '2020-01-01',
+    };
+
+    async function openFiscalTab(
+      rows: readonly unknown[],
+      detail = productDetail(),
+    ): Promise<{ host: HTMLElement; classifyVariant: ReturnType<typeof vi.fn> }> {
+      const classifyVariant = vi.fn().mockReturnValue(of(undefined));
+      configure({
+        productDetail: () => of(detail),
+        searchMxikReference: vi.fn().mockReturnValue(of(rows)),
+        classifyVariant,
+      });
+      const harness = await RouterTestingHarness.create('/catalog/products/product-1');
+      await flushMicrotasks();
+      const host = harness.routeNativeElement!;
+      (host.querySelector('[data-testid="editor-tab-FISCAL"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+      return { host, classifyVariant };
+    }
+
+    async function chooseRow(host: HTMLElement, text: string, index: number): Promise<void> {
+      const input = host.querySelector(
+        '[data-testid="editor-fiscal-mxik"] input',
+      ) as HTMLInputElement;
+      input.value = text;
+      input.dispatchEvent(new Event('input'));
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await flushMicrotasks();
+      (host.querySelectorAll('[data-testid="q-combobox-option"]')[index] as HTMLElement).click();
+      await flushMicrotasks();
+    }
+
+    it('the ИКПУ field is the shared component, not a combobox of the editor’s own', async () => {
+      const { host } = await openFiscalTab([MILK]);
+
+      expect(host.querySelector('q-mxik-picker[data-testid="editor-fiscal-mxik"]')).not.toBeNull();
+    });
+
+    it('a chosen reference row fills the empty package and unit fields, and the save sends them with its code', async () => {
+      const { host, classifyVariant } = await openFiscalTab([MILK]);
+
+      await chooseRow(host, 'молоко', 0);
+
+      expect(
+        (host.querySelector('[data-testid="editor-fiscal-package"]') as HTMLInputElement).value,
+      ).toBe('1500316');
+      expect(
+        (host.querySelector('[data-testid="editor-fiscal-unit"]') as HTMLInputElement).value,
+      ).toBe('1500');
+      (host.querySelector('[data-testid="editor-save-fiscal"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+      expect(classifyVariant).toHaveBeenCalledWith(
+        BRAND_SCOPE,
+        'variant-1',
+        expect.objectContaining({
+          mxikCode: MILK.code,
+          packageCode: '1500316',
+          fiscalUnitCode: 1500,
+        }),
+      );
+    });
+
+    it('several package and unit codes are offered, not guessed, and clicking one fills its field', async () => {
+      const { host } = await openFiscalTab([BREAD]);
+
+      await chooseRow(host, 'хлеб', 0);
+
+      expect(
+        (host.querySelector('[data-testid="editor-fiscal-package"]') as HTMLInputElement).value,
+      ).toBe('');
+      expect(
+        (host.querySelector('[data-testid="editor-fiscal-unit"]') as HTMLInputElement).value,
+      ).toBe('');
+      expect(
+        host.querySelectorAll('[data-testid="editor-fiscal-package-suggestions"] button').length,
+      ).toBe(2);
+      (
+        host.querySelector(
+          '[data-testid="editor-fiscal-package-suggestion-1500999"]',
+        ) as HTMLButtonElement
+      ).click();
+      (
+        host.querySelector(
+          '[data-testid="editor-fiscal-unit-suggestion-1501"]',
+        ) as HTMLButtonElement
+      ).click();
+      expect(
+        (host.querySelector('[data-testid="editor-fiscal-package"]') as HTMLInputElement).value,
+      ).toBe('1500999');
+      expect(
+        (host.querySelector('[data-testid="editor-fiscal-unit"]') as HTMLInputElement).value,
+      ).toBe('1501');
+    });
+
+    it('a package code and a unit the variant already holds are not overwritten by a pick', async () => {
+      const { host } = await openFiscalTab(
+        [MILK],
+        productDetail({
+          variants: [
+            {
+              ...productDetail().variants[0],
+              fiscal: {
+                mxikCode: null,
+                packageCode: '7777777',
+                fiscalUnitCode: 9,
+                fiscalName: 'Плов',
+                markingRequired: false,
+                excisable: false,
+              },
+            },
+          ],
+        }),
+      );
+
+      await chooseRow(host, 'молоко', 0);
+
+      expect(
+        (host.querySelector('[data-testid="editor-fiscal-package"]') as HTMLInputElement).value,
+      ).toBe('7777777');
+      expect(
+        (host.querySelector('[data-testid="editor-fiscal-unit"]') as HTMLInputElement).value,
+      ).toBe('9');
+    });
+
+    it('a name half-typed into the field never reaches a save as a code', async () => {
+      const { host, classifyVariant } = await openFiscalTab([MILK]);
+      const input = host.querySelector(
+        '[data-testid="editor-fiscal-mxik"] input',
+      ) as HTMLInputElement;
+      input.value = 'молоко';
+      input.dispatchEvent(new Event('input'));
+      await flushMicrotasks();
+
+      (host.querySelector('[data-testid="editor-save-fiscal"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+
+      expect(classifyVariant).toHaveBeenCalledWith(
+        BRAND_SCOPE,
+        'variant-1',
+        expect.objectContaining({ mxikCode: null }),
+      );
+    });
+  });
+
   it('writes a brand-layer kitchen routing rule for this product — pure wiring over the existing endpoint', async () => {
     const route = vi.fn().mockReturnValue(of({ ruleId: 'rule-1', layer: 'BRAND', version: 1 }));
     configure({ productDetail: () => of(productDetail()) }, {}, {}, { route });

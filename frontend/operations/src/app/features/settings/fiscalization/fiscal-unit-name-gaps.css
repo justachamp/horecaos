@@ -1,0 +1,115 @@
+.gaps {
+  margin-top: 24px;
+}
+
+.gaps__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+
+.gaps__spacer {
+  flex: 1;
+}
+
+.gaps__button {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.gaps__button--primary {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.gaps__button:disabled {
+  border-color: var(--q-hairline);
+  background: var(--q-surface-2);
+  color: var(--q-ink-subtle);
+  cursor: default;
+}
+
+.gaps__link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--q-primary);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.gaps__link:disabled {
+  color: var(--q-ink-subtle);
+  cursor: default;
+}
+
+.gaps__problem {
+  color: var(--q-error-text);
+  background: var(--q-error-tint);
+  padding: 8px 12px;
+  border-radius: var(--q-radius);
+  max-width: 720px;
+  margin: 8px 0;
+}
+
+.gaps__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+.gaps__table thead th {
+  text-align: start;
+  color: var(--q-ink-muted);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+}
+
+.gaps__table tbody td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--q-hairline);
+  vertical-align: top;
+}
+
+.gaps__cell {
+  width: 120px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.gaps__cell--wide {
+  width: 100%;
+  min-width: 220px;
+}
+
+.gaps__cell--stored {
+  background: var(--q-surface-2);
+  color: var(--q-ink-muted);
+}
+
+.gaps__cell--invalid {
+  border-color: var(--q-error-text);
+}
+
+.gaps__error {
+  display: block;
+  color: var(--q-error-text);
+}
+
+.gaps__note,
+.gaps__choices {
+  display: block;
+  color: var(--q-ink-subtle);
+}

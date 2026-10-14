@@ -709,7 +709,7 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.backfill.lead':
     '{count} ta pozitsiyada IKPU yoki qadoq kodi yetishmaydi. Kodlarni qoʻlda kiriting yoki jadvaldan ustunni nusxalab, birinchi katakka joylang — qiymatlar pastga qarab joylashadi. Pozitsiyada allaqachon bor kod oʻz holicha koʻrsatiladi va bu yerda oʻzgarmaydi; uni mahsulot muharririda oʻzgartiring.',
   'settings.fiscalization.backfill.referenceNote':
-    'IKPUning rasmiy roʻyxati hali yuklanmagan, shuning uchun kod faqat formati boʻyicha tekshiriladi (17 raqam) va uni nomi boʻyicha qidirib boʻlmaydi. Oʻlchov birligi va fiskal nom katalogning fiskal ish stolida belgilanadi.',
+    'IKPUning rasmiy roʻyxati hali yuklanmagan, shuning uchun kod faqat formati boʻyicha tekshiriladi (17 raqam) va uni nomi boʻyicha qidirib boʻlmaydi. Oʻlchov birligi va fiskal nom jadval ostidagi boʻlimda yoki katalogning fiskal ish stolida toʻldiriladi.',
   'settings.fiscalization.backfill.empty': 'Barcha pozitsiyalarda IKPU va qadoq kodi bor.',
   'settings.fiscalization.backfill.column.mxik': 'IKPU (17 raqam)',
   'settings.fiscalization.backfill.column.packageCode': 'Qadoq kodi',
@@ -736,6 +736,41 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.backfill.status.conflict':
     'Pozitsiyada allaqachon boshqa kod bor; u oʻzgartirilmadi. Roʻyxat yangilandi.',
   'settings.fiscalization.backfill.status.failed': 'Saqlanmadi. Qayta urinib koʻring.',
+  'settings.fiscalization.gaps.title': 'Birlik kodi yoki chekdagi nomi yoʻq pozitsiyalar',
+  'settings.fiscalization.gaps.lead':
+    '{count} ta pozitsiyada IKPU va qadoq kodi bor, lekin birlik kodi yoki chek qatorida chop etiladigan nom yoʻq. Ular qamrov hisobida qoladi va ular uchun chek tuzib boʻlmaydi. Ularni shu yerda toʻldiring yoki katalogning barcha toʻrt maydonni tahrirlaydigan fiskal ish stolini oching.',
+  'settings.fiscalization.gaps.workbench': 'Fiskal ish stolini ochish',
+  'settings.fiscalization.gaps.column.unit': 'Birlik kodi',
+  'settings.fiscalization.gaps.column.fiscalName': 'Chekdagi nom',
+  'settings.fiscalization.gaps.useReferenceUnit': 'IKPU roʻyxatidan birlik',
+  'settings.fiscalization.gaps.fillUnits':
+    'Boʻsh birliklarni IKPU roʻyxatidan toʻldirish ({count})',
+  'settings.fiscalization.gaps.useItemName': 'Pozitsiya nomini olish',
+  'settings.fiscalization.gaps.fillNames':
+    'Boʻsh chek nomlari uchun pozitsiya nomlarini olish ({count})',
+  'settings.fiscalization.gaps.unitChoices': 'Roʻyxatda bir nechta birlik bor:',
+  'settings.fiscalization.gaps.noReferenceUnit': 'IKPU roʻyxatida bu kod uchun birlik yoʻq.',
+  'settings.fiscalization.gaps.referenceUnavailable': 'IKPU roʻyxatini oʻqib boʻlmadi.',
+  'settings.fiscalization.gaps.fillSummary':
+    'Roʻyxatdan toʻldirilgan birliklar: {filled}; yana {open} tasini tanlash yoki kiritish kerak.',
+  'settings.fiscalization.gaps.error.unit': 'Birlik kodi musbat butun son.',
+  'settings.fiscalization.gaps.error.name': 'Chekdagi nom 1 dan 63 gacha belgi.',
+  'settings.fiscalization.backfill.bulk.title': 'Ommaviy tayinlash',
+  'settings.fiscalization.backfill.bulk.lead':
+    'Jadvalni filtrlang, qatorlarni belgilang, bitta IKPU va bitta qadoq kodini tanlang va qoʻllang. Ular faqat belgilangan qatorlarning boʻsh kataklariga, saqlanmagan tahrir sifatida tushadi: pastda tekshirib, «Saqlash» tugmasi bilan yuboring. Kodi bor katak almashtirilmaydi.',
+  'settings.fiscalization.backfill.bulk.counts':
+    '{total} tadan {shown} tasi koʻrsatilgan; {selected} tasi belgilangan.',
+  'settings.fiscalization.backfill.bulk.selectAll': 'Koʻrsatilgan barcha qatorlarni belgilash',
+  'settings.fiscalization.backfill.bulk.selectRow': 'Belgilash: {name}',
+  'settings.fiscalization.backfill.bulk.apply': 'Belgilangan qatorlarga qoʻllash ({count})',
+  'settings.fiscalization.backfill.bulk.applied':
+    'Toʻldirilgan boʻsh kataklar: {cells}, qatorlar: {rows}; kodi allaqachon bor kataklar: {kept}, ularga tegilmadi. Pastda tekshirib, saqlang.',
+  'settings.fiscalization.backfill.filter.all': 'Barchasi',
+  'settings.fiscalization.backfill.filter.noCategory': 'Kategoriyasiz',
+  'settings.fiscalization.backfill.filter.name': 'Nomida bor',
+  'settings.fiscalization.backfill.filter.locations': 'Kamida shuncha filialda sotiladi',
+  'settings.fiscalization.backfill.filter.clear': 'Filtrlarni tozalash',
+  'settings.fiscalization.backfill.filter.noMatch': 'Filtrga hech narsa mos kelmadi.',
 
   // 10.9 Bildirishnomalar
   'settings.notifications.title': 'Bildirishnomalar',

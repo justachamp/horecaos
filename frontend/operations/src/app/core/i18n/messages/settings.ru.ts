@@ -701,7 +701,7 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.backfill.lead':
     'У {count} позиций не хватает ИКПУ или кода упаковки. Введите коды вручную или скопируйте столбец из таблицы и вставьте в первую ячейку — значения встанут вниз по списку. Уже заданный у позиции код показан как есть и здесь не меняется; измените его в редакторе товаров.',
   'settings.fiscalization.backfill.referenceNote':
-    'Официальный справочник ИКПУ ещё не загружен, поэтому код проверяется только по формату (17 цифр), а искать его по названию нельзя. Единицу измерения и фискальное название задают в фискальном верстаке каталога.',
+    'Официальный справочник ИКПУ ещё не загружен, поэтому код проверяется только по формату (17 цифр), а искать его по названию нельзя. Единицу измерения и фискальное название заполняют в разделе под таблицей или в фискальном верстаке каталога.',
   'settings.fiscalization.backfill.empty': 'У всех позиций есть ИКПУ и код упаковки.',
   'settings.fiscalization.backfill.column.mxik': 'ИКПУ (17 цифр)',
   'settings.fiscalization.backfill.column.packageCode': 'Код упаковки',
@@ -727,6 +727,40 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.backfill.status.conflict':
     'У позиции уже есть другой код; он не изменён. Список обновлён.',
   'settings.fiscalization.backfill.status.failed': 'Не сохранено. Повторите.',
+  'settings.fiscalization.gaps.title': 'Позиции без кода единицы или названия в чеке',
+  'settings.fiscalization.gaps.lead':
+    'У {count} позиций есть ИКПУ и код упаковки, но нет кода единицы или названия, которое печатается в строке чека. Они остаются в счётчике покрытия, и чек для них собрать нельзя. Заполните их здесь или откройте фискальный верстак каталога: он правит все четыре поля.',
+  'settings.fiscalization.gaps.workbench': 'Открыть фискальный верстак',
+  'settings.fiscalization.gaps.column.unit': 'Код единицы',
+  'settings.fiscalization.gaps.column.fiscalName': 'Название в чеке',
+  'settings.fiscalization.gaps.useReferenceUnit': 'Единица из списка ИКПУ',
+  'settings.fiscalization.gaps.fillUnits': 'Заполнить пустые единицы из списка ИКПУ ({count})',
+  'settings.fiscalization.gaps.useItemName': 'Взять название позиции',
+  'settings.fiscalization.gaps.fillNames':
+    'Взять названия позиций для пустых названий в чеке ({count})',
+  'settings.fiscalization.gaps.unitChoices': 'В списке несколько единиц:',
+  'settings.fiscalization.gaps.noReferenceUnit': 'В списке ИКПУ для этого кода единицы нет.',
+  'settings.fiscalization.gaps.referenceUnavailable': 'Список ИКПУ не удалось прочитать.',
+  'settings.fiscalization.gaps.fillSummary':
+    'Заполнено единиц из списка: {filled}; ещё {open} нужно выбрать или ввести.',
+  'settings.fiscalization.gaps.error.unit': 'Код единицы — целое положительное число.',
+  'settings.fiscalization.gaps.error.name': 'Название в чеке — от 1 до 63 символов.',
+  'settings.fiscalization.backfill.bulk.title': 'Массовое назначение',
+  'settings.fiscalization.backfill.bulk.lead':
+    'Отфильтруйте таблицу, отметьте строки, выберите один ИКПУ и один код упаковки и примените. Они попадут только в пустые ячейки отмеченных строк, как несохранённые правки: проверьте их ниже и отправьте кнопкой «Сохранить». Ячейка, в которой уже есть код, не заменяется.',
+  'settings.fiscalization.backfill.bulk.counts':
+    'Показано {shown} из {total}; отмечено {selected}.',
+  'settings.fiscalization.backfill.bulk.selectAll': 'Отметить все показанные строки',
+  'settings.fiscalization.backfill.bulk.selectRow': 'Отметить: {name}',
+  'settings.fiscalization.backfill.bulk.apply': 'Применить к отмеченным строкам ({count})',
+  'settings.fiscalization.backfill.bulk.applied':
+    'Заполнено пустых ячеек: {cells}, строк: {rows}; ячеек с уже заданным кодом: {kept}, их не трогали. Проверьте ниже и сохраните.',
+  'settings.fiscalization.backfill.filter.all': 'Все',
+  'settings.fiscalization.backfill.filter.noCategory': 'Без категории',
+  'settings.fiscalization.backfill.filter.name': 'Название содержит',
+  'settings.fiscalization.backfill.filter.locations': 'Продаётся не меньше чем в (филиалах)',
+  'settings.fiscalization.backfill.filter.clear': 'Сбросить фильтры',
+  'settings.fiscalization.backfill.filter.noMatch': 'Под фильтр ничего не подходит.',
 
   // 10.9 Уведомления
   'settings.notifications.title': 'Уведомления',

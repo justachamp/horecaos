@@ -702,7 +702,7 @@ export const settingsEn = {
   'settings.fiscalization.backfill.lead':
     '{count} items (dishes and modifier options) still lack an ИКПУ or a package code. Type each code, or copy a column from a spreadsheet and paste it into the first cell to fill down. A code an item already holds is shown as it is and cannot be changed here; change it in the product editor.',
   'settings.fiscalization.backfill.referenceNote':
-    'The official ИКПУ list is not imported yet, so a code is checked by format only (17 digits) and cannot be looked up by name. Unit code and fiscal name are set in the catalog’s fiscal workbench.',
+    'The official ИКПУ list is not imported yet, so a code is checked by format only (17 digits) and cannot be looked up by name. Unit code and fiscal name are filled in the section below the table, or in the catalog’s fiscal workbench.',
   'settings.fiscalization.backfill.empty': 'Every item has an ИКПУ and a package code.',
   'settings.fiscalization.backfill.column.mxik': 'ИКПУ (17 digits)',
   'settings.fiscalization.backfill.column.packageCode': 'Package code',
@@ -728,6 +728,38 @@ export const settingsEn = {
   'settings.fiscalization.backfill.status.conflict':
     'This item already holds a code that differs from yours; it was not changed. The list has been refreshed.',
   'settings.fiscalization.backfill.status.failed': 'Not saved. Try again.',
+  'settings.fiscalization.gaps.title': 'Items short of a unit code or a receipt name',
+  'settings.fiscalization.gaps.lead':
+    '{count} items hold an ИКПУ and a package code but still lack a unit code or the name printed on their receipt line. They stay on the coverage count, and no receipt can be built for them. Fill them here, or open the catalog’s fiscal workbench, which edits all four fields.',
+  'settings.fiscalization.gaps.workbench': 'Open the fiscal workbench',
+  'settings.fiscalization.gaps.column.unit': 'Unit code',
+  'settings.fiscalization.gaps.column.fiscalName': 'Name on the receipt',
+  'settings.fiscalization.gaps.useReferenceUnit': 'Unit from the ИКПУ list',
+  'settings.fiscalization.gaps.fillUnits': 'Fill empty units from the ИКПУ list ({count})',
+  'settings.fiscalization.gaps.useItemName': 'Use the item’s name',
+  'settings.fiscalization.gaps.fillNames': 'Use item names for empty receipt names ({count})',
+  'settings.fiscalization.gaps.unitChoices': 'The list gives several units:',
+  'settings.fiscalization.gaps.noReferenceUnit': 'The ИКПУ list gives no unit for this code.',
+  'settings.fiscalization.gaps.referenceUnavailable': 'The ИКПУ list could not be read.',
+  'settings.fiscalization.gaps.fillSummary':
+    'Filled {filled} units from the list; {open} still need one chosen or typed.',
+  'settings.fiscalization.gaps.error.unit': 'A unit code is a positive whole number.',
+  'settings.fiscalization.gaps.error.name': 'The name on the receipt is 1 to 63 characters.',
+  'settings.fiscalization.backfill.bulk.title': 'Bulk assign',
+  'settings.fiscalization.backfill.bulk.lead':
+    'Filter the table, tick the rows, choose one ИКПУ and one package code, and apply. They go into the ticked rows’ empty cells only, as unsaved edits you review below and send with Save. A cell that already holds a code is never replaced.',
+  'settings.fiscalization.backfill.bulk.counts': 'Showing {shown} of {total}; {selected} ticked.',
+  'settings.fiscalization.backfill.bulk.selectAll': 'Tick every row shown',
+  'settings.fiscalization.backfill.bulk.selectRow': 'Tick {name}',
+  'settings.fiscalization.backfill.bulk.apply': 'Apply to {count} ticked rows',
+  'settings.fiscalization.backfill.bulk.applied':
+    'Filled {cells} empty cells in {rows} rows; {kept} cells already held a code and were left alone. Review them below, then save.',
+  'settings.fiscalization.backfill.filter.all': 'All',
+  'settings.fiscalization.backfill.filter.noCategory': 'No category',
+  'settings.fiscalization.backfill.filter.name': 'Name contains',
+  'settings.fiscalization.backfill.filter.locations': 'Offered in at least (branches)',
+  'settings.fiscalization.backfill.filter.clear': 'Clear filters',
+  'settings.fiscalization.backfill.filter.noMatch': 'No item matches the filter.',
 
   // 10.9 Notifications
   'settings.notifications.title': 'Notifications',

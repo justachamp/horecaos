@@ -91,6 +91,33 @@ class FiscalReferenceControllerTests {
     }
 
     @Test
+    void aSearchResultCarriesTheUnitCodesTheListGivesAsDefaults() {
+        mxik("07131100010000000", "Свежие овощи", "2020-01-01", null);
+        jdbc.sql("""
+                UPDATE catalog.mxik_reference
+                   SET default_unit_codes = ARRAY[1500, 1501], default_package_codes = ARRAY['1500316']
+                 WHERE code = '07131100010000000'
+                """).update();
+        mxik("07131100020000000", "Сушёные овощи", "2020-01-01", null);
+
+        var rows = controller.search("овощи", null, null).items();
+
+        assertThat(rows)
+                .filteredOn(row -> row.code().equals("07131100010000000"))
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.defaultUnitCodes())
+                            .as("the picker fills a node's fiscal unit from these when exactly one is listed")
+                            .containsExactly(1500, 1501);
+                    assertThat(row.defaultPackageCodes()).containsExactly("1500316");
+                });
+        assertThat(rows)
+                .filteredOn(row -> row.code().equals("07131100020000000"))
+                .singleElement()
+                .satisfies(row -> assertThat(row.defaultUnitCodes()).isEmpty());
+    }
+
+    @Test
     void refusesAQueryShorterThanTwoCharacters() {
         assertThatThrownBy(() -> controller.search("a", null, null)).isInstanceOf(ApiException.class);
         assertThatThrownBy(() -> controller.search("  ", null, null)).isInstanceOf(ApiException.class);
