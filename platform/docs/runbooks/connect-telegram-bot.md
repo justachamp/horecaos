@@ -185,6 +185,16 @@ re-register rather than trying to reason about which secret is current.
   token ever leaving BotFather and the platform's own secret store a second
   time, so skip it if you would rather not.
 
+## 8. Put the storefront inside the bot (optional, after step 7)
+
+A bot that only answers customers is finished at step 7. To open the tenant's storefront inside it (the Mini App) and to count
+how many people each link brings, use the guided flow instead of the steps above: **Marketing → Referrals → Telegram Mini App
+setup**. It lists seven steps, the first three of which are this runbook's steps 2 to 6, shows the exact words to send
+@BotFather for `/newapp`, records the short name BotFather answers with, sets the bot's menu button, and then asks Telegram what
+the button is before it says «done». Each step is read from the facts every time, so the page can be closed and reopened. What
+cannot be checked ahead of a real bot is written up in
+[external-connections/w8-acquisition-merchandising.md](external-connections/w8-acquisition-merchandising.md) (ADR 0183).
+
 ## Troubleshooting
 
 - **"Something went wrong" in the console, and `SecretWriteFailedException`
