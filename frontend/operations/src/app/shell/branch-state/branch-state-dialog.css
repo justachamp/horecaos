@@ -1,0 +1,108 @@
+/* The chrome (backdrop, panel, Escape, focus trap, button row) is `q-modal`; this file styles what is
+ * projected into it, which emulated encapsulation still stamps with this component's attribute. */
+
+.branch-state__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-inline-size: min(28rem, 100%);
+}
+
+.branch-state__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.branch-state__modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.branch-state__mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.branch-state__select,
+.branch-state__textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  font-family: var(--q-font-sans);
+}
+
+.branch-state__textarea {
+  resize: vertical;
+}
+
+.branch-state__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.branch-state__chip {
+  padding: 6px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.branch-state__chip--on {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+/* «Until cancelled» is the last chip and the dangerous one: nothing reopens the branch but a person. */
+.branch-state__chip--danger {
+  border-color: var(--q-error-text);
+  color: var(--q-error-text);
+}
+
+.branch-state__chip--danger.branch-state__chip--on {
+  background: var(--q-error-text);
+  color: var(--q-inverse-ink);
+}
+
+.branch-state__note {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+.branch-state__error {
+  margin: 0;
+  color: var(--q-error-text);
+}
+
+.branch-state__dismiss,
+.branch-state__confirm {
+  padding: 6px 14px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.branch-state__confirm {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+}
+
+.branch-state__confirm:disabled,
+.branch-state__dismiss:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

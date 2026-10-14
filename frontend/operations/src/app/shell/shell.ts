@@ -35,6 +35,7 @@ import { NAVIGATION, NavGroup, NavItem, admitsSection } from './navigation';
 import { ServiceStatus } from './service-status';
 import { SupportBanner } from './support-banner';
 import { VoicePresence } from './voice-presence';
+import { BranchStateControl } from './branch-state/branch-state-control';
 
 /** The longest sign-out waits for the person's last preference change to reach the platform. */
 const SIGN_OUT_FLUSH_MS = 1500;
@@ -94,6 +95,7 @@ const SIGN_OUT_FLUSH_MS = 1500;
     RefreshIndicator,
     ShortcutSheet,
     LocaleScopeOffer,
+    BranchStateControl,
   ],
   templateUrl: './shell.html',
   styleUrl: './shell.css',
@@ -297,6 +299,16 @@ export class Shell {
             caps: ['?'],
             label: () => text('keys.open'),
             run: () => this.shortcuts.openSheet(),
+          },
+          {
+            // brands-and-locations.md §1.8: the branch list from anywhere. Offered to whoever has the
+            // Settings section, which is where the list lives.
+            keys: [],
+            sequence: ['g', 'l'],
+            caps: ['g', 'l'],
+            label: () => text('keys.goLocations'),
+            enabled: () => this.capabilities.has('TENANT_READ'),
+            run: () => void this.router.navigateByUrl('/settings/locations'),
           },
           {
             keys: ['Escape'],

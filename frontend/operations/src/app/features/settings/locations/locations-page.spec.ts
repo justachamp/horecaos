@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../../core/api/operations-paths';
 import { CurrentLocation } from '../../../core/auth/current-location';
+import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { I18n } from '../../../core/i18n/i18n';
 import {
   BulkServiceStateResponse,
@@ -100,6 +101,11 @@ const CHANNELS: readonly LocationChannelsView[] = [
 class FakeCurrentLocation {
   readonly scope = signal<LocationScope | null>(SCOPE);
   readonly denied = signal(false);
+  readonly options = signal([
+    { id: 'location-1', displayName: 'Chilanzar', status: 'ACTIVE' as const },
+    { id: 'location-2', displayName: 'Yunusabad', status: 'ACTIVE' as const },
+    { id: 'location-3', displayName: 'Sergeli', status: 'ACTIVE' as const },
+  ]);
   ensureLoaded = vi.fn().mockResolvedValue(undefined);
 }
 
@@ -153,6 +159,7 @@ describe('LocationsPage', () => {
         provideRouter([]),
         { provide: LocationsApi, useValue: api },
         { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+        { provide: SessionCapabilities, useValue: { has: () => true } },
       ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
@@ -230,6 +237,79 @@ describe('LocationsPage', () => {
     );
   });
 
+  describe('the closed-branch strip (brands-and-locations.md §6.2)', () => {
+    const strip = (): HTMLElement | null =>
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="closed-branch-strip"]');
+
+    it('names every branch shut by hand above the list, from the same read the list is drawn from', async () => {
+      await render();
+
+      expect(strip()?.textContent).toContain('Yunusabad');
+      expect(strip()?.textContent).toContain('until cancelled');
+      expect(strip()?.textContent).not.toContain('Chilanzar');
+      expect(api.serviceStates).toHaveBeenCalledTimes(1);
+    });
+
+    it('has no strip while every branch is open', async () => {
+      await render({
+        serviceStates: vi.fn().mockResolvedValue(
+          STATES.map((state) => ({
+            ...state,
+            mode: 'FOLLOW_SCHEDULE' as const,
+            effectiveMode: 'FOLLOW_SCHEDULE' as const,
+            reasonCode: null,
+          })),
+        ),
+      });
+
+      expect(strip()).toBeNull();
+    });
+
+    it('reopening from the strip puts the branch back on the list’s state column at once', async () => {
+      await render();
+      expect(rowFor(fixture, 'Yunusabad').textContent).toContain('fryer_broken');
+      api.serviceStates.mockResolvedValue(
+        STATES.map((state) => ({
+          ...state,
+          mode: 'FOLLOW_SCHEDULE' as const,
+          effectiveMode: 'FOLLOW_SCHEDULE' as const,
+          reasonCode: null,
+        })),
+      );
+
+      (strip()!.querySelector('[data-testid="closed-branch-reopen"]') as HTMLButtonElement).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(api.changeServiceState).toHaveBeenCalledWith(
+        { tenantId: 'tenant-1', brandId: 'brand-1', locationId: 'location-2' },
+        { mode: 'FOLLOW_SCHEDULE' },
+      );
+      expect(strip()).toBeNull();
+      expect(rowFor(fixture, 'Yunusabad').textContent).not.toContain('fryer_broken');
+    });
+
+    it('reopening a row from the list takes the branch off the strip at once', async () => {
+      await render();
+      api.serviceStates.mockResolvedValue(
+        STATES.map((state) => ({
+          ...state,
+          mode: 'FOLLOW_SCHEDULE' as const,
+          effectiveMode: 'FOLLOW_SCHEDULE' as const,
+          reasonCode: null,
+        })),
+      );
+
+      (
+        rowFor(fixture, 'Yunusabad').querySelector('.actions-cell button') as HTMLButtonElement
+      ).click();
+      await flushMicrotasks();
+      fixture.detectChanges();
+
+      expect(strip()).toBeNull();
+    });
+  });
+
   it('sorts forced-closed branches first, regardless of load order (severity sort)', async () => {
     await render();
 
@@ -266,7 +346,10 @@ describe('LocationsPage', () => {
     select.dispatchEvent(new Event('change'));
     fixture.detectChanges();
 
-    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    // The rows only: the closed-branch strip above them names Yunusabad whatever the filter says.
+    const text = rows(fixture)
+      .map((row) => row.textContent ?? '')
+      .join(' ');
     expect(text).toContain('Chilanzar');
     expect(text).not.toContain('Yunusabad');
     expect(text).not.toContain('Sergeli');

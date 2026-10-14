@@ -21,6 +21,7 @@ import { I18n } from '../core/i18n/i18n';
 import { seedPlatformLocalesForTesting } from '../core/i18n/platform-locales';
 import { REGISTRY_FIXTURE } from '../../testing/platform-locales.fixture';
 import { RealtimeClient } from '../core/realtime/realtime-client';
+import { LocationsApi } from '../features/settings/locations/locations-api';
 import { ShortcutRegistry } from '../shared/keyboard/shortcut-registry';
 import { Toasts } from '../shared/ui/toast';
 import { NAV_ITEMS } from './navigation';
@@ -108,9 +109,14 @@ describe('Shell', () => {
   let auth: FakeAuth;
   let ownProfile: FakeOwnProfile;
   let preferences: FakePreferences;
+  let locationsApi: { serviceStates: ReturnType<typeof vi.fn>; list: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     preferences = new FakePreferences();
+    locationsApi = {
+      serviceStates: vi.fn().mockResolvedValue([]),
+      list: vi.fn().mockResolvedValue([]),
+    };
     currentLocation = new FakeCurrentLocation();
     currentTenant = new FakeCurrentTenant();
     auth = new FakeAuth();
@@ -124,6 +130,7 @@ describe('Shell', () => {
         { provide: OwnProfile, useValue: ownProfile },
         { provide: CurrentLocation, useValue: currentLocation },
         { provide: CurrentTenant, useValue: currentTenant },
+        { provide: LocationsApi, useValue: locationsApi },
       ],
     }).compileComponents();
 
@@ -336,6 +343,95 @@ describe('Shell', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', bubbles: true }));
 
     expect(navigate).toHaveBeenCalledWith('/orders/new');
+  });
+
+  it('g then l goes to the branch list from anywhere, for someone who has the Settings section', () => {
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', bubbles: true }));
+
+    expect(navigate).toHaveBeenCalledWith('/settings/locations');
+  });
+
+  it('offers no g l to someone without the Settings section, and the chord goes nowhere', () => {
+    currentTenant.scopes.set([
+      {
+        scope: { type: 'TENANT', tenantId: 't1', brandId: null, locationId: null },
+        roleCode: 'location-staff',
+        capabilities: ['ORDER_READ'],
+      },
+    ]);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', bubbles: true }));
+
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  describe('the branch open/closed control (brands-and-locations.md §6.2)', () => {
+    const CONTROL = '[data-testid="branch-state-control"]';
+    const here: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
+
+    function mayChangeBranchState(): void {
+      currentTenant.scopes.set([
+        {
+          scope: { type: 'LOCATION', tenantId: 't1', brandId: 'b1', locationId: 'l1' },
+          roleCode: 'location-manager',
+          capabilities: ['ORDER_READ', 'LOCATION_SERVICE_STATE_CHANGE'],
+        },
+      ]);
+      currentLocation.scope.set(here);
+      currentLocation.options.set([locationOption('l1', 'Chilonzor')]);
+      locationsApi.serviceStates.mockResolvedValue([
+        {
+          locationId: 'l1',
+          mode: 'FORCE_CLOSED',
+          effectiveMode: 'FORCE_CLOSED',
+          reasonCode: 'NO_STAFF',
+          effectiveUntil: null,
+        },
+      ]);
+    }
+
+    async function afterIdle(expectation: () => void): Promise<void> {
+      await vi.waitFor(
+        () => {
+          fixture.detectChanges();
+          expectation();
+        },
+        { timeout: 5000 },
+      );
+    }
+
+    it('is in the header, once the shell is idle, for someone who may change a branch’s state', async () => {
+      mayChangeBranchState();
+
+      await afterIdle(() =>
+        expect(
+          (fixture.nativeElement as HTMLElement).querySelector(CONTROL)?.textContent,
+        ).toContain('Branch closed'),
+      );
+    });
+
+    it('is not drawn at all for someone who may not', async () => {
+      mayChangeBranchState();
+      currentTenant.scopes.set([
+        {
+          scope: { type: 'LOCATION', tenantId: 't1', brandId: 'b1', locationId: 'l1' },
+          roleCode: 'location-staff',
+          capabilities: ['ORDER_READ'],
+        },
+      ]);
+
+      await afterIdle(() => {
+        expect(
+          (fixture.nativeElement as HTMLElement).querySelector('q-branch-state-control'),
+        ).not.toBeNull();
+      });
+      expect((fixture.nativeElement as HTMLElement).querySelector(CONTROL)).toBeNull();
+    });
   });
 
   it('ignores F2 that something else already handled', () => {

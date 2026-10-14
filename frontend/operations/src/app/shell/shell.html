@@ -100,6 +100,13 @@
         <q-refresh-indicator [updatedAt]="status.updatedAt()" (refresh)="status.refresh()" />
       </div>
 
+      <!-- brands-and-locations.md §6.2: the branch open/closed lever, in the header for anyone who may pull
+           it. Deferred: the control, its dialog and their sentences load after first paint, and the control
+           draws nothing for an operator who may not change a branch's state. -->
+      @defer (on idle) {
+        <q-branch-state-control />
+      }
+
       <div class="scope">
         <!-- Row X.1: the brand picker, for a tenant-wide operator of a tenant
              with more than one brand and for nobody else (settings.md §1.1: a
