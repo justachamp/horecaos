@@ -744,6 +744,12 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     'uz-Latn': 'Mijozning telefon va manzilini ochish',
     en: "Reveal a customer's contact details",
   },
+  'customer.address.capture': {
+    area: 'customer',
+    ru: 'Принимать адрес доставки по телефону',
+    'uz-Latn': 'Telefon orqali yetkazib berish manzilini qabul qilish',
+    en: "Take a customer's delivery address on the phone",
+  },
   'customer.import': {
     area: 'customer',
     ru: 'Импортировать клиентов',
