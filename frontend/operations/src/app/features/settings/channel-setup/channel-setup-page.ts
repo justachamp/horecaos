@@ -15,6 +15,7 @@ import { DineInApi, DineInSettingsView, QrMode } from '../locations/dinein-api';
 import { LocationView, LocationsApi } from '../locations/locations-api';
 import { InstallationView, IntegrationsApi } from '../integrations/integrations-api';
 import { KioskCard } from '../kiosk/kiosk-card';
+import { TelegramCard } from '../telegram/telegram-card';
 import { ChannelView, SalesChannelsApi } from '../sales-channels/sales-channels-api';
 import {
   CHANNEL_PAGE_SLUGS,
@@ -50,7 +51,7 @@ interface LocationQrMode {
  */
 @Component({
   selector: 'q-channel-setup-page',
-  imports: [TPipe, RouterLink, MediaUploader, KioskCard],
+  imports: [TPipe, RouterLink, MediaUploader, KioskCard, TelegramCard],
   templateUrl: './channel-setup-page.html',
   styleUrl: './channel-setup-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

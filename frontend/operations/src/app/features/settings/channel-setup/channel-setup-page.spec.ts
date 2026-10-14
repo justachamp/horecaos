@@ -16,6 +16,7 @@ import { DineInApi } from '../locations/dinein-api';
 import { LocationsApi } from '../locations/locations-api';
 import { ChannelView, SalesChannelsApi } from '../sales-channels/sales-channels-api';
 import { ChannelSetupApi } from './channel-setup-api';
+import { TelegramSettingsApi } from '../telegram/telegram-settings-api';
 import { ChannelSetupPage } from './channel-setup-page';
 
 const SCOPE: LocationScope = { tenantId: 'tenant-1', brandId: 'brand-1', locationId: 'location-1' };
@@ -65,6 +66,7 @@ describe('ChannelSetupPage', () => {
   let fixture: ComponentFixture<ChannelSetupPage>;
   let localeSet: FakeLocaleSet;
   let channelsApi: { list: ReturnType<typeof vi.fn>; matrices: ReturnType<typeof vi.fn> };
+  let telegramApi: { read: ReturnType<typeof vi.fn> };
   let setupApi: {
     hostname: ReturnType<typeof vi.fn>;
     presentation: ReturnType<typeof vi.fn>;
@@ -128,12 +130,27 @@ describe('ChannelSetupPage', () => {
       ),
     };
     localeSet = new FakeLocaleSet();
+    telegramApi = {
+      read: vi.fn().mockResolvedValue({
+        brandId: null,
+        miniAppEnabled: false,
+        miniAppShortName: null,
+        publicOfferLink: false,
+        menuButtonLabels: {},
+        welcomeTexts: {},
+        miniAppUrl: null,
+        miniAppUnavailable: 'BRAND_NOT_CHOSEN',
+        publicOfferUrl: null,
+        channelVersion: 1,
+      }),
+    };
 
     await TestBed.configureTestingModule({
       imports: [ChannelSetupPage],
       providers: [
         { provide: SalesChannelsApi, useValue: channelsApi },
         { provide: ChannelSetupApi, useValue: setupApi },
+        { provide: TelegramSettingsApi, useValue: telegramApi },
         {
           provide: IntegrationsApi,
           useValue: { listInstallations: vi.fn().mockResolvedValue([]) },
@@ -311,6 +328,23 @@ describe('ChannelSetupPage', () => {
     expect(host.querySelector('a[routerLink="/settings/integrations"]')).toBeTruthy();
     // No hostname/presentation facets for a TELEGRAM channel.
     expect(setupApi.hostname).not.toHaveBeenCalled();
+  });
+
+  it('mounts the Telegram settings card for a TELEGRAM channel only, reading that channel', async () => {
+    fixture = await createFixture(
+      channel({ systemType: 'TELEGRAM', code: 'BOT1', providerInstallationId: 'inst-1' }),
+    );
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="telegram-card"]')).toBeTruthy();
+    expect(telegramApi.read).toHaveBeenCalledWith(SCOPE, 'chan-1');
+
+    TestBed.resetTestingModule();
+    fixture = await createFixture(channel({ systemType: 'WEB' }));
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="telegram-card"]'),
+    ).toBeNull();
+    expect(telegramApi.read).not.toHaveBeenCalled();
   });
 
   it('renders the kiosk facet locked -- no pairing flow exists yet', async () => {

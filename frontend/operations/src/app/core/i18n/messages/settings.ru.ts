@@ -381,6 +381,38 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.channelSetup.status.notConfigured': 'Не настроено',
   'settings.channelSetup.noFacets': 'Для этого типа канала нет настроек.',
   'settings.channelSetup.telegram.title': 'Telegram-бот',
+  'settings.telegram.title': 'Кнопка меню, Mini App и приветствие',
+  'settings.telegram.loading': 'Загружаем настройки Telegram…',
+  'settings.telegram.denied': 'Нет доступа к настройкам Telegram этого канала.',
+  'settings.telegram.error': 'Не удалось загрузить настройки Telegram.',
+  'settings.telegram.lead':
+    'Эти настройки относятся к этому Telegram-каналу. Mini App открывает вашу витрину, поэтому адрес вводить не нужно: это подтверждённый адрес витрины рабочего бренда.',
+  'settings.telegram.miniApp.enabled': 'Кнопка меню открывает Mini App',
+  'settings.telegram.miniApp.address': 'Адрес Mini App',
+  'settings.telegram.miniApp.unavailable.BRAND_NOT_CHOSEN':
+    'Сохраните с включённым Mini App, чтобы выбрать витрину рабочего бренда.',
+  'settings.telegram.miniApp.unavailable.HOSTNAME_NOT_CLAIMED':
+    'Филиалы этого бренда пока не продают ни через один сайт-канал с адресом. Задайте адрес в настройке сайт-канала.',
+  'settings.telegram.miniApp.unavailable.HOSTNAME_NOT_VERIFIED':
+    'Адрес сайт-канала ещё не подтверждён, поэтому использовать его нельзя. Опубликуйте DNS-запись и подтвердите адрес.',
+  'settings.telegram.miniApp.unavailable.HOSTNAME_AMBIGUOUS':
+    'В филиалах этого бренда продают через два подтверждённых адреса, и платформа не гадает, какой из них витрина. Оставьте один.',
+  'settings.telegram.shortName': 'Короткое имя Mini App',
+  'settings.telegram.shortName.hint':
+    'Короткое имя, которое BotFather дал вашему Mini App (/newapp): буквы, цифры и подчёркивания. Нужно для ссылок на Mini App.',
+  'settings.telegram.menuButton.title': 'Подпись кнопки меню',
+  'settings.telegram.menuButton.hint':
+    'До 64 символов на язык. Telegram хранит одну подпись на бота: пошаговая настройка применяет подпись на языке бренда по умолчанию, а клиент видит подпись на своём языке, когда запускает бота.',
+  'settings.telegram.welcome.title': 'Приветствие',
+  'settings.telegram.welcome.hint':
+    'Что бот отвечает, когда клиент его запускает. Пусто — стандартное приветствие платформы.',
+  'settings.telegram.offer':
+    'Предлагать мои условия использования как публичную оферту в приветствии',
+  'settings.telegram.save': 'Сохранить',
+  'settings.telegram.saved': 'Сохранено.',
+  'settings.telegram.stale':
+    'Канал изменили в другом окне, данные загружены заново. Повторите изменение.',
+  'settings.telegram.guided': 'Пошаговая настройка Mini App',
   'settings.channelSetup.hostname.title': 'Адрес сайта',
   'settings.channelSetup.hostname.verified': 'подтверждён',
   'settings.channelSetup.hostname.unverified': 'не подтверждён',

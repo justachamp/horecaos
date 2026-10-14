@@ -42,6 +42,11 @@
           → {{ 'settings.nav.integrations' | t }}
         </a>
       </section>
+
+      <!-- The menu button, the Mini App, the welcome message and the offer link (ADR 0183 D27) -->
+      @if (kioskScope(); as scope) {
+        <q-telegram-card [scope]="scope" [channelId]="ch.id" />
+      }
     }
 
     <!-- (b) Web storefront hostname -->

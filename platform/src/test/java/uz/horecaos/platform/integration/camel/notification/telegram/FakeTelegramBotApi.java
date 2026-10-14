@@ -69,6 +69,15 @@ public final class FakeTelegramBotApi implements AutoCloseable {
     private volatile boolean setWebhookAnswersUnreadable;
     private volatile @Nullable Runnable nextSetWebhookHook;
 
+    // ---------------------------------------------------------- menu button (ADR 0183 D27)
+    // Real Telegram keeps one default button per bot and an optional override per private chat; a chat with no override
+    // shows the default, and a bot nobody has configured shows {"type": "default"}.
+    private volatile Map<String, Object> defaultMenuButton = Map.of("type", "default");
+    private final Map<Long, Map<String, Object>> menuButtonByChat = new ConcurrentHashMap<>();
+    private final AtomicLong setChatMenuButtonCalls = new AtomicLong();
+    private volatile boolean setChatMenuButtonFails;
+    private volatile boolean menuButtonIgnoresWrites;
+
     private FakeTelegramBotApi(HttpServer server) {
         this.server = server;
     }
@@ -134,6 +143,34 @@ public final class FakeTelegramBotApi implements AutoCloseable {
 
     public void setCanManageTopics(boolean value) {
         canManageTopics.set(value);
+    }
+
+    /** The bot's default menu button as Telegram holds it now: {@code {"type": "default"}} until one is set. */
+    public Map<String, Object> defaultMenuButton() {
+        return defaultMenuButton;
+    }
+
+    /** The menu button set for this one private chat, or null when the chat shows the bot's default. */
+    public @Nullable Map<String, Object> menuButtonFor(long chatId) {
+        return menuButtonByChat.get(chatId);
+    }
+
+    /** How many times {@code setChatMenuButton} has actually been called. */
+    public long setChatMenuButtonCallCount() {
+        return setChatMenuButtonCalls.get();
+    }
+
+    /** The next {@code setChatMenuButton} call answers Telegram's own {@code 400 Bad Request} refusal. */
+    public void failNextSetChatMenuButton() {
+        this.setChatMenuButtonFails = true;
+    }
+
+    /**
+     * From now on {@code setChatMenuButton} answers {@code ok} and changes nothing, so a later {@code getChatMenuButton}
+     * still shows the old button: the case a read-back exists to catch.
+     */
+    public void ignoreMenuButtonWrites() {
+        this.menuButtonIgnoresWrites = true;
     }
 
     /** The most recent message id sent (or edited) in this chat, for a test that then targets it directly. */
@@ -282,6 +319,8 @@ public final class FakeTelegramBotApi implements AutoCloseable {
             case "getUpdates" -> respondOk(exchange, List.of());
             case "setWebhook" -> handleSetWebhook(exchange, body);
             case "getWebhookInfo" -> handleGetWebhookInfo(exchange);
+            case "setChatMenuButton" -> handleSetChatMenuButton(exchange, body);
+            case "getChatMenuButton" -> handleGetChatMenuButton(exchange, body);
             default -> respond(exchange, 404, errorBody(404, "Not Found: unknown method"));
         }
     }
@@ -403,6 +442,38 @@ public final class FakeTelegramBotApi implements AutoCloseable {
         }
 
         respondOk(exchange, Boolean.TRUE);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleSetChatMenuButton(HttpExchange exchange, Map<String, Object> body) throws IOException {
+        setChatMenuButtonCalls.incrementAndGet();
+        if (setChatMenuButtonFails) {
+            setChatMenuButtonFails = false;
+            respond(exchange, 400, errorBody(400, "Bad Request: menu button refused"));
+            return;
+        }
+        if (!(body.get("menu_button") instanceof Map<?, ?> button)) {
+            respond(exchange, 400, errorBody(400, "Bad Request: menu_button is required"));
+            return;
+        }
+        if (!menuButtonIgnoresWrites) {
+            Map<String, Object> shape = (Map<String, Object>) button;
+            if (body.get("chat_id") instanceof Number chatId) {
+                menuButtonByChat.put(chatId.longValue(), shape);
+            } else {
+                defaultMenuButton = shape;
+            }
+        }
+        respondOk(exchange, Boolean.TRUE);
+    }
+
+    private void handleGetChatMenuButton(HttpExchange exchange, Map<String, Object> body) throws IOException {
+        if (body.get("chat_id") instanceof Number chatId) {
+            Map<String, Object> own = menuButtonByChat.get(chatId.longValue());
+            respondOk(exchange, own != null ? own : defaultMenuButton);
+            return;
+        }
+        respondOk(exchange, defaultMenuButton);
     }
 
     private void handleGetWebhookInfo(HttpExchange exchange) throws IOException {

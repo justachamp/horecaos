@@ -383,6 +383,37 @@ export const settingsEn = {
   'settings.channelSetup.status.notConfigured': 'Not configured',
   'settings.channelSetup.noFacets': 'No setup for this type yet.',
   'settings.channelSetup.telegram.title': 'Telegram bot',
+  'settings.telegram.title': 'Menu button, Mini App and welcome',
+  'settings.telegram.loading': 'Loading the Telegram settings…',
+  'settings.telegram.denied': 'You do not have access to this channel’s Telegram settings.',
+  'settings.telegram.error': 'The Telegram settings could not be loaded.',
+  'settings.telegram.lead':
+    'These settings belong to this Telegram channel. The Mini App opens your storefront, so you never type its address: it is the verified address of the working brand’s storefront.',
+  'settings.telegram.miniApp.enabled': 'The menu button opens the Mini App',
+  'settings.telegram.miniApp.address': 'Mini App address',
+  'settings.telegram.miniApp.unavailable.BRAND_NOT_CHOSEN':
+    'Save with the Mini App switched on to choose the working brand’s storefront.',
+  'settings.telegram.miniApp.unavailable.HOSTNAME_NOT_CLAIMED':
+    'This brand’s branches do not sell on any website channel with an address yet. Claim one in the website channel’s setup.',
+  'settings.telegram.miniApp.unavailable.HOSTNAME_NOT_VERIFIED':
+    'The website channel’s address is not verified yet, so it cannot be used. Publish its DNS record and verify the address.',
+  'settings.telegram.miniApp.unavailable.HOSTNAME_AMBIGUOUS':
+    'Two verified website addresses sell at this brand’s branches, and the platform will not guess which is the storefront. Keep one.',
+  'settings.telegram.shortName': 'Mini App short name',
+  'settings.telegram.shortName.hint':
+    'The short name BotFather gave your Mini App (/newapp): letters, digits and underscores. Needed for Mini App links.',
+  'settings.telegram.menuButton.title': 'Menu button label',
+  'settings.telegram.menuButton.hint':
+    'Up to 64 characters per language. Telegram keeps one label per bot: the guided setup applies the one in the brand’s default language, and a customer sees their own language’s label once they start the bot.',
+  'settings.telegram.welcome.title': 'Welcome message',
+  'settings.telegram.welcome.hint':
+    'What the bot answers when a customer starts it. Empty means the platform’s own greeting.',
+  'settings.telegram.offer': 'Offer my terms of service as the public offer in the welcome message',
+  'settings.telegram.save': 'Save',
+  'settings.telegram.saved': 'Saved.',
+  'settings.telegram.stale':
+    'The channel was changed in another window and has been loaded again. Make your change again.',
+  'settings.telegram.guided': 'Guided Mini App setup',
   'settings.channelSetup.hostname.title': 'Web address',
   'settings.channelSetup.hostname.verified': 'verified',
   'settings.channelSetup.hostname.unverified': 'not verified',
