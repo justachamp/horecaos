@@ -983,6 +983,27 @@ public enum Capability {
      */
     CUSTOMER_CREATE("customer.create", "customer", "create"),
     /**
+     * ADR 0177, rows 1.3/1.3b: giving the delivery address of a phone order, without any
+     * customer-PII capability. Split out of {@link #CUSTOMER_MANAGE} and {@link
+     * #CUSTOMER_PII_REVEAL} for the reason {@link #CUSTOMER_CREATE} was: the New order screen's
+     * own persona ({@link PlatformRole#LOCATION_STAFF}, {@link PlatformRole#LOCATION_MANAGER})
+     * must not see "a raw contact value" (ADR 0039), and {@code CUSTOMER_MANAGE} would also
+     * hand over blacklisting, merging and profile edits on every other customer. A delivery
+     * order names a saved address of the resolved customer, and the saved-address routes are
+     * {@code TENANT}-scoped, which a {@code LOCATION} grant never covers -- so this capability
+     * is declared at {@code LOCATION} scope on a second, narrower surface in {@code
+     * OperationsCustomerController}, beside the create-on-miss route.
+     *
+     * <p>It grants exactly three things on the customer the operator has resolved: a
+     * <em>masked</em> list of the customer's saved addresses (label, street without house or
+     * flat, coordinate source, the point; never the encrypted lines), adding one address with its
+     * pin, and setting the pin of one saved address. It reveals no raw address, edits no address
+     * text, archives nothing and touches no other customer data. Every role that holds {@code
+     * CUSTOMER_MANAGE} holds it too, so nothing narrows for {@link PlatformRole#TENANT_OWNER},
+     * {@link PlatformRole#TENANT_ADMIN} or {@link PlatformRole#SUPPORT_AGENT}.
+     */
+    CUSTOMER_ADDRESS_CAPTURE("customer.address.capture", "customer", "address-capture"),
+    /**
      * Reveals a customer's decrypted contact details or address (ADR 0029).
      * Separate from CUSTOMER_READ because seeing that a customer exists and
      * reading their phone number are different levels of access, and every

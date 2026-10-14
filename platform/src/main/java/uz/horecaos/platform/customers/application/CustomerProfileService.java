@@ -2,6 +2,7 @@ package uz.horecaos.platform.customers.application;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.Clock;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -729,6 +730,122 @@ public class CustomerProfileService {
         }
     }
 
+    /**
+     * The purpose recorded against the decrypt a masked read makes. The masked read never returns
+     * what it decrypts -- only the part of the street that survives {@link #maskStreet} -- but the
+     * decrypt still happens, so it carries a purpose of its own (ADR 0029).
+     */
+    static final String MASKED_READ_PURPOSE = "OPERATOR_ADDRESS_CAPTURE_MASKED_READ";
+
+    /**
+     * Every active address of one account, masked for a phone-order operator (ADR 0177): the
+     * label, the street without its house number or flat, the city and district, the point and
+     * where it came from, and the version a pin is later set at. The entrance, floor, flat,
+     * landmark, second line, postal code and delivery instructions are decrypted with the rest of
+     * the document and dropped here, so they never leave this method.
+     *
+     * <p>No audit fact is written by this method; {@code OperatorAddressCaptureService} writes the
+     * one fact per call, before it asks for the list, for the reason {@link #recordReveal}'s doc
+     * gives.
+     */
+    @Transactional(readOnly = true)
+    public List<MaskedAddress> maskedAddresses(UUID tenantId, UUID accountId) {
+        return store.addresses(tenantId, accountId).stream()
+                .map(row -> mask(tenantId, row))
+                .toList();
+    }
+
+    /** One active address of one account, masked as {@link #maskedAddresses} masks it. */
+    @Transactional(readOnly = true)
+    public Optional<MaskedAddress> maskedAddress(UUID tenantId, UUID accountId, UUID addressId) {
+        return store.address(tenantId, accountId, addressId).map(row -> mask(tenantId, row));
+    }
+
+    /**
+     * Places or moves the pin of one of an account's own addresses, and nothing else about it.
+     *
+     * <p>The source written is always {@code OPERATOR_PIN}: a person looked at a map (or typed the
+     * point) and confirmed it. A geocoder's answer, a customer's own pin and a migrated point are
+     * not what this method records (ADR 0145 decision 5). The encrypted lines are not read or
+     * rewritten, so a caller that may not see them can still call this.
+     *
+     * @return the stored version after the write
+     * @throws AddressNotFoundException when the address is not this account's active address
+     * @throws StaleRecordException    when it has moved on from {@code expectedVersion}
+     */
+    @Transactional
+    public int setAddressPoint(
+            UUID tenantId, UUID accountId, UUID addressId, int expectedVersion, double latitude, double longitude) {
+        requireCoordinatesMatchSource(CoordinateSource.OPERATOR_PIN, latitude, longitude);
+        var current = store.address(tenantId, accountId, addressId).orElseThrow(AddressNotFoundException::new);
+        int written = store.updateAddressPoint(
+                tenantId,
+                accountId,
+                addressId,
+                expectedVersion,
+                latitude,
+                longitude,
+                CoordinateSource.OPERATOR_PIN.name(),
+                clock.instant());
+        if (written == 0) {
+            throw new StaleRecordException(expectedVersion, current.version());
+        }
+        return expectedVersion + 1;
+    }
+
+    private MaskedAddress mask(UUID tenantId, JdbcCustomerStore.AddressRow row) {
+        AddressFields fields = objectMapper.readValue(
+                protection.reveal(
+                        tenantId,
+                        ProtectedValue.deserialize(row.encryptedFields()),
+                        new RecordRef(ADDRESS_TABLE, "encrypted_fields", row.id()),
+                        MASKED_READ_PURPOSE),
+                AddressFields.class);
+        return new MaskedAddress(
+                row.id(),
+                row.label(),
+                maskStreet(fields.line1()),
+                fields.city(),
+                fields.district(),
+                row.latitude(),
+                row.longitude(),
+                CoordinateSource.valueOf(row.coordinateSource()),
+                row.version());
+    }
+
+    /**
+     * The part of a street line an operator may read: what is left once every house number and
+     * flat is gone.
+     *
+     * <p>The first comma-separated part keeps its words and loses every word that contains a digit
+     * ({@code "Amir Temur ko'chasi 15А"} becomes {@code "Amir Temur ko'chasi"}); a later part is
+     * kept only when it carries no digit at all, because a later part that has one is the house or
+     * the flat ({@code "д. 12"}, {@code "кв. 5"}). A heuristic, and an honest one: a street whose
+     * own name contains a digit loses that word, which is the safe side to be wrong on.
+     */
+    static String maskStreet(@Nullable String line) {
+        if (line == null || line.isBlank()) {
+            return "";
+        }
+        String[] parts = line.split(",");
+        List<String> kept = new java.util.ArrayList<>();
+        for (int index = 0; index < parts.length; index++) {
+            List<String> words = Arrays.stream(parts[index].trim().split("\\s+"))
+                    .filter(word -> !word.isEmpty())
+                    .toList();
+            List<String> withoutNumbers = words.stream()
+                    .filter(word -> word.chars().noneMatch(Character::isDigit))
+                    .toList();
+            boolean carriedANumber = withoutNumbers.size() != words.size();
+            if (index == 0 || !carriedANumber) {
+                if (!withoutNumbers.isEmpty()) {
+                    kept.add(String.join(" ", withoutNumbers));
+                }
+            }
+        }
+        return String.join(", ", kept);
+    }
+
     private void requireAccount(UUID tenantId, UUID accountId) {
         if (!store.accountExists(tenantId, accountId)) {
             throw new IllegalArgumentException("No such customer account in this tenant");
@@ -867,6 +984,25 @@ public class CustomerProfileService {
 
     /** A contact point named by kind and state, with no value and therefore no decrypt. */
     public record ContactPointSummary(UUID id, ContactType type, String verificationStatus, boolean isPrimary) {}
+
+    /**
+     * An address as a phone-order operator may read it (ADR 0177): enough to tell «Дом» from
+     * «Работа» and to choose one, never enough to knock on a door. The point is in clear because
+     * the platform stores it in clear on purpose (ADR 0015: a courier cannot be routed to
+     * ciphertext) and the screen needs it for the zone fee, the branch resolver and the map.
+     *
+     * @param street the first line with every word that contains a digit removed
+     */
+    public record MaskedAddress(
+            UUID id,
+            String label,
+            String street,
+            String city,
+            String district,
+            @Nullable Double latitude,
+            @Nullable Double longitude,
+            CoordinateSource coordinateSource,
+            int version) {}
 
     /**
      * An address as revealed to its owner.

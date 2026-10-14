@@ -360,6 +360,8 @@ public enum PlatformRole {
                     // CUSTOMER_MANAGE) does not silently stop this role from
                     // doing what it could already do.
                     CUSTOMER_CREATE,
+                    // ADR 0177: the delivery address of a phone order, masked (Capability.CUSTOMER_ADDRESS_CAPTURE).
+                    CUSTOMER_ADDRESS_CAPTURE,
                     CUSTOMER_PII_REVEAL,
                     CUSTOMER_ERASURE_EXECUTE,
                     CUSTOMER_ERASURE_RAISE,
@@ -625,6 +627,8 @@ public enum PlatformRole {
                     // CUSTOMER_MANAGE) does not silently stop this role from
                     // doing what it could already do.
                     CUSTOMER_CREATE,
+                    // ADR 0177: the delivery address of a phone order, masked (Capability.CUSTOMER_ADDRESS_CAPTURE).
+                    CUSTOMER_ADDRESS_CAPTURE,
                     CUSTOMER_PII_REVEAL,
                     CUSTOMER_ERASURE_EXECUTE,
                     CUSTOMER_ERASURE_RAISE,
@@ -1018,6 +1022,8 @@ public enum PlatformRole {
                     // taking a phone order still needs to open an account for
                     // a caller nobody has seen before.
                     CUSTOMER_CREATE,
+                    // ADR 0177: the delivery address of a phone order, masked (Capability.CUSTOMER_ADDRESS_CAPTURE).
+                    CUSTOMER_ADDRESS_CAPTURE,
                     CUSTOMER_PII_REVEAL,
                     // ADR 0111: the callbacks assigned to her branch -- and the number to ring them on,
                     // which is why this bundle and not the floor's holds the pair.
@@ -1078,6 +1084,8 @@ public enum PlatformRole {
                     // caller nobody has seen before does not also hand this bundle
                     // PII reveal, blacklisting or merge.
                     CUSTOMER_CREATE,
+                    // ADR 0177: the delivery address of a phone order, masked (Capability.CUSTOMER_ADDRESS_CAPTURE).
+                    CUSTOMER_ADDRESS_CAPTURE,
                     // ADR 0041: the line cook's screen. Reading the board and starting
                     // and readying a line is the whole of it — a recall undoes a
                     // readiness the pass may have acted on, and a release decides when
@@ -1330,6 +1338,8 @@ public enum PlatformRole {
                     CUSTOMER_LEAD_READ,
                     // Row 1.3a: see TENANT_OWNER's identical grant above for why.
                     CUSTOMER_CREATE,
+                    // ADR 0177: the delivery address of a phone order, masked (Capability.CUSTOMER_ADDRESS_CAPTURE).
+                    CUSTOMER_ADDRESS_CAPTURE,
                     CUSTOMER_PII_REVEAL));
 
     private static final Map<String, PlatformRole> BY_CODE =
