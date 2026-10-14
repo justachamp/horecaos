@@ -120,3 +120,12 @@ re-run; the membership test passes; `make verify` is green.
 - ADR 0031 — HTTP API conventions
 - ADR 0040 — Marketplace channel and partner API
 - ADR 0035 — Angular frontend platform and design system
+
+## Status addition (2026-10-14)
+
+The open input that asked whether the courier's own self-service endpoints deserve a group once
+a frontend consumes them is answered by [ADR 0179](../partial/0179-the-courier-client.md):
+`frontend/courier` consumes them, so `OpenApiSurface.COURIER` (`/api/v1/courier/**`) is a fifth
+group with its own baseline and generated client, and `/api/v1/courier/**` leaves
+`OPERATIONS`. The decision above is otherwise unchanged; read "four groups" in this record as
+five, and `make openapi-baseline` as covering the full document and five groups.

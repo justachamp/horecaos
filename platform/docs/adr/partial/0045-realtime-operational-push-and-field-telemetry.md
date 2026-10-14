@@ -831,3 +831,18 @@ are unchanged.
   kitchen execution; ADR 0042 courier compensation and settlement; ADR 0043
   reporting and the metric layer; ADR 0079 kitchen display device principal and
   enrolment, the ADR 0025 model change this record named and did not build.
+
+## Status addition (2026-10-14)
+
+Two things this record described and left unbuilt now exist, under [ADR 0179](0179-the-courier-client.md),
+and nothing above is changed. The courier's own path, which this record's `CourierDutyController`
+note called "a second controller with its own declaration, not a widening of this one", is
+`courier.web.CourierSelfDutyController` under `courier.telemetry`, reaching this module through
+`telemetry.api.CourierDutyPort` (a courier's reading goes in and nothing returns one). And a duty
+session now opens from a shift **and ends with it**: `CourierShiftService` tells the session, in the
+shift's transaction, when a break starts and ends and when the shift ends, whoever ends it, through
+`telemetry.api.DutySessionLifecyclePort`; before this a closed or auto-closed shift left its session
+collecting. Still unbuilt and still this record's rollout order: the courier transparency notice
+and the recorded acknowledgement that must exist before ingest is switched on for a real tenant
+(the wording is external), and the visible on-duty indicator and the wake-locked sender in the courier
+app (client part 2).
