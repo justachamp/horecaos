@@ -1,0 +1,13 @@
+id,query,surveyed_lat,surveyed_lon,kind,city
+G-001,"Synthetic address 001, Tashkent",41.311081,69.240562,LANDMARK,Tashkent
+G-002,"Synthetic address 002, Tashkent",41.311081,69.244562,DOOR,Tashkent
+G-003,"Synthetic address 003, Tashkent",41.311081,69.248562,BRANCH,Tashkent
+G-004,"Synthetic address 004, Tashkent",41.311081,69.252562,LANDMARK,Tashkent
+G-005,"Synthetic address 005, Tashkent",41.315081,69.240562,DOOR,Tashkent
+G-006,"Synthetic address 006, Tashkent",41.315081,69.244562,BRANCH,Tashkent
+G-007,"Synthetic address 007, Tashkent",41.315081,69.248562,LANDMARK,Tashkent
+G-008,"Synthetic address 008, Tashkent",41.315081,69.252562,DOOR,Tashkent
+G-009,"Synthetic address 009, Tashkent",41.319081,69.240562,BRANCH,Tashkent
+G-010,"Synthetic address 010, Tashkent",41.319081,69.244562,LANDMARK,Tashkent
+G-011,"Synthetic address 011, Tashkent",41.319081,69.248562,DOOR,Tashkent
+G-012,"Synthetic address 012, Tashkent",41.319081,69.252562,BRANCH,Tashkent

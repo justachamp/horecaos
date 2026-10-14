@@ -8,6 +8,7 @@ Run directly, or via `make lint`.
 """
 from __future__ import annotations
 
+import hashlib
 import re
 import subprocess
 import sys
@@ -225,6 +226,74 @@ def check_secrets() -> None:
     pat = re.compile(r"(^|/)\.env($|\.)|\.pem$|\.p12$|\.jks$|(^|/)id_rsa|application-local-secrets")
     problems = [f for f in tracked if pat.search(f) and not f.endswith(".env.example")]
     result("secrets: no credential files tracked", problems)
+
+
+# ADR 0145 decision 4: the map's browser key is delivered by `GET .../map-config`, so it can be
+# rotated without a build, and none is committed or defaulted anywhere. A key was a literal default
+# in both storefront images, in `public/config.json` and in the Angular `environment` files, shared
+# by every deployment, until batch 21 removed it from all eight places.
+#
+# The compromised key is named here by its SHA-256 and not by its value: a guard that spelled the
+# key would put it back in git, in the one file whose job is to keep it out.
+COMPROMISED_MAP_KEY_DIGESTS = frozenset(
+    {"5671d85c9b3c37e09c0c51bc28be7262002cbd980c754fdb69a6c072fca6a032"}
+)
+
+_UUID_SHAPED = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+# A line that is about a map vendor's key, in any of the spellings this repository has used.
+_MAP_KEY_LINE = re.compile(r"yandex|maps_api_key|mapsapikey|map[-_ ]?key|apikey", re.IGNORECASE)
+_MAP_KEY_SCANNED = (".ts", ".js", ".mjs", ".json", ".sh", ".html", ".yml", ".yaml", ".md", ".env", ".conf", ".txt")
+_MAP_KEY_SKIPPED = ("package-lock.json",)
+
+
+def map_key_problems(
+    files: dict[str, str], compromised: frozenset[str] = COMPROMISED_MAP_KEY_DIGESTS
+) -> list[str]:
+    """What is wrong with a set of tracked files, as `{path: text}`. Pure, so the guard can be proven.
+
+    Two rules, because the first alone would pass a replacement: (1) the one key known to be
+    compromised appears nowhere, whatever the line says; (2) no line that talks about a map vendor's
+    key carries a UUID-shaped literal, which is what a vendor key looks like and what a default in an
+    entrypoint or a config file would be.
+    """
+    problems: list[str] = []
+    for path, text in sorted(files.items()):
+        for number, line in enumerate(text.splitlines(), start=1):
+            for token in _UUID_SHAPED.findall(line):
+                if hashlib.sha256(token.lower().encode()).hexdigest() in compromised:
+                    problems.append(f"{path}:{number}: the compromised shared map key is committed again")
+            if _MAP_KEY_LINE.search(line) and _UUID_SHAPED.search(line):
+                problems.append(f"{path}:{number}: a map key is a literal in a tracked file")
+    return problems
+
+
+def check_no_committed_map_key() -> None:
+    """ADR 0145 decision 4: no map key, and not the compromised one, in git.
+
+    A browser key is public by construction, but a *shared* one is every deployment's quota and
+    rotating it is a code change; the platform delivers the key (`GET .../map-config`) so neither is
+    true any more. This keeps it that way. See `docs/runbooks/external-connections/w3-delivery-maps.md`
+    for what the owner still has to do in the vendor's console.
+    """
+    try:
+        tracked = subprocess.run(
+            ["git", "ls-files"], cwd=ROOT.parent, capture_output=True, text=True, check=True
+        ).stdout.splitlines()
+    except Exception as exc:  # not a git checkout
+        result("secrets: no map key committed", [], f"skipped: {exc}")
+        return
+    files: dict[str, str] = {}
+    for name in tracked:
+        path = ROOT.parent / name
+        if name.endswith(_MAP_KEY_SKIPPED) or not (name.endswith(_MAP_KEY_SCANNED) or path.name == "Caddyfile"):
+            continue
+        try:
+            if path.is_file() and path.stat().st_size < 2_000_000:
+                files[name] = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+    result("secrets: no map key committed (ADR 0145 decision 4)", map_key_problems(files),
+           "The key is delivered by GET .../map-config; nothing may default one. Rotate it in the vendor's console.")
 
 
 def check_adr_statuses() -> None:
@@ -659,6 +728,7 @@ CHECKS = [
     check_domain_purity,
     check_provider_branching,
     check_secrets,
+    check_no_committed_map_key,
     check_adr_statuses,
     check_print_debugging,
     check_security_definer_pinning,
