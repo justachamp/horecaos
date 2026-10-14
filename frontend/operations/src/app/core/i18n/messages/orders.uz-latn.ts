@@ -966,4 +966,30 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   'orders.detail.print.reason.amendedOrder': 'Buyurtma oʻzgartirildi',
   'orders.detail.print.reason.test': 'Sinov',
   'orders.detail.print.reason.other': 'Boshqa',
+
+  'orders.detail.section.requote': 'Nazorat nuqtasidagi aksiyalar',
+  'orders.detail.requote.intro':
+    'Oldindan buyurtma qabul qilingan narxini saqlaydi. Vaʻda qilingan vaqtdan bir soat oldin platforma savatni qayta hisoblaydi va nima oʻzgarishini yozib qoʻyadi. Bu yerda buyurtma oʻzgarmaydi: narx oʻzgarsa, mehmonga qoʻngʻiroq qiling yoki buyurtmani bekor qiling.',
+  'orders.detail.requote.error': 'Tekshiruv natijalarini yuklab boʻlmadi',
+  'orders.detail.requote.empty':
+    'Hali tekshirilmagan. Platforma vaʻda qilingan vaqtdan bir soat oldin tekshiradi.',
+  'orders.detail.requote.recheck': 'Hozir yana tekshirish',
+  'orders.detail.requote.rechecking': 'Tekshirilmoqda…',
+  'orders.detail.requote.notAwaiting':
+    'Faqat oshxona hali boshlamagan oldindan buyurtmani tekshirish mumkin.',
+  'orders.detail.requote.trigger.CHECKPOINT': 'Avtomatik tekshiruv',
+  'orders.detail.requote.trigger.OPERATOR': 'Qoʻlda tekshirildi',
+  'orders.detail.requote.outcome.UNCHANGED': 'Hech narsa oʻzgarmasdi',
+  'orders.detail.requote.outcome.CHANGED': 'Narx oʻzgarardi',
+  'orders.detail.requote.outcome.NOT_PRICEABLE': 'Qayta hisoblab boʻlmadi',
+  'orders.detail.requote.judgedAt': '{time} holatiga',
+  'orders.detail.requote.totals': 'Buyurtma narxi {held}, qayta hisob {requote}',
+  'orders.detail.requote.delta.up': '{amount} koʻproq',
+  'orders.detail.requote.delta.down': '{amount} kamroq',
+  'orders.detail.requote.refusal': 'Sabab: {code}',
+  'orders.detail.requote.change.DROPPED': 'endi qoʻllanmaydi',
+  'orders.detail.requote.change.GAINED': 'yangidan qoʻllanardi',
+  'orders.detail.requote.change.CHANGED': 'boshqa summa berardi',
+  'orders.detail.requote.change.line': '{promotion}: {change} ({held} → {requote})',
+  'orders.detail.requote.promotionFallback': 'Aksiya ({reference})',
 };

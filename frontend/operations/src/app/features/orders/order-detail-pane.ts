@@ -103,6 +103,7 @@ import { OrderOutcomeReasonDialog, OutcomeReasonSubmission } from './order-outco
 import { OrderPaymentPanel } from './order-payment-panel';
 import { LabelledAction } from './order-row-actions';
 import { OrderPosExportApi, OrderPosExportView, PosExportPushResult } from './order-pos-export-api';
+import { OrderRequotePanel } from './order-requote-panel';
 import { OrderPosExportPanel } from './order-pos-export-panel';
 import { OrderPrintPanel } from './order-print-panel';
 import { POS_EXPORT_STATE_LABEL_KEYS, posExportReachedTheTill } from './order-pos-export-labels';
@@ -225,6 +226,7 @@ type DialogKind =
     OrderMarkingPanel,
     OrderDetailMoney,
     OrderPosExportPanel,
+    OrderRequotePanel,
     OrderPrintPanel,
     // ---------------------------------------------------- wave 10 financial commands
     OrderAddLinesDialog,

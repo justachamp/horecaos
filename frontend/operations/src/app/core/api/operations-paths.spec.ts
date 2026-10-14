@@ -248,3 +248,18 @@ describe('operationsPaths kitchen headcount (ADR 0163)', () => {
     );
   });
 });
+
+/**
+ * `ScheduledOrderRequoteController` is mapped on the pre-ADR-0031 tenant prefix with the order under the
+ * location, like `OperationsOrderController`; a builder on the `/operations` prefix would 404 on every call.
+ */
+describe('operationsPaths.orderPromotionRequotes (row 6.1)', () => {
+  it('is the literal path the controller is mapped on, with the order id encoded', () => {
+    expect(operationsPaths.orderPromotionRequotes(SCOPE, 'o-1')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/orders/o-1/promotion-requotes',
+    );
+    expect(operationsPaths.orderPromotionRequotes(SCOPE, 'a/b')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/orders/a%2Fb/promotion-requotes',
+    );
+  });
+});

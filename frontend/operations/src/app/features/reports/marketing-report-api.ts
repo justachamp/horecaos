@@ -52,9 +52,16 @@ export interface CustomerDiscountHistory {
  */
 export interface PromotionSummaryRow {
   readonly brandId: string;
-  readonly promotionId: string;
+  /**
+   * The legal entity that took the orders' money (ADR 0038, the promo.* metrics): one row per promotion and
+   * entity, so a tenant trading as two companies reads two figures and never their sum. Null where no fiscal
+   * identity was recorded, which is a bucket of its own.
+   */
+  readonly legalEntityId?: string | null;
+  /** Null for a customer's one-off code (`GRANT`): there is no promotion behind it. */
+  readonly promotionId: string | null;
   readonly promotionCode: string;
-  /** `AUTOMATIC` (the redemption ledger) or `COUPON` (a typed promo code). */
+  /** `AUTOMATIC` (the redemption ledger), `COUPON` (a typed promo code) or `GRANT` (a customer's one-off code). */
   readonly sourceKind: string;
   readonly redemptions: number;
   readonly uniqueCustomers: number;
@@ -80,7 +87,8 @@ export interface PromotionRedemptionRow {
   readonly redemptionId: string;
   readonly businessDate: string;
   readonly brandId: string;
-  readonly promotionId: string;
+  /** Null for a customer's one-off code (`GRANT`). */
+  readonly promotionId: string | null;
   readonly promotionCode: string;
   readonly definitionVersion: number;
   readonly sourceKind: string;
@@ -93,6 +101,8 @@ export interface PromotionRedemptionRow {
   /** The order's status in `fact_order`, null while it has none; a cancelled order is still listed. */
   readonly orderStatus: string | null;
   readonly channelCode: string | null;
+  readonly locationId?: string | null;
+  readonly legalEntityId?: string | null;
 }
 
 export interface PromotionRedemptionLog {
