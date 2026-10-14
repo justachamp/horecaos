@@ -1,6 +1,7 @@
 rule_files:
   - adr-0023-alerts.yml
   - adr-0147-alerts.yml
+  - adr-0167-alerts.yml
 
 evaluation_interval: 1m
 
@@ -225,3 +226,60 @@ tests:
             exp_annotations:
               summary: "3 staff sign-ins were refused by the code budget in the last 5 minutes"
               runbook: docs/runbooks/staff-second-factor.md
+
+  # ADR 0167: a closed day with orders and no funnel row. Zero for a while, then one day goes
+  # missing: the alert waits out its 15m and then fires, and does not fire on the zero.
+  - interval: 5m
+    input_series:
+      - series: 'horecaos_reporting_funnel_days_without_row'
+        values: '0 0 0 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HorecaosFunnelDayWithoutRow
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: HorecaosFunnelDayWithoutRow
+        exp_alerts: []
+      - eval_time: 35m
+        alertname: HorecaosFunnelDayWithoutRow
+        exp_alerts:
+          - exp_labels:
+              tier: morning
+            exp_annotations:
+              summary: "1 closed business day(s) hold orders and have no customer-funnel row; their basket counts are unrecoverable once the carts are swept"
+              runbook: docs/runbooks/customer-funnel-gap.md
+
+  # The same gauge at zero for the whole window never fires.
+  - interval: 5m
+    input_series:
+      - series: 'horecaos_reporting_funnel_days_without_row'
+        values: '0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 35m
+        alertname: HorecaosFunnelDayWithoutRow
+        exp_alerts: []
+
+  # ADR 0167: unrecorded days. A plateau at 12 (history a backfill could not recover) is not an
+  # alert; the same gauge climbing from 12 to 14 inside a day is.
+  - interval: 1h
+    input_series:
+      - series: 'horecaos_reporting_funnel_unrecorded_days'
+        values: '12 12 12 12 12 12 12 12 12 12 12 12 12 12 12 12 12 12 12 12 12 12 12 12 12 12'
+    alert_rule_test:
+      - eval_time: 25h
+        alertname: HorecaosFunnelUnrecordedDaysGrowing
+        exp_alerts: []
+
+  - interval: 1h
+    input_series:
+      - series: 'horecaos_reporting_funnel_unrecorded_days'
+        values: '12 12 12 12 12 12 12 12 12 12 12 12 12 12 12 12 12 12 12 12 12 12 13 13 13 14 14 14'
+    alert_rule_test:
+      - eval_time: 27h
+        alertname: HorecaosFunnelUnrecordedDaysGrowing
+        exp_alerts:
+          - exp_labels:
+              tier: morning
+            exp_annotations:
+              summary: "customer-funnel days past the first week with a basket or checkout count that was never recorded grew by 2 in the last day"
+              runbook: docs/runbooks/customer-funnel-gap.md

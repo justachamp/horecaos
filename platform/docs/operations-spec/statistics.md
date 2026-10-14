@@ -648,12 +648,26 @@ between those two lines is the only acquisition diagnostic a restaurant needs.
   cells = share returning. Read as a triangle, tinted on one ramp.
 
 **Band D — the product funnel.** `Входы → Зарегистрировано → Добавил в корзину
-→ Заказал`, by day. Source `reporting.fact_behaviour` from the `analytics.events`
-topic — *not built, and the single item in this whole spec that cannot be
-backfilled.* ADR 0043 ships behavioural events first, before any consumer, for
-exactly this reason. Until they exist the band renders the unbuilt state with
-the line `Данные воронки собираются с момента включения телеметрии — их нельзя
-восстановить задним числом.`
+→ Начал оформление → Заказал`, by day, per brand and per channel. **Built from facts, not from telemetry**
+(ADR 0167, amending ADR 0043's telemetry decision): the last four stages are daily *counts* of events the platform already
+holds for another purpose, captured when the business day closes into `reporting.fact_funnel_day` and
+`reporting.fact_registration_day` — registrations from `customer.brand_profiles`, baskets and checkouts from the carts
+and checkout attempts *before* the sweeper deletes them (a cart lives 90 days), orders from `reporting.fact_order`. The
+rows hold no account, guest hash, session or address, and a day whose carts were already gone shows «не записано», never
+a zero. The stages are counts of distinct events on that day, not a cohort: a ratio between two of them is a rate of
+activity and not the chance that one person converts, and the screen says so.
+
+**«Входы» is not measured**, and the band says why: `Входы не измеряются: платформа не собирает данные о посещениях без
+подтверждённого правового основания.` No ratio is drawn against it. Two things can change that, and only these two.
+Counsel's written basis for client-side telemetry (ADR 0167, Decision 8) would add real visits; until then the
+platform may, once counsel allows even this, count page loads (ADR 0183, D18): one ping per tab session adds one to a
+per-day, per-brand, per-channel counter (`reporting.page_load_counts_day`), with no cookie, identifier, address,
+session or path, behind the platform flag `reporting.page_load_count_enabled`, off by default. When it is on, the stage
+reads `Загрузки страниц, а не люди` («page loads, not people») and still has no ratio against it. A tenant who wants
+visit analytics today has its own GA4 (ADR 0106, row `10.8e`); HorecaOS does not read it.
+
+Acquisition source beside the funnel is anonymous by decision (ADR 0183, D16): clicks per attribution link, registrations
+by origin, orders by channel, side by side, with the sentence that the chart does not attribute a customer to a link.
 
 **RFM lives in 5.3, not here.** RFM is a *segment builder* whose output is an
 audience handed to a campaign; putting a builder inside a read-only analytics
@@ -943,7 +957,7 @@ if run live against OLTP tables indexed for point writes:
 - Any range longer than a quarter, for anything.
 
 **Blocked on data that does not exist at all, not on the query engine:**
-7.6 Band D (funnel — needs `analytics.events`, still not built), kitchen timings
+7.6 Band D's «Входы» stage (visits are not collected, ADR 0167; the rest of the funnel is counted from facts at day close), kitchen timings
 reaching a report
 (`kitchen.tickets` is built — V0030 — but the close job reads order
 timestamps, not the ticket), cancellation cost reaching a report
@@ -1098,7 +1112,7 @@ provisional (§1.2).
 | Courier and delivery data reaching a report | `fulfillment.courier_shifts`, `courier_assignment_earnings` (`distance_meters`, `on_time_outcome`, `promised_delivery_end`, `grace_seconds`, `on_time_policy_version`) and `courier_ledger_entries` are **built** (V0040), and since T11 something populates them: `DeliveryAccrualOrderCompletionTrigger` accrues every completed internal delivery (ADR 0125), `reporting.fact_delivery` (V0337, with `brand_id` since V0510) and the `COURIER` scope of `agg_sla_bucket_day` are written by the day close. | **0043** + **0125** |
 | External-delivery reconciliation | **Built** as its own closed fact, `reporting.fact_external_delivery_cost` (V0412): billed amount, variance and match status as of the business day's close | **0042** + 0043 |
 | Aggregator commission | `fact_order.aggregator_commission_som` — column **built** (V0031), never written. **Renders `—`, never `0`** | **0040** |
-| Behavioural telemetry | `analytics.events` topic (`session_started`, `customer_registered`, `cart_item_added`, `checkout_started`, `order_placed`), keyed by session, subject = ADR 0029 keyed hash. **Cannot be backfilled.** | **0043** + 0032 |
+| Behavioural telemetry | `analytics.events` topic (`session_started`, `customer_registered`, `cart_item_added`, `checkout_started`, `order_placed`), keyed by session, subject = ADR 0029 keyed hash. **Not built, by decision**: [ADR 0167](../adr/partial/0167-behavioural-telemetry-lawful-basis-and-the-funnel.md) counts the funnel's last four stages from facts at day close and collects nothing from a client until counsel confirms a basis; [ADR 0183](../adr/partial/0183-acquisition-links-the-tenants-mini-app-and-storefront-merchandising.md) allows one dark page-load count and no more. | **0043**, amended by **0167** + **0183** |
 | Refunds | `reporting.fact_refund` is **built** (V0031) — one row per refund transaction, filed under the refund's own business date, not the two columns on `fact_order` this ADR originally sketched (which cannot separate an order refunded twice on two different days). Its source, `payments.payment_transactions` refund rows, is what no code writes yet, so the table stays empty. | **0013** |
 | Promotion redemptions | `fact_promotion_redemption` | promotions ADR — *does not exist*; nearest is **0044** |
 | Campaign delivery stats | per-recipient delivery and read receipts | **0044** |
