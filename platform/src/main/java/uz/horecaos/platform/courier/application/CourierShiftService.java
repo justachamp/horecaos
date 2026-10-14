@@ -34,9 +34,11 @@ import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftS
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierShiftStore.ShiftRow;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.EngagementRow;
+import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
+import uz.horecaos.platform.telemetry.api.DutySessionLifecyclePort;
 import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -69,6 +71,7 @@ public class CourierShiftService {
     private final FieldProtection protection;
     private final AuditRecorder audit;
     private final AdjustmentRuleEvaluator adjustmentRules;
+    private final DutySessionLifecyclePort dutySessions;
     private final Clock clock;
 
     public CourierShiftService(
@@ -81,6 +84,7 @@ public class CourierShiftService {
             FieldProtection protection,
             AuditRecorder audit,
             AdjustmentRuleEvaluator adjustmentRules,
+            DutySessionLifecyclePort dutySessions,
             Clock clock) {
         this.shifts = shifts;
         this.couriers = couriers;
@@ -91,6 +95,7 @@ public class CourierShiftService {
         this.protection = protection;
         this.audit = audit;
         this.adjustmentRules = adjustmentRules;
+        this.dutySessions = dutySessions;
         this.clock = clock;
     }
 
@@ -203,6 +208,9 @@ public class CourierShiftService {
                     ErrorCode.UNPROCESSABLE_STATE, "A break starts from AVAILABLE; this shift is " + shift.dutyState());
         }
         shifts.startBreak(UUID.randomUUID(), tenantId, shiftId, clock.instant());
+        // ADR 0045: a courier on break is not assignable and is not tracked. The shift says so to
+        // its duty session in the same transaction, so the two cannot disagree.
+        dutySessions.breakStarted(tenantId, shift.courierId());
 
         // Staff 9.3a: "dutyState" genuinely moves -- setDutyState's own guard
         // above proved it was AVAILABLE.
@@ -229,6 +237,7 @@ public class CourierShiftService {
             throw new ApiException(ErrorCode.UNPROCESSABLE_STATE, "No break is open on this shift");
         }
         shifts.setDutyState(tenantId, shiftId, DutyState.ON_BREAK, DutyState.AVAILABLE, clock.instant());
+        dutySessions.breakEnded(tenantId, shift.courierId());
 
         // Staff 9.3a: "dutyState" genuinely moves -- endOpenBreak's own guard
         // above proved a break was open (ON_BREAK).
@@ -310,6 +319,17 @@ public class CourierShiftService {
         if (!closed) {
             throw new ApiException(ErrorCode.RESOURCE_CONFLICT, "The shift was closed by somebody else first");
         }
+
+        // ADR 0045: collection that continues after sign-off is the failure this feature exists to
+        // prevent, so the session ends with the shift whoever ended it -- the courier, a manager, or
+        // the sweeper that closes a shift left open overnight. Same transaction as the close.
+        dutySessions.shiftEnded(
+                command.tenantId(),
+                shift.courierId(),
+                command.actor(),
+                closeCapability(command.actorKind()),
+                command.reason(),
+                "courier-shift:" + command.shiftId());
 
         UUID handoverId = openCashHandover(shift, command.currency());
         if (status == ShiftStatus.CLOSED) {
@@ -516,6 +536,15 @@ public class CourierShiftService {
             throw new ApiException(ErrorCode.UNPROCESSABLE_STATE, "This shift is " + shift.status());
         }
         return shift;
+    }
+
+    /** The capability an audit fact names for the duty session a shift's close ends. */
+    private static String closeCapability(ShiftActor actorKind) {
+        return switch (actorKind) {
+            case COURIER -> Capability.COURIER_SHIFT_OPEN.code();
+            case MANAGER -> Capability.COURIER_SHIFT_APPROVE.code();
+            case SWEEPER -> "courier-shift-auto-close";
+        };
     }
 
     private @Nullable String protectPoint(UUID tenantId, UUID shiftId, String column, @Nullable String point) {

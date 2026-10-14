@@ -61,6 +61,7 @@ import uz.horecaos.platform.ordering.api.OrderCompleted;
 import uz.horecaos.platform.payments.api.CashDueLookupPort;
 import uz.horecaos.platform.payments.settlement.JdbcSettlementStore;
 import uz.horecaos.platform.payments.settlement.OrderSettlementService;
+import uz.horecaos.platform.support.RecordingDutySessions;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.support.TestProtection;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
@@ -100,6 +101,7 @@ class DeliveryAccrualOrderCompletionTriggerTests {
     private JdbcDeliveryCompletionAdapter deliveryCompletion;
     private CourierAccrualService accruals;
     private CourierShiftService shifts;
+    private final RecordingDutySessions dutySessions = new RecordingDutySessions();
     private Clock clock;
 
     private UUID branch;
@@ -201,6 +203,7 @@ class DeliveryAccrualOrderCompletionTriggerTests {
                 protection,
                 audit,
                 adjustmentRules,
+                dutySessions,
                 clock);
         accruals = new CourierAccrualService(
                 ledgerStore,
