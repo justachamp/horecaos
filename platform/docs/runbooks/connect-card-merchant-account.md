@@ -87,6 +87,16 @@ setup): "Declare an account", then Activate or Suspend with a reason. The screen
 `version` it read, never shows the secret reference (only whether one is named), and says in
 words that with no account active every card tenant is collected like an invoice tenant.
 
+## Walking the flow on a laptop, with no Click account
+
+`make seed-card-provider` (`tools/seed-card-provider`) points a **local** database at the fake of Click's card API
+that `make run` starts under the `local` profile on port 18090: it writes the fake's credential to the local OpenBao,
+moves the approved `click_card_sandbox` environment onto the fake, and declares and activates the account. Then
+Finance > Wallet > Add a card, with card `8600 1234 1234 4242` and the SMS code `246810`, walks the real adapter, route and
+egress check against the fake. Card `…0002` declines and card `…0003` takes the first charge and loses the answer, which the
+settlement sweep then resolves without charging again. The script has been syntax-checked and **not yet run**: nobody has had a
+local stack of their own to run it against. It never touches a deployment, and `docker compose down -v` throws its work away.
+
 ## Replacing an account
 
 A card token is only meaningful to the merchant account that minted it, so every stored card
