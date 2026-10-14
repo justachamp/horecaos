@@ -94,6 +94,8 @@ export const PROMOTION_ACTION_TYPES = [
   'REDUCED_DELIVERY',
   'ITEM_PERCENTAGE_MARKUP',
   'ITEM_FIXED_MARKUP',
+  'ORDER_PERCENTAGE_MARKUP',
+  'ORDER_FIXED_MARKUP',
 ] as const;
 
 export type PromotionActionType = (typeof PROMOTION_ACTION_TYPES)[number];
@@ -104,7 +106,9 @@ export function actionTypesFor(
   scope: PromotionScope,
 ): readonly PromotionActionType[] {
   if (kind === 'MARKUP') {
-    return ['ITEM_PERCENTAGE_MARKUP', 'ITEM_FIXED_MARKUP'];
+    return scope === 'ORDER'
+      ? ['ORDER_PERCENTAGE_MARKUP', 'ORDER_FIXED_MARKUP']
+      : ['ITEM_PERCENTAGE_MARKUP', 'ITEM_FIXED_MARKUP'];
   }
   switch (scope) {
     case 'ITEM':
@@ -116,15 +120,19 @@ export function actionTypesFor(
   }
 }
 
-/** Markups land on items only: an order-level markup is a service line whose fiscal treatment is still open (ADR 0140). */
+/**
+ * A markup lands on items or on the whole order. An order-level markup is a service charge whose fiscal and tax
+ * treatment is an open decision (ADR 0140): it is switched off for every company until the platform has the
+ * answer, and the rule checker says so, so the console offers the scope and lets the checker refuse it.
+ */
 export function scopesFor(kind: PromotionKind): readonly PromotionScope[] {
-  return kind === 'MARKUP' ? ['ITEM'] : ['ITEM', 'ORDER', 'DELIVERY'];
+  return kind === 'MARKUP' ? ['ITEM', 'ORDER'] : ['ITEM', 'ORDER', 'DELIVERY'];
 }
 
 /** The stacking group a new promotion starts in: item rules may not share a group with order or delivery ones (`STACKING_GROUP_MIXES_SCOPES`). */
 export function defaultStackingGroup(kind: PromotionKind, scope: PromotionScope): string {
   if (kind === 'MARKUP') {
-    return 'markup';
+    return scope === 'ORDER' ? 'service' : 'markup';
   }
   switch (scope) {
     case 'ITEM':
@@ -178,7 +186,12 @@ export interface PromotionDraft {
   /** One AND group; the engine has no OR. */
   readonly conditions: readonly ConditionGroup[];
   readonly actions: readonly ActionDraft[];
+  /** What a guest may read for this promotion, by locale tag (ADR 0140). A locale left empty is not sent. */
+  readonly titles: Readonly<Record<string, string>>;
 }
+
+/** The longest title the platform accepts (`pricing.promotion_titles.title`). */
+export const MAX_TITLE_LENGTH = 120;
 
 /** The one AND group a promotion's conditions live in: the engine has no OR (ADR 0018). It may hold no row at all, which means every order. */
 export function andGroup(rows: readonly ConditionRow[]): ConditionGroup {
@@ -221,6 +234,7 @@ export function emptyDraft(currency = 'UZS'): PromotionDraft {
     loyaltyRedemption: 'ALLOW',
     conditions: [andGroup([])],
     actions: [emptyAction('ORDER_PERCENTAGE_DISCOUNT')],
+    titles: {},
   };
 }
 
@@ -595,11 +609,13 @@ export function ruleFromAction(action: ActionDraft): Omit<PromotionRule, 'sequen
     case 'ITEM_PERCENTAGE_DISCOUNT':
     case 'ORDER_PERCENTAGE_DISCOUNT':
     case 'ITEM_PERCENTAGE_MARKUP':
+    case 'ORDER_PERCENTAGE_MARKUP':
       return { type: action.type, operands: { basisPoints: action.basisPoints } };
     case 'ITEM_FIXED_DISCOUNT':
     case 'ORDER_FIXED_DISCOUNT':
     case 'ITEM_FIXED_PRICE':
     case 'ITEM_FIXED_MARKUP':
+    case 'ORDER_FIXED_MARKUP':
       return { type: action.type, operands: { amountMinor: action.amountMinor } };
     case 'FREE_DELIVERY':
       return { type: 'FREE_DELIVERY', operands: {} };
@@ -645,14 +661,16 @@ export function actionFromRule(rule: PromotionRule): ActionDraft | null {
   switch (rule.type) {
     case 'ITEM_PERCENTAGE_DISCOUNT':
     case 'ORDER_PERCENTAGE_DISCOUNT':
-    case 'ITEM_PERCENTAGE_MARKUP': {
+    case 'ITEM_PERCENTAGE_MARKUP':
+    case 'ORDER_PERCENTAGE_MARKUP': {
       const basisPoints = positiveInt(operands['basisPoints']);
       return basisPoints === null ? null : { ...base, basisPoints };
     }
     case 'ITEM_FIXED_DISCOUNT':
     case 'ORDER_FIXED_DISCOUNT':
     case 'ITEM_FIXED_PRICE':
-    case 'ITEM_FIXED_MARKUP': {
+    case 'ITEM_FIXED_MARKUP':
+    case 'ORDER_FIXED_MARKUP': {
       const amountMinor = positiveInt(operands['amountMinor']);
       return amountMinor === null ? null : { ...base, amountMinor };
     }
@@ -748,6 +766,7 @@ export function draftFromView(
       loyaltyRedemption: view.loyaltyRedemption,
       conditions: conditions.groups,
       actions,
+      titles: { ...(view.titles ?? {}) },
     },
     unsupported,
   };
@@ -777,7 +796,24 @@ export function bodyFromDraft(draft: PromotionDraft): PromotionBody {
       ...ruleFromAction(action),
       sequence: index + 1,
     })),
+    titles: titlesToSend(draft.titles),
   };
+}
+
+/**
+ * Only the locales somebody filled in. A blank field is left out rather than sent empty, and because an edit
+ * replaces the whole definition, a locale left out is a locale cleared: the platform stores no title for it
+ * and describes the offer by its kind of benefit in that language.
+ */
+export function titlesToSend(titles: Readonly<Record<string, string>>): Record<string, string> {
+  const sent: Record<string, string> = {};
+  for (const [locale, value] of Object.entries(titles)) {
+    const text = value.trim();
+    if (text.length > 0) {
+      sent[locale] = text;
+    }
+  }
+  return sent;
 }
 
 /** The reasons a draft cannot be saved yet, as promotion text keys: only what the form itself can know. The server's validator owns the rest. */
@@ -794,6 +830,9 @@ export function draftProblems(draft: PromotionDraft): readonly PromotionTextKey[
   }
   if (draft.actions.length === 0) {
     problems.push('problem.action');
+  }
+  if (Object.values(draft.titles).some((title) => title.trim().length > MAX_TITLE_LENGTH)) {
+    problems.push('problem.title');
   }
   if (
     draft.actions.some((action) => action.type === 'FREE_ITEM' && action.variantIds.length === 0)

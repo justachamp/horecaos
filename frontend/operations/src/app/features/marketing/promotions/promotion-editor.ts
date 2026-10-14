@@ -6,15 +6,18 @@ import {
   input,
   model,
   output,
+  signal,
 } from '@angular/core';
 
-import { I18n } from '../../../core/i18n/i18n';
+import { I18n, LOCALES } from '../../../core/i18n/i18n';
+import { localeDisplayName } from '../../../core/i18n/locale-labels';
 import { ConditionBuilder } from '../../../shared/ui/condition-builder';
 import {
   ConditionFixedValue,
   ConditionGroup,
   ConditionTypeDescriptor,
 } from '../../../shared/ui/condition-types';
+import { LocalizedFieldGroup } from '../../../shared/ui/localized-field-group';
 import { MoneyInput } from '../../../shared/ui/money-input';
 import { PercentInput } from '../../../shared/ui/percent-input';
 import { PromotionChipPicker } from './chip-picker';
@@ -24,6 +27,7 @@ import {
   PromotionActionType,
   PromotionDraft,
   PromotionLookups,
+  MAX_TITLE_LENGTH,
   actionTypesFor,
   defaultStackingGroup,
   draftProblems,
@@ -40,11 +44,13 @@ function shapeOf(type: PromotionActionType): ActionShape {
     case 'ITEM_PERCENTAGE_DISCOUNT':
     case 'ORDER_PERCENTAGE_DISCOUNT':
     case 'ITEM_PERCENTAGE_MARKUP':
+    case 'ORDER_PERCENTAGE_MARKUP':
       return 'PERCENT';
     case 'ITEM_FIXED_DISCOUNT':
     case 'ORDER_FIXED_DISCOUNT':
     case 'ITEM_FIXED_PRICE':
     case 'ITEM_FIXED_MARKUP':
+    case 'ORDER_FIXED_MARKUP':
       return 'AMOUNT';
     case 'FREE_DELIVERY':
       return 'NONE';
@@ -74,7 +80,14 @@ function shapeOf(type: PromotionActionType): ActionShape {
  */
 @Component({
   selector: 'q-promotion-editor',
-  imports: [PromotionTextPipe, ConditionBuilder, MoneyInput, PercentInput, PromotionChipPicker],
+  imports: [
+    PromotionTextPipe,
+    ConditionBuilder,
+    LocalizedFieldGroup,
+    MoneyInput,
+    PercentInput,
+    PromotionChipPicker,
+  ],
   templateUrl: './promotion-editor.html',
   styleUrl: './promotion-editor.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -117,6 +130,29 @@ export class PromotionEditor {
   protected readonly canSave = computed(
     () => !this.readOnly() && !this.saving() && this.problems().length === 0,
   );
+
+  /** The languages a guest title is written in: the platform triple, default first. */
+  protected readonly titleLocales: readonly string[] = LOCALES;
+  protected readonly titleLimit = MAX_TITLE_LENGTH;
+  protected readonly titleLocale = signal<string>(LOCALES[0]);
+  protected readonly titleLabels = computed<Readonly<Record<string, string>>>(() =>
+    Object.fromEntries(
+      this.titleLocales.map((locale) => [locale, localeDisplayName(this.i18n, locale)]),
+    ),
+  );
+  /** A dot per language: filled when a title is written, so the marketer sees which languages still say nothing. */
+  protected readonly titleCompleteness = computed<Readonly<Record<string, boolean>>>(() =>
+    Object.fromEntries(
+      this.titleLocales.map((locale) => [
+        locale,
+        (this.draft().titles[locale] ?? '').trim().length > 0,
+      ]),
+    ),
+  );
+
+  protected setTitle(locale: string, value: string): void {
+    this.draft.update((draft) => ({ ...draft, titles: { ...draft.titles, [locale]: value } }));
+  }
 
   protected shape(type: PromotionActionType): ActionShape {
     return shapeOf(type);

@@ -399,13 +399,43 @@ describe('actions: editor rows to wire and back', () => {
       'ITEM_PERCENTAGE_MARKUP',
       'ITEM_FIXED_MARKUP',
     ]);
-    // A markup's scope is whatever the page left it at; its actions never follow it.
-    expect(actionTypesFor('MARKUP', 'ORDER')).toEqual(actionTypesFor('MARKUP', 'ITEM'));
+    // An order-level markup is a service charge: its own two actions, never an item uplift.
+    expect(actionTypesFor('MARKUP', 'ORDER')).toEqual([
+      'ORDER_PERCENTAGE_MARKUP',
+      'ORDER_FIXED_MARKUP',
+    ]);
   });
 
-  it('only offers item scope for a markup, since an order-level markup is not built', () => {
-    expect(scopesFor('MARKUP')).toEqual(['ITEM']);
+  it('offers a markup item or order scope, and never a delivery one', () => {
+    expect(scopesFor('MARKUP')).toEqual(['ITEM', 'ORDER']);
     expect(scopesFor('DISCOUNT')).toEqual(['ITEM', 'ORDER', 'DELIVERY']);
+  });
+
+  it('starts a service charge in a group of its own, apart from item markups', () => {
+    expect(defaultStackingGroup('MARKUP', 'ORDER')).toBe('service');
+    expect(defaultStackingGroup('MARKUP', 'ITEM')).toBe('markup');
+  });
+
+  it('round-trips a service charge through the editor row and back to its operands', () => {
+    const percentage = actionFromRule({
+      sequence: 1,
+      type: 'ORDER_PERCENTAGE_MARKUP',
+      operands: { basisPoints: 1_000 },
+    });
+    expect(percentage).toMatchObject({ type: 'ORDER_PERCENTAGE_MARKUP', basisPoints: 1_000 });
+    expect(ruleFromAction(percentage!)).toEqual({
+      type: 'ORDER_PERCENTAGE_MARKUP',
+      operands: { basisPoints: 1_000 },
+    });
+    const fixed = actionFromRule({
+      sequence: 1,
+      type: 'ORDER_FIXED_MARKUP',
+      operands: { amountMinor: 2_000 },
+    });
+    expect(ruleFromAction(fixed!)).toEqual({
+      type: 'ORDER_FIXED_MARKUP',
+      operands: { amountMinor: 2_000 },
+    });
   });
 
   it('starts an item rule in a group that an order rule never shares', () => {
@@ -442,6 +472,7 @@ describe('the draft: stored promotion to editor and back to a request body', () 
       kind: 'DISCOUNT',
       scope: 'ORDER',
       stackingGroup: 'payment',
+      titles: {},
       exclusive: true,
       priority: 5,
       maximumDiscountMinor: 20_000,
@@ -526,6 +557,41 @@ describe('the draft: stored promotion to editor and back to a request body', () 
       [1, 'ORDER_FIXED_DISCOUNT'],
       [2, 'ORDER_PERCENTAGE_DISCOUNT'],
     ]);
+  });
+});
+
+describe('the title a guest reads (ADR 0140)', () => {
+  it('reads the stored titles into the draft and sends only the languages somebody filled in', () => {
+    const { draft } = draftFromView(
+      view({ titles: { ru: 'Скидка на ланч', en: 'Lunch offer' } }),
+      CATALOGUE,
+    );
+    expect(draft.titles).toEqual({ ru: 'Скидка на ланч', en: 'Lunch offer' });
+
+    const body = bodyFromDraft({
+      ...draft,
+      titles: { ru: '  Скидка на ланч ', 'uz-Latn': '   ', en: 'Lunch offer' },
+    });
+    expect(body.titles).toEqual({ ru: 'Скидка на ланч', en: 'Lunch offer' });
+  });
+
+  it('sends no wording for a promotion that has none, so an edit clears what was cleared', () => {
+    const { draft } = draftFromView(view({}), CATALOGUE);
+    expect(draft.titles).toEqual({});
+    expect(bodyFromDraft(draft).titles).toEqual({});
+  });
+
+  it('flags a title longer than the platform accepts', () => {
+    const problems = draftProblems({
+      ...emptyDraft(),
+      name: 'Lunch',
+      code: 'LUNCH10',
+      titles: { en: 'x'.repeat(121) },
+    });
+    expect(problems).toContain('problem.title');
+    expect(
+      draftProblems({ ...emptyDraft(), name: 'Lunch', code: 'LUNCH10', titles: { en: 'ok' } }),
+    ).not.toContain('problem.title');
   });
 });
 
