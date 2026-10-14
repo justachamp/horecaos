@@ -42,7 +42,7 @@ public class StorefrontPickupLocationQuery {
     }
 
     @Transactional(readOnly = true)
-    public PickupLocations nearby(GeoPoint point, int limit) {
+    public PickupLocations nearby(@Nullable GeoPoint point, int limit) {
         if (limit < 1 || limit > MAXIMUM_LIMIT) {
             throw new IllegalArgumentException("limit must be between 1 and " + MAXIMUM_LIMIT);
         }
@@ -78,7 +78,8 @@ public class StorefrontPickupLocationQuery {
                 candidate.addressLine(),
                 candidate.district(),
                 candidate.city(),
-                Math.round(candidate.distanceMeters()),
+                candidate.distanceMeters() == null ? 0 : Math.round(candidate.distanceMeters()),
+                candidate.distanceMeters() != null,
                 answer.available(),
                 answer.reason() == null ? null : answer.reason().name(),
                 answer.acceptsScheduledOrders(),
@@ -88,7 +89,13 @@ public class StorefrontPickupLocationQuery {
     /** The response envelope permits new browse metadata without breaking list consumers. */
     public record PickupLocations(List<PickupLocation> locations) {}
 
-    /** One branch a customer may browse, plus its current pickup availability. */
+    /**
+     * One branch a customer may browse, plus its current pickup availability.
+     *
+     * @param distanceMeters from the customer's point; 0 when {@code distanceKnown} is false
+     * @param distanceKnown false when the customer shared no point (ADR 0183 D17): the branches then come in the order the
+     *                      brand set for its storefront, and no distance is claimed
+     */
     public record PickupLocation(
             UUID tenantId,
             UUID brandId,
@@ -99,6 +106,7 @@ public class StorefrontPickupLocationQuery {
             String district,
             String city,
             long distanceMeters,
+            boolean distanceKnown,
             boolean available,
             @Nullable String reason,
             boolean acceptsScheduledOrders,

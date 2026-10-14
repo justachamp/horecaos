@@ -43,7 +43,8 @@ import uz.horecaos.platform.web.api.ErrorCode;
             // for LegalEntity's own business conflicts.
             ChannelSetupController.class,
             ChannelPagesController.class,
-            TelegramChannelSetupController.class
+            TelegramChannelSetupController.class,
+            StorefrontBranchOrderController.class
         })
 public class TenantApiErrorHandler {
 
