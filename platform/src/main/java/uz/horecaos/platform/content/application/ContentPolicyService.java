@@ -42,7 +42,9 @@ public class ContentPolicyService {
             EditorialPolicy editorial,
             int editorialVersion,
             boolean editorialEntitled,
-            boolean videoEntitled) {}
+            boolean videoEntitled,
+            String layout,
+            int layoutVersion) {}
 
     @Transactional(readOnly = true)
     public Policies get(UUID tenantId, UUID brandId) {
@@ -53,7 +55,32 @@ public class ContentPolicyService {
                 environment.editorialPolicy(tenantId, brandId),
                 author.currentVersion(ContentPolicies.EDITORIAL, scope),
                 environment.editorialEntitled(tenantId),
-                environment.videoEntitled(tenantId));
+                environment.videoEntitled(tenantId),
+                environment.storefrontLayout(tenantId, brandId),
+                author.currentVersion(ContentPolicies.STOREFRONT_LAYOUT, scope));
+    }
+
+    /**
+     * Chooses the brand's category layout (ADR 0183 D17): {@code STANDARD}, or {@code MARKETPLACE}. Anything else is refused
+     * here, at the one place it is written, because a reader reads an unknown value as standard and would otherwise hide the
+     * mistake.
+     */
+    @Transactional
+    public Policies setLayout(
+            UUID tenantId, UUID brandId, String actor, int expectedVersion, String layout, String reason) {
+        requireBrand(tenantId, brandId);
+        ContentPolicies.StorefrontLayoutPolicy document = new ContentPolicies.StorefrontLayoutPolicy(layout);
+        if (!document.isValid()) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "layout must be STANDARD or MARKETPLACE");
+        }
+        author.author(
+                ContentPolicies.STOREFRONT_LAYOUT,
+                ResourceScope.brand(tenantId, brandId),
+                document,
+                expectedVersion,
+                ActorRef.user(actor, null),
+                reason);
+        return get(tenantId, brandId);
     }
 
     @Transactional
