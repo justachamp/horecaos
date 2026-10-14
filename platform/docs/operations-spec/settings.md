@@ -996,9 +996,17 @@ brand override → tenant override → platform default, with locale falling bac
 default → tenant default. That is ADR 0020's stated resolution order; the screen must show which
 of those steps produced the template being previewed, using the same origin chip as §1.2.
 
+**Built (ADR 0184, wave 21).** The list carries an origin chip per row (`Бренд`, `Организация`) and a
+read-only card of the platform's own default wording beneath it (`Платформа`), eight order events in
+ru / uz-Latn / en, with `Настроить` copying one into a template of the brand. The precedence is lexicographic
+and not a sum: a brand's wording beats a tenant's whatever the tenant pinned; then more pinned dimensions
+(fulfilment mode, source channel) beat fewer; then fulfilment mode beats source channel (D20). The platform
+default answers only when the tenant has no active template at any scope, and never for `ORDER_COMPLETED`
+(the rating prompt stays opt-in, ADR 0075).
+
 | Column | Source |
 |---|---|
-| Событие | `notifications.templates.template_key` — order statuses from the canonical machine (`CONFIRMED`, `PREPARING`, `READY`, `FULFILLING`, `COMPLETED`, `CANCELLED`, `REJECTED`), plus OTP, payment link, review request |
+| Событие | `notifications.templates.template_key` — order statuses from the canonical machine (`CONFIRMED`, `PREPARING`, `READY`, `FULFILLING`, `COMPLETED`, `CANCELLED`, `REJECTED`), plus payment link, review request. The one-time code is **not a row**: its sentence is the platform's (ADR 0184, D19), shown in its own read-only card with the gateway's approval state, and a `SECURITY` template cannot be created |
 | Класс | `.notification_class` ∈ `TRANSACTIONAL_REQUIRED / TRANSACTIONAL_OPTIONAL / MARKETING / SECURITY / OPERATIONS_ALERT` |
 | Канал доставки | `.channel` — SMS / Telegram / push / email |
 | Языки | completeness chips per locale from `notifications.template_versions.locale` |
@@ -1009,6 +1017,9 @@ of those steps produced the template being previewed, using the same origin chip
 **Sort.** Severity: blocked in moderation and required (0) → missing a locale that a channel
 actually serves (1) → draft (2) → active (3); then event order along the order lifecycle, not
 alphabetically — an admin reading this list is walking an order through its life.
+*Built (ADR 0184):* the language chips show every language the template's brand serves, written or
+missing; the moderation state is its own column on the list; the sort is `template-list-order.ts`. A
+moderation state counts against a template only while it is in force.
 
 **Editor.** A `TemplateEditor` with `VariableChip` insertion and a live preview inside the matching
 frame. Variables are **allowlisted typed variables from a versioned schema**
@@ -1018,6 +1029,13 @@ match: order id, restaurant name, delivery time, preparation time, product list,
 amount, delivery fee, courier first name, courier surname, courier phone, customer name,
 customer phone. Plus a `Показывать цены товаров` toggle, which Delever has and which changes the
 rendered product list.
+
+*Built (ADR 0184, D21):* ten of the thirteen are merge variables: order id, restaurant name (the brand's
+display name), delivery time, preparation time, product list, total (`amount` and `currency`), discount
+amount, delivery fee, courier first name (the on-the-way message only) and customer name (a message to the
+customer only). The toggle is a column of the version (`show_item_prices`). **Declined, and refused when a
+version names one:** the customer's phone, the courier's phone and the courier's surname. The two personal
+values are looked up when a message is sent and are never stored.
 
 Left pane: language tabs (`LocalizedFieldGroup`, ru / uz-Latn / en, default marked, completeness
 indicated). Right pane: the key fields — event, source channels, fulfilment modes, default
@@ -1036,12 +1054,16 @@ not model this at all and the IA calls it out as something HorecaOS adds.
 `NotificationTemplateController.create`/`.activate`. `Изменить` (creates a new
 `template_version`, never mutates) is built as `.addVersion`. `Тестовая отправка` (to a staff
 phone, recorded as an audit fact) and `Дублировать на другой язык` have no matching endpoint yet.
+*Built (ADR 0184):* `Тестовая отправка` sends an SMS template to a number and a Telegram template to one of the
+brand's bound chats, and writes `notification.template.test_sent` without the destination; `Дублировать`
+is an editor action that copies the active language's text into another to start its translation.
 Activation of a `TRANSACTIONAL_REQUIRED` template is confirmed by naming what it changes.
 
 **Consent is visible but not editable here.** A `MARKETING`-class template shows
 *«отправляется только клиентам с согласием»* with a link to Customers 5.2. Unsubscribe changes
 future eligibility and never erases delivery evidence — say so where an admin might expect a
-delete button.
+delete button. *Built (ADR 0184):* the notice is on the create form, beside every `MARKETING` row and in the
+versions drawer; creating an optional or marketing template asks for its consent purpose.
 
 ### Tab 2 — Маршрутизация
 

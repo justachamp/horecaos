@@ -820,6 +820,19 @@ The catalogue also predates `KITCHEN_BOARD` (`LOCATION`, `kitchen.ticket.read`,
 under ADR 0041's rollout. This record's Decision, Alternatives and Consequences
 are unchanged.
 
+## Status addition (2026-10-14)
+
+The customer milestones in «What the customer sees» are built on the ADR 0020 path by
+[ADR 0184](0184-order-messages-platform-wording-milestones-and-personal-values.md). `OrderPreparing`,
+`OrderReady` and `OrderFulfilling` are published when a forward transition enters those statuses, and
+`OrderNotificationTrigger` turns each into a `TRANSACTIONAL_OPTIONAL` intent, consent-gated under the
+purpose `ORDER_PROGRESS_UPDATES`. Two readings of this record are fixed there: **ready** is told to a pickup
+order only, because for delivery it is «awaiting courier» and this record's table does not message it, and
+**on the way** carries the courier's first name through `CourierFirstNameDisclosure`, resolved when the
+message is rendered and stored nowhere, with an audit fact each time (the courier's surname and number are
+declined). The token-scoped polled tracking page is not part of that record's build and is still not built.
+This record's Decision, Alternatives and Consequences are unchanged.
+
 ## References
 
 - ADR 0004 transactional outbox; ADR 0014 delivery sourcing and partner
