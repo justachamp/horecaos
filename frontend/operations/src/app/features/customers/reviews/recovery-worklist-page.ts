@@ -48,6 +48,8 @@ const EMPTY_COLUMN: Column = { items: [], cursor: null, loading: false };
 const COLUMN_PAGE_SIZE = 25;
 const TABLE_PAGE_SIZE = 50;
 const SLA_STATES: readonly SlaState[] = ['ON_TRACK', 'AT_RISK', 'BREACHED', 'MET'];
+/** The stars a case can be filtered to: the rating of the review it is about (ADR 0159, row 5.4). */
+const RATINGS: readonly number[] = [1, 2, 3, 4, 5];
 const FALLBACK_TIME_ZONE = 'Asia/Tashkent';
 
 /** What the branch filter offers: an id and the name to show for it. */
@@ -112,6 +114,8 @@ export class RecoveryWorklistPage {
   protected readonly locationFilter = signal('');
   protected readonly slaFilter = signal<SlaState | ''>('');
   protected readonly stateFilter = signal<CaseState | ''>('');
+  /** One star count, or empty for any; sent as both ends of the range the endpoints take. */
+  protected readonly ratingFilter = signal<number | ''>('');
 
   protected readonly columns = signal<Record<CaseState, Column>>(emptyColumns());
   protected readonly tableRows = signal<readonly CaseSummary[]>([]);
@@ -123,6 +127,7 @@ export class RecoveryWorklistPage {
 
   protected readonly caseStates = CASE_STATES;
   protected readonly slaStates = SLA_STATES;
+  protected readonly ratings = RATINGS;
   protected readonly stars = stars;
   protected readonly stateKey = stateKey;
   protected readonly slaKey = slaKey;
@@ -184,6 +189,11 @@ export class RecoveryWorklistPage {
 
   protected onSlaFilter(value: string): void {
     this.slaFilter.set(value as SlaState | '');
+    void this.refresh();
+  }
+
+  protected onRatingFilter(value: string): void {
+    this.ratingFilter.set(value === '' ? '' : Number(value));
     void this.refresh();
   }
 
@@ -356,6 +366,8 @@ export class RecoveryWorklistPage {
       state,
       locationId: this.locationFilter() || undefined,
       slaState: this.slaFilter() || undefined,
+      minRating: this.ratingFilter() || undefined,
+      maxRating: this.ratingFilter() || undefined,
     };
   }
 

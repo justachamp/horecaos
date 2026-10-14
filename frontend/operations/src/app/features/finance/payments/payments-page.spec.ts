@@ -1,5 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CurrentTenant } from '../../../core/auth/current-tenant';
@@ -841,5 +842,39 @@ describe('PaymentsPage', () => {
 
       expect(byTestId('tender-fiscal-open')).toBeNull();
     });
+  });
+
+  it('opens the order the service-recovery drawer links with ?order=, already looked up', async () => {
+    await TestBed.resetTestingModule()
+      .configureTestingModule({
+        imports: [PaymentsPage],
+        providers: [
+          { provide: PaymentsApi, useValue: api },
+          { provide: OrderLookupApi, useValue: orderLookup },
+          { provide: CurrentTenant, useValue: new FakeCurrentTenant() },
+          { provide: FiscalEvidenceApi, useValue: evidenceApi },
+          { provide: SessionCapabilities, useValue: { has: () => false } },
+          {
+            provide: ActivatedRoute,
+            useValue: { snapshot: { queryParamMap: convertToParamMap({ order: ' order-77 ' }) } },
+          },
+        ],
+      })
+      .compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    const linked = TestBed.createComponent(PaymentsPage);
+    linked.detectChanges();
+    await flushMicrotasks();
+    linked.detectChanges();
+
+    expect(api.orderPayment).toHaveBeenCalledWith(TENANT_ID, 'order-77');
+    expect(api.remediesOfOrder).toHaveBeenCalledWith(TENANT_ID, 'order-77');
+    expect((linked.nativeElement.querySelector('#order-id') as HTMLInputElement).value).toBe(
+      'order-77',
+    );
+  });
+
+  it('looks nothing up when it is opened without an order in the link', () => {
+    expect(api.orderPayment).not.toHaveBeenCalled();
   });
 });

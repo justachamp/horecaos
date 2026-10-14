@@ -33,6 +33,15 @@ describe('ReviewsShell', () => {
     expect(tab('reviews-tab-list')).not.toBeNull();
     expect(tab('reviews-tab-recovery')).toBeNull();
     expect(tab('reviews-tab-moderation')).toBeNull();
+    expect(tab('reviews-tab-report')).toBeNull();
+  });
+
+  it('adds the quality report for whoever may read reports, and only for them', async () => {
+    await render('REVIEW_READ', 'REPORTING_READ');
+
+    expect(tab('reviews-tab-report')?.getAttribute('href')).toBe('/customers/reviews/report');
+    expect(tab('reviews-tab-recovery')).toBeNull();
+    expect(tab('reviews-tab-moderation')).toBeNull();
   });
 
   it('adds the worklist for whoever holds the case capability', async () => {

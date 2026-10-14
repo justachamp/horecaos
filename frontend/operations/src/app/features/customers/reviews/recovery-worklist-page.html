@@ -92,6 +92,18 @@
             <option [value]="sla">{{ slaKey(sla) | t }}</option>
           }
         </select>
+        <select
+          class="control"
+          [attr.aria-label]="'customers.recovery.filter.rating' | t"
+          [value]="ratingFilter()"
+          (change)="onRatingFilter($any($event.target).value)"
+          data-testid="recovery-rating-filter"
+        >
+          <option value="">{{ 'customers.recovery.filter.allRatings' | t }}</option>
+          @for (rating of ratings; track rating) {
+            <option [value]="rating">{{ stars(rating) }}</option>
+          }
+        </select>
         @if (view() === 'table') {
           <select
             class="control"

@@ -41,6 +41,22 @@ export const reportsPaths = {
     return `${TENANT_REPORTING(tenantId)}/promotions/redemptions`;
   },
 
+  /**
+   * ADR 0159 (rows 5.4 and 5.5): reviews per branch over the closed business days in a range -- the count, the
+   * rating distribution, and the tags guests tapped by category and sentiment.
+   */
+  reviewSummary(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/reviews/summary`;
+  },
+
+  /**
+   * ADR 0159: service-recovery cases per branch over the closed business days in a range -- opened, closed by
+   * outcome, first-response and close times, the breach rate, and the money attached as remedies per currency.
+   */
+  reviewRecovery(tenantId: string): string {
+    return `${TENANT_REPORTING(tenantId)}/reviews/recovery`;
+  },
+
   /** The fixed six-bucket SLA distribution, per branch. */
   slaBuckets(tenantId: string): string {
     return `${TENANT_REPORTING(tenantId)}/sla-buckets`;

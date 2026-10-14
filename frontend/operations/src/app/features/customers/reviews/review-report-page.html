@@ -1,0 +1,170 @@
+<section class="review-report" data-testid="review-report">
+  <header class="review-report__header">
+    <h2 class="q-emphasis">{{ 'customers.reviews.report.title' | t }}</h2>
+    <p class="q-body-sm review-report__intro">{{ 'customers.reviews.report.intro' | t }}</p>
+    <q-date-range-picker
+      [start]="range().start"
+      [end]="range().end"
+      (rangeChange)="setRange($event)"
+    />
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm" data-testid="review-report-loading">
+        {{ 'customers.reviews.report.loading' | t }}
+      </p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm" role="alert" data-testid="review-report-denied">
+        {{ 'customers.reviews.report.denied' | t }}
+      </p>
+    }
+    @case ('error') {
+      <div class="review-report__error" role="alert" data-testid="review-report-error">
+        <span class="q-body-sm">{{ 'customers.reviews.report.error' | t }}</span>
+        <button type="button" (click)="retry()">{{ 'customers.reviews.report.retry' | t }}</button>
+      </div>
+    }
+    @case ('ready') {
+      <q-provenance-banner [provenance]="provenance()" [requestedTo]="range().end" />
+
+      @if (isEmpty()) {
+        <p class="q-body-sm" data-testid="review-report-empty">
+          {{ 'customers.reviews.report.empty' | t }}
+        </p>
+      } @else {
+        <h3 class="q-body-sm review-report__title">
+          {{ 'customers.reviews.report.ratings.title' | t }}
+        </h3>
+        <table class="review-report__table" data-testid="review-report-ratings">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'customers.reviews.report.column.branch' | t }}</th>
+              <th class="q-caption num">{{ 'customers.reviews.report.column.reviews' | t }}</th>
+              <th class="q-caption num">{{ 'customers.reviews.report.column.average' | t }}</th>
+              <th class="q-caption num">{{ 'customers.reviews.report.column.withComment' | t }}</th>
+              <th class="q-caption num">
+                {{ 'customers.reviews.report.column.distribution' | t }}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (line of ratingLines(); track line.key) {
+              <tr data-testid="review-report-rating-row">
+                <td class="q-body-sm">{{ line.name }}</td>
+                <td class="q-body-sm q-tnum num">{{ line.reviews }}</td>
+                <td class="q-body-sm q-tnum num">{{ line.average }}</td>
+                <td class="q-body-sm q-tnum num">{{ line.withComment }}</td>
+                <td class="q-body-sm q-tnum num">{{ line.distribution }}</td>
+              </tr>
+            }
+            @if (ratingTotal(); as total) {
+              <tr class="review-report__total" data-testid="review-report-rating-total">
+                <td class="q-body-sm">{{ total.name }}</td>
+                <td class="q-body-sm q-tnum num">{{ total.reviews }}</td>
+                <td class="q-body-sm q-tnum num">{{ total.average }}</td>
+                <td class="q-body-sm q-tnum num">{{ total.withComment }}</td>
+                <td class="q-body-sm q-tnum num">{{ total.distribution }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+
+        <h3 class="q-body-sm review-report__title">
+          {{ 'customers.reviews.report.tags.title' | t }}
+        </h3>
+        <p class="q-caption review-report__note">{{ 'customers.reviews.report.tags.intro' | t }}</p>
+        @if (tagLines().length === 0) {
+          <p class="q-body-sm muted" data-testid="review-report-tags-empty">
+            {{ 'customers.reviews.report.tags.empty' | t }}
+          </p>
+        } @else {
+          <table class="review-report__table" data-testid="review-report-tags">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'customers.reviews.report.column.branch' | t }}</th>
+                <th class="q-caption">{{ 'customers.reviews.report.column.category' | t }}</th>
+                <th class="q-caption num">{{ 'customers.reviews.report.column.positive' | t }}</th>
+                <th class="q-caption num">{{ 'customers.reviews.report.column.negative' | t }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (line of tagLines(); track line.key) {
+                <tr data-testid="review-report-tag-row">
+                  <td class="q-body-sm">{{ line.name }}</td>
+                  <td class="q-body-sm">{{ categoryLabel(line.category) }}</td>
+                  <td class="q-body-sm q-tnum num">{{ line.positive }}</td>
+                  <td class="q-body-sm q-tnum num">{{ line.negative }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+
+        <h3 class="q-body-sm review-report__title">
+          {{ 'customers.reviews.report.cases.title' | t }}
+        </h3>
+        @if (caseLines().length === 0) {
+          <p class="q-body-sm muted" data-testid="review-report-cases-empty">
+            {{ 'customers.reviews.report.cases.empty' | t }}
+          </p>
+        } @else {
+          <table class="review-report__table" data-testid="review-report-cases">
+            <thead>
+              <tr>
+                <th class="q-caption">{{ 'customers.reviews.report.column.branch' | t }}</th>
+                <th class="q-caption num">{{ 'customers.reviews.report.column.opened' | t }}</th>
+                <th class="q-caption num">{{ 'customers.reviews.report.column.closed' | t }}</th>
+                <th class="q-caption num">
+                  {{ 'customers.reviews.report.column.firstResponse' | t }}
+                </th>
+                <th class="q-caption num">{{ 'customers.reviews.report.column.close' | t }}</th>
+                <th class="q-caption num">{{ 'customers.reviews.report.column.breached' | t }}</th>
+                <th class="q-caption num">
+                  {{ 'customers.reviews.report.column.compensations' | t }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (line of caseLines(); track line.key) {
+                <tr data-testid="review-report-case-row">
+                  <td class="q-body-sm">{{ line.name }}</td>
+                  <td class="q-body-sm q-tnum num">{{ line.opened }}</td>
+                  <td class="q-body-sm q-tnum num">{{ line.closed }}</td>
+                  <td class="q-body-sm q-tnum num">{{ line.firstResponse }}</td>
+                  <td class="q-body-sm q-tnum num">{{ line.close }}</td>
+                  <td class="q-body-sm q-tnum num">{{ line.breached }}</td>
+                  <td class="q-body-sm q-tnum num">{{ line.compensations }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+
+          @if (outcomes().length > 0) {
+            <h3 class="q-body-sm review-report__title">
+              {{ 'customers.reviews.report.outcomes.title' | t }}
+            </h3>
+            <ul class="review-report__outcomes" data-testid="review-report-outcomes">
+              @for (outcome of outcomes(); track outcome.code) {
+                <li class="q-body-sm" data-testid="review-report-outcome">
+                  {{ outcome.label }}: <span class="q-tnum">{{ outcome.cases }}</span>
+                </li>
+              }
+            </ul>
+          }
+          @if (remedyMoney().length > 0) {
+            <p class="q-body-sm" data-testid="review-report-remedy-money">
+              {{
+                'customers.reviews.report.remedyMoney' | t: { amounts: remedyMoney().join(', ') }
+              }}
+            </p>
+            <p class="q-caption review-report__note">
+              {{ 'customers.reviews.report.remedyMoney.note' | t }}
+            </p>
+          }
+        }
+      }
+    }
+  }
+</section>

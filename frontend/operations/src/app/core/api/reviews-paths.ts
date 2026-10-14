@@ -73,12 +73,26 @@ export const reviewPaths = {
     return `${this.recoveryCase(scope, locationId, caseId)}/compensations`;
   },
 
+  recoveryCompensationCandidates(scope: BrandScope, locationId: string, caseId: string): string {
+    return `${this.recoveryCase(scope, locationId, caseId)}/compensation-candidates`;
+  },
+
   moderationQueue(scope: BrandScope): string {
     return `${this.list(scope)}/moderation-queue`;
   },
 
   moderationDecision(scope: BrandScope, reviewId: string): string {
     return `${this.list(scope)}/${enc(reviewId)}/moderation-decisions`;
+  },
+} as const;
+
+/**
+ * A brand's one-off coded benefit grants (`BenefitGrantController`, ADR 0140, ADR 0181): the apology code a case
+ * may issue. Brand scope, `pricing.promotion.manage` to mint.
+ */
+export const benefitGrantPaths = {
+  mint(scope: BrandScope): string {
+    return `${OPERATIONS}${tenantBrand(scope)}/benefit-grants`;
   },
 } as const;
 

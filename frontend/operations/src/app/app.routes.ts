@@ -274,6 +274,13 @@ export const routes: Routes = [
                   ),
               },
               {
+                path: 'report',
+                loadComponent: () =>
+                  import('./features/customers/reviews/review-report-page').then(
+                    (m) => m.ReviewReportPage,
+                  ),
+              },
+              {
                 path: 'moderation',
                 loadComponent: () =>
                   import('./features/customers/reviews/moderation-page').then(
