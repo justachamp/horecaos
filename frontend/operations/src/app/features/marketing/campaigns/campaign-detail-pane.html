@@ -235,9 +235,8 @@
               }
             </ul>
           }
-          <p class="q-caption stats__hint">
-            {{ 'marketing.campaign.stats.deliveryUnavailableHint' | t }}
-          </p>
+          <h4 class="q-caption">{{ 'marketing.campaign.stats.delivery.title' | t }}</h4>
+          <q-delivery-counts [counts]="counts.delivery" [channel]="campaign()?.channel ?? null" />
         }
 
         @if (campaign(); as c) {
@@ -287,6 +286,11 @@
                     <td>
                       @if (recipient.deliveryState; as state) {
                         {{ deliveryText(state) }}
+                        @if (recipient.deliveryReason; as why) {
+                          <div class="q-caption" data-testid="recipient-delivery-reason">
+                            {{ deliveryReasonText(why) }}
+                          </div>
+                        }
                         @if (recipient.segmentsBilled; as segments) {
                           <div class="q-caption">
                             {{ 'marketing.campaign.recipients.segments' | t: { count: segments } }}

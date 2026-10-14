@@ -127,7 +127,13 @@ export class TemplateEditor {
 
   protected readonly canSave = computed(
     () =>
-      !this.submitting() && this.localeTags().every((tag) => this.bodyOf(tag).trim().length > 0),
+      !this.submitting() &&
+      this.localeTags().every(
+        (tag) =>
+          this.bodyOf(tag).trim().length > 0 &&
+          // An email without a subject is filed under «no subject» by every inbox (ADR 0182).
+          (!this.hasSubject() || this.subjectOf(tag).trim().length > 0),
+      ),
   );
   protected readonly anyBodyStarted = computed(() =>
     this.localeTags().some((tag) => this.bodyOf(tag).trim().length > 0),

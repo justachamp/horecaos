@@ -193,6 +193,18 @@
                           <th class="q-caption">
                             {{ 'reports.marketing.campaigns.column.status' | t }}
                           </th>
+                          <th class="q-caption num">
+                            {{ 'reports.marketing.campaigns.column.messages' | t }}
+                          </th>
+                          <th class="q-caption num">
+                            {{ 'reports.marketing.campaigns.column.delivered' | t }}
+                          </th>
+                          <th class="q-caption num">
+                            {{ 'reports.marketing.campaigns.column.failed' | t }}
+                          </th>
+                          <th class="q-caption num">
+                            {{ 'reports.marketing.campaigns.column.withheld' | t }}
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -210,6 +222,26 @@
                             <td class="q-body-sm">
                               {{ campaignStatusLabelKey(campaign.status) | t }}
                             </td>
+                            @for (figure of comparisonFigures; track figure) {
+                              <td
+                                class="q-body-sm num q-tnum"
+                                [attr.data-testid]="'campaign-compare-' + figure"
+                              >
+                                @if (comparison(campaign, figure); as value) {
+                                  {{ value }}
+                                } @else if (comparison(campaign, figure) === 0) {
+                                  0
+                                } @else {
+                                  <span
+                                    class="muted"
+                                    [attr.title]="'marketing.delivery.counts.notReported' | t"
+                                    >{{
+                                      'reports.marketing.campaigns.column.notReported' | t
+                                    }}</span
+                                  >
+                                }
+                              </td>
+                            }
                           </tr>
                         }
                       </tbody>
@@ -263,9 +295,13 @@
                                 </dt>
                                 <dd class="q-data-lg q-tnum">{{ c.total }}</dd>
                               </dl>
-                              <p class="q-body-sm not-built-note">
-                                {{ 'reports.marketing.campaigns.readReceiptsNotBuilt' | t }}
-                              </p>
+                              <h2 class="q-body-sm">
+                                {{ 'reports.marketing.campaigns.delivery.title' | t }}
+                              </h2>
+                              <q-delivery-counts
+                                [counts]="c.delivery"
+                                [channel]="selectedCampaign()?.channel ?? null"
+                              />
                             }
                           }
                           @default {}

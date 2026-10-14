@@ -99,6 +99,16 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Маркетинг курьер рассылка отправлено',
       'uz-Latn': 'Marketing kuryer ommaviy xabar yuborildi',
     },
+    MARKETING_COURIER_CONTACTS_CHECKED: {
+      en: 'Marketing courier numbers checked for a broadcast',
+      ru: 'Маркетинг номера курьеров проверены для рассылки',
+      'uz-Latn': 'Marketing kuryer raqamlari xabarnoma uchun tekshirildi',
+    },
+    MARKETING_COURIER_CONTACT_REVEALED: {
+      en: 'Marketing courier number read to send a message',
+      ru: 'Маркетинг номер курьера прочитан для отправки сообщения',
+      'uz-Latn': 'Marketing kuryer raqami xabar yuborish uchun oʻqildi',
+    },
     MARKETING_LINK_ARCHIVED: {
       en: 'Marketing link archived',
       ru: 'Маркетинг ссылка архивировано',

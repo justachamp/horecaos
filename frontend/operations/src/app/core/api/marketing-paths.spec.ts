@@ -60,3 +60,28 @@ describe('marketingPaths: contact policy (ADR 0112)', () => {
     );
   });
 });
+
+describe('marketingPaths: courier broadcasts and campaign delivery (ADR 0182)', () => {
+  it('builds the courier broadcast calls the controller declares', () => {
+    expect(marketingPaths.courierBroadcasts(SCOPE)).toBe(`${BASE}/courier-broadcasts`);
+    expect(marketingPaths.courierBroadcastReadiness(SCOPE)).toBe(
+      `${BASE}/courier-broadcasts/readiness`,
+    );
+    expect(marketingPaths.courierBroadcastRecipients(SCOPE, 'x1')).toBe(
+      `${BASE}/courier-broadcasts/x1/recipients`,
+    );
+    expect(marketingPaths.courierBroadcastSends(SCOPE, 'x1')).toBe(
+      `${BASE}/courier-broadcasts/x1/sends`,
+    );
+  });
+
+  it('builds the one read that compares every recent campaign’s delivery', () => {
+    expect(marketingPaths.campaignDeliveryCounts(SCOPE)).toBe(`${BASE}/campaigns/delivery-counts`);
+  });
+
+  it('encodes a broadcast id, so it cannot escape its place in the path', () => {
+    expect(marketingPaths.courierBroadcastRecipients(SCOPE, 'a/b')).toBe(
+      `${BASE}/courier-broadcasts/a%2Fb/recipients`,
+    );
+  });
+});

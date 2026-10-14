@@ -104,6 +104,14 @@ export interface ChannelView {
    * the bare code; see `channel-wiring.ts`.
    */
   readonly notWiredReason: string | null;
+  /**
+   * Whether this channel's provider reports anything after the hand-over for this brand: a delivery
+   * receipt (ADR 0182). False means a delivered figure is not zero but unknown, and a screen says
+   * so; SMS turns true when the brand's bound gateway has an enabled receipt source.
+   */
+  readonly reportsDelivery?: boolean;
+  /** Whether it reports an open or a click. False means a read figure is unknown, not zero. */
+  readonly reportsRead?: boolean;
 }
 
 export type CampaignKind = 'BROADCAST' | 'SCENARIO';
@@ -186,16 +194,58 @@ export interface RecipientView {
   readonly deferredUntil: string | null;
   readonly terminalStatus: string | null;
   /**
-   * What the delivery path knows about the message (ADR 0146): `DELIVERED`, `FAILED`,
-   * `REJECTED`, `NO_RECEIPT`, `HANDED_TO_OPERATOR` or `PENDING`. Evidence, not a promise: a
-   * gateway that accepted a message and reported nothing is `HANDED_TO_OPERATOR`, which is
-   * neither delivered nor failed. Null for a recipient with no message.
+   * What the delivery path knows about the message (ADR 0146, ADR 0182): `DELIVERED`, `READ`,
+   * `FAILED`, `REJECTED`, `NO_RECEIPT`, `HANDED_TO_OPERATOR`, `WITHHELD` or `PENDING`. Evidence,
+   * not a promise: a gateway that accepted a message and reported nothing is
+   * `HANDED_TO_OPERATOR`, which is neither delivered nor failed; `WITHHELD` is a message that was
+   * never sent, and `deliveryReason` says why. Null for a recipient with no message.
    */
   readonly deliveryState: string | null;
   /** The gateway's own last word, when it sent one. */
   readonly receiptState: string | null;
   /** Segments the gateway billed, when it said. */
   readonly segmentsBilled: number | null;
+  /**
+   * A bounded code that says why a message was withheld, failed or rejected
+   * (`TEMPLATE_AWAITING_PROVIDER`, `CONSENT_WITHHELD`, `RECEIVER_UNREACHABLE`...), never a
+   * provider's text, a number or an address.
+   */
+  readonly deliveryReason?: string | null;
+}
+
+/**
+ * What became of a campaign's messages, counted from their own evidence when asked (ADR 0182).
+ * Mirrors `OperationsMarketingController.DeliveryCountsResponse`.
+ */
+export interface DeliveryCountsView {
+  readonly total: number;
+  /** Confirmed delivered by the channel; includes `read`. */
+  readonly delivered: number;
+  /** Delivered messages the channel also reported opened or clicked. */
+  readonly read: number;
+  readonly failed: number;
+  readonly rejected: number;
+  /** Accepted by the gateway or relay and not reported on since. */
+  readonly handedToOperator: number;
+  /** Accepted, a receipt was expected, and none came in the window. */
+  readonly noReceipt: number;
+  readonly pending: number;
+  /** Never sent; `withheldByReason` says why. */
+  readonly withheld: number;
+  readonly withheldByReason: Readonly<Record<string, number>>;
+  /** What the gateway says it billed across the campaign. */
+  readonly segmentsBilled: number;
+  /** When false, `delivered` is unknown for this channel and brand, not zero. */
+  readonly reportsDelivery: boolean;
+  /** When false, `read` is unknown for this channel, not zero. */
+  readonly reportsRead: boolean;
+}
+
+/** One campaign's delivery counts, for comparing campaigns. Mirrors `OperationsMarketingController.CampaignDeliveryResponse`. */
+export interface CampaignDeliveryView {
+  readonly campaignId: string;
+  readonly channel: string;
+  readonly delivery: DeliveryCountsView;
 }
 
 /** Row 7.9b/6.4. Mirrors `OperationsMarketingController.RecipientCountsResponse`. */
@@ -213,6 +263,8 @@ export interface RecipientCountsView {
    * "delivered" vs "failed" has no data source yet).
    */
   readonly refusedByReason: Readonly<Record<string, number>>;
+  /** What became of the messages that were created (ADR 0182). */
+  readonly delivery: DeliveryCountsView;
 }
 
 /** Mirrors `OperationsMarketingController.SuppressionListItemResponse`. */
@@ -242,8 +294,14 @@ export interface CourierBroadcastView {
   readonly channel: string;
   readonly targetKind: string;
   readonly targetGroupId: string | null;
-  readonly message: string;
+  /** Free text, present only on a broadcast drafted before ADR 0182; a new one names a wording. */
+  readonly message: string | null;
+  /** The approved wording (an active SMS template of the class `COURIER_DISPATCH`) this broadcast sends. */
+  readonly templateKey: string | null;
+  /** The values the dispatcher gave the wording's variables. */
+  readonly variables: Readonly<Record<string, string>>;
   readonly status: string;
+  /** Couriers messaged; those with no number are in the per-courier results, not in this count. */
   readonly recipientCount: number;
   readonly refusalReason: string | null;
   readonly createdBy: string;
@@ -254,7 +312,43 @@ export interface CourierBroadcastView {
 export interface DraftCourierBroadcastRequest {
   readonly targetKind: string;
   readonly targetGroupId?: string | null;
-  readonly message: string;
+  readonly templateKey: string;
+  readonly variables: Readonly<Record<string, string>>;
+}
+
+/** One wording a dispatcher may broadcast. Mirrors `CourierBroadcastController.TemplateResponse`. */
+export interface CourierTemplateView {
+  readonly templateKey: string;
+  /** Each needs a value when the broadcast is drafted. */
+  readonly variables: readonly string[];
+  /** The wording per language tag, placeholders unexpanded. */
+  readonly bodiesByLocale: Readonly<Record<string, string>>;
+  /** True while the SMS gateway has not approved the wording (ADR 0091). */
+  readonly awaitingGateway: boolean;
+}
+
+/**
+ * Whether a courier SMS can leave for this brand and, if not, the stable code why
+ * (`NO_PROVIDER_BINDING`, `SMS_PURPOSE_NOT_PERMITTED`, `COURIER_CONTACTS_NOT_WIRED`...); read before
+ * drafting. Mirrors `CourierBroadcastController.ReadinessResponse`.
+ */
+export interface CourierReadinessView {
+  readonly isWired: boolean;
+  readonly reason: string | null;
+  readonly templates: readonly CourierTemplateView[];
+}
+
+/**
+ * What became of one courier a broadcast targeted, by their non-personal reference (K-014): the
+ * message's delivery state, or `NO_CONTACT` for a courier with no number. Mirrors
+ * `CourierBroadcastController.CourierResultResponse`.
+ */
+export interface CourierResultView {
+  readonly courierReference: string;
+  readonly state: string;
+  readonly reason: string | null;
+  readonly receiptState: string | null;
+  readonly segmentsBilled: number | null;
 }
 
 /** Mirrors `AttributionLinkController.AttributionLinkResponse` (T18, ADR 0044, operations 6.6a). */
@@ -470,6 +564,17 @@ export class MarketingApi {
   }
 
   /** Row 7.9b: how many recipients ended each way, without paging the full list. */
+  /**
+   * What became of the messages of each of the brand's recent campaigns (row 7.9b, ADR 0182), in one
+   * read: the list a marketer compares campaigns by.
+   */
+  async campaignDeliveryCounts(scope: BrandScope): Promise<readonly CampaignDeliveryView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly CampaignDeliveryView[]>(marketingPaths.campaignDeliveryCounts(scope)),
+    );
+    return result.value ?? [];
+  }
+
   async recipientCounts(scope: BrandScope, campaignId: string): Promise<RecipientCountsView> {
     return (
       await firstValueFrom(
@@ -555,6 +660,24 @@ export class MarketingApi {
         command(request),
       ),
     );
+  }
+
+  async courierReadiness(scope: BrandScope): Promise<CourierReadinessView> {
+    return firstValueFrom(
+      this.api.get<CourierReadinessView>(marketingPaths.courierBroadcastReadiness(scope)),
+    ).then((result) => result.value ?? { isWired: false, reason: null, templates: [] });
+  }
+
+  async courierBroadcastRecipients(
+    scope: BrandScope,
+    broadcastId: string,
+  ): Promise<readonly CourierResultView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly CourierResultView[]>(
+        marketingPaths.courierBroadcastRecipients(scope, broadcastId),
+      ),
+    );
+    return result.value ?? [];
   }
 
   async sendCourierBroadcast(

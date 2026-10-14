@@ -285,6 +285,14 @@
             }
             @case ('courierBroadcasts') {
               <p class="q-body-sm">{{ 'marketing.courierBroadcasts.intro' | t }}</p>
+              @if (courierWiringProblem(); as problem) {
+                <div class="error-band" role="status" data-testid="courier-wiring-problem">
+                  <span class="q-body-sm">
+                    <strong>{{ 'marketing.courierBroadcasts.readiness.heading' | t }}.</strong>
+                    {{ problem.key | t: problem.values }}
+                  </span>
+                </div>
+              }
               <div class="section-toolbar">
                 <button type="button" (click)="openCreateBroadcast()">
                   {{ 'marketing.courierBroadcasts.create.action' | t }}
@@ -314,16 +322,18 @@
                         <td>
                           {{ broadcastTargetKindLabelKey(broadcast.targetKind) | t }}
                         </td>
-                        <td>{{ broadcast.message }}</td>
+                        <td data-testid="courier-broadcast-wording">
+                          {{ broadcastWording(broadcast) }}
+                        </td>
                         <td>
                           <span class="status-badge">{{
                             broadcastStatusLabelKey(broadcast.status) | t
                           }}</span>
-                          @if (broadcast.refusalReason) {
-                            <div class="q-caption row-hint">
+                          @if (broadcast.refusalReason; as refusal) {
+                            <div class="q-caption row-hint" data-testid="courier-broadcast-refusal">
                               {{
                                 'marketing.courierBroadcasts.refusalReason'
-                                  | t: { reason: broadcast.refusalReason }
+                                  | t: { reason: broadcastRefusalText(refusal) }
                               }}
                             </div>
                           }
@@ -339,9 +349,70 @@
                             >
                               {{ 'marketing.courierBroadcasts.action.send' | t }}
                             </button>
+                          } @else {
+                            <button
+                              type="button"
+                              data-testid="courier-broadcast-results"
+                              (click)="toggleBroadcastResults(broadcast)"
+                            >
+                              {{
+                                (openResultsId() === broadcast.broadcastId
+                                  ? 'marketing.courierBroadcasts.action.hideResults'
+                                  : 'marketing.courierBroadcasts.action.results'
+                                ) | t
+                              }}
+                            </button>
                           }
                         </td>
                       </tr>
+                      @if (openResultsId() === broadcast.broadcastId) {
+                        <tr data-testid="courier-broadcast-results-row">
+                          <td colspan="5">
+                            <h3 class="q-caption">
+                              {{ 'marketing.courierBroadcasts.results.title' | t }}
+                            </h3>
+                            @if (resultsLoading()) {
+                              <p class="q-body-sm">
+                                {{ 'marketing.courierBroadcasts.results.loading' | t }}
+                              </p>
+                            } @else if (resultsOf(broadcast.broadcastId).length === 0) {
+                              <p class="q-body-sm" data-testid="courier-results-empty">
+                                {{ 'marketing.courierBroadcasts.results.empty' | t }}
+                              </p>
+                            } @else {
+                              <table class="campaigns__table">
+                                <thead>
+                                  <tr>
+                                    <th>
+                                      {{ 'marketing.courierBroadcasts.results.column.courier' | t }}
+                                    </th>
+                                    <th>
+                                      {{ 'marketing.courierBroadcasts.results.column.state' | t }}
+                                    </th>
+                                    <th>
+                                      {{ 'marketing.courierBroadcasts.results.column.reason' | t }}
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  @for (
+                                    result of resultsOf(broadcast.broadcastId);
+                                    track result.courierReference
+                                  ) {
+                                    <tr data-testid="courier-result-row">
+                                      <td class="q-tnum">{{ result.courierReference }}</td>
+                                      <td>{{ courierStateText(result.state) }}</td>
+                                      <td>
+                                        {{ result.reason ? courierReasonText(result.reason) : '—' }}
+                                      </td>
+                                    </tr>
+                                  }
+                                </tbody>
+                              </table>
+                            }
+                          </td>
+                        </tr>
+                      }
                     } @empty {
                       <tr>
                         <td colspan="5">
@@ -789,15 +860,58 @@
         </label>
       }
 
-      <label class="field">
-        <span class="q-caption">{{ 'marketing.courierBroadcasts.create.message' | t }}</span>
-        <textarea
-          rows="3"
-          maxlength="480"
-          [value]="newBroadcastMessage()"
-          (input)="newBroadcastMessage.set($any($event.target).value)"
-        ></textarea>
-      </label>
+      @if (courierTemplates().length === 0) {
+        <p class="q-body-sm" data-testid="courier-no-templates">
+          {{ 'marketing.courierBroadcasts.create.templates.none' | t }}
+        </p>
+      } @else {
+        <label class="field">
+          <span class="q-caption">{{ 'marketing.courierBroadcasts.create.template' | t }}</span>
+          <select
+            data-testid="courier-template"
+            [value]="newBroadcastTemplateKey()"
+            (change)="chooseBroadcastTemplate($any($event.target).value)"
+          >
+            <option value="">
+              {{ 'marketing.courierBroadcasts.create.template.placeholder' | t }}
+            </option>
+            @for (template of courierTemplates(); track template.templateKey) {
+              <option [value]="template.templateKey" [disabled]="template.awaitingGateway">
+                {{
+                  template.awaitingGateway
+                    ? ('marketing.courierBroadcasts.create.template.awaiting'
+                      | t: { key: template.templateKey })
+                    : template.templateKey
+                }}
+              </option>
+            }
+          </select>
+        </label>
+
+        @if (selectedCourierTemplate(); as chosen) {
+          @for (name of chosen.variables; track name) {
+            <label class="field">
+              <span class="q-caption">{{ variableLabel(name) }}</span>
+              <input
+                type="text"
+                maxlength="80"
+                [attr.data-testid]="'courier-variable-' + name"
+                [value]="broadcastValue(name)"
+                (input)="setBroadcastValue(name, $any($event.target).value)"
+              />
+            </label>
+          }
+          <p class="q-caption">{{ 'marketing.courierBroadcasts.create.variablesHint' | t }}</p>
+          <div class="field" data-testid="courier-preview">
+            <span class="q-caption">{{ 'marketing.courierBroadcasts.create.preview' | t }}</span>
+            @for (line of broadcastPreview(); track line[0]) {
+              <p class="q-body-sm">
+                <span class="q-tnum">{{ line[0] }}</span> · {{ line[1] }}
+              </p>
+            }
+          </div>
+        }
+      }
 
       @if (createBroadcastError(); as error) {
         <p class="dialog__error q-body-sm">{{ error }}</p>

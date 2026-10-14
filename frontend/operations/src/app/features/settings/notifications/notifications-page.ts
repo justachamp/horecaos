@@ -38,6 +38,7 @@ const NOTIFICATION_CLASSES: readonly string[] = [
   'MARKETING',
   'SECURITY',
   'OPERATIONS_ALERT',
+  'COURIER_DISPATCH',
 ];
 
 const PAYMENT_LINK_CODE = 'notifications.payment_link_auto_send';

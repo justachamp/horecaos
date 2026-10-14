@@ -754,7 +754,7 @@ export const settingsEn = {
   'settings.notifications.field.status': 'Active',
   'settings.notifications.field.activeVersion': 'Version',
   'settings.notifications.field.channel.hint':
-    'Only SMS and Telegram actually send today. Email and Push are declared so the schema and template key carry a channel, but no adapter delivers them yet.',
+    'Only SMS, Telegram and Email actually send today. Email is for campaigns only and needs a subject in every language. Push is declared so the schema and template key carry a channel, but no adapter delivers it yet.',
   'settings.notifications.field.variant': 'Variant',
   'settings.notifications.field.fulfilmentMode': 'Fulfilment mode',
   'settings.notifications.field.channelSource': 'Channel source',

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { BrandScope } from '../../../core/api/catalog-paths';
 import { CurrentBrand } from '../../../core/auth/current-brand';
+import { ApiError } from '../../../core/api/problem-details';
 import { applyRegionalFormats, resetRegionalFormats } from '../../../core/format/regional-format';
 import { I18n } from '../../../core/i18n/i18n';
 import { ContactPolicyApi } from '../contact-policy/contact-policy-api';
@@ -20,7 +21,7 @@ const SCOPE: BrandScope = { tenantId: 'tenant-1', brandId: 'brand-1' };
 /** T18: isWired true for every channel this fixture knows, unless a test overrides it. */
 const CHANNELS: readonly ChannelView[] = [
   { channel: 'SMS', carriesMarginalCost: true, isWired: true, notWiredReason: null },
-  { channel: 'EMAIL', carriesMarginalCost: true, isWired: true, notWiredReason: null },
+  { channel: 'EMAIL', carriesMarginalCost: false, isWired: true, notWiredReason: null },
   { channel: 'PUSH', carriesMarginalCost: false, isWired: true, notWiredReason: null },
   { channel: 'MESSAGING_APP', carriesMarginalCost: false, isWired: true, notWiredReason: null },
 ];
@@ -281,48 +282,288 @@ describe('CampaignsPage', () => {
     );
   });
 
-  it('T18: switching to the courier broadcasts tab lists broadcasts and can send a draft', async () => {
-    await render([]);
-    const api2 = api as unknown as {
-      listCourierBroadcasts: ReturnType<typeof vi.fn>;
-      sendCourierBroadcast: ReturnType<typeof vi.fn>;
-    };
-    const broadcast = {
-      broadcastId: 'broadcast-1',
-      channel: 'SMS',
-      targetKind: 'ALL_ACTIVE',
-      targetGroupId: null,
-      message: 'Shift change at 18:00',
-      status: 'DRAFT',
-      recipientCount: 0,
-      refusalReason: null,
-      createdBy: 'actor-1',
-      createdAt: '2026-09-14T08:00:00Z',
-      sentAt: null,
-    };
-    api2.listCourierBroadcasts = vi
-      .fn()
-      .mockResolvedValueOnce([broadcast])
-      .mockResolvedValueOnce([
-        { ...broadcast, status: 'SENT', recipientCount: 3, sentAt: '2026-09-14T09:00:00Z' },
-      ]);
-    api2.sendCourierBroadcast = vi.fn().mockResolvedValue({ ...broadcast, status: 'SENT' });
+  // ------------------------------------------------ courier broadcasts (ADR 0182, D15)
 
+  const BROADCAST = {
+    broadcastId: 'broadcast-1',
+    channel: 'SMS',
+    targetKind: 'ALL_ACTIVE',
+    targetGroupId: null,
+    message: null,
+    templateKey: 'COURIER_SHIFT_CHANGE',
+    variables: { note: 'Shift change', time: '18:00' },
+    status: 'DRAFT',
+    recipientCount: 0,
+    refusalReason: null,
+    createdBy: 'actor-1',
+    createdAt: '2026-09-14T08:00:00Z',
+    sentAt: null,
+  } as const;
+
+  const READY = {
+    isWired: true,
+    reason: null,
+    templates: [
+      {
+        templateKey: 'COURIER_SHIFT_CHANGE',
+        variables: ['note', 'time'],
+        bodiesByLocale: { ru: 'Смена: {{note}} в {{time}}', en: 'Shift: {{note}} at {{time}}' },
+        awaitingGateway: false,
+      },
+      {
+        templateKey: 'COURIER_ROAD_CLOSED',
+        variables: ['place'],
+        bodiesByLocale: { en: 'Road closed: {{place}}' },
+        awaitingGateway: true,
+      },
+    ],
+  } as const;
+
+  type CourierApi = {
+    listCourierBroadcasts: ReturnType<typeof vi.fn>;
+    sendCourierBroadcast: ReturnType<typeof vi.fn>;
+    draftCourierBroadcast: ReturnType<typeof vi.fn>;
+    courierReadiness: ReturnType<typeof vi.fn>;
+    courierBroadcastRecipients: ReturnType<typeof vi.fn>;
+  };
+
+  async function openCourierTab(setup: (api: CourierApi) => void): Promise<HTMLElement> {
+    await render([]);
+    const courier = api as unknown as CourierApi;
+    courier.listCourierBroadcasts = vi.fn().mockResolvedValue([BROADCAST]);
+    courier.courierReadiness = vi.fn().mockResolvedValue(READY);
+    courier.sendCourierBroadcast = vi.fn().mockResolvedValue({ ...BROADCAST, status: 'SENT' });
+    courier.draftCourierBroadcast = vi.fn().mockResolvedValue(BROADCAST);
+    courier.courierBroadcastRecipients = vi.fn().mockResolvedValue([]);
+    setup(courier);
     const host = fixture.nativeElement as HTMLElement;
     host.querySelector<HTMLButtonElement>('[data-testid="tab-courier-broadcasts"]')!.click();
     fixture.detectChanges();
     await flushMicrotasks();
     fixture.detectChanges();
+    return host;
+  }
+
+  it('T18: switching to the courier broadcasts tab lists broadcasts and can send a draft', async () => {
+    const host = await openCourierTab((api) => {
+      api.listCourierBroadcasts = vi
+        .fn()
+        .mockResolvedValueOnce([BROADCAST])
+        .mockResolvedValueOnce([
+          { ...BROADCAST, status: 'SENT', recipientCount: 3, sentAt: '2026-09-14T09:00:00Z' },
+        ]);
+    });
+    const courier = api as unknown as CourierApi;
 
     expect(host.querySelectorAll('[data-testid="courier-broadcast-row"]')).toHaveLength(1);
-    expect(host.textContent).toContain('Shift change at 18:00');
+    expect(host.querySelector('[data-testid="courier-broadcast-wording"]')?.textContent).toContain(
+      'COURIER_SHIFT_CHANGE: Shift change · 18:00',
+    );
 
     host.querySelector<HTMLButtonElement>('[data-testid="courier-broadcast-send"]')!.click();
     await flushMicrotasks();
     fixture.detectChanges();
 
-    expect(api2.sendCourierBroadcast).toHaveBeenCalledWith(SCOPE, 'broadcast-1');
-    expect(api2.listCourierBroadcasts).toHaveBeenCalledTimes(2);
+    expect(courier.sendCourierBroadcast).toHaveBeenCalledWith(SCOPE, 'broadcast-1');
+    expect(courier.listCourierBroadcasts).toHaveBeenCalledTimes(2);
+  });
+
+  it('6.4b: says in a sentence, before anything is drafted, why a courier SMS cannot leave for this brand', async () => {
+    const host = await openCourierTab((courier) => {
+      courier.courierReadiness = vi
+        .fn()
+        .mockResolvedValue({ ...READY, isWired: false, reason: 'COURIER_CONTACTS_NOT_WIRED' });
+    });
+
+    const banner = host.querySelector('[data-testid="courier-wiring-problem"]') as HTMLElement;
+    expect(banner).not.toBeNull();
+    expect(banner.textContent).toContain('Courier SMS cannot be sent for this brand yet');
+    expect(banner.textContent).toContain('may not yet use a courier’s own number');
+  });
+
+  it('6.4b: names the gateway account when it is not cleared for courier traffic', async () => {
+    const host = await openCourierTab((courier) => {
+      courier.courierReadiness = vi
+        .fn()
+        .mockResolvedValue({ ...READY, isWired: false, reason: 'SMS_PURPOSE_NOT_PERMITTED' });
+    });
+
+    expect(host.querySelector('[data-testid="courier-wiring-problem"]')?.textContent).toContain(
+      'not cleared to carry courier messages',
+    );
+  });
+
+  it('6.4b: says nothing when a courier SMS can leave', async () => {
+    const host = await openCourierTab(() => undefined);
+
+    expect(host.querySelector('[data-testid="courier-wiring-problem"]')).toBeNull();
+  });
+
+  it('6.4b: a refused broadcast is explained in words, not as the English sentence the server recorded', async () => {
+    const host = await openCourierTab((courier) => {
+      courier.listCourierBroadcasts = vi.fn().mockResolvedValue([
+        {
+          ...BROADCAST,
+          status: 'FAILED',
+          refusalReason:
+            'No SMS delivery path can reach couriers for this brand (COURIER_CONTACTS_NOT_WIRED)',
+        },
+      ]);
+    });
+
+    const hint = host.querySelector('[data-testid="courier-broadcast-refusal"]') as HTMLElement;
+    expect(hint.textContent).toContain('may not yet use a courier’s own number');
+    expect(hint.textContent).not.toContain('No SMS delivery path can reach couriers');
+  });
+
+  it('6.4b: a broadcast is drafted from an approved wording and its variables, never free text', async () => {
+    const host = await openCourierTab(() => undefined);
+    const courier = api as unknown as CourierApi;
+    const component = fixture.componentInstance as unknown as {
+      openCreateBroadcast(): void;
+      chooseBroadcastTemplate(key: string): void;
+      setBroadcastValue(name: string, value: string): void;
+      canCreateBroadcast(): boolean;
+      submitCreateBroadcast(): Promise<void>;
+    };
+
+    component.openCreateBroadcast();
+    fixture.detectChanges();
+    expect(host.querySelector('textarea')).toBeNull();
+    const options = Array.from(
+      host.querySelectorAll<HTMLOptionElement>('[data-testid="courier-template"] option'),
+    );
+    expect(options.map((option) => option.value)).toEqual([
+      '',
+      'COURIER_SHIFT_CHANGE',
+      'COURIER_ROAD_CLOSED',
+    ]);
+    expect(options[2].disabled).toBe(true);
+    expect(options[2].textContent).toContain('waiting for the SMS gateway’s approval');
+
+    component.chooseBroadcastTemplate('COURIER_SHIFT_CHANGE');
+    fixture.detectChanges();
+    expect(component.canCreateBroadcast()).toBe(false);
+    component.setBroadcastValue('note', 'Shift change');
+    expect(component.canCreateBroadcast()).toBe(false);
+    component.setBroadcastValue('time', '18:00');
+    fixture.detectChanges();
+    expect(component.canCreateBroadcast()).toBe(true);
+    expect(host.querySelector('[data-testid="courier-preview"]')?.textContent).toContain(
+      'Shift: Shift change at 18:00',
+    );
+
+    await component.submitCreateBroadcast();
+
+    expect(courier.draftCourierBroadcast).toHaveBeenCalledWith(SCOPE, {
+      targetKind: 'ALL_ACTIVE',
+      targetGroupId: null,
+      templateKey: 'COURIER_SHIFT_CHANGE',
+      variables: { note: 'Shift change', time: '18:00' },
+    });
+  });
+
+  it('6.4b: a value over eighty characters, or on two lines, cannot be drafted; nor can a wording the gateway has not approved', async () => {
+    await openCourierTab(() => undefined);
+    const component = fixture.componentInstance as unknown as {
+      chooseBroadcastTemplate(key: string): void;
+      setBroadcastValue(name: string, value: string): void;
+      canCreateBroadcast(): boolean;
+    };
+
+    component.chooseBroadcastTemplate('COURIER_SHIFT_CHANGE');
+    component.setBroadcastValue('time', '18:00');
+    component.setBroadcastValue('note', 'x'.repeat(81));
+    expect(component.canCreateBroadcast()).toBe(false);
+    component.setBroadcastValue('note', 'line one\nline two');
+    expect(component.canCreateBroadcast()).toBe(false);
+    component.setBroadcastValue('note', 'fine');
+    expect(component.canCreateBroadcast()).toBe(true);
+
+    component.chooseBroadcastTemplate('COURIER_ROAD_CLOSED');
+    component.setBroadcastValue('place', 'Amir Temur');
+    expect(component.canCreateBroadcast()).toBe(false);
+  });
+
+  it('6.4b: with no approved wording the dialog says how to get one instead of offering an empty form', async () => {
+    const host = await openCourierTab((courier) => {
+      courier.courierReadiness = vi.fn().mockResolvedValue({ ...READY, templates: [] });
+    });
+    (fixture.componentInstance as unknown as { openCreateBroadcast(): void }).openCreateBroadcast();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="courier-no-templates"]')?.textContent).toContain(
+      'COURIER_DISPATCH',
+    );
+    expect(host.querySelector('[data-testid="courier-template"]')).toBeNull();
+  });
+
+  it('6.4b: after a send, each courier’s result is shown by reference, with the reason a courier had no message', async () => {
+    const host = await openCourierTab((courier) => {
+      courier.listCourierBroadcasts = vi
+        .fn()
+        .mockResolvedValue([{ ...BROADCAST, status: 'SENT', recipientCount: 2 }]);
+      courier.courierBroadcastRecipients = vi.fn().mockResolvedValue([
+        {
+          courierReference: 'K-001',
+          state: 'HANDED_TO_OPERATOR',
+          reason: null,
+          receiptState: null,
+          segmentsBilled: 1,
+        },
+        {
+          courierReference: 'K-002',
+          state: 'NO_CONTACT',
+          reason: 'COURIER_HAS_NO_NUMBER',
+          receiptState: null,
+          segmentsBilled: null,
+        },
+        {
+          courierReference: 'K-003',
+          state: 'FAILED',
+          reason: 'RECEIVER_UNREACHABLE',
+          receiptState: null,
+          segmentsBilled: 1,
+        },
+      ]);
+    });
+
+    host.querySelector<HTMLButtonElement>('[data-testid="courier-broadcast-results"]')!.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    const rows = Array.from(host.querySelectorAll('[data-testid="courier-result-row"]')).map(
+      (row) => row.textContent ?? '',
+    );
+    expect((api as unknown as CourierApi).courierBroadcastRecipients).toHaveBeenCalledWith(
+      SCOPE,
+      'broadcast-1',
+    );
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toContain('K-001');
+    expect(rows[0]).toContain('Handed to the operator');
+    expect(rows[1]).toContain('No number');
+    expect(rows[1]).toContain('holds no number the platform sends to');
+    expect(rows[2]).toContain('Failed');
+    expect(rows[2]).toContain('cannot be reached');
+    expect(host.textContent).not.toContain('+998');
+  });
+
+  it('6.4b: an identity provider that could not be asked is said as such and leaves the draft to send again', async () => {
+    const host = await openCourierTab((courier) => {
+      courier.sendCourierBroadcast = vi
+        .fn()
+        .mockRejectedValue(
+          new ApiError('IDENTITY_PROVIDER_UNAVAILABLE', 503, { status: 503 }, null),
+        );
+    });
+
+    host.querySelector<HTMLButtonElement>('[data-testid="courier-broadcast-send"]')!.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host.textContent).toContain('could not be asked for the couriers’ numbers');
+    expect(host.querySelector('[data-testid="courier-broadcast-send"]')).not.toBeNull();
   });
 
   it('T18: records a suppression from the suppressions tab and reloads the list', async () => {
@@ -567,9 +808,9 @@ describe('CampaignsPage', () => {
       },
       {
         channel: 'EMAIL',
-        carriesMarginalCost: true,
+        carriesMarginalCost: false,
         isWired: false,
-        notWiredReason: 'NO_DELIVERY_ADAPTER',
+        notWiredReason: 'EMAIL_NOT_CONFIGURED',
       },
       {
         channel: 'PUSH',
@@ -606,7 +847,7 @@ describe('CampaignsPage', () => {
       expect(hint.textContent).toContain('not cleared to carry marketing messages');
     });
 
-    it('says email and push are not connected, each in its own words', async () => {
+    it('says email is not set up and push is not connected, each in its own words', async () => {
       await render([], GATED);
       (fixture.componentInstance as unknown as { openCreateCampaign(): void }).openCreateCampaign();
       fixture.detectChanges();
@@ -620,7 +861,7 @@ describe('CampaignsPage', () => {
 
       component.newCampaignChannel.set('EMAIL');
       fixture.detectChanges();
-      expect(hint()).toContain('mail service sends staff invitations');
+      expect(hint()).toContain('Email is not set up on this deployment');
 
       component.newCampaignChannel.set('PUSH');
       fixture.detectChanges();

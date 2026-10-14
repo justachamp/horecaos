@@ -762,7 +762,7 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.notifications.field.status': 'Faol',
   'settings.notifications.field.activeVersion': 'Versiya',
   'settings.notifications.field.channel.hint':
-    'Bugun faqat SMS va Telegram haqiqatda yuboradi. Email va Push sxema hamda shablon kalitida eʻlon qilingan, lekin ularni hech qanday adapter yetkazmaydi.',
+    'Hozir faqat SMS, Telegram va Email haqiqatan yuboriladi. Email faqat kampaniyalar uchun va har bir tilda mavzu talab qilinadi. Push sxema va shablon kaliti kanalni olib yurishi uchun eʻlon qilingan, lekin hozircha yetkazuvchi adapter yoʻq.',
   'settings.notifications.field.variant': 'Variant',
   'settings.notifications.field.fulfilmentMode': 'Bajarish usuli',
   'settings.notifications.field.channelSource': 'Kanal manbasi',

@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import { ChannelView } from './marketing-api';
-import { isSelectable, viewOf, wiringCodeIn, wiringSentence } from './channel-wiring';
+import {
+  courierCodeIn,
+  courierWiringSentence,
+  handedKey,
+  isSelectable,
+  viewOf,
+  wiringCodeIn,
+  wiringSentence,
+} from './channel-wiring';
 
 const SMS_GATED: ChannelView = {
   channel: 'SMS',
@@ -17,15 +25,24 @@ describe('wiringSentence', () => {
     );
   });
 
-  it('says email and push have no delivery in their own words, not a generic one', () => {
-    expect(wiringSentence('EMAIL', 'NO_DELIVERY_ADAPTER').key).toBe(
-      'marketing.wiring.NO_DELIVERY_ADAPTER.EMAIL',
-    );
+  it('says push has no delivery in its own words, not a generic one', () => {
     expect(wiringSentence('PUSH', 'NO_DELIVERY_ADAPTER').key).toBe(
       'marketing.wiring.NO_DELIVERY_ADAPTER.PUSH',
     );
     expect(wiringSentence('SMS', 'NO_DELIVERY_ADAPTER').key).toBe(
       'marketing.wiring.NO_DELIVERY_ADAPTER',
+    );
+  });
+
+  it('says why email cannot send: the platform’s relay is not set up, or only carries campaigns (ADR 0182)', () => {
+    expect(wiringSentence('EMAIL', 'EMAIL_NOT_CONFIGURED').key).toBe(
+      'marketing.wiring.EMAIL_NOT_CONFIGURED',
+    );
+    expect(wiringSentence('EMAIL', 'EMAIL_PURPOSE_NOT_PERMITTED').key).toBe(
+      'marketing.wiring.EMAIL_PURPOSE_NOT_PERMITTED',
+    );
+    expect(wiringSentence('EMAIL', 'ACCOUNT_MISCONFIGURED').key).toBe(
+      'marketing.wiring.ACCOUNT_MISCONFIGURED',
     );
   });
 
@@ -77,5 +94,67 @@ describe('wiringCodeIn', () => {
     expect(wiringCodeIn(null)).toBeNull();
     expect(wiringCodeIn(undefined)).toBeNull();
     expect(wiringCodeIn('')).toBeNull();
+  });
+});
+
+describe('courierWiringSentence', () => {
+  it('gives a courier SMS its own sentences, apart from marketing’s, for the two things only the owner can change', () => {
+    expect(courierWiringSentence('SMS_PURPOSE_NOT_PERMITTED').key).toBe(
+      'marketing.courierBroadcasts.wiring.SMS_PURPOSE_NOT_PERMITTED',
+    );
+    expect(courierWiringSentence('COURIER_CONTACTS_NOT_WIRED').key).toBe(
+      'marketing.courierBroadcasts.wiring.COURIER_CONTACTS_NOT_WIRED',
+    );
+  });
+
+  it('maps every code a courier send can be refused with', () => {
+    for (const code of [
+      'COURIER_CONTACTS_UNAVAILABLE',
+      'NO_PROVIDER_BINDING',
+      'INSTALLATION_INACTIVE',
+      'INSTALLATION_MISSING',
+      'SMS_ACCOUNT_MISCONFIGURED',
+      'PROVIDER_ADAPTER_MISMATCH',
+      'NO_ADAPTER',
+      'NO_DELIVERY_ADAPTER',
+      'COURIER_TEMPLATE_NOT_AVAILABLE',
+      'TEMPLATE_AWAITING_PROVIDER',
+      'NO_ACTIVE_COURIER',
+      'NO_COURIER_HAS_A_NUMBER',
+    ]) {
+      expect(courierWiringSentence(code).key).toBe(`marketing.courierBroadcasts.wiring.${code}`);
+    }
+  });
+
+  it('still says something, with the code in it, for a code a newer server added', () => {
+    const sentence = courierWiringSentence('SOMETHING_NEW');
+    expect(sentence.key).toBe('marketing.courierBroadcasts.wiring.UNKNOWN');
+    expect(sentence.values).toEqual({ reason: 'SOMETHING_NEW' });
+  });
+});
+
+describe('courierCodeIn', () => {
+  it('finds the code a refused broadcast’s recorded sentence names', () => {
+    expect(
+      courierCodeIn(
+        'No SMS delivery path can reach couriers for this brand (COURIER_CONTACTS_NOT_WIRED)',
+      ),
+    ).toBe('COURIER_CONTACTS_NOT_WIRED');
+    expect(courierCodeIn('... (SMS_PURPOSE_NOT_PERMITTED)')).toBe('SMS_PURPOSE_NOT_PERMITTED');
+  });
+
+  it('says nothing for a sentence that names none, or for nothing at all', () => {
+    expect(courierCodeIn('The broadcast was refused')).toBeNull();
+    expect(courierCodeIn(null)).toBeNull();
+    expect(courierCodeIn(undefined)).toBeNull();
+  });
+});
+
+describe('handedKey', () => {
+  it('calls an accepted message «sent» for Telegram, which has no operator in between, and «handed to the operator» elsewhere', () => {
+    expect(handedKey('MESSAGING_APP')).toBe('marketing.delivery.HANDED_TO_OPERATOR.MESSAGING_APP');
+    expect(handedKey('SMS')).toBe('marketing.delivery.HANDED_TO_OPERATOR');
+    expect(handedKey('EMAIL')).toBe('marketing.delivery.HANDED_TO_OPERATOR');
+    expect(handedKey(null)).toBe('marketing.delivery.HANDED_TO_OPERATOR');
   });
 });

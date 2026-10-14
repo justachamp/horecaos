@@ -563,8 +563,12 @@ export const reportsUzLatn: AreaMessages<typeof reportsEn> = {
   'reports.marketing.campaigns.count.deferred': 'Kechiktirilgan (tinch soatlar)',
   'reports.marketing.campaigns.count.refused': 'Rad etilgan',
   'reports.marketing.campaigns.count.total': 'Jami qabul qiluvchilar',
-  'reports.marketing.campaigns.readReceiptsNotBuilt':
-    'Oʻqilganlik belgilari koʻrsatilmaydi: hozircha na oʻqilgan holat, na oʻqilgan vaqt yozib borilmaydi — bu oʻlchanmagan, nolga teng emas.',
+  'reports.marketing.campaigns.column.messages': 'Xabarlar',
+  'reports.marketing.campaigns.column.delivered': 'Yetkazilgan',
+  'reports.marketing.campaigns.column.failed': 'Yetkazilmagan',
+  'reports.marketing.campaigns.column.withheld': 'Ushlab qolingan',
+  'reports.marketing.campaigns.column.notReported': 'maʻlum emas',
+  'reports.marketing.campaigns.delivery.title': 'Xabarlar nima boʻldi',
 
   // ---------------------------------------------------------------- reports 7.8 demand history (wave 48)
   'reports.forecast.title': 'Talab bashorati',

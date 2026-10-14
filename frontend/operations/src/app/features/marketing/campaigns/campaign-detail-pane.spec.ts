@@ -9,7 +9,13 @@ import { CurrentBrand } from '../../../core/auth/current-brand';
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { applyRegionalFormats, resetRegionalFormats } from '../../../core/format/regional-format';
 import { I18n } from '../../../core/i18n/i18n';
-import { CampaignView, MarketingApi, RecipientCountsView, RecipientView } from '../marketing-api';
+import {
+  CampaignView,
+  DeliveryCountsView,
+  MarketingApi,
+  RecipientCountsView,
+  RecipientView,
+} from '../marketing-api';
 import { OffersApi } from '../offers/offers-api';
 import { ScenariosApi } from '../scenarios/scenarios-api';
 import { CampaignDetailPane } from './campaign-detail-pane';
@@ -60,6 +66,26 @@ function campaign(overrides: Partial<CampaignView> = {}): CampaignView {
   };
 }
 
+/** What became of a campaign's messages (ADR 0182): none yet, on a channel that reports nothing. */
+function delivery(overrides: Partial<DeliveryCountsView> = {}): DeliveryCountsView {
+  return {
+    total: 0,
+    delivered: 0,
+    read: 0,
+    failed: 0,
+    rejected: 0,
+    handedToOperator: 0,
+    noReceipt: 0,
+    pending: 0,
+    withheld: 0,
+    withheldByReason: {},
+    segmentsBilled: 0,
+    reportsDelivery: false,
+    reportsRead: false,
+    ...overrides,
+  };
+}
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -81,6 +107,7 @@ describe('CampaignDetailPane', () => {
       refused: 0,
       total: 0,
       refusedByReason: {},
+      delivery: delivery(),
     },
     options: { recipients?: readonly RecipientView[]; providers?: readonly Provider[] } = {},
   ): Promise<void> {
@@ -279,14 +306,14 @@ describe('CampaignDetailPane', () => {
           status: 'DRAFT',
           createdBy: AUTHOR_ID,
           isWired: false,
-          notWiredReason: 'NO_DELIVERY_ADAPTER',
+          notWiredReason: 'EMAIL_NOT_CONFIGURED',
           channel: 'EMAIL',
         }),
       );
       const host = fixture.nativeElement as HTMLElement;
 
       expect(host.querySelector('[data-testid="campaign-unwired-warning"]')!.textContent).toContain(
-        'mail service sends staff invitations',
+        'Email is not set up on this deployment',
       );
     });
 
@@ -598,6 +625,7 @@ describe('CampaignDetailPane', () => {
       refused: 3,
       total: 46,
       refusedByReason: { SUPPRESSED: 2, CONSENT_WITHHELD: 1 },
+      delivery: delivery(),
     });
     const host = fixture.nativeElement as HTMLElement;
 
@@ -648,5 +676,139 @@ describe('CampaignDetailPane', () => {
     fixture.detectChanges();
 
     expect(host.querySelector('.stats__export-error')).not.toBeNull();
+  });
+
+  // ----------------------------------------------- row 7.9b: what became of the messages (ADR 0182)
+
+  const COUNTS = {
+    pending: 0,
+    queued: 3,
+    deferred: 0,
+    refused: 1,
+    total: 4,
+    refusedByReason: { CONSENT_WITHHELD: 1 },
+  } as const;
+
+  it('7.9b: a channel that reports nothing after the hand-over says «not reported», never a zero', async () => {
+    await render(OTHER_ID, campaign({ status: 'SENT', channel: 'EMAIL' }), {
+      ...COUNTS,
+      delivery: delivery({ total: 3, handedToOperator: 3, failed: 0 }),
+    });
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="delivered-not-reported"]')?.textContent).toContain(
+      'Not reported by this channel',
+    );
+    expect(host.querySelector('[data-testid="read-not-reported"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="delivery-handed"]')?.textContent).toContain('3');
+    expect(host.querySelector('[data-testid="delivery-failed"]')?.textContent).toContain('0');
+  });
+
+  it('7.9b: a channel that reports a delivery shows the number, and a read lights up by its flag alone', async () => {
+    await render(OTHER_ID, campaign({ status: 'SENT', channel: 'SMS' }), {
+      ...COUNTS,
+      delivery: delivery({
+        total: 3,
+        delivered: 2,
+        read: 1,
+        handedToOperator: 1,
+        reportsDelivery: true,
+        reportsRead: true,
+        segmentsBilled: 5,
+      }),
+    });
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="delivered-not-reported"]')).toBeNull();
+    expect(host.querySelector('[data-testid="delivery-delivered"]')?.textContent).toContain('2');
+    expect(host.querySelector('[data-testid="read-not-reported"]')).toBeNull();
+    expect(host.querySelector('[data-testid="delivery-read"]')?.textContent).toContain('1');
+    expect(host.querySelector('[data-testid="delivery-segments"]')?.textContent).toContain('5');
+    expect(host.querySelector('[data-testid="delivery-no-receipt"]')).not.toBeNull();
+  });
+
+  it('7.9b: a figure above zero is shown whatever the channel is said to report — evidence outranks a capability', async () => {
+    await render(OTHER_ID, campaign({ status: 'SENT', channel: 'SMS' }), {
+      ...COUNTS,
+      delivery: delivery({ total: 1, delivered: 1, reportsDelivery: false }),
+    });
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="delivered-not-reported"]')).toBeNull();
+    expect(host.querySelector('[data-testid="delivery-delivered"]')?.textContent).toContain('1');
+  });
+
+  it("7.9b: Telegram's accepted message is «sent», not «handed to the operator»", async () => {
+    await render(OTHER_ID, campaign({ status: 'SENT', channel: 'MESSAGING_APP' }), {
+      ...COUNTS,
+      delivery: delivery({ total: 3, handedToOperator: 3 }),
+    });
+    const facts = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="delivery-counts"]',
+    ) as HTMLElement;
+
+    expect(facts.textContent).toContain('Sent');
+    expect(facts.textContent).not.toContain('Handed to the operator');
+  });
+
+  it('7.9b: messages withheld say why, in words', async () => {
+    await render(OTHER_ID, campaign({ status: 'SENT', channel: 'SMS' }), {
+      ...COUNTS,
+      delivery: delivery({
+        total: 5,
+        withheld: 5,
+        withheldByReason: { TEMPLATE_AWAITING_PROVIDER: 4, SOMETHING_NEW: 1 },
+      }),
+    });
+    const reasons = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="delivery-withheld-reasons"]',
+    ) as HTMLElement;
+
+    expect(reasons.textContent).toContain('Wording awaiting the gateway’s approval');
+    expect(reasons.textContent).toContain('Reason code: SOMETHING_NEW');
+  });
+
+  it('7.9b: a recipient row carries a read, a withheld message and the reason a message failed', async () => {
+    const row = (overrides: Partial<RecipientView>): RecipientView => ({
+      customerAccountId: 'acct',
+      status: 'QUEUED',
+      notificationId: 'n',
+      refusalReason: null,
+      deferredUntil: null,
+      terminalStatus: null,
+      deliveryState: null,
+      receiptState: null,
+      segmentsBilled: null,
+      deliveryReason: null,
+      ...overrides,
+    });
+    await render(
+      OTHER_ID,
+      campaign({ status: 'SENT', channel: 'EMAIL' }),
+      { ...COUNTS, delivery: delivery() },
+      {
+        recipients: [
+          row({ customerAccountId: 'a', deliveryState: 'READ' }),
+          row({
+            customerAccountId: 'b',
+            deliveryState: 'WITHHELD',
+            deliveryReason: 'CONSENT_WITHHELD',
+          }),
+          row({
+            customerAccountId: 'c',
+            deliveryState: 'REJECTED',
+            deliveryReason: 'ADDRESS_REJECTED',
+          }),
+        ],
+      },
+    );
+    const rows = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('[data-testid="recipient-row"]'),
+    ).map((r) => r.textContent ?? '');
+
+    expect(rows[0]).toContain('Read');
+    expect(rows[1]).toContain('Withheld');
+    expect(rows[1]).toContain('Consent withdrawn since the audience was built');
+    expect(rows[2]).toContain('The mail relay refused this address for good');
   });
 });

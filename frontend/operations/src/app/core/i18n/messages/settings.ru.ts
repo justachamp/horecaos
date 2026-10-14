@@ -753,7 +753,7 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.notifications.field.status': 'Активен',
   'settings.notifications.field.activeVersion': 'Версия',
   'settings.notifications.field.channel.hint':
-    'Сегодня реально отправляют только SMS и Telegram. Email и Push объявлены в схеме и ключе шаблона, но ни один адаптер их не доставляет.',
+    'Сейчас реально отправляются только SMS, Telegram и Email. Email — только для кампаний, и в каждом языке нужна тема. Push объявлен, чтобы схема и ключ шаблона несли канал, но адаптера доставки пока нет.',
   'settings.notifications.field.variant': 'Вариант',
   'settings.notifications.field.fulfilmentMode': 'Способ выполнения',
   'settings.notifications.field.channelSource': 'Источник канала',

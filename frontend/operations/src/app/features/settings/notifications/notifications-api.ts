@@ -139,11 +139,11 @@ export interface RoutingBinding {
   readonly subscriptions: readonly RoutingSubscription[];
 }
 
-/** Every channel a template may declare. Only `SMS` and `TELEGRAM` are wired — see `field.channel.hint`. */
+/** Every channel a template may declare. `SMS`, `TELEGRAM` and `EMAIL` are wired (EMAIL for campaigns only, ADR 0182) — see `field.channel.hint`. */
 export const NOTIFICATION_CHANNELS: readonly string[] = ['SMS', 'TELEGRAM', 'PUSH', 'EMAIL'];
 
 /** `NotificationChannel.isWired()`, restated client-side so the editor can warn before a save round-trip. */
-export const WIRED_CHANNELS: ReadonlySet<string> = new Set(['SMS', 'TELEGRAM']);
+export const WIRED_CHANNELS: ReadonlySet<string> = new Set(['SMS', 'TELEGRAM', 'EMAIL']);
 
 /**
  * 10.9 Notifications, Tab 1 (`NotificationTemplateController`, ADR 0020).
