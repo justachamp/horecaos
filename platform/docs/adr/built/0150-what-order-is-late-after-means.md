@@ -29,7 +29,10 @@
   `ordering.average_order_minutes` and `ordering.maximum_order_minutes` have no reader by this
   record's own decision 5, and the key is still declared twice (`OrderingConfigurationKeys` and
   `ConfigurationKeys`) because the registry is internal to tenancy and importing it would make
-  the modules cyclic (a drift test guards the pair).
+  the modules cyclic (a drift test guards the pair). **Since 2026-10-14 (ADR 0177, batch 21)** the
+  five card 2 scalars that said «Пока не применяется» are retired, keys, stored values (V0653),
+  strings and fields, so the card carries no field that changes nothing; the runbook above is
+  still an owner step.
 - Date proposed: 2026-10-01
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (wave batch 17); Ayubkhon Abbosov (platform owner)
@@ -306,6 +309,22 @@ An operator sets «Заказ без обещанного времени опа�
 and the order board, the order header and the kitchen VDU all show an aggregator
 order with no promised time as late at 21 minutes; the same branch's promised
 orders are unchanged; and no field on card 2 changes nothing without saying so.
+
+## Status addition (2026-10-14)
+
+This record's decision 5 and second open input left `ordering.maximum_order_minutes` and
+`ordering.average_order_minutes` (and, by the same reading, `ordering.business_day_start_hour`,
+`ordering.vat_rate_percent` and `ordering.routing_poll_interval_minutes`) "either given a reader by a
+record that names one, or removed". ADR 0177 (batch 21) removes them: each has a neighbour that
+already owns the behaviour (the reporting calendar, the preparation bands, the dated tax profiles,
+the dispatch rules), `maximum_order_minutes` would have been a fourth lateness severity `orders.md`
+§2.7 does not have, and none had a reader. The keys leave both declarations, migration V0653 deletes
+any stored value (the startup validator refuses to boot over a row whose key is undeclared), and the
+fields and strings leave the order-policy page. This record's Decision, Alternatives and
+Consequences are unchanged; the Implementation status line above is advanced by this addition and
+stays `Built` (the late-order scalar it built is untouched). The runbook for stored values of
+`ordering.late_order_threshold_minutes` is unaffected and is still to be run (operations, with the
+owner's go).
 
 ## References
 

@@ -815,11 +815,14 @@ class OperatorOrderEntryHttpTests {
     @DisplayName("a promo code on an operator order is refused, priced and placed, where the tenant turned it off")
     void aPromoCodeIsRefusedWhereTheTenantTurnedItOff() throws Exception {
         activatePromoCode("OPERATOR10", 1_000);
-        assertThat(placeResult(pickupBody("OPERATOR10", null), STAFF, "promo-allowed")
+        // Quotes, not orders, until the one order below: a second pickup order at this branch would be
+        // proposed to the other (emptier) branch by the resolver and need an override reason, which is not
+        // what this test is about.
+        assertThat(quoteResult(pickupBody("OPERATOR10", null), STAFF)
                         .getResponse()
                         .getStatus())
                 .as("on by default: operators have applied promo codes since row 1.3e")
-                .isEqualTo(201);
+                .isEqualTo(200);
 
         setCard5("ordering.operator_promo_code_allowed", false);
 
@@ -842,10 +845,11 @@ class OperatorOrderEntryHttpTests {
                 .isEqualTo(201);
 
         setCard5("ordering.operator_promo_code_allowed", true);
-        assertThat(placeResult(pickupBody("OPERATOR10", null), STAFF, "promo-back")
+        assertThat(quoteResult(pickupBody("OPERATOR10", null), STAFF)
                         .getResponse()
                         .getStatus())
-                .isEqualTo(201);
+                .as("turning it back on lets the code through again, with no restart")
+                .isEqualTo(200);
     }
 
     @Test
@@ -909,13 +913,17 @@ class OperatorOrderEntryHttpTests {
                         .query(Boolean.class)
                         .single())
                 .isFalse();
+    }
 
+    @Test
+    @DisplayName("an order that did not ask for a call back carries none")
+    void anOrderThatDidNotAskForACallbackCarriesNone() throws Exception {
         UUID plain = place(pickupBody(null, null), STAFF, "callback-none");
+
         assertThat(jdbc.sql("SELECT callback_requested FROM ordering.orders WHERE id = :id")
                         .param("id", plain)
                         .query(Boolean.class)
                         .single())
-                .as("an order that did not ask for one carries none")
                 .isFalse();
     }
 

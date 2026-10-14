@@ -1,29 +1,27 @@
 # ADR 0145: Map and geocoding provider
 
 - Decision status: Accepted
-- Implementation status: Not started — no map is drawn anywhere in the operations
-  console and no geocoder is called by the platform. What exists is the schema
-  and the seams, not a provider: `customer.addresses.coordinate_source`
-  (`NOT_GEOCODED`, `LANDMARK_ONLY`, `GEOCODER`, `CUSTOMER_PIN`, `OPERATOR_PIN`,
-  `LEGACY_UNSOURCED`, V0021) with `GEOCODER` written by nothing and refused from
-  the storefront surface; `fulfillment.regions` with the SW/NE bounding box that
-  is meant to constrain a geocoder (V0025, editable as four numbers, row `3.6b`);
-  `fulfillment.service_zone_versions.area geography(MultiPolygon, 4326)` under
-  PostGIS, which `ServiceZoneService` will accept as a polygon through the API
-  while the console draws only circles; `integration.provider_installations`
-  accepting the category `GEOCODING` (V0013) while
-  `ProviderInstallationController.secretCategoryFor` refuses to store a secret
-  for it; `GeoPoint` in `tenancy.api`; `RoadDistancePort` answering empty (the
-  subject of ADR 0147, not this record). The only live third-party map in the
-  repository is outside the platform's control: `frontend/storefront` loads the
-  Yandex Maps 2.1 script on its address screen (`locations-add`) and calls
-  `geocode-maps.yandex.ru` directly from the customer's browser
-  (`GeocodingService`, `YandexMapsService`), and saves what the customer confirms
-  as `CUSTOMER_PIN`; `frontend/storefront-milliy` carries the same two services
-  and the same key configuration with no screen calling them yet (its checkout
-  notes that creating an address "needs the geocoding/marker flow"). Both images
-  ship a browser key as a default in `docker-entrypoint.sh` and `public/config.json`. The operations
-  console, the control plane and the mobile app have no map at all.
+- Implementation status: Partial — the map layer and the platform's own geocoder are built, and
+  the persona the address pane was built for can now reach it. Built (batch 19, `w1-maps`): the
+  geocoding port and its Yandex adapter, proved against recorded provider bodies and a controlled
+  fake; `GET .../brands/{brandId}/map-config`; the three rate-limited lookups of
+  `OperationsGeocodeController` (`geo.lookup`, with the region box applied); `shared/ui/map`
+  (`q-map-canvas`, `q-map-pin`, `q-polygon-editor`, `q-bbox-editor`, `q-address-picker` over one
+  `MapProvider` token, with a null provider and a recording fake) and their call sites in the
+  delivery zones, the courier and dispatch maps, the branch detail and New order's address pane;
+  a pin a person confirmed is saved as `OPERATOR_PIN` and a geocoder's answer is never saved as
+  such. Since 2026-10-14 (ADR 0177) `LOCATION_STAFF` and `LOCATION_MANAGER` give a delivery address
+  from that pane through `customer.address.capture` and the location-scoped address routes; before
+  that the pane's routes were `TENANT`-scoped and only the tenant roles could use it. Not built:
+  the 200-address bake-off harness and its recorded result; moving both storefronts off their direct
+  Yandex calls and removing the browser key committed as a default in both images'
+  `docker-entrypoint.sh` and `public/config.json`; the entry in ADR 0034's processor register.
+  **Nothing has drawn a tile from the real vendor SDK or called the real geocoder:**
+  `HORECAOS_GEO_PROVIDER` defaults to `none` and no environment holds the server key reference or
+  the browser key, so every map screen says in words that no provider is configured and works from
+  its coordinate fields; the operator types the point. That, and finance's answer on paying for
+  the licence from Uzbekistan, is the external connection recorded in
+  `docs/runbooks/external-connections/w2-order-entry-policy.md`.
 - Date proposed: 2026-10-01
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (wave batch 17); Ayubkhon Abbosov (platform owner)
@@ -399,6 +397,21 @@ address; and watches couriers move on the same map. A customer picks an address
 on the storefront without their browser calling the vendor's geocoder, and the
 saved row is `CUSTOMER_PIN`. The 200-address result is on record. No map key
 remains in git.
+
+## Status addition (2026-10-14)
+
+ADR 0177 (batch 21) takes the decision this record's address pane waited on and left open: how a
+phone-order operator gives a delivery address without holding `customer.pii.reveal` and
+`customer.manage`. The answer is a narrow capability, `customer.address.capture`, at `LOCATION` scope
+(held by `LOCATION_STAFF`, `LOCATION_MANAGER` and the three roles that hold `customer.manage`), and
+three location-scoped routes beside the location-scoped customer create: a masked list of the
+customer's saved addresses, adding one with its pin, and setting the pin of a saved one. The routes
+that batch 19's pane called are `TENANT`-scoped, which a `LOCATION` grant never covers, so the
+persona the pane is for could not reach what this record built; the gap map's earlier note that
+"`LOCATION_MANAGER` and above" could was wrong, because that role holds `customer.pii.reveal` but not
+`customer.manage`. This record's Decision, Alternatives and Consequences are unchanged. The Implementation status line
+above is advanced by this addition and by the audit it cites; it stays `Partial` for the bake-off, the
+storefront move and the register entry, and for the provider that no environment has yet connected.
 
 ## References
 

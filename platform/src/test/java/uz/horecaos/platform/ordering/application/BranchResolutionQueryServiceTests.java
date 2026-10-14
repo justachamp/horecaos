@@ -128,9 +128,11 @@ class BranchResolutionQueryServiceTests {
                 new FakeConfigurationResolver(config));
     }
 
+    /** The higher the priority the higher the zone ranks (ADR 0037); the service sorts by it, so the fixture sets it. */
     private static BranchResolutionPort.DeliveryBranchMatch match(
-            UUID id, String name, @Nullable Double lat, @Nullable Double lon) {
-        return new BranchResolutionPort.DeliveryBranchMatch(id, name, UUID.randomUUID(), 1, 10, 5_000, lat, lon);
+            UUID id, String name, int zonePriority, @Nullable Double lat, @Nullable Double lon) {
+        return new BranchResolutionPort.DeliveryBranchMatch(
+                id, name, UUID.randomUUID(), 1, zonePriority, 5_000, lat, lon);
     }
 
     private static List<UUID> order(BranchResolution resolution) {
@@ -142,10 +144,10 @@ class BranchResolutionQueryServiceTests {
     /** Four closed branches, in zone-rank order NEAR, FAR, SOON, SOONEST_BUT_NO_PREORDERS; NEAR is nearest to the customer. */
     private void everyBranchClosedAtThePromisedTime() {
         zoneMatches.clear();
-        zoneMatches.add(match(FAR, "Far", 41.40, 69.40));
-        zoneMatches.add(match(NEAR, "Near", 41.301, 69.241));
-        zoneMatches.add(match(SOON, "Soon", 41.35, 69.30));
-        zoneMatches.add(match(SOONEST_BUT_NO_PREORDERS, "Soonest, no pre-orders", 41.31, 69.25));
+        zoneMatches.add(match(FAR, "Far", 40, 41.40, 69.40));
+        zoneMatches.add(match(NEAR, "Near", 30, 41.301, 69.241));
+        zoneMatches.add(match(SOON, "Soon", 20, 41.35, 69.30));
+        zoneMatches.add(match(SOONEST_BUT_NO_PREORDERS, "Soonest, no pre-orders", 10, 41.31, 69.25));
         schedule.put(
                 FAR,
                 at -> Serviceability.refused(
@@ -262,7 +264,7 @@ class BranchResolutionQueryServiceTests {
     @DisplayName("a branch with no point of its own is the last to be picked by distance")
     void aBranchWithNoPointRanksLastByDistance() {
         everyBranchClosedAtThePromisedTime();
-        zoneMatches.add(match(NO_POINT, "No point", null, null));
+        zoneMatches.add(match(NO_POINT, "No point", 5, null, null));
         schedule.put(
                 NO_POINT,
                 at -> Serviceability.refused(

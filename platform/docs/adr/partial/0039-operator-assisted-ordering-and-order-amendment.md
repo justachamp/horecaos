@@ -569,3 +569,19 @@ discovery and the choice to spend it rather than ship a command that crashes on
 first use. ADR 0113 carries the full decision, alternatives and consequences;
 this note only records that the two channels §11 named now have an owner and
 points there rather than restating it here.
+
+### Amended 2026-10-14 (ADR 0177, batch 21): the delivery address of a phone order
+
+ADR 0177 amends one part of this record's capability split for the phone-order persona and changes
+nothing else it decided. This record kept `customer.manage` and `customer.pii.reveal` off
+`LOCATION_STAFF` on purpose, "so a phone-order operator sees a masked lookup card and never a raw
+contact value", and `CartService#setDestination` keeps a delivery order naming a *saved* address of
+the resolved customer. What the split missed is that the saved-address routes are `TENANT`-scoped and a
+`LOCATION` grant never covers a `TENANT` route, so below a tenant-level grant nobody could give a
+delivery address from the New order screen at all (and `LOCATION_MANAGER`, who holds
+`customer.pii.reveal` but not `customer.manage`, could not add one). ADR 0177 adds one narrow
+capability, `customer.address.capture`, at `LOCATION` scope, in the manner of `customer.create` (row
+`1.3a`): a masked list of the resolved customer's saved addresses, adding one with its pin, and setting
+the pin of a saved one, on location-scoped routes beside `OperationsCustomerController`'s create; it
+reveals no raw address and edits no address text. This addition leaves the Implementation status line
+above as it is; ADR 0177 carries the build and its status.

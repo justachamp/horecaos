@@ -1337,7 +1337,7 @@ change the address, then a third dish, then ask the total. Every pane must be
 reachable at any moment.
 
 ```
-┌ Новый заказ ─────────────────────────────────── Черновик · 00:42 ── [Отмена][Создать]┐
+┌ Новый заказ ──────────────────────────────────────────────────────── [Отмена][Создать]┐
 ├─ 320px ──────────┬────────── flexible ──────────┬────── 360px ──────────────────────┤
 │ КЛИЕНТ           │ МЕНЮ                          │ ЗАКАЗ                             │
 │  телефон 🔍      │  поиск позиции  F2            │  филиал ▾                         │
@@ -1354,6 +1354,16 @@ reachable at any moment.
 
 The phone field is focused on open. That single decision is worth more than
 anything else on the screen.
+
+**There is no draft timer and no quote countdown, and the header does not
+pretend to have either** (corrected 2026-10-14, ADR 0177; the first sketch of
+this screen assumed a server-side draft cart that expires). `OperatorOrderingService.place`
+opens a cart, fills it, prices it and checks it out in one atomic call, and
+`POST .../orders/quote` prices the same basket inside a transaction it always
+rolls back, so nothing is held between the operator's keystrokes that could
+expire under her. The total beside **Создать** is the server's own price for the
+basket as it stands, re-asked after every change (§5.6); §5.7 lists the two
+states this removes.
 
 ### 5.3 Customer pane
 
@@ -1382,10 +1392,25 @@ anything else on the screen.
 
 ### 5.4 Address pane
 
-Saved addresses from `customer.addresses` (label, masked line, coordinate
-source). **+ Новый адрес** opens a map picker plus the structured fields this
+Saved addresses of the customer the operator has resolved, **masked**: the
+label, the street without its house number or flat, the district, the point and
+where it came from. The operator on this screen is `LOCATION_STAFF` or
+`LOCATION_MANAGER`, who hold `customer.address.capture` (ADR 0177) and not
+`customer.pii.reveal`, so the rest of the address (house, flat, подъезд, этаж,
+ориентир, delivery instructions) is never sent to the browser; the
+courier and the kitchen ticket read it from the order's own snapshot. The
+unmasked list, behind `customer.pii.reveal`, stays on the Customers screen.
+(Until 2026-10-14 this pane called the tenant-scoped address routes, which a
+`LOCATION` grant never covers, so the persona the screen is for could not give
+a delivery address at all.)
+
+**+ Новый адрес** opens a map picker plus the structured fields this
 market requires — дом, квартира, **подъезд**, **этаж**, **ориентир** — which
-live inside `encrypted_fields`, not as columns (V0021).
+live inside `encrypted_fields`, not as columns (V0021), and saves them through
+the location-scoped add route with a pin the operator confirmed. A saved address
+with no pin, or the wrong one, gets its **pin** placed or moved in place; that
+writes the point and its source (`OPERATOR_PIN`) and nothing else, because an
+operator who cannot read the address text has no business editing it.
 
 An address with no coordinates is legitimate: `coordinate_source =
 'NOT_GEOCODED'` with an ориентир is how a large share of addresses here work.
@@ -1421,13 +1446,13 @@ in words, not a silent empty menu.
 | Филиал | resolved from the zone, overridable. **Changing it rebuilds the cart** — `ordering.reject_cart_rebinding()` refuses to move a cart between locations, so the UI must warn that prices and availability change, and re-price |
 | Канал | fixed to the tenant's operator channel (`tenant.sales_channels`, `system_type` for the admin panel). Aggregator orders entered by hand set `entry_mode = 'MANUAL'` with no live binding — the column is **built** (ADR 0040, V0038), but this whole screen is not: see §11's order-creation gap |
 | Тип | `fulfillment_mode`, offered only where `tenant.channel_fulfillment_modes.enabled` |
-| Время | Сейчас / Ко времени. Out-of-hours shows the branch-resolution warning before it is committed, not after |
+| Время | Сейчас / Ко времени. Out-of-hours shows the branch-resolution warning before it is committed, not after. The branch resolver is asked about the **promised** time, not about now (ADR 0177): a branch closed now and open then is a candidate, and when none is open then `ordering.preorder_branch_resolution` ranks the closed ones — the nearest to the delivery point, or the one that opens soonest; a pickup has no point to measure from, so it always takes the soonest |
 | Оплата | from `tenant.channel_payment_methods` intersected with the ADR 0030 operator policy — which methods an operator may offer is configurable and is not the same set the storefront shows |
-| Промокод | when the operator policy permits |
-| Сдача с | `SET_CASH_TENDERED`; shows change owed live. If a later amendment pushes the total above it, the operator gets `CASH_TENDERED_INSUFFICIENT` as an **acknowledgeable** notice, not a block — the customer can hand over more |
-| Требуется звонок | toggle, when the policy offers it |
+| Промокод | when `ordering.operator_promo_code_allowed` permits (default on). Where it is off the field is replaced by a sentence, and the server refuses a code on an operator-keyed order with `OPERATOR_PROMO_CODE_NOT_ALLOWED`, on the quote and on the order |
+| Сдача с | `ordering.operator_change_due_allowed` (default on); written to the order in the transaction that creates it, a later change is `SET_CASH_TENDERED`; shows change owed live. If a later amendment pushes the total above it, the operator gets `CASH_TENDERED_INSUFFICIENT` as an **acknowledgeable** notice, not a block — the customer can hand over more. Refused with `OPERATOR_CHANGE_DUE_NOT_ALLOWED` where the setting is off |
+| Требуется звонок | toggle, when `ordering.operator_callback_flag_allowed` offers it (default on); the flag is on the order from its first read, and the board's «Требуется звонок» filter finds it. Refused with `OPERATOR_CALLBACK_NOT_ALLOWED` where the setting is off |
 | Комментарий кухне | free text |
-| Итого | the ADR 0018 quote, re-priced on every change, with the quote's 15-minute TTL visible as a countdown once it is priced |
+| Итого | the ADR 0018 quote, re-priced on every change (`POST .../orders/quote`, which prices and undoes). It has no countdown: nothing is held between the price and **Создать** (§5.2) |
 
 **Создать** → `POST /api/v1/operations/orders` with `Idempotency-Key`,
 capability `ORDER_PLACE` at `LOCATION` scope. On success, route straight to the
@@ -1439,8 +1464,8 @@ back.
 
 | State | Rendering |
 |---|---|
-| Draft timer | Elapsed time in the header. A cart expires (`carts.expires_at`); at two minutes remaining the header warns and offers to extend by re-pricing |
-| Quote expired | Basket stays, totals grey, **Пересчитать** — never silently re-price behind the operator |
+| Draft timer | **Does not apply** (ADR 0177, corrected 2026-10-14). `OperatorOrderingService.place` opens the cart, prices it and checks it out in one atomic call, so there is no server-side draft cart that can expire out from under the operator the way a storefront cart does; the quote endpoint holds nothing either. A header timer would show a number that means nothing |
+| Quote expired | **Does not apply**, for the same reason. The price on screen is the server's own, asked again after every change and dropped if a slower answer for an older basket arrives; at **Создать** the order is priced and booked in one transaction, so it is booked at the price the checkout computed, not at one that could have lapsed in between |
 | Item became unavailable | The line turns danger with **стоп** and the create button is blocked until it is removed. No partial reservation (ADR 0019) |
 | Location closed | Warning at the branch selector with the next opening time, and the pre-order path offered |
 | Out of zone | The refusal reason from ADR 0037 in words, plus the nearest serviceable branch if any |
