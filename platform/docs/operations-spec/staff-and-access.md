@@ -496,7 +496,11 @@ question ("which roles have `catalog.publish`?") that a restaurant manager never
 asks. She asks "what does a manager get?", which is a page per job.
 
 The grid earns its place exactly once — when tenant-defined jobs ship (§11.4) —
-and should be built then, not now.
+and should be built then, not now. **They shipped (ADR 0186, batch 21), and the grid
+is «Таблица прав»**, a lazy route under this tab (`/staff/roles/grid`): every job across,
+every capability down in plain sentences grouped by area, a read-only matrix with a
+search over the list itself. The library above stays the page a manager reads; the grid
+is where an owner sees the whole vocabulary and, beside it, the job editor.
 
 ### List columns
 
@@ -540,8 +544,16 @@ Read-only. Three blocks:
    rows linking to 9.2. Empty state: «Пока никто».
 
 Actions: **Назначить кому-то** (opens the job dialog with the job preselected).
-No edit, no duplicate, no delete — jobs are code-owned in v1 and the screen
-should not imply otherwise by showing greyed-out edit controls.
+The eight code-owned jobs have no edit and no delete — they are the product's, and the
+screen does not imply otherwise by showing greyed-out edit controls. A job the company
+made (ADR 0186) is marked «Своя», carries its own name, and for a person holding
+`iam.role.manage` (the owner and the administrator) offers **Изменить** and
+**Копировать** (every job, code-owned ones included, can be copied: a "template" is a
+copy). **Создать должность** opens the same editor blank. The editor asks for a name, the
+level (fixed once made), the things the job can do (ticked from the vocabulary; what the
+author does not hold herself, and what a company's job can never carry, is shown locked
+with the reason), and a reason that goes to the activity log; closing a job is refused
+while anyone holds it.
 
 ### The one thing this screen must beat Delever on
 
@@ -1036,30 +1048,29 @@ thing and this spec is explicit about the difference (§2.6). **ADR 0009.**
 
 ### 11.4 Tenant-defined jobs
 
-`iam.roles` carries `tenant_id` and `is_platform_defined`, and
-`uq_role_tenant_code` exists — the schema is ready, and more of the plumbing
-around it is built than a grant-creation reading would suggest.
-`GrantManagementService`'s private `resolveRole` no longer stops at
-`PlatformRole.find(roleCode)`: when a code names no platform role it falls
-back to a tenant-scoped lookup in `iam.roles` itself, so a grant *can* name a
-tenant-owned role today. `V0086` and `V0089` closed the security gap that
-made this safe to allow — `fk_grant_role` originally referenced `iam.roles`
-on `id` alone, so a grant in one tenant could have named a role another
-tenant defined privately, which the two migrations closed with a composite
-key and a trigger doing the same check for every writer that is not this
-method.
+**Built (ADR 0186, batch 21), reversing ADR 0025's closed input «no tenant-defined roles in
+v1».** A company defines its own jobs as named subsets of the capability catalogue:
+`POST`, `PUT .../{code}` (under `If-Match`) and `DELETE .../{code}` on
+`/api/v1/control-plane/tenants/{tenantId}/roles`, under the new `iam.role.manage` (the
+owner and the administrator, never a branch manager, and never part of a job a company
+makes). Every capability in a job is one its author holds company-wide at the moment of the
+write and one a company's job may carry at all: the deny-list is derived from what the
+code-owned human jobs carry, minus `platform.*` and `iam.*`, so a tenant job can never
+confer the power to define jobs or to give them away. The code a grant names is generated
+(`job-` and ten hex digits), the name is one free-text line, the level is fixed once made,
+an edit is live for every holder at their next request, a close is refused while the job is
+held, and a company has at most twenty active jobs. Giving one away is the unchanged ADR 0103
+path: the granter must hold every capability at the scope, and a granter whose
+`iam.grant.manage` stops short of the company may give a job only at a level no broader than
+the scope, read from the job's own level. `GET .../roles` returns the code-owned jobs and the
+company's own (`custom`, `name`, `version`, `grantable`); `GET .../capabilities` returns the
+vocabulary with what the reader holds; the branch and brand `grant-roles` routes include the
+company's jobs. `iam.roles` and `iam.role_capabilities` have row-level security (V0693),
+and every reader of a grant's role binds the tenant. The person holding a job reads its name
+from the session context (`roleName`), because she cannot read the company's list.
 
-None of that creates a tenant-owned role. There is no `POST` for one —
-`RoleRegistrySynchronizer` only projects the code-owned `PlatformRole`
-catalogue into `iam.roles` at startup — so `iam.roles` today holds platform
-roles alone regardless of what the grant path can now resolve. ADR 0025's own
-decision record still closes this for v1: "no tenant-defined roles in v1" is
-listed among its closed inputs. What changed is that granting one would work
-correctly the day a creation path exists; what has not changed is that the
-creation path, and therefore the feature, does not exist. This is still the
-trigger for building the permission grid described in §5, not before.
-**ADR 0025**, explicitly deferred; the resolution and boundary-safety half is
-done ahead of the decision to build the rest.
+The audit facts are `iam.role.created`, `iam.role.changed` and `iam.role.retired`, each a
+before-and-after change document with the reason. The console side is §5.
 
 ### 11.5 Order attribution
 

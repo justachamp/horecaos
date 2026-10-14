@@ -1,0 +1,80 @@
+<div class="page">
+  <a class="q-caption back" routerLink="/staff/roles" data-testid="grid-back">{{
+    'staff.grid.backToJobs' | t
+  }}</a>
+  <h1 class="q-title">{{ 'staff.grid.title' | t }}</h1>
+  <p class="q-body-sm lead">{{ 'staff.grid.lead' | t }}</p>
+
+  @if (loading()) {
+    <p class="q-body-sm">{{ 'staff.grid.loading' | t }}</p>
+  } @else if (denied()) {
+    <p class="q-body-sm denied">{{ 'staff.people.denied' | t }}</p>
+  } @else if (refusal(); as r) {
+    @if (r.kind === 'denied') {
+      <q-denied-state [capability]="r.name" />
+    } @else {
+      <q-locked-state [module]="r.name" />
+    }
+  } @else if (loadError(); as message) {
+    <p class="q-body-sm error" role="alert">{{ message }}</p>
+  } @else {
+    @if (notice(); as message) {
+      <p class="q-body-sm notice" role="status" data-testid="grid-notice">{{ message }}</p>
+    }
+
+    @if (canManage()) {
+      <div class="toolbar">
+        <button type="button" class="primary-button" (click)="newJob()" data-testid="grid-new">
+          {{ 'staff.roles.create' | t }}
+        </button>
+      </div>
+    }
+
+    @if (editorMode(); as mode) {
+      <q-staff-job-editor
+        [catalogue]="catalogue()"
+        [mode]="mode"
+        [busy]="busy()"
+        [serverError]="editorError()"
+        (submitted)="submit($event)"
+        (retired)="retire($event)"
+        (dismiss)="closeEditor()"
+      />
+    }
+
+    <p class="q-caption legend" data-testid="grid-legend">
+      <span class="swatch swatch--on" aria-hidden="true"></span>{{ 'staff.grid.canDo' | t }}
+      <span class="swatch" aria-hidden="true"></span>{{ 'staff.grid.cannotDo' | t }}
+    </p>
+
+    <label class="search q-body-sm">
+      <span class="q-visually-hidden">{{ 'staff.grid.search.label' | t }}</span>
+      <input
+        type="search"
+        class="search__input"
+        [value]="query()"
+        (input)="onQueryInput($any($event.target).value)"
+        [placeholder]="'staff.grid.search.placeholder' | t"
+        data-testid="grid-search"
+      />
+    </label>
+
+    @if (areas().length === 0) {
+      <p class="q-body-sm empty" data-testid="grid-empty">
+        {{ 'staff.grid.search.empty' | t: { query: query() } }}
+      </p>
+    } @else {
+      @for (area of areas(); track area.area) {
+        <section class="area" [attr.data-testid]="'grid-area-' + area.area">
+          <h2 class="q-emphasis area__title">{{ area.area }}</h2>
+          <q-matrix-grid
+            [rowHeaders]="area.rowHeaders"
+            [columnHeaders]="columnHeaders()"
+            [cells]="area.cells"
+            [disabled]="true"
+          />
+        </section>
+      }
+    }
+  }
+</div>

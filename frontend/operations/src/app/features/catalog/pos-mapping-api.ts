@@ -69,6 +69,13 @@ export interface UnmappedExternalResponse {
   readonly detail: string | null;
   readonly entities: readonly UnmappedExternalEntity[];
   readonly horecaosCandidates: readonly HorecaosCandidate[];
+  /**
+   * Asked only for `OPERATOR` (row `9.2c`): whether the till's create-order API carries the paired
+   * operator. False means a pairing is kept and sent to no order, and the pane says so; null for every
+   * other entity type, for which the question does not arise. Optional so a fixture written before it
+   * still type-checks, and absent reads as "not asked".
+   */
+  readonly receivedByProvider?: boolean | null;
 }
 
 /** The two-sided conflict card's own data — `PosMappingController.MappingConflictView`. */

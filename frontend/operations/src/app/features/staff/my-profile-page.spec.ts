@@ -110,6 +110,26 @@ async function setUp(
 }
 
 describe('MyProfilePage', () => {
+  it('no longer says the password and the terminal PIN are not built: it carries the password card and the PIN card', async () => {
+    const { fixture } = await setUp([scope()]);
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).not.toContain('пока не построены');
+    expect(fixture.nativeElement.querySelector('q-my-profile-password-card')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('q-my-profile-pin-card')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="password-change"]')).not.toBeNull();
+  });
+
+  it('names a job the company defined by the name the session context carries, not by its code', async () => {
+    const { fixture } = await setUp([
+      scope({ roleCode: 'job-3f9a1c0b2d', roleName: 'Старший кассир' }),
+    ]);
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Старший кассир');
+    expect(text).not.toContain('job-3f9a1c0b2d');
+  });
+
   it('reads Мои должности from CurrentTenant.scopes — GET /api/v1/session/context, already loaded — and nothing else', async () => {
     const { tenant } = await setUp([scope()]);
 

@@ -42,6 +42,7 @@ import { PersonShiftsTab } from './shifts/person-shifts-tab';
 import { ProfileDraft, toManagerRequest } from './staff-profile-draft';
 import { StaffProfileForm } from './staff-profile-form';
 import { roleLabel, scopeLevelLabel } from './staff-role-labels';
+import { StaffJobNames } from './staff-job-names';
 
 type StaffTab = 'access' | 'profile' | 'contacts' | 'shifts' | 'security';
 
@@ -102,6 +103,7 @@ export class StaffMemberDetailPane {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   protected readonly i18n = inject(I18n);
+  private readonly jobNames = inject(StaffJobNames);
   private readonly registry = inject(PlatformLocales);
   private readonly attendance = inject(AttendanceStatus);
 
@@ -271,7 +273,7 @@ export class StaffMemberDetailPane {
   }
 
   protected roleLabel(code: string): string {
-    return roleLabel(code, (key) => this.i18n.t(key));
+    return roleLabel(code, (key) => this.i18n.t(key), this.jobNames.nameOf(code));
   }
 
   protected scopeLevelLabel(scopeType: GrantView['scopeType']): string {

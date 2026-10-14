@@ -44,8 +44,12 @@ import {
 /**
  * The six pairings the `10.8b` mapping tab offers, alongside `4.5a`'s own
  * product tab on the import screen. `OPERATOR` (row `9.2c`, ADR 0139) is the
- * till's id for a colleague: typed in by hand like `COURIER` -- no adapter lists
- * a POS's operators -- against the people the tenant keeps a record of.
+ * till's id for a colleague, chosen from the till's own list where the adapter
+ * can read one (Clopos: `GET /users`) and typed in by hand where it cannot,
+ * against the people the tenant keeps a record of. Listing a till's users and the
+ * till's order API receiving one are different facts, and the tab says which is
+ * true: `receivedByProvider` false puts «this till does not receive an operator
+ * yet» above the pane, because a pairing that goes to no order must not look live.
  */
 const MAPPING_ENTITY_TYPES: readonly MappingEntityType[] = [
   'PAYMENT_TYPE',
@@ -454,6 +458,14 @@ const MAPPING_ENTITY_TYPES: readonly MappingEntityType[] = [
                     </button>
                   }
                 </nav>
+                @if (
+                  mappingEntityType() === 'OPERATOR' &&
+                  mappingUnmapped()?.receivedByProvider === false
+                ) {
+                  <p class="mapping-note" role="status" data-testid="mapping-operator-not-received">
+                    {{ i18n.t('settings.integrations.detail.mapping.operatorNotReceived') }}
+                  </p>
+                }
                 <q-mapping-pane
                   [rows]="mappingRows()"
                   [horecaosCandidates]="mappingUnmapped()?.horecaosCandidates ?? []"
@@ -548,6 +560,14 @@ const MAPPING_ENTITY_TYPES: readonly MappingEntityType[] = [
       display: flex;
       align-items: center;
       gap: 8px;
+    }
+
+    .mapping-note {
+      margin: 12px 0 0;
+      padding: 8px 12px;
+      border: 1px dashed var(--q-hairline);
+      border-radius: var(--q-radius);
+      color: var(--q-ink-muted);
     }
 
     .mapping-entity-types {

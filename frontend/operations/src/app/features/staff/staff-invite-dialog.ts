@@ -17,6 +17,7 @@ import { Scope, canGrantAt, tenantScope, brandScope, locationScope } from './sco
 import { ScopeGrant } from '../../core/auth/session-context';
 import { roleDescription, roleLabel } from './staff-role-labels';
 import { ScopeOption } from './staff-job-dialog';
+import { StaffJobNames } from './staff-job-names';
 
 /** Digits the mask accepts after the fixed `+998` prefix — nine, matching a UZ mobile number. */
 const PHONE_DIGIT_COUNT = 9;
@@ -62,6 +63,8 @@ export class StaffInviteDialog {
   readonly dismiss = output<void>();
 
   protected readonly i18n = inject(I18n);
+
+  private readonly jobNames = inject(StaffJobNames);
 
   protected readonly fullName = signal('');
   protected readonly phoneDigits = signal('');
@@ -201,7 +204,7 @@ export class StaffInviteDialog {
   }
 
   protected roleLabel(code: string): string {
-    return roleLabel(code, (key) => this.i18n.t(key));
+    return roleLabel(code, (key) => this.i18n.t(key), this.jobNames.nameOf(code));
   }
 
   protected roleDescription(code: string): string | null {

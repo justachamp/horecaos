@@ -1,0 +1,90 @@
+.page {
+  max-width: 1280px;
+}
+
+.back {
+  color: var(--q-primary);
+}
+
+.lead {
+  color: var(--q-ink-muted);
+  margin-top: 4px;
+  max-width: 640px;
+}
+
+.toolbar {
+  margin: 16px 0 0;
+}
+
+.primary-button {
+  height: 40px;
+  padding: 0 16px;
+  border: none;
+  border-radius: var(--q-radius);
+  background: var(--q-primary);
+  color: var(--q-inverse-ink);
+  cursor: pointer;
+}
+
+.search {
+  display: block;
+  margin: 16px 0;
+  max-width: 420px;
+}
+
+.search__input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--q-surface-2);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+}
+
+.area {
+  margin-top: 24px;
+  overflow-x: auto;
+}
+
+.area__title {
+  margin-bottom: 8px;
+}
+
+.notice {
+  padding: 8px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  margin-top: 16px;
+}
+
+.error {
+  color: var(--q-error-text);
+}
+
+.empty {
+  color: var(--q-ink-muted);
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 0;
+  color: var(--q-ink-muted);
+}
+
+.swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+  border: 1px solid var(--q-hairline);
+  border-radius: 3px;
+  background: var(--q-canvas);
+}
+
+.swatch--on {
+  background: var(--q-primary);
+  border-color: var(--q-primary);
+}

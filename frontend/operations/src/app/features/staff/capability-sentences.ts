@@ -927,6 +927,14 @@ export const CAPABILITY_SENTENCES: Readonly<Record<string, CapabilitySentence>> 
     'uz-Latn': 'Lavozim va kirish huquqlarini tayinlash',
     en: 'Manage staff grants',
   },
+  // ADR 0186: the company's own jobs. Held by the owner and the administrator, and never part of a job the
+  // company makes - the sentence is for the grid, which shows it locked.
+  'iam.role.manage': {
+    area: 'iam',
+    ru: 'Создавать и менять должности своей компании',
+    'uz-Latn': 'Kompaniyaning oʻz lavozimlarini yaratish va oʻzgartirish',
+    en: 'Create and change the company’s own jobs',
+  },
 
   // ADR 0139: the staff member record. The four sentences name what a person
   // can do with other people's details -- and, for the emergency contacts,

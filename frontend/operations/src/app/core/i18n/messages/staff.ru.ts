@@ -164,8 +164,6 @@ export const staffRu: AreaMessages<typeof staffEn> = {
   'staff.detail.field.revokedReason': 'Причина отзыва',
   'staff.detail.field.subject': 'Внутренний идентификатор',
   'staff.detail.field.telegram': 'Telegram',
-  'staff.detail.security.notBuilt':
-    'Способ входа, последний вход и PIN на терминале пока не отслеживаются',
   'staff.detail.today.created': 'Создано сегодня: {count}',
   'staff.detail.today.accepted': 'Принято сегодня: {count}',
   'staff.detail.today.loading': 'Загрузка заказов за сегодня…',
@@ -232,7 +230,6 @@ export const staffRu: AreaMessages<typeof staffEn> = {
   'staff.myProfile.telegram.issue': 'Получить код',
   'staff.myProfile.telegram.sendThis': 'Отправьте это боту в личном чате:',
   'staff.myProfile.security.title': 'Безопасность',
-  'staff.myProfile.security.notBuilt': 'Смена пароля и PIN на терминале пока не построены',
   'staff.myProfile.sessions.title': 'Сеансы',
   'staff.myProfile.sessions.lead':
     'Это сеансы вашей учётной записи. Они общие для всех компаний, где вы работаете: завершить один — значит выйти из него во всех.',
@@ -834,4 +831,72 @@ export const staffRu: AreaMessages<typeof staffEn> = {
   'staff.myProfile.interface.reset.confirm':
     'Столбцы и все сохранённые виды будут удалены. Это нельзя отменить.',
   'staff.myProfile.interface.reset.yes': 'Да, сбросить',
+
+  // ----------------------------------------- batch 21: jobs a company defines (ADR 0186), password card
+  'staff.roles.create': 'Новая должность',
+  'staff.roles.grid': 'Таблица прав',
+  'staff.roles.own': 'Своя',
+  'staff.roles.edit': 'Изменить',
+  'staff.roles.copy': 'Копировать',
+  'staff.roles.ownNote':
+    'Должности с пометкой «Своя» создала ваша компания из того же списка действий, которые умеет система. Такая должность никогда не может больше, чем мог её автор.',
+  'staff.grid.title': 'Таблица прав',
+  'staff.grid.lead':
+    'По горизонтали — должности, по вертикали — всё, что можно делать, по разделам. Закрашенная клетка: должность это умеет.',
+  'staff.grid.backToJobs': 'Должности',
+  'staff.grid.loading': 'Читаем таблицу…',
+  'staff.grid.search.label': 'Поиск по таблице',
+  'staff.grid.search.placeholder': 'Что можно делать — «отменять заказы», «возврат»…',
+  'staff.grid.search.empty': 'Ничего не найдено по «{query}»',
+  'staff.grid.canDo': 'Может',
+  'staff.grid.cannotDo': 'Не может',
+  'staff.jobEditor.title.new': 'Новая должность',
+  'staff.jobEditor.title.copy': 'Копия «{name}»',
+  'staff.jobEditor.title.edit': 'Изменить «{name}»',
+  'staff.jobEditor.name.label': 'Название',
+  'staff.jobEditor.name.hint': 'Одна строка, до 80 символов, на любом языке.',
+  'staff.jobEditor.name.required': 'Назовите должность',
+  'staff.jobEditor.level.label': 'Где даётся',
+  'staff.jobEditor.level.fixed': 'Уровень должности не меняется. Чтобы перенести, сделайте копию.',
+  'staff.jobEditor.capabilities.title': 'Что можно делать',
+  'staff.jobEditor.capabilities.selected': 'Выбрано: {count}',
+  'staff.jobEditor.capabilities.search': 'Поиск по списку',
+  'staff.jobEditor.capabilities.none': 'Отметьте хотя бы одно действие.',
+  'staff.jobEditor.capabilities.notHeld': 'Нельзя дать то, чего нет у вас самих',
+  'staff.jobEditor.capabilities.never': 'Не входит в должности, которые создаёт компания',
+  'staff.jobEditor.capabilities.trimmed':
+    'Не вошло в копию, потому что вы не можете это дать: {count}',
+  'staff.jobEditor.reason.label': 'Причина',
+  'staff.jobEditor.reason.placeholder': 'Запишется в журнал действий',
+  'staff.jobEditor.reason.required': 'Укажите причину',
+  'staff.jobEditor.holders.some':
+    'Эту должность занимают: {count}. Изменение подействует на них при следующем запросе.',
+  'staff.jobEditor.holders.none': 'Эту должность пока никто не занимает.',
+  'staff.jobEditor.save': 'Сохранить',
+  'staff.jobEditor.saving': 'Сохраняем…',
+  'staff.jobEditor.cancel': 'Отмена',
+  'staff.jobEditor.saved': 'Сохранено: «{name}»',
+  'staff.jobEditor.retired': 'Закрыто: «{name}»',
+  'staff.jobEditor.capabilities.mustDrop':
+    'Снимите отметки с того, что вы не можете дать, и сохраните',
+  'staff.jobEditor.retire.title': 'Закрыть должность',
+  'staff.jobEditor.retire.hint':
+    'Закрытая должность уходит из списка, и её нельзя назначить. Что это была за должность, остаётся в журнале действий.',
+  'staff.jobEditor.retire.blocked':
+    'Её всё ещё занимают: {count}. Сначала снимите должность с этих людей.',
+  'staff.jobEditor.retire.confirm': 'Закрыть должность',
+  'staff.activity.action.roleCreated': 'Должность создана',
+  'staff.activity.action.roleChanged': 'Должность изменена',
+  'staff.activity.action.roleRetired': 'Должность закрыта',
+  'staff.myProfile.password.title': 'Пароль',
+  'staff.myProfile.password.lead':
+    'Пароль хранит сервис входа, а не эта система. Кнопка ведёт на страницу сброса, ссылка придёт на почту.',
+  'staff.myProfile.password.endsAll':
+    'После сброса вы выйдете везде, включая эту консоль, и войдёте снова с новым паролем.',
+  'staff.myProfile.password.action': 'Сменить пароль',
+  'staff.myProfile.password.checking': 'Проверяем, работает ли здесь почта…',
+  'staff.myProfile.password.noMail':
+    'Эта установка пока не может отправлять почту, поэтому ссылка не дойдёт. Попросите того, кто отвечает за платформу, настроить почту.',
+  'staff.detail.security.declined':
+    'Входы и сеансы коллеги здесь не показываются — так задумано: каждый видит и завершает свои в «Мой профиль». Чтобы закрыть доступ ушедшему сотруднику, завершите его работу.',
 };

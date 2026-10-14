@@ -1,9 +1,10 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CurrentTenant } from '../../core/auth/current-tenant';
+import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
 import { GrantView, RoleDescriptor, StaffApi } from './staff-api';
@@ -47,9 +48,12 @@ async function flushMicrotasks(): Promise<void> {
 
 interface ApiOverrides {
   readonly roles?: () => Promise<readonly RoleDescriptor[]>;
+  /** The capabilities the reader holds; none unless a spec says. */
+  readonly held?: readonly string[];
 }
 
 async function setUp(grants: readonly GrantView[], overrides: ApiOverrides = {}) {
+  const held = new Set(overrides.held ?? []);
   const api = {
     roles: vi.fn(overrides.roles ?? (() => Promise.resolve(ROLES))),
     listGrants: vi.fn().mockResolvedValue(grants),
@@ -64,6 +68,10 @@ async function setUp(grants: readonly GrantView[], overrides: ApiOverrides = {})
       provideRouter([]),
       { provide: StaffApi, useValue: api },
       { provide: CurrentTenant, useValue: new FakeCurrentTenant() },
+      {
+        provide: SessionCapabilities,
+        useValue: { has: (capability: string) => held.has(capability) },
+      },
     ],
   }).compileComponents();
   TestBed.inject(I18n).setLocale('ru');
@@ -223,5 +231,80 @@ describe('StaffRolesPage', () => {
       'staff.directory.enabled',
     );
     expect(el.querySelector('[data-testid="q-denied-state"]')).toBeNull();
+  });
+});
+
+describe('StaffRolesPage: the company’s own jobs (ADR 0186, row 9.1b)', () => {
+  const OWN: RoleDescriptor = {
+    code: 'job-3f9a1c0b2d',
+    scopeType: 'LOCATION',
+    capabilities: ['order.read', 'order.cancel'],
+    custom: true,
+    name: 'Старший кассир',
+    version: 3,
+    status: 'ACTIVE',
+  };
+
+  const withOwn = () => Promise.resolve([...ROLES, OWN]);
+
+  function text(fixture: ComponentFixture<StaffRolesPage>): string {
+    return (fixture.nativeElement as HTMLElement).textContent ?? '';
+  }
+
+  it('names the job by what the company called it, marks it «Своя», and never shows its code', async () => {
+    const fixture = await setUp([], { roles: withOwn });
+
+    const names = [...fixture.nativeElement.querySelectorAll('.row .q-emphasis')].map(
+      (e: Element) => e.textContent,
+    );
+    expect(names).toContain('Старший кассир');
+    expect(fixture.nativeElement.querySelectorAll('[data-testid="role-own"]')).toHaveLength(1);
+    expect(text(fixture)).not.toContain('job-3f9a1c0b2d');
+    expect(fixture.nativeElement.querySelector('[data-testid="roles-own-note"]')).not.toBeNull();
+  });
+
+  it('says nothing about own jobs while the company has none', async () => {
+    const fixture = await setUp([], { held: ['IAM_ROLE_MANAGE'] });
+
+    expect(fixture.nativeElement.querySelector('[data-testid="role-own"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="roles-own-note"]')).toBeNull();
+  });
+
+  it('offers define, edit and copy to a person who holds iam.role.manage, edit only on the company’s own', async () => {
+    const fixture = await setUp([], { roles: withOwn, held: ['IAM_ROLE_MANAGE'] });
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+    expect(fixture.nativeElement.querySelector('[data-testid="roles-create"]')).not.toBeNull();
+    (fixture.nativeElement.querySelector('[data-testid="roles-create"]') as HTMLElement).click();
+    expect(navigate).toHaveBeenLastCalledWith(['/staff/roles/grid'], { queryParams: { new: 1 } });
+
+    const rows = fixture.nativeElement.querySelectorAll('.row') as NodeListOf<HTMLElement>;
+    rows[0].click(); // tenant-owner: code-owned
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="role-edit"]')).toBeNull();
+    (fixture.nativeElement.querySelector('[data-testid="role-copy"]') as HTMLElement).click();
+    expect(navigate).toHaveBeenLastCalledWith(['/staff/roles/grid'], {
+      queryParams: { copy: 'tenant-owner' },
+    });
+
+    const own = [...rows].find((row) => row.textContent?.includes('Старший кассир'))!;
+    own.click();
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('[data-testid="role-edit"]') as HTMLElement).click();
+    expect(navigate).toHaveBeenLastCalledWith(['/staff/roles/grid'], {
+      queryParams: { edit: 'job-3f9a1c0b2d' },
+    });
+  });
+
+  it('offers a reader without iam.role.manage the table and no way to define, edit or copy', async () => {
+    const fixture = await setUp([], { roles: withOwn });
+
+    expect(fixture.nativeElement.querySelector('[data-testid="roles-grid-link"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="roles-create"]')).toBeNull();
+    (fixture.nativeElement.querySelectorAll('.row')[0] as HTMLElement).click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="role-edit"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="role-copy"]')).toBeNull();
   });
 });

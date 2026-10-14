@@ -40,10 +40,20 @@ export const SCOPE_LEVEL_LABEL_KEYS: Readonly<Record<ScopeType, MessageKey>> = {
   LOCATION: 'staff.scope.location',
 };
 
-/** A role's label, or the raw code for one this catalogue does not yet name — never a blank cell. */
-export function roleLabel(code: string, translate: (key: MessageKey) => string): string {
+/**
+ * A role's label: the translated name of a code-owned job, else the name the company gave its own
+ * (ADR 0186, `custom`), else the raw code - never a blank cell.
+ */
+export function roleLabel(
+  code: string,
+  translate: (key: MessageKey) => string,
+  custom?: string | null,
+): string {
   const key = ROLE_LABEL_KEYS[code];
-  return key ? translate(key) : code;
+  if (key) {
+    return translate(key);
+  }
+  return custom ?? code;
 }
 
 export function roleDescription(

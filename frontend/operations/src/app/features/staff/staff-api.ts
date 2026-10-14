@@ -6,6 +6,7 @@ import { command } from '../../core/api/idempotency';
 import { LocationScope } from '../../core/api/operations-paths';
 import { staffPaths } from '../../core/api/staff-paths';
 import { Scope } from './scope-coverage';
+import { StaffJobNames } from './staff-job-names';
 import { ManagedPlace, StaffReach } from './staff-reach';
 
 /** `ResourceScope.ScopeType` — re-exported so callers do not reach into `operations-paths.ts` for it. */
@@ -56,8 +57,61 @@ export interface RoleDescriptor {
   readonly code: string;
   readonly scopeType: ScopeType;
   readonly capabilities: readonly string[];
-  /** Present only on a branch's or brand's own catalogue: whether the caller may give this job there. Absent means the company-wide catalogue. */
+  /** Whether the caller may give this job at the place the list was asked for (the company, or her own branch or brand). */
   readonly grantable?: boolean;
+  /** ADR 0186: true for a job the company defined itself, false for one of the code-owned bundles. */
+  readonly custom?: boolean;
+  /** The company's own name for a custom job; null for a code-owned one, whose name is a translation. */
+  readonly name?: string | null;
+  /** The `If-Match` version of a custom job; null for a code-owned one. */
+  readonly version?: number | null;
+  readonly status?: 'ACTIVE' | 'RETIRED';
+}
+
+/**
+ * Mirrors `TenantRoleController.CapabilityEntryResponse` (ADR 0186): one row of the vocabulary a job is
+ * built from. `area` is the server's resource type; the console groups by the area its own sentences
+ * name (`capability-sentences.ts`), and falls back to this one.
+ */
+export interface CapabilityEntry {
+  readonly code: string;
+  readonly area: string;
+  readonly action: string;
+  /** The caller holds it company-wide, so she may put it in a job. */
+  readonly held: boolean;
+  /** A job a company defines may carry it at all (not `platform.*`, not `iam.*`, not a machine's). */
+  readonly composable: boolean;
+}
+
+/** Mirrors `TenantRoleController.TenantJobResponse`. */
+export interface TenantJobView {
+  readonly code: string;
+  readonly name: string;
+  readonly scopeType: ScopeType;
+  readonly capabilities: readonly string[];
+  readonly version: number;
+  readonly status: 'ACTIVE' | 'RETIRED';
+  readonly copiedFrom: string | null;
+  readonly holders: number;
+  readonly createdAt: string | null;
+  readonly updatedAt: string | null;
+  readonly retiredAt: string | null;
+}
+
+/** The body of `POST .../roles` - `TenantRoleController.CreateJobRequest`. `copiedFrom` is omitted, not null, when there is none. */
+export interface CreateJobRequest {
+  readonly name: string;
+  readonly scopeType: Exclude<ScopeType, 'PLATFORM'>;
+  readonly capabilities: readonly string[];
+  readonly copiedFrom?: string;
+  readonly reason: string;
+}
+
+/** The body of `PUT .../roles/{code}` - `TenantRoleController.UpdateJobRequest`. The level does not change. */
+export interface UpdateJobRequest {
+  readonly name: string;
+  readonly capabilities: readonly string[];
+  readonly reason: string;
 }
 
 /** Mirrors `GrantManagementService.PlaceDirectory` — the names a branch manager's team view groups under. */
@@ -145,6 +199,7 @@ export interface OperatorTodayCounts {
 export class StaffApi {
   private readonly api = inject(ApiClient);
   private readonly reach = inject(StaffReach);
+  private readonly jobNames = inject(StaffJobNames);
 
   /**
    * What the last scoped list said about each grant, so a revoke can name the route
@@ -222,7 +277,75 @@ export class StaffApi {
         place ? this.placeRolesPath(place) : staffPaths.roles(tenantId),
       ),
     );
+    const roles = result.value ?? [];
+    // Every screen that shows a job by its code learns the company's own names from the one read
+    // that has them, so a person's card and the staff list say «Старший кассир», not job-3f9a1c0b2d.
+    this.jobNames.remember(roles);
+    return roles;
+  }
+
+  /**
+   * `TenantRoleController.capabilities` (ADR 0186) - the vocabulary the capability grid and the job editor
+   * are built from. Needs `iam.grant.manage` company-wide, like the library itself.
+   */
+  async capabilityCatalogue(tenantId: string): Promise<readonly CapabilityEntry[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly CapabilityEntry[]>(staffPaths.capabilities(tenantId)),
+    );
     return result.value ?? [];
+  }
+
+  /**
+   * `StaffPasswordController` (ADR 0098) - whether the platform can send the email a password reset
+   * arrives by. The reset request itself answers 202 whatever the account, so this is the one place a
+   * signed-in person can learn that a link would never come.
+   */
+  async passwordHandoff(tenantId: string): Promise<{ readonly emailConfigured: boolean }> {
+    const result = await firstValueFrom(
+      this.api.get<{ readonly emailConfigured: boolean }>(staffPaths.passwordHandoff(tenantId)),
+    );
+    return result.value;
+  }
+
+  /** `TenantRoleController.create` - define a job. The version of the new job is its `ETag`, and `version` in the body. */
+  async createJob(tenantId: string, request: CreateJobRequest): Promise<TenantJobView> {
+    return firstValueFrom(
+      this.api.post<CreateJobRequest, TenantJobView>(staffPaths.roles(tenantId), command(request)),
+    );
+  }
+
+  /** `TenantRoleController.update` - change a job's name and capabilities under the version the editor was opened at. */
+  async updateJob(
+    tenantId: string,
+    code: string,
+    request: UpdateJobRequest,
+    expectedVersion: number,
+  ): Promise<TenantJobView> {
+    return firstValueFrom(
+      this.api.put<UpdateJobRequest, TenantJobView>(
+        staffPaths.role(tenantId, code),
+        command(request),
+        { expectedVersion },
+      ),
+    );
+  }
+
+  /** `TenantRoleController.retire` - close a job nobody holds. */
+  async retireJob(
+    tenantId: string,
+    code: string,
+    reason: string,
+    expectedVersion: number,
+  ): Promise<TenantJobView> {
+    const response = await firstValueFrom(
+      this.api.send<ReasonRequest, TenantJobView>(
+        'DELETE',
+        staffPaths.role(tenantId, code),
+        command({ reason }),
+        { expectedVersion },
+      ),
+    );
+    return response.body as TenantJobView;
   }
 
   async telegramLinks(tenantId: string): Promise<readonly TelegramStaffLinkView[]> {

@@ -594,6 +594,16 @@ export const routes: Routes = [
         loadComponent: () => import('./features/staff/staff-shell').then((m) => m.StaffShell),
         children: [
           {
+            // «Таблица прав» (ADR 0186, row 9.1b): the whole vocabulary against every job, and the editor for
+            // the company's own jobs. Lazy, so the initial bundle does not carry the matrix, the editor or the
+            // catalogue helpers; `roles` below is the job library it hangs off.
+            path: 'roles/grid',
+            loadComponent: () =>
+              import('./features/staff/staff-capability-grid-page').then(
+                (m) => m.StaffCapabilityGridPage,
+              ),
+          },
+          {
             path: 'roles',
             loadComponent: () =>
               import('./features/staff/staff-roles-page').then((m) => m.StaffRolesPage),

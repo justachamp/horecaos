@@ -75,6 +75,12 @@ export class Auth {
    * correlating a session in a log is {@link subject}.
    */
   readonly displayName = signal<string | null>(null);
+  /**
+   * The name this account signs in with (the token's `preferred_username`), kept in memory only. It
+   * exists for one thing: «Мой профиль» hands a person to the password reset with their own sign-in
+   * name already typed (ADR 0098), through the router's state and never the address bar.
+   */
+  readonly signInName = signal<string | null>(null);
 
   /**
    * The `sub` claim: an opaque Keycloak identifier.
@@ -218,6 +224,8 @@ export class Auth {
     const claims = decodeJwtPayload(session.accessToken);
     const name = claims?.['name'] ?? claims?.['preferred_username'];
     this.displayName.set(typeof name === 'string' ? name : null);
+    const login = claims?.['preferred_username'];
+    this.signInName.set(typeof login === 'string' && login !== '' ? login : null);
     const sub = claims?.['sub'];
     this.subject.set(typeof sub === 'string' ? sub : null);
     this.state.set('signed-in');
@@ -243,6 +251,7 @@ export class Auth {
     this.cancelScheduledRefresh();
     this.tokens.clear();
     this.displayName.set(null);
+    this.signInName.set(null);
     this.subject.set(null);
     this.state.set('signed-out');
   }

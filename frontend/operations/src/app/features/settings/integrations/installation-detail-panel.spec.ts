@@ -720,7 +720,7 @@ describe('InstallationDetailPanel', () => {
         of(
           entityType === 'OPERATOR'
             ? {
-                // No adapter lists a POS's operators: the right side is typed by hand.
+                // This till does not list its operators: the right side is typed by hand.
                 sourced: false,
                 detail: 'The till’s operator ids are typed in',
                 entities: [],
@@ -779,6 +779,100 @@ describe('InstallationDetailPanel', () => {
       ),
     ).map((option) => option.textContent?.trim());
     expect(options).toEqual(['Aziza Karimova']);
+  });
+
+  async function openOperators(unmapped: UnmappedExternalResponse): Promise<void> {
+    api = new FakeIntegrationsApi();
+    mappingApi = new FakePosMappingApi();
+    api.listBindings.mockResolvedValue([ACTIVE_BINDING]);
+    mappingApi.unmapped.mockImplementation(
+      (_scope: TenantScope, _binding: string, entityType: MappingEntityType) =>
+        of(entityType === 'OPERATOR' ? unmapped : EMPTY_UNMAPPED),
+    );
+    await TestBed.configureTestingModule({
+      imports: [InstallationDetailPanel],
+      providers: [
+        { provide: IntegrationsApi, useValue: api },
+        { provide: PosMappingApi, useValue: mappingApi },
+        { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(InstallationDetailPanel);
+    fixture.componentRef.setInput('installation', CLOPOS_INSTALLATION);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    tabWithText('Соответствия').click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+    (
+      Array.from(host().querySelectorAll('.mapping-entity-types button')).find((b) =>
+        b.textContent?.includes('Operators'),
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  }
+
+  it('chooses the till’s operator from the till’s own list, and says nothing when the till receives it (row 9.2c)', async () => {
+    await openOperators({
+      sourced: true,
+      detail: null,
+      entities: [
+        { externalId: '17', name: 'Aziza (till)', externalParentId: null },
+        { externalId: '18', name: 'Bobur (till)', externalParentId: null },
+      ],
+      horecaosCandidates: [{ id: 'member-1', name: 'Aziza Karimova' }],
+      receivedByProvider: true,
+    });
+
+    const rightInput = host().querySelector<HTMLInputElement>(
+      '[data-testid="q-mapping-pane-right"] [data-testid="q-combobox-input"]',
+    )!;
+    rightInput.value = '(till)';
+    rightInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const options = Array.from(
+      host().querySelectorAll(
+        '[data-testid="q-mapping-pane-right"] [data-testid="q-combobox-option"]',
+      ),
+    ).map((option) => option.textContent?.trim());
+    expect(options).toEqual(['Aziza (till)', 'Bobur (till)']);
+    expect(host().querySelector('[data-testid="mapping-operator-not-received"]')).toBeNull();
+  });
+
+  it('says “this till does not receive an operator yet” when it lists its users but its orders carry none, and still lets the pairing be made (row 9.2c)', async () => {
+    await openOperators({
+      sourced: true,
+      detail: null,
+      entities: [{ externalId: '17', name: 'Aziza (till)', externalParentId: null }],
+      horecaosCandidates: [{ id: 'member-1', name: 'Aziza Karimova' }],
+      receivedByProvider: false,
+    });
+
+    const note = host().querySelector('[data-testid="mapping-operator-not-received"]');
+    expect(note?.textContent).toContain('does not receive an operator yet');
+    expect(host().querySelector('[data-testid="q-mapping-pane-right"]')).not.toBeNull();
+  });
+
+  it('asks the question of operators only: another pairing never carries the note (row 9.2c)', async () => {
+    await openOperators({
+      sourced: false,
+      detail: 'typed in',
+      entities: [],
+      horecaosCandidates: [],
+      receivedByProvider: false,
+    });
+    (
+      Array.from(host().querySelectorAll('.mapping-entity-types button')).find((b) =>
+        b.textContent?.includes('Couriers'),
+      ) as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(host().querySelector('[data-testid="mapping-operator-not-received"]')).toBeNull();
   });
 
   it('links a pair through the pane, then reloads the mapping for the active entity type', async () => {

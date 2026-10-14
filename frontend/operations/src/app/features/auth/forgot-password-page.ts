@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
@@ -180,13 +180,28 @@ import { PasswordResetsApi } from './password-resets-api';
 export class ForgotPasswordPage {
   private readonly resets = inject(PasswordResetsApi);
   private readonly i18n = inject(I18n);
+  private readonly router = inject(Router);
 
-  protected readonly login = signal('');
+  /**
+   * Empty, unless a signed-in person came from «Мой профиль» → «Пароль», which hands over their own
+   * sign-in name in the navigation's state. State, not a query parameter: a sign-in name in the address
+   * would reach history, the server's access log and the Referer of whatever the page links to.
+   */
+  protected readonly login = signal(this.handedOverLogin());
   protected readonly busy = signal(false);
   protected readonly sent = signal(false);
   protected readonly errorKey = signal<MessageKey | null>(null);
 
   protected readonly canSubmit = () => !this.busy() && this.login().trim().length > 0;
+
+  private handedOverLogin(): string {
+    const state: unknown = this.router.getCurrentNavigation()?.extras.state ?? history.state;
+    const login =
+      typeof state === 'object' && state !== null
+        ? (state as Record<string, unknown>)['login']
+        : null;
+    return typeof login === 'string' ? login : '';
+  }
 
   protected onLoginInput(event: Event): void {
     this.login.set((event.target as HTMLInputElement).value);
