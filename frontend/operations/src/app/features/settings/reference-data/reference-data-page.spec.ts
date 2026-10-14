@@ -247,6 +247,19 @@ describe('ReferenceDataPage', () => {
     expect(text).toContain('Есть парковка');
   });
 
+  it('pins ADR 0107 Decision 4: the SLA card is a version card, with no input and no button in it', () => {
+    const card = (fixture.nativeElement as HTMLElement).querySelector('#sla-boundaries');
+    expect(card, 'the SLA card is on the screen').not.toBeNull();
+    // What it does carry: the version it was read at and one row per bucket the platform published.
+    expect(card?.textContent).toContain('Version 1');
+    expect(card?.querySelectorAll('tbody tr').length).toBe(SLA_BUCKET_SET.buckets.length);
+    // What it must never carry: a control. The buckets are platform-fixed and versioned (ADR 0043), so a
+    // field or a save button here would promise a tenant a boundary it cannot set.
+    expect(
+      card?.querySelectorAll('input, select, textarea, button, [contenteditable]').length,
+    ).toBe(0);
+  });
+
   it('builds the branch-tag matrix from the brand-wide location list, not the shell scope-bar signal', () => {
     // CurrentLocation.options stays empty for an operator who resolved
     // through a direct LOCATION grant (see that signal's own doc comment) —

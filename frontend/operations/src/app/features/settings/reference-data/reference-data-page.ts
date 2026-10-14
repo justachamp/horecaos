@@ -57,10 +57,10 @@ const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
  * weekend, the tenant's own holidays and the business-day boundary editor on
  * one card; the tag registry and a location × tag matrix on another.
  *
- * **SLA buckets stay deliberately read-only** (10.10c, ADR 0043): a version
- * card, no editor. `docs/operations-spec/settings.md` lines 1105 and 1325
- * promise tenant-configurable buckets; ADR 0107 raises that contradiction
- * rather than building the configurability the platform decision refuses.
+ * **SLA buckets are platform-fixed and versioned** (10.10c, ADR 0043 and
+ * ADR 0107 Decision 4): the card is a version card, read from
+ * `GET .../reporting/sla-bucket-set`, and it is the whole affordance. It has
+ * no input and no button, and `reference-data-page.spec.ts` pins that.
  *
  * **Reordered, two ways** (row 10.10a): native HTML5 drag-and-drop on each
  * row, the same "no `@angular/cdk`" posture `q-rule-list` documents, plus an

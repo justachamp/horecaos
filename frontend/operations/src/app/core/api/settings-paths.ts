@@ -653,9 +653,19 @@ export const settingsPaths = {
 
   // ---------------------------------------------------------- 10.9 Notifications
 
-  /** `NotificationTemplateController` — already operations surface (`/api/v1/tenants/**`). */
+  /**
+   * `NotificationTemplateController`, mapped at
+   * `/api/v1/tenants/{tenantId}/brands/{brandId}/notification-templates`.
+   *
+   * It sat on `${OPERATIONS}/tenants/...` until wave 21: a prefix the platform serves nothing under (the
+   * `/api/v1/operations` surface is `/api/v1/operations/tenants/{t}/<resource>` for the controllers that
+   * were mirrored there, and this one never was), so every call of the template editor answered 404 and
+   * no spec noticed, because none asserted the literal path. `settings-paths.spec.ts` now does, and
+   * `path-builders-resolve.spec.ts` resolves every builder of every `*-paths.ts` against the OpenAPI
+   * baseline so the next one cannot do it quietly.
+   */
   notificationTemplates(scope: LocationScope): string {
-    return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/notification-templates`;
+    return `${TENANT}/${enc(scope.tenantId)}/brands/${enc(scope.brandId)}/notification-templates`;
   },
 
   notificationTemplate(scope: LocationScope, templateId: string): string {
