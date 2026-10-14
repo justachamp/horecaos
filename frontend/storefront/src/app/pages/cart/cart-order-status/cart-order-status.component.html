@@ -107,6 +107,9 @@
         </div>
       </div>
 
+      <!-- X.1 (ADR 0185): the points and the money that pay for this order, where both do -->
+      <app-payment-split [split]="split()" />
+
       @if (lastUpdated()) {
         <p class="mt-6 text-center text-[11px] text-zinc-500">
           {{ 'orders.lastUpdated' | t }} {{ lastUpdated()?.toLocaleTimeString() }}

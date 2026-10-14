@@ -7,6 +7,7 @@ import { LangService } from '../../../services/lang.service';
 import { UiCartService } from '../../../services/ui-cart.service';
 import { OrdersService } from '../../../services/orders.service';
 import { PaymentSessionService } from '../../../services/payment-session.service';
+import { type CartPointsOffer, PointsService } from '../../../services/points.service';
 import { NotificationService } from '../../../services/notification.service';
 import { TranslateService } from '../../../services/translate.service';
 import { DeliverySelectionService } from '../../../services/delivery-selection.service';
@@ -55,6 +56,8 @@ class FakeUiCartService {
   promoCodeDiscountFormatted = vi.fn<() => string | null>(() => null);
   applyPromoCode = vi.fn().mockResolvedValue(true);
   removePromoCode = vi.fn().mockResolvedValue(undefined);
+  /** The last pricing answer; the points control reads the cart and quote it names. */
+  priced = vi.fn<() => PricedCart | null>(() => null);
 }
 
 class FakeDeliverySelectionService {
@@ -68,6 +71,13 @@ class FakeDeliverySelectionService {
 
 class FakePaymentSessionService {
   open = vi.fn();
+}
+
+/** X.1 (ADR 0185): by default a brand with no points to offer, so the control is not there. */
+class FakePointsService {
+  redemptionOffer = vi.fn<(cartId: string) => Promise<CartPointsOffer>>(() =>
+    Promise.resolve(pointsOffer({ redeemable: false, refusal: 'REDEMPTION_NOT_ENABLED' })),
+  );
 }
 
 class FakeNotificationService {
@@ -146,6 +156,26 @@ function pricedFixture(): PricedCart {
   };
 }
 
+/** A cart priced at 15 000 so'm, for a customer with 12 000 in points, of which 4 000 may be spent. */
+function pointsOffer(
+  overrides: { redeemable?: boolean; maximum?: number; refusal?: string | null } = {},
+): CartPointsOffer {
+  const redeemable = overrides.redeemable ?? true;
+  const maximum = redeemable ? (overrides.maximum ?? 4_000) : 0;
+  return {
+    cartId: 'cart-1',
+    priced: true,
+    orderTotal: { amountMinor: 15_000, currency: 'UZS' },
+    offer: {
+      accountId: 'pa-1',
+      available: { amountMinor: 12_000, currency: 'UZS' },
+      maximum: { amountMinor: maximum, currency: 'UZS' },
+      redeemable,
+      refusal: redeemable ? null : (overrides.refusal ?? 'INSUFFICIENT_BALANCE'),
+    },
+  };
+}
+
 function checkoutResult(overrides: Partial<CheckoutResult> = {}): CheckoutResult {
   return {
     orderId: 'order-1',
@@ -163,6 +193,7 @@ async function setUp(
   configureCart?: (cart: FakeUiCartService) => void,
   configureDelivery?: (delivery: FakeDeliverySelectionService) => void,
   configureLocations?: (locations: FakeLocationProfileService) => void,
+  configurePoints?: (points: FakePointsService, cart: FakeUiCartService) => void,
 ) {
   const cart = new FakeUiCartService();
   const delivery = new FakeDeliverySelectionService();
@@ -173,6 +204,8 @@ async function setUp(
   const notification = new FakeNotificationService();
   const locations = new FakeLocationProfileService();
   configureLocations?.(locations);
+  const points = new FakePointsService();
+  configurePoints?.(points, cart);
 
   TestBed.configureTestingModule({
     imports: [CartConfirmationComponent],
@@ -181,6 +214,7 @@ async function setUp(
       { provide: UiCartService, useValue: cart },
       { provide: OrdersService, useValue: {} },
       { provide: PaymentSessionService, useValue: paymentSessions },
+      { provide: PointsService, useValue: points },
       { provide: NotificationService, useValue: notification },
       { provide: TranslateService, useClass: FakeTranslateService },
       { provide: LangService, useClass: FakeLangService },
@@ -211,6 +245,7 @@ async function setUp(
     paymentSessions,
     notification,
     locations,
+    points,
     navigateSpy,
   };
 }
@@ -885,5 +920,147 @@ describe('CartConfirmationComponent: items sold by weight (ADR 0137)', () => {
         '[data-testid="confirm-provisional-notice"]',
       ),
     ).toBeNull();
+  });
+});
+
+describe('CartConfirmationComponent: paying part of the order with points (ADR 0046, ADR 0185)', () => {
+  /** A checkout screen whose cart is priced, so the points control has a quote to ask about. */
+  async function withPoints(offer: CartPointsOffer = pointsOffer()) {
+    const setup = await setUp(
+      ['CASH'],
+      (cart) => {
+        cart.priced.mockReturnValue(pricedFixture());
+      },
+      undefined,
+      undefined,
+      (points) => {
+        points.redemptionOffer.mockResolvedValue(offer);
+      },
+    );
+    setup.cart.applyDestination.mockResolvedValue(true);
+    setup.cart.priceCart.mockResolvedValue(pricedFixture());
+    setup.cart.checkout.mockResolvedValue(checkoutResult());
+    return setup;
+  }
+
+  const host = (fixture: { nativeElement: unknown }) => fixture.nativeElement as HTMLElement;
+  const byId = (fixture: { nativeElement: unknown }, id: string) =>
+    host(fixture).querySelector<HTMLElement>(`[data-testid="${id}"]`);
+
+  /** The text of one element with every kind of space read as a plain one: amounts are grouped with a no-break space. */
+  const textOf = (fixture: { nativeElement: unknown }, id: string) =>
+    (byId(fixture, id)?.textContent ?? '').replace(/\s+/g, ' ');
+
+  async function settle(fixture: { detectChanges(): void }): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+  }
+
+  async function switchOn(fixture: { detectChanges(): void; nativeElement: unknown }) {
+    byId(fixture, 'points-toggle')!.click();
+    await settle(fixture);
+  }
+
+  it('asks what may be spent against the quote the cart is priced under, and offers nothing it was not given', async () => {
+    const { fixture, points } = await withPoints(pointsOffer({ redeemable: false }));
+
+    expect(points.redemptionOffer).toHaveBeenCalledWith('cart-1');
+    expect(byId(fixture, 'points-redemption')).toBeNull();
+  });
+
+  it('shows the control, and sends no points, until the customer switches them on', async () => {
+    const { fixture, comp, cart } = await withPoints();
+
+    expect(byId(fixture, 'points-redemption')).not.toBeNull();
+    await comp.submitOrder();
+
+    expect(cart.checkout).toHaveBeenCalledTimes(1);
+    expect(cart.checkout.mock.calls[0][0]).not.toHaveProperty('redeemFromBalanceMinor');
+  });
+
+  it('starts from the most the platform allows, shows what is left to pay, and sends that amount with the checkout', async () => {
+    const { fixture, comp, cart } = await withPoints();
+
+    await switchOn(fixture);
+
+    expect((byId(fixture, 'points-amount') as HTMLInputElement).value).toBe('4000');
+    expect(textOf(fixture, 'points-cash')).toContain('11 000');
+    await comp.submitOrder();
+
+    expect(cart.checkout.mock.calls[0][0].redeemFromBalanceMinor).toBe(4_000);
+  });
+
+  it('shows the points and the cash left among the totals', async () => {
+    const { fixture } = await withPoints();
+
+    await switchOn(fixture);
+
+    expect(textOf(fixture, 'summary-points')).toContain('4 000');
+    expect(textOf(fixture, 'summary-cash')).toContain('11 000');
+  });
+
+  it('keeps the order from being placed while the amount typed is more than the platform allows', async () => {
+    const { fixture, comp, cart } = await withPoints();
+    await switchOn(fixture);
+
+    const amount = byId(fixture, 'points-amount') as HTMLInputElement;
+    amount.value = '9 000';
+    amount.dispatchEvent(new Event('input'));
+    await settle(fixture);
+
+    expect(byId(fixture, 'points-exceeds')).not.toBeNull();
+    expect((byId(fixture, 'place-order-button') as HTMLButtonElement).disabled).toBe(true);
+    await comp.submitOrder();
+    expect(cart.checkout).not.toHaveBeenCalled();
+  });
+
+  it('asks again after pricing, and does not place the order when the most allowed has fallen below the amount chosen', async () => {
+    const { fixture, comp, cart, points } = await withPoints();
+    await switchOn(fixture);
+    // The re-pricing at submit moved the cap (a promotion landed).
+    points.redemptionOffer.mockResolvedValue(pointsOffer({ maximum: 1_000 }));
+
+    await comp.submitOrder();
+
+    expect(comp.orderError()).toBe('cart.pointsChanged');
+    expect(cart.checkout).not.toHaveBeenCalled();
+    const asked = points.redemptionOffer.mock.invocationCallOrder.at(-1)!;
+    expect(cart.priceCart.mock.invocationCallOrder[0]).toBeLessThan(asked);
+  });
+
+  it('still places the order when the second look cannot be had: the platform checks the amount at checkout', async () => {
+    const { fixture, comp, cart, points } = await withPoints();
+    await switchOn(fixture);
+    points.redemptionOffer.mockRejectedValue(new Error('offline'));
+
+    await comp.submitOrder();
+
+    expect(cart.checkout.mock.calls[0][0].redeemFromBalanceMinor).toBe(4_000);
+  });
+
+  it('presents a different checkout key when the amount changed after a lost answer, and the same one when it did not', async () => {
+    const { fixture, comp, cart } = await withPoints();
+    await switchOn(fixture);
+    cart.checkout.mockRejectedValue(
+      new HorecaOSApiError({ status: 0, code: 'NETWORK_UNREACHABLE', detail: 'x' }),
+    );
+
+    await comp.submitOrder();
+    await comp.submitOrder();
+    const [first, second] = cart.checkout.mock.calls.map((call) => call[0].idempotencyKey);
+    expect(second, 'an unchanged retry is the same intent').toBe(first);
+
+    const amount = byId(fixture, 'points-amount') as HTMLInputElement;
+    amount.value = '2000';
+    amount.dispatchEvent(new Event('input'));
+    await settle(fixture);
+    await comp.submitOrder();
+
+    const third = cart.checkout.mock.calls[2][0];
+    expect(third.redeemFromBalanceMinor).toBe(2_000);
+    expect(
+      third.idempotencyKey,
+      'a different amount is a different body, which the same key would be refused for',
+    ).not.toBe(first);
   });
 });
