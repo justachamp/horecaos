@@ -40,7 +40,11 @@ import {
   CustomerOrderSummary,
   CustomerProfile,
   CustomersApi,
+  ErasureBlock,
+  ErasureProof,
   ErasureRequest,
+  LegalHold,
+  LegalHoldReason,
   LoyaltyAdjustmentRequest,
   LoyaltyAdjustmentResult,
   LoyaltyBalance,
@@ -488,6 +492,12 @@ export class CustomerDetailPane {
     this.discountHistory.set(null);
     this.customerReviews.set(null);
     this.erasureRequests.set(null);
+    this.erasureBlocks.set([]);
+    this.legalHolds.set([]);
+    this.proofRequestId.set(null);
+    this.proof.set(null);
+    this.closeHoldForm();
+    this.liftingHoldId.set(null);
   }
 
   // ------------------------------------------------------------------ profile
@@ -1439,6 +1449,10 @@ export class CustomerDetailPane {
   protected readonly raisingErasure = signal(false);
   protected readonly erasureActionPendingId = signal<string | null>(null);
 
+  /** What stands between this customer and an execution right now (ADR 0029): a hold, an order on its way, an open case. */
+  protected readonly erasureBlocks = signal<readonly ErasureBlock[]>([]);
+  protected readonly legalHolds = signal<readonly LegalHold[]>([]);
+
   private async loadErasureRequests(): Promise<void> {
     const scope = this.scope();
     if (!scope || this.loadingErasureRequests()) {
@@ -1446,12 +1460,49 @@ export class CustomerDetailPane {
     }
     this.loadingErasureRequests.set(true);
     try {
-      this.erasureRequests.set(await this.api.erasureRequests(scope, this.accountId()));
+      const accountId = this.accountId();
+      const [requests, blocks, holds] = await Promise.all([
+        this.api.erasureRequests(scope, accountId),
+        this.api.erasureBlocks(scope, accountId),
+        this.api.legalHolds(scope, accountId),
+      ]);
+      this.erasureRequests.set(requests);
+      this.erasureBlocks.set(blocks);
+      this.legalHolds.set(holds);
     } catch (error) {
       this.noticeFrom(error);
     } finally {
       this.loadingErasureRequests.set(false);
     }
+  }
+
+  /** The block's code in words; a code this console has no words for is shown as it is. */
+  protected erasureBlockLabel(block: ErasureBlock): string {
+    switch (block.code) {
+      case 'LEGAL_HOLD':
+        return this.i18n.t('customers.erasure.block.LEGAL_HOLD');
+      case 'OPEN_ORDER':
+        return this.i18n.t('customers.erasure.block.OPEN_ORDER', { count: block.amount });
+      case 'OPEN_RECOVERY_CASE':
+        return this.i18n.t('customers.erasure.block.OPEN_RECOVERY_CASE', { count: block.amount });
+      default:
+        return `${block.code} (${block.amount})`;
+    }
+  }
+
+  /** What an execute refused for, from the problem the server answered: `blocks` is `CODE:amount,CODE:amount`. */
+  private blocksFromRefusal(error: unknown): readonly ErasureBlock[] | null {
+    if (!(error instanceof ApiError) || error.code !== 'UNPROCESSABLE_STATE') {
+      return null;
+    }
+    const raw = error.problem?.['blocks'];
+    if (typeof raw !== 'string' || raw.length === 0) {
+      return null;
+    }
+    return raw.split(',').map((part) => {
+      const [code, amount] = part.split(':');
+      return { code, amount: Number(amount) || 1 };
+    });
   }
 
   /**
@@ -1517,9 +1568,181 @@ export class CustomerDetailPane {
       await this.api.executeErasure(scope, this.accountId(), requestId);
       await this.loadErasureRequests();
     } catch (error) {
-      this.noticeFrom(error);
+      const blocks = this.blocksFromRefusal(error);
+      if (blocks) {
+        // Not a failure of the call: the platform refused on purpose and says why. The request stays pending, and the
+        // reasons are in the list above the table.
+        this.erasureBlocks.set(blocks);
+        this.notice.set(
+          this.i18n.t('customers.erasure.refused', {
+            reasons: blocks.map((block) => this.erasureBlockLabel(block)).join('; '),
+          }),
+        );
+      } else {
+        this.noticeFrom(error);
+      }
     } finally {
       this.erasureActionPendingId.set(null);
+    }
+  }
+
+  // ------------------------------------------------------------ the proof of an executed erasure
+
+  protected readonly proofRequestId = signal<string | null>(null);
+  protected readonly proof = signal<ErasureProof | null>(null);
+  protected readonly loadingProof = signal(false);
+
+  /** Shows what an executed request changed, per module and table: counts and names, never a value. */
+  protected async toggleProof(requestId: string): Promise<void> {
+    if (this.proofRequestId() === requestId) {
+      this.proofRequestId.set(null);
+      this.proof.set(null);
+      return;
+    }
+    const scope = this.scope();
+    if (!scope || this.loadingProof()) {
+      return;
+    }
+    this.loadingProof.set(true);
+    this.proofRequestId.set(requestId);
+    this.proof.set(null);
+    try {
+      this.proof.set(await this.api.erasureProof(scope, this.accountId(), requestId));
+    } catch (error) {
+      this.proofRequestId.set(null);
+      if (error instanceof ApiError && error.status === 404) {
+        this.notice.set(this.i18n.t('customers.erasure.proof.none'));
+      } else {
+        this.noticeFrom(error);
+      }
+    } finally {
+      this.loadingProof.set(false);
+    }
+  }
+
+  // ------------------------------------------------------------------ legal hold
+
+  protected readonly holdFormOpen = signal(false);
+  protected readonly holdReason = signal<LegalHoldReason>('LITIGATION');
+  protected readonly holdNote = signal('');
+  protected readonly holdBusy = signal(false);
+  /** The sentence shown while a second person has to decide; the form stays open with what was typed. */
+  protected readonly holdWaiting = signal<string | null>(null);
+  protected readonly liftingHoldId = signal<string | null>(null);
+  protected readonly liftNote = signal('');
+
+  protected readonly holdReasons: readonly LegalHoldReason[] = [
+    'LITIGATION',
+    'REGULATORY_REQUEST',
+    'INVESTIGATION',
+    'OTHER',
+  ];
+
+  protected hasActiveHold(): boolean {
+    return this.legalHolds().some((hold) => hold.status === 'ACTIVE');
+  }
+
+  protected holdReasonLabel(reason: string): string {
+    switch (reason) {
+      case 'LITIGATION':
+        return this.i18n.t('customers.erasure.hold.reason.LITIGATION');
+      case 'REGULATORY_REQUEST':
+        return this.i18n.t('customers.erasure.hold.reason.REGULATORY_REQUEST');
+      case 'INVESTIGATION':
+        return this.i18n.t('customers.erasure.hold.reason.INVESTIGATION');
+      case 'OTHER':
+        return this.i18n.t('customers.erasure.hold.reason.OTHER');
+      default:
+        return reason;
+    }
+  }
+
+  protected openHoldForm(): void {
+    this.holdFormOpen.set(true);
+    this.holdReason.set('LITIGATION');
+    this.holdNote.set('');
+    this.holdWaiting.set(null);
+  }
+
+  protected closeHoldForm(): void {
+    this.holdFormOpen.set(false);
+    this.holdWaiting.set(null);
+  }
+
+  /** Whether the answer was "a second person has to decide", with the sentence to show; `null` for any other error. */
+  private approvalSentence(error: unknown, what: 'placed' | 'lifted'): string | null {
+    if (!(error instanceof ApiError) || error.code !== 'SECOND_APPROVER_REQUIRED') {
+      return null;
+    }
+    const id = error.problem?.['approvalRequestId'];
+    const declined = error.problem?.['approvalStatus'] === 'DECLINED';
+    const values = { id: typeof id === 'string' ? id : '' };
+    if (what === 'placed') {
+      return declined
+        ? this.i18n.t('customers.erasure.hold.place.declined', values)
+        : this.i18n.t('customers.erasure.hold.place.pending', values);
+    }
+    return declined
+      ? this.i18n.t('customers.erasure.hold.lift.declined', values)
+      : this.i18n.t('customers.erasure.hold.lift.pending', values);
+  }
+
+  protected async placeHold(): Promise<void> {
+    const scope = this.scope();
+    const note = this.holdNote().trim();
+    if (!scope || this.holdBusy() || note.length === 0) {
+      return;
+    }
+    this.holdBusy.set(true);
+    this.holdWaiting.set(null);
+    try {
+      await this.api.placeLegalHold(scope, this.accountId(), { reason: this.holdReason(), note });
+      this.closeHoldForm();
+      await this.loadErasureRequests();
+    } catch (error) {
+      const waiting = this.approvalSentence(error, 'placed');
+      if (waiting) {
+        this.holdWaiting.set(waiting);
+      } else {
+        this.noticeFrom(error);
+      }
+    } finally {
+      this.holdBusy.set(false);
+    }
+  }
+
+  protected startLift(holdId: string): void {
+    this.liftingHoldId.set(holdId);
+    this.liftNote.set('');
+    this.holdWaiting.set(null);
+  }
+
+  protected cancelLift(): void {
+    this.liftingHoldId.set(null);
+    this.holdWaiting.set(null);
+  }
+
+  protected async liftHold(holdId: string): Promise<void> {
+    const scope = this.scope();
+    const note = this.liftNote().trim();
+    if (!scope || this.holdBusy() || note.length === 0) {
+      return;
+    }
+    this.holdBusy.set(true);
+    this.holdWaiting.set(null);
+    try {
+      await this.api.liftLegalHold(scope, this.accountId(), holdId, { note });
+      this.liftingHoldId.set(null);
+      await this.loadErasureRequests();
+    } catch (error) {
+      const waiting = this.approvalSentence(error, 'lifted');
+      if (waiting) {
+        this.holdWaiting.set(waiting);
+      } else {
+        this.noticeFrom(error);
+      }
+    } finally {
+      this.holdBusy.set(false);
     }
   }
 

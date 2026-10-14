@@ -24,9 +24,13 @@ import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.infrastructure.persistence.JdbcAuditRecorder;
 import uz.horecaos.platform.customers.application.CustomerErasureService;
 import uz.horecaos.platform.customers.application.CustomerErasureService.RequestedVia;
+import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerErasureStore;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore.ErasureRequestRow;
+import uz.horecaos.platform.customers.infrastructure.persistence.JdbcLegalHoldStore;
 import uz.horecaos.platform.customers.spi.CustomerErasureParticipant;
+import uz.horecaos.platform.customers.spi.ErasesCustomerData;
+import uz.horecaos.platform.customers.spi.ErasureCounts;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
@@ -113,9 +117,17 @@ class CustomerErasureTests {
                 "local"));
         ObjectMapper objectMapper = JsonMapper.builder().build();
         calledParticipants = new java.util.ArrayList<>();
-        CustomerErasureParticipant recordingParticipant = (tenantId, accountId) -> calledParticipants.add(accountId);
+        CustomerErasureParticipant recordingParticipant = new RecordingParticipant(calledParticipants);
         erasure = new CustomerErasureService(
-                store, protection, clock, new JdbcAuditRecorder(jdbc, objectMapper), List.of(recordingParticipant));
+                store,
+                new JdbcCustomerErasureStore(jdbc),
+                new JdbcLegalHoldStore(jdbc),
+                protection,
+                clock,
+                new JdbcAuditRecorder(jdbc, objectMapper),
+                objectMapper,
+                List.of(recordingParticipant),
+                List.of());
     }
 
     // ------------------------------------------------------------- idempotency
@@ -561,5 +573,24 @@ class CustomerErasureTests {
                 SELECT count(*) FROM audit.audit_events
                 WHERE action_code = 'customer.erasure.completed' AND target_id = :accountId
                 """).param("accountId", accountId).query(Long.class).single();
+    }
+
+    /** Records the accounts it was asked to erase; stands in for every module the service never imports. */
+    @ErasesCustomerData(
+            name = "recording",
+            tables = {})
+    private static final class RecordingParticipant implements CustomerErasureParticipant {
+
+        private final List<UUID> calls;
+
+        private RecordingParticipant(List<UUID> calls) {
+            this.calls = calls;
+        }
+
+        @Override
+        public ErasureCounts erase(UUID tenantId, UUID customerAccountId, ErasedContacts held) {
+            calls.add(customerAccountId);
+            return ErasureCounts.none();
+        }
     }
 }

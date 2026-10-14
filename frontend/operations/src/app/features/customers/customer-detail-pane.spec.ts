@@ -182,6 +182,11 @@ describe('CustomerDetailPane', () => {
       revealBlacklistHistory: vi.fn().mockResolvedValue([]),
       discountHistory: vi.fn().mockResolvedValue({ redemptions: [], totalsRedeemed: [] }),
       erasureRequests: vi.fn().mockResolvedValue([]),
+      erasureBlocks: vi.fn().mockResolvedValue([]),
+      erasureProof: vi.fn(),
+      legalHolds: vi.fn().mockResolvedValue([]),
+      placeLegalHold: vi.fn(),
+      liftLegalHold: vi.fn(),
       requestErasure: vi.fn(),
       cancelErasure: vi.fn(),
       executeErasure: vi.fn(),
@@ -892,6 +897,280 @@ describe('CustomerDetailPane', () => {
       'CUSTOMER_ERASURE_EXECUTE',
     ]);
     expect(withExecute.host.querySelector('[data-testid="erasure-execute"]')).not.toBeNull();
+  });
+
+  // ------------------------------------ ADR 0029: blocks, proof and legal hold on the erasure tab
+
+  describe('the erasure tab’s blocks, proof and legal hold', () => {
+    const PENDING = {
+      id: 'erasure-1',
+      status: 'PENDING',
+      requestedVia: 'OPERATIONS',
+      requestedByActorType: 'USER',
+      requestedByActorId: 'operator-subject-1',
+      requestedAt: '2026-09-10T10:00:00Z',
+      completedAt: null,
+      completedByActorId: null,
+      cancelledAt: null,
+      cancelledByActorId: null,
+    };
+    const COMPLETED = {
+      ...PENDING,
+      id: 'erasure-2',
+      status: 'COMPLETED',
+      completedAt: '2026-09-11T10:00:00Z',
+      completedByActorId: 'operator-subject-1',
+    };
+
+    async function openErasureTab(
+      overrides: Record<string, ReturnType<typeof vi.fn>>,
+    ): Promise<{ fixture: ComponentFixture<CustomerDetailPane>; host: HTMLElement }> {
+      await TestBed.resetTestingModule()
+        .configureTestingModule({
+          imports: [CustomerDetailPane],
+          providers: [
+            provideRouter([]),
+            { provide: CustomersApi, useValue: { ...api, ...overrides } },
+            { provide: CurrentLocation, useValue: new FakeCurrentLocation() },
+            { provide: Auth, useValue: FAKE_AUTH },
+            { provide: SessionCapabilities, useValue: fakeCapabilities() },
+            { provide: ReviewsApi, useValue: FAKE_REVIEWS_API },
+            { provide: LeadsApi, useValue: FAKE_LEADS_API },
+            { provide: BrandProfileApi, useValue: FAKE_BRAND_PROFILE_API },
+          ],
+        })
+        .compileComponents();
+      TestBed.inject(I18n).setLocale('en');
+      const opened = TestBed.createComponent(CustomerDetailPane);
+      opened.componentRef.setInput('accountId', 'customer-1');
+      opened.detectChanges();
+      await flushMicrotasks();
+      opened.detectChanges();
+      const host: HTMLElement = opened.nativeElement;
+      tabByLabel(host, 'Data erasure').click();
+      opened.detectChanges();
+      // The tab has read what it shows once the loading placeholder is gone from the erasure table.
+      const read = { ...api, ...overrides }['legalHolds'];
+      await vi.waitFor(() => {
+        opened.detectChanges();
+        expect(read).toHaveBeenCalled();
+        expect(host.querySelector('.grid .empty')?.textContent ?? '').not.toContain('Loading');
+      });
+      return { fixture: opened, host };
+    }
+
+    it('lists what stands between the customer and an execution, in words', async () => {
+      const { host } = await openErasureTab({
+        erasureRequests: vi.fn().mockResolvedValue([PENDING]),
+        erasureBlocks: vi.fn().mockResolvedValue([
+          { code: 'LEGAL_HOLD', amount: 1 },
+          { code: 'OPEN_ORDER', amount: 2 },
+        ]),
+      });
+
+      const blocks = Array.from(host.querySelectorAll('[data-testid="erasure-block"]')).map(
+        (block) => block.textContent?.trim(),
+      );
+      expect(blocks).toEqual([
+        'A legal hold is in force on this customer',
+        '2 order(s) still on their way',
+      ]);
+    });
+
+    it('shows the platform’s refusal as reasons, not as a failed call, and keeps the request pending', async () => {
+      const executeErasure = vi
+        .fn()
+        .mockRejectedValue(
+          new ApiError(
+            ApiErrorCode.UNPROCESSABLE_STATE,
+            422,
+            { status: 422, code: 'UNPROCESSABLE_STATE', blocks: 'OPEN_ORDER:1' },
+            null,
+          ),
+        );
+      const { fixture, host } = await openErasureTab({
+        erasureRequests: vi.fn().mockResolvedValue([PENDING]),
+        executeErasure,
+      });
+
+      (host.querySelector('[data-testid="erasure-execute"]') as HTMLButtonElement).click();
+
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(host.textContent).toContain('Not erased yet: 1 order(s) still on their way');
+      });
+      expect(host.querySelector('[data-testid="erasure-execute"]')).not.toBeNull();
+    });
+
+    it('shows the proof of an executed erasure: modules, tables and counts, nothing else', async () => {
+      const erasureProof = vi.fn().mockResolvedValue({
+        requestId: 'erasure-2',
+        status: 'COMPLETED',
+        completedAt: '2026-09-11T10:00:00Z',
+        completedByActorId: 'operator-subject-1',
+        participants: [
+          {
+            name: 'ordering',
+            tables: [
+              { table: 'ordering.order_customer_snapshots', rows: 3 },
+              { table: 'ordering.cart_fulfillment', rows: 0 },
+            ],
+          },
+        ],
+      });
+      const { fixture, host } = await openErasureTab({
+        erasureRequests: vi.fn().mockResolvedValue([COMPLETED]),
+        erasureProof,
+      });
+
+      (host.querySelector('[data-testid="erasure-proof"]') as HTMLButtonElement).click();
+
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(host.querySelectorAll('[data-testid="erasure-proof-line"]')).toHaveLength(2);
+      });
+      expect(erasureProof).toHaveBeenCalledWith(SCOPE, 'customer-1', 'erasure-2');
+      expect(host.textContent).toContain('ordering.order_customer_snapshots');
+      // A table looked at and found empty is listed with its 0, which is different from not looking.
+      expect(host.textContent).toContain('ordering.cart_fulfillment');
+    });
+
+    it('says a request has no proof when the platform has none, without raising an error', async () => {
+      const erasureProof = vi
+        .fn()
+        .mockRejectedValue(new ApiError(ApiErrorCode.RESOURCE_NOT_FOUND, 404, null, null));
+      const { fixture, host } = await openErasureTab({
+        erasureRequests: vi.fn().mockResolvedValue([COMPLETED]),
+        erasureProof,
+      });
+
+      (host.querySelector('[data-testid="erasure-proof"]') as HTMLButtonElement).click();
+
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(host.textContent).toContain('This request has no proof');
+      });
+    });
+
+    it('waits for a second person when placing a hold, and keeps what was typed', async () => {
+      const placeLegalHold = vi
+        .fn()
+        .mockRejectedValueOnce(
+          new ApiError(
+            'SECOND_APPROVER_REQUIRED',
+            422,
+            {
+              status: 422,
+              code: 'SECOND_APPROVER_REQUIRED',
+              approvalRequestId: 'appr-77',
+              approvalStatus: 'PENDING',
+            },
+            null,
+          ),
+        )
+        .mockResolvedValueOnce({
+          id: 'hold-1',
+          status: 'ACTIVE',
+          reasonCode: 'LITIGATION',
+          placedByActorId: 'operator-subject-1',
+          placedAt: '2026-10-14T10:00:00Z',
+          liftedByActorId: null,
+          liftedAt: null,
+        });
+      const legalHolds = vi.fn().mockResolvedValue([]);
+      const { fixture, host } = await openErasureTab({ placeLegalHold, legalHolds });
+
+      (host.querySelector('[data-testid="hold-open"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      const note = host.querySelector('[data-testid="hold-note"]') as HTMLTextAreaElement;
+      note.value = 'Claim 2026/118';
+      note.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      (host.querySelector('[data-testid="hold-submit"]') as HTMLButtonElement).click();
+
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(host.querySelector('[data-testid="hold-waiting"]')?.textContent).toContain(
+          'appr-77',
+        );
+      });
+      expect(placeLegalHold).toHaveBeenCalledWith(SCOPE, 'customer-1', {
+        reason: 'LITIGATION',
+        note: 'Claim 2026/118',
+      });
+      expect((host.querySelector('[data-testid="hold-note"]') as HTMLTextAreaElement).value).toBe(
+        'Claim 2026/118',
+      );
+
+      // The second person has approved: the same submission places the hold and the list is re-read.
+      legalHolds.mockResolvedValue([
+        {
+          id: 'hold-1',
+          status: 'ACTIVE',
+          reasonCode: 'LITIGATION',
+          placedByActorId: 'operator-subject-1',
+          placedAt: '2026-10-14T10:00:00Z',
+          liftedByActorId: null,
+          liftedAt: null,
+        },
+      ]);
+      (host.querySelector('[data-testid="hold-submit"]') as HTMLButtonElement).click();
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(host.querySelectorAll('[data-testid="hold-row"]')).toHaveLength(1);
+      });
+      expect(host.querySelector('[data-testid="hold-form"]')).toBeNull();
+      expect(host.querySelector('[data-testid="hold-open"]')).toBeNull();
+    });
+
+    it('lifts a hold with a note, and says so while the approval is pending', async () => {
+      const liftLegalHold = vi.fn().mockRejectedValue(
+        new ApiError(
+          'SECOND_APPROVER_REQUIRED',
+          422,
+          {
+            status: 422,
+            code: 'SECOND_APPROVER_REQUIRED',
+            approvalRequestId: 'appr-88',
+            approvalStatus: 'DECLINED',
+          },
+          null,
+        ),
+      );
+      const { fixture, host } = await openErasureTab({
+        legalHolds: vi.fn().mockResolvedValue([
+          {
+            id: 'hold-1',
+            status: 'ACTIVE',
+            reasonCode: 'REGULATORY_REQUEST',
+            placedByActorId: 'operator-subject-1',
+            placedAt: '2026-10-14T10:00:00Z',
+            liftedByActorId: null,
+            liftedAt: null,
+          },
+        ]),
+        liftLegalHold,
+      });
+      expect(host.textContent).toContain('Regulatory request');
+
+      (host.querySelector('[data-testid="lift-open"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      const note = host.querySelector('[data-testid="lift-note"]') as HTMLTextAreaElement;
+      note.value = 'Claim withdrawn';
+      note.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      (host.querySelector('[data-testid="lift-submit"]') as HTMLButtonElement).click();
+
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(host.querySelector('[data-testid="hold-waiting"]')?.textContent).toContain(
+          'Approval request appr-88 was declined, so the hold stays in force.',
+        );
+      });
+      expect(liftLegalHold).toHaveBeenCalledWith(SCOPE, 'customer-1', 'hold-1', {
+        note: 'Claim withdrawn',
+      });
+    });
   });
 
   // ------------------------------------- rows 5.2c / 1.3b (ADR 0145): a pin on a saved address

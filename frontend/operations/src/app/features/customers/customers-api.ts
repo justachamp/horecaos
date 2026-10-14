@@ -380,6 +380,49 @@ export interface ErasureRequest {
   readonly cancelledByActorId: string | null;
 }
 
+/** `CustomerController.ErasureBlockResponse` — one thing in the way of an erasure, as a code and a count. */
+export interface ErasureBlock {
+  /** `LEGAL_HOLD`, `OPEN_ORDER` or `OPEN_RECOVERY_CASE`; a code this console has no words for is shown as it is. */
+  readonly code: string;
+  readonly amount: number;
+}
+
+/** One table's line in an erasure's proof. */
+export interface ErasureProofTable {
+  readonly table: string;
+  readonly rows: number;
+}
+
+/** One module's line in an erasure's proof. */
+export interface ErasureProofParticipant {
+  readonly name: string;
+  readonly tables: readonly ErasureProofTable[];
+}
+
+/** `CustomerController.ErasureProofResponse` — counts and table names, never a value. */
+export interface ErasureProof {
+  readonly requestId: string;
+  readonly status: string;
+  readonly completedAt: string | null;
+  readonly completedByActorId: string | null;
+  readonly participants: readonly ErasureProofParticipant[];
+}
+
+/** `CustomerController.LegalHoldResponse` — no free text, because none is stored. */
+export interface LegalHold {
+  readonly id: string;
+  /** ACTIVE or LIFTED. */
+  readonly status: string;
+  readonly reasonCode: string;
+  readonly placedByActorId: string;
+  readonly placedAt: string;
+  readonly liftedByActorId: string | null;
+  readonly liftedAt: string | null;
+}
+
+/** Why a hold is placed: the closed set `LegalHoldService.Reason` accepts. */
+export type LegalHoldReason = 'LITIGATION' | 'REGULATORY_REQUEST' | 'INVESTIGATION' | 'OTHER';
+
 // ------------------------------------------------------------ row X.13/5.1b: import
 
 /** `CustomerImportController.CustomerImportSubmitResponse`/`CustomerImportStatusResponse`'s shared status vocabulary. */
@@ -994,6 +1037,67 @@ export class CustomersApi {
       this.api.post<null, ErasureRequest>(
         operationsPaths.customerErasureRequestCancel(scope, accountId, requestId),
         command(null),
+      ),
+    );
+  }
+
+  /** What would stop this customer's erasure from executing right now. Empty when nothing does. */
+  async erasureBlocks(scope: LocationScope, accountId: string): Promise<readonly ErasureBlock[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly ErasureBlock[]>(
+        operationsPaths.customerErasureBlocks(scope, accountId),
+      ),
+    );
+    return result.value ?? [];
+  }
+
+  /** What an executed request changed, per module and table. 404 for a request with no proof. */
+  async erasureProof(
+    scope: LocationScope,
+    accountId: string,
+    requestId: string,
+  ): Promise<ErasureProof> {
+    const result = await firstValueFrom(
+      this.api.get<ErasureProof>(operationsPaths.customerErasureProof(scope, accountId, requestId)),
+    );
+    return result.value;
+  }
+
+  async legalHolds(scope: LocationScope, accountId: string): Promise<readonly LegalHold[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly LegalHold[]>(operationsPaths.customerLegalHolds(scope, accountId)),
+    );
+    return result.value ?? [];
+  }
+
+  /**
+   * Places a hold. Under an approval: the first call answers 422 `SECOND_APPROVER_REQUIRED` naming the request a second
+   * person must decide, and once they have, the same call places it.
+   */
+  async placeLegalHold(
+    scope: LocationScope,
+    accountId: string,
+    body: { readonly reason: LegalHoldReason; readonly note: string },
+  ): Promise<LegalHold> {
+    return firstValueFrom(
+      this.api.post<{ readonly reason: LegalHoldReason; readonly note: string }, LegalHold>(
+        operationsPaths.customerLegalHolds(scope, accountId),
+        command(body),
+      ),
+    );
+  }
+
+  /** Lifts a hold, under the same second-person approval as placing one. */
+  async liftLegalHold(
+    scope: LocationScope,
+    accountId: string,
+    holdId: string,
+    body: { readonly note: string },
+  ): Promise<LegalHold> {
+    return firstValueFrom(
+      this.api.post<{ readonly note: string }, LegalHold>(
+        operationsPaths.customerLegalHoldLift(scope, accountId, holdId),
+        command(body),
       ),
     );
   }

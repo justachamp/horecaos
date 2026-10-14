@@ -229,6 +229,41 @@ export const customersUzLatn: AreaMessages<typeof customersEn> = {
   'customers.erasure.status.PENDING': 'Kutilmoqda',
   'customers.erasure.status.COMPLETED': 'Bajarildi',
   'customers.erasure.status.CANCELLED': 'Bekor qilindi',
+  'customers.erasure.blocks.lead':
+    'Bu oʻchirishni hozircha bajarib boʻlmaydi. Soʻrov kutishda qoladi va quyidagilar bartaraf etilgach bajariladi:',
+  'customers.erasure.block.LEGAL_HOLD': 'Mijozga huquqiy cheklov qoʻyilgan',
+  'customers.erasure.block.OPEN_ORDER': 'Yoʻldagi buyurtmalar: {count}',
+  'customers.erasure.block.OPEN_RECOVERY_CASE': 'Ochiq xizmat murojaatlari: {count}',
+  'customers.erasure.refused': 'Hali oʻchirilmadi: {reasons}',
+  'customers.erasure.proof.show': 'Tasdiq',
+  'customers.erasure.proof.hide': 'Tasdiqni yashirish',
+  'customers.erasure.proof.none':
+    'Bu soʻrovda tasdiq yoʻq: u bajarilmagan yoki tasdiqlar saqlanishidan oldin bajarilgan.',
+  'customers.erasure.proof.lead':
+    'Oʻchirish nimani oʻzgartirgani, modul va jadval boʻyicha. Faqat sonlar; bu yerda qiymat yozilmaydi.',
+  'customers.erasure.proof.module': 'Modul',
+  'customers.erasure.proof.table': 'Jadval',
+  'customers.erasure.proof.rows': 'Qatorlar',
+  'customers.erasure.hold.title': 'Huquqiy cheklov',
+  'customers.erasure.hold.lead':
+    'Cheklov amalda ekan, oʻchirishni bajarib boʻlmaydi va mijoz maʻlumotlari saqlash muddati boʻyicha oʻchirilmaydi. Cheklovni qoʻyish va olib tashlash uchun ikkinchi shaxsning tasdigʻi kerak.',
+  'customers.erasure.hold.place': 'Cheklov qoʻyish',
+  'customers.erasure.hold.lift': 'Cheklovni olib tashlash',
+  'customers.erasure.hold.reason': 'Sabab',
+  'customers.erasure.hold.note': 'Nima uchun (tasdiqlovchi shaxs koʻradi)',
+  'customers.erasure.hold.placedAt': 'Qoʻyilgan',
+  'customers.erasure.hold.status.ACTIVE': 'Amalda',
+  'customers.erasure.hold.status.LIFTED': 'Olib tashlangan',
+  'customers.erasure.hold.reason.LITIGATION': 'Sud jarayoni',
+  'customers.erasure.hold.reason.REGULATORY_REQUEST': 'Tartibga soluvchi soʻrovi',
+  'customers.erasure.hold.reason.INVESTIGATION': 'Tekshiruv',
+  'customers.erasure.hold.reason.OTHER': 'Boshqa',
+  'customers.erasure.hold.place.pending':
+    'Bu cheklovni ikkinchi shaxs tasdiqlashi kerak. {id} tasdiq soʻrovi kutmoqda. U tasdiqlagach, yana qoʻying.',
+  'customers.erasure.hold.place.declined': '{id} tasdiq soʻrovi rad etildi, cheklov qoʻyilmadi.',
+  'customers.erasure.hold.lift.pending':
+    'Cheklovni olib tashlashni ikkinchi shaxs tasdiqlashi kerak. {id} tasdiq soʻrovi kutmoqda. U tasdiqlagach, yana olib tashlang.',
+  'customers.erasure.hold.lift.declined': '{id} tasdiq soʻrovi rad etildi, cheklov amalda qoladi.',
 
   'customers.merge.title': 'Boshqa hisobga birlashtirish',
   'customers.merge.lead':

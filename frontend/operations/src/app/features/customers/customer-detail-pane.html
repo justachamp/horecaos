@@ -1150,6 +1150,17 @@
         </button>
       }
 
+      @if (erasureBlocks().length > 0) {
+        <div class="q-callout" role="status" data-testid="erasure-blocks">
+          <p class="q-body-sm">{{ 'customers.erasure.blocks.lead' | t }}</p>
+          <ul>
+            @for (block of erasureBlocks(); track block.code) {
+              <li class="q-body-sm" data-testid="erasure-block">{{ erasureBlockLabel(block) }}</li>
+            }
+          </ul>
+        </div>
+      }
+
       <table class="grid">
         <thead>
           <tr>
@@ -1190,8 +1201,54 @@
                     </button>
                   }
                 }
+                @if (request.status === 'COMPLETED') {
+                  <button
+                    type="button"
+                    class="link"
+                    data-testid="erasure-proof"
+                    [disabled]="loadingProof()"
+                    (click)="toggleProof(request.id)"
+                  >
+                    {{
+                      proofRequestId() === request.id
+                        ? ('customers.erasure.proof.hide' | t)
+                        : ('customers.erasure.proof.show' | t)
+                    }}
+                  </button>
+                }
               </td>
             </tr>
+            @if (proofRequestId() === request.id) {
+              <tr data-testid="erasure-proof-row">
+                <td class="q-body-sm" colspan="4">
+                  @if (proof(); as shown) {
+                    <p class="q-caption">{{ 'customers.erasure.proof.lead' | t }}</p>
+                    <table class="grid">
+                      <thead>
+                        <tr>
+                          <th class="q-caption">{{ 'customers.erasure.proof.module' | t }}</th>
+                          <th class="q-caption">{{ 'customers.erasure.proof.table' | t }}</th>
+                          <th class="q-caption">{{ 'customers.erasure.proof.rows' | t }}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (participant of shown.participants; track participant.name) {
+                          @for (table of participant.tables; track table.table) {
+                            <tr data-testid="erasure-proof-line">
+                              <td class="q-body-sm">{{ participant.name }}</td>
+                              <td class="q-body-sm q-mono">{{ table.table }}</td>
+                              <td class="q-body-sm q-tnum">{{ table.rows }}</td>
+                            </tr>
+                          }
+                        }
+                      </tbody>
+                    </table>
+                  } @else {
+                    <span class="q-caption">{{ 'customers.loading' | t }}</span>
+                  }
+                </td>
+              </tr>
+            }
           } @empty {
             <tr>
               <td class="q-body-sm empty" colspan="4">
@@ -1205,6 +1262,132 @@
           }
         </tbody>
       </table>
+
+      <h3 class="q-emphasis">{{ 'customers.erasure.hold.title' | t }}</h3>
+      <p class="q-body-sm">{{ 'customers.erasure.hold.lead' | t }}</p>
+
+      @if (canExecuteErasure() && !hasActiveHold() && !holdFormOpen()) {
+        <button
+          type="button"
+          class="q-btn-secondary"
+          data-testid="hold-open"
+          (click)="openHoldForm()"
+        >
+          {{ 'customers.erasure.hold.place' | t }}
+        </button>
+      }
+
+      @if (holdFormOpen()) {
+        <div class="q-form" data-testid="hold-form">
+          <label class="q-field">
+            <span class="q-caption">{{ 'customers.erasure.hold.reason' | t }}</span>
+            <select
+              class="q-select"
+              data-testid="hold-reason"
+              [value]="holdReason()"
+              (change)="holdReason.set($any($event.target).value)"
+            >
+              @for (reason of holdReasons; track reason) {
+                <option [value]="reason">{{ holdReasonLabel(reason) }}</option>
+              }
+            </select>
+          </label>
+          <label class="q-field">
+            <span class="q-caption">{{ 'customers.erasure.hold.note' | t }}</span>
+            <textarea
+              class="q-textarea"
+              rows="3"
+              maxlength="500"
+              data-testid="hold-note"
+              [value]="holdNote()"
+              (input)="holdNote.set($any($event.target).value)"
+            ></textarea>
+          </label>
+          @if (holdWaiting(); as waiting) {
+            <p class="q-body-sm" role="status" data-testid="hold-waiting">{{ waiting }}</p>
+          }
+          <button
+            type="button"
+            class="q-btn-secondary"
+            data-testid="hold-submit"
+            [disabled]="holdBusy() || holdNote().trim().length === 0"
+            (click)="placeHold()"
+          >
+            {{ 'customers.erasure.hold.place' | t }}
+          </button>
+          <button type="button" class="link" (click)="closeHoldForm()">
+            {{ 'customers.cancel' | t }}
+          </button>
+        </div>
+      }
+
+      @if (legalHolds().length > 0) {
+        <table class="grid">
+          <thead>
+            <tr>
+              <th class="q-caption">{{ 'customers.erasure.status' | t }}</th>
+              <th class="q-caption">{{ 'customers.erasure.hold.reason' | t }}</th>
+              <th class="q-caption">{{ 'customers.erasure.hold.placedAt' | t }}</th>
+              <th class="q-caption"></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (hold of legalHolds(); track hold.id) {
+              <tr data-testid="hold-row">
+                <td class="q-body-sm">
+                  {{
+                    hold.status === 'ACTIVE'
+                      ? ('customers.erasure.hold.status.ACTIVE' | t)
+                      : ('customers.erasure.hold.status.LIFTED' | t)
+                  }}
+                </td>
+                <td class="q-body-sm">{{ holdReasonLabel(hold.reasonCode) }}</td>
+                <td class="q-body-sm q-tnum">{{ formatErasureAt(hold.placedAt) }}</td>
+                <td class="q-body-sm">
+                  @if (hold.status === 'ACTIVE' && canExecuteErasure()) {
+                    @if (liftingHoldId() === hold.id) {
+                      <textarea
+                        class="q-textarea"
+                        rows="2"
+                        maxlength="500"
+                        data-testid="lift-note"
+                        [value]="liftNote()"
+                        (input)="liftNote.set($any($event.target).value)"
+                      ></textarea>
+                      @if (holdWaiting(); as waiting) {
+                        <p class="q-body-sm" role="status" data-testid="hold-waiting">
+                          {{ waiting }}
+                        </p>
+                      }
+                      <button
+                        type="button"
+                        class="link"
+                        data-testid="lift-submit"
+                        [disabled]="holdBusy() || liftNote().trim().length === 0"
+                        (click)="liftHold(hold.id)"
+                      >
+                        {{ 'customers.erasure.hold.lift' | t }}
+                      </button>
+                      <button type="button" class="link" (click)="cancelLift()">
+                        {{ 'customers.cancel' | t }}
+                      </button>
+                    } @else {
+                      <button
+                        type="button"
+                        class="link"
+                        data-testid="lift-open"
+                        (click)="startLift(hold.id)"
+                      >
+                        {{ 'customers.erasure.hold.lift' | t }}
+                      </button>
+                    }
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
     }
   }
 </div>

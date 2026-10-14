@@ -910,6 +910,31 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'Курьер расчёт закрыто',
       'uz-Latn': 'Kuryer hisob-kitob yopildi',
     },
+    'customer.erasure.requested': {
+      en: 'Customer erasure requested',
+      ru: 'Запрошено удаление данных клиента',
+      'uz-Latn': 'Mijoz maʻlumotlarini oʻchirish soʻraldi',
+    },
+    'customer.erasure.completed': {
+      en: 'Customer erased',
+      ru: 'Данные клиента удалены',
+      'uz-Latn': 'Mijoz maʻlumotlari oʻchirildi',
+    },
+    'customer.erasure.cancelled': {
+      en: 'Customer erasure withdrawn',
+      ru: 'Запрос на удаление данных клиента отозван',
+      'uz-Latn': 'Mijoz maʻlumotlarini oʻchirish soʻrovi qaytarib olindi',
+    },
+    'customer.legal-hold.placed': {
+      en: 'Legal hold placed on a customer',
+      ru: 'На клиента наложена юридическая блокировка',
+      'uz-Latn': 'Mijozga huquqiy cheklov qoʻyildi',
+    },
+    'customer.legal-hold.lifted': {
+      en: 'Legal hold lifted from a customer',
+      ru: 'С клиента снята юридическая блокировка',
+      'uz-Latn': 'Mijozdan huquqiy cheklov olib tashlandi',
+    },
     'customer.blacklist.revealed': {
       en: 'Customer blacklist revealed',
       ru: 'Клиент чёрный список раскрыто',

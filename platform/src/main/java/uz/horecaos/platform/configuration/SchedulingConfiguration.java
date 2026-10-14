@@ -132,17 +132,15 @@ public class SchedulingConfiguration {
      * wanted a manager, and nothing ever asked the till again — an order waited
      * on a decision that had already been taken at the terminal. ADR
      * 0044's third named gap, the ADR 0029 erasure path, is deliberately
-     * <b>not</b> among these: {@code CustomerMetricProjectionService.erase} and
-     * {@code JdbcAudienceStore.eraseMembership} exist and are tested, but
-     * nothing in the platform ever produces the fact "this customer asked to be
-     * erased" — no request table, no endpoint, no status transition sets {@code
-     * customer.accounts.status = 'ANONYMIZED'} — so there is no worklist for a
-     * sweep to read. ADR 0029 says as much itself: "no data-subject export,
-     * correction, anonymisation, retention, legal-hold or proof operation
-     * exists anywhere — there is no privacy endpoint, service or table."
-     * Scheduling a sweep with nothing to find would look like the erasure
-     * obligation was met; it would not be, so it stays unscheduled and is
-     * recorded as a gap instead. Wave 77 added one more: {@code
+     * <b>not</b> a sweep. It is no longer unwired: {@code
+     * CustomerErasureService} (V0178) is the producer of the fact "this customer
+     * asked to be erased", and {@code MarketingErasureParticipant} calls {@code
+     * CustomerMetricProjectionService.erase} and {@code
+     * JdbcAudienceStore.eraseMembership} from it, in the execution's own
+     * transaction, with the other modules' participants. Execution stays a manual,
+     * capability-gated act that refuses while a legal hold, an open order or an
+     * open recovery case stands, so there is still no worklist for a sweep to
+     * consume on its own. Wave 77 added one more: {@code
      * MediaVerificationWorker.verifyScheduledBatch}, the leased worker that
      * drains {@code media.verification_jobs} (ADR 0010, V0180) — the separate
      * asynchronous validation worker the record always asked for, replacing the

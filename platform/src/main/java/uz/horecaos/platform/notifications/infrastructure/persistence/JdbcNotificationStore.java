@@ -1010,6 +1010,39 @@ public class JdbcNotificationStore {
 
     // ------------------------------------------------------------------- rows
 
+    /** ADR 0029 erasure: how a customer wanted to be reached is her preference, and goes with her. */
+    public int deletePreferencesOfCustomer(UUID tenantId, UUID customerAccountId) {
+        return jdbc.sql("""
+                DELETE FROM notifications.notification_preferences
+                 WHERE tenant_id = :tenantId AND customer_account_id = :customerAccountId
+                """)
+                .param("tenantId", tenantId)
+                .param("customerAccountId", customerAccountId)
+                .update();
+    }
+
+    /**
+     * ADR 0029 erasure: retires the delivery destinations of an erased customer and overwrites the lookup hash
+     * they copied from her contact point. The contact point's own hash was replaced with a random value, so an
+     * endpoint left holding the old one would still let a search for her number find the endpoint, and through it
+     * the account. {@code RETIRED}, not deleted: a notification row references the endpoint it went to.
+     *
+     * @return how many endpoints were retired
+     */
+    public int retireEndpointsOfCustomer(UUID tenantId, UUID customerAccountId, java.time.Instant now) {
+        return jdbc.sql("""
+                UPDATE notifications.recipient_endpoints
+                   SET status = 'RETIRED',
+                       normalized_hash = CASE WHEN normalized_hash IS NULL THEN NULL ELSE gen_random_uuid()::text END,
+                       version = version + 1, updated_at = :now
+                 WHERE tenant_id = :tenantId AND customer_account_id = :customerAccountId
+                """)
+                .param("tenantId", tenantId)
+                .param("customerAccountId", customerAccountId)
+                .param("now", java.time.OffsetDateTime.ofInstant(now, java.time.ZoneOffset.UTC))
+                .update();
+    }
+
     private static final String SELECT_NOTIFICATION = """
             SELECT id, tenant_id, brand_id, location_id, notification_class, channel,
                    template_key, template_id, template_version, locale, subject_type,

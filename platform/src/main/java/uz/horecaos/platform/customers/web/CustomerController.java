@@ -41,8 +41,10 @@ import uz.horecaos.platform.customers.application.CustomerProfileService;
 import uz.horecaos.platform.customers.application.CustomerProfileService.AddressFields;
 import uz.horecaos.platform.customers.application.CustomerProfileService.ContactType;
 import uz.horecaos.platform.customers.application.CustomerProfileService.CoordinateSource;
+import uz.horecaos.platform.customers.application.LegalHoldService;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore.ErasureRequestRow;
+import uz.horecaos.platform.customers.infrastructure.persistence.JdbcLegalHoldStore.HoldRow;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.web.api.AggregateVersion;
@@ -78,6 +80,7 @@ public class CustomerController {
     private final CustomerListQueryService lists;
     private final CustomerBlacklistService blacklist;
     private final CustomerErasureService erasure;
+    private final LegalHoldService legalHolds;
     private final CurrentActor currentActor;
     private final String trustedIssuer;
 
@@ -89,6 +92,7 @@ public class CustomerController {
             CustomerListQueryService lists,
             CustomerBlacklistService blacklist,
             CustomerErasureService erasure,
+            LegalHoldService legalHolds,
             CurrentActor currentActor,
             @org.springframework.beans.factory.annotation.Value(
                             "${spring.security.oauth2.resourceserver.jwt.issuer-uri}")
@@ -100,6 +104,7 @@ public class CustomerController {
         this.lists = lists;
         this.blacklist = blacklist;
         this.erasure = erasure;
+        this.legalHolds = legalHolds;
         this.currentActor = currentActor;
         this.trustedIssuer = trustedIssuer;
     }
@@ -804,7 +809,137 @@ public class CustomerController {
                     merged.getMessage(),
                     java.util.Map.of(
                             "survivingAccountId", merged.survivingAccountId().toString()));
+        } catch (CustomerErasureService.ErasureBlockedException blocked) {
+            // Codes and counts only: the refusal is returned to the operator and must carry nothing personal.
+            throw new ApiException(
+                    ErrorCode.UNPROCESSABLE_STATE,
+                    blocked.getMessage(),
+                    java.util.Map.of(
+                            "blocks",
+                            blocked.blocks().stream()
+                                    .map(block -> block.code() + ":" + block.amount())
+                                    .collect(java.util.stream.Collectors.joining(","))));
         }
+    }
+
+    @GetMapping("/{accountId}/erasure-blocks")
+    @RequiresCapability(Capability.CUSTOMER_READ)
+    @Operation(
+            summary = "What would stop this customer's erasure from executing right now",
+            description = "A legal hold, an order still on its way, a service-recovery case still open. "
+                    + "Codes and counts only; empty when nothing stands in the way. Execute refuses with "
+                    + "422 UNPROCESSABLE_STATE naming the same blocks.")
+    public ResponseEntity<List<ErasureBlockResponse>> erasureBlocks(
+            @PathVariable UUID tenantId, @PathVariable UUID accountId) {
+        try {
+            return ResponseEntity.ok(erasure.blocksFor(tenantId, accountId).stream()
+                    .map(block -> new ErasureBlockResponse(block.code(), block.amount()))
+                    .toList());
+        } catch (CustomerErasureService.AccountNotFoundException absent) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such customer");
+        }
+    }
+
+    @GetMapping("/{accountId}/erasure-requests/{requestId}/proof")
+    @RequiresCapability(Capability.CUSTOMER_READ)
+    @Operation(
+            summary = "What an executed erasure changed, per module and table",
+            description = "The evidence ADR 0029 asks for: which participants ran and how many rows each "
+                    + "overwrote or removed in each table, with when and by whom. Counts and table names "
+                    + "only. 404 for a request that has not completed or that completed before proofs "
+                    + "were kept.")
+    public ResponseEntity<ErasureProofResponse> erasureProof(
+            @PathVariable UUID tenantId, @PathVariable UUID accountId, @PathVariable UUID requestId) {
+        try {
+            return ResponseEntity.ok(ErasureProofResponse.of(erasure.proof(tenantId, accountId, requestId)));
+        } catch (CustomerErasureService.NoSuchErasureRequestException absent) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such erasure request");
+        } catch (CustomerErasureService.ProofNotAvailableException none) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, none.getMessage());
+        }
+    }
+
+    // ---------------------------------------------------------------- legal holds
+
+    @PostMapping("/{accountId}/legal-holds")
+    @RequiresCapability(value = Capability.CUSTOMER_ERASURE_EXECUTE, mutating = true)
+    @Operation(
+            summary = "Place a legal hold on this customer",
+            description = "While a hold stands, executing the customer's erasure is refused and the "
+                    + "retention jobs that expire her data skip her (ADR 0029). Under an ADR 0027 "
+                    + "approval: the first call answers 422 SECOND_APPROVER_REQUIRED naming "
+                    + "approvalRequestId, and once a second person has approved it the same call places "
+                    + "the hold. Idempotent: a customer who already has a hold gets that hold back.")
+    public ResponseEntity<LegalHoldResponse> placeLegalHold(
+            @PathVariable UUID tenantId, @PathVariable UUID accountId, @Valid @RequestBody PlaceLegalHoldRequest body) {
+        try {
+            return switch (legalHolds.place(
+                    tenantId, accountId, body.reason(), body.note().strip(), staffActor())) {
+                case LegalHoldService.Result.Done done ->
+                    ResponseEntity.status(HttpStatus.CREATED).body(LegalHoldResponse.of(done.hold()));
+                case LegalHoldService.Result.Awaiting awaiting -> throw awaitingApproval(awaiting.outcome(), "placed");
+            };
+        } catch (CustomerErasureService.AccountNotFoundException absent) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such customer");
+        }
+    }
+
+    @GetMapping("/{accountId}/legal-holds")
+    @RequiresCapability(Capability.CUSTOMER_READ)
+    @Operation(summary = "This customer's legal holds, newest first")
+    public ResponseEntity<List<LegalHoldResponse>> legalHolds(
+            @PathVariable UUID tenantId, @PathVariable UUID accountId) {
+        try {
+            return ResponseEntity.ok(legalHolds.history(tenantId, accountId).stream()
+                    .map(LegalHoldResponse::of)
+                    .toList());
+        } catch (CustomerErasureService.AccountNotFoundException absent) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such customer");
+        }
+    }
+
+    @PostMapping("/{accountId}/legal-holds/{holdId}/lift")
+    @RequiresCapability(value = Capability.CUSTOMER_ERASURE_EXECUTE, mutating = true)
+    @Operation(
+            summary = "Lift a legal hold",
+            description = "Releases the customer to an erasure request that was waiting behind the hold. "
+                    + "Under an ADR 0027 approval, like placing one: the first call answers 422 "
+                    + "SECOND_APPROVER_REQUIRED. Idempotent for a hold already lifted.")
+    public ResponseEntity<LegalHoldResponse> liftLegalHold(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID accountId,
+            @PathVariable UUID holdId,
+            @Valid @RequestBody LiftLegalHoldRequest body) {
+        try {
+            return switch (legalHolds.lift(
+                    tenantId, accountId, holdId, body.note().strip(), staffActor())) {
+                case LegalHoldService.Result.Done done -> ResponseEntity.ok(LegalHoldResponse.of(done.hold()));
+                case LegalHoldService.Result.Awaiting awaiting -> throw awaitingApproval(awaiting.outcome(), "lifted");
+            };
+        } catch (LegalHoldService.NoSuchHoldException absent) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, absent.getMessage());
+        }
+    }
+
+    /** The 422 the maker is answered with while a checker has not decided. */
+    private static ApiException awaitingApproval(ApprovalOutcome outcome, String what) {
+        return switch (outcome) {
+            case ApprovalOutcome.Pending pending ->
+                new ApiException(
+                        ErrorCode.SECOND_APPROVER_REQUIRED,
+                        "This hold needs a second approver. Approval request %s is pending."
+                                .formatted(pending.requestId()),
+                        java.util.Map.of(
+                                "approvalRequestId", pending.requestId().toString(), "approvalStatus", "PENDING"));
+            case ApprovalOutcome.Declined declined ->
+                new ApiException(
+                        ErrorCode.SECOND_APPROVER_REQUIRED,
+                        "Approval request %s was declined, so the hold is not %s."
+                                .formatted(declined.requestId(), what),
+                        java.util.Map.of(
+                                "approvalRequestId", declined.requestId().toString(), "approvalStatus", "DECLINED"));
+            default -> new ApiException(ErrorCode.SECOND_APPROVER_REQUIRED, "A second approver is required");
+        };
     }
 
     @PostMapping("/{accountId}/erasure-requests/{requestId}/cancel")
@@ -1018,6 +1153,69 @@ public class CustomerController {
                     row.completedByActorId(),
                     row.cancelledAt(),
                     row.cancelledByActorId());
+        }
+    }
+
+    /** One thing in the way of an erasure: a code the console maps to words, and how many. */
+    public record ErasureBlockResponse(String code, int amount) {}
+
+    /** What an executed erasure changed, with the request it belongs to. */
+    public record ErasureProofResponse(
+            UUID requestId,
+            String status,
+            @Nullable Instant completedAt,
+            @Nullable String completedByActorId,
+            List<ParticipantProofResponse> participants) {
+        static ErasureProofResponse of(CustomerErasureService.ErasureProof proof) {
+            ErasureRequestRow request = proof.request();
+            return new ErasureProofResponse(
+                    request.id(),
+                    request.status(),
+                    request.completedAt(),
+                    request.completedByActorId(),
+                    proof.participants().stream()
+                            .map(participant -> new ParticipantProofResponse(
+                                    participant.name(),
+                                    participant.tables().stream()
+                                            .map(table -> new TableRowsResponse(table.table(), table.rows()))
+                                            .toList()))
+                            .toList());
+        }
+    }
+
+    public record ParticipantProofResponse(String name, List<TableRowsResponse> tables) {}
+
+    public record TableRowsResponse(String table, int rows) {}
+
+    public record PlaceLegalHoldRequest(
+            @NotNull LegalHoldService.Reason reason,
+
+            @NotBlank
+            @Size(max = 500)
+            @Schema(description = "Why, for the second person who signs it. Not stored on the hold.")
+            String note) {}
+
+    public record LiftLegalHoldRequest(
+            @NotBlank @Size(max = 500) String note) {}
+
+    /** One legal hold; no free text, because none is stored. */
+    public record LegalHoldResponse(
+            UUID id,
+            String status,
+            String reasonCode,
+            String placedByActorId,
+            Instant placedAt,
+            @Nullable String liftedByActorId,
+            @Nullable Instant liftedAt) {
+        static LegalHoldResponse of(HoldRow row) {
+            return new LegalHoldResponse(
+                    row.id(),
+                    row.status(),
+                    row.reasonCode(),
+                    row.placedByActorId(),
+                    row.placedAt(),
+                    row.liftedByActorId(),
+                    row.liftedAt());
         }
     }
 }

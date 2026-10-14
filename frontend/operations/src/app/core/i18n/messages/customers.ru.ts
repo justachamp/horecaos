@@ -229,6 +229,43 @@ export const customersRu: AreaMessages<typeof customersEn> = {
   'customers.erasure.status.PENDING': 'Ожидает',
   'customers.erasure.status.COMPLETED': 'Выполнен',
   'customers.erasure.status.CANCELLED': 'Отозван',
+  'customers.erasure.blocks.lead':
+    'Это удаление пока выполнить нельзя. Запрос остаётся в ожидании и выполнится, когда это будет снято:',
+  'customers.erasure.block.LEGAL_HOLD': 'На клиента наложена юридическая блокировка',
+  'customers.erasure.block.OPEN_ORDER': 'Заказов в пути: {count}',
+  'customers.erasure.block.OPEN_RECOVERY_CASE': 'Открытых обращений по сервису: {count}',
+  'customers.erasure.refused': 'Пока не удалено: {reasons}',
+  'customers.erasure.proof.show': 'Подтверждение',
+  'customers.erasure.proof.hide': 'Скрыть подтверждение',
+  'customers.erasure.proof.none':
+    'У этого запроса нет подтверждения: он не выполнен или выполнен до того, как подтверждения стали сохраняться.',
+  'customers.erasure.proof.lead':
+    'Что изменило удаление, по модулям и таблицам. Только количества; значения здесь не записаны.',
+  'customers.erasure.proof.module': 'Модуль',
+  'customers.erasure.proof.table': 'Таблица',
+  'customers.erasure.proof.rows': 'Строк',
+  'customers.erasure.hold.title': 'Юридическая блокировка',
+  'customers.erasure.hold.lead':
+    'Пока блокировка действует, удаление выполнить нельзя, а данные клиента не удаляются по сроку хранения. Для наложения и снятия блокировки нужно одобрение второго человека.',
+  'customers.erasure.hold.place': 'Наложить блокировку',
+  'customers.erasure.hold.lift': 'Снять блокировку',
+  'customers.erasure.hold.reason': 'Причина',
+  'customers.erasure.hold.note': 'Зачем (увидит тот, кто одобряет)',
+  'customers.erasure.hold.placedAt': 'Наложена',
+  'customers.erasure.hold.status.ACTIVE': 'Действует',
+  'customers.erasure.hold.status.LIFTED': 'Снята',
+  'customers.erasure.hold.reason.LITIGATION': 'Судебное разбирательство',
+  'customers.erasure.hold.reason.REGULATORY_REQUEST': 'Запрос регулятора',
+  'customers.erasure.hold.reason.INVESTIGATION': 'Расследование',
+  'customers.erasure.hold.reason.OTHER': 'Другое',
+  'customers.erasure.hold.place.pending':
+    'Эту блокировку должен одобрить второй человек. Запрос на одобрение {id} ожидает. Наложите её снова, когда он одобрит.',
+  'customers.erasure.hold.place.declined':
+    'Запрос на одобрение {id} отклонён, блокировка не наложена.',
+  'customers.erasure.hold.lift.pending':
+    'Снятие блокировки должен одобрить второй человек. Запрос на одобрение {id} ожидает. Снимите её снова, когда он одобрит.',
+  'customers.erasure.hold.lift.declined':
+    'Запрос на одобрение {id} отклонён, блокировка остаётся в силе.',
 
   'customers.merge.title': 'Объединить с другой учётной записью',
   'customers.merge.lead':

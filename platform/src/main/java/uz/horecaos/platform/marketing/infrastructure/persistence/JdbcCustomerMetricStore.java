@@ -265,6 +265,21 @@ public class JdbcCustomerMetricStore {
     }
 
     /**
+     * ADR 0029 erasure: what the drift check recorded about this customer's numbers. An observation holds the
+     * projected and the recomputed value of one of her metrics (order counts, spend), so it describes her
+     * behaviour as the projection row did and goes with it.
+     */
+    public int eraseDriftObservations(UUID tenantId, UUID accountId) {
+        return jdbc.sql("""
+                DELETE FROM marketing.metric_drift_observations
+                 WHERE tenant_id = :tenantId AND customer_account_id = :accountId
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .update();
+    }
+
+    /**
      * Accounts whose {@code birth_month_day} falls within {@code windowDays}
      * either side of {@code today} — gap-map row 6.5's own {@code BIRTHDAY}
      * sweep, expanded into a set of {@code MM-DD} literals the same way {@code

@@ -201,6 +201,27 @@ public class JdbcPosBalanceSyncStore {
                 .update();
     }
 
+    /**
+     * ADR 0029 erasure: retires the till link of every points account an erased customer held, so the balance
+     * stops being pushed to a till customer who is no longer anyone's. The till's own customer id stays on the row
+     * (an INTERNAL provider id, V0555) as the report's record that a link existed.
+     *
+     * @return how many links were retired
+     */
+    public int retireStatesOfCustomer(UUID tenantId, UUID customerAccountId, Instant now) {
+        return jdbc.sql("""
+                UPDATE loyalty.pos_balance_sync_state s
+                   SET status = 'RETIRED', version = s.version + 1, updated_at = :now
+                  FROM loyalty.accounts a
+                 WHERE s.tenant_id = :tenantId AND a.tenant_id = :tenantId AND a.id = s.account_id
+                   AND a.customer_account_id = :customerAccountId AND s.status <> 'RETIRED'
+                """)
+                .param("tenantId", tenantId)
+                .param("customerAccountId", customerAccountId)
+                .param("now", utc(now))
+                .update();
+    }
+
     public void setStateStatus(UUID tenantId, UUID stateId, String status, Instant now) {
         jdbc.sql("""
                 UPDATE loyalty.pos_balance_sync_state

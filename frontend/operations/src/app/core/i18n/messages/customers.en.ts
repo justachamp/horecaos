@@ -226,6 +226,43 @@ export const customersEn = {
   'customers.erasure.status.PENDING': 'Pending',
   'customers.erasure.status.COMPLETED': 'Completed',
   'customers.erasure.status.CANCELLED': 'Withdrawn',
+  'customers.erasure.blocks.lead':
+    'This erasure cannot run yet. It stays pending and can be executed once these are cleared:',
+  'customers.erasure.block.LEGAL_HOLD': 'A legal hold is in force on this customer',
+  'customers.erasure.block.OPEN_ORDER': '{count} order(s) still on their way',
+  'customers.erasure.block.OPEN_RECOVERY_CASE': '{count} open service-recovery case(s)',
+  'customers.erasure.refused': 'Not erased yet: {reasons}',
+  'customers.erasure.proof.show': 'Proof',
+  'customers.erasure.proof.hide': 'Hide proof',
+  'customers.erasure.proof.none':
+    'This request has no proof: it did not complete, or it completed before proofs were kept.',
+  'customers.erasure.proof.lead':
+    'What the erasure changed, per module and table. Counts only; no value is recorded here.',
+  'customers.erasure.proof.module': 'Module',
+  'customers.erasure.proof.table': 'Table',
+  'customers.erasure.proof.rows': 'Rows',
+  'customers.erasure.hold.title': 'Legal hold',
+  'customers.erasure.hold.lead':
+    'While a hold is in force the erasure cannot be executed and this customer’s data is not expired by the retention jobs. Placing and lifting a hold each need a second person’s approval.',
+  'customers.erasure.hold.place': 'Place a legal hold',
+  'customers.erasure.hold.lift': 'Lift the hold',
+  'customers.erasure.hold.reason': 'Reason',
+  'customers.erasure.hold.note': 'Why (shown to the person who approves it)',
+  'customers.erasure.hold.placedAt': 'Placed',
+  'customers.erasure.hold.status.ACTIVE': 'In force',
+  'customers.erasure.hold.status.LIFTED': 'Lifted',
+  'customers.erasure.hold.reason.LITIGATION': 'Litigation',
+  'customers.erasure.hold.reason.REGULATORY_REQUEST': 'Regulatory request',
+  'customers.erasure.hold.reason.INVESTIGATION': 'Investigation',
+  'customers.erasure.hold.reason.OTHER': 'Other',
+  'customers.erasure.hold.place.pending':
+    'A second person has to approve this hold. Approval request {id} is waiting. Place it again once they have.',
+  'customers.erasure.hold.place.declined':
+    'Approval request {id} was declined, so the hold was not placed.',
+  'customers.erasure.hold.lift.pending':
+    'A second person has to approve lifting this hold. Approval request {id} is waiting. Lift it again once they have.',
+  'customers.erasure.hold.lift.declined':
+    'Approval request {id} was declined, so the hold stays in force.',
 
   'customers.merge.title': 'Merge into another account',
   'customers.merge.lead':

@@ -1259,6 +1259,26 @@ export const operationsPaths = {
   ): string {
     return `${this.customerErasureRequests(scope, accountId)}/${encodeURIComponent(requestId)}/execute`;
   },
+
+  /** What would stop this customer's erasure right now: a legal hold, an open order, an open recovery case. */
+  customerErasureBlocks(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/erasure-blocks`;
+  },
+
+  /** What an executed erasure changed, per module and table (ADR 0029's proof). */
+  customerErasureProof(scope: LocationScope, accountId: string, requestId: string): string {
+    return `${this.customerErasureRequests(scope, accountId)}/${encodeURIComponent(requestId)}/proof`;
+  },
+
+  /** `GET` this customer's legal holds, `POST` to place one (a second person approves). */
+  customerLegalHolds(scope: LocationScope, accountId: string): string {
+    return `${this.customer(scope, accountId)}/legal-holds`;
+  },
+
+  /** Lift a hold (a second person approves). Mutation: key and `CUSTOMER_ERASURE_EXECUTE`. */
+  customerLegalHoldLift(scope: LocationScope, accountId: string, holdId: string): string {
+    return `${this.customerLegalHolds(scope, accountId)}/${encodeURIComponent(holdId)}/lift`;
+  },
 } as const;
 
 /**

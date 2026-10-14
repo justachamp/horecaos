@@ -143,6 +143,46 @@ class MarketingRetentionSweeperTests {
     }
 
     @Test
+    @DisplayName("a snapshot that records a customer under a legal hold is kept, and purged once the hold is lifted (ADR 0029)")
+    void aHeldMemberSuspendsThePurge() {
+        UUID tenant = UUID.randomUUID();
+        UUID brand = UUID.randomUUID();
+        seedTenantAndBrand(tenant, brand, "retention-hold");
+        UUID held = insertCustomer(tenant, brand);
+        UUID free = insertCustomer(tenant, brand);
+        UUID heldSnapshot = buildReadySnapshot(tenant, brand, List.of(held), T0);
+        UUID freeSnapshot = buildReadySnapshot(tenant, brand, List.of(free), T0);
+        jdbc.sql("""
+                INSERT INTO customer.legal_holds (id, tenant_id, customer_account_id, reason_code,
+                    placed_by_actor_type, placed_by_actor_id)
+                VALUES (:id, :t, :a, 'LITIGATION', 'USER', 'owner-1')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("t", tenant)
+                .param("a", held)
+                .update();
+
+        clock.advance(Duration.ofDays(31 * 25));
+        var result = sweeper.runOnce();
+
+        assertThat(result.snapshotsDue()).as("only the snapshot without a held customer is due").isEqualTo(1);
+        assertThat(memberCount(freeSnapshot)).isZero();
+        assertThat(memberCount(heldSnapshot))
+                .as("expiry is suspended for the snapshot that records a held customer")
+                .isEqualTo(1);
+
+        jdbc.sql("""
+                UPDATE customer.legal_holds
+                   SET status = 'LIFTED', lifted_at = now(), lifted_by_actor_type = 'USER', lifted_by_actor_id = 'owner-2'
+                 WHERE customer_account_id = :a
+                """)
+                .param("a", held)
+                .update();
+        assertThat(sweeper.runOnce().snapshotsDue()).isEqualTo(1);
+        assertThat(memberCount(heldSnapshot)).isZero();
+    }
+
+    @Test
     @DisplayName("two tenants' due snapshots are each purged from their own membership, independently")
     void retentionIsolatesTenants() {
         UUID tenantA = UUID.randomUUID();
