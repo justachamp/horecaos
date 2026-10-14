@@ -48,6 +48,22 @@ describe('settingsPaths: notification templates (ADR 0020, row 10.9a)', () => {
     );
   });
 
+  it('asks the catalogue about one template key when it is given one, encoded', () => {
+    expect(settingsPaths.notificationVariableCatalogue(SCOPE, 'ORDER_FULFILLING')).toBe(
+      `${TEMPLATES}/variable-catalogue?templateKey=ORDER_FULFILLING`,
+    );
+    expect(settingsPaths.notificationVariableCatalogue(SCOPE, 'A B&C')).toBe(
+      `${TEMPLATES}/variable-catalogue?templateKey=A%20B%26C`,
+    );
+  });
+
+  it('builds the platform defaults and the one-time-code wording beside the collection', () => {
+    expect(settingsPaths.notificationPlatformDefaults(SCOPE)).toBe(
+      `${TEMPLATES}/platform-defaults`,
+    );
+    expect(settingsPaths.notificationOtpWording(SCOPE)).toBe(`${TEMPLATES}/otp-wording`);
+  });
+
   it('keeps the routing tab where it was, on the same prefix', () => {
     expect(settingsPaths.notificationRoutingBindings(SCOPE)).toBe(
       '/api/v1/tenants/t1/brands/b1/notification-routing/bindings',
@@ -103,6 +119,17 @@ describe('settingsPaths: the console calls what the baseline publishes, verb inc
     ['POST', 'activate a version', settingsPaths.notificationTemplateActivate(SCOPE, 'tp1', 2)],
     ['POST', 'send a test', settingsPaths.notificationTemplateTestSend(SCOPE, 'tp1', 2)],
     ['GET', 'load the variable catalogue', settingsPaths.notificationVariableCatalogue(SCOPE)],
+    [
+      'GET',
+      'load the variable catalogue for one key',
+      settingsPaths.notificationVariableCatalogue(SCOPE, 'ORDER_FULFILLING').split('?')[0],
+    ],
+    [
+      'GET',
+      "read the platform's default wording",
+      settingsPaths.notificationPlatformDefaults(SCOPE),
+    ],
+    ['GET', "read the one-time code's wording", settingsPaths.notificationOtpWording(SCOPE)],
   ];
 
   it.each(CALLS)('%s is published to %s', (method, _what, builtPath) => {

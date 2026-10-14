@@ -841,6 +841,49 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.notifications.routing.topic.prompt':
     'Forum mavzusi IDsi — oddiy chat uchun boʻsh qoldiring',
   'settings.notifications.routing.topic.save': 'Saqlash',
+  'settings.notifications.field.notificationClass.hint':
+    'Bir martalik kodli xabar platformaga tegishli va bu yerda tahrirlanmaydi; u quyida faqat oʻqish uchun koʻrsatilgan.',
+  'settings.notifications.field.consentPurpose': 'Rozilik maqsadi',
+  'settings.notifications.field.consentPurpose.hint':
+    'Yuborishdan oldin mijozning roziligi shu maqsad boʻyicha tekshiriladi. Maqsadsiz ixtiyoriy xabar rad etiladi. Buyurtma holati xabarlari ORDER_PROGRESS_UPDATES dan foydalanadi.',
+  'settings.notifications.marketing.notice': 'Faqat rozilik bergan mijozlarga yuboriladi.',
+  'settings.notifications.marketing.evidence':
+    'Obunani bekor qilish keyingi yuborishlarga taʻsir qiladi va allaqachon yetkazilganlarning izini hech qachon oʻchirmaydi.',
+  'settings.notifications.marketing.link': 'Mijozning roziligini uning kartasida koʻring',
+  'settings.notifications.marketing.chip': 'faqat rozilik bilan',
+  'settings.notifications.column.languages': 'Tillar',
+  'settings.notifications.column.moderation': 'Moderatsiya',
+  'settings.notifications.column.origin': 'Manba',
+  'settings.notifications.languages.missing': 'til yetishmaydi',
+  'settings.notifications.origin.BRAND': 'Brend',
+  'settings.notifications.origin.TENANT': 'Tashkilot',
+  'settings.notifications.origin.PLATFORM': 'Platforma',
+  'settings.notifications.defaults.title': 'Platformaning standart matni',
+  'settings.notifications.defaults.lead':
+    'Brend ham, tashkilot ham hech narsa yozmagan boʻlsa, mijoz shu hodisalar boʻyicha nimani oladi. Bu oxirgi qatlam: siz faollashtirgan shablon uni darhol bosib oʻtadi. Uni tahrirlab boʻlmaydi; «Moslash» uni shu brendning shabloniga nusxalaydi.',
+  'settings.notifications.defaults.customise': 'Moslash',
+  'settings.notifications.defaults.editOwn': 'Shabloningizni ochish',
+  'settings.notifications.defaults.overridden': 'bosib oʻtilgan',
+  'settings.notifications.otp.title': 'Bir martalik kodli xabar',
+  'settings.notifications.otp.lead':
+    'Mijoz kirish kodi bilan birga oʻqiydigan gap platformaga tegishli: u bitta SMS ga sigʻishi uchun ataylab qisqa va u shablon emas, shuning uchun bu yerda yaratadigan yoki faollashtiradigan narsa yoʻq.',
+  'settings.notifications.otp.gateway.GATEWAY_MODERATES':
+    'SMS shlyuzingiz matnlarni tasdiqlaydi: kodlar telefonga yetishidan oldin platforma gaplarini shlyuz tasdiqlagan boʻlishi kerak',
+  'settings.notifications.otp.gateway.NOT_MODERATED':
+    'SMS shlyuzingiz matnlarni moderatsiya qilmaydi',
+  'settings.notifications.otp.characters': '{count} belgi',
+  'settings.notifications.testSend.chat': 'Bogʻlangan chat',
+  'settings.notifications.testSend.chat.choose': 'Shu brendning chatlaridan birini tanlang…',
+  'settings.notifications.testSend.chat.none':
+    'Hali hech bir chat bogʻlanmagan — uni «Marshrutlash» boʻlimida bogʻlang.',
+  'settings.notifications.editor.copy.label': 'Boshqa tilni shu matndan boshlash:',
+  'settings.notifications.editor.copy.into': '{locale} ga nusxalash',
+  'settings.notifications.editor.copy.replace': '{locale} ni shu matn bilan almashtirish',
+  'settings.notifications.editor.personal.note':
+    'Mijozning ismi va kuryerning ismi xabar yuborilayotganda qoʻyiladi va hech qayerda saqlanmaydi.',
+  'settings.notifications.editor.showItemPrices': 'Mahsulotlar roʻyxatida narxlarni koʻrsatish',
+  'settings.notifications.editor.showItemPrices.unused':
+    'Hech bir til {{productList}} dan foydalanmaydi, shuning uchun bu tugma hech narsani oʻzgartirmaydi.',
 
   // 10.10 Maʻlumotnoma maʻlumotlari
   'settings.referenceData.title': 'Maʻlumotnoma maʻlumotlari',

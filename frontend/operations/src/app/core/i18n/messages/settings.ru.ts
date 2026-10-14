@@ -832,6 +832,48 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.notifications.routing.topic.prompt':
     'ID темы форума — оставьте пустым для обычного чата',
   'settings.notifications.routing.topic.save': 'Сохранить',
+  'settings.notifications.field.notificationClass.hint':
+    'Сообщение с одноразовым кодом принадлежит платформе и здесь не редактируется; оно показано ниже только для чтения.',
+  'settings.notifications.field.consentPurpose': 'Цель согласия',
+  'settings.notifications.field.consentPurpose.hint':
+    'Цель, по которой проверяется согласие клиента перед отправкой. Необязательное сообщение без цели отклоняется. Для сообщений о ходе заказа используется ORDER_PROGRESS_UPDATES.',
+  'settings.notifications.marketing.notice': 'Отправляется только клиентам с согласием.',
+  'settings.notifications.marketing.evidence':
+    'Отписка меняет, кому можно писать дальше, и никогда не стирает следы уже доставленного.',
+  'settings.notifications.marketing.link': 'Согласие клиента смотрите в его карточке',
+  'settings.notifications.marketing.chip': 'только по согласию',
+  'settings.notifications.column.languages': 'Языки',
+  'settings.notifications.column.moderation': 'Модерация',
+  'settings.notifications.column.origin': 'Источник',
+  'settings.notifications.languages.missing': 'не хватает языка',
+  'settings.notifications.origin.BRAND': 'Бренд',
+  'settings.notifications.origin.TENANT': 'Организация',
+  'settings.notifications.origin.PLATFORM': 'Платформа',
+  'settings.notifications.defaults.title': 'Текст платформы по умолчанию',
+  'settings.notifications.defaults.lead':
+    'Что получает клиент по этим событиям, пока ни бренд, ни организация ничего не написали. Это последний уровень: активированный вами шаблон сразу его перекрывает. Менять его нельзя; «Настроить» копирует его в шаблон этого бренда.',
+  'settings.notifications.defaults.customise': 'Настроить',
+  'settings.notifications.defaults.editOwn': 'Открыть ваш шаблон',
+  'settings.notifications.defaults.overridden': 'перекрыт',
+  'settings.notifications.otp.title': 'Сообщение с одноразовым кодом',
+  'settings.notifications.otp.lead':
+    'Фраза, которую клиент читает вместе с кодом входа, принадлежит платформе: она короткая намеренно, чтобы укладываться в одно SMS, и это не шаблон, поэтому здесь нечего создавать и активировать.',
+  'settings.notifications.otp.gateway.GATEWAY_MODERATES':
+    'Ваш SMS-шлюз утверждает тексты: фразы платформы должны быть утверждены им, прежде чем коды дойдут до телефона',
+  'settings.notifications.otp.gateway.NOT_MODERATED': 'Ваш SMS-шлюз не модерирует тексты',
+  'settings.notifications.otp.characters': '{count} симв.',
+  'settings.notifications.testSend.chat': 'Привязанный чат',
+  'settings.notifications.testSend.chat.choose': 'Выберите один из чатов этого бренда…',
+  'settings.notifications.testSend.chat.none':
+    'Ни один чат ещё не привязан — привяжите его на вкладке «Маршрутизация».',
+  'settings.notifications.editor.copy.label': 'Начать другой язык с этого текста:',
+  'settings.notifications.editor.copy.into': 'Скопировать в {locale}',
+  'settings.notifications.editor.copy.replace': 'Заменить {locale} этим текстом',
+  'settings.notifications.editor.personal.note':
+    'Имя клиента и имя курьера подставляются при отправке сообщения и нигде не хранятся.',
+  'settings.notifications.editor.showItemPrices': 'Показывать цены товаров в списке',
+  'settings.notifications.editor.showItemPrices.unused':
+    'Ни один язык не использует {{productList}}, поэтому этот переключатель ничего не изменит.',
 
   // 10.10 Справочные данные
   'settings.referenceData.title': 'Справочные данные',

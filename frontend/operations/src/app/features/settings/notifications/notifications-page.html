@@ -82,13 +82,41 @@
         id="template-class"
         class="q-body field"
         [value]="newNotificationClass()"
-        (change)="newNotificationClass.set($any($event.target).value)"
+        (change)="onClassChange($any($event.target).value)"
         [disabled]="createSubmitting()"
       >
         @for (option of notificationClasses; track option) {
           <option [value]="option">{{ option }}</option>
         }
       </select>
+      <p class="q-caption hint" data-testid="class-security-note">
+        {{ 'settings.notifications.field.notificationClass.hint' | t }}
+      </p>
+
+      @if (newTemplateNeedsPurpose()) {
+        <label class="q-caption" for="template-consent-purpose">{{
+          'settings.notifications.field.consentPurpose' | t
+        }}</label>
+        <input
+          id="template-consent-purpose"
+          class="q-body field"
+          type="text"
+          data-testid="consent-purpose"
+          [value]="newConsentPurpose()"
+          (input)="newConsentPurpose.set($any($event.target).value)"
+          [disabled]="createSubmitting()"
+          [placeholder]="progressPurpose"
+        />
+        <p class="q-caption hint">{{ 'settings.notifications.field.consentPurpose.hint' | t }}</p>
+      }
+      @if (newTemplateIsMarketing()) {
+        <p class="q-body-sm consent-notice" data-testid="marketing-notice">
+          {{ 'settings.notifications.marketing.notice' | t }}
+          <a routerLink="/customers" class="link">{{
+            'settings.notifications.marketing.link' | t
+          }}</a>
+        </p>
+      }
 
       <label class="q-caption" for="template-channel">{{
         'settings.notifications.field.channel' | t
@@ -177,23 +205,36 @@
     </div>
   }
 
-  <table class="table">
+  <table class="table" data-testid="template-table">
     <thead>
       <tr>
         <th class="q-caption">{{ 'settings.notifications.field.templateKey' | t }}</th>
         <th class="q-caption">{{ 'settings.notifications.field.notificationClass' | t }}</th>
         <th class="q-caption">{{ 'settings.notifications.field.channel' | t }}</th>
         <th class="q-caption">{{ 'settings.notifications.field.variant' | t }}</th>
+        <th class="q-caption">{{ 'settings.notifications.column.languages' | t }}</th>
+        <th class="q-caption">{{ 'settings.notifications.column.moderation' | t }}</th>
         <th class="q-caption">{{ 'settings.notifications.field.status' | t }}</th>
         <th class="q-caption">{{ 'settings.notifications.field.activeVersion' | t }}</th>
+        <th class="q-caption">{{ 'settings.notifications.column.origin' | t }}</th>
         <th class="q-caption"></th>
       </tr>
     </thead>
     <tbody>
-      @for (template of templates(); track template.id) {
-        <tr>
+      @for (template of sortedTemplates(); track template.id) {
+        <tr
+          [attr.data-severity]="severityOf(template)"
+          [attr.data-testid]="'template-row-' + template.id"
+        >
           <td class="q-body-sm q-mono">{{ template.templateKey }}</td>
-          <td class="q-body-sm">{{ template.notificationClass }}</td>
+          <td class="q-body-sm">
+            {{ template.notificationClass }}
+            @if (template.notificationClass === 'MARKETING') {
+              <span class="q-caption consent-chip" data-testid="consent-chip">{{
+                'settings.notifications.marketing.chip' | t
+              }}</span>
+            }
+          </td>
           <td class="q-body-sm">
             {{ template.channel }}
             @if (!wiredChannels.has(template.channel)) {
@@ -201,10 +242,36 @@
             }
           </td>
           <td class="q-body-sm">{{ variantLabel(template) }}</td>
+          <td class="q-body-sm" data-testid="language-chips">
+            @for (chip of languageChips(template); track chip.tag) {
+              <span
+                class="locale-chip"
+                [class.locale-chip--missing]="!chip.present"
+                [attr.data-present]="chip.present"
+                >{{ chip.tag }}</span
+              >
+            }
+            @if (hasMissingLanguage(template)) {
+              <span class="q-caption missing-note">{{
+                'settings.notifications.languages.missing' | t
+              }}</span>
+            }
+          </td>
+          <td class="q-body-sm" data-testid="moderation-cell">
+            <q-status-pill
+              [label]="moderationLabel(template.providerReview)"
+              [tone]="moderationTone(template.providerReview)"
+            />
+          </td>
           <td class="q-body-sm">
             <span class="status-badge">{{ template.status }}</span>
           </td>
           <td class="q-body-sm q-tnum">{{ template.activeVersion ?? '—' }}</td>
+          <td class="q-body-sm">
+            <span class="origin-chip" [attr.data-origin]="template.origin">{{
+              originLabel(template)
+            }}</span>
+          </td>
           <td class="row-menu">
             <q-action-menu
               [triggerLabel]="'settings.notifications.action.rowMenu' | t"
@@ -217,11 +284,106 @@
         </tr>
       } @empty {
         <tr>
-          <td class="q-body-sm empty" colspan="7">{{ 'settings.notifications.empty' | t }}</td>
+          <td class="q-body-sm empty" colspan="10">{{ 'settings.notifications.empty' | t }}</td>
         </tr>
       }
     </tbody>
   </table>
+
+  @if (platformDefaults().length > 0) {
+    <section class="card card--wide" data-testid="platform-defaults">
+      <h2 class="q-subhead">{{ 'settings.notifications.defaults.title' | t }}</h2>
+      <p class="q-body-sm lead">{{ 'settings.notifications.defaults.lead' | t }}</p>
+      @if (customiseError(); as message) {
+        <p class="q-body-sm error" role="alert">{{ message }}</p>
+      }
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="q-caption">{{ 'settings.notifications.field.templateKey' | t }}</th>
+            <th class="q-caption">{{ 'settings.notifications.field.notificationClass' | t }}</th>
+            <th class="q-caption">{{ 'settings.notifications.column.languages' | t }}</th>
+            <th class="q-caption">{{ 'settings.notifications.column.origin' | t }}</th>
+            <th class="q-caption"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (platformDefault of platformDefaults(); track platformDefault.templateKey) {
+            <tr [attr.data-testid]="'default-row-' + platformDefault.templateKey">
+              <td class="q-body-sm q-mono">{{ platformDefault.templateKey }}</td>
+              <td class="q-body-sm">{{ platformDefault.notificationClass }}</td>
+              <td class="q-body-sm">
+                @for (tag of defaultLocales(platformDefault); track tag) {
+                  <span class="locale-chip">{{ tag }}</span>
+                }
+              </td>
+              <td class="q-body-sm">
+                <span class="origin-chip" data-origin="PLATFORM">{{
+                  'settings.notifications.origin.PLATFORM' | t
+                }}</span>
+                @if (isOverridden(platformDefault)) {
+                  <span class="q-caption" data-testid="overridden-note">{{
+                    'settings.notifications.defaults.overridden' | t
+                  }}</span>
+                }
+              </td>
+              <td class="row-menu">
+                <button
+                  type="button"
+                  class="q-body-sm link"
+                  [attr.data-testid]="'customise-' + platformDefault.templateKey"
+                  [disabled]="customiseBusy() !== null"
+                  (click)="customise(platformDefault)"
+                >
+                  {{
+                    ownTemplateFor(platformDefault)
+                      ? ('settings.notifications.defaults.editOwn' | t)
+                      : ('settings.notifications.defaults.customise' | t)
+                  }}
+                </button>
+              </td>
+            </tr>
+            <tr class="default-wording">
+              <td class="q-body-sm" colspan="5">
+                @for (tag of defaultLocales(platformDefault); track tag) {
+                  <p class="q-body-sm wording-line">
+                    <span class="q-caption">{{ tag }}</span>
+                    {{ platformDefault.bodies[tag] }}
+                  </p>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+
+  @if (otpWording(); as otp) {
+    <section class="card card--wide" data-testid="otp-wording">
+      <h2 class="q-subhead">{{ 'settings.notifications.otp.title' | t }}</h2>
+      <p class="q-body-sm lead">{{ 'settings.notifications.otp.lead' | t }}</p>
+      <p class="q-body-sm">
+        <q-status-pill
+          [label]="
+            otp.gatewayApproval === 'GATEWAY_MODERATES'
+              ? ('settings.notifications.otp.gateway.GATEWAY_MODERATES' | t)
+              : ('settings.notifications.otp.gateway.NOT_MODERATED' | t)
+          "
+          [tone]="otp.gatewayApproval === 'GATEWAY_MODERATES' ? 'warning' : 'none'"
+        />
+      </p>
+      @for (sentence of otp.sentences; track sentence.locale) {
+        <p class="q-body-sm wording-line" [attr.data-testid]="'otp-' + sentence.locale">
+          <span class="q-caption">{{ sentence.locale }}</span>
+          {{ sentence.text }}
+          <span class="q-caption">{{
+            'settings.notifications.otp.characters' | t: { count: sentence.characters }
+          }}</span>
+        </p>
+      }
+    </section>
+  }
 } @else {
   <p class="q-body-sm lead">{{ 'settings.notifications.routing.lead' | t }}</p>
 
@@ -339,6 +501,16 @@
     [title]="'settings.notifications.drawer.versionsTitle' | t: { key: template.templateKey }"
     (dismiss)="closeDrawer()"
   >
+    @if (template.notificationClass === 'MARKETING') {
+      <p class="q-body-sm consent-notice" data-testid="marketing-notice-drawer">
+        {{ 'settings.notifications.marketing.notice' | t }}
+        {{ 'settings.notifications.marketing.evidence' | t }}
+        <a routerLink="/customers" class="link">{{
+          'settings.notifications.marketing.link' | t
+        }}</a>
+      </p>
+    }
+
     <div class="toolbar">
       <button type="button" class="q-body primary" (click)="startNewVersion()">
         {{ 'settings.notifications.action.newVersion' | t }}
@@ -422,16 +594,44 @@
           }
         </select>
 
-        <label class="q-caption" for="test-send-destination">{{
-          'settings.notifications.testSend.destination' | t
-        }}</label>
-        <input
-          id="test-send-destination"
-          class="q-body field"
-          type="tel"
-          [value]="testSendDestination()"
-          (input)="testSendDestination.set($any($event.target).value)"
-        />
+        @if (testSendIsTelegram()) {
+          <label class="q-caption" for="test-send-chat">{{
+            'settings.notifications.testSend.chat' | t
+          }}</label>
+          <select
+            id="test-send-chat"
+            class="q-body field"
+            data-testid="test-send-chat"
+            [value]="testSendDestination()"
+            (change)="testSendDestination.set($any($event.target).value)"
+          >
+            <option value="">{{ 'settings.notifications.testSend.chat.choose' | t }}</option>
+            @for (chat of testSendChats(); track chat.bindingId) {
+              <option [value]="chat.bindingId">
+                {{ chat.chatId }}
+                @if (chat.topicId !== null) {
+                  ·
+                  {{ 'settings.notifications.routing.topic.numbered' | t: { topic: chat.topicId } }}
+                }
+              </option>
+            } @empty {
+              <option value="" disabled>
+                {{ 'settings.notifications.testSend.chat.none' | t }}
+              </option>
+            }
+          </select>
+        } @else {
+          <label class="q-caption" for="test-send-destination">{{
+            'settings.notifications.testSend.destination' | t
+          }}</label>
+          <input
+            id="test-send-destination"
+            class="q-body field"
+            type="tel"
+            [value]="testSendDestination()"
+            (input)="testSendDestination.set($any($event.target).value)"
+          />
+        }
 
         @if (testSendError(); as message) {
           <p class="q-body-sm error" role="alert">{{ message }}</p>

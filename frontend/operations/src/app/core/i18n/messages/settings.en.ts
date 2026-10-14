@@ -832,6 +832,48 @@ export const settingsEn = {
   'settings.notifications.routing.unbind.confirm.confirm': 'Unbind',
   'settings.notifications.routing.topic.prompt': 'Forum topic id — leave empty for the flat chat',
   'settings.notifications.routing.topic.save': 'Save',
+  'settings.notifications.field.notificationClass.hint':
+    'The one-time-code message is the platform’s and is not authored here; it is shown below, read-only.',
+  'settings.notifications.field.consentPurpose': 'Consent purpose',
+  'settings.notifications.field.consentPurpose.hint':
+    'The purpose the customer’s consent is checked against before this is sent. An optional message that names none is refused. Order progress messages use ORDER_PROGRESS_UPDATES.',
+  'settings.notifications.marketing.notice': 'Sent only to customers who have consented.',
+  'settings.notifications.marketing.evidence':
+    'Unsubscribing changes who is eligible from then on and never erases the evidence of what was already delivered.',
+  'settings.notifications.marketing.link': 'See a customer’s consent on their card',
+  'settings.notifications.marketing.chip': 'consent only',
+  'settings.notifications.column.languages': 'Languages',
+  'settings.notifications.column.moderation': 'Moderation',
+  'settings.notifications.column.origin': 'Origin',
+  'settings.notifications.languages.missing': 'a language is missing',
+  'settings.notifications.origin.BRAND': 'Brand',
+  'settings.notifications.origin.TENANT': 'Tenant',
+  'settings.notifications.origin.PLATFORM': 'Platform',
+  'settings.notifications.defaults.title': 'Platform default wording',
+  'settings.notifications.defaults.lead':
+    'What a customer is sent for these events when neither this brand nor the tenant has written anything. It is the last layer: a template you activate outranks it at once. It cannot be edited; customise copies it into a template of this brand.',
+  'settings.notifications.defaults.customise': 'Customise',
+  'settings.notifications.defaults.editOwn': 'Open your template',
+  'settings.notifications.defaults.overridden': 'overridden',
+  'settings.notifications.otp.title': 'One-time code message',
+  'settings.notifications.otp.lead':
+    'The sentence a customer reads with a sign-in code belongs to the platform: it is short on purpose so it stays one SMS, and it is not a template, so there is nothing to author or activate here.',
+  'settings.notifications.otp.gateway.GATEWAY_MODERATES':
+    'Your SMS gateway approves wordings: the platform’s sentences must be approved by it before codes reach a handset',
+  'settings.notifications.otp.gateway.NOT_MODERATED': 'Your SMS gateway does not moderate wordings',
+  'settings.notifications.otp.characters': '{count} characters',
+  'settings.notifications.testSend.chat': 'Bound chat',
+  'settings.notifications.testSend.chat.choose': 'Choose one of this brand’s chats…',
+  'settings.notifications.testSend.chat.none':
+    'No chat is bound yet — bind one on the Routing tab.',
+  'settings.notifications.editor.copy.label': 'Start another language from this text:',
+  'settings.notifications.editor.copy.into': 'Copy into {locale}',
+  'settings.notifications.editor.copy.replace': 'Replace {locale} with this text',
+  'settings.notifications.editor.personal.note':
+    'The customer’s name and the courier’s first name are looked up when the message is sent and are never stored.',
+  'settings.notifications.editor.showItemPrices': 'Show item prices in the product list',
+  'settings.notifications.editor.showItemPrices.unused':
+    'No language uses {{productList}}, so this switch would change nothing.',
 
   // 10.10 Reference data
   'settings.referenceData.title': 'Reference data',

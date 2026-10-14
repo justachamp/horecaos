@@ -23,7 +23,6 @@ import {
   VariableCatalogueEntry,
   VersionResult,
   WIRED_CHANNELS,
-  WordingResponse,
 } from './notifications-api';
 
 /** Mirrors `TemplateRenderer`'s own placeholder grammar exactly: `{{name}}`, letters/digits/underscore. */
@@ -32,11 +31,33 @@ const PLACEHOLDER = /\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}/g;
 /** Sample values for the live preview — the same defaults `TemplateTestSendService` renders a test send with. */
 const SAMPLE_VALUES: Readonly<Record<string, string>> = {
   orderNumber: 'A-1042',
-  amount: '85 000 UZS',
+  amount: '85000',
   currency: 'UZS',
   reasonCode: 'OUT_OF_STOCK',
   code: '482913',
+  restaurantName: 'Oqtepa Lavash',
+  deliveryTime: '19:45',
+  preparationTime: '35',
+  discountAmount: '5000',
+  deliveryFee: '12000',
+  // The two personal values read as invented people in a preview: they are looked up when a real
+  // message is sent and are never stored (ADR 0184, D21), so there is no real value to show here.
+  customerName: 'Aziz',
+  courierFirstName: 'Bobur',
 };
+
+/** The product list as the preview shows it, with or without the price after each item. */
+function sampleProductList(showItemPrices: boolean): string {
+  return showItemPrices ? '2x Lavash (50000 UZS), 1x Cola (8000 UZS)' : '2x Lavash, 1x Cola';
+}
+
+/** What a prefilled wording needs to carry: a language, its text, and the version's price switch. */
+export interface PrefillWording {
+  readonly locale: string;
+  readonly body: string;
+  readonly subject: string | null;
+  readonly showItemPrices?: boolean;
+}
 
 /** Every placeholder a piece of text names, in first-appearance order. */
 function variablesUsedIn(text: string): readonly string[] {
@@ -47,8 +68,12 @@ function variablesUsedIn(text: string): readonly string[] {
   return [...found];
 }
 
-function renderPreview(text: string): string {
-  return text.replace(PLACEHOLDER, (whole, name: string) => SAMPLE_VALUES[name] ?? `[${name}]`);
+function renderPreview(text: string, showItemPrices: boolean): string {
+  return text.replace(PLACEHOLDER, (whole, name: string) =>
+    name === 'productList'
+      ? sampleProductList(showItemPrices)
+      : (SAMPLE_VALUES[name] ?? `[${name}]`),
+  );
 }
 
 /**
@@ -79,8 +104,11 @@ export class TemplateEditor {
   readonly templateKey = input.required<string>();
   readonly notificationClass = input.required<string>();
   readonly channel = input.required<string>();
-  /** The version to start from — the active version's own text, or null for a blank draft. */
-  readonly prefill = input<readonly WordingResponse[] | null>(null);
+  /**
+   * The version to start from — the active version's own text, the platform's default wording a brand is
+   * customising (ADR 0184), or null for a blank draft.
+   */
+  readonly prefill = input<readonly PrefillWording[] | null>(null);
 
   readonly saved = output<VersionResult>();
   readonly cancelled = output<void>();
@@ -123,11 +151,41 @@ export class TemplateEditor {
   protected readonly error = signal<string | null>(null);
   protected readonly result = signal<VersionResult | null>(null);
 
-  protected readonly preview = computed(() => renderPreview(this.bodyOf(this.activeLocale())));
+  /**
+   * ADR 0184: whether `{{productList}}` follows each item with its line total. One value for the whole
+   * version, which is why it sits beside the tabs and not inside one of them.
+   */
+  protected readonly showItemPrices = signal(false);
+  /** The switch only means something where the class offers `{{productList}}` at all. */
+  protected readonly offersProductList = computed(() =>
+    this.variablesForClass().some((variable) => variable.name === 'productList'),
+  );
+  /** True when some language's wording prints the list, which is the only thing the switch changes. */
+  protected readonly usesProductList = computed(() =>
+    this.localeTags().some((tag) => variablesUsedIn(this.bodyOf(tag)).includes('productList')),
+  );
+  /** Variables looked up when a message is sent and never stored; the editor says so beside them. */
+  protected readonly offersPersonalVariables = computed(() =>
+    this.variablesForClass().some(
+      (variable) => variable.name === 'customerName' || variable.name === 'courierFirstName',
+    ),
+  );
+
+  protected readonly preview = computed(() =>
+    renderPreview(this.bodyOf(this.activeLocale()), this.showItemPrices()),
+  );
 
   protected readonly canSave = computed(
     () =>
-      !this.submitting() && this.localeTags().every((tag) => this.bodyOf(tag).trim().length > 0),
+      !this.submitting() &&
+      this.localeTags().every((tag) => this.bodyOf(tag).trim().length > 0) &&
+      // A switch that changes nothing is refused by the platform; saying so here saves the round trip.
+      (!this.showItemPrices() || this.usesProductList()),
+  );
+
+  /** The other languages this wording can be copied into, to start their translation (settings.md 10.9). */
+  protected readonly copyTargets = computed(() =>
+    this.localeTags().filter((tag) => tag !== this.activeLocale()),
   );
   protected readonly anyBodyStarted = computed(() =>
     this.localeTags().some((tag) => this.bodyOf(tag).trim().length > 0),
@@ -176,6 +234,7 @@ export class TemplateEditor {
       }
       this.bodies.set(bodies);
       this.subjects.set(subjects);
+      this.showItemPrices.set(prefill.some((row) => row.showItemPrices === true));
     });
 
     effect(() => {
@@ -201,6 +260,17 @@ export class TemplateEditor {
 
   protected setSubject(tag: string, value: string): void {
     this.subjects.update((current) => ({ ...current, [tag]: value }));
+  }
+
+  /**
+   * Copies the active language's text (and subject) into another language, to be translated there. It
+   * replaces what the target held, which the button says in its label when the target had text.
+   */
+  protected copyActiveTo(target: string): void {
+    const source = this.activeLocale();
+    this.setBody(target, this.bodyOf(source));
+    this.setSubject(target, this.subjectOf(source));
+    this.chosenLocale.set(target);
   }
 
   /** Appends the placeholder to the active locale's own body — see the class doc for why nothing else is needed. */
@@ -241,6 +311,7 @@ export class TemplateEditor {
       }
 
       const outcome = await this.api.addVersion(this.scope(), this.templateId(), {
+        showItemPrices: this.showItemPrices() ? true : undefined,
         wordings: Object.fromEntries(
           sent.map((tag) => [
             tag,
@@ -267,7 +338,7 @@ export class TemplateEditor {
   private async loadCatalogue(): Promise<void> {
     this.catalogueLoading.set(true);
     try {
-      this.catalogue.set(await this.api.variableCatalogue(this.scope()));
+      this.catalogue.set(await this.api.variableCatalogue(this.scope(), this.templateKey()));
     } finally {
       this.catalogueLoading.set(false);
     }

@@ -213,3 +213,56 @@
 .test-send {
   margin-top: 24px;
 }
+
+.card--wide {
+  max-inline-size: 960px;
+}
+
+.origin-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--q-radius);
+  border: 1px solid var(--q-hairline);
+  color: var(--q-ink-muted);
+  font-size: var(--q-type-caption);
+}
+
+.origin-chip[data-origin='PLATFORM'] {
+  background: var(--q-surface-2);
+  color: var(--q-ink);
+}
+
+.consent-chip {
+  display: inline-block;
+  margin-inline-start: 6px;
+  padding: 1px 6px;
+  border-radius: var(--q-radius);
+  background: var(--q-surface-2);
+  color: var(--q-ink-muted);
+}
+
+.consent-notice {
+  max-inline-size: 720px;
+  padding: 8px 12px;
+  border-radius: var(--q-radius);
+  background: var(--q-surface-2);
+  color: var(--q-ink);
+}
+
+.missing-note {
+  color: var(--q-error-text);
+}
+
+.default-wording td {
+  padding-block-start: 0;
+}
+
+.wording-line {
+  margin: 2px 0;
+  color: var(--q-ink-muted);
+}
+
+.wording-line .q-caption {
+  margin-inline-end: 6px;
+  color: var(--q-ink);
+}

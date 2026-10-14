@@ -706,8 +706,29 @@ export const settingsPaths = {
    * `X.27`: fixes the `variablesSchema: {}` defect that made the editor
    * unable to author a variable-bearing template at all.
    */
-  notificationVariableCatalogue(scope: LocationScope): string {
-    return `${this.notificationTemplates(scope)}/variable-catalogue`;
+  notificationVariableCatalogue(scope: LocationScope, templateKey?: string): string {
+    const path = `${this.notificationTemplates(scope)}/variable-catalogue`;
+    // One variable (the courier's first name) exists for one template key only (ADR 0184, D21), so the
+    // editor names the key it is editing and the platform answers for it.
+    return templateKey === undefined
+      ? path
+      : `${path}?templateKey=${encodeURIComponent(templateKey)}`;
+  },
+
+  /**
+   * `NotificationTemplateController.platformDefaults` — ADR 0184: the wording the platform sends when a
+   * brand and its tenant have written none, read-only.
+   */
+  notificationPlatformDefaults(scope: LocationScope): string {
+    return `${this.notificationTemplates(scope)}/platform-defaults`;
+  },
+
+  /**
+   * `NotificationTemplateController.otpWording` — ADR 0184, D19: the sentence a customer reads with a
+   * one-time code. The platform's, so read-only.
+   */
+  notificationOtpWording(scope: LocationScope): string {
+    return `${this.notificationTemplates(scope)}/otp-wording`;
   },
 
   // ------------------------------------------- 10.9 Notifications, Tab 2 routing

@@ -21,6 +21,48 @@ export interface TemplateResponse {
   readonly fulfillmentMode: string | null;
   /** Gap-map row 10.9a: null resolves for every channel source. */
   readonly channelSource: string | null;
+  /** ADR 0184: where this row sits in ADR 0020's order — a brand's own, or the tenant-wide default. */
+  readonly origin: 'BRAND' | 'TENANT';
+  /** The version the row summarises: the active one, or the newest draft; null when there is no version. */
+  readonly shownVersion: number | null;
+  /** The languages that version has a wording in. */
+  readonly versionLocales: readonly string[];
+  /** The languages this template's brand serves, which an activation needs. */
+  readonly requiredLocales: readonly string[];
+  /** ADR 0091: the worst provider state among the shown version's languages. */
+  readonly providerReview: string;
+}
+
+/**
+ * Mirrors `NotificationTemplateController.PlatformDefaultResponse` (ADR 0184): the wording the platform
+ * sends when a brand and its tenant have written none. Read-only; a brand customises it by registering
+ * its own template.
+ */
+export interface PlatformDefault {
+  readonly templateKey: string;
+  readonly notificationClass: string;
+  readonly consentPurpose: string | null;
+  /** The customer channels the wording is offered on. */
+  readonly channels: readonly string[];
+  /** The version a sent message freezes. */
+  readonly version: number;
+  /** Locale tag to the platform's sentence. */
+  readonly bodies: Readonly<Record<string, string>>;
+  readonly variables: readonly string[];
+}
+
+/** Mirrors `NotificationTemplateController.OtpWordingResponse` (ADR 0184, D19). */
+export interface OtpWording {
+  readonly sentences: readonly OtpSentence[];
+  /** `GATEWAY_MODERATES` when this tenant's SMS gateway refuses wordings it has not approved. */
+  readonly gatewayApproval: 'GATEWAY_MODERATES' | 'NOT_MODERATED';
+}
+
+export interface OtpSentence {
+  readonly locale: string;
+  /** The sentence with `{{code}}` and `{{minutes}}` still in it. */
+  readonly text: string;
+  readonly characters: number;
 }
 
 export interface CreateTemplateRequest {
@@ -56,6 +98,8 @@ export interface Wording {
 export interface AddVersionRequest {
   readonly wordings: Readonly<Record<string, Wording>>;
   readonly variablesSchema: Readonly<Record<string, string>>;
+  /** ADR 0184: whether `{{productList}}` follows each item with its line total. Absent reads as off. */
+  readonly showItemPrices?: boolean;
 }
 
 /** Mirrors `NotificationTemplateController.VersionResponse`. */
@@ -85,6 +129,8 @@ export interface WordingResponse {
   readonly providerReviewReference: string | null;
   readonly providerReviewNote: string | null;
   readonly providerReviewUpdatedAt: string | null;
+  /** ADR 0184: the version's «show item prices» setting, repeated on each of its languages. */
+  readonly showItemPrices: boolean;
 }
 
 /** One version's locale rows, grouped client-side from the flat `WordingResponse` list. */
@@ -216,13 +262,33 @@ export class NotificationsApi {
     return result.value ?? [];
   }
 
-  async variableCatalogue(scope: LocationScope): Promise<readonly VariableCatalogueEntry[]> {
+  /** `templateKey` lets the platform include the one variable that exists for one key only (ADR 0184, D21). */
+  async variableCatalogue(
+    scope: LocationScope,
+    templateKey?: string,
+  ): Promise<readonly VariableCatalogueEntry[]> {
     const result = await firstValueFrom(
       this.api.get<readonly VariableCatalogueEntry[]>(
-        settingsPaths.notificationVariableCatalogue(scope),
+        settingsPaths.notificationVariableCatalogue(scope, templateKey),
       ),
     );
     return result.value ?? [];
+  }
+
+  /** The platform's own wording, shown read-only beneath the brand's and tenant's templates (ADR 0184). */
+  async platformDefaults(scope: LocationScope): Promise<readonly PlatformDefault[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly PlatformDefault[]>(settingsPaths.notificationPlatformDefaults(scope)),
+    );
+    return result.value ?? [];
+  }
+
+  /** The one-time-code sentence, read-only: the platform's, not the tenant's (ADR 0184, D19). */
+  async otpWording(scope: LocationScope): Promise<OtpWording | null> {
+    const result = await firstValueFrom(
+      this.api.get<OtpWording>(settingsPaths.notificationOtpWording(scope)),
+    );
+    return result.value ?? null;
   }
 
   async testSend(
