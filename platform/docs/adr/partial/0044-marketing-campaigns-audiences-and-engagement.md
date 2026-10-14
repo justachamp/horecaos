@@ -855,3 +855,20 @@ that brand no matter which channel the next campaign chooses. No audience
 definition, snapshot, or member list leaves the platform. A campaign editor offers
 a list of existing benefits and no field in which to invent one. And every table
 this module owns has a stated retention window that a job actually enforces.
+
+## Status addition (2026-10-14)
+
+[ADR 0183](0183-acquisition-links-the-tenants-mini-app-and-storefront-merchandising.md) (Accepted 2026-10-14, batch 21) completes
+the half of «Attribution and referrals» that was deferred to «whichever surface serves the redirect or deep link», and
+declines the other half. This record's Decision, Alternatives and Consequences are unchanged.
+
+- **Link formats are computed on the server and shown as they are.** A website link is
+  `https://<verified hostname>/?ref=<token>`, a bot link is `https://t.me/<bot>?start=<token>`, and a Mini App link is the
+  direct link `https://t.me/<bot>/<short name>?startapp=<token>`. The console no longer renders a placeholder. A link
+  that cannot be built says what is missing. `MOBILE_APP` is no longer offered while the Flutter app is on hold
+  (ADR 0055).
+- **The bot and the Mini App count a click** through the same public endpoint the web storefront calls. A `/start <token>`
+  for an `ACTIVE` link of the same brand counts once and then answers like a bare `/start`.
+- **First-touch on the account and last-touch on the order are declined until counsel answers** (ADR 0183 D16, on
+  ADR 0167 Decision 4 tier 2): no column on a customer account or an order, no `attribution_link_id`, and the
+  `ACQUISITION_CHANNEL` audience predicate continues to select nobody.

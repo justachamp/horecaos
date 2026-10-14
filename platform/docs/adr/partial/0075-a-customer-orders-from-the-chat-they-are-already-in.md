@@ -360,6 +360,21 @@ has an order number — without opening anything. The same customer, on a day th
 kitchen has 86'd one of those dishes, sees no such button and is told which dish
 is unavailable.
 
+## Status addition (2026-10-14)
+
+[ADR 0183](0183-acquisition-links-the-tenants-mini-app-and-storefront-merchandising.md) (Accepted 2026-10-14, batch 21, decision
+D27) closes the open input «Where the tenant's Mini App lives». This record's Decision, Alternatives and Consequences
+are unchanged.
+
+The tenant's Mini App lives at the brand's **verified storefront hostname**, in Mini App mode: the menu button the
+platform sets points at `https://<hostname>/`, where the hostname is the verified `tenant.channel_hostnames` row of the
+active WEB channel that sells at the brand's branches (DNS-TXT proof, batch 13). A tenant types no URL, so the platform
+vouches for a hostname it has already verified and for nothing the tenant supplied, which is the trust decision this
+input said had to be taken first. The short name BotFather gives the Mini App is recorded on the Telegram channel's own
+settings (`tenant.telegram_channel_settings`, `V0674`), not on `integration.installations.non_sensitive_config`, which
+nothing tenant-facing writes. Because the platform now knows the Mini App, the handoffs this record lists as sentences
+may become links in a later change; none is made here.
+
 ## References
 
 - ADR 0060 §4 and V0106 — the token discipline this extends
