@@ -428,6 +428,19 @@ export const financeEn = {
   'finance.subscription.statements.total': 'Total',
   'finance.subscription.statements.status': 'Status',
   'finance.subscription.statements.download': 'Download CSV',
+  'finance.subscription.einvoice.label': 'E-invoice',
+  'finance.subscription.einvoice.state.DRAFT':
+    'prepared at {operator}; HorecaOS has not sent it to you yet',
+  'finance.subscription.einvoice.state.SENT':
+    'sent to you through {operator}; waiting for your signature',
+  'finance.subscription.einvoice.state.SIGNED': 'signed by you at {operator}',
+  'finance.subscription.einvoice.state.REFUSED': 'refused at {operator}',
+  'finance.subscription.einvoice.state.CANCELLED': 'cancelled at {operator}',
+  'finance.subscription.einvoice.state.UNKNOWN': '{operator} reports “{status}”',
+  'finance.subscription.einvoice.state.UNCONFIRMED':
+    'sent to {operator}; waiting for it to confirm',
+  'finance.subscription.einvoice.checked': 'checked {time}',
+  'finance.subscription.einvoice.sign': 'Open {operator} to sign or refuse it.',
   'finance.subscription.statements.empty': 'No statements have been issued yet.',
   'finance.subscription.statements.status.DRAFT': 'Preview',
   'finance.subscription.statements.status.ISSUED': 'Issued',

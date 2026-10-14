@@ -214,3 +214,11 @@
 .wallet-summary .lapsing p {
   margin: 4px 0 0;
 }
+
+.einvoice {
+  margin-top: var(--q-space-1, 4px);
+}
+
+.einvoice--waiting {
+  font-weight: 600;
+}

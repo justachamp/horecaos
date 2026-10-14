@@ -14,6 +14,7 @@ import {
   EntitlementSnapshotView,
   ModuleEndedView,
   SellableModuleView,
+  StatementEInvoiceView,
   StatementView,
   SubscriptionView,
   TenantArrearsView,
@@ -21,7 +22,7 @@ import {
   UsageView,
 } from '../commercial-api';
 import { StatementPaymentView, TenantWalletView, WalletApi } from '../wallet/wallet-api';
-import { walletDate, walletMoney } from '../wallet/wallet-format';
+import { walletDate, walletDateTime, walletMoney } from '../wallet/wallet-format';
 
 type LoadState = 'loading' | 'ready' | 'denied' | 'error';
 
@@ -43,6 +44,23 @@ const STATEMENT_STATUS_KEYS: Readonly<Record<string, MessageKey>> = {
   VOID: 'finance.subscription.statements.status.VOID',
 };
 
+/** `EInvoiceOperatorState`'s constants, plus `UNCONFIRMED` for a sent invoice the operator has not yet described. */
+const EINVOICE_STATE_KEYS: Readonly<Record<string, MessageKey>> = {
+  DRAFT: 'finance.subscription.einvoice.state.DRAFT',
+  SENT: 'finance.subscription.einvoice.state.SENT',
+  SIGNED: 'finance.subscription.einvoice.state.SIGNED',
+  REFUSED: 'finance.subscription.einvoice.state.REFUSED',
+  CANCELLED: 'finance.subscription.einvoice.state.CANCELLED',
+  UNKNOWN: 'finance.subscription.einvoice.state.UNKNOWN',
+  UNCONFIRMED: 'finance.subscription.einvoice.state.UNCONFIRMED',
+};
+
+/** The operators' own names, which are the same in every language. */
+const EINVOICE_OPERATOR_NAMES: Readonly<Record<string, string>> = {
+  DIDOX: 'Didox',
+  FAKTURA_UZ: 'Faktura.uz',
+};
+
 /** `BillingUnit.java`'s five constants. */
 const BILLING_UNIT_KEYS: Readonly<Record<string, MessageKey>> = {
   PER_TENANT: 'finance.subscription.modules.billingUnit.PER_TENANT',
@@ -60,6 +78,23 @@ const STATEMENT_LINE_KIND_KEYS: Readonly<Record<string, MessageKey>> = {
   DEPOSIT: 'finance.subscription.statements.kind.DEPOSIT',
   EARLY_EXIT: 'finance.subscription.statements.kind.EARLY_EXIT',
 };
+
+/**
+ * One invoice per statement: the one standing as its invoice, else the newest attempt (the list arrives newest
+ * first). A refused or cancelled attempt is only shown when nothing else stands, because then it is the news.
+ */
+function standingInvoices(
+  invoices: readonly StatementEInvoiceView[],
+): ReadonlyMap<string, StatementEInvoiceView> {
+  const standing = new Map<string, StatementEInvoiceView>();
+  for (const invoice of invoices) {
+    const held = standing.get(invoice.statementId);
+    if (held === undefined || (!held.current && invoice.current)) {
+      standing.set(invoice.statementId, invoice);
+    }
+  }
+  return standing;
+}
 
 /**
  * 8.6 Subscription & billing (`frontend-information-architecture.md` §8.6) —
@@ -204,6 +239,13 @@ export class SubscriptionPage {
    */
   protected readonly walletSummary = signal<TenantWalletView | null>(null);
 
+  /**
+   * Where each issued statement's e-invoice stands, by statement id (ADR 0096): the one standing as its invoice,
+   * else the newest attempt. Empty until HorecaOS has sent a statement to an operator, and when this role cannot
+   * read it; the statements table does not depend on it.
+   */
+  protected readonly einvoices = signal<ReadonlyMap<string, StatementEInvoiceView>>(new Map());
+
   /** What the wallet has paid of each issued statement, by statement id; empty when the wallet cannot be read. */
   protected readonly statementPayments = signal<ReadonlyMap<string, StatementPaymentView>>(
     new Map(),
@@ -251,6 +293,7 @@ export class SubscriptionPage {
         arrears,
         payments,
         walletOverview,
+        einvoices,
       ] = await Promise.all([
         this.api.subscription(tenantId).catch((error) => {
           if (error instanceof ApiError && error.status === 403) {
@@ -276,6 +319,7 @@ export class SubscriptionPage {
         }),
         this.wallet.statementPayments(tenantId).catch(() => [] as readonly StatementPaymentView[]),
         this.wallet.overview(tenantId).catch(() => null),
+        this.api.einvoices(tenantId).catch(() => [] as readonly StatementEInvoiceView[]),
       ]);
       this.subscription.set(subscription);
       this.entitlements.set(entitlements);
@@ -288,6 +332,7 @@ export class SubscriptionPage {
         new Map(payments.map((payment) => [payment.statementId, payment])),
       );
       this.walletSummary.set(walletOverview);
+      this.einvoices.set(standingInvoices(einvoices));
       this.state.set('ready');
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
@@ -354,6 +399,33 @@ export class SubscriptionPage {
       ? this.statementPayments().get(statement.statementId)
       : undefined;
     return payment ? this.money(payment.paid) : '—';
+  }
+
+  /** The e-invoice of one statement, or null when it has not been sent to an operator. */
+  protected invoiceOf(statement: StatementView): StatementEInvoiceView | null {
+    return statement.statementId ? (this.einvoices().get(statement.statementId) ?? null) : null;
+  }
+
+  /**
+   * The operator's word for where the invoice stands, in a sentence. An unrecognised state falls back to itself,
+   * never a blank, and `UNKNOWN` carries the operator's own status text.
+   */
+  protected invoiceLabel(invoice: StatementEInvoiceView): string {
+    const key = EINVOICE_STATE_KEYS[invoice.state];
+    return key
+      ? this.i18n.t(key, {
+          operator: this.operatorName(invoice.provider),
+          status: invoice.operatorStatus ?? '',
+        })
+      : invoice.state;
+  }
+
+  protected operatorName(provider: string): string {
+    return EINVOICE_OPERATOR_NAMES[provider] ?? provider;
+  }
+
+  protected invoiceChecked(invoice: StatementEInvoiceView): string | null {
+    return invoice.stateCheckedAt ? walletDateTime(invoice.stateCheckedAt) : null;
   }
 
   protected dueOf(statement: StatementView): string {

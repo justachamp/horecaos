@@ -433,6 +433,18 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
   'finance.subscription.statements.total': 'Jami',
   'finance.subscription.statements.status': 'Holat',
   'finance.subscription.statements.download': 'CSV yuklab olish',
+  'finance.subscription.einvoice.label': 'Elektron hisob-faktura',
+  'finance.subscription.einvoice.state.DRAFT':
+    '{operator}da tayyorlangan; HorecaOS uni hali sizga yubormagan',
+  'finance.subscription.einvoice.state.SENT':
+    '{operator} orqali sizga yuborilgan; imzoingizni kutmoqda',
+  'finance.subscription.einvoice.state.SIGNED': 'siz {operator}da imzolagansiz',
+  'finance.subscription.einvoice.state.REFUSED': '{operator}da rad etilgan',
+  'finance.subscription.einvoice.state.CANCELLED': '{operator}da bekor qilingan',
+  'finance.subscription.einvoice.state.UNKNOWN': '{operator} xabar beradi: «{status}»',
+  'finance.subscription.einvoice.state.UNCONFIRMED': '{operator}ga yuborilgan; tasdiq kutilmoqda',
+  'finance.subscription.einvoice.checked': 'tekshirilgan: {time}',
+  'finance.subscription.einvoice.sign': 'Imzolash yoki rad etish uchun {operator}ni oching.',
   'finance.subscription.statements.empty': 'Hali hisob chiqarilmagan.',
   'finance.subscription.statements.status.DRAFT': 'Oldindan koʻrish',
   'finance.subscription.statements.status.ISSUED': 'Chiqarilgan',

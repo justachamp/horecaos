@@ -88,6 +88,34 @@ export interface StatementView {
   readonly lines: readonly StatementLineView[];
 }
 
+/**
+ * Mirrors `CommercialOperationsEInvoiceController.StatementEInvoiceView` (ADR 0096): where the e-invoice of an
+ * issued statement stands, **as the operator reports it**. Never signature material, and nothing of the staff
+ * side (failure details, who sent it, the operator's own document id).
+ */
+export interface StatementEInvoiceView {
+  readonly statementId: string;
+  readonly documentNumber: string;
+  readonly documentDate: string;
+  /** The operator by its code: `DIDOX` or `FAKTURA_UZ`. */
+  readonly provider: string;
+  /**
+   * `DRAFT`, `SENT`, `SIGNED`, `REFUSED`, `CANCELLED`, `UNKNOWN`, or `UNCONFIRMED` (sent, and the operator has not
+   * said what it holds yet). An unrecognised value falls back to itself, never a blank cell.
+   */
+  readonly state: string;
+  /** The operator holds it signed by HorecaOS and the buyer has not yet signed or refused it. */
+  readonly awaitingYourSignature: boolean;
+  /** The operator's own word for the state; shown for `UNKNOWN`. */
+  readonly operatorStatus: string | null;
+  readonly stateCheckedAt: string | null;
+  readonly stateChangedAt: string | null;
+  /** The one standing as the statement's invoice; an older refused or cancelled attempt stays for history. */
+  readonly current: boolean;
+  readonly total: Money;
+  readonly sentAt: string;
+}
+
 /** Mirrors `CommercialModuleController.ModuleView`, read through the tenant-reachable mirror. */
 export interface SellableModuleView {
   readonly moduleId: string;
@@ -254,6 +282,17 @@ export class CommercialApi {
   async statements(tenantId: string): Promise<readonly StatementView[]> {
     const result = await firstValueFrom(
       this.api.get<readonly StatementView[]>(financePaths.commercialStatements(tenantId)),
+    );
+    return result.value ?? [];
+  }
+
+  /**
+   * Where the e-invoice of each issued statement stands, newest first (ADR 0096). Empty until HorecaOS has sent a
+   * statement to an operator, which it does by hand and only once an operator account is connected.
+   */
+  async einvoices(tenantId: string): Promise<readonly StatementEInvoiceView[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly StatementEInvoiceView[]>(financePaths.commercialEInvoices(tenantId)),
     );
     return result.value ?? [];
   }
