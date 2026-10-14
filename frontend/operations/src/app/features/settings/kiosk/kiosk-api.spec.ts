@@ -87,10 +87,14 @@ describe('KioskApi: idle media (ADR 0187)', () => {
 
     await walkToTheStore();
     await pause();
-    http.expectOne(`${IDLE}/uploads/a1`).flush({ assetId: 'a1', status: 'UPLOADED', rejectionCode: null });
+    http
+      .expectOne(`${IDLE}/uploads/a1`)
+      .flush({ assetId: 'a1', status: 'UPLOADED', rejectionCode: null });
     await pause();
     await pause();
-    http.expectOne(`${IDLE}/uploads/a1`).flush({ assetId: 'a1', status: 'AVAILABLE', rejectionCode: null });
+    http
+      .expectOne(`${IDLE}/uploads/a1`)
+      .flush({ assetId: 'a1', status: 'AVAILABLE', rejectionCode: null });
 
     await expect(done).resolves.toBe('a1');
   });
@@ -124,7 +128,9 @@ describe('KioskApi: idle media (ADR 0187)', () => {
     for (let attempt = 0; attempt < 2; attempt++) {
       await pause();
       await pause();
-      http.expectOne(`${IDLE}/uploads/a1`).flush({ assetId: 'a1', status: 'UPLOADED', rejectionCode: null });
+      http
+        .expectOne(`${IDLE}/uploads/a1`)
+        .flush({ assetId: 'a1', status: 'UPLOADED', rejectionCode: null });
     }
 
     expect(await outcome).toBeInstanceOf(IdleUploadTimedOut);

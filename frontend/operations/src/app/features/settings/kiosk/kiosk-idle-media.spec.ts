@@ -25,7 +25,12 @@ const CHANNELS: readonly KioskChannelChoice[] = [
 ];
 
 function item(n: number): IdleMediaItem {
-  return { id: `i${n}`, assetId: `a${n}`, position: n - 1, url: `/api/v1/storefront/tenants/t1/media/a${n}` };
+  return {
+    id: `i${n}`,
+    assetId: `a${n}`,
+    position: n - 1,
+    url: `/api/v1/storefront/tenants/t1/media/a${n}`,
+  };
 }
 
 function list(count: number, version = count): IdleMediaList {
@@ -78,7 +83,8 @@ describe('KioskIdleMedia (ADR 0187, D25)', () => {
   }
 
   function uploader(): MediaUploader {
-    return fixture.debugElement.query(By.directive(MediaUploader)).componentInstance as MediaUploader;
+    return fixture.debugElement.query(By.directive(MediaUploader))
+      .componentInstance as MediaUploader;
   }
 
   it('reads the first channel list and shows the pictures in play order with a kiosk-frame preview', async () => {
@@ -166,7 +172,9 @@ describe('KioskIdleMedia (ADR 0187, D25)', () => {
   });
 
   it('says the picture is not 9:16 when the platform rejected it for its shape', async () => {
-    const uploadIdlePicture = vi.fn().mockRejectedValue(new IdleUploadRejected('PURPOSE_ASPECT_RATIO'));
+    const uploadIdlePicture = vi
+      .fn()
+      .mockRejectedValue(new IdleUploadRejected('PURPOSE_ASPECT_RATIO'));
     await render({ idleMedia: () => Promise.resolve(list(0, 0)), uploadIdlePicture });
 
     uploader().cropped.emit(jpeg(1000));
@@ -189,12 +197,13 @@ describe('KioskIdleMedia (ADR 0187, D25)', () => {
   });
 
   it("names the platform's reason when an attach is refused", async () => {
-    const attachIdle = vi.fn().mockReturnValue(
-      throwError(
-        () =>
-          new ApiError('IDLE_MEDIA_REFUSED', 422, { status: 422, reason: 'LIMIT' }, 'c'),
-      ),
-    );
+    const attachIdle = vi
+      .fn()
+      .mockReturnValue(
+        throwError(
+          () => new ApiError('IDLE_MEDIA_REFUSED', 422, { status: 422, reason: 'LIMIT' }, 'c'),
+        ),
+      );
     await render({
       idleMedia: () => Promise.resolve(list(1)),
       uploadIdlePicture: () => Promise.resolve('a9'),
@@ -240,9 +249,11 @@ describe('KioskIdleMedia (ADR 0187, D25)', () => {
 
   it("reloads the list and says so when a second manager's change got there first", async () => {
     const idleMedia = vi.fn().mockResolvedValueOnce(list(2, 2)).mockResolvedValueOnce(list(3, 5));
-    const removeIdle = vi.fn().mockReturnValue(
-      throwError(() => new ApiError(ApiErrorCode.STALE_VERSION, 409, { status: 409 }, 'c')),
-    );
+    const removeIdle = vi
+      .fn()
+      .mockReturnValue(
+        throwError(() => new ApiError(ApiErrorCode.STALE_VERSION, 409, { status: 409 }, 'c')),
+      );
     await render({ idleMedia, removeIdle });
 
     click('kiosk-idle-remove-i1');
@@ -272,7 +283,8 @@ describe('KioskIdleMedia (ADR 0187, D25)', () => {
 
   it('says the channel is out of reach when the platform refuses the read', async () => {
     await render({
-      idleMedia: () => Promise.reject(new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, 'c')),
+      idleMedia: () =>
+        Promise.reject(new ApiError(ApiErrorCode.INSUFFICIENT_CAPABILITY, 403, null, 'c')),
     });
 
     expect(byId('kiosk-idle-denied')).not.toBeNull();

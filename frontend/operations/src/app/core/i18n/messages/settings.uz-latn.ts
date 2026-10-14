@@ -418,6 +418,27 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.channelSetup.pages.slug.privacyOffer': 'Maxfiylik / oferta',
   'settings.channelSetup.dineIn.title': 'QR buyurtma rejimi',
   'settings.channelSetup.dineIn.edit': 'Filialni ochish →',
+  // ------------------------------------------------------------------- the rest of the hub (ADR 0187, D28; settings.md §10.5)
+  'settings.channelSetup.installationFailed.title': 'Bu kanal uchun ulanish amalga oshmadi',
+  'settings.channelSetup.installationFailed.body':
+    '«{name}» ulanishining oxirgi tekshiruvi muvaffaqiyatsiz tugadi, shuning uchun bu kanal orqali buyurtmalar yoki xabarlar kelmayotgan boʻlishi mumkin. Qayta ulash uchun «Integratsiyalar»ni oching.',
+  'settings.channelSetup.integrations': '«Integratsiyalar»ni ochish',
+  'settings.channelSetup.preview': 'Oldindan koʻrish',
+  'settings.channelSetup.aggregator.title': 'Agregator',
+  'settings.channelSetup.aggregator.body':
+    'Agregator kanali vitrina emas, moslashtirishlarga ega ulanishdir. U «Integratsiyalar»da sozlanadi; bu yerda faqat koʻrish mumkin.',
+  'settings.channelSetup.aggregator.installation': 'Ulanish: {name} ({status})',
+  'settings.channelSetup.aggregator.noInstallation': 'Bu kanalga hali ulanish biriktirilmagan.',
+  'settings.channelSetup.callCentre.title': 'Call-markaz',
+  'settings.channelSetup.callCentre.body':
+    'Bu yerda faqat koʻrish mumkin. Operator kiritadigan buyurtmalar qoidalari «Buyurtma qoidalari» ekranining 5-kartasida belgilanadi.',
+  'settings.channelSetup.callCentre.unreadable': 'Joriy qiymatni oʻqib boʻlmadi.',
+  'settings.channelSetup.callCentre.yes': 'ha',
+  'settings.channelSetup.callCentre.no': 'yoʻq',
+  'settings.channelSetup.callCentre.link': '«Buyurtma qoidalari»ni ochish',
+  'settings.channelSetup.mobile.title': 'Mobil ilovani sozlash hozircha mavjud emas',
+  'settings.channelSetup.mobile.body':
+    'Mehmonlar uchun mobil ilova toʻxtatib turilgan, shuning uchun doʻkon havolalari, versiya cheklovi va push kalitlarini sozlash shart emas. Bu shakl ilova qaytganda paydo boʻladi. Tillar brend sozlamasi boʻlib qoladi.',
   'settings.channelSetup.kiosk.title': 'Kiosk ulash',
   'settings.channelSetup.kiosk.locked': 'Hali qurilmagan.',
 
@@ -1550,10 +1571,13 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.kiosk.revoked.title': 'Oʻchirilgan kiosklar',
   // ------------------------------------------------------------------- kiosk idle media and the hardware block (ADR 0187)
   'settings.kiosk.idle.title': 'Kutish ekrani rasmlari',
-  'settings.kiosk.idle.lead': 'Hech kim buyurtma bermayotganda kiosk koʻrsatadigan rasmlar. 8 tagacha, har biri 9:16 va 1 MB dan oshmasligi kerak, koʻrsatilgan tartibda. Faqat rasmlar, video yoʻq.',
-  'settings.kiosk.idle.shared': 'Butun kanal uchun bitta roʻyxat: bu rasmlarni kanal sotadigan har bir filialdagi barcha kiosklar koʻrsatadi.',
+  'settings.kiosk.idle.lead':
+    'Hech kim buyurtma bermayotganda kiosk koʻrsatadigan rasmlar. 8 tagacha, har biri 9:16 va 1 MB dan oshmasligi kerak, koʻrsatilgan tartibda. Faqat rasmlar, video yoʻq.',
+  'settings.kiosk.idle.shared':
+    'Butun kanal uchun bitta roʻyxat: bu rasmlarni kanal sotadigan har bir filialdagi barcha kiosklar koʻrsatadi.',
   'settings.kiosk.idle.channel': 'Sotuv kanali',
-  'settings.kiosk.idle.noChannels': 'Bu filialda faol kiosk kanali yoʻq, shuning uchun kutish ekranini sozlash shart emas.',
+  'settings.kiosk.idle.noChannels':
+    'Bu filialda faol kiosk kanali yoʻq, shuning uchun kutish ekranini sozlash shart emas.',
   'settings.kiosk.idle.loading': 'Rasmlar yuklanmoqda',
   'settings.kiosk.idle.denied': 'Bu kanal rasmlariga ruxsat yoʻq',
   'settings.kiosk.idle.error': 'Rasmlarni yuklab boʻlmadi. Birozdan soʻng qayta urining.',
@@ -1565,23 +1589,30 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.kiosk.idle.up': 'Yuqoriga',
   'settings.kiosk.idle.down': 'Pastga',
   'settings.kiosk.idle.remove': 'Olib tashlash',
-  'settings.kiosk.idle.full': 'Roʻyxatda allaqachon {max} ta rasm bor. Yangisini qoʻshish uchun birini olib tashlang.',
+  'settings.kiosk.idle.full':
+    'Roʻyxatda allaqachon {max} ta rasm bor. Yangisini qoʻshish uchun birini olib tashlang.',
   'settings.kiosk.idle.hint': 'Rasmni tanlab, 9:16 kadrga moslang. 1 MB gacha JPEG, PNG yoki WebP.',
   'settings.kiosk.idle.uploading': 'Rasm yuklanmoqda va tekshirilmoqda…',
   'settings.kiosk.idle.added': 'Rasm roʻyxatga qoʻshildi.',
-  'settings.kiosk.idle.tooLarge': 'Moslangandan keyin ham rasm 1 MB dan katta. Soddaroq yoki kichikroq rasm tanlang.',
+  'settings.kiosk.idle.tooLarge':
+    'Moslangandan keyin ham rasm 1 MB dan katta. Soddaroq yoki kichikroq rasm tanlang.',
   'settings.kiosk.idle.rejected': 'Platforma bu rasmni qabul qilmadi.',
-  'settings.kiosk.idle.timedOut': 'Platforma rasmni tekshirib ulgurmadi. Birozdan soʻng qayta urining.',
-  'settings.kiosk.idle.stale': 'Roʻyxatni avval boshqa kishi oʻzgartirgan. U yangilandi; oʻzgarishingizni qaytadan kiriting.',
+  'settings.kiosk.idle.timedOut':
+    'Platforma rasmni tekshirib ulgurmadi. Birozdan soʻng qayta urining.',
+  'settings.kiosk.idle.stale':
+    'Roʻyxatni avval boshqa kishi oʻzgartirgan. U yangilandi; oʻzgarishingizni qaytadan kiriting.',
   'settings.kiosk.idle.refused.WRONG_ASPECT_RATIO': 'Rasm 9:16 emas.',
   'settings.kiosk.idle.refused.TOO_LARGE': 'Rasm 1 MB dan katta.',
-  'settings.kiosk.idle.refused.NOT_A_RASTER_IMAGE': 'Kiosk ekraniga faqat JPEG, PNG va WebP qoʻyish mumkin.',
-  'settings.kiosk.idle.refused.NOT_AVAILABLE': 'Rasm hali tekshirilmagan. Biroz kutib, qayta urining.',
+  'settings.kiosk.idle.refused.NOT_A_RASTER_IMAGE':
+    'Kiosk ekraniga faqat JPEG, PNG va WebP qoʻyish mumkin.',
+  'settings.kiosk.idle.refused.NOT_AVAILABLE':
+    'Rasm hali tekshirilmagan. Biroz kutib, qayta urining.',
   'settings.kiosk.idle.refused.UNKNOWN_ASSET': 'Bu rasmni bu yerda ishlatib boʻlmaydi.',
   'settings.kiosk.idle.refused.LIMIT': 'Roʻyxatda allaqachon 8 ta rasm bor.',
   'settings.kiosk.idle.refused.DUPLICATE': 'Bu rasm roʻyxatda bor.',
   'settings.kiosk.hardware.title': 'Printer, bank terminali va markirovka skaneri: qurilmagan',
-  'settings.kiosk.hardware.body': 'HorecaOS kiosk uskunasini yetkazmaydi, sertifikatlamaydi va qoʻllab-quvvatlamaydi. Kiosk korpusidagi chek printeri filialdagi har qanday printer kabi sozlanadi (Sozlamalar, Chop etish); bank terminali va markirovka skaneri ulanmagan, kioskning oʻzi esa hozircha buyurtma qabul qilmaydi.',
+  'settings.kiosk.hardware.body':
+    'HorecaOS kiosk uskunasini yetkazmaydi, sertifikatlamaydi va qoʻllab-quvvatlamaydi. Kiosk korpusidagi chek printeri filialdagi har qanday printer kabi sozlanadi (Sozlamalar, Chop etish); bank terminali va markirovka skaneri ulanmagan, kioskning oʻzi esa hozircha buyurtma qabul qilmaydi.',
   'settings.kioskPairing.title': 'Kioskni ulash',
   'settings.kioskPairing.lead':
     'Bu sahifani kioskdagi QR orqali oching yoki u koʻrsatgan kodni kiriting. Quyida tasdiqlamaguningizcha hech narsa ulanmaydi.',

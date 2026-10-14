@@ -263,3 +263,57 @@
   padding: 0 20px;
   font-size: var(--q-type-body-lg);
 }
+
+/* A paired kiosk's idle loop (ADR 0187): the channel's pictures, full screen, one after the other. The status facts stay in a corner. */
+.device-shell__idle {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+.device-shell__idle-picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: device-shell-idle-in 600ms ease-in;
+}
+
+.device-shell__idle-facts {
+  position: absolute;
+  inset-block-end: 16px;
+  inset-inline-start: 16px;
+  margin: 0;
+  padding: 8px 16px;
+  border-radius: var(--q-radius);
+  background: rgb(0 0 0 / 55%);
+  color: var(--q-inverse-ink);
+  display: flex;
+  gap: 24px;
+}
+
+.device-shell__idle-facts dt {
+  font-size: var(--q-type-caption);
+  opacity: 0.75;
+}
+
+.device-shell__idle-facts dd {
+  margin: 0;
+}
+
+@keyframes device-shell-idle-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .device-shell__idle-picture {
+    animation: none;
+  }
+}

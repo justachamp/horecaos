@@ -15,6 +15,22 @@
     <h1 class="q-headline">{{ 'settings.channelSetup.title' | t: { name: ch.displayName } }}</h1>
     <p class="q-body-sm ink-subtle">{{ ch.systemType }} · {{ ch.code }}</p>
 
+    @if (installationFailed(); as _failed) {
+      @if (installation(); as inst) {
+        <div class="banner" role="alert" data-testid="installation-failed">
+          <p class="q-body-sm banner__title">
+            {{ 'settings.channelSetup.installationFailed.title' | t }}
+          </p>
+          <p class="q-body-sm">
+            {{ 'settings.channelSetup.installationFailed.body' | t: { name: inst.displayName } }}
+          </p>
+          <a routerLink="/settings/integrations" class="q-body-sm link">
+            → {{ 'settings.channelSetup.integrations' | t }}
+          </a>
+        </div>
+      }
+    }
+
     <!-- (a) Telegram bot -->
     @if (ch.systemType === 'TELEGRAM') {
       <section class="facet-card">
@@ -357,12 +373,78 @@
       }
     }
 
-    @if (
-      ch.systemType !== 'TELEGRAM' &&
-      ch.systemType !== 'WEB' &&
-      ch.systemType !== 'QR_TABLE' &&
-      ch.systemType !== 'KIOSK'
-    ) {
+    <!-- (f) Aggregator: an installation with mappings, set up in Integrations; read-only here -->
+    @if (ch.systemType === 'AGGREGATOR') {
+      <section class="facet-card" data-testid="aggregator-facet">
+        <h2 class="q-subhead">{{ 'settings.channelSetup.aggregator.title' | t }}</h2>
+        <p class="q-body-sm ink-subtle">{{ 'settings.channelSetup.aggregator.body' | t }}</p>
+        @if (installation(); as inst) {
+          <p class="q-body-sm status" data-testid="aggregator-installation">
+            {{
+              'settings.channelSetup.aggregator.installation'
+                | t: { name: inst.displayName, status: inst.status }
+            }}
+          </p>
+        } @else {
+          <p class="q-body-sm status not-configured" data-testid="aggregator-installation">
+            {{ 'settings.channelSetup.aggregator.noInstallation' | t }}
+          </p>
+        }
+        <a routerLink="/settings/integrations" class="q-body-sm link" data-testid="aggregator-link">
+          → {{ 'settings.channelSetup.integrations' | t }}
+        </a>
+        <a
+          routerLink="/catalog/preview"
+          [queryParams]="{ channel: ch.id }"
+          class="q-body-sm link"
+          data-testid="channel-preview-link"
+        >
+          → {{ 'settings.channelSetup.preview' | t }}
+        </a>
+      </section>
+    }
+
+    <!-- (g) Call centre: a read-only summary of order policy card 5 -->
+    @if (ch.systemType === 'CALL_CENTRE') {
+      <section class="facet-card" data-testid="call-centre-facet">
+        <h2 class="q-subhead">{{ 'settings.channelSetup.callCentre.title' | t }}</h2>
+        <p class="q-body-sm ink-subtle">{{ 'settings.channelSetup.callCentre.body' | t }}</p>
+        @if (callCentreUnreadable()) {
+          <p class="q-body-sm error" data-testid="call-centre-unreadable">
+            {{ 'settings.channelSetup.callCentre.unreadable' | t }}
+          </p>
+        } @else if (operatorPromoAllowed() !== null) {
+          <p class="q-body-sm status" data-testid="call-centre-promo">
+            {{ 'settings.orderPolicy.field.operatorPromoCodeAllowed' | t }}:
+            {{
+              (operatorPromoAllowed()
+                ? 'settings.channelSetup.callCentre.yes'
+                : 'settings.channelSetup.callCentre.no'
+              ) | t
+            }}
+          </p>
+        }
+        <a
+          routerLink="/settings/order-policy"
+          class="q-body-sm link"
+          data-testid="call-centre-link"
+        >
+          → {{ 'settings.channelSetup.callCentre.link' | t }}
+        </a>
+      </section>
+    }
+
+    <!-- (h) Mobile apps are on hold (ADR 0055, ADR 0187 D28): an honest locked state, no form -->
+    @if (ch.systemType === 'IOS' || ch.systemType === 'ANDROID') {
+      <section class="facet-card" data-testid="mobile-locked">
+        <q-locked-state
+          titleKey="settings.channelSetup.mobile.title"
+          askKey="settings.channelSetup.mobile.body"
+        />
+      </section>
+    }
+
+    @if (!hasFacets(ch.systemType)) {
       <p class="q-body-sm ink-subtle">{{ 'settings.channelSetup.noFacets' | t }}</p>
     }
   }

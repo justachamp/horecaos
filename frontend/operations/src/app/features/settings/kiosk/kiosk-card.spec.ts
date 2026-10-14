@@ -299,7 +299,9 @@ describe('KioskCard (ADR 0162)', () => {
     const idleMedia = vi.fn().mockResolvedValue({
       channelId: 'c1',
       version: 2,
-      items: [{ id: 'i1', assetId: 'a1', position: 0, url: '/api/v1/storefront/tenants/t1/media/a1' }],
+      items: [
+        { id: 'i1', assetId: 'a1', position: 0, url: '/api/v1/storefront/tenants/t1/media/a1' },
+      ],
       maximumCount: 8,
       maximumBytes: 1_048_576,
       ratio: '9:16',

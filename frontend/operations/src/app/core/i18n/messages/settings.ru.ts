@@ -414,6 +414,27 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.channelSetup.pages.slug.privacyOffer': 'Конфиденциальность / оферта',
   'settings.channelSetup.dineIn.title': 'Режим QR-заказа',
   'settings.channelSetup.dineIn.edit': 'Открыть филиал →',
+  // ------------------------------------------------------------------- the rest of the hub (ADR 0187, D28; settings.md §10.5)
+  'settings.channelSetup.installationFailed.title': 'Не удалось подключиться по этому каналу',
+  'settings.channelSetup.installationFailed.body':
+    'Последняя проверка подключения «{name}» не прошла, поэтому заказы или сообщения по этому каналу могут не доходить. Откройте «Интеграции», чтобы подключить заново.',
+  'settings.channelSetup.integrations': 'Открыть «Интеграции»',
+  'settings.channelSetup.preview': 'Предпросмотр',
+  'settings.channelSetup.aggregator.title': 'Агрегатор',
+  'settings.channelSetup.aggregator.body':
+    'Канал агрегатора — это подключение с сопоставлениями, а не витрина. Он настраивается в «Интеграциях»; здесь только просмотр.',
+  'settings.channelSetup.aggregator.installation': 'Подключение: {name} ({status})',
+  'settings.channelSetup.aggregator.noInstallation': 'К этому каналу ещё не привязано подключение.',
+  'settings.channelSetup.callCentre.title': 'Колл-центр',
+  'settings.channelSetup.callCentre.body':
+    'Здесь только просмотр. Правила для заказов, которые вводит оператор, заданы на экране «Правила заказа», карточка 5.',
+  'settings.channelSetup.callCentre.unreadable': 'Не удалось прочитать текущее значение.',
+  'settings.channelSetup.callCentre.yes': 'да',
+  'settings.channelSetup.callCentre.no': 'нет',
+  'settings.channelSetup.callCentre.link': 'Открыть «Правила заказа»',
+  'settings.channelSetup.mobile.title': 'Настройка мобильного приложения пока недоступна',
+  'settings.channelSetup.mobile.body':
+    'Мобильное приложение для гостей приостановлено, поэтому ссылкам на магазины, ограничению версий и push-ключам нечего настраивать. Эта форма появится вместе с возвращением приложения. Языки остаются настройкой бренда.',
   'settings.channelSetup.kiosk.title': 'Подключение киоска',
   'settings.channelSetup.kiosk.locked': 'Пока не реализовано.',
 
@@ -1534,10 +1555,13 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.kiosk.revoked.title': 'Отключённые киоски',
   // ------------------------------------------------------------------- kiosk idle media and the hardware block (ADR 0187)
   'settings.kiosk.idle.title': 'Картинки экрана ожидания',
-  'settings.kiosk.idle.lead': 'Картинки, которые киоск показывает, пока никто не заказывает. До 8 штук, каждая 9:16 и не больше 1 МБ, в указанном порядке. Только изображения, без видео.',
-  'settings.kiosk.idle.shared': 'Один список на весь канал: эти картинки показывают все киоски канала во всех филиалах, где он продаёт.',
+  'settings.kiosk.idle.lead':
+    'Картинки, которые киоск показывает, пока никто не заказывает. До 8 штук, каждая 9:16 и не больше 1 МБ, в указанном порядке. Только изображения, без видео.',
+  'settings.kiosk.idle.shared':
+    'Один список на весь канал: эти картинки показывают все киоски канала во всех филиалах, где он продаёт.',
   'settings.kiosk.idle.channel': 'Канал продаж',
-  'settings.kiosk.idle.noChannels': 'В этом филиале нет активного канала киоска, поэтому настраивать экран ожидания нечего.',
+  'settings.kiosk.idle.noChannels':
+    'В этом филиале нет активного канала киоска, поэтому настраивать экран ожидания нечего.',
   'settings.kiosk.idle.loading': 'Загружаем картинки',
   'settings.kiosk.idle.denied': 'Нет доступа к картинкам этого канала',
   'settings.kiosk.idle.error': 'Не удалось загрузить картинки. Повторите через минуту.',
@@ -1550,22 +1574,30 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.kiosk.idle.down': 'Ниже',
   'settings.kiosk.idle.remove': 'Убрать',
   'settings.kiosk.idle.full': 'В списке уже {max} картинок. Уберите одну, чтобы добавить другую.',
-  'settings.kiosk.idle.hint': 'Выберите картинку и подгоните её под кадр 9:16. JPEG, PNG или WebP до 1 МБ.',
+  'settings.kiosk.idle.hint':
+    'Выберите картинку и подгоните её под кадр 9:16. JPEG, PNG или WebP до 1 МБ.',
   'settings.kiosk.idle.uploading': 'Загружаем и проверяем картинку…',
   'settings.kiosk.idle.added': 'Картинка добавлена в список.',
-  'settings.kiosk.idle.tooLarge': 'После подгонки картинка всё ещё больше 1 МБ. Выберите попроще или поменьше.',
+  'settings.kiosk.idle.tooLarge':
+    'После подгонки картинка всё ещё больше 1 МБ. Выберите попроще или поменьше.',
   'settings.kiosk.idle.rejected': 'Платформа не приняла эту картинку.',
-  'settings.kiosk.idle.timedOut': 'Платформа ещё не закончила проверку картинки. Повторите через минуту.',
-  'settings.kiosk.idle.stale': 'Список уже изменил кто-то другой. Он обновлён; повторите своё изменение.',
+  'settings.kiosk.idle.timedOut':
+    'Платформа ещё не закончила проверку картинки. Повторите через минуту.',
+  'settings.kiosk.idle.stale':
+    'Список уже изменил кто-то другой. Он обновлён; повторите своё изменение.',
   'settings.kiosk.idle.refused.WRONG_ASPECT_RATIO': 'Картинка не 9:16.',
   'settings.kiosk.idle.refused.TOO_LARGE': 'Картинка больше 1 МБ.',
-  'settings.kiosk.idle.refused.NOT_A_RASTER_IMAGE': 'На экран киоска можно только JPEG, PNG и WebP.',
-  'settings.kiosk.idle.refused.NOT_AVAILABLE': 'Картинка ещё не проверена. Подождите немного и повторите.',
+  'settings.kiosk.idle.refused.NOT_A_RASTER_IMAGE':
+    'На экран киоска можно только JPEG, PNG и WebP.',
+  'settings.kiosk.idle.refused.NOT_AVAILABLE':
+    'Картинка ещё не проверена. Подождите немного и повторите.',
   'settings.kiosk.idle.refused.UNKNOWN_ASSET': 'Эту картинку здесь использовать нельзя.',
   'settings.kiosk.idle.refused.LIMIT': 'В списке уже 8 картинок.',
   'settings.kiosk.idle.refused.DUPLICATE': 'Эта картинка уже в списке.',
-  'settings.kiosk.hardware.title': 'Принтер, банковский терминал и сканер маркировки: не реализовано',
-  'settings.kiosk.hardware.body': 'HorecaOS не поставляет, не сертифицирует и не обслуживает оборудование киосков. Чековый принтер в корпусе киоска настраивается как любой принтер филиала (Настройки, Печать); банковский терминал и сканер маркировки не подключаются, а сам киоск пока не принимает заказы.',
+  'settings.kiosk.hardware.title':
+    'Принтер, банковский терминал и сканер маркировки: не реализовано',
+  'settings.kiosk.hardware.body':
+    'HorecaOS не поставляет, не сертифицирует и не обслуживает оборудование киосков. Чековый принтер в корпусе киоска настраивается как любой принтер филиала (Настройки, Печать); банковский терминал и сканер маркировки не подключаются, а сам киоск пока не принимает заказы.',
   'settings.kioskPairing.title': 'Подключение киоска',
   'settings.kioskPairing.lead':
     'Откройте эту страницу по QR на киоске или введите код, который он показывает. Пока вы не подтвердите ниже, ничего не подключится.',

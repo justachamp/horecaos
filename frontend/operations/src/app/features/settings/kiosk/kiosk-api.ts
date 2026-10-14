@@ -245,10 +245,7 @@ export class KioskApi {
     wait: { readonly intervalMs?: number; readonly attempts?: number } = {},
   ): Promise<string> {
     const ticket = await firstValueFrom(
-      this.api.post<
-        { contentType: string; sizeBytes: number; filename: string },
-        IdleUploadTicket
-      >(
+      this.api.post<{ contentType: string; sizeBytes: number; filename: string }, IdleUploadTicket>(
         terminalPaths.kioskIdleMediaUploadRequest(scope, channelId),
         command({
           contentType: file.type || 'application/octet-stream',

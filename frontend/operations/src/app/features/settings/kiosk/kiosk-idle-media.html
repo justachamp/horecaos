@@ -32,7 +32,9 @@
         <p class="q-body-sm">{{ 'settings.kiosk.idle.loading' | t }}</p>
       }
       @case ('denied') {
-        <p class="q-body-sm" data-testid="kiosk-idle-denied">{{ 'settings.kiosk.idle.denied' | t }}</p>
+        <p class="q-body-sm" data-testid="kiosk-idle-denied">
+          {{ 'settings.kiosk.idle.denied' | t }}
+        </p>
       }
       @case ('error') {
         <p class="q-body-sm error" data-testid="kiosk-idle-error">
@@ -43,12 +45,7 @@
         <div class="layout">
           <q-kiosk-frame [caption]="'settings.kiosk.idle.preview' | t">
             @if (first(); as picture) {
-              <img
-                class="screen"
-                [src]="src(picture)"
-                alt=""
-                data-testid="kiosk-idle-preview"
-              />
+              <img class="screen" [src]="src(picture)" alt="" data-testid="kiosk-idle-preview" />
             } @else {
               <p class="q-caption screen-empty" data-testid="kiosk-idle-preview-empty">
                 {{ 'settings.kiosk.idle.previewEmpty' | t }}

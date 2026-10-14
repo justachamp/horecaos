@@ -11,7 +11,8 @@ import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { I18n, Locale } from '../../../core/i18n/i18n';
 import { LocaleSet } from '../../../core/i18n/locale-set';
 import { MediaApi } from '../../catalog/media-api';
-import { IntegrationsApi } from '../integrations/integrations-api';
+import { ConfigurationApi } from '../configuration-api';
+import { InstallationView, IntegrationsApi } from '../integrations/integrations-api';
 import { DineInApi } from '../locations/dinein-api';
 import { LocationsApi } from '../locations/locations-api';
 import { ChannelView, SalesChannelsApi } from '../sales-channels/sales-channels-api';
@@ -77,9 +78,24 @@ describe('ChannelSetupPage', () => {
     publishPage: ReturnType<typeof vi.fn>;
   };
 
+  let resolution: ReturnType<typeof vi.fn>;
+  let listInstallations: ReturnType<typeof vi.fn>;
+
   async function createFixture(
     theChannel: ChannelView,
+    extras: {
+      installations?: readonly InstallationView[];
+      listInstallationsFails?: boolean;
+      promoCodeAllowed?: boolean | 'unreadable';
+    } = {},
   ): Promise<ComponentFixture<ChannelSetupPage>> {
+    listInstallations = extras.listInstallationsFails
+      ? vi.fn().mockRejectedValue(new ApiError('INSUFFICIENT_CAPABILITY', 403, null, 'c'))
+      : vi.fn().mockResolvedValue(extras.installations ?? []);
+    resolution =
+      extras.promoCodeAllowed === 'unreadable'
+        ? vi.fn().mockRejectedValue(new ApiError('INTERNAL_ERROR', 500, null, 'c'))
+        : vi.fn().mockResolvedValue({ keyCode: 'k', value: extras.promoCodeAllowed ?? false });
     channelsApi = {
       list: vi.fn().mockResolvedValue([theChannel]),
       matrices: vi
@@ -134,10 +150,8 @@ describe('ChannelSetupPage', () => {
       providers: [
         { provide: SalesChannelsApi, useValue: channelsApi },
         { provide: ChannelSetupApi, useValue: setupApi },
-        {
-          provide: IntegrationsApi,
-          useValue: { listInstallations: vi.fn().mockResolvedValue([]) },
-        },
+        { provide: IntegrationsApi, useValue: { listInstallations } },
+        { provide: ConfigurationApi, useValue: { resolution } },
         { provide: LocationsApi, useValue: { list: vi.fn().mockResolvedValue([]) } },
         {
           provide: DineInApi,
@@ -322,10 +336,155 @@ describe('ChannelSetupPage', () => {
   });
 
   it('has nothing to show for a channel type with no setup facets', async () => {
-    fixture = await createFixture(channel({ systemType: 'CALL_CENTRE', code: 'CC1' }));
+    fixture = await createFixture(channel({ systemType: 'POS', code: 'POS1' }));
 
     const host = fixture.nativeElement as HTMLElement;
     expect(host.textContent).toContain('No setup for this type yet.');
+  });
+
+  function installation(overrides: Partial<InstallationView>): InstallationView {
+    return {
+      id: 'inst-1',
+      category: 'AGGREGATOR',
+      providerType: 'WOLT',
+      environmentCode: 'PRODUCTION',
+      displayName: 'Wolt Tashkent',
+      status: 'ACTIVE',
+      secretReference: null,
+      lastConnectionStatus: 'OK',
+      adapterVersion: null,
+      lastSecretRotatedAt: null,
+      secretLastUsedAt: null,
+      nonSensitiveConfig: null,
+      webhookRegistered: false,
+      webhookRegisteredAt: null,
+      ...overrides,
+    };
+  }
+
+  const text = (): string => (fixture.nativeElement as HTMLElement).textContent ?? '';
+  const byId = (id: string): HTMLElement | null =>
+    (fixture.nativeElement as HTMLElement).querySelector(`[data-testid="${id}"]`);
+
+  describe('States across all types (settings.md §10.5)', () => {
+    it('puts a banner at the top of the form when the channel’s installation failed its last connection check', async () => {
+      fixture = await createFixture(
+        channel({ systemType: 'AGGREGATOR', code: 'WOLT', providerInstallationId: 'inst-1' }),
+        { installations: [installation({ lastConnectionStatus: 'FAILED' })] },
+      );
+
+      const banner = byId('installation-failed') as HTMLElement;
+      expect(banner).not.toBeNull();
+      expect(banner.textContent).toContain('Wolt Tashkent');
+      expect(banner.querySelector('a[routerLink="/settings/integrations"]')).toBeTruthy();
+      // At the top, not the bottom: before the first facet card.
+      const firstFacet = (fixture.nativeElement as HTMLElement).querySelector('.facet-card');
+      expect(
+        banner.compareDocumentPosition(firstFacet as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    });
+
+    it('shows no banner for an installation that connected, or for a channel with none', async () => {
+      fixture = await createFixture(
+        channel({ systemType: 'AGGREGATOR', code: 'WOLT', providerInstallationId: 'inst-1' }),
+        { installations: [installation({ lastConnectionStatus: 'OK' })] },
+      );
+      expect(byId('installation-failed')).toBeNull();
+
+      TestBed.resetTestingModule();
+      fixture = await createFixture(channel({ systemType: 'WEB' }));
+      expect(byId('installation-failed')).toBeNull();
+    });
+
+    it('draws the banner for a web channel too, and does not take the form away from someone who cannot read integrations', async () => {
+      fixture = await createFixture(
+        channel({ systemType: 'WEB', providerInstallationId: 'inst-1' }),
+        { installations: [installation({ lastConnectionStatus: 'FAILED' })] },
+      );
+      expect(byId('installation-failed')).not.toBeNull();
+
+      TestBed.resetTestingModule();
+      fixture = await createFixture(
+        channel({ systemType: 'WEB', providerInstallationId: 'inst-1' }),
+        { listInstallationsFails: true },
+      );
+      expect(byId('installation-failed')).toBeNull();
+      expect(byId('channel-setup-denied')).toBeNull();
+      expect(text()).toContain('Web address');
+    });
+  });
+
+  describe('AGGREGATOR', () => {
+    it('is read-only here: a link to Integrations, the installation it rests on, and a preview of what it would receive', async () => {
+      fixture = await createFixture(
+        channel({ systemType: 'AGGREGATOR', code: 'WOLT', providerInstallationId: 'inst-1' }),
+        { installations: [installation({})] },
+      );
+
+      expect(byId('aggregator-facet')).not.toBeNull();
+      expect(byId('aggregator-installation')?.textContent).toContain('Wolt Tashkent');
+      expect(byId('aggregator-link')?.getAttribute('routerLink')).toBe('/settings/integrations');
+      const preview = byId('channel-preview-link') as HTMLElement;
+      expect(preview.getAttribute('routerLink')).toBe('/catalog/preview');
+      expect(preview.textContent).toContain('Preview');
+      expect(fixture.nativeElement.querySelector('input, select, textarea')).toBeNull();
+      expect(text()).not.toContain('No setup for this type yet.');
+    });
+
+    it('says plainly that no installation is linked yet', async () => {
+      fixture = await createFixture(channel({ systemType: 'AGGREGATOR', code: 'WOLT' }));
+
+      expect(byId('aggregator-installation')?.textContent).toContain('No installation is linked');
+      expect(listInstallations).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('CALL_CENTRE', () => {
+    it('summarises order policy card 5 as the brand resolves it, read-only, with a way to the card', async () => {
+      fixture = await createFixture(channel({ systemType: 'CALL_CENTRE', code: 'CC1' }), {
+        promoCodeAllowed: true,
+      });
+
+      expect(resolution).toHaveBeenCalledWith(
+        'tenant-1',
+        'ordering.operator_promo_code_allowed',
+        'BRAND',
+        'brand-1',
+        null,
+      );
+      expect(byId('call-centre-promo')?.textContent).toContain('Operator may apply a promo code');
+      expect(byId('call-centre-promo')?.textContent).toContain('yes');
+      expect(byId('call-centre-link')?.getAttribute('routerLink')).toBe('/settings/order-policy');
+      expect(fixture.nativeElement.querySelector('input, select, textarea, button')).toBeNull();
+    });
+
+    it('says no when the policy says no, and says so when the value cannot be read', async () => {
+      fixture = await createFixture(channel({ systemType: 'CALL_CENTRE', code: 'CC1' }), {
+        promoCodeAllowed: false,
+      });
+      expect(byId('call-centre-promo')?.textContent).toContain('no');
+
+      TestBed.resetTestingModule();
+      fixture = await createFixture(channel({ systemType: 'CALL_CENTRE', code: 'CC1' }), {
+        promoCodeAllowed: 'unreadable',
+      });
+      expect(byId('call-centre-unreadable')).not.toBeNull();
+      expect(byId('call-centre-promo')).toBeNull();
+    });
+  });
+
+  describe('IOS and ANDROID while the app is on hold (ADR 0187, D28)', () => {
+    for (const type of ['IOS', 'ANDROID'] as const) {
+      it(`${type} renders an honest locked state and no form`, async () => {
+        fixture = await createFixture(channel({ systemType: type, code: type }));
+
+        const locked = byId('mobile-locked') as HTMLElement;
+        expect(locked.querySelector('[data-testid="q-locked-state"]')).not.toBeNull();
+        expect(locked.textContent).toContain('on hold');
+        expect(fixture.nativeElement.querySelector('input, select, textarea')).toBeNull();
+        expect(text()).not.toContain('No setup for this type yet.');
+      });
+    }
   });
 
   /**

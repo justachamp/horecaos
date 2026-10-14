@@ -10,7 +10,9 @@ import { LocaleSet } from '../../../core/i18n/locale-set';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { MediaApi } from '../../catalog/media-api';
 import { describeApiError } from '../../orders/order-errors';
+import { LockedState } from '../../../shared/ui/locked-state';
 import { MediaUploader } from '../../../shared/ui/media-uploader';
+import { ConfigurationApi } from '../configuration-api';
 import { DineInApi, DineInSettingsView, QrMode } from '../locations/dinein-api';
 import { LocationView, LocationsApi } from '../locations/locations-api';
 import { InstallationView, IntegrationsApi } from '../integrations/integrations-api';
@@ -50,7 +52,7 @@ interface LocationQrMode {
  */
 @Component({
   selector: 'q-channel-setup-page',
-  imports: [TPipe, RouterLink, MediaUploader, KioskCard],
+  imports: [TPipe, RouterLink, MediaUploader, KioskCard, LockedState],
   templateUrl: './channel-setup-page.html',
   styleUrl: './channel-setup-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -62,6 +64,7 @@ export class ChannelSetupPage {
   private readonly locationsApi = inject(LocationsApi);
   private readonly dineInApi = inject(DineInApi);
   private readonly mediaApi = inject(MediaApi);
+  private readonly configApi = inject(ConfigurationApi);
   private readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
   private readonly localeSet = inject(LocaleSet);
@@ -79,6 +82,19 @@ export class ChannelSetupPage {
 
   // -------------------------------------------------------------- (a) bot
   protected readonly installation = signal<InstallationView | null>(null);
+
+  /**
+   * A channel whose installation failed its last connection check shows a banner at the top of the form, whatever its type
+   * (settings.md §10.5, «States across all types»): the failure is the first thing the operator needs, not the last.
+   */
+  protected readonly installationFailed = computed(
+    () => this.installation()?.lastConnectionStatus === 'FAILED',
+  );
+
+  // --------------------------------------------------- (f) call centre, read-only
+  /** Order policy card 5's «operator may apply a promo code», as it resolves for the working brand; null while unread or unreadable. */
+  protected readonly operatorPromoAllowed = signal<boolean | null>(null);
+  protected readonly callCentreUnreadable = signal(false);
 
   // --------------------------------------------------------- (b) hostname
   protected readonly hostname = signal<ChannelHostnameView | null>(null);
@@ -121,6 +137,20 @@ export class ChannelSetupPage {
   protected readonly locationQrModes = signal<readonly LocationQrMode[]>([]);
 
   protected readonly version = computed(() => this.channel()?.version ?? 0);
+
+  /** The channel types this hub draws something for. POS is the one that has nothing to set up (waiter-entered, no storefront). */
+  protected hasFacets(systemType: string): boolean {
+    return [
+      'TELEGRAM',
+      'WEB',
+      'QR_TABLE',
+      'KIOSK',
+      'AGGREGATOR',
+      'CALL_CENTRE',
+      'IOS',
+      'ANDROID',
+    ].includes(systemType);
+  }
 
   // --------------------------------------------------------- (e) kiosk
   /** The working branch, for the KIOSK card (ADR 0162): a kiosk is paired to a branch, so the card reads that branch's. */
@@ -166,11 +196,36 @@ export class ChannelSetupPage {
   }
 
   private async loadFacets(scope: LocationScope, channel: ChannelView): Promise<void> {
-    if (channel.systemType === 'TELEGRAM' && channel.providerInstallationId) {
-      const installations = await this.integrationsApi.listInstallations(scope);
-      this.installation.set(
-        installations.find((candidate) => candidate.id === channel.providerInstallationId) ?? null,
-      );
+    if (channel.providerInstallationId) {
+      try {
+        const installations = await this.integrationsApi.listInstallations(scope);
+        this.installation.set(
+          installations.find((candidate) => candidate.id === channel.providerInstallationId) ??
+            null,
+        );
+      } catch (error) {
+        // The Telegram facet is the installation's status, so its failure is the page's. For any other type the
+        // installation only feeds a banner, and an operator who cannot read integrations still gets her form.
+        if (channel.systemType === 'TELEGRAM') {
+          throw error;
+        }
+        this.installation.set(null);
+      }
+    }
+
+    if (channel.systemType === 'CALL_CENTRE') {
+      try {
+        const resolution = await this.configApi.resolution(
+          scope.tenantId,
+          'ordering.operator_promo_code_allowed',
+          'BRAND',
+          scope.brandId,
+          null,
+        );
+        this.operatorPromoAllowed.set(resolution.value === true);
+      } catch {
+        this.callCentreUnreadable.set(true);
+      }
     }
 
     if (channel.systemType === 'WEB') {

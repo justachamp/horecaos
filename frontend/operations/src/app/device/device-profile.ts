@@ -131,3 +131,60 @@ function toStation(value: unknown): DeviceStation | null {
     displayNameEn: station.displayNameEn ?? station.code,
   };
 }
+
+/** One picture of a kiosk channel's idle loop, as `GET .../kiosk/configuration` lists it (ADR 0187). */
+export interface DeviceIdleMedia {
+  readonly id: string;
+  readonly assetId: string;
+  readonly position: number;
+  /** A path on the API's own origin; the shell prefixes the origin and nothing else. */
+  readonly url: string;
+}
+
+/** The part of a kiosk's configuration the shell reads: the pictures its channel plays while nobody is ordering. */
+export interface DeviceKioskConfiguration {
+  readonly idleMedia: readonly DeviceIdleMedia[];
+  /** Changes whenever the list does. */
+  readonly idleMediaVersion: number;
+}
+
+/**
+ * The idle pictures of a kiosk's configuration, or null when the body is not one. A picture whose address is not a path on
+ * the API's own origin is dropped rather than shown: the shell never loads an address the server did not mean as its own
+ * (an `<img>` of a stranger's URL on a lobby screen is the thing this refuses).
+ */
+export function toKioskConfiguration(value: unknown): DeviceKioskConfiguration | null {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const body = value as { idleMedia?: unknown; idleMediaVersion?: unknown };
+  if (!Array.isArray(body.idleMedia)) {
+    return null;
+  }
+  const pictures: DeviceIdleMedia[] = [];
+  for (const entry of body.idleMedia as unknown[]) {
+    if (typeof entry !== 'object' || entry === null) {
+      continue;
+    }
+    const picture = entry as Partial<DeviceIdleMedia>;
+    if (
+      typeof picture.id === 'string' &&
+      typeof picture.assetId === 'string' &&
+      typeof picture.url === 'string' &&
+      picture.url.startsWith('/api/') &&
+      !picture.url.startsWith('//')
+    ) {
+      pictures.push({
+        id: picture.id,
+        assetId: picture.assetId,
+        position: typeof picture.position === 'number' ? picture.position : pictures.length,
+        url: picture.url,
+      });
+    }
+  }
+  pictures.sort((a, b) => a.position - b.position);
+  return {
+    idleMedia: pictures,
+    idleMediaVersion: typeof body.idleMediaVersion === 'number' ? body.idleMediaVersion : 0,
+  };
+}
