@@ -116,6 +116,18 @@ public class PaymentIntentService implements PaymentIntentPort {
     }
 
     /**
+     * Answered from the receipt port of the method's provider, so the answer is what the adapter actually
+     * does with a marking code and not a second statement of it (ADR 0166 Decision 7).
+     */
+    @Override
+    public boolean carriesMarkingCodes(UUID tenantId, String paymentMethodCode) {
+        return PaymentMethod.fromCode(paymentMethodCode)
+                .flatMap(PaymentMethod::provider)
+                .map(fiscal::carriesMarkingCodes)
+                .orElse(true);
+    }
+
+    /**
      * Which of these orders have a payment the operations console can present
      * again (the order board's {@code ISSUE_INVOICE}). See {@link
      * JdbcPaymentIntentStore#ordersWithPresentablePayment} for exactly which

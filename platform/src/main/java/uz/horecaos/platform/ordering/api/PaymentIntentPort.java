@@ -49,6 +49,21 @@ public interface PaymentIntentPort {
     }
 
     /**
+     * Whether the receipt this method produces can carry a marking code per unit of a marked good (ADR 0038
+     * stage 6, ADR 0166 Decision 7). Click's receipt line can; Payme's {@code detail} object has no field
+     * for one, so Payme is the method a basket holding a marked good must not be offered.
+     *
+     * <p>A method with no partner receipt to refuse the code (cash, whose receipt is the tenant's own
+     * equipment's, and an unknown code) answers true: the exclusion is about a receipt that provably cannot
+     * carry the code, not about every method that is not Click.
+     *
+     * <p>Defaults to true so a build with no payments module behaves exactly as it did.
+     */
+    default boolean carriesMarkingCodes(UUID tenantId, String paymentMethodCode) {
+        return true;
+    }
+
+    /**
      * Whether a payment by this method could actually be taken at this location.
      *
      * <p>A precondition, asked among checkout's read-only validations and before

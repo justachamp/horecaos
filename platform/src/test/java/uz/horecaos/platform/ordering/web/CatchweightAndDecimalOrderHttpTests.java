@@ -47,6 +47,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.catalog.application.CatalogAuthoringService;
 import uz.horecaos.platform.catalog.application.CatalogPublicationService;
 import uz.horecaos.platform.catalog.application.CompositeProductAuthoringService;
@@ -61,6 +62,7 @@ import uz.horecaos.platform.catalog.domain.FiscalClassification;
 import uz.horecaos.platform.catalog.domain.PhysicalAttributes;
 import uz.horecaos.platform.catalog.domain.PublicationStatus;
 import uz.horecaos.platform.iam.api.PlatformRole;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.kitchen.application.KitchenTicketService;
 import uz.horecaos.platform.kitchen.domain.ReleaseMode;
@@ -80,6 +82,7 @@ import uz.horecaos.platform.reporting.application.DayCloseService;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcClassificationStore;
 import uz.horecaos.platform.reporting.infrastructure.persistence.JdbcReportingStore;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.tenancy.api.FeatureFlagKeys;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
@@ -190,6 +193,9 @@ class CatchweightAndDecimalOrderHttpTests {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private uz.horecaos.platform.tenancy.api.ConfigurationValueAuthor markedGoods;
 
     private UUID plovVariant;
     private UUID cakeVariant;
@@ -1028,6 +1034,64 @@ class CatchweightAndDecimalOrderHttpTests {
         var settledAtTheDoor = checkoutResult(weighed, "weighed-cash", "CASH");
         assertThat(settledAtTheDoor.created())
                 .as("%s %s", settledAtTheDoor.rejectionCode(), settledAtTheDoor.rejectionDetail())
+                .isTrue();
+    }
+
+    // ------------------------ ADR 0038 stage 6, ADR 0166 Decision 7: marked goods and the method
+
+    @Test
+    @DisplayName("a basket holding a marked good cannot be checked out with a method whose receipt cannot carry the "
+            + "code, and only while marked goods are switched on")
+    void aMarkedBasketCannotBeSoldForAMethodThatCannotCarryTheCode() {
+        enableProviderMethodOnTheStorefront("PAYME");
+        jdbc.sql("""
+                INSERT INTO catalog.fiscal_classifications (id, tenant_id, brand_id, variant_id, mxik_code,
+                    package_code, fiscal_unit_code, fiscal_name, barcode, marking_required, marking_scheme, source)
+                VALUES (:id, :t, :b, :variant, '22030000000000000', '123456', 796, 'Soda', '4600000000015',
+                    true, 'DATA_MATRIX', 'MANUAL')
+                """)
+                .param("id", UUID.randomUUID())
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("variant", sodaVariant)
+                .update();
+        UUID marked = openCart();
+        putLine(marked, "soda", sodaVariant, "1");
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, marked, cartVersion(marked)));
+
+        // Marked goods are not switched on for this tenant: marking is not captured, no code will be filed,
+        // and the method keeps being what it was (the checkout meets the next precondition).
+        assertThat(checkoutResult(marked, "marked-off", "PAYME").rejectionCode())
+                .isEqualTo("PAYMENT_METHOD_UNAVAILABLE");
+
+        markedGoods.set(
+                FeatureFlagKeys.MARKED_GOODS,
+                ResourceScope.tenant(TENANT),
+                true,
+                false,
+                null,
+                ActorRef.user("test-admin", null),
+                "marked basket test");
+
+        var refused = checkoutResult(marked, "marked-payme", "PAYME");
+
+        assertThat(refused.rejectionCode())
+                .as(refused.rejectionDetail())
+                .isEqualTo("MARKED_GOODS_NEED_MARKING_CAPABLE_PAYMENT");
+        assertThat(refused.orderId()).isNull();
+
+        // The rule is about the basket and the method: the same checkout for a basket with nothing marked
+        // meets the next precondition instead.
+        UUID ordinary = openCart();
+        putLine(ordinary, "plov", plovVariant, "1");
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, ordinary, cartVersion(ordinary)));
+        assertThat(checkoutResult(ordinary, "unmarked-payme", "PAYME").rejectionCode())
+                .isEqualTo("PAYMENT_METHOD_UNAVAILABLE");
+
+        // And the marked basket is still sold, for a method whose receipt needs no field for a code.
+        var cash = checkoutResult(marked, "marked-cash", "CASH");
+        assertThat(cash.created())
+                .as("%s %s", cash.rejectionCode(), cash.rejectionDetail())
                 .isTrue();
     }
 

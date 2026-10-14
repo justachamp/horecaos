@@ -110,4 +110,52 @@ class CartPaymentOptionsTests {
         assertThat(offered.methodCodes()).containsExactly("CASH");
         assertThat(offered.warnings()).isEmpty();
     }
+
+    // ------------------------------------------------ ADR 0038 stage 6, ADR 0166 Decision 7
+
+    /**
+     * Payme's {@code detail} object has no field for a marking code, so a basket holding a marked good must
+     * not be offered it. The check existed (catalog's {@code requiresMarkingCapablePayment}) and nothing
+     * called it; these are the first tests that fail if the call goes away.
+     */
+    @Test
+    @DisplayName(
+            "a basket holding a marked good is not offered a method whose receipt cannot carry the code, and is told why")
+    void aMarkedBasketIsNotOfferedAMethodThatCannotCarryTheCode() {
+        when(channels.enabledPaymentMethodCodes(TENANT, CHANNEL)).thenReturn(Set.of("CASH", "CLICK", "PAYME"));
+        when(payments.carriesMarkingCodes(any(), anyString())).thenReturn(true);
+        when(payments.carriesMarkingCodes(TENANT, "PAYME")).thenReturn(false);
+        CartPaymentOptions marked = new CartPaymentOptions(carts, channels, payments, (tenant, brand, lines) -> true);
+
+        var offered = marked.forCart(TENANT, BRAND, CUSTOMER, CART).orElseThrow();
+
+        assertThat(offered.methodCodes()).containsExactly("CASH", "CLICK");
+        assertThat(offered.warnings()).contains(CartPaymentOptions.MARKED_GOODS_NEED_MARKING_CAPABLE_PAYMENT);
+    }
+
+    @Test
+    @DisplayName("a basket with no marked good keeps Payme, and the note is not raised")
+    void anUnmarkedBasketKeepsPayme() {
+        when(channels.enabledPaymentMethodCodes(TENANT, CHANNEL)).thenReturn(Set.of("CASH", "CLICK", "PAYME"));
+        when(payments.carriesMarkingCodes(TENANT, "PAYME")).thenReturn(false);
+        CartPaymentOptions unmarked =
+                new CartPaymentOptions(carts, channels, payments, (tenant, brand, lines) -> false);
+
+        var offered = unmarked.forCart(TENANT, BRAND, CUSTOMER, CART).orElseThrow();
+
+        assertThat(offered.methodCodes()).containsExactly("CASH", "CLICK", "PAYME");
+        assertThat(offered.warnings()).doesNotContain(CartPaymentOptions.MARKED_GOODS_NEED_MARKING_CAPABLE_PAYMENT);
+    }
+
+    @Test
+    @DisplayName("the marked-goods note is not raised when the channel sold nothing it would have removed")
+    void noMarkedNoteWhenNothingWasRemoved() {
+        when(payments.carriesMarkingCodes(any(), anyString())).thenReturn(true);
+        CartPaymentOptions marked = new CartPaymentOptions(carts, channels, payments, (tenant, brand, lines) -> true);
+
+        var offered = marked.forCart(TENANT, BRAND, CUSTOMER, CART).orElseThrow();
+
+        assertThat(offered.methodCodes()).containsExactly("CASH", "CLICK");
+        assertThat(offered.warnings()).isEmpty();
+    }
 }
