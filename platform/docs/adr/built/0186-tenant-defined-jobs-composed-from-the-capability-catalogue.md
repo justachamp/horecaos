@@ -275,10 +275,10 @@ against the table; and a retire with a holder is refused.
 
 ## References
 
-- [ADR 0025: Fine-grained authorization and the capability model](0025-fine-grained-authorization-and-capability-model.md)
-- [ADR 0027: Audit evidence and approval model](0027-audit-evidence-and-approval-model.md)
-- [ADR 0031: HTTP API conventions](0031-http-api-conventions.md)
-- [ADR 0033: Caching, rate limiting and shared runtime state](0033-caching-rate-limiting-and-shared-runtime-state.md)
+- [ADR 0025: Fine-grained authorization and the capability model](../built/0025-fine-grained-authorization-and-capability-model.md)
+- [ADR 0027: Audit evidence and approval model](../built/0027-audit-evidence-and-approval-model.md)
+- [ADR 0031: HTTP API conventions](../built/0031-http-api-conventions.md)
+- [ADR 0033: Caching, rate limiting and shared runtime state](../built/0033-caching-rate-limiting-and-shared-runtime-state.md)
 - [ADR 0056: Application-enforced tenant isolation, with RLS as a production backstop](../partial/0056-tenant-isolation-enforcement-and-rls.md)
 - [ADR 0103: A branch manager's own scope should reach `iam.grant.manage`](../not-started/0103-wave131-p30-a-branch-managers-own-scope-should-reach-iam-grant-manage.md)
 - `docs/operations-spec/staff-and-access.md` §5 and §11.4
