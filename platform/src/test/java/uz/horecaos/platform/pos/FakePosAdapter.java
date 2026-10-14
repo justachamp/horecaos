@@ -77,6 +77,26 @@ public final class FakePosAdapter implements PosAdapter {
 
     private @Nullable ProviderOutcome nextDiscountsOutcome;
 
+    /** What {@link #discoverOperators} answers by default: two fake till operators. */
+    private List<PosAdapter.ExternalReference> nextOperators = List.of(
+            new PosAdapter.ExternalReference("fake-op-17", "Aziza"),
+            new PosAdapter.ExternalReference("fake-op-18", "Bobur"));
+
+    private @Nullable ProviderOutcome nextOperatorsOutcome;
+
+    /**
+     * Whether this till's order API carries the operator (PosCapability#ORDER_OPERATOR_ATTRIBUTION). True
+     * by default, because the point of the fake is to be the shape Clopos is not; {@link
+     * #withoutOperatorAttribution} turns it into a till that, like Clopos, receives none.
+     */
+    private boolean carriesOperator = true;
+
+    /** The body each create-order call would put on the wire, in the order they came. */
+    private final List<Map<String, Object>> wireBodies = new ArrayList<>();
+
+    /** The {@code operatorExternalId} each create-order call was handed, in the order they came. */
+    private final List<@Nullable String> operatorsReceived = new ArrayList<>();
+
     // ------------------------------------------------------------------
     // The customer wallet (ADR 0171, PosCapability#LOYALTY_BALANCE_SYNC)
     //
@@ -392,6 +412,37 @@ public final class FakePosAdapter implements PosAdapter {
         return this;
     }
 
+    /** From the next {@link #discoverOperators} call onward, this is what it finds. */
+    public FakePosAdapter scriptOperators(List<ExternalReference> entries) {
+        this.nextOperators = List.copyOf(entries);
+        return this;
+    }
+
+    /** Makes {@link #discoverOperators} answer the way an unsupported vendor does. */
+    public FakePosAdapter failOperatorsWith(ProviderOutcome outcome) {
+        this.nextOperatorsOutcome = outcome;
+        return this;
+    }
+
+    /**
+     * A till like Clopos: it lists its users but its order API receives no operator, so the capability is not
+     * declared and the body never carries one.
+     */
+    public FakePosAdapter withoutOperatorAttribution() {
+        this.carriesOperator = false;
+        return this;
+    }
+
+    /** What each create-order call would have put on the wire. */
+    public List<Map<String, Object>> wireBodies() {
+        return Collections.unmodifiableList(new ArrayList<>(wireBodies));
+    }
+
+    /** What each create-order call was handed as the operator, before this adapter decided what to send. */
+    public List<@Nullable String> operatorsReceived() {
+        return Collections.unmodifiableList(new ArrayList<>(operatorsReceived));
+    }
+
     @Override
     public String providerType() {
         return PROVIDER_TYPE;
@@ -399,16 +450,24 @@ public final class FakePosAdapter implements PosAdapter {
 
     @Override
     public Set<PosCapability> declaredCapabilities() {
-        // Everything, including the two Clopos lacks. A capability no adapter in
+        // Everything, including the ones Clopos lacks. A capability no adapter in
         // the build implements is a capability whose refusal path is never
         // exercised, and its support path never exercised either.
-        return EnumSet.allOf(PosCapability.class);
+        EnumSet<PosCapability> declared = EnumSet.allOf(PosCapability.class);
+        if (!carriesOperator) {
+            declared.remove(PosCapability.ORDER_OPERATOR_ATTRIBUTION);
+        }
+        return declared;
     }
 
     @Override
     public CapabilitySnapshot discoverCapabilities(PosContext context) {
         Map<PosCapability, Entry> entries = new EnumMap<>(PosCapability.class);
         for (PosCapability capability : PosCapability.values()) {
+            if (!declaredCapabilities().contains(capability)) {
+                entries.put(capability, Entry.unsupported("Fake provider configured without " + capability));
+                continue;
+            }
             entries.put(
                     capability,
                     new Entry(
@@ -475,6 +534,16 @@ public final class FakePosAdapter implements PosAdapter {
     }
 
     @Override
+    public ReferenceListRead discoverOperators(PosContext context) {
+        if (nextOperatorsOutcome != null) {
+            ProviderOutcome scripted = nextOperatorsOutcome;
+            nextOperatorsOutcome = null;
+            return new ReferenceListRead(scripted, List.of());
+        }
+        return new ReferenceListRead(ProviderOutcome.success(Map.of(), null), nextOperators);
+    }
+
+    @Override
     public ReferenceListRead discoverDiscounts(PosContext context) {
         if (nextDiscountsOutcome != null) {
             ProviderOutcome scripted = nextDiscountsOutcome;
@@ -492,6 +561,15 @@ public final class FakePosAdapter implements PosAdapter {
             return new ExportResult(scripted, null, false);
         }
         exportedCorrelations.add(order.correlationReference());
+        operatorsReceived.add(order.operatorExternalId());
+        // The body this till would be sent. The operator rides on it as operator_id exactly when the
+        // till's API carries one - the clause PosAdapterContractTests holds every adapter to.
+        Map<String, Object> wire = new LinkedHashMap<>();
+        wire.put("order_number", order.correlationReference());
+        if (carriesOperator && order.operatorExternalId() != null) {
+            wire.put("operator_id", order.operatorExternalId());
+        }
+        wireBodies.add(wire);
         // ConcurrentHashMap refuses a null key outright, and a null correlation
         // reference has no identity to deduplicate on anyway, so it always gets a
         // fresh external id instead of going through the map.

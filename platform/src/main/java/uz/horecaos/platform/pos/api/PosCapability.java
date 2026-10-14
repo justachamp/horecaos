@@ -18,7 +18,7 @@ package uz.horecaos.platform.pos.api;
  * reading a real POS API and are declared here rather than left as provider
  * quirks, because each one is something a domain module will eventually want and
  * none of them is Clopos-specific in principle. The eleventh, {@link #LOYALTY_BALANCE_SYNC},
- * is ADR 0171's.
+ * is ADR 0171's, and the twelfth, {@link #ORDER_OPERATOR_ATTRIBUTION}, is gap-map row 9.2c's.
  */
 public enum PosCapability {
 
@@ -104,7 +104,29 @@ public enum PosCapability {
      * (the trigger refuses it). That includes Clopos, whose notes record no balance field, iiko and
      * R-Keeper, about which nothing in this repository says what either exposes for a wallet.
      */
-    LOYALTY_BALANCE_SYNC;
+    LOYALTY_BALANCE_SYNC,
+
+    /**
+     * The till's create-order call carries <em>which colleague</em> took the order, and the adapter
+     * puts {@code OrderExport#operatorExternalId} on the wire (gap-map row {@code 9.2c}, ADR 0139).
+     *
+     * <p>The pairing between a HorecaOS staff member and the till's own operator id is written from
+     * the console (entity type {@code OPERATOR}) and resolved off {@code accepted_by_actor_id} on the
+     * next accepted order. That is a writer and a reader. This capability is the sender, and it is a
+     * separate statement about the vendor because the other two are about us: a till whose documented
+     * order API has no waiter, cashier or user field cannot be handed one, and an adapter that sent an
+     * undocumented field anyway would be guessing on a vendor that has already punished a guess
+     * ({@code product_hash}). So the capability is declared only by an adapter whose vendor documents
+     * the field, and the order-export path hands an operator id <em>only</em> to an adapter that
+     * declares it.
+     *
+     * <p>Clopos does not declare it: {@code CreateOrderRequest} names {@code sale_type_id},
+     * {@code venue_id}, {@code customer} and {@code products}, and every call acts on behalf of the
+     * credential's Staff user (docs/providers/clopos-api.md section 6.5). A vendor whose API carries
+     * the operator is an external fact (docs/runbooks/external-connections/w13-staff-access.md); the
+     * controlled fake declares it so the contract can be proved against something that does.
+     */
+    ORDER_OPERATOR_ATTRIBUTION;
 
     /** The string stored in the database. Identical to the constant name by design. */
     public String code() {

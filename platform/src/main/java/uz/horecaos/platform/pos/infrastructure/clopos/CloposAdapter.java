@@ -259,6 +259,13 @@ public class CloposAdapter implements PosAdapter {
                 PosCapability.PREPARATION_STATUS,
                 Entry.unsupported("Clopos publishes no endpoint that reports preparation. Receipt.order_status is one "
                         + "of the four fields we write, so reading it back would report our own writes."));
+        // Likewise stated (gap-map row 9.2c): GET /users lists the brand's users, so a colleague can be
+        // paired from the till's own list, but the documented CreateOrderRequest carries no user, waiter or
+        // cashier. The pairing is kept and reaches no order.
+        entries.put(
+                PosCapability.ORDER_OPERATOR_ATTRIBUTION,
+                Entry.unsupported("CreateOrderRequest names sale_type_id, venue_id, customer and products and no "
+                        + "operator; every call acts on behalf of the credential's Staff user (clopos-api.md 6.5)."));
 
         // PARTIAL, not UNSUPPORTED, and the distinction is the whole point of the
         // middle value. UNSUPPORTED means "the provider does not do this" and is
@@ -440,6 +447,84 @@ public class CloposAdapter implements PosAdapter {
                 ProviderOutcome.rejected("NOT_SUPPORTED", "Clopos exposes no discount discovery endpoint"), List.of());
     }
 
+    /**
+     * The brand's Staff users, from {@code GET /users} (documented as {@code users/get-users},
+     * docs/providers/clopos-api.md section 1), so the tenant pairs a colleague with the till's own
+     * operator from its list instead of typing an id by hand (gap-map row {@code 9.2c}).
+     *
+     * <p><strong>The response shape is not verified.</strong> The page is on the list of 24 read on
+     * 2026-08-23 but its schema is not quoted in the notes, and on 2026-10-14 the public OpenAPI
+     * could not be fetched (the host answered every path with its single-page app shell). What this
+     * reads is the envelope every other Clopos list uses (a {@code data} array) and, per user, an
+     * {@code id} and a display name from {@code name}, else {@code full_name}, else {@code
+     * first_name} with {@code last_name}; a user with none of those is listed as «Clopos user
+     * #id» rather than dropped. It never reads a login, an email or a phone: the entry is the
+     * name a manager recognises and the id the till uses, and nothing else (ADR 0029). A response
+     * of another shape lists nobody, which the pane reports as an empty list and not as a
+     * success with data. Proving the shape against a live credential is the external step
+     * recorded in docs/runbooks/external-connections/w13-staff-access.md.
+     *
+     * <p>Listing a vendor's operators and the vendor's order API carrying one are different
+     * facts. Clopos lists its users and does not receive one on an order, so this method works and
+     * {@link PosCapability#ORDER_OPERATOR_ATTRIBUTION} is still not declared.
+     *
+     * <p>Paged defensively: the walk stops when a page brings no id it has not seen, because
+     * whether {@code /users} honours the paging parameters is part of what is unverified, and a
+     * walk that trusted a ceiling alone would list the same people {@code MAX_PAGES} times.
+     */
+    @Override
+    public ReferenceListRead discoverOperators(PosContext context) {
+        Map<String, String> byId = new LinkedHashMap<>();
+        for (int page = 1; page <= MAX_PAGES; page++) {
+            ProviderOutcome outcome = read(
+                    context,
+                    "users",
+                    "/users" + CloposQuery.create().page(page, PAGE_SIZE).render());
+            if (outcome.status() != ProviderOutcome.Status.SUCCESS) {
+                return new ReferenceListRead(outcome, List.of());
+            }
+            List<Map<String, Object>> rows = CloposEnvelope.dataList(outcome.normalized());
+            int before = byId.size();
+            for (Map<String, Object> row : rows) {
+                String id = identifier(row.get("id"));
+                if (id != null) {
+                    byId.putIfAbsent(id, operatorName(row, id));
+                }
+            }
+            if (rows.size() < PAGE_SIZE || byId.size() == before) {
+                break;
+            }
+        }
+        List<ExternalReference> entries = new ArrayList<>();
+        byId.forEach((id, name) -> entries.add(new ExternalReference(id, name)));
+        return new ReferenceListRead(ProviderOutcome.success(Map.of(), null), entries);
+    }
+
+    /** A JSON number or string id as the plain string the till uses, or null when there is none. */
+    private static @Nullable String identifier(@Nullable Object value) {
+        if (value instanceof Number number) {
+            return new java.math.BigDecimal(number.toString())
+                    .stripTrailingZeros()
+                    .toPlainString();
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            return text.strip();
+        }
+        return null;
+    }
+
+    private static String operatorName(Map<String, Object> row, String id) {
+        for (String key : List.of("name", "full_name")) {
+            if (row.get(key) instanceof String text && !text.isBlank()) {
+                return text.strip();
+            }
+        }
+        String first = row.get("first_name") instanceof String text ? text.strip() : "";
+        String last = row.get("last_name") instanceof String text ? text.strip() : "";
+        String joined = (first + " " + last).strip();
+        return joined.isEmpty() ? "Clopos user #" + id : joined;
+    }
+
     // ------------------------------------------------------------------
     // Order export
     // ------------------------------------------------------------------
@@ -497,13 +582,18 @@ public class CloposAdapter implements PosAdapter {
                 && Boolean.parseBoolean(context.config(CloposConfig.REQUIRE_CLERK_APPROVAL, "true"));
 
         // order.operatorExternalId() (operations-gap-map.md 9.2c) is deliberately
-        // never read here: docs/providers/clopos-api.md §6.5's CreateOrderRequest
-        // names exactly sale_type_id, venue_id, customer and products as fields
-        // Clopos accepts, with no waiter/user/operator field documented anywhere
-        // on order creation. Sending an undocumented field on a vendor this
-        // unforgiving about schema (product_hash's own history is the warning)
-        // is a guess this adapter does not make; the value stays available on
-        // the contract for a provider that does document one.
+        // never read here, and PosCapability.ORDER_OPERATOR_ATTRIBUTION is
+        // deliberately not declared: docs/providers/clopos-api.md §6.5's
+        // CreateOrderRequest names exactly sale_type_id, venue_id, customer and
+        // products as fields Clopos accepts, with no waiter/user/operator field
+        // documented anywhere on order creation. Sending an undocumented field on a
+        // vendor this unforgiving about schema (product_hash's own history is the
+        // warning) is a guess this adapter does not make. The export path does not
+        // even hand the value to an adapter that does not declare the capability
+        // (PosOrderExportService), and PosAdapterContractTests holds the adapter to
+        // it: an operator id never appears in this body. If Clopos answers Q23
+        // (does POST /orders accept a user, waiter or cashier?), the change is one
+        // line here, the capability in declaredCapabilities, and the ceiling row.
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("venue_id", numeric(context.externalVenueReference()));
         body.put("sale_type_id", numeric(context.config(CloposConfig.SALE_TYPE_ID, null)));

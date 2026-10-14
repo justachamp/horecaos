@@ -19,6 +19,7 @@ import uz.horecaos.platform.catalog.api.PackageCodeLookup;
 import uz.horecaos.platform.integration.api.provider.ProviderActivityRecorder;
 import uz.horecaos.platform.integration.api.provider.ProviderEntityMappingLookup;
 import uz.horecaos.platform.integration.api.provider.ProviderInstallationLookup;
+import uz.horecaos.platform.pos.FakePosAdapter;
 import uz.horecaos.platform.pos.application.port.PosOrderSource;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosBindingConfiguration;
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosCapabilityStore;
@@ -129,6 +130,28 @@ class PosOrderExportOperatorAttributionTests {
         String resolved = service.resolveOperatorExternalId(TENANT, BINDING, "SYSTEM_JOB", "pos:clopos");
 
         assertThat(resolved).isNull();
+        verifyNoInteractions(mappings);
+    }
+
+    @Test
+    @DisplayName("a till whose adapter declares ORDER_OPERATOR_ATTRIBUTION is handed the pairing")
+    void aDeclaringAdapterIsHandedThePairing() {
+        when(mappings.externalIdFor(eq(BINDING), eq("OPERATOR"), eq(OPERATOR_MEMBER)))
+                .thenReturn(Optional.of("fake-op-17"));
+
+        assertThat(service.operatorFor(new FakePosAdapter(), TENANT, BINDING, "USER", OPERATOR_SUBJECT))
+                .isEqualTo("fake-op-17");
+    }
+
+    @Test
+    @DisplayName("a till whose adapter does not declare it is handed nothing, and the mapping is not even read")
+    void anAdapterThatDoesNotDeclareItIsNeverHandedAPairing() {
+        when(mappings.externalIdFor(any(), any(), any())).thenReturn(Optional.of("fake-op-17"));
+
+        assertThat(service.operatorFor(
+                        new FakePosAdapter().withoutOperatorAttribution(), TENANT, BINDING, "USER", OPERATOR_SUBJECT))
+                .as("a pairing nothing sends must not be presented to the adapter as live")
+                .isNull();
         verifyNoInteractions(mappings);
     }
 
