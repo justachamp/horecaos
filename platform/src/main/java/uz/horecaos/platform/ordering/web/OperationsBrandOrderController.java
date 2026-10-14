@@ -119,7 +119,9 @@ public class OperationsBrandOrderController {
                     + "row's branch. `ORDER_READ` at BRAND scope: a location-scoped grant is "
                     + "refused with 403 — the console's signal to keep its single-branch board — "
                     + "and a caller who needs only some branches asks the branch endpoint for "
-                    + "each. Keyset-paginated (ADR 0031); changing a filter or the branch set "
+                    + "each. `include` names the optional facts the picker's columns draw "
+                    + "(`courierEta`, `source`, `fiscal`, `distance`, `externalNumber`), as on the branch "
+                    + "board. Keyset-paginated (ADR 0031); changing a filter or the branch set "
                     + "invalidates the cursor.")
     @SuppressWarnings("checkstyle:ParameterNumber")
     public Page<OrderSummaryResponse> board(
@@ -142,6 +144,7 @@ public class OperationsBrandOrderController {
             @RequestParam(required = false) @Nullable Boolean problem,
             @RequestParam(required = false) @Nullable Boolean callbackRequested,
             @RequestParam(required = false) @Nullable List<String> fiscalStatus,
+            @RequestParam(required = false) @Nullable List<String> include,
             @RequestParam(required = false) @Nullable String cursor,
             @RequestParam(required = false) @Nullable Integer limit) {
 
@@ -168,7 +171,7 @@ public class OperationsBrandOrderController {
 
         String subject = currentActor.get().subject();
         boolean invoiceCapability = OperationsOrderController.invoiceCapabilityHeld(authorization, subject, tenantId);
-        return OrderBoardFilters.page(orderQuery, query, cursor, limit, branch -> {
+        return OrderBoardFilters.page(orderQuery, query, cursor, limit, OrderBoardFilters.facts(include), branch -> {
             Set<Capability> granted = OperationsOrderController.grantedActionCapabilities(
                     authorization, subject, tenantId, brandId, branch);
             return OperationsOrderController.withInvoiceCapability(granted, invoiceCapability);

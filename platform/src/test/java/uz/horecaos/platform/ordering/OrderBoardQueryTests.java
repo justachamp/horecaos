@@ -68,6 +68,15 @@ class OrderBoardQueryTests {
     /** ADR 0160: the staff members who took and accepted an order, by name, for the optional board columns. */
     private static final List<String> STAFF_ACTOR_NAMES = List.of("createdByDisplayName", "acceptedByDisplayName");
 
+    /**
+     * Gap map row 1.1 (batch 21): the two other names on the board row. Neither is a person: {@code
+     * firstItemName} is the name of the first product as it was sold (the «Позиции» column, orders.md §2.5
+     * column 8) and {@code channelDisplayName} is the tenant's own name for the channel the order came in
+     * through (the source icon's title). A customer's name stays out of the row, and so does everything that
+     * could carry one.
+     */
+    private static final List<String> NON_PERSON_NAMES = List.of("firstItemName", "channelDisplayName");
+
     /** Every fixture order is placed relative to this, newest last. */
     private static final Instant NOON = Instant.parse("2026-09-10T12:00:00Z");
 
@@ -568,6 +577,7 @@ class OrderBoardQueryTests {
                     // the next test pins that they are the only two.
                     return !lowered.equals("publicordernumber")
                             && !STAFF_ACTOR_NAMES.contains(component)
+                            && !NON_PERSON_NAMES.contains(component)
                             && forbidden.stream().anyMatch(lowered::contains);
                 })
                 .toList();
@@ -578,7 +588,8 @@ class OrderBoardQueryTests {
     }
 
     @Test
-    @DisplayName("the only names on the board row are the two staff actors' and nothing else carries one")
+    @DisplayName(
+            "the only names on the board row are the two staff actors', a product's and a channel's, and nothing else carries one")
     void theOnlyNamesAreTheStaffActors() {
         List<String> named = java.util.Arrays.stream(
                         OperationsOrderController.OrderSummaryResponse.class.getRecordComponents())
@@ -589,8 +600,11 @@ class OrderBoardQueryTests {
 
         assertThat(named)
                 .as("ADR 0160 adds createdByDisplayName and acceptedByDisplayName for the board's optional "
-                        + "columns; a third name on this row is a new decision")
-                .containsExactlyInAnyOrderElementsOf(STAFF_ACTOR_NAMES);
+                        + "columns, and row 1.1 adds the first product's name and the channel's; a further name "
+                        + "on this row is a new decision")
+                .containsExactlyInAnyOrderElementsOf(
+                        java.util.stream.Stream.concat(STAFF_ACTOR_NAMES.stream(), NON_PERSON_NAMES.stream())
+                                .toList());
     }
 
     @Test

@@ -66,6 +66,25 @@ public class JdbcSalesChannelStore implements SalesChannelLookup {
     }
 
     @Override
+    public Map<String, SalesChannel> byCodes(UUID tenantId, java.util.Collection<String> codes) {
+        if (codes.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, SalesChannel> byCode = new LinkedHashMap<>();
+        jdbc.sql("SELECT " + CHANNEL_COLUMNS + """
+                FROM tenant.sales_channels
+                WHERE tenant_id = :tenantId AND code IN (:codes)
+                ORDER BY code
+                """)
+                .param("tenantId", tenantId)
+                .param("codes", codes)
+                .query(JdbcSalesChannelStore::toChannel)
+                .list()
+                .forEach(channel -> byCode.put(channel.code(), channel));
+        return byCode;
+    }
+
+    @Override
     public Optional<SalesChannel> byProviderInstallation(UUID tenantId, UUID installationId) {
         List<SalesChannel> channels = jdbc.sql("SELECT " + CHANNEL_COLUMNS + """
                 FROM tenant.sales_channels

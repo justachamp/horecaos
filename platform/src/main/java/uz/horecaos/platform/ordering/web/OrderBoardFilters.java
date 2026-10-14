@@ -14,6 +14,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.iam.api.Capability;
+import uz.horecaos.platform.ordering.application.OrderBoardEnrichment;
 import uz.horecaos.platform.ordering.application.OrderQueryService;
 import uz.horecaos.platform.ordering.domain.OrderStatus;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
@@ -144,6 +145,21 @@ final class OrderBoardFilters {
             @Nullable String cursor,
             @Nullable Integer limit,
             Function<UUID, Set<Capability>> grantedFor) {
+        return page(orderQuery, query, cursor, limit, Set.of(), grantedFor);
+    }
+
+    /**
+     * {@link #page(OrderQueryService, JdbcOrderStore.OrderListQuery, String, Integer, Function)} with the
+     * optional board facts the caller asked for ({@link #facts}); they never touch the cursor, which is
+     * pinned to the filter set alone.
+     */
+    static Page<OperationsOrderController.OrderSummaryResponse> page(
+            OrderQueryService orderQuery,
+            JdbcOrderStore.OrderListQuery query,
+            @Nullable String cursor,
+            @Nullable Integer limit,
+            Set<OrderBoardEnrichment.Fact> include,
+            Function<UUID, Set<Capability>> grantedFor) {
 
         String filterHash = filterHashOf(query);
         @Nullable UUID cursorOrderId = null;
@@ -158,7 +174,7 @@ final class OrderBoardFilters {
         int pageSize = Page.limitOrDefault(limit);
         List<JdbcOrderStore.OrderBoardRow> rows;
         try {
-            rows = orderQuery.forLocation(query, cursorOrderId, pageSize);
+            rows = orderQuery.forLocation(query, cursorOrderId, pageSize, include);
         } catch (OrderQueryService.UnknownCursorException unknown) {
             throw new ApiException(ErrorCode.INVALID_REQUEST, "This cursor does not name an order of this board");
         }
@@ -179,6 +195,33 @@ final class OrderBoardFilters {
                 : new Cursor(rows.getLast().order().orderId().toString(), filterHash).encodeUnsigned();
 
         return new Page<>(items, nextCursor);
+    }
+
+    /**
+     * The optional board facts a request named, refused when one is not a fact (a typo is a validation
+     * failure, not a column that quietly never fills in).
+     *
+     * @param include column keys from {@link OrderBoardEnrichment.Fact}: {@code courierEta}, {@code source},
+     *                {@code fiscal}, {@code distance}, {@code externalNumber}
+     */
+    static Set<OrderBoardEnrichment.Fact> facts(@Nullable List<String> include) {
+        if (include == null || include.isEmpty()) {
+            return Set.of();
+        }
+        Set<OrderBoardEnrichment.Fact> facts = java.util.EnumSet.noneOf(OrderBoardEnrichment.Fact.class);
+        for (String raw : include) {
+            // A repeated parameter and a comma-separated one both work: `include=a,b` and `include=a&include=b`.
+            for (String key : raw.split(",")) {
+                String named = key.strip();
+                if (named.isEmpty()) {
+                    continue;
+                }
+                facts.add(OrderBoardEnrichment.Fact.ofKey(named)
+                        .orElseThrow(() -> new ApiException(
+                                ErrorCode.VALIDATION_FAILED, "Unknown board fact \"%s\"".formatted(named))));
+            }
+        }
+        return facts;
     }
 
     /**

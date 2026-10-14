@@ -287,6 +287,29 @@ public class JdbcDeliveryPlanStore {
         return byOrder;
     }
 
+    /**
+     * The route distance of each order's live plan, batched over a board page (gap map row 1.1's optional
+     * «Дистанция» column). Absent for an order with no plan, a cancelled plan, or one the tariff priced
+     * without a measured distance ({@code distance_meters} null).
+     */
+    public Map<UUID, Integer> distanceMetersByOrders(UUID tenantId, Collection<UUID> orderIds) {
+        if (orderIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Integer> byOrder = new HashMap<>();
+        jdbc.sql("""
+                SELECT order_id, distance_meters FROM fulfillment.delivery_plans
+                WHERE tenant_id = :tenantId AND order_id IN (:orderIds)
+                  AND status <> 'CANCELLED' AND distance_meters IS NOT NULL
+                """)
+                .param("tenantId", tenantId)
+                .param("orderIds", orderIds)
+                .query((row, number) -> Map.entry(row.getObject("order_id", UUID.class), row.getInt("distance_meters")))
+                .list()
+                .forEach(entry -> byOrder.put(entry.getKey(), entry.getValue()));
+        return byOrder;
+    }
+
     private static final String SELECT = """
             SELECT id, tenant_id, brand_id, location_id, order_id, status, sourcing_mode,
                    service_level, customer_delivery_fee_minor, currency,

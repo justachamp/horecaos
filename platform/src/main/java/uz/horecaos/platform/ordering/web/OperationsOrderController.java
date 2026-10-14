@@ -396,7 +396,10 @@ public class OperationsOrderController {
                     + "awaiting retry), `callbackRequested` (Требуется звонок — the flag "
                     + "the callback amendment raises and clears) and `fiscalStatus` (Фискализация "
                     + "— any fiscal document of the order in one of the given statuses, ADR "
-                    + "0038). Keyset-paginated "
+                    + "0038). `include` names the optional facts the board's picker columns draw "
+                    + "(`courierEta`, `source`, `fiscal`, `distance`, `externalNumber`), each read in one "
+                    + "batch for the page and only when asked for; the payment method and the item summary "
+                    + "are always on the row. Keyset-paginated "
                     + "(ADR 0031): pass the previous page's `nextCursor` back as `cursor`. "
                     + "Changing a filter invalidates the cursor — start the list again — because "
                     + "a window cut for one filter set says nothing about another. The same board "
@@ -423,6 +426,7 @@ public class OperationsOrderController {
             @RequestParam(required = false) @Nullable Boolean problem,
             @RequestParam(required = false) @Nullable Boolean callbackRequested,
             @RequestParam(required = false) @Nullable List<String> fiscalStatus,
+            @RequestParam(required = false) @Nullable List<String> include,
             @RequestParam(required = false) @Nullable String cursor,
             @RequestParam(required = false) @Nullable Integer limit) {
 
@@ -448,7 +452,8 @@ public class OperationsOrderController {
                 fiscalStatus);
 
         Set<Capability> granted = grantedRowCapabilities(tenantId, brandId, locationId);
-        return OrderBoardFilters.page(orderQuery, query, cursor, limit, ignored -> granted);
+        return OrderBoardFilters.page(
+                orderQuery, query, cursor, limit, OrderBoardFilters.facts(include), ignored -> granted);
     }
 
     @GetMapping("/marketplace-bindings")
@@ -3162,6 +3167,30 @@ public class OperationsOrderController {
      *                   order.read} already admits, and never carries the raw
      *                   subject (the console draws a dash instead)
      * @param acceptedByDisplayName the same resolution for {@code acceptedByActorId}
+     * @param origin     how the order arrived (gap map row {@code 1.1}'s source column): {@code HORECAOS} for
+     *                   the tenant's own channels, {@code MARKETPLACE} for anything an aggregator pushed
+     *                   (ADR 0040). Always sent on a board read; null on a summary read outside the board
+     * @param courierEtaAt the ETA fulfilment captured for the order's partner-quoted delivery plan
+     *                   ({@link uz.horecaos.platform.fulfillment.api.CourierEtaPort}), a snapshot of the
+     *                   winning quote and not a live feed. Null for an order carried by a house courier, for
+     *                   a plan whose quote named no ETA, and whenever the board read was not asked for
+     *                   {@code include=courierEta}
+     * @param channelSystemType the order's channel's {@code SalesChannelSystemType} name, resolved on the
+     *                   server because the roles that work the board do not hold {@code CHANNEL_READ}; null
+     *                   unless {@code include=source}, and for a channel the tenant no longer lists
+     * @param channelIcon the channel's own free-text icon; the console draws a generic one for a value it
+     *                   does not know. Same availability as {@code channelSystemType}
+     * @param channelDisplayName the tenant's name for the channel, the icon's title. Same availability
+     * @param paymentMethodCode the method of the order's payment intent (the platform's {@code
+     *                   PaymentMethod} codes), always on a board row; null for an order with no intent. The
+     *                   console draws its icon from a set it owns
+     * @param itemCount  how many positions the order holds now, always on a board row (a combo is one
+     *                   position); null off the board
+     * @param firstItemName the first position's name as it was sold
+     * @param fiscalStatus the status of the order's sale fiscal document, only for {@code include=fiscal}
+     * @param distanceMeters the delivery plan's route distance, only for {@code include=distance}
+     * @param externalNumber the number the partner or POS knows the order by, only for {@code
+     *                   include=externalNumber}
      */
     public record OrderSummaryResponse(
             UUID orderId,
@@ -3191,7 +3220,18 @@ public class OperationsOrderController {
             @Nullable UUID courierId,
             OrderTablesPort.@Nullable OrderTable table,
             @Nullable String createdByDisplayName,
-            @Nullable String acceptedByDisplayName) {
+            @Nullable String acceptedByDisplayName,
+            @Nullable String origin,
+            @Nullable Instant courierEtaAt,
+            @Nullable String channelSystemType,
+            @Nullable String channelIcon,
+            @Nullable String channelDisplayName,
+            @Nullable String paymentMethodCode,
+            @Nullable Integer itemCount,
+            @Nullable String firstItemName,
+            @Nullable String fiscalStatus,
+            @Nullable Integer distanceMeters,
+            @Nullable String externalNumber) {
 
         /**
          * The summary of an order read outside the board — the detail read's own
@@ -3275,7 +3315,18 @@ public class OperationsOrderController {
                     row.courierId(),
                     row.table(),
                     row.createdByDisplayName(),
-                    row.acceptedByDisplayName());
+                    row.acceptedByDisplayName(),
+                    row.origin(),
+                    row.facts().courierEtaAt(),
+                    row.facts().channelSystemType(),
+                    row.facts().channelIcon(),
+                    row.facts().channelDisplayName(),
+                    row.facts().paymentMethodCode(),
+                    row.facts().itemCount(),
+                    row.facts().firstItemName(),
+                    row.facts().fiscalStatus(),
+                    row.facts().distanceMeters(),
+                    row.facts().externalNumber());
         }
     }
 
