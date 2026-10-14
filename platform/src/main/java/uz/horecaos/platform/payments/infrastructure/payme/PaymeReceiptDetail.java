@@ -86,7 +86,7 @@ public final class PaymeReceiptDetail {
             item.put("title", line.fiscalName());
             // The unit price. Not the line total. See the class comment.
             item.put("price", unitPrice.value());
-            item.put("count", line.quantity());
+            item.put("count", count(line.quantity()));
             item.put("code", line.mxikCode());
             item.put("package_code", line.packageCode());
             if (line.unitCode() != null) {
@@ -100,10 +100,11 @@ public final class PaymeReceiptDetail {
             }
             items.add(item);
 
+            // unit price times count is a whole minor unit by FiscalReceiptLine's own invariant, so
+            // this sum is exact whatever the count is.
             declared = Math.addExact(
                     declared,
-                    Math.subtractExact(
-                            Math.multiplyExact(unitPrice.value(), (long) line.quantity()), discount.value()));
+                    Math.subtractExact(TiyinAmount.of(line.lineTotal()).value(), discount.value()));
         }
 
         if (declared != total.value()) {
@@ -116,6 +117,21 @@ public final class PaymeReceiptDetail {
         detail.put("receipt_type", RECEIPT_TYPE_SALE);
         detail.put("items", items);
         return detail;
+    }
+
+    /**
+     * Payme's {@code count} is a JSON {@code Number}: a whole count as an integer, a weighed one as the
+     * decimal it is ({@code 1.04}, not {@code 1.040} and never an exponent). Whether Payme reads a
+     * fractional {@code count} on the surface it reads is an open question to Payme in writing (the
+     * external-connections runbook for this wave); the shape is the documented one.
+     */
+    public static Object count(java.math.BigDecimal quantity) {
+        java.math.BigDecimal stripped = quantity.stripTrailingZeros();
+        if (stripped.scale() <= 0) {
+            long whole = stripped.longValueExact();
+            return whole <= Integer.MAX_VALUE ? (Object) (int) whole : (Object) whole;
+        }
+        return stripped;
     }
 
     /** The form field's encoding: the JSON document, base64. */

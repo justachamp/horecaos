@@ -793,7 +793,7 @@ export const financeRu: AreaMessages<typeof financeEn> = {
   'finance.fiscalEvidence.lines.kind.DELIVERY_FEE': 'Доставка',
   'finance.fiscalEvidence.lines.kind.SYNTHETIC': 'Заглушка',
   'finance.fiscalEvidence.lines.synthetic':
-    'Это однострочная заглушка, которую песочница отправляет, чтобы проверить соединение. Её нули — не продажа.',
+    'Это однострочная заглушка, которую песочница отправляла до того, как чеки стали строиться по заказу, чтобы проверить соединение. Её нули — не продажа.',
   'finance.fiscalEvidence.lines.notSent':
     'Строки по этому чеку не записаны: либо ещё ничего не отправлено, либо отправленное не сохранилось. Вместо них ничего не показывается.',
   'finance.fiscalEvidence.lines.notReadable':

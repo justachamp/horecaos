@@ -661,6 +661,8 @@ export const settingsEn = {
   'settings.fiscalization.terminals.retire': 'Retire',
 
   'settings.fiscalization.classification.title': 'Product classification',
+  'settings.fiscalization.classification.receiptLines':
+    'Receipts are built from each order\u2019s own lines: the dish, every priced option and the delivery fee, each under its own classification. An item with no complete classification (ИКПУ, package code, unit code and fiscal name) blocks that order\u2019s receipt; nothing is sent and no placeholder code is ever written.',
   'settings.fiscalization.classification.headline': 'Unclassified: {unclassified} of {total} items',
   'settings.fiscalization.classification.empty': 'Everything is classified.',
   'settings.fiscalization.classification.notAnEditor':

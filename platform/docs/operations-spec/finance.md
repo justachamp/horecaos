@@ -130,9 +130,15 @@ person's approval of the exact reference typed, and only with a link on the tax
 authority's own site —, `POST .../fiscal/correction-requests/{requestId}/closures`
 — the way out of a request that will not be attached: the agent declined it, or it was
 raised in error; the document is issued again and nothing is filed —, and
-`GET .../fiscal/correction-requests`). `retry` now answers 409 with `reasonCode
+`GET .../fiscal/correction-requests`). `retry` used to answer 409 with `reasonCode
 FISCAL_LINES_NOT_BUILT` where only the one-line placeholder receipt could be
-filed and the environment is not a sandbox the platform has allowed it in.
+filed. Since batch 21 (2026-10-14) the placeholder is deleted and the receipt is built
+from the order's own lines (ADR 0166 Decisions 6 and 9): `retry` answers 200 with the
+outcome `BLOCKED_CLASSIFICATION`, `BLOCKED_TAX`, `BLOCKED_RECONCILIATION` or
+`BLOCKED_MARKS` when the receipt cannot be built, sends nothing, and the document carries
+the matching reason (`CLASSIFICATION_MISSING`, `VAT_NOT_EXPRESSIBLE`,
+`RECEIPT_DOES_NOT_RECONCILE`, `MARKS_INCOMPLETE`); `LINES_NOT_BUILT` survives only on rows
+blocked before the builder existed.
 
 **Since then (ADR 0166, batch 20, console):** `q-fiscal-evidence`
 (`features/finance/fiscal/fiscal-evidence.ts`) draws that read, and it appears in

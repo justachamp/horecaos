@@ -591,6 +591,9 @@
 } @else {
   <section>
     <h2 class="q-subhead">{{ 'settings.fiscalization.classification.title' | t }}</h2>
+    <p class="q-body-sm" data-testid="fiscalization-receipt-lines">
+      {{ 'settings.fiscalization.classification.receiptLines' | t }}
+    </p>
 
     @if (coverageError(); as message) {
       <p class="q-body-sm error" role="alert">{{ message }}</p>

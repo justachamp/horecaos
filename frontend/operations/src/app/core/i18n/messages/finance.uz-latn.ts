@@ -798,7 +798,7 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
   'finance.fiscalEvidence.lines.kind.DELIVERY_FEE': 'Yetkazib berish',
   'finance.fiscalEvidence.lines.kind.SYNTHETIC': 'Vaqtincha',
   'finance.fiscalEvidence.lines.synthetic':
-    'Bu — ulanishni tekshirish uchun sinov muhiti yuboradigan bir qatorli vaqtincha chek. Undagi nollar sotuv emas.',
+    'Bu — cheklar buyurtma boʻyicha tuzila boshlashidan oldin ulanishni tekshirish uchun sinov muhiti yuborgan bir qatorli vaqtincha chek. Undagi nollar sotuv emas.',
   'finance.fiscalEvidence.lines.notSent':
     'Bu chek uchun qatorlar yozilmagan: yo hali hech narsa yuborilmagan, yo yuborilgani saqlanmagan. Oʻrniga hech narsa koʻrsatilmaydi.',
   'finance.fiscalEvidence.lines.notReadable':

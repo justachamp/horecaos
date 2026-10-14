@@ -791,7 +791,7 @@ export const financeEn = {
   'finance.fiscalEvidence.lines.kind.DELIVERY_FEE': 'Delivery',
   'finance.fiscalEvidence.lines.kind.SYNTHETIC': 'Placeholder',
   'finance.fiscalEvidence.lines.synthetic':
-    'This is the one-line placeholder a sandbox files to prove the connection. Its zeros are not a sale.',
+    'This is the one-line placeholder a sandbox filed before receipts were built from the order, to prove the connection. Its zeros are not a sale.',
   'finance.fiscalEvidence.lines.notSent':
     'No lines were recorded for this receipt: either nothing has been sent yet, or what was sent was not kept. Nothing is shown in their place.',
   'finance.fiscalEvidence.lines.notReadable':

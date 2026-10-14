@@ -451,7 +451,7 @@ public class OperationsFiscalEvidenceController {
             String ikpu,
             String packageCode,
             @Nullable Long unitCode,
-            int quantity,
+            java.math.BigDecimal quantity,
             ApiMoney unitPrice,
             ApiMoney tax,
             int vatPercent,

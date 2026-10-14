@@ -667,6 +667,8 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.fiscalization.terminals.retire': 'Hisobdan chiqarish',
 
   'settings.fiscalization.classification.title': 'Mahsulotlar tasnifi',
+  'settings.fiscalization.classification.receiptLines':
+    'Chek buyurtmaning oʻz qatorlaridan tuziladi: taom, har bir pullik opsiya va yetkazib berish, har biri oʻz tasnifi bilan. Toʻliq tasnifi (IKPU, qadoq kodi, birlik kodi va fiskal nom) yoʻq pozitsiya shu buyurtma chekini toʻxtatadi: hech narsa yuborilmaydi va vaqtincha kod hech qachon qoʻyilmaydi.',
   'settings.fiscalization.classification.headline':
     'Tasniflanmagan: {total} tadan {unclassified} tasi',
   'settings.fiscalization.classification.empty': 'Hammasi tasniflangan.',

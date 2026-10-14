@@ -145,6 +145,12 @@ public class FiscalObligationService {
     private NewFiscalDocument obligationFor(OrderOwingADocument order, Instant now) {
         UUID id = UUID.randomUUID();
 
+        // The date the seller is resolved on, and the date the document keeps (ADR 0038): the local date,
+        // in the branch's calendar, on which the order closed. Taken once, here, so the date a document
+        // was resolved on and the date it records cannot differ.
+        LocalDate businessDate = LocalDate.ofInstant(
+                order.closedAt(), BusinessZone.resolve(order.businessZone(), fallbackZone, "Order " + order.orderId()));
+
         if (order.paymentIntentId() == null) {
             // No payment record at all. Reachable: createIntent answers null for a
             // method this build does not implement, and the order still completed.
@@ -153,6 +159,7 @@ public class FiscalObligationService {
                     order,
                     null,
                     now,
+                    businessDate,
                     "the order completed with no payment record, so no provider and no "
                             + "terminal can be identified");
         }
@@ -171,12 +178,10 @@ public class FiscalObligationService {
                     order,
                     null,
                     now,
+                    businessDate,
                     "a cash leg with no recorded fiscal decision; the receipt is owed by the "
                             + "restaurant's own equipment and no terminal is bound");
         }
-
-        LocalDate businessDate = LocalDate.ofInstant(
-                order.closedAt(), BusinessZone.resolve(order.businessZone(), fallbackZone, "Order " + order.orderId()));
 
         Optional<FiscalSeller> seller = sellers.sellerFor(order.tenantId(), order.locationId(), businessDate);
 
@@ -186,6 +191,7 @@ public class FiscalObligationService {
                     order,
                     null,
                     now,
+                    businessDate,
                     sellers.isWired()
                             ? "no legal entity is assigned to this location on " + businessDate
                             : "tenant.legal_entities is not present in this deployment (ADR 0038 "
@@ -200,6 +206,7 @@ public class FiscalObligationService {
                     order,
                     seller.get().legalEntityId(),
                     now,
+                    businessDate,
                     "legal entity %s is not active and cannot be named as the seller"
                             .formatted(seller.get().code()));
         }
@@ -216,11 +223,18 @@ public class FiscalObligationService {
                 order.captured()
                         ? "captured; awaiting submission to " + order.providerType()
                         : "awaiting capture before " + order.providerType() + " can be asked",
-                now);
+                now,
+                order.tenderId(),
+                businessDate);
     }
 
     private NewFiscalDocument blocked(
-            UUID id, OrderOwingADocument order, @Nullable UUID legalEntityId, Instant now, String why) {
+            UUID id,
+            OrderOwingADocument order,
+            @Nullable UUID legalEntityId,
+            Instant now,
+            LocalDate businessDate,
+            String why) {
         // At WARN with the identifiers and no evidence on it, because ADR 0029 keeps
         // fiscal signs and receipt URLs out of logs and this line has to be
         // greppable when somebody asks why an order has no receipt.
@@ -235,7 +249,9 @@ public class FiscalObligationService {
                 FiscalDocumentState.BLOCKED,
                 FiscalReasonCode.NO_FISCAL_PATH,
                 truncated(why),
-                now);
+                now,
+                order.tenderId(),
+                businessDate);
     }
 
     // ---------------------------------------------------------- submitting it
@@ -363,23 +379,25 @@ public class FiscalObligationService {
                         claim.legalEntityId(),
                         claim.providerType());
             }
-            case LINES_NOT_BUILT -> {
-                // Nothing was sent, and a claim over a request that never left would be blocked an
-                // hour later as "the provider did not report" about a provider nobody asked. It is
-                // blocked now, with the reason that is true: there is no real receipt to file and
-                // the placeholder may not be (ADR 0166, Decision 6).
-                documents.blockUnsent(
-                        claim.tenantId(),
-                        claim.documentId(),
-                        FiscalReasonCode.LINES_NOT_BUILT,
-                        "the receipt line builder does not exist and a placeholder receipt may not be filed here",
+            case BLOCKED_CLASSIFICATION ->
+                blockForLines(
+                        claim,
+                        FiscalReasonCode.CLASSIFICATION_MISSING,
+                        "a priced item, option or the delivery fee of the order has no complete fiscal "
+                                + "classification; nothing was sent",
                         now);
-                log.warn(
-                        "Fiscal document {} for order {} is BLOCKED: {}.",
-                        claim.documentId(),
-                        claim.orderId(),
-                        FiscalReasonCode.LINES_NOT_BUILT);
-            }
+            case BLOCKED_TAX ->
+                blockForLines(
+                        claim,
+                        FiscalReasonCode.VAT_NOT_EXPRESSIBLE,
+                        "the tax rule of the sale cannot be stated on a receipt; nothing was sent",
+                        now);
+            case BLOCKED_RECONCILIATION ->
+                blockForLines(
+                        claim,
+                        FiscalReasonCode.RECEIPT_DOES_NOT_RECONCILE,
+                        "the receipt lines cannot be made to add up to the payment; nothing was sent",
+                        now);
             case BLOCKED_MARKS -> {
                 // ADR 0161: nothing was built and nothing was sent, so the claim describes a request that
                 // does not exist; the document is blocked for the one reason that names the obstacle, and
@@ -402,6 +420,17 @@ public class FiscalObligationService {
                 // overwrite.
             }
         }
+    }
+
+    /**
+     * Nothing was built and nothing was sent, so the claim describes a request that does not exist; the
+     * document is blocked for the one reason that names the obstacle (ADR 0166, Decision 6). Left
+     * {@code SUBMITTED} it would be blocked an hour later as «the provider did not report» about a provider
+     * nobody asked.
+     */
+    private void blockForLines(ClaimedSubmission claim, String reasonCode, String note, Instant now) {
+        documents.blockUnsent(claim.tenantId(), claim.documentId(), reasonCode, note, now);
+        log.warn("Fiscal document {} for order {} is BLOCKED: {}.", claim.documentId(), claim.orderId(), reasonCode);
     }
 
     /** A document this node has claimed and is about to send. */

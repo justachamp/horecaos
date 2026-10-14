@@ -1923,10 +1923,22 @@ public class OrderAmendmentService {
                 .collect(Collectors.groupingBy(
                         QuoteSnapshot.Line::cartLineKey, LinkedHashMap::new, Collectors.toList()));
         Map<String, List<QuoteSnapshot.Adjustment>> hiddenChargesByLine = new LinkedHashMap<>();
+        // What each option charged a rewritten line: the hidden ones the server applied, and the ones the
+        // customer chose. A receipt lists every priced option as a line of its own, so the replacement
+        // line must carry the same itemisation the line it replaces had at checkout.
+        Map<String, List<QuoteSnapshot.Adjustment>> optionChargesByLine = new LinkedHashMap<>();
         for (QuoteSnapshot.Adjustment adjustment : quote.adjustments()) {
-            if (adjustment.lineKey() != null
-                    && QuoteSnapshot.Adjustment.HIDDEN_MODIFIER_SOURCE.equals(adjustment.sourceType())) {
+            if (adjustment.lineKey() == null) {
+                continue;
+            }
+            if (QuoteSnapshot.Adjustment.HIDDEN_MODIFIER_SOURCE.equals(adjustment.sourceType())) {
                 hiddenChargesByLine
+                        .computeIfAbsent(adjustment.lineKey(), key -> new ArrayList<>())
+                        .add(adjustment);
+            }
+            if (QuoteSnapshot.Adjustment.HIDDEN_MODIFIER_SOURCE.equals(adjustment.sourceType())
+                    || QuoteSnapshot.Adjustment.MODIFIER_OPTION_SOURCE.equals(adjustment.sourceType())) {
+                optionChargesByLine
                         .computeIfAbsent(adjustment.lineKey(), key -> new ArrayList<>())
                         .add(adjustment);
             }
@@ -2021,7 +2033,7 @@ public class OrderAmendmentService {
                         tenantId,
                         orderId,
                         newLineId,
-                        hiddenChargesByLine.getOrDefault(priced.lineKey(), List.of()),
+                        optionChargesByLine.getOrDefault(priced.lineKey(), List.of()),
                         adjustmentSequence);
             }
         }
@@ -2076,7 +2088,7 @@ public class OrderAmendmentService {
                         tenantId,
                         orderId,
                         newLineId,
-                        hiddenChargesByLine.getOrDefault(priced.lineKey(), List.of()),
+                        optionChargesByLine.getOrDefault(priced.lineKey(), List.of()),
                         adjustmentSequence);
             }
         }

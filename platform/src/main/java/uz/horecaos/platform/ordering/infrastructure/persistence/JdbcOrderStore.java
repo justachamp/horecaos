@@ -2540,6 +2540,39 @@ public class JdbcOrderStore {
         return byLine;
     }
 
+    /**
+     * What each modifier option charged each line, from the order's adjustments (ADR 0166).
+     *
+     * <p>One row per line, option and source: an option the customer chose ({@code MODIFIER_OPTION}), an
+     * option the server applied ({@code HIDDEN_MODIFIER_OPTION}), and -- only on an order from before options
+     * were itemised -- the whole line's modifier charge as one step ({@code PRICE_BOOK}), which no receipt
+     * can split between the options and which the caller therefore reports and does not guess at. Read from
+     * the adjustments and not from the modifier rows, whose amounts are zero: every option's price is folded
+     * into its line's unit price, and the adjustment is where it was itemised.
+     */
+    public List<ModifierChargeRow> modifierCharges(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                SELECT order_line_id, source_type, source_id, SUM(amount_minor) AS amount_minor
+                FROM ordering.order_adjustments
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                  AND order_line_id IS NOT NULL AND adjustment_type = 'MODIFIER'
+                GROUP BY order_line_id, source_type, source_id
+                ORDER BY order_line_id, source_type, source_id
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, number) -> new ModifierChargeRow(
+                        row.getObject("order_line_id", UUID.class),
+                        row.getString("source_type"),
+                        row.getObject("source_id", UUID.class),
+                        row.getLong("amount_minor")))
+                .list();
+    }
+
+    /** @param sourceId the option, except on the legacy whole-line step, where it is the price book */
+    public record ModifierChargeRow(
+            UUID orderLineId, String sourceType, @Nullable UUID sourceId, long amountMinor) {}
+
     public List<OrderModifierRow> lineModifiers(UUID tenantId, UUID orderId) {
         return jdbc.sql("""
                 SELECT m.id, m.order_line_id, m.source_group_id, m.source_option_id,

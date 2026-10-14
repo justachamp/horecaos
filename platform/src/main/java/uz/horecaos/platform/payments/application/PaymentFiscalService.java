@@ -166,16 +166,6 @@ public class PaymentFiscalService {
      */
     @Transactional
     public FiscalStatus submit(FiscalDocument document, ProviderBinding binding, Instant now) {
-        return submit(document, binding, now, false);
-    }
-
-    /**
-     * {@link #submit(FiscalDocument, ProviderBinding, Instant)}, saying whether the lines are the
-     * bridge's one-line placeholder, so the evidence of what was filed says it was a stand-in and
-     * not a sale (ADR 0166, Decision 6).
-     */
-    @Transactional
-    public FiscalStatus submit(FiscalDocument document, ProviderBinding binding, Instant now, boolean linesSynthetic) {
         FiscalReceiptPort port = receiptPorts.get(binding.providerType());
         if (port == null || !binding.supportsPartnerFiscalization()) {
             log.warn(
@@ -193,7 +183,7 @@ public class PaymentFiscalService {
         SentReceipt wire = submission.sent();
         if (wire != null) {
             try {
-                sentEvidence.record(document, binding, wire, linesSynthetic, now);
+                sentEvidence.record(document, binding, wire, now);
             } catch (RuntimeException unrecorded) {
                 // Losing the record costs the detail and not the answer. The request has left; the
                 // provider's reply is the outcome that must survive, and a failure here that rolled

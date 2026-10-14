@@ -67,9 +67,23 @@ public final class FiscalReasonCode {
     public static final String TERMINAL_OFFLINE = "TERMINAL_OFFLINE";
 
     /**
-     * The real receipt line builder does not exist yet, and a one-line placeholder may not be
-     * filed in this environment (ADR 0166, Decision 6). A document the sweeper claimed lands here
-     * rather than going out as a sale with a placeholder classification.
+     * The receipt lines could not be built because the tax rule of the sale cannot be stated on a
+     * receipt: the rate is not a whole percent, the prices were not VAT-inclusive, or the quote recorded no
+     * rule (ADR 0166 Decision 9, ADR 0038). Nothing was sent.
+     */
+    public static final String VAT_NOT_EXPRESSIBLE = "VAT_NOT_EXPRESSIBLE";
+
+    /**
+     * The receipt lines could not be made to add up to the payment, or a figure they need was never
+     * recorded (ADR 0166 Decision 9). Nothing was sent and no line absorbs the difference.
+     */
+    public static final String RECEIPT_DOES_NOT_RECONCILE = "RECEIPT_DOES_NOT_RECONCILE";
+
+    /**
+     * Historical. Before the receipt line builder existed a claimed document was blocked with this reason
+     * because there was nothing to file but a placeholder that may not be filed (ADR 0166, Decision 6).
+     * Nothing produces it any more; rows that carry it are retried through the builder like any other
+     * blocked document, so it stays a valid reason to filter and unblock by.
      */
     public static final String LINES_NOT_BUILT = "LINES_NOT_BUILT";
 
@@ -83,6 +97,8 @@ public final class FiscalReasonCode {
             MARKS_INCOMPLETE,
             NO_FISCAL_PATH,
             TERMINAL_OFFLINE,
+            VAT_NOT_EXPRESSIBLE,
+            RECEIPT_DOES_NOT_RECONCILE,
             LINES_NOT_BUILT);
 
     private FiscalReasonCode() {}

@@ -42,10 +42,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.audit.api.ApprovalService;
-import uz.horecaos.platform.fiscal.api.FiscalEvidencePolicies;
 import uz.horecaos.platform.fiscal.api.SentReceiptEvidence;
 import uz.horecaos.platform.iam.api.PlatformRole;
-import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.iam.api.secrets.SecretReference;
@@ -61,7 +59,6 @@ import uz.horecaos.platform.payments.domain.SentReceipt;
 import uz.horecaos.platform.payments.domain.SomAmount;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcFiscalDocumentStore;
 import uz.horecaos.platform.support.TestDatabase;
-import uz.horecaos.platform.tenancy.api.PolicyAuthor;
 import uz.horecaos.platform.web.idempotency.IdempotencyInterceptor;
 
 /**
@@ -149,9 +146,6 @@ class FiscalEvidenceEndpointTests {
 
     @Autowired
     private JdbcFiscalDocumentStore payments;
-
-    @Autowired
-    private PolicyAuthor policyAuthor;
 
     @Autowired
     private ApprovalService approvals;
@@ -1194,52 +1188,72 @@ class FiscalEvidenceEndpointTests {
 
     @Test
     @DisplayName(
-            "a retry that would file the placeholder outside a sandbox is a 409 FISCAL_LINES_NOT_BUILT, sends nothing and leaves the document as it was")
-    void aRetryOutsideASandboxIsRefusedBeforeAnythingIsSent() throws Exception {
+            "a retry whose order cannot be built is blocked with the reason that names why, sends nothing and files no placeholder")
+    void aRetryThatCannotBuildItsLinesSendsNothing() throws Exception {
         UUID orderId = seedOrder("E-301");
         UUID documentId = pendingClickDocument(orderId);
+
+        // The order seeded here recorded no tax rule on its quote, so no VAT rate can be stated on a
+        // receipt for it: the builder answers with the obstacle and nothing is invented to get past it.
+        MvcResult refused = mvc.perform(
+                        post("/api/v1/tenants/" + TENANT + "/fiscal/documents/" + documentId + "/retries")
+                                .with(tokenFor(FINANCE))
+                                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "retry-unbuildable")
+                                .header("If-Match", "W/\"1\"")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"reason\":\"the customer asked for their receipt\"}"))
+                .andReturn();
+
+        assertThat(refused.getResponse().getStatus()).isEqualTo(200);
+        JsonNode body = json.readTree(refused.getResponse().getContentAsString());
+        assertThat(body.path("outcome").asText()).isEqualTo("BLOCKED_TAX");
+
+        Map<String, Object> row = jdbc.sql("""
+                        SELECT status, reason_code, lines_synthetic, protected_request_reference
+                          FROM fiscal.fiscal_documents WHERE id = :id
+                        """).param("id", documentId).query().singleRow();
+        assertThat(row.get("status")).isEqualTo("BLOCKED");
+        assertThat(row.get("reason_code"))
+                .as("the document says why, in a reason an operator can act on")
+                .isEqualTo("VAT_NOT_EXPRESSIBLE");
+        assertThat(row.get("lines_synthetic")).isEqualTo(false);
+        assertThat(row.get("protected_request_reference"))
+                .as("nothing was sent, so nothing is recorded as sent")
+                .isNull();
+    }
+
+    @Test
+    @DisplayName(
+            "a document blocked before the line builder existed is restated with the true reason when it is retried")
+    void aHistoricalLinesNotBuiltBlockIsRestatedOnRetry() throws Exception {
+        UUID orderId = seedOrder("E-302");
+        UUID documentId = pendingClickDocument(orderId);
         jdbc.sql("""
-                INSERT INTO integration.provider_environments (code, provider_category, provider_type,
-                    base_url, is_production, egress_allowlist)
-                VALUES ('click-evidence-prod', 'PAYMENT', 'CLICK', 'https://example.invalid', true,
-                    'example.invalid')
-                ON CONFLICT DO NOTHING
-                """).update();
-        jdbc.sql("UPDATE integration.installations SET environment_code = 'click-evidence-prod' WHERE id = :id")
-                .param("id", INSTALLATION)
+                UPDATE fiscal.fiscal_documents
+                   SET status = 'BLOCKED', reason_code = 'LINES_NOT_BUILT', reason_note = 'before the builder',
+                       blocked_at = :now
+                 WHERE id = :id
+                """)
+                .param("id", documentId)
+                .param("now", NOW.atOffset(ZoneOffset.UTC))
                 .update();
-        // Even with the platform's permission, a production environment refuses.
-        allowPlaceholders(true);
-        try {
-            MvcResult refused = mvc.perform(
-                            post("/api/v1/tenants/" + TENANT + "/fiscal/documents/" + documentId + "/retries")
-                                    .with(tokenFor(FINANCE))
-                                    .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "retry-prod")
-                                    .header("If-Match", "W/\"1\"")
-                                    .contentType(MediaType.APPLICATION_JSON)
-                                    .content("{\"reason\":\"the customer asked for their receipt\"}"))
-                    .andReturn();
 
-            assertThat(refused.getResponse().getStatus()).isEqualTo(409);
-            JsonNode problem = json.readTree(refused.getResponse().getContentAsString());
-            assertThat(problem.path("code").asText()).isEqualTo("RESOURCE_CONFLICT");
-            assertThat(problem.path("reasonCode").asText()).isEqualTo("FISCAL_LINES_NOT_BUILT");
+        MvcResult retried = mvc.perform(
+                        post("/api/v1/tenants/" + TENANT + "/fiscal/documents/" + documentId + "/retries")
+                                .with(tokenFor(FINANCE))
+                                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "retry-historical")
+                                .header("If-Match", "W/\"1\"")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"reason\":\"the builder exists now\"}"))
+                .andReturn();
 
-            Map<String, Object> row =
-                    jdbc.sql("""
-                            SELECT status, attempt_count, version, lines_synthetic, protected_request_reference
-                              FROM fiscal.fiscal_documents WHERE id = :id
-                            """).param("id", documentId).query().singleRow();
-            assertThat(row.get("status")).isEqualTo("PENDING");
-            assertThat(row.get("attempt_count"))
-                    .as("the attempt claimed for the call was rolled back")
-                    .isEqualTo(0);
-            assertThat(row.get("version")).isEqualTo(1);
-            assertThat(row.get("lines_synthetic")).isEqualTo(false);
-            assertThat(row.get("protected_request_reference")).isNull();
-        } finally {
-            allowPlaceholders(false);
-        }
+        assertThat(retried.getResponse().getStatus()).isEqualTo(200);
+        assertThat(jdbc.sql("SELECT reason_code FROM fiscal.fiscal_documents WHERE id = :id")
+                        .param("id", documentId)
+                        .query(String.class)
+                        .single())
+                .as("the worklist shows what is true now, not what was true when it was claimed")
+                .isEqualTo("VAT_NOT_EXPRESSIBLE");
     }
 
     // ----------------------------------------------------- the four new statuses
@@ -1710,7 +1724,8 @@ class FiscalEvidenceEndpointTests {
                 base.barcode(),
                 base.markingCodes(),
                 commissionTin,
-                null);
+                null,
+                base.kind());
     }
 
     private FiscalReceiptLine line(String name, int quantity, long unitPrice, List<String> markingCodes) {
@@ -1787,7 +1802,6 @@ class FiscalEvidenceEndpointTests {
                 merchantBinding(entityId),
                 new SentReceipt(
                         List.of(lines), new SomAmount(total, "UZS"), new SomAmount(0, "UZS"), new SomAmount(0, "UZS")),
-                false,
                 NOW);
     }
 
@@ -1806,15 +1820,6 @@ class FiscalEvidenceEndpointTests {
                 .param("url", RECEIPT_URL)
                 .param("now", NOW.atOffset(ZoneOffset.UTC))
                 .update();
-    }
-
-    private void allowPlaceholders(boolean allowed) {
-        policyAuthor.author(
-                FiscalEvidencePolicies.SYNTHETIC_LINES_ALLOWED,
-                ResourceScope.platform(),
-                new FiscalEvidencePolicies.SyntheticLines(allowed),
-                ActorRef.user("platform-admin", "Platform"),
-                "endpoint test");
     }
 
     private UUID pendingClickDocument(UUID orderId) {

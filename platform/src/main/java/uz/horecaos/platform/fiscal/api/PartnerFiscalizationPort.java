@@ -67,15 +67,30 @@ public interface PartnerFiscalizationPort {
         NOT_WIRED,
 
         /**
-         * The real line builder does not exist, and the one-line placeholder may not be filed
-         * here (ADR 0166, Decision 6).
+         * A priced node of the order has no complete classification (ИКПУ, package code, unit code and fiscal
+         * name), so no lawful receipt line can be written for it. Nothing was sent (ADR 0166, Decision 6,
+         * ADR 0038).
          *
-         * <p>Nothing was sent. A receipt of one line, a placeholder classification, VAT 0 and
-         * possibly a zero TIN is filed with the tax authority and can only be corrected, never
-         * withdrawn, whereas a blocked document is recoverable. Allowed only where the provider
-         * environment is a sandbox and the platform has said so.
+         * <p>The document is left {@code BLOCKED} with reason {@code CLASSIFICATION_MISSING} and is retried
+         * once the tenant has classified the node. The alternative, a placeholder code, is a tax
+         * classification error on a legal document that can only be corrected and never withdrawn.
          */
-        LINES_NOT_BUILT,
+        BLOCKED_CLASSIFICATION,
+
+        /**
+         * The tax rule the order was sold under cannot be stated on a receipt: the rate is not a whole
+         * percent, the prices were not VAT-inclusive, or the quote recorded none. Nothing was sent;
+         * rounding a rate misstates tax on a legal document.
+         */
+        BLOCKED_TAX,
+
+        /**
+         * The receipt cannot be made to add up: its lines do not equal what the provider was asked to
+         * collect, or a figure a line needs was never recorded (a weighed line that was never weighed,
+         * modifier prices an older order never itemised). Nothing was sent, and no line absorbs the
+         * difference.
+         */
+        BLOCKED_RECONCILIATION,
 
         /**
          * The order holds a marked line with fewer scanned units than it has (ADR 0161). Nothing was built

@@ -58,11 +58,14 @@
   submissions reach the Click adapter for real (proven end to end against a
   fake Click HTTP boundary in `ClickFakeProviderRoundTripTests`; the callback's
   missing `payment_id` is resolved via `status_by_mti` as the adapter's javadoc
-  forecast), but the bridge sends one clearly-synthetic aggregate line until
-  real classification exists, and nothing has touched a real Click or Payme
-  sandbox — only the fake; the `business_date` and `tender_id` snapshot
-  at acceptance — `JdbcFiscalLifecycleStore`'s insert writes neither and the
-  sweeper still derives the date from the branch timezone; `TERMINAL` issuance,
+  forecast), and since 2026-10-14 (batch 21) the bridge builds every order's
+  receipt from its own lines (`ReceiptLineBuilder`: one line per priced item, per priced modifier option and
+  for the delivery fee, each under its own classification; an unclassified node blocks the document as
+  `CLASSIFICATION_MISSING` and nothing is sent, so the one-line placeholder is deleted), and nothing has
+  touched a real Click or Payme sandbox — only the fake; the obligation opener now snapshots the
+  `business_date` (the branch's local day the order closed on, the day the seller was resolved for) and the
+  `tender_id` it covers on the document (V0685), though a document written through the payments
+  compatibility view at checkout (the cash decision) carries neither yet; `TERMINAL` issuance,
   marked goods and age gating; the correction and void commands; the
   `FiscalDocument*` ADR 0032 event contracts; and the `payments.fiscal_documents`
   compatibility view, which `JdbcFiscalDocumentStore` and `PaymeMerchantApi` still
@@ -85,9 +88,9 @@
   on `tenancy.api.FiscalSeller`), the totals and VAT summed in payments, the
   fiscal sign, terminal, receipt number and registration time exactly as the
   provider returned them, and the receipt URL as a QR; it prints nothing for a
-  document in any other state and never invents a fiscal identifier. Still not
-  built: the receipt's line items are the same synthetic aggregate the bridge
-  sends (real classification does not exist), the legal wording a printed
+  document in any other state and never invents a fiscal identifier. Since batch 21 the
+  printed lines are the lines as filed (the reader opens the sent request under a stated purpose). Still not
+  built: the legal wording a printed
   receipt must carry is an external input, and a branch prints a receipt only
   where a manager has routed one (Settings → Printing and receipts; automatic
   printing is off until switched on per route).
@@ -1137,7 +1140,7 @@ orders.
 - [x] Build the Click and Payme fiscal adapters together, with the single named som↔tiyin conversion, read-before-retry on Click, and `PERFORM`/`CANCEL` as separate documents on Payme. (V0027's module; a `SetFiscalData` with a non-zero `status_code` lands `FAILED` and never `ISSUED`.)
 - [ ] Wire the adapters to the lifecycle. Half done: `FiscalObligationService` and `FiscalObligationSweeper`, which landed with V0053, open the obligation and claim it for submission on two timers — at completion rather than at capture, because ordering publishes no capture signal. The port implementation landed 2026-08-30 (`PartnerFiscalizationBridge` in payments); what remains of stage 4 is real order-line ИКПУ classification behind it and a run against a real provider sandbox.
 - [x] Implement the reporting sweeper, the `fiscal.reporting_deadline` ADR 0030 policy, and the business-date backstop. (V0039. The policy is settable at `PLATFORM` and `TENANT`, defaults to sixty minutes, and takes per-provider overrides; legal-entity granularity belongs inside the document rather than as a fourth ADR 0025 scope.)
-- [ ] Snapshot the order's `business_date` and `tender_id` onto the fiscal document at acceptance. The sweeper derives the business date from the branch's timezone today, and `tender_id` is null on every row, which is correct for one intent per order and wrong the moment ADR 0046 split tender lands.
+- [x] Snapshot the order's `business_date` and `tender_id` onto the fiscal document (V0685, batch 21: at the moment the obligation is opened, which is when the seller is resolved; the cash decision written through the payments view still carries neither).
 - [ ] Publish the `FiscalDocument*` ADR 0032 event contracts — catalogue entries, schemas, topic policy and an outbox listener — so `FiscalDocumentBlocked` reaches a consumer rather than only a worklist.
 - [ ] Retire the `payments.fiscal_documents` compatibility view by renaming the six SQL strings in `JdbcFiscalDocumentStore` and `PaymeMerchantApi` to the `fiscal` schema.
 - [ ] Wire `TERMINAL` issuance through the ADR 0011 POS capability and ADR 0026 bindings, including Click `submit_qrcode` and Payme `receipts.set_fiscal_data` as the recovery remedy.

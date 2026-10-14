@@ -5,12 +5,13 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
 
 /**
- * The two ADR 0030 policy keys the fiscal evidence surface owns (ADR 0166).
+ * The ADR 0030 policy key the fiscal evidence surface owns (ADR 0166).
  *
- * <p>Declared in the module's published interface rather than in {@code fiscal.application}
- * because {@code payments} resolves one of them: the bridge that files a placeholder line is in
- * {@code payments}, and the decision whether it may is the {@code fiscal} module's. Two modules
- * naming one key code from two declarations is how they come to disagree about its scopes.
+ * <p>Declared in the module's published interface rather than in {@code fiscal.application} so that
+ * any module resolving it names one declaration; two modules naming one key code from two declarations is
+ * how they come to disagree about its scopes. (A second key, {@code fiscal.synthetic_lines_allowed}, said
+ * whether the bridge's one-line placeholder receipt could be filed in a sandbox. The placeholder is
+ * deleted, and the key with it.)
  */
 public final class FiscalEvidencePolicies {
 
@@ -34,22 +35,6 @@ public final class FiscalEvidencePolicies {
                     + "still the provisional default nobody has confirmed (ADR 0166, ADR 0029).");
 
     /**
-     * Whether the one-line placeholder receipt may be filed at all.
-     *
-     * <p>{@code PLATFORM} only, so a tenant cannot switch the placeholder on, and honoured only
-     * where the provider environment is a sandbox: in a production environment the answer is no
-     * whatever this says (ADR 0166, Decision 6).
-     */
-    public static final PolicyKey<SyntheticLines> SYNTHETIC_LINES_ALLOWED = new PolicyKey<>(
-            "fiscal.synthetic_lines_allowed",
-            SyntheticLines.class,
-            Set.of(ScopeType.PLATFORM),
-            "fiscal",
-            false,
-            "Whether the bridge may file its one-line placeholder receipt to prove a provider wire "
-                    + "in a sandbox. Never honoured in a production environment (ADR 0166).");
-
-    /**
      * @param years       whole years
      * @param provisional true until someone with the authority confirms the figure; reported on the
      *                    evidence read so the surface does not present a guess as a rule
@@ -67,14 +52,6 @@ public final class FiscalEvidencePolicies {
 
         public static FiscalEvidenceRetention platformDefault() {
             return new FiscalEvidenceRetention(DEFAULT_YEARS, true);
-        }
-    }
-
-    /** @param allowed false until a platform operator says otherwise, and then only for a sandbox */
-    public record SyntheticLines(boolean allowed) {
-
-        public static SyntheticLines platformDefault() {
-            return new SyntheticLines(false);
         }
     }
 

@@ -278,5 +278,12 @@ public record QuoteSnapshot(
          * between pricing and ordering rather than either module's private spelling.
          */
         public static final String HIDDEN_MODIFIER_SOURCE = "HIDDEN_MODIFIER_OPTION";
+
+        /**
+         * The {@code sourceType} of an adjustment for a modifier option the customer chose, whose {@code
+         * sourceId} is the option and whose amount is what that option charged on the line. A receipt
+         * lists each priced option as a line of its own, so the order keeps them apart.
+         */
+        public static final String MODIFIER_OPTION_SOURCE = "MODIFIER_OPTION";
     }
 }

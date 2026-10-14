@@ -175,7 +175,7 @@ public class FiscalEvidenceService {
             String ikpu,
             String packageCode,
             @Nullable Long unitCode,
-            int quantity,
+            java.math.BigDecimal quantity,
             Money unitPrice,
             Money tax,
             int vatPercent,

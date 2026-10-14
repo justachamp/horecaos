@@ -40,19 +40,20 @@ public class ProtectedSentEvidenceRecorder implements SentEvidenceRecorder {
         this.json = json;
     }
 
+    private static String kindOf(FiscalReceiptLine line) {
+        return line.kind() == FiscalReceiptLine.Kind.DELIVERY_FEE
+                ? SentReceiptEvidence.KIND_DELIVERY_FEE
+                : SentReceiptEvidence.KIND_ITEM;
+    }
+
     @Override
-    public void record(
-            FiscalDocument document,
-            ProviderBinding binding,
-            SentReceipt sent,
-            boolean linesSynthetic,
-            Instant sentAt) {
+    public void record(FiscalDocument document, ProviderBinding binding, SentReceipt sent, Instant sentAt) {
         String currency = sent.receivedCard().currency();
 
         List<SentReceiptEvidence.Line> lines = new ArrayList<>(sent.lines().size());
         for (FiscalReceiptLine line : sent.lines()) {
             lines.add(new SentReceiptEvidence.Line(
-                    linesSynthetic ? SentReceiptEvidence.KIND_SYNTHETIC : SentReceiptEvidence.KIND_ITEM,
+                    kindOf(line),
                     line.fiscalName(),
                     line.mxikCode(),
                     line.packageCode(),
@@ -67,7 +68,7 @@ public class ProtectedSentEvidenceRecorder implements SentEvidenceRecorder {
                     line.commissionTin()));
         }
         String linesJson = json.writeValueAsString(
-                new SentReceiptEvidence.Lines(SentReceiptEvidence.VERSION, currency, linesSynthetic, lines));
+                new SentReceiptEvidence.Lines(SentReceiptEvidence.VERSION, currency, false, lines));
         String splitJson = json.writeValueAsString(new SentReceiptEvidence.TenderSplit(
                 SentReceiptEvidence.VERSION,
                 currency,
@@ -91,12 +92,6 @@ public class ProtectedSentEvidenceRecorder implements SentEvidenceRecorder {
                 .serialize();
 
         documents.recordSentEvidence(
-                document.tenantId(),
-                document.id(),
-                binding.bindingId(),
-                linesSynthetic,
-                requestReference,
-                splitReference,
-                sentAt);
+                document.tenantId(), document.id(), binding.bindingId(), requestReference, splitReference, sentAt);
     }
 }

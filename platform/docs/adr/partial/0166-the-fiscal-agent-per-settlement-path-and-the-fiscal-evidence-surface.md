@@ -23,17 +23,32 @@
   .../fiscal/payment-types` (derived, not settable) and the correction requests (`POST
   .../fiscal/documents/{documentId}/correction-requests` under the seeded ADR 0027 policy
   `fiscal.correction.request`, `POST .../fiscal/correction-requests/{requestId}/attachments`,
-  `GET .../fiscal/correction-requests`). Decision 6 holds: the one-line placeholder is filed
-  only where the provider environment is a sandbox and the platform policy
-  `fiscal.synthetic_lines_allowed` says so; elsewhere `retry` answers 409 with reason code
-  `FISCAL_LINES_NOT_BUILT`, nothing is sent, and a swept claim is blocked as `LINES_NOT_BUILT`.
-  The policies `fiscal.evidence_retention_years` (seven years, provisional) and
-  `fiscal.synthetic_lines_allowed` are declared in `FiscalEvidencePolicies`. Not built: the real
-  line builder (so no delivery-line ИКПУ can be filed, and the `DELIVERY_FEE` line kind is
-  declared and written by nothing), `openPartnerObligation` driven at capture, the
+  `GET .../fiscal/correction-requests`). Decision 6 holds, and since batch 21 (2026-10-14, wave `w11-fiscal-evidence`) as written
+  rather than as a stopgap: the placeholder is **deleted**. `ReceiptLineBuilder` (with the pure
+  `ReceiptLineAllocator`) builds the receipt of every order from `ordering.api.OrderReceiptSource`:
+  one line per priced item, per priced modifier option (the pricing engine now itemises each chosen
+  option as its own `MODIFIER_OPTION` adjustment, carried onto an amended line too) and for the delivery
+  fee, each under its own classification with the whole-percent VAT of the rate the accepted quote
+  recorded (`pricing.api.QuoteTaxLookup`), the quote's recorded tax share split between the pieces, item
+  and order discounts and the points redemption as per-line discounts (ADR 0046's worked order, VAT
+  7 714), a decimal count and the weighed total for a catch-weight line, and the delivery fee as an
+  ordinary item line of kind `DELIVERY_FEE`, never Payme's `shipping`. An order it cannot build is
+  answered `BLOCKED_CLASSIFICATION`, `BLOCKED_TAX` or `BLOCKED_RECONCILIATION` (document reasons
+  `CLASSIFICATION_MISSING`, `VAT_NOT_EXPRESSIBLE`, `RECEIPT_DOES_NOT_RECONCILE`), nothing is sent, and a
+  retry restates the reason of a document blocked earlier; `LINES_NOT_BUILT` remains only as the
+  historical reason of rows blocked before the builder existed. The policy
+  `fiscal.synthetic_lines_allowed`, `SyntheticLineGate` and the 409 `FISCAL_LINES_NOT_BUILT` are gone;
+  `fiscal.evidence_retention_years` (seven years, provisional) is declared in `FiscalEvidencePolicies`.
+  V0685 snapshots the `tender_id` and `business_date` on the document at opening.
+  `FiscalNodeFacts.requiresMarkingCapablePayment` is called from `CartPaymentOptions` and
+  `CheckoutEligibilityGuard` (while `feature.marked_goods` is on for the tenant), so Payme is neither
+  offered nor accepted for a basket holding a marked node. The paper receipt prints the lines as filed.
+  The Click `Amount` for a weighed count goes through an injected `ClickQuantityScale`
+  (`horecaos.payments.click.quantity-scale`, default 1, a fractional count refused until Click answers).
+  Not built: `openPartnerObligation` driven at capture, the Payme detail on either surface, the
   `FiscalTerminalPort` and its fake adapter, the reader for `order_revisions.fiscal_correction_required`,
   `FiscalCorrectionRequested.v1` and `FiscalCorrectionAttached.v1` on `fiscal.events`, the
-  `FiscalNodeFacts.requiresMarkingCapablePayment` call sites, the adapter from `OrderMarkCounts`
+  `CHANGE_PAYMENT_METHOD` amendment's own marked-goods refusal, the adapter from `OrderMarkCounts`
   to ADR 0161's `OrderMarksPort` (until it exists the block reads «marks not built»).
   The console (`q-fiscal-evidence`) draws the read on the order detail's fiscal panel, under the
   tenders of the payments page, where each tender links to its document, and beneath the order
@@ -537,11 +552,11 @@ that is audited.
 - [ ] `GET .../orders/{orderId}/fiscal-evidence` and `GET .../fiscal/payment-types`, with
       masking and the audited reveal.
 - [ ] `PartnerFiscalizationBridge.retry` refuses a non-sandbox synthetic submission.
-- [ ] The real line builder from the accepted quote snapshot, delivery fee as an item line,
-      ИКПУ and package code stored as sent; then `PaymentFiscalService.openPartnerObligation`
+- [x] The real line builder from the accepted quote snapshot, delivery fee as an item line,
+      ИКПУ and package code stored as sent (batch 21). Still open: `PaymentFiscalService.openPartnerObligation`
       and `submit` driven at capture.
-- [ ] `FiscalNodeFacts.requiresMarkingCapablePayment` called from `CartPaymentOptions` and
-      `CheckoutEligibilityGuard`.
+- [x] `FiscalNodeFacts.requiresMarkingCapablePayment` called from `CartPaymentOptions` and
+      `CheckoutEligibilityGuard` (batch 21).
 - [ ] The evidence block's marks count reads ADR 0161's `OrderMarksPort.markCounts`; until
       that port exists the block says "marks not built" and shows no count.
 - [ ] Correction and void requests, attachments, the four states, and a reader for

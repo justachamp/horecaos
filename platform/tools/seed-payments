@@ -222,28 +222,10 @@ BEGIN
        AND (merchant_user_reference IS NULL OR merchant_id_reference IS NULL);
 END \$\$;
 
--- 5. ADR 0166, Decision 6. The receipt line builder does not exist yet, so the only receipt that
---    can be filed is the bridge's one-line placeholder, and that is filed only where the provider
---    environment is a sandbox AND the platform has said so. Step 2 made the environment a sandbox
---    pointed at FakeClickHttpProvider; this is the platform saying so, for this database only. Without
---    it the fiscal sweeper blocks every captured order as LINES_NOT_BUILT and a manual retry answers
---    409 FISCAL_LINES_NOT_BUILT, which is the right behaviour anywhere that is not a developer's laptop.
-INSERT INTO tenant.policies
-    (id, key_code, scope_type, version, status, document, document_hash, valid_from, created_by, approved_by)
-SELECT '20000000-0000-0000-0000-000000000551'::uuid, 'fiscal.synthetic_lines_allowed', 'PLATFORM', 1,
-       'ACTIVE', '{"allowed":true}'::jsonb,
-       'af0da34c17b64921ff8e70fffbc89b6fa7a9445ef03cf8407b99d913231acb00',
-       now(), 'tools/seed-payments', 'tools/seed-payments'
- WHERE NOT EXISTS (
-     SELECT 1 FROM tenant.policies
-      WHERE key_code = 'fiscal.synthetic_lines_allowed' AND scope_type = 'PLATFORM');
-INSERT INTO tenant.policy_current (key_code, scope_type, policy_id, policy_version, activated_by)
-SELECT p.key_code, p.scope_type, p.id, p.version, 'tools/seed-payments'
-  FROM tenant.policies p
- WHERE p.key_code = 'fiscal.synthetic_lines_allowed' AND p.scope_type = 'PLATFORM' AND p.status = 'ACTIVE'
-   AND NOT EXISTS (
-       SELECT 1 FROM tenant.policy_current c
-        WHERE c.key_code = p.key_code AND c.scope_type = 'PLATFORM');
+-- (There used to be a step 5 here: the platform policy that let the bridge file a one-line
+--  placeholder receipt in a sandbox. ADR 0166, Decision 6 deletes the placeholder -- the receipt is built
+--  from the order's own lines -- so there is nothing left to allow. A fixture database that still holds the
+--  old fiscal.synthetic_lines_allowed row is harmless: nothing reads it.)
 SQL
 echo "    done"
 
@@ -260,6 +242,10 @@ echo "      3. tools/pay-fake-click <orderId>          (or: make pay-fake-click 
 echo "      4. the order is CONFIRMED — a real, signature-verified ClickShopApiController webhook"
 echo "         call just credited it, and the fake customer's synthetic Click payment_id is printed"
 echo "         for fiscalization to key on"
+echo "      5. the receipt is built from the order's own lines (ADR 0166): a dish, a modifier option or the"
+echo "         delivery fee with no complete fiscal classification blocks the document as"
+echo "         CLASSIFICATION_MISSING instead of filing a placeholder -- classify the fixture's items first"
+echo "         (Catalog -> Fiscal classification) or expect to see exactly that on the finance fiscal page"
 echo
 echo "==> For reference, the real control-plane requests an operator would send instead of steps 2-3"
 echo "    above (need a bearer token with INTEGRATION_INSTALLATION_MANAGE — get one through Swagger UI's"

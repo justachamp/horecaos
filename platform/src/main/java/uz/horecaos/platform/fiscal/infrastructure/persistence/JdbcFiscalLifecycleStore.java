@@ -3,6 +3,7 @@ package uz.horecaos.platform.fiscal.infrastructure.persistence;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
@@ -263,7 +264,14 @@ public class JdbcFiscalLifecycleStore {
                        o.total_minor, o.currency, o.closed_at,
                        COALESCE(l.timezone, :fallbackZone) AS business_zone,
                        i.id AS payment_intent_id, i.tender, i.provider_type,
-                       i.status AS intent_status
+                       i.status AS intent_status,
+                       -- The money tender this document will cover (ADR 0038, ADR 0166 Decision 2): the
+                       -- one tender that names the intent, and none when that is not unambiguous.
+                       (SELECT (array_agg(t.id))[1]
+                          FROM payments.tenders t
+                         WHERE t.tenant_id = o.tenant_id AND t.payment_intent_id = i.id
+                           AND NOT t.settles_from_balance
+                        HAVING count(*) = 1) AS tender_id
                 FROM ordering.orders o
                 LEFT JOIN payments.payment_intents i
                        ON i.tenant_id = o.tenant_id AND i.order_id = o.id
@@ -294,7 +302,8 @@ public class JdbcFiscalLifecycleStore {
                         row.getObject("payment_intent_id", UUID.class),
                         row.getString("tender"),
                         row.getString("provider_type"),
-                        row.getString("intent_status")))
+                        row.getString("intent_status"),
+                        row.getObject("tender_id", UUID.class)))
                 .list();
     }
 
@@ -329,14 +338,17 @@ public class JdbcFiscalLifecycleStore {
         parameters.put("reasonNote", document.reasonNote());
         parameters.put("blockedAt", document.state() == FiscalDocumentState.BLOCKED ? utc(document.openedAt()) : null);
         parameters.put("now", utc(document.openedAt()));
+        parameters.put("tenderId", document.tenderId());
+        parameters.put("businessDate", document.businessDate());
 
         return jdbc.sql("""
                 INSERT INTO fiscal.fiscal_documents (
                     id, tenant_id, order_id, legal_entity_id, payment_intent_id, provider_type,
                     document_type, status, reason_code, reason_note, blocked_at, attempt_count,
-                    version, created_at, updated_at)
+                    version, created_at, updated_at, tender_id, business_date)
                 VALUES (:id, :tenantId, :orderId, :legalEntityId, :paymentIntentId, :providerType,
-                    'SALE', :status, :reasonCode, :reasonNote, :blockedAt, 0, 1, :now, :now)
+                    'SALE', :status, :reasonCode, :reasonNote, :blockedAt, 0, 1, :now, :now,
+                    :tenderId, CAST(:businessDate AS date))
                 ON CONFLICT (tenant_id, order_id, tender_id)
                     WHERE document_type = 'SALE' DO NOTHING
                 """).params(parameters).update() == 1;
@@ -494,6 +506,33 @@ public class JdbcFiscalLifecycleStore {
                 """).params(parameters).update() == 1;
     }
 
+    /**
+     * Restates why a document that is already blocked is blocked.
+     *
+     * <p>A retry that was refused for a different reason than the one the document carries (a document
+     * blocked before the receipt line builder existed, retried and now short of a classification) must not
+     * go on saying the old reason. {@code blocked_at} is not moved: how long the document has been waiting
+     * is still how long it has been waiting.
+     */
+    public boolean restateBlock(UUID tenantId, UUID documentId, String reasonCode, String reasonNote, Instant now) {
+        return jdbc.sql("""
+                UPDATE fiscal.fiscal_documents
+                SET reason_code = :reasonCode,
+                    reason_note = :reasonNote,
+                    version = version + 1,
+                    updated_at = :now
+                WHERE tenant_id = :tenantId AND id = :id AND status = 'BLOCKED'
+                  AND reason_code <> :reasonCode
+                """)
+                        .param("tenantId", tenantId)
+                        .param("id", documentId)
+                        .param("reasonCode", reasonCode)
+                        .param("reasonNote", reasonNote)
+                        .param("now", utc(now))
+                        .update()
+                == 1;
+    }
+
     public Optional<FiscalDocumentRow> find(UUID tenantId, UUID documentId) {
         return jdbc.sql("SELECT " + DOCUMENT_COLUMNS
                         + " FROM fiscal.fiscal_documents WHERE tenant_id = :tenantId AND id = :id")
@@ -636,7 +675,8 @@ public class JdbcFiscalLifecycleStore {
             UUID paymentIntentId,
             String tender,
             String providerType,
-            String intentStatus) {
+            String intentStatus,
+            @Nullable UUID tenderId) {
 
         public boolean cash() {
             return "CASH".equals(tender);
@@ -677,7 +717,37 @@ public class JdbcFiscalLifecycleStore {
             FiscalDocumentState state,
             String reasonCode,
             String reasonNote,
-            Instant openedAt) {}
+            Instant openedAt,
+            @Nullable UUID tenderId,
+            @Nullable LocalDate businessDate) {
+
+        /** A document with neither snapshot, which is every document there was before they were taken. */
+        public NewFiscalDocument(
+                UUID id,
+                UUID tenantId,
+                UUID orderId,
+                @Nullable UUID legalEntityId,
+                UUID paymentIntentId,
+                String providerType,
+                FiscalDocumentState state,
+                String reasonCode,
+                String reasonNote,
+                Instant openedAt) {
+            this(
+                    id,
+                    tenantId,
+                    orderId,
+                    legalEntityId,
+                    paymentIntentId,
+                    providerType,
+                    state,
+                    reasonCode,
+                    reasonNote,
+                    openedAt,
+                    null,
+                    null);
+        }
+    }
 
     /** A document the sweep has claimed, with everything its deadline needs. */
     /**

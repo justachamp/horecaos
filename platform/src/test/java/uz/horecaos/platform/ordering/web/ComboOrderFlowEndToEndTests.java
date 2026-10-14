@@ -97,6 +97,7 @@ import uz.horecaos.platform.kitchen.domain.TicketItemStatus;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore;
 import uz.horecaos.platform.kitchen.infrastructure.persistence.JdbcKitchenStore.TicketItemRow;
 import uz.horecaos.platform.ordering.api.CustomerBotOrderingPort;
+import uz.horecaos.platform.ordering.api.OrderReceiptSource;
 import uz.horecaos.platform.ordering.application.CartService;
 import uz.horecaos.platform.ordering.application.CheckoutService;
 import uz.horecaos.platform.ordering.application.CustomerBotOrderingAdapter;
@@ -260,6 +261,9 @@ class ComboOrderFlowEndToEndTests {
 
     @Autowired
     private ReorderPlanService reorderPlans;
+
+    @Autowired
+    private OrderReceiptSource receiptSource;
 
     @Autowired
     private CustomerBotOrderingAdapter bot;
@@ -1563,6 +1567,28 @@ class ComboOrderFlowEndToEndTests {
         long unit = SALAD + CHILI + HOT + BOX;
         assertThat(totalOf(orderId)).isEqualTo(unit);
 
+        // What a receipt is built from (ADR 0166): each priced option the customer chose, and the server's
+        // box, as the order itemised them at checkout -- not one «modifiers» figure for the line.
+        var checkedOut = receiptSource.find(TENANT, orderId).orElseThrow();
+        assertThat(checkedOut.tax())
+                .as("the rule the accepted quote extracted VAT under, read from the quote and not guessed")
+                .isNotNull()
+                .satisfies(tax -> assertThat(tax.inclusive()).isTrue());
+        var checkedOutLine = checkedOut.lines().getFirst();
+        assertThat(checkedOutLine.options())
+                .extracting(OrderReceiptSource.Option::optionId, OrderReceiptSource.Option::amountMinor)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(chiliOption, CHILI),
+                        org.assertj.core.groups.Tuple.tuple(hotOption, HOT),
+                        org.assertj.core.groups.Tuple.tuple(boxOption, BOX));
+        assertThat(checkedOutLine.baseMinor()
+                        - checkedOutLine.options().stream()
+                                .mapToLong(OrderReceiptSource.Option::amountMinor)
+                                .sum())
+                .as("the salad's own part of the line is what is left once the options are taken out")
+                .isEqualTo(SALAD);
+        assertThat(checkedOutLine.unitemisedModifiersMinor()).isZero();
+
         JsonNode applied = amend(orderId, "amend-grow-salad", """
                 {"type":"CHANGE_LINE_QUANTITY","orderLineId":"%s","quantity":2}""".formatted(
                         orderLines(orderId).get(0).lineId()));
@@ -1588,6 +1614,18 @@ class ComboOrderFlowEndToEndTests {
                 .findFirst()
                 .orElseThrow();
         assertThat(hot.parentId()).isEqualTo(chili.id());
+
+        // The replacement line itemises what each option charges on two salads, like the line it replaced:
+        // a receipt built after an amendment bills the cheese and the sauce and not a lump.
+        var amended = receiptSource.find(TENANT, orderId).orElseThrow();
+        assertThat(amended.lines()).hasSize(1);
+        assertThat(amended.lines().getFirst().options())
+                .extracting(OrderReceiptSource.Option::optionId, OrderReceiptSource.Option::amountMinor)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(chiliOption, 2 * CHILI),
+                        org.assertj.core.groups.Tuple.tuple(hotOption, 2 * HOT),
+                        org.assertj.core.groups.Tuple.tuple(boxOption, 2 * BOX));
+        assertThat(amended.lines().getFirst().unitemisedModifiersMinor()).isZero();
 
         // A second amendment prices the same basket again, which only works if the first kept it.
         amend(orderId, "amend-grow-salad-again", """

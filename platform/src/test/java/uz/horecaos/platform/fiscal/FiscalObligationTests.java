@@ -19,6 +19,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.json.JsonMapper;
@@ -98,6 +100,8 @@ class FiscalObligationTests {
         jdbc.sql("DELETE FROM fiscal.fiscal_documents").update();
         jdbc.sql("TRUNCATE TABLE ordering.orders CASCADE").update();
         jdbc.sql("TRUNCATE TABLE payments.payment_intents CASCADE").update();
+        jdbc.sql("TRUNCATE TABLE payments.order_settlements, payments.payment_methods CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE customer.customer_accounts CASCADE").update();
         jdbc.sql("TRUNCATE TABLE catalog.catalogs CASCADE").update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
@@ -243,6 +247,44 @@ class FiscalObligationTests {
         assertThat(onlyDocument(order).legalEntityId())
                 .as("a UTC day rolls over at 05:00 in Tashkent, in the middle of a night service")
                 .isEqualTo(secondCompany);
+    }
+
+    @Test
+    @DisplayName("the opener keeps the tender the document covers and the business date the seller was resolved on")
+    void theOpenerSnapshotsTheTenderAndTheBusinessDate() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        // 00:30 on 20 August in Tashkent is 19:30 on the 19th in UTC: the branch's day is the 20th.
+        UUID order = completedOrder("O-tender", "CLICK", "PAID", Instant.parse("2026-08-19T19:30:00Z"));
+        UUID tender = settleWithAMoneyTender(order);
+
+        obligations.openObligations(50);
+
+        var kept = jdbc.sql("SELECT tender_id, business_date FROM fiscal.fiscal_documents WHERE order_id = :o")
+                .param("o", order)
+                .query()
+                .singleRow();
+        assertThat(kept.get("tender_id"))
+                .as("the money tender whose intent the document names, written and not inferred")
+                .isEqualTo(tender);
+        assertThat(java.util.Objects.requireNonNull(kept.get("business_date")).toString())
+                .as("the branch's own calendar day, kept as it was resolved")
+                .isEqualTo("2026-08-20");
+    }
+
+    @Test
+    @DisplayName("an order with no tender row opens a document with no tender, and the date is still kept")
+    void aDocumentWithNoUnambiguousTenderKeepsNone() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        UUID order = completedOrder("O-no-tender", "CLICK", "PAID", NOW.minusSeconds(3600));
+
+        obligations.openObligations(50);
+
+        var kept = jdbc.sql("SELECT tender_id, business_date FROM fiscal.fiscal_documents WHERE order_id = :o")
+                .param("o", order)
+                .query()
+                .singleRow();
+        assertThat(kept.get("tender_id")).isNull();
+        assertThat(kept.get("business_date")).isNotNull();
     }
 
     @Test
@@ -417,23 +459,36 @@ class FiscalObligationTests {
         assertThat(document.reasonNote()).contains("CLICK");
     }
 
-    @Test
+    @ParameterizedTest(name = "{0} blocks the claim as {1}")
+    @CsvSource({
+        "BLOCKED_CLASSIFICATION, CLASSIFICATION_MISSING",
+        "BLOCKED_TAX, VAT_NOT_EXPRESSIBLE",
+        "BLOCKED_RECONCILIATION, RECEIPT_DOES_NOT_RECONCILE"
+    })
     @DisplayName(
-            "a claim the bridge refused to send because no real lines exist is blocked with that reason, not 'the provider did not report'")
-    void aRefusalToFilePlaceholderLinesBlocksTheClaimWithTheTrueReason() {
+            "a claim whose receipt could not be built is blocked with the reason that names why, not 'the provider did not report'")
+    void aReceiptThatCouldNotBeBuiltBlocksTheClaimWithTheTrueReason(
+            PartnerFiscalizationPort.Outcome outcome, String expectedReason) {
         assign(firstCompany, LocalDate.of(2026, 1, 1));
-        UUID order = completedOrder("S-8", "CLICK", "PAID", NOW.minusSeconds(3600));
+        UUID order = completedOrder("S-8-" + outcome.ordinal(), "CLICK", "PAID", NOW.minusSeconds(3600));
         obligations.openObligations(50);
 
         ClaimedSubmission claim = obligations.claimSubmissions(50).getFirst();
-        obligations.settle(claim, PartnerFiscalizationPort.Outcome.LINES_NOT_BUILT);
+        obligations.settle(claim, outcome);
 
         FiscalDocumentRow document = onlyDocument(order);
         assertThat(document.state()).isEqualTo(FiscalDocumentState.BLOCKED);
         assertThat(document.reasonCode())
                 .as("nothing was sent; an hour later the sweep would otherwise say a provider nobody "
                         + "asked failed to answer")
-                .isEqualTo(FiscalReasonCode.LINES_NOT_BUILT);
+                .isEqualTo(expectedReason);
+        assertThat(FiscalReasonCode.BLOCKING).contains(expectedReason);
+    }
+
+    @Test
+    @DisplayName(
+            "the historical LINES_NOT_BUILT reason stays blockable, so a document blocked before the builder existed can be worked")
+    void theHistoricalReasonStaysAValidBlockingReason() {
         assertThat(FiscalReasonCode.BLOCKING).contains(FiscalReasonCode.LINES_NOT_BUILT);
     }
 
@@ -648,6 +703,49 @@ class FiscalObligationTests {
                 .param("e", entityId)
                 .param("from", from)
                 .update();
+    }
+
+    /** A settlement with one settled money tender naming the order's payment intent, as checkout writes it. */
+    private UUID settleWithAMoneyTender(UUID orderId) {
+        UUID method = UUID.randomUUID();
+        UUID settlement = UUID.randomUUID();
+        UUID tender = UUID.randomUUID();
+        UUID intent = jdbc.sql("SELECT id FROM payments.payment_intents WHERE order_id = :o")
+                .param("o", orderId)
+                .query(UUID.class)
+                .single();
+        jdbc.sql("""
+                INSERT INTO payments.payment_methods (id, tenant_id, code, display_name, responsibility)
+                VALUES (:id, :t, 'CLICK', 'Click', 'PARTNER')
+                ON CONFLICT (tenant_id, code) DO NOTHING
+                """).param("id", method).param("t", TENANT).update();
+        UUID methodId = jdbc.sql("SELECT id FROM payments.payment_methods WHERE tenant_id = :t AND code = 'CLICK'")
+                .param("t", TENANT)
+                .query(UUID.class)
+                .single();
+        jdbc.sql("""
+                INSERT INTO payments.order_settlements (id, tenant_id, order_id, currency, total_due_minor,
+                    settled_minor, status, version)
+                VALUES (:id, :t, :o, 'UZS', 50000, 50000, 'SETTLED', 1)
+                """)
+                .param("id", settlement)
+                .param("t", TENANT)
+                .param("o", orderId)
+                .update();
+        jdbc.sql("""
+                INSERT INTO payments.tenders (id, tenant_id, settlement_id, sequence, payment_method_id,
+                    settles_from_balance, amount_minor, currency, status, payment_intent_id, settled_at,
+                    idempotency_key, version)
+                VALUES (:id, :t, :s, 1, :m, false, 50000, 'UZS', 'SETTLED', :intent, now(), :key, 1)
+                """)
+                .param("id", tender)
+                .param("t", TENANT)
+                .param("s", settlement)
+                .param("m", methodId)
+                .param("intent", intent)
+                .param("key", "tender-" + tender)
+                .update();
+        return tender;
     }
 
     private UUID completedOrder(
