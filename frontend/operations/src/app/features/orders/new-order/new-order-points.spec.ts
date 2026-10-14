@@ -140,15 +140,13 @@ describe('NewOrderPoints', () => {
     'says nothing to an operator when the answer is %s: there are no points to talk about',
     async (refusal) => {
       render(
-        vi
-          .fn()
-          .mockResolvedValue(
-            answerFor(null, {
-              maximum: { amountMinor: 0, currency: 'UZS' },
-              redeemable: false,
-              refusal,
-            }),
-          ),
+        vi.fn().mockResolvedValue(
+          answerFor(null, {
+            maximum: { amountMinor: 0, currency: 'UZS' },
+            redeemable: false,
+            refusal,
+          }),
+        ),
       );
       await answered(1);
 
