@@ -3,9 +3,11 @@
 **Last executed:** never, and it cannot be yet: HorecaOS has no Click or Payme merchant
 account of its own (ADR 0095's open input, owned by finance and operations). What exists
 is everything this runbook ends in — the installation to fill, the rules it is held to,
-and a fake behind it that proves the flow. Per ADR 0023 a runbook that has never been
-executed is a draft; run it once against the provider's sandbox and put the date and the
-provider here.
+the real Click adapter (`ClickCardProviderAdapter`, provider type `CLICK_CARD`) and a fake
+of Click's HTTP boundary behind it that proves the flow. Per ADR 0023 a runbook that has
+never been executed is a draft; run it once against the provider's sandbox and put the date
+and the provider here. The facts that wait on the account, one section each, are in
+[`external-connections/w12-money.md`](external-connections/w12-money.md).
 
 **How to get back.** Suspending the installation (step 6) puts every card tenant back to
 being collected like an invoice tenant, at once and without losing a card or a ledger entry.
@@ -16,27 +18,46 @@ Nothing here deletes anything.
 | Needs | Who |
 |---|---|
 | The merchant account, with card-token (recurring) access, and its credential | Finance and operations, with the provider |
-| An adapter that speaks that provider's API: a class implementing `CardProviderAdapter` (its `providerType()` is the value the installation names) | A developer |
-| The provider's sandbox and production endpoints as `integration.provider_environments` rows, category `PAYMENT` | A developer, as a migration — tenants and staff never type a URL (ADR 0026) |
+| An adapter that speaks that provider's API: a class implementing `CardProviderAdapter` (its `providerType()` is the value the installation names) | A developer. **Done for Click:** `ClickCardProviderAdapter`, type `CLICK_CARD`, over `docs/routes/card-billing-provider-api.md`. A second provider is a second class |
+| The provider's sandbox and production endpoints as `integration.provider_environments` rows, category `PAYMENT` | A developer, as a migration — tenants and staff never type a URL (ADR 0026). **Done for Click:** `click_card_production` and `click_card_sandbox` (V0689), both `https://api.click.uz/v2/merchant` because Click publishes no separate sandbox host |
 
 The adapter must honour the idempotency key on `charge` — a repeated key is the same
 attempt and never a new charge — and must answer `status(key)`. The contract is written on
-`CardCharger`, and `FakeCardProviderTests` is the executable form of it: run the same
-assertions against the real adapter's sandbox before activating it.
+`CardCharger`, and `CardProviderContract` is the executable form of it. It is run against the
+fake double (`FakeCardProviderTests`) and against the real Click adapter talking over a socket
+to a fake of Click's HTTP (`ClickCardProviderAdapterTests`). Click has no idempotency key on a
+charge, so the adapter keeps the contract itself: it asks `status_by_mti` for the key before it
+charges, and an answer it cannot read leaves the attempt `PENDING` rather than charging on a
+guess. Run the same assertions by hand against the sandbox before activating it (step 5).
 
 ## Steps
 
 1. **Put the credential in OpenBao**, category `provider_payment`, owner scope `platform`,
-   for example `horecaos:production:provider_payment:platform:card-merchant`. The value goes
-   in through the secrets manager and never through this API (ADR 0028).
+   for example `horecaos:production:provider_payment:platform:click-card`. The value goes
+   in through the secrets manager and never through this API (ADR 0028). For Click it is one
+   JSON object of the two private values Click issues, and `service_id` (public) is not in it:
+
+   ```sh
+   bao kv put horecaos/production/provider_payment/platform/click-card \
+     value='{"merchantUserId": "<merchant_user_id>", "secretKey": "<secret_key>"}'
+   ```
 2. **Declare the account, in DRAFT** (`INTEGRATION_INSTALLATION_MANAGE` at platform scope):
 
    ```
    POST /api/v1/platform-admin/commercial/billing/card-installations
-   {"providerType": "<the adapter's type>", "environmentCode": "<approved environment>",
-    "displayName": "HorecaOS card account", "secretReference": "<the reference from step 1>",
+   {"providerType": "CLICK_CARD", "environmentCode": "click_card_sandbox",
+    "displayName": "HorecaOS card account", "secretReference": "horecaos:production:provider_payment:platform:click-card",
+    "externalAccountReference": "<Click's service_id>",
+    "configuration": {"lookbackDays": 2, "notFoundErrorCodes": []},
     "reason": "connecting the merchant account"}
    ```
+
+   `externalAccountReference` is Click's `service_id`, a public identifier the adapter sends and
+   the browser sees. `configuration` is optional: `lookbackDays` (0 to 31, default 2) is how many
+   days before today the adapter looks for an earlier charge under the same key, and
+   `notFoundErrorCodes` lists the `error_code` values the sandbox walk showed Click answers for
+   "no such payment" (empty until then, and the adapter then charges nothing it cannot rule out).
+   Use `click_card_production` only for the live account.
 
    Check: `GET /api/v1/control-plane/billing/card-installations` lists it as `DRAFT` with
    `secretConfigured: true` (the reference itself is never returned).
@@ -56,6 +77,8 @@ assertions against the real adapter's sandbox before activating it.
 5. **Walk one real card through.** With a test tenant: add a card, top up a small amount,
    check the ledger holds one `TOP_UP` whose reference is the provider's own, and that the
    provider's dashboard shows exactly one charge. Then choose CARD and issue its statement.
+   The sandbox walk's checklist, and what each answer sets, is section 5 of
+   `external-connections/w12-money.md`.
 6. **To stop charging**, suspend the installation (`.../{id}/suspension`). Cards stay on file. It is
    refused while a top-up or statement charge asked through it is still `PENDING`; see *Replacing an account*.
 
