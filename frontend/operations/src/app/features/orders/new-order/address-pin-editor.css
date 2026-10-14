@@ -1,0 +1,10 @@
+.address-pin-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.address-pin-editor__note {
+  margin: 0;
+  color: var(--q-ink-subtle);
+}

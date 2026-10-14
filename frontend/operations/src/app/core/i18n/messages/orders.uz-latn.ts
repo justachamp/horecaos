@@ -783,11 +783,14 @@ export const ordersUzLatn: AreaMessages<typeof ordersEn> = {
   // wave P14: §5.4 manzil paneli (1.3b qatori)
   'orders.newOrder.address.title': 'Manzil',
   'orders.newOrder.address.loading': 'Manzillar yuklanmoqda…',
-  'orders.newOrder.address.denied': 'Mijozning saqlangan manzillariga ruxsat yoʻq',
+  'orders.newOrder.address.denied':
+    'Sizning rolingiz bu mijoz uchun yetkazib berish manzilini kiritolmaydi (manzil huquqi kerak)',
   'orders.newOrder.address.empty': 'Saqlangan manzillar yoʻq',
   'orders.newOrder.address.add': '+ Yangi manzil',
   'orders.newOrder.address.notLocated':
-    'Bu manzilda hali xaritada nuqta yoʻq, shuning uchun yetkazib berish hisoblanmaydi — xarita va nuqta hali qurilmagan. Boshqa manzilni tanlang yoki telefon orqali aniqlashtiring.',
+    'Bu manzilda hali xaritada nuqta yoʻq, shuning uchun yetkazib berish hisoblanmaydi. Quyida nuqta belgilang yoki boshqa manzilni tanlang.',
+  'orders.newOrder.address.pinOnlyNote':
+    'Siz koʻchani koʻrasiz, uy va xonadonni emas: ular kuryerda qoladi. Nuqta faqat kuryer boradigan joyni oʻzgartiradi, manzil matnini emas.',
   'orders.newOrder.address.notServiceable':
     'Bu manzil ushbu filial yetkazib berish hududidan tashqarida',
   'orders.newOrder.address.recipientName': 'Qabul qiluvchi',

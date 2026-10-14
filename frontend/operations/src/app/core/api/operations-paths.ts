@@ -194,6 +194,26 @@ export const operationsPaths = {
     return `${LEGACY_TENANT_PREFIX}${tenantBrandLocation(scope)}/customers`;
   },
 
+  /**
+   * ADR 0177, rows 1.3/1.3b: the delivery address of a phone order, for a caller whose only
+   * grant is at `LOCATION` scope (`OperationsCustomerController`). `GET` is the masked list of
+   * the resolved customer's saved addresses, `POST` saves one with its pin. The tenant-scoped
+   * {@link customerAddresses} stays for the Customers screen: `LOCATION_STAFF` and
+   * `LOCATION_MANAGER` cannot reach it, because a `LOCATION` grant never covers a `TENANT` route.
+   */
+  orderIntakeCustomerAddresses(scope: LocationScope, accountId: string): string {
+    return `${this.orderIntakeCustomers(scope)}/${encodeURIComponent(accountId)}/addresses`;
+  },
+
+  /** ADR 0177: `PUT` (key + `If-Match`) places or moves the pin of one saved address, and writes nothing else. */
+  orderIntakeCustomerAddressPin(
+    scope: LocationScope,
+    accountId: string,
+    addressId: string,
+  ): string {
+    return `${this.orderIntakeCustomerAddresses(scope, accountId)}/${encodeURIComponent(addressId)}/pin`;
+  },
+
   /** Row 1.3g (ADR 0040): record an aggregator's own order by hand. */
   orderAggregatorEntries(scope: LocationScope): string {
     return `${this.orders(scope)}/aggregator-entries`;

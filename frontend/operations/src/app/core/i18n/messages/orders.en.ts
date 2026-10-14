@@ -785,11 +785,14 @@ export const ordersEn = {
   // wave P14: §5.4 the address pane (row 1.3b)
   'orders.newOrder.address.title': 'Address',
   'orders.newOrder.address.loading': 'Loading addresses…',
-  'orders.newOrder.address.denied': 'No access to this customer’s saved addresses',
+  'orders.newOrder.address.denied':
+    'Your role cannot give a delivery address for this customer (it needs the delivery-address permission)',
   'orders.newOrder.address.empty': 'No saved addresses',
   'orders.newOrder.address.add': '+ New address',
   'orders.newOrder.address.notLocated':
-    'This address has no map pin yet, so delivery cannot be routed — the pin and the map are not built yet. Choose a different address or confirm by phone.',
+    'This address has no map pin yet, so delivery cannot be routed. Place the pin below, or choose a different address.',
+  'orders.newOrder.address.pinOnlyNote':
+    'You see the street, not the house or flat: those stay with the courier. Placing the pin changes where the courier is sent, not the address text.',
   'orders.newOrder.address.notServiceable':
     'This address is outside every delivery zone for this branch',
   'orders.newOrder.address.recipientName': 'Recipient',

@@ -27,6 +27,7 @@ import { Combobox, ComboboxOption } from '../../../shared/ui/combobox';
 import { DeniedState } from '../../../shared/ui/denied-state';
 import { MoneyInput } from '../../../shared/ui/money-input';
 import { MapPin } from '../../../shared/ui/map/map-pin';
+import { LatLng } from '../../../shared/ui/map/map-provider';
 import { Toasts } from '../../../shared/ui/toast';
 import {
   CustomerAddressDraft,
@@ -41,10 +42,10 @@ import {
   CustomerOrderSummary,
   CustomersApi,
   ReorderPlan,
-  RevealedCustomerAddress,
 } from '../../customers/customers-api';
 import { ChannelView, SalesChannelsApi } from '../../settings/sales-channels/sales-channels-api';
 import { accessRefusal, describeApiError } from '../order-errors';
+import { AddressPinEditor } from './address-pin-editor';
 import { ComboDialogConfirmation, ComboPickerDialog } from './combo-picker-dialog';
 import { resolvePicks } from './combo-selection';
 import { DineInTablePicker, TablePick } from './dine-in-table-picker';
@@ -56,6 +57,7 @@ import {
   CommentPresetOption,
   CustomerLookupCandidate,
   DeliveryFeeQuote,
+  MaskedCustomerAddress,
   MenuComboGroup,
   MenuModifierGroup,
   MenuProduct,
@@ -136,11 +138,11 @@ interface PendingComboSelection {
  * inventing an address flow this wave's brief explicitly says not to build.
  *
  * **Wave P14 adds** the address pane's structured half (§5.4, row `1.3b`):
- * saved addresses through the already-wired `CUSTOMER_PII_REVEAL` reveal, an
- * inline «+ новый адрес» reusing `customer-detail-pane.html`'s own
+ * the customer's saved addresses, an inline «+ новый адрес» with the
  * дом/квартира/подъезд/этаж/ориентир fields, saved `NOT_GEOCODED` or
- * `LANDMARK_ONLY` — the pin, the suggest and the geocoder stay deferred
- * behind `X.4`. Payment now reads the operator channel's own matrix instead
+ * `LANDMARK_ONLY` when the operator places no pin (the pin and the suggest
+ * arrived with ADR 0145, below; the saved addresses are masked since ADR 0177,
+ * below). Payment now reads the operator channel's own matrix instead
  * of a hard-coded CASH (row `1.3e`; see `OperatorOrderingService`'s own
  * doc), promo code is threaded to `CartService.applyPromoCode` (ADR 0072).
  * The total beside «Создать» is the server's own price (row `1.3e`): the same
@@ -183,26 +185,32 @@ interface PendingComboSelection {
  * 1.3b's pin is placed from this screen since ADR 0145), so an address with no
  * point still reads "—" rather than a guessed number.
  *
- * <p>**The address pane has a map and a search (row 1.3b, ADR 0145).** The «+ новый адрес» form is
- * the shared `q-customer-address-editor`: type-ahead from the platform's own geocoder, a pin the
- * operator looks at and confirms (or moves, or types the coordinates of), and the structured
- * дом/подъезд/этаж/квартира/ориентир fields a courier needs. A saved address shows where it is,
- * and one with no pin (or the wrong one) can be edited in place: placing the pin is what lets the
- * delivery be priced and routed. A geocoder's answer is a suggestion; only a pin a person confirmed
+ * <p>**The address pane has a map and a search (row 1.3b, ADR 0145), and the persona it is for can
+ * use it (ADR 0177).** The «+ новый адрес» form is the shared `q-customer-address-editor`:
+ * type-ahead from the platform's own geocoder, a pin the operator looks at and confirms (or moves,
+ * or types the coordinates of), and the structured дом/подъезд/этаж/квартира/ориентир fields a
+ * courier needs. It saves through `NewOrderApi.captureAddress`, the location-scoped route that
+ * `LOCATION_STAFF` and `LOCATION_MANAGER` hold (`customer.address.capture`): the tenant-scoped
+ * address routes behind `customer.manage` and `customer.pii.reveal` are `TENANT`-scoped, which a
+ * `LOCATION` grant never covers, and stay for the Customers screen. The saved addresses it lists
+ * are **masked** (`NewOrderApi.capturedAddresses`): the label, the street without its house number
+ * or flat, the district, the point and its source. A saved address shows where it is, and one with
+ * no pin (or the wrong one) gets its pin placed or moved in `q-address-pin-editor`, which writes
+ * the point and `OPERATOR_PIN` and nothing else: the operator cannot read the address text, so
+ * there is no editor over it. A geocoder's answer is a suggestion; only a pin a person confirmed
  * is saved, as `OPERATOR_PIN`, and an address saved with no pin says so honestly
  * (`NOT_GEOCODED`/`LANDMARK_ONLY`) and is refused for delivery until it has one.
  *
- * <p>**Still not built, honestly.** No out-of-brand branch resolution (this screen stays scoped to
- * `CurrentLocation`; "Филиал" shows the current branch with a static «по
- * зоне» caption on a delivery order rather than a real cross-branch
- * resolver). No lead-time limit, repricing checkpoint or payment-authorization
- * timing for a long-lead pre-order — ADR 0019 leaves that policy open, and
- * `requestedFor` only ever asks "is the branch open then", never holds a
- * price or a slot for the wait. The header's draft timer and quote-expiry
- * states (§5.7) still do not apply to this backend shape at all:
- * `OperatorOrderingService.place` opens the cart, prices it and checks out
- * in one atomic call, so there is no server-side draft cart that can expire
- * out from under the operator the way a storefront cart can.
+ * <p>**Not built, and why (the old "still not built" list was wrong in two places).** «Филиал» is
+ * not a static caption: batch 13's `BranchResolutionQueryService` ranks the brand's branches and
+ * batch 18's `OperatorOrderQuoteService` prices the basket, both read above. No lead-time limit,
+ * repricing checkpoint or payment-authorization timing for a long-lead pre-order — ADR 0019 leaves
+ * that policy open, and `requestedFor` only ever asks "is the branch open then", never holds a
+ * price or a slot for the wait. The header's draft timer and quote-expiry states (`orders.md`
+ * §5.7) do not apply to this backend shape at all, and the spec says so:
+ * `OperatorOrderingService.place` opens the cart, prices it and checks out in one atomic call, and
+ * the quote endpoint prices a basket and undoes it without holding one, so there is no server-side
+ * draft cart that can expire out from under the operator the way a storefront cart can.
  *
  * <p><b>Wave 10 (rows 1.3f/1.3a).</b> «Повторить» used to call
  * `CustomerOrderHistoryController.reorderPlan` (`ORDER_READ` at `BRAND`
@@ -253,6 +261,7 @@ interface PendingComboSelection {
     NewOrderHeader,
     NewOrderMenuGrid,
     CustomerAddressEditor,
+    AddressPinEditor,
     MapPin,
   ],
   templateUrl: './new-order-page.html',
@@ -784,7 +793,7 @@ export class NewOrderPage implements OnInit {
 
   protected readonly fulfillmentMode = signal<'PICKUP' | 'DELIVERY' | 'DINE_IN'>('PICKUP');
 
-  protected readonly addresses = signal<readonly RevealedCustomerAddress[]>([]);
+  protected readonly addresses = signal<readonly MaskedCustomerAddress[]>([]);
   protected readonly addressesLoading = signal(false);
   protected readonly addressesError = signal<string | null>(null);
   protected readonly addressesDenied = signal(false);
@@ -798,8 +807,10 @@ export class NewOrderPage implements OnInit {
   protected readonly addressError = signal<string | null>(null);
   /** What the address editor holds (map, suggest, structured fields); `null` until it has said anything. */
   protected readonly addressDraft = signal<CustomerAddressDraft | null>(null);
-  /** The saved address being corrected in place (placing or moving its pin), or `null`. */
+  /** The saved address whose pin is being placed or moved, or `null`. */
   protected readonly editingAddressId = signal<string | null>(null);
+  /** Where the pin is now in the pin editor; `null` while none is placed. */
+  protected readonly pinDraft = signal<LatLng | null>(null);
 
   /** The branch's scope as a signal, for the address editor: it selects the lookup path the operator's grant covers. */
   protected readonly editorScope = computed(() => this.location.scope());
@@ -897,22 +908,18 @@ export class NewOrderPage implements OnInit {
     this.addressesLoading.set(true);
     this.addressesError.set(null);
     try {
-      const list = await this.customersApi.revealAddresses(
-        scope,
-        selected.accountId,
-        'Operations console: New order screen delivery address (row 1.3b)',
-      );
+      // ADR 0177: the masked list this screen's persona is granted (`customer.address.capture`,
+      // `LOCATION` scope), not the tenant-scoped reveal behind `customer.pii.reveal`.
+      const list = await this.api.capturedAddresses(scope, selected.accountId);
       this.addresses.set(list);
       if (list.length > 0 && this.selectedAddressId() === null) {
         this.selectedAddressId.set(list[0].id);
       }
     } catch (error) {
       if (error instanceof ApiError && accessRefusal(error)?.kind === 'denied') {
-        // LOCATION_STAFF does not hold CUSTOMER_PII_REVEAL (see PlatformRole's
-        // own comment) — an open capability-model gap this wave flags rather
-        // than silently patches by widening a role bundle it was not asked
-        // to touch, the identical posture this file's own channel-list
-        // fallback already takes.
+        // A role that holds neither `customer.address.capture` nor a wider customer grant
+        // (ADR 0177). LOCATION_STAFF and LOCATION_MANAGER hold it, so for the persona this screen
+        // is built for this is not the ordinary path any more.
         this.addressesDenied.set(true);
       } else {
         this.addressesError.set(
@@ -939,7 +946,7 @@ export class NewOrderPage implements OnInit {
     this.addressError.set(null);
   }
 
-  /** Opens the selected saved address in the editor, to place its pin or move it (row 1.3b / 5.2c). */
+  /** Opens the selected saved address in the pin editor, to place its pin or move it (row 1.3b, ADR 0177). */
   protected startEditingSelectedAddress(): void {
     if (this.selectedAddressId() === null) {
       return;
@@ -947,6 +954,7 @@ export class NewOrderPage implements OnInit {
     this.addingAddress.set(false);
     this.addressDraft.set(null);
     this.addressError.set(null);
+    this.pinDraft.set(this.selectedAddressPoint());
     this.editingAddressId.set(this.selectedAddressId());
   }
 
@@ -961,6 +969,21 @@ export class NewOrderPage implements OnInit {
 
   protected canSaveAddress(): boolean {
     return !this.addressSaving() && (this.addressDraft()?.valid ?? false);
+  }
+
+  protected onPinDraft(point: LatLng | null): void {
+    this.pinDraft.set(point);
+  }
+
+  /** A pin is placed, and it is not already where the address has it. */
+  protected canSavePin(): boolean {
+    const pin = this.pinDraft();
+    const saved = this.selectedAddressPoint();
+    return (
+      !this.addressSaving() &&
+      pin !== null &&
+      (saved === null || saved.latitude !== pin.latitude || saved.longitude !== pin.longitude)
+    );
   }
 
   /**
@@ -979,7 +1002,9 @@ export class NewOrderPage implements OnInit {
     this.addressSaving.set(true);
     this.addressError.set(null);
     try {
-      const { id } = await this.customersApi.addAddress(scope, selected.accountId, {
+      // ADR 0177: `OperationsCustomerController`'s location-scoped add, which the persona is
+      // granted; the server refuses any source an operator cannot honestly claim.
+      const id = await this.api.captureAddress(scope, selected.accountId, {
         label: draft.label,
         fields: draft.fields,
         latitude: draft.latitude,
@@ -997,32 +1022,25 @@ export class NewOrderPage implements OnInit {
   }
 
   /**
-   * Saves the corrected address at the version it was read at (ADR 0031): another operator's edit in
-   * between is a refusal to read, not an overwrite. Keeps the delivery instructions the address already
-   * had, which this editor does not show.
+   * Saves the pin at the version the masked list returned (ADR 0031): another operator's pin in
+   * between is a refusal to read, not an overwrite. Writes the point and `OPERATOR_PIN` and
+   * nothing else about the address (ADR 0177) -- its text is not this screen's to change.
    */
-  protected async saveEditedAddress(original: RevealedCustomerAddress): Promise<void> {
+  protected async savePin(original: MaskedCustomerAddress): Promise<void> {
     const selected = this.selectedCustomer();
     const scope = this.location.scope();
-    const draft = this.addressDraft();
-    if (!selected || !scope || !draft || !this.canSaveAddress()) {
+    const pin = this.pinDraft();
+    if (!selected || !scope || pin === null || !this.canSavePin()) {
       return;
     }
     this.addressSaving.set(true);
     this.addressError.set(null);
     try {
-      await this.customersApi.updateAddress(
+      await this.api.placeAddressPin(
         scope,
         selected.accountId,
         original.id,
-        {
-          label: draft.label,
-          fields: draft.fields,
-          deliveryInstructions: original.deliveryInstructions,
-          latitude: draft.latitude,
-          longitude: draft.longitude,
-          coordinateSource: draft.coordinateSource,
-        },
+        { latitude: pin.latitude, longitude: pin.longitude },
         original.version,
       );
       await this.loadAddresses();

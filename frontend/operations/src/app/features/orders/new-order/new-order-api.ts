@@ -6,6 +6,10 @@ import { BrandScope, catalogPaths } from '../../../core/api/catalog-paths';
 import { IntentCommandRegistry, command } from '../../../core/api/idempotency';
 import { LocationScope, operationsPaths } from '../../../core/api/operations-paths';
 import { CursorState, Page } from '../../../core/api/page';
+import {
+  CustomerCoordinateSource,
+  SaveCustomerAddressRequest,
+} from '../../customers/customers-api';
 
 /**
  * Types mirror `OperationsOrderController`, `CatalogAuthoringController` and
@@ -38,6 +42,32 @@ export interface CustomerLookupCandidate {
 export interface CreateCustomerRequest {
   readonly phone: string;
   readonly displayName?: string | null;
+}
+
+/**
+ * ADR 0177: `CustomerProfileService.MaskedAddress` — a saved address as a phone-order operator may
+ * read it: the label, the street **without** its house number or flat, the city and district, the
+ * point and where it came from, and the version a pin is set at. There is no member for the
+ * entrance, floor, flat, landmark, second line, postal code or delivery instructions, because the
+ * server never sends them to a role that holds `customer.address.capture` and not
+ * `customer.pii.reveal`.
+ */
+export interface MaskedCustomerAddress {
+  readonly id: string;
+  readonly label: string;
+  readonly street: string;
+  readonly city: string;
+  readonly district: string;
+  readonly latitude: number | null;
+  readonly longitude: number | null;
+  readonly coordinateSource: CustomerCoordinateSource;
+  readonly version: number;
+}
+
+/** `OperationsCustomerController.PinRequest`. */
+export interface AddressPinRequest {
+  readonly latitude: number;
+  readonly longitude: number;
 }
 
 // -------------------------------------------------------- §5.5 menu and basket
@@ -508,6 +538,7 @@ export class NewOrderApi {
   private readonly placeOrderIntents = new IntentCommandRegistry<PlaceOrderRequest>();
   private readonly aggregatorEntryIntents = new IntentCommandRegistry<AggregatorOrderRequest>();
   private readonly createCustomerIntents = new IntentCommandRegistry<CreateCustomerRequest>();
+  private readonly captureAddressIntents = new IntentCommandRegistry<SaveCustomerAddressRequest>();
 
   /** orders.md §5.3: a `POST` with the phone in the body, never a query string. */
   async lookupCustomerByPhone(
@@ -679,6 +710,70 @@ export class NewOrderApi {
         .pipe(tap(() => this.createCustomerIntents.forget('draft'))),
     );
     return response.id;
+  }
+
+  /**
+   * ADR 0177: the resolved customer's saved addresses, masked — `OperationsCustomerController`'s
+   * `GET`, which `LOCATION_STAFF` and `LOCATION_MANAGER` reach (capability
+   * `customer.address.capture`, `LOCATION` scope). The tenant-scoped reveal the Customers screen
+   * reads stays behind `customer.pii.reveal`, which this screen's persona does not hold.
+   */
+  async capturedAddresses(
+    scope: LocationScope,
+    accountId: string,
+  ): Promise<readonly MaskedCustomerAddress[]> {
+    const result = await firstValueFrom(
+      this.api.get<readonly MaskedCustomerAddress[]>(
+        operationsPaths.orderIntakeCustomerAddresses(scope, accountId),
+      ),
+    );
+    return result.value ?? [];
+  }
+
+  /**
+   * ADR 0177: saves one delivery address for the customer, with the pin the operator confirmed.
+   * Held on {@link captureAddressIntents} like {@link createCustomer}: the write inserts
+   * unconditionally, so a retry that minted a fresh `Idempotency-Key` would save the same address
+   * twice when the first response was lost.
+   *
+   * @returns the new address's id, so the pane can select it
+   */
+  async captureAddress(
+    scope: LocationScope,
+    accountId: string,
+    request: SaveCustomerAddressRequest,
+  ): Promise<string> {
+    const intent = this.captureAddressIntents.next(accountId, request);
+    const response = await firstValueFrom(
+      this.api
+        .post<SaveCustomerAddressRequest, { id: string }>(
+          operationsPaths.orderIntakeCustomerAddresses(scope, accountId),
+          intent,
+        )
+        .pipe(tap(() => this.captureAddressIntents.forget(accountId))),
+    );
+    return response.id;
+  }
+
+  /**
+   * ADR 0177: places or moves the pin of one saved address, at the version the masked list
+   * returned (ADR 0031: another operator's pin in between is a refusal to read, not an overwrite).
+   * Writes the point and `OPERATOR_PIN` and nothing else; the address text is not this screen's.
+   */
+  async placeAddressPin(
+    scope: LocationScope,
+    accountId: string,
+    addressId: string,
+    pin: AddressPinRequest,
+    expectedVersion: number,
+  ): Promise<MaskedCustomerAddress> {
+    return firstValueFrom(
+      this.api.put<AddressPinRequest, MaskedCustomerAddress>(
+        operationsPaths.orderIntakeCustomerAddressPin(scope, accountId, addressId),
+        command(pin),
+        { expectedVersion },
+      ),
+    );
   }
 
   /**

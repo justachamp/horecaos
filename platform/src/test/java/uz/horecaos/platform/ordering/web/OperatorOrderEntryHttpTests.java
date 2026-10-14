@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -102,6 +103,13 @@ class OperatorOrderEntryHttpTests {
 
     private static final String LOCALE = "uz";
     private static final String MANAGER = "order-entry-http-manager";
+
+    /**
+     * The call-centre operator the New order screen is built for: {@code LOCATION_STAFF}, which holds
+     * neither {@code customer.manage} nor {@code customer.pii.reveal} (ADR 0039, ADR 0177).
+     */
+    private static final String STAFF = "order-entry-http-staff";
+
     private static final String OTHER_BRANCH_MANAGER = "order-entry-http-other-branch";
     private static final String UNGRANTED = "order-entry-http-ungranted";
     private static final ObjectMapper JSON = JsonMapper.builder().build();
@@ -241,6 +249,7 @@ class OperatorOrderEntryHttpTests {
         inventory.listVariantAtLocation(TENANT, BRAND, LOCATION, burgerVariant, TrackingMode.BINARY);
         grant(MANAGER, LOCATION);
         grant(OTHER_BRANCH_MANAGER, OTHER_LOCATION);
+        grant(STAFF, LOCATION, PlatformRole.LOCATION_STAFF);
     }
 
     // ============================================================ row 1.3e: the server's price
@@ -572,6 +581,210 @@ class OperatorOrderEntryHttpTests {
                 .isEqualTo("OPEN");
     }
 
+    // ===================== ADR 0177, rows 1.3/1.3b: the screen's own persona, end to end
+
+    /**
+     * The both-ends proof the gap map asked for: every step is the production controller reached with
+     * the JSON the console sends, by a principal that holds {@code LOCATION_STAFF} and nothing else.
+     * Nothing is seeded that production creates -- the account, its address and its pin are all written
+     * through the routes an operator uses, which is the thing the earlier cases of this class could not
+     * show (they inserted {@code customer.addresses} by SQL and granted {@code LOCATION_MANAGER}, so the
+     * address route was never called).
+     */
+    @Test
+    @DisplayName("a call-centre operator takes a first-time caller's delivery order, from the lookup to the board")
+    void aCallCentreOperatorTakesAFirstTimeCallersDeliveryOrder() throws Exception {
+        String phone = "+998935550101";
+
+        // 1. The caller is looked up, and nobody has that number.
+        MvcResult lookup = mvc.perform(post(ordersPath(LOCATION) + "/customer-lookups")
+                        .with(tokenFor(STAFF))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "staff-lookup-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"phone\":\"" + phone + "\"}"))
+                .andReturn();
+        assertThat(lookup.getResponse().getStatus()).isEqualTo(200);
+        assertThat(JSON.readTree(lookup.getResponse().getContentAsString()).path("candidates"))
+                .as("a miss")
+                .isEmpty();
+
+        // 2. So the account is opened, by the operator, on the miss.
+        UUID account = openAccountOnMiss(phone);
+
+        // 3. The caller gives an address and the operator pins it on the map.
+        MvcResult added = mvc.perform(post(customerAddressesPath(account))
+                        .with(tokenFor(STAFF))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "staff-add-address-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(consoleAddress(true)))
+                .andReturn();
+        assertThat(added.getResponse().getStatus())
+                .as(added.getResponse().getContentAsString())
+                .isEqualTo(201);
+
+        // 4. The pane lists what it can: the street and district, the point, no house number.
+        MvcResult listed = mvc.perform(get(customerAddressesPath(account)).with(tokenFor(STAFF)))
+                .andReturn();
+        assertThat(listed.getResponse().getStatus()).isEqualTo(200);
+        String listBody = listed.getResponse().getContentAsString();
+        JsonNode masked = JSON.readTree(listBody).get(0);
+        assertThat(masked.path("street").asText()).isEqualTo("Amir Temur ko'chasi");
+        assertThat(masked.path("coordinateSource").asText()).isEqualTo("OPERATOR_PIN");
+        assertThat(listBody)
+                .as("what the operator may not read is not in the answer")
+                .doesNotContain("blue gate")
+                .doesNotContain("Ring the top bell")
+                .doesNotContain("\"landmark\"")
+                .doesNotContain("\"apartment\"");
+        UUID addressId = UUID.fromString(masked.path("id").asText());
+
+        // 5. The server's price for the delivery, then the order itself.
+        String body = deliveryBodyFor(account, addressId, "Aziz", phone);
+        JsonNode quote = quote(body, STAFF);
+        assertThat(quote.path("feeMinor").asLong()).isEqualTo(DELIVERY_FEE);
+        assertThat(quote.path("totalMinor").asLong()).isEqualTo(BURGER + DELIVERY_FEE);
+
+        UUID orderId = place(body, STAFF, "staff-delivery-1");
+
+        // 6. And it is on the board, as a delivery to the address the operator gave.
+        MvcResult board = mvc.perform(get(ordersPath(LOCATION) + "/board").with(tokenFor(STAFF)))
+                .andReturn();
+        assertThat(board.getResponse().getStatus()).isEqualTo(200);
+        JsonNode row = null;
+        for (JsonNode candidate :
+                JSON.readTree(board.getResponse().getContentAsString()).path("items")) {
+            if (orderId.toString().equals(candidate.path("orderId").asText())) {
+                row = candidate;
+            }
+        }
+        assertThat(row).as("the order is on the board the operator reads").isNotNull();
+        assertThat(String.valueOf(row)).contains("DELIVERY");
+        assertThat(jdbc.sql("""
+                                SELECT created_by_actor_type || ':' || created_by_actor_id FROM ordering.orders
+                                WHERE id = :id
+                                """).param("id", orderId).query(String.class).single())
+                .as("the order is attributed to the operator who took the call")
+                .isEqualTo("USER:" + STAFF);
+        assertThat(jdbc.sql("SELECT customer_address_id FROM ordering.cart_fulfillment WHERE tenant_id = :t")
+                        .param("t", TENANT)
+                        .query(UUID.class)
+                        .list())
+                .as("the destination the order was priced and booked for is the address the operator saved")
+                .contains(addressId);
+    }
+
+    @Test
+    @DisplayName(
+            "an address saved with no pin is refused for delivery until the operator pins it, and then it is taken")
+    void anAddressWithNoPinIsRefusedForDeliveryUntilTheOperatorPlacesIt() throws Exception {
+        String phone = "+998935550102";
+        UUID account = openAccountOnMiss(phone);
+        MvcResult added = mvc.perform(post(customerAddressesPath(account))
+                        .with(tokenFor(STAFF))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "staff-add-address-2")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(consoleAddress(false)))
+                .andReturn();
+        assertThat(added.getResponse().getStatus()).isEqualTo(201);
+        JsonNode saved = JSON.readTree(
+                        mvc.perform(get(customerAddressesPath(account)).with(tokenFor(STAFF)))
+                                .andReturn()
+                                .getResponse()
+                                .getContentAsString())
+                .get(0);
+        UUID addressId = UUID.fromString(saved.path("id").asText());
+        assertThat(saved.path("coordinateSource").asText()).isEqualTo("LANDMARK_ONLY");
+        String body = deliveryBodyFor(account, addressId, "Aziz", phone);
+
+        MvcResult unpinned = placeResult(body, STAFF, "staff-delivery-unpinned");
+        assertThat(unpinned.getResponse().getStatus())
+                .as(
+                        "an address with no point cannot be routed: %s",
+                        unpinned.getResponse().getContentAsString())
+                .isBetween(400, 499);
+        assertThat(unpinned.getResponse().getContentAsString()).contains("DESTINATION_NOT_LOCATED");
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.orders")
+                        .query(Long.class)
+                        .single())
+                .as("nothing was created")
+                .isZero();
+
+        MvcResult pinned = mvc.perform(put(customerAddressesPath(account) + "/" + addressId + "/pin")
+                        .with(tokenFor(STAFF))
+                        .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "staff-pin-1")
+                        .header("If-Match", "\"" + saved.path("version").asInt() + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"latitude\":41.311081,\"longitude\":69.240562}"))
+                .andReturn();
+        assertThat(pinned.getResponse().getStatus())
+                .as(pinned.getResponse().getContentAsString())
+                .isEqualTo(200);
+
+        UUID orderId = place(body, STAFF, "staff-delivery-pinned");
+        assertThat(detail(orderId).path("summary").path("totalMinor").asLong()).isEqualTo(BURGER + DELIVERY_FEE);
+    }
+
+    @Test
+    @DisplayName("the operator reaches the address routes of this branch only, and the tenant routes stay closed")
+    void theOperatorReachesThisBranchsAddressRoutesOnly() throws Exception {
+        UUID account = openAccountOnMiss("+998935550103");
+
+        MvcResult otherBranch = mvc.perform(get("/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/"
+                                + OTHER_LOCATION + "/customers/" + account + "/addresses")
+                        .with(tokenFor(STAFF)))
+                .andReturn();
+        MvcResult tenantRoute = mvc.perform(get("/api/v1/tenants/" + TENANT + "/customers/" + account + "/addresses")
+                        .param("purpose", "peek")
+                        .with(tokenFor(STAFF)))
+                .andReturn();
+
+        assertThat(otherBranch.getResponse().getStatus())
+                .as("a LOCATION grant covers its own location and no other")
+                .isEqualTo(403);
+        assertThat(tenantRoute.getResponse().getStatus())
+                .as("and never a TENANT route, which is why the tenant roles' routes stay for the Customers screen")
+                .isEqualTo(403);
+    }
+
+    private UUID openAccountOnMiss(String phone) throws Exception {
+        MvcResult created = mvc.perform(
+                        post("/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION + "/customers")
+                                .with(tokenFor(STAFF))
+                                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "staff-create-" + phone)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"phone\":\"" + phone + "\",\"displayName\":\"Aziz\"}"))
+                .andReturn();
+        assertThat(created.getResponse().getStatus())
+                .as(created.getResponse().getContentAsString())
+                .isEqualTo(201);
+        return UUID.fromString(JSON.readTree(created.getResponse().getContentAsString())
+                .path("id")
+                .asText());
+    }
+
+    private static String customerAddressesPath(UUID account) {
+        return "/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/locations/" + LOCATION + "/customers/" + account
+                + "/addresses";
+    }
+
+    /** The address the console's pane sends, every part a courier would knock on included. */
+    private static String consoleAddress(boolean pinned) {
+        return """
+                {"label":"Home",
+                 "fields":{"line1":"Amir Temur ko'chasi 15","line2":null,"city":"Tashkent","district":"Yunusobod",
+                           "postalCode":null,"entrance":"3","floor":"4","apartment":"12","landmark":"blue gate"},
+                 "deliveryInstructions":"Ring the top bell",
+                 "latitude":%s,"longitude":%s,"coordinateSource":"%s"}""".formatted(
+                        pinned ? "41.311081" : "null",
+                        pinned ? "69.240562" : "null",
+                        pinned ? "OPERATOR_PIN" : "LANDMARK_ONLY");
+    }
+
+    private String deliveryBodyFor(UUID account, UUID address, String recipient, String recipientPhone) {
+        return body(account, "DELIVERY", null, null, null, """
+                {"customerAddressId":"%s","recipientName":"%s","recipientPhone":"%s"}""".formatted(address, recipient, recipientPhone));
+    }
+
     // ================================================================================ helpers
 
     private JsonNode quote(String body, String subject) throws Exception {
@@ -704,8 +917,18 @@ class OperatorOrderEntryHttpTests {
             @Nullable Long cashTenderedMinor,
             @Nullable UUID dineInSessionId,
             @Nullable String destination) {
+        return body(CUSTOMER, mode, promoCode, cashTenderedMinor, dineInSessionId, destination);
+    }
+
+    private String body(
+            UUID customer,
+            String mode,
+            @Nullable String promoCode,
+            @Nullable Long cashTenderedMinor,
+            @Nullable UUID dineInSessionId,
+            @Nullable String destination) {
         StringBuilder json = new StringBuilder();
-        json.append("{\"customerAccountId\":\"").append(CUSTOMER).append('"');
+        json.append("{\"customerAccountId\":\"").append(customer).append('"');
         json.append(",\"channelCode\":\"STOREFRONT\"");
         json.append(",\"fulfillmentMode\":\"").append(mode).append('"');
         json.append(",\"paymentMethodCode\":\"CASH\"");
@@ -1067,6 +1290,10 @@ class OperatorOrderEntryHttpTests {
     }
 
     private void grant(String subject, UUID location) {
+        grant(subject, location, PlatformRole.LOCATION_MANAGER);
+    }
+
+    private void grant(String subject, UUID location, PlatformRole role) {
         jdbc.sql("""
                 INSERT INTO iam.grants
                     (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
@@ -1075,13 +1302,10 @@ class OperatorOrderEntryHttpTests {
                         'ACTIVE', 'test-fixture', 'order entry http test', :validFrom)
                 ON CONFLICT DO NOTHING
                 """)
-                .param(
-                        "id",
-                        UUID.nameUUIDFromBytes(
-                                (subject + PlatformRole.LOCATION_MANAGER.code() + location).getBytes(UTF_8)))
+                .param("id", UUID.nameUUIDFromBytes((subject + role.code() + location).getBytes(UTF_8)))
                 .param("tenantId", TENANT)
                 .param("subject", subject)
-                .param("roleId", RoleRegistrySynchronizer.platformRoleId(PlatformRole.LOCATION_MANAGER))
+                .param("roleId", RoleRegistrySynchronizer.platformRoleId(role))
                 .param("scopeId", location)
                 .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
                 .update();

@@ -248,3 +248,26 @@ describe('operationsPaths kitchen headcount (ADR 0163)', () => {
     );
   });
 });
+
+describe('operationsPaths phone-order address capture (ADR 0177, OperationsCustomerController)', () => {
+  it('builds on the location-scoped customers path beside the create-on-miss route', () => {
+    expect(operationsPaths.orderIntakeCustomerAddresses(SCOPE, 'c1')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/customers/c1/addresses',
+    );
+    expect(operationsPaths.orderIntakeCustomerAddressPin(SCOPE, 'c1', 'a1')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/customers/c1/addresses/a1/pin',
+    );
+  });
+
+  it('is not the tenant-scoped address path a location grant cannot reach', () => {
+    expect(operationsPaths.orderIntakeCustomerAddresses(SCOPE, 'c1')).not.toBe(
+      operationsPaths.customerAddresses(SCOPE, 'c1'),
+    );
+  });
+
+  it('encodes the customer and the address, including a slash smuggled into one', () => {
+    expect(operationsPaths.orderIntakeCustomerAddressPin(SCOPE, 'c/1', 'a/1')).toBe(
+      '/api/v1/tenants/t1/brands/b1/locations/l1/customers/c%2F1/addresses/a%2F1/pin',
+    );
+  });
+});
