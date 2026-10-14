@@ -380,29 +380,12 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         // The quote id arrives minted (see quote()) so the evidence row can name the quote
         // it explains; a simulation has none.
         //
-        // The goods subtotal the resolver is handed is the engine's own, asked of a
-        // draft of the inputs that has no charge yet: the same arithmetic, not a second
-        // copy of it, so a combo's components and a hidden charge count toward a zone's
-        // minimum basket exactly as they will count toward the total.
+        // The resolver is handed no goods subtotal. The zone's minimum basket and free-delivery threshold
+        // are judged by the engine (steps 7 and 8, against the post-discount goods subtotal, ADR 0037), and
+        // nothing in fulfillment reads the figure: it used to be the pre-discount one, which was the wrong
+        // basis for a threshold and would have been the first thing a resolver that read it got wrong.
         Map<UUID, String> descriptions = catalog.descriptions(request.tenantId(), request.brandId(), pricedVariantIds);
-        var draft = new PricingEngine.PricingInputs(
-                priceBook.currency(),
-                publication,
-                priceBook.id(),
-                priceBook.version(),
-                taxProfile.id(),
-                taxProfile.version(),
-                taxProfile.rateBasisPoints(),
-                PricingEngine.TaxMode.valueOf(taxProfile.mode()),
-                variantPrices,
-                modifierPrices,
-                descriptions,
-                null,
-                null,
-                composite,
-                catchweight);
-        ResolvedDeliveryCharge charge = resolveDeliveryCharge(
-                request, quoteId, priceBook.currency(), engine.goodsSubtotal(request, draft), now);
+        ResolvedDeliveryCharge charge = resolveDeliveryCharge(request, quoteId, priceBook.currency(), now);
 
         PromotionInputResolver.Resolved resolved =
                 promotionInputs.resolve(request, now, channel, charge, pricedVariantIds, overrides);
@@ -448,21 +431,18 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
     /**
      * Runs ADR 0037 steps 1 to 6, or nothing at all for a collected order.
      *
-     * <p>The subtotal handed to the resolver is the goods subtotal the engine is
-     * about to compute, recomputed here from the same price maps rather than taken
-     * from a later stage. That looks like duplication and is not avoidable: steps 7
-     * and 8 compare the basket against the zone's minimum and threshold, and the
-     * resolver has to carry both back before the engine can apply them. Today it is
-     * exactly the engine's gross because ADR 0018's discount stages are unbuilt;
-     * when they land, this becomes the post-discount figure and the two stop being
-     * the same number.
+     * <p>Steps 7 and 8 -- the zone's minimum basket and its free-delivery threshold -- are not run
+     * here. The resolver carries the minimum and the threshold back on the charge, and
+     * {@link PricingEngine} compares both against the post-discount goods subtotal once the
+     * discount stages have run; this method therefore hands the resolver no goods subtotal
+     * ({@code DeliveryFeeQuery#goodsSubtotalMinor} stays zero).
      *
      * <p>A refusal is not an exception. An address outside every zone is a fact the
      * storefront renders, and the quote still returns — with no fee line — so the
      * customer sees their basket and the reason together instead of an error page.
      */
     private @Nullable ResolvedDeliveryCharge resolveDeliveryCharge(
-            QuoteRequest request, @Nullable UUID quoteId, String currency, long goodsSubtotal, Instant now) {
+            QuoteRequest request, @Nullable UUID quoteId, String currency, Instant now) {
 
         if (request.delivery() == null) {
             return null;
@@ -474,7 +454,7 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
                 quoteId,
                 request.delivery().destination(),
                 currency,
-                goodsSubtotal,
+                0L,
                 request.delivery().pricingAuthority(),
                 now);
         // A real quote always has an id, and its fee resolution is evidence pinned to that quote.
