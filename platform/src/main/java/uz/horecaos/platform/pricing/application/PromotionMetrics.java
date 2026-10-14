@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
  * nothing finer.
  *
  * <p><b>Bounded labels only.</b> {@code reason} is one of the {@link
- * PromotionEvaluator.Verdict} names, {@code source} one of {@code automatic} and {@code coupon},
+ * PromotionEvaluator.Verdict} names, {@code source} one of {@code automatic}, {@code coupon} and {@code grant},
  * {@code outcome} one of three fixed words. No tenant, brand, promotion, code, order or account
  * is ever a label: a per-promotion series is unbounded cardinality, and a per-account one is a
  * place an account id lives (ADR 0029). Which promotion is the question the ledger and the 7.9
@@ -85,7 +85,9 @@ public class PromotionMetrics {
     /** Where a redemption came from. */
     public enum Source {
         AUTOMATIC("automatic"),
-        COUPON("coupon");
+        COUPON("coupon"),
+        /** A customer's one-off benefit grant (ADR 0140). */
+        GRANT("grant");
 
         private final String label;
 

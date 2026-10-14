@@ -435,6 +435,8 @@
       "codeNotActive": "That promo code is not active yet.",
       "codeExpired": "That promo code has expired.",
       "codeLimitReached": "You've reached the limit for this promo code.",
+      "codeAlreadyUsed": "That code has already been used.",
+      "codeRequiresAccount": "Sign in to use this code. It was issued to a customer account.",
       "channelNotEnabled": "This is not available on this channel yet.",
       "modeUnavailable": "This option is not available right now.",
       "closed": "This branch is closed right now.",

@@ -297,6 +297,11 @@ const REASON_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   CODE_EXPIRED: 'errors.reason.codeExpired',
   REDEMPTION_LIMIT_REACHED: 'errors.reason.codeLimitReached',
   PER_CUSTOMER_LIMIT_REACHED: 'errors.reason.codeLimitReached',
+  // ADR 0140: a customer's one-off code (an apology, a gift): spent already, or typed by a guest who has no
+  // account to spend it on. CODE_NOT_ELIGIBLE is checkout finding the same grant spent by another checkout.
+  CODE_ALREADY_USED: 'errors.reason.codeAlreadyUsed',
+  CODE_NOT_ELIGIBLE: 'errors.reason.codeAlreadyUsed',
+  CODE_REQUIRES_ACCOUNT: 'errors.reason.codeRequiresAccount',
   // Row 4.2g: a well-formed line against an item whose own sale schedule
   // currently excludes it -- shown, distinct from a product that vanished
   // from the menu entirely.

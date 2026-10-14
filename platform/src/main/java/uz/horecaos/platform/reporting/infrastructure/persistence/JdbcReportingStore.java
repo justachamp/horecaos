@@ -1638,6 +1638,7 @@ public class JdbcReportingStore {
         params.put("definitionVersion", fact.definitionVersion());
         params.put("sourceKind", fact.sourceKind());
         params.put("couponId", fact.couponId());
+        params.put("grantId", fact.grantId());
         params.put("orderId", fact.orderId());
         params.put("subjectHash", fact.customerSubjectHash());
         params.put("discount", fact.discountMinor());
@@ -1648,11 +1649,11 @@ public class JdbcReportingStore {
         jdbc.sql("""
                 INSERT INTO reporting.fact_promotion_redemption (
                     tenant_id, redemption_id, business_date, boundary_version, metric_calculation_version,
-                    brand_id, promotion_id, promotion_code, definition_version, source_kind, coupon_id,
+                    brand_id, promotion_id, promotion_code, definition_version, source_kind, coupon_id, grant_id,
                     order_id, customer_subject_hash, discount_minor, markup_minor, currency, redeemed_at)
                 VALUES (
                     :tenantId, :redemptionId, :businessDate, :boundaryVersion, :calculationVersion,
-                    :brandId, :promotionId, :promotionCode, :definitionVersion, :sourceKind, :couponId,
+                    :brandId, :promotionId, :promotionCode, :definitionVersion, :sourceKind, :couponId, :grantId,
                     :orderId, :subjectHash, :discount, :markup, :currency, :redeemedAt)
                 """).params(params).update();
     }

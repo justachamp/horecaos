@@ -42,7 +42,8 @@ import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStor
 @Service
 public class AppliedPromotionService implements AppliedPromotionPort {
 
-    private static final String PROMOTION_SOURCE = "PROMOTION";
+    private static final String PROMOTION_SOURCE = PricingEngine.PROMOTION_SOURCE;
+    private static final String GRANT_SOURCE = PricingEngine.GRANT_SOURCE;
 
     private final JdbcPricingStore pricing;
     private final JdbcPromoCodeStore promoCodes;
@@ -65,13 +66,22 @@ public class AppliedPromotionService implements AppliedPromotionPort {
             return AppliedPromotions.none();
         }
         List<QuoteSnapshot.Adjustment> promotionRows = quote.adjustments().stream()
-                .filter(adjustment -> PROMOTION_SOURCE.equals(adjustment.sourceType()) && adjustment.sourceId() != null)
+                .filter(adjustment -> (PROMOTION_SOURCE.equals(adjustment.sourceType())
+                                || GRANT_SOURCE.equals(adjustment.sourceType()))
+                        && adjustment.sourceId() != null)
                 .toList();
         Set<UUID> appliedIds = new LinkedHashSet<>();
+        Set<UUID> grantIds = new LinkedHashSet<>();
         for (QuoteSnapshot.Adjustment adjustment : promotionRows) {
             appliedIds.add(adjustment.sourceId());
+            if (GRANT_SOURCE.equals(adjustment.sourceType())) {
+                grantIds.add(adjustment.sourceId());
+            }
         }
-        Set<UUID> gated = promoCodes.couponGatedPromotionIds(tenantId, appliedIds);
+        // A customer's one-off grant is a typed code like a shared one (ADR 0140): it was asked for, so it is
+        // told apart from an automatic offer the same way.
+        Set<UUID> gated = new LinkedHashSet<>(promoCodes.couponGatedPromotionIds(tenantId, appliedIds));
+        gated.addAll(grantIds);
 
         // One entry per (source, effect): "two offers applied" is a fact about the
         // rule set, not about the basket, and a customer reads the sum.
@@ -107,7 +117,7 @@ public class AppliedPromotionService implements AppliedPromotionPort {
         if (!verdict.isEligible()) {
             return CouponOutcome.NOT_VALID;
         }
-        UUID promotionId = verdict.promotionId();
+        UUID promotionId = verdict.standsFor();
         if (promotionId != null && appliedIds.contains(promotionId)) {
             return CouponOutcome.APPLIED;
         }

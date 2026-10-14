@@ -182,7 +182,7 @@ public class PricingEngine {
                             ++sequence,
                             entry.getKey(),
                             Adjustment.Type.ITEM_DISCOUNT,
-                            "PROMOTION",
+                            sourceTypeOf(inputs, applied.promotionId()),
                             applied.promotionId(),
                             applied.definitionVersion(),
                             Money.of(-entry.getValue(), currency),
@@ -193,7 +193,7 @@ public class PricingEngine {
                             ++sequence,
                             null,
                             Adjustment.Type.ORDER_DISCOUNT,
-                            "PROMOTION",
+                            sourceTypeOf(inputs, applied.promotionId()),
                             applied.promotionId(),
                             applied.definitionVersion(),
                             Money.of(-applied.orderMinor(), currency),
@@ -283,7 +283,10 @@ public class PricingEngine {
                 adjustments,
                 sequence,
                 offers.deliveryBenefitMinor(),
-                offers);
+                offers,
+                inputs.promotions() == null
+                        ? java.util.Set.of()
+                        : inputs.promotions().grantIds());
 
         // Stage 8. subtotal is reported gross of the discount — derived from
         // preDiscountGrossTotal, not from the discounted grossTotal below —
@@ -723,7 +726,8 @@ public class PricingEngine {
             List<Adjustment> adjustments,
             int sequence,
             long promotionBenefitMinor,
-            PromotionEvaluator.Outcome offers) {
+            PromotionEvaluator.Outcome offers,
+            java.util.Set<UUID> grantIds) {
 
         if (charge == null || !charge.isResolved()) {
             return new Delivery(0L, lines, null);
@@ -838,7 +842,7 @@ public class PricingEngine {
                         ++sequence,
                         DELIVERY_FEE_LINE_ID,
                         Adjustment.Type.DELIVERY_FEE_BENEFIT,
-                        "PROMOTION",
+                        grantIds.contains(applied.promotionId()) ? GRANT_SOURCE : PROMOTION_SOURCE,
                         applied.promotionId(),
                         applied.definitionVersion(),
                         Money.of(-share, currency),
@@ -852,6 +856,20 @@ public class PricingEngine {
         // here means the basket clears the minimum, so there is no shortfall
         // left to report.
         return new Delivery(fee, List.copyOf(withDelivery), null);
+    }
+
+    /** The {@code source_type} of an adjustment a promotion produced. */
+    public static final String PROMOTION_SOURCE = "PROMOTION";
+
+    /**
+     * The {@code source_type} of an adjustment a customer's one-off benefit grant produced (ADR 0140). There is
+     * no promotion row behind the id such an adjustment names, so it must not claim to be one.
+     */
+    public static final String GRANT_SOURCE = "GRANT";
+
+    private static String sourceTypeOf(PricingInputs inputs, UUID promotionId) {
+        PromotionInputs offers = inputs.promotions();
+        return offers != null && offers.grantIds().contains(promotionId) ? GRANT_SOURCE : PROMOTION_SOURCE;
     }
 
     /**
@@ -1429,15 +1447,27 @@ public class PricingEngine {
      *        and this engine may read neither a clock nor a zone.
      * @param membership variant to product and categories, for the line-matching
      *        conditions.
+     * @param grantIds the ids among {@code promotions} that stand for a customer's one-off benefit grant and not
+     *        for a promotion row (ADR 0140); the adjustments they produce name the source {@code GRANT}.
      */
     public record PromotionInputs(
             List<Promotion> promotions,
             PromotionEvaluator.PromotionContext context,
-            Map<UUID, MenuMembershipLookup.Membership> membership) {
+            Map<UUID, MenuMembershipLookup.Membership> membership,
+            java.util.Set<UUID> grantIds) {
 
         public PromotionInputs {
             promotions = promotions == null ? List.of() : List.copyOf(promotions);
             membership = membership == null ? Map.of() : Map.copyOf(membership);
+            grantIds = grantIds == null ? java.util.Set.of() : java.util.Set.copyOf(grantIds);
+        }
+
+        /** Inputs with no benefit grant among the promotions: every caller that predates ADR 0140's grants. */
+        public PromotionInputs(
+                List<Promotion> promotions,
+                PromotionEvaluator.PromotionContext context,
+                Map<UUID, MenuMembershipLookup.Membership> membership) {
+            this(promotions, context, membership, java.util.Set.of());
         }
     }
 

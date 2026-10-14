@@ -168,22 +168,10 @@ public class BenefitGrantService {
             return RedemptionOutcome.refused(RedemptionOutcome.Reason.CODE_NOT_FOUND);
         }
         GrantRow row = found.get();
-        if (!row.customerAccountId().equals(customerAccountId)) {
-            // Refused without distinguishing "code exists" from "code does not
-            // exist" in the reason returned to the caller below this method —
-            // WRONG_CUSTOMER is deliberately as far as this leaks, never the
-            // account it actually belongs to.
-            return RedemptionOutcome.refused(RedemptionOutcome.Reason.WRONG_CUSTOMER);
-        }
         Instant now = clock.instant();
-        if (!"ACTIVE".equals(row.status())) {
-            return RedemptionOutcome.refused(RedemptionOutcome.Reason.ALREADY_USED);
-        }
-        if (now.isBefore(row.validFrom())) {
-            return RedemptionOutcome.refused(RedemptionOutcome.Reason.NOT_YET_ACTIVE);
-        }
-        if (row.expiresAt() != null && !now.isBefore(row.expiresAt())) {
-            return RedemptionOutcome.refused(RedemptionOutcome.Reason.EXPIRED);
+        Optional<RedemptionOutcome.Reason> refusal = BenefitGrantEligibility.refusalOf(row, customerAccountId, now);
+        if (refusal.isPresent()) {
+            return RedemptionOutcome.refused(refusal.get());
         }
 
         boolean claimed = store.redeemIfActive(tenantId, row.grantId(), customerAccountId, orderId, null, now);
@@ -200,6 +188,93 @@ public class BenefitGrantService {
                 row.maximumDiscountMinor(),
                 row.currency(),
                 row.minBasketMinor());
+    }
+
+    /** What claiming the grant a quote was priced with came to. */
+    public record Claim(Outcome outcome, @Nullable UUID grantId, RedemptionOutcome.@Nullable Reason reason) {
+
+        public boolean isRefused() {
+            return outcome == Outcome.REFUSED;
+        }
+
+        public enum Outcome {
+            /** No grant was priced into the quote. Nothing to claim, and nothing refused. */
+            NONE,
+            CLAIMED,
+            REFUSED
+        }
+    }
+
+    /**
+     * Claims the grant the quote was priced with, for the order a checkout is about to write (ADR 0140): the one
+     * place a grant is spent at checkout.
+     *
+     * <p>Which grant applied is read from the quote's own {@code GRANT} adjustments and never from a value on the
+     * request, so a request cannot spend a grant the quote was not priced with. A quote with none returns {@link
+     * Claim.Outcome#NONE}, which is success. The claim is one conditional {@code UPDATE} that checks the customer,
+     * the brand, the status and the window in the statement that spends it: two checkouts racing for one grant
+     * have exactly one winner, and the loser is refused as {@code ALREADY_USED}. A retried checkout finds its own
+     * claim by the quote and claims nothing twice.
+     *
+     * <p>Must run inside the checkout's transaction, beside the inventory hold and the quote acceptance, and is
+     * given back by {@link #releaseForQuote} if a later step of the same checkout fails.
+     */
+    @Transactional
+    public Claim claimForQuote(
+            UUID tenantId, UUID brandId, UUID quoteId, UUID orderId, @Nullable UUID customerAccountId, Instant now) {
+        Optional<JdbcBenefitGrantStore.GrantOnQuote> applied = store.grantAppliedToQuote(tenantId, quoteId);
+        if (applied.isEmpty()) {
+            return new Claim(Claim.Outcome.NONE, null, null);
+        }
+        JdbcBenefitGrantStore.GrantOnQuote grant = applied.get();
+        if (store.isClaimedByQuote(tenantId, grant.grantId(), quoteId)) {
+            return new Claim(Claim.Outcome.CLAIMED, grant.grantId(), null);
+        }
+        if (customerAccountId == null) {
+            return new Claim(Claim.Outcome.REFUSED, grant.grantId(), RedemptionOutcome.Reason.REQUIRES_ACCOUNT);
+        }
+        boolean claimed = store.claimIfActive(
+                tenantId,
+                brandId,
+                grant.grantId(),
+                customerAccountId,
+                orderId,
+                quoteId,
+                grant.discountMinor(),
+                grant.currency(),
+                now);
+        return claimed
+                ? new Claim(Claim.Outcome.CLAIMED, grant.grantId(), null)
+                : new Claim(Claim.Outcome.REFUSED, grant.grantId(), RedemptionOutcome.Reason.ALREADY_USED);
+    }
+
+    /**
+     * Gives back the grant a checkout claimed under this quote when a later step of the same checkout failed,
+     * or when the order it was claimed for ended without ever being fulfilled (the rule coupons follow).
+     *
+     * @return false when this quote holds no grant, which is not an error
+     */
+    @Transactional
+    public boolean releaseForQuote(UUID tenantId, UUID quoteId) {
+        return store.releaseByQuote(tenantId, quoteId, clock.instant());
+    }
+
+    /**
+     * Restates what the grant an order holds took off, after an amendment repriced the order: the order keeps the
+     * one spend its checkout made, and only the amount moves. A quote that no longer produces the grant's
+     * discount restates it to zero.
+     *
+     * @return false when the order holds no grant
+     */
+    @Transactional
+    public boolean restateForOrder(UUID tenantId, UUID orderId, UUID amendedQuoteId) {
+        if (store.findHeldByOrder(tenantId, orderId).isEmpty()) {
+            return false;
+        }
+        long discount = store.grantAppliedToQuote(tenantId, amendedQuoteId)
+                .map(JdbcBenefitGrantStore.GrantOnQuote::discountMinor)
+                .orElse(0L);
+        return store.restateDiscount(tenantId, orderId, discount, clock.instant());
     }
 
     public List<GrantRow> forCustomer(UUID tenantId, UUID brandId, UUID customerAccountId) {
@@ -286,7 +361,9 @@ public class BenefitGrantService {
             WRONG_CUSTOMER,
             NOT_YET_ACTIVE,
             EXPIRED,
-            ALREADY_USED
+            ALREADY_USED,
+            /** A guest presented a grant's code: a grant is bound to an account, which a guest does not have. */
+            REQUIRES_ACCOUNT
         }
     }
 }

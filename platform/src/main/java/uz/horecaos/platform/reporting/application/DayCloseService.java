@@ -627,7 +627,8 @@ public class DayCloseService {
                                                 source.discountMinor(),
                                                 source.markupMinor(),
                                                 source.currency(),
-                                                source.redeemedAt()))
+                                                source.redeemedAt(),
+                                                source.grantId()))
                                 .toList();
 
         // ADR 0156: the closed shifts whose business date is this day, through the workforce port. The

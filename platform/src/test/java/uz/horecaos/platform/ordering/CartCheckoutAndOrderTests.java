@@ -493,7 +493,11 @@ class CartCheckoutAndOrderTests {
                 objectMapper,
                 clock,
                 customerBlacklist,
-                new PromoCodeEligibilityService(promoCodeStore),
+                new PromoCodeEligibilityService(
+                        promoCodeStore,
+                        new uz.horecaos.platform.pricing.application.BenefitGrantEligibility(
+                                new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcBenefitGrantStore(
+                                        jdbc))),
                 new FakeConfigurationResolver(),
                 saleWindowRules,
                 commentPresetLookup,
@@ -511,7 +515,7 @@ class CartCheckoutAndOrderTests {
                 new JdbcAuditRecorder(jdbc, objectMapper),
                 published,
                 clock,
-                new PromoCodeRedemptionService(promoCodeStore, clock));
+                grantAwareRedemptions(promoCodeStore));
         // The ordering.api face a POS integration reaches OrderStateService.decide
         // through (ADR 0002, ADR 0011 §6.4) — a translation layer only, so it is
         // built directly over the same orderState this suite already wires by
@@ -596,7 +600,7 @@ class CartCheckoutAndOrderTests {
                 serviceability,
                 quotes,
                 inventory,
-                new PromoCodeRedemptionService(new JdbcPromoCodeStore(jdbc, objectMapper), clock),
+                grantAwareRedemptions(new JdbcPromoCodeStore(jdbc, objectMapper)),
                 catalogSnapshot,
                 tenantContext,
                 policies,
@@ -1479,6 +1483,77 @@ class CartCheckoutAndOrderTests {
         assertThat(redeemedCount(drafted.couponId()))
                 .as("an order that never completed must not permanently burn the customer's redemption")
                 .isEqualTo(0L);
+    }
+
+    /**
+     * The redemption port as production wires it: a shared code claims the coupon, and a customer's one-off
+     * grant (ADR 0140) is spent by the same checkout transaction and given back by the same compensation.
+     */
+    private PromoCodeRedemptionService grantAwareRedemptions(JdbcPromoCodeStore promoCodeStore) {
+        var grantStore = new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcBenefitGrantStore(jdbc);
+        return new PromoCodeRedemptionService(
+                promoCodeStore,
+                clock,
+                uz.horecaos.platform.pricing.application.PromotionMetrics.none(),
+                new uz.horecaos.platform.pricing.application.BenefitGrantService(
+                        grantStore, uz.horecaos.platform.support.AuditTrail.recorder(jdbc), clock));
+    }
+
+    @Test
+    @DisplayName("a customer's one-off code is priced, spent by checkout and given back when the order is cancelled")
+    void aOneOffGrantIsSpentByCheckoutAndGivenBackOnCancellation() {
+        requireApproval();
+        var grants = new uz.horecaos.platform.pricing.application.BenefitGrantService(
+                new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcBenefitGrantStore(jdbc),
+                uz.horecaos.platform.support.AuditTrail.recorder(jdbc),
+                clock);
+        var minted = grants.mint(
+                TENANT,
+                BRAND,
+                new uz.horecaos.platform.pricing.application.BenefitGrantService.MintRequest(
+                        CUSTOMER,
+                        uz.horecaos.platform.pricing.application.PromoCodeAuthoringService.DiscountShape
+                                .PERCENTAGE_OFF_ORDER,
+                        1_500L,
+                        null,
+                        "UZS",
+                        0L,
+                        "RECOVERY_CASE",
+                        UUID.randomUUID(),
+                        null,
+                        null),
+                uz.horecaos.platform.audit.api.ActorRef.user("promo-author", null),
+                "test");
+
+        UUID cart = openCart();
+        putLine(cart, "a", burgerVariant, 1);
+        tx(() -> carts.applyPromoCode(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart), minted.plaintextCode()));
+        tx(() -> carts.price(TENANT, BRAND, CUSTOMER, cart, cartVersion(cart)));
+
+        var result = tx(() -> checkout.checkout(checkoutCommand(cart, "idem-grant-checkout")));
+
+        assertThat(result.created()).isTrue();
+        UUID order = orderIdOf(result);
+        assertThat(orderStore.find(TENANT, order).orElseThrow().discountMinor())
+                .as("15% of the 50 000 burger")
+                .isEqualTo(7_500L);
+        var held = jdbc.sql("SELECT status, order_id FROM pricing.benefit_grants WHERE id = :id")
+                .param("id", minted.grantId())
+                .query()
+                .singleRow();
+        assertThat(held.get("status")).isEqualTo("REDEEMED");
+        assertThat(held.get("order_id")).isEqualTo(order);
+
+        int version = orderStore.find(TENANT, order).orElseThrow().version();
+        tx(() -> orderState.cancel(
+                TENANT, order, version, "CUSTOMER_CHANGED_MIND", "CUSTOMER", CUSTOMER.toString(), null));
+
+        assertThat(jdbc.sql("SELECT status FROM pricing.benefit_grants WHERE id = :id")
+                        .param("id", minted.grantId())
+                        .query(String.class)
+                        .single())
+                .as("an order that never completed does not burn the customer's apology")
+                .isEqualTo("ACTIVE");
     }
 
     private long redeemedCount(UUID couponId) {

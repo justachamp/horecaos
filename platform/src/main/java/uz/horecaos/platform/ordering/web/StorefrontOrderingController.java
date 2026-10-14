@@ -763,6 +763,9 @@ public class StorefrontOrderingController {
                             "CODE_EXPIRED",
                             "REDEMPTION_LIMIT_REACHED",
                             "PER_CUSTOMER_LIMIT_REACHED",
+                            // ADR 0140: a one-off grant already spent, or a guest presenting one.
+                            "CODE_ALREADY_USED",
+                            "CODE_REQUIRES_ACCOUNT",
                             // ADR 0158: a line a rule added that the customer may not remove or lower, or
                             // a quantity past the rule's bounds -- the basket is well formed, the rule refuses.
                             "AUTO_ADD_LINE_MANDATORY",

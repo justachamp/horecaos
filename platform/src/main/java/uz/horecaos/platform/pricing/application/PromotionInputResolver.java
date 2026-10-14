@@ -13,6 +13,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.fulfillment.api.ResolvedDeliveryCharge;
 import uz.horecaos.platform.pricing.api.AudienceMembershipPort;
@@ -21,6 +22,7 @@ import uz.horecaos.platform.pricing.api.PromoCodeQueryPort;
 import uz.horecaos.platform.pricing.domain.Promotion;
 import uz.horecaos.platform.pricing.domain.PromotionDefinition;
 import uz.horecaos.platform.pricing.domain.QuoteRequest;
+import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcBenefitGrantStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromotionStore;
@@ -63,7 +65,9 @@ public class PromotionInputResolver {
     private final LocationTimeZoneLookup timeZones;
     private final ObjectProvider<CustomerOrderHistoryPort> history;
     private final ObjectProvider<AudienceMembershipPort> audiences;
+    private final @Nullable JdbcBenefitGrantStore grantStore;
 
+    /** A resolver for a caller that predates one-off grants: a presented code can only be a shared one. */
     @SuppressWarnings("checkstyle:ParameterNumber")
     public PromotionInputResolver(
             JdbcPromoCodeStore promoCodes,
@@ -74,6 +78,22 @@ public class PromotionInputResolver {
             LocationTimeZoneLookup timeZones,
             ObjectProvider<CustomerOrderHistoryPort> history,
             ObjectProvider<AudienceMembershipPort> audiences) {
+        this(promoCodes, promotions, pricing, promoCodeEligibility, membership, timeZones, history, audiences, null);
+    }
+
+    @Autowired
+    @SuppressWarnings("checkstyle:ParameterNumber")
+    public PromotionInputResolver(
+            JdbcPromoCodeStore promoCodes,
+            JdbcPromotionStore promotions,
+            JdbcPricingStore pricing,
+            PromoCodeEligibilityService promoCodeEligibility,
+            MenuMembershipLookup membership,
+            LocationTimeZoneLookup timeZones,
+            ObjectProvider<CustomerOrderHistoryPort> history,
+            ObjectProvider<AudienceMembershipPort> audiences,
+            @Nullable JdbcBenefitGrantStore grantStore) {
+        this.grantStore = grantStore;
         this.promoCodes = promoCodes;
         this.promotions = promotions;
         this.pricing = pricing;
@@ -117,6 +137,7 @@ public class PromotionInputResolver {
             Optional<SalesChannel> channel,
             @Nullable ResolvedDeliveryCharge charge,
             Set<UUID> variantIds,
+            String currency,
             @Nullable Overrides overrides) {
 
         QuoteRequest.Frame frame = request.frame();
@@ -224,9 +245,12 @@ public class PromotionInputResolver {
             }
         }
 
-        // The coupon presented, exactly as before: a presented code is re-checked fresh, and an
-        // order's own redeemed code is carried without a new eligibility test.
+        // The code presented, exactly as before for a shared code: a presented code is re-checked fresh, and an
+        // order's own redeemed code is carried without a new eligibility test. A code that is not a shared one may
+        // be the customer's own one-off benefit grant (ADR 0140), which the engine treats exactly as it treats a
+        // shared code (exclusive, comparative, never combined with an automatic offer) as a transient promotion.
         Set<UUID> presented = new HashSet<>();
+        Set<UUID> grantIds = new HashSet<>();
         List<Promotion> promotionsOut = new ArrayList<>(pool);
         if (request.presentedCouponCode() != null
                 && !request.presentedCouponCode().isBlank()) {
@@ -234,6 +258,12 @@ public class PromotionInputResolver {
                     request.tenantId(), request.brandId(), request.presentedCouponCode(), accountId, now);
             if (eligibility.isEligible() && eligibility.promotionId() != null) {
                 presented.add(eligibility.promotionId());
+            } else if (eligibility.isEligible() && eligibility.grantId() != null && grantStore != null) {
+                grantStore.findById(request.tenantId(), eligibility.grantId()).ifPresent(grant -> {
+                    promotionsOut.add(GrantPromotion.of(request.tenantId(), grant, currency, false));
+                    presented.add(grant.grantId());
+                    grantIds.add(grant.grantId());
+                });
             }
         }
         if (request.carriedRedemptionOrderId() != null) {
@@ -248,6 +278,20 @@ public class PromotionInputResolver {
                     heldPromotions.forEach(promotion -> promotionsOut.add(promotion.heldPastItsWindow()));
                     presented.add(heldPromotionId);
                 }
+            }
+            // The grant an order spent is kept the same way, whether or not the amendment presents a code, and
+            // keeps applying after its window closes: the window decided whether the order could spend it.
+            if (grantStore != null) {
+                grantStore
+                        .findHeldByOrder(request.tenantId(), request.carriedRedemptionOrderId())
+                        .filter(grant -> grant.brandId().equals(request.brandId()))
+                        .ifPresent(grant -> {
+                            promotionsOut.removeIf(
+                                    promotion -> promotion.promotionId().equals(grant.grantId()));
+                            promotionsOut.add(GrantPromotion.of(request.tenantId(), grant, currency, true));
+                            presented.add(grant.grantId());
+                            grantIds.add(grant.grantId());
+                        });
             }
         }
 
@@ -310,7 +354,7 @@ public class PromotionInputResolver {
                 zone.getId(),
                 List.of());
 
-        return new Resolved(new PricingEngine.PromotionInputs(promotionsOut, context, memberships), recorded);
+        return new Resolved(new PricingEngine.PromotionInputs(promotionsOut, context, memberships, grantIds), recorded);
     }
 
     /**

@@ -387,8 +387,8 @@ public class QuoteService implements QuoteAcceptancePort, CartPricingPort {
         Map<UUID, String> descriptions = catalog.descriptions(request.tenantId(), request.brandId(), pricedVariantIds);
         ResolvedDeliveryCharge charge = resolveDeliveryCharge(request, quoteId, priceBook.currency(), now);
 
-        PromotionInputResolver.Resolved resolved =
-                promotionInputs.resolve(request, now, channel, charge, pricedVariantIds, overrides);
+        PromotionInputResolver.Resolved resolved = promotionInputs.resolve(
+                request, now, channel, charge, pricedVariantIds, priceBook.currency(), overrides);
 
         var inputs = new PricingEngine.PricingInputs(
                 priceBook.currency(),
