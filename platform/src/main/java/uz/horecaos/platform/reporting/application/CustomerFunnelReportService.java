@@ -1,6 +1,7 @@
 package uz.horecaos.platform.reporting.application;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -29,9 +30,12 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * <p>Three things this class will not do, each by design.
  *
  * <ul>
- *   <li><strong>Draw a visits stage as anything but "not measured".</strong> Nothing is collected
- *       from a browser (Decision 1), so the stage is returned with {@code measured = false} and a
- *       reason, and no count and no ratio. A zero here would be believed.
+ *   <li><strong>Draw a visits stage as anything but "not measured", or "page loads, not people".</strong>
+ *       Nothing is collected from a browser (Decision 1), so the stage is returned with {@code measured =
+ *       false} and a reason, and no count and no ratio. A zero here would be believed. The one exception
+ *       is ADR 0183 D18: once the platform owner has switched the page-load count on, the stage carries a
+ *       count whose {@code basis} is {@code PAGE_LOADS}, a count of tab sessions and not of people, with
+ *       the days before the counter started reported as unrecorded. It is still never a denominator.
  *   <li><strong>Turn a gap into a zero.</strong> A day whose basket or checkout count is "not
  *       recorded" is summed as nothing <em>and</em> reported in {@code unrecordedDays}, so the
  *       stage says its total is partial rather than quietly low.
@@ -47,16 +51,19 @@ public class CustomerFunnelReportService {
     private final BusinessDayService businessDays;
     private final ReportQueryService reports;
     private final AttributionClickSeries clicks;
+    private final PageLoadCountService pageLoads;
 
     public CustomerFunnelReportService(
             JdbcFunnelStore store,
             BusinessDayService businessDays,
             ReportQueryService reports,
-            AttributionClickSeries clicks) {
+            AttributionClickSeries clicks,
+            PageLoadCountService pageLoads) {
         this.store = store;
         this.businessDays = businessDays;
         this.reports = reports;
         this.clicks = clicks;
+        this.pageLoads = pageLoads;
     }
 
     @Transactional(readOnly = true)
@@ -74,7 +81,7 @@ public class CustomerFunnelReportService {
                 registrationsCutByChannel ? List.of() : store.readRegistrationDays(tenantId, from, to, brandId);
 
         List<Stage> stages = new ArrayList<>();
-        stages.add(Stage.notMeasured("VISITS", "NOT_COLLECTED"));
+        stages.add(visits(tenantId, from, to, brandId, blankToNull(channelCode)));
         stages.add(
                 registrationsCutByChannel
                         ? Stage.notMeasured("REGISTERED", "NOT_BY_CHANNEL")
@@ -123,6 +130,24 @@ public class CustomerFunnelReportService {
                 provenance(tenantId, "acquisition.source.v1"));
     }
 
+    /**
+     * The visits stage: «not measured» while the page-load count is dark, and a count of page loads, labelled as such, once
+     * it is on (ADR 0183 D18). Business dates in the range before the counter wrote its first row are reported as unrecorded
+     * and are not summed as zero, so a range that reaches back past the day it was switched on says its total is partial.
+     */
+    private Stage visits(
+            UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId, @Nullable String channel) {
+        if (!pageLoads.enabled()) {
+            return Stage.notMeasured("VISITS", "NOT_COLLECTED");
+        }
+        long loads = store.readPageLoads(tenantId, from, to, brandId, channel);
+        long rangeDays = ChronoUnit.DAYS.between(from, to) + 1;
+        long unrecorded = store.firstPageLoadDate(tenantId, brandId)
+                .map(first -> Math.max(0, Math.min(ChronoUnit.DAYS.between(from, first), rangeDays)))
+                .orElse(rangeDays);
+        return Stage.pageLoads(loads, (int) unrecorded);
+    }
+
     private void requireBrand(UUID tenantId, @Nullable UUID brandId) {
         // Another tenant's brand and an unknown one answer alike, so the response cannot be used to
         // find out which brand ids exist elsewhere.
@@ -162,20 +187,28 @@ public class CustomerFunnelReportService {
      * @param unrecordedDays business dates inside the range whose count for this stage is "not recorded";
      *                      the total is a sum of what was recorded and is partial when this is above zero
      * @param reason        why a stage is not measured, null otherwise
+     * @param basis         what the count is a count <em>of</em>, when that is not the stage's own name: {@code PAGE_LOADS}
+     *                      for the visits stage once the page-load count is on, meaning tab sessions and not people (ADR 0183
+     *                      D18). A client must not draw a ratio against it
      */
     public record Stage(
             String stage,
             boolean measured,
             @Nullable String reason,
             @Nullable Long count,
-            int unrecordedDays) {
+            int unrecordedDays,
+            @Nullable String basis) {
 
         static Stage notMeasured(String stage, String reason) {
-            return new Stage(stage, false, reason, null, 0);
+            return new Stage(stage, false, reason, null, 0, null);
         }
 
         static Stage of(String stage, long count, int unrecordedDays) {
-            return new Stage(stage, true, null, count, unrecordedDays);
+            return new Stage(stage, true, null, count, unrecordedDays, null);
+        }
+
+        static Stage pageLoads(long count, int unrecordedDays) {
+            return new Stage("VISITS", true, null, count, unrecordedDays, "PAGE_LOADS");
         }
     }
 

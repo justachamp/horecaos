@@ -141,7 +141,8 @@ class EndpointCapabilityDeclarationTests {
                     || isPreAccountPickupLocationSearchEndpoint(handler)
                     || isDeliveryFeePreviewEndpoint(handler)
                     || isContentCounterEndpoint(handler)
-                    || isAttributionLinkClickEndpoint(handler)) {
+                    || isAttributionLinkClickEndpoint(handler)
+                    || isPageLoadCountEndpoint(handler)) {
                 continue;
             }
             if (authorizationDeclarationCount(handler) == 0) {
@@ -274,6 +275,7 @@ class EndpointCapabilityDeclarationTests {
                     || isTerminalSecretEndpoint(handler)
                     || isContentCounterEndpoint(handler)
                     || isAttributionLinkClickEndpoint(handler)
+                    || isPageLoadCountEndpoint(handler)
                     || isDispatchRuleSimulationEndpoint(handler)
                     || isPromotionSimulationEndpoint(handler)
                     || isAutoAddSimulationEndpoint(handler)
@@ -756,6 +758,16 @@ class EndpointCapabilityDeclarationTests {
      */
     private static boolean isPreAccountPickupLocationSearchEndpoint(Method handler) {
         return pathOf(handler).equals("/api/v1/storefront/pickup-locations");
+    }
+
+    /**
+     * ADR 0183 D18: the anonymous page-load ping. Like the attribution-link click and the content counters it has no
+     * principal to authorise (a storefront visitor has not signed in, and the ping precedes any account), it can only add one
+     * to a per-day counter, it stores no address, user agent, cookie, session or path, it is dark behind a platform flag, and
+     * it is limited per visitor in the ADR 0033 limiter. Matched on the exact path and method, never a prefix.
+     */
+    private static boolean isPageLoadCountEndpoint(Method handler) {
+        return pathOf(handler).equals("/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/page-loads");
     }
 
     /**

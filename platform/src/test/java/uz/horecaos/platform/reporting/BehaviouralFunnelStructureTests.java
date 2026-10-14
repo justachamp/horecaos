@@ -33,7 +33,9 @@ class BehaviouralFunnelStructureTests {
     private static final List<String[]> TABLES = List.of(
             new String[] {"reporting", "fact_funnel_day"},
             new String[] {"reporting", "fact_registration_day"},
-            new String[] {"marketing", "attribution_link_clicks_day"});
+            new String[] {"marketing", "attribution_link_clicks_day"},
+            // ADR 0183 D18: the dark page-load counter is the same kind of table and is held to the same rule.
+            new String[] {"reporting", "page_load_counts_day"});
 
     private static TestDatabase.Handle db;
 
@@ -52,7 +54,7 @@ class BehaviouralFunnelStructureTests {
     }
 
     @Test
-    @DisplayName("none of the three funnel tables has a column that names or could identify a person")
+    @DisplayName("none of the funnel tables has a column that names or could identify a person")
     void noColumnCouldNameAPerson() {
         JdbcClient jdbc = JdbcClient.create(db.dataSource());
 
