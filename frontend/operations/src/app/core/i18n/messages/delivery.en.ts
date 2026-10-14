@@ -488,10 +488,6 @@ export const deliveryEn = {
   'delivery.regions.field.nameIn': 'Name ({locale})',
   'delivery.regions.field.boxHint':
     'The north-east corner must be north and east of the south-west one, and the centre must sit inside the box.',
-  'delivery.regions.field.swLat': 'SW latitude',
-  'delivery.regions.field.swLon': 'SW longitude',
-  'delivery.regions.field.neLat': 'NE latitude',
-  'delivery.regions.field.neLon': 'NE longitude',
   'delivery.regions.field.centreLat': 'Centre latitude',
   'delivery.regions.field.centreLon': 'Centre longitude',
 

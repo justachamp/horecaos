@@ -498,10 +498,6 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.regions.field.nameIn': 'Nomi ({locale})',
   'delivery.regions.field.boxHint':
     'Shimoli-sharqiy burchak janubi-gʻarbiydan shimolroq va sharqroq boʻlishi, markaz esa toʻrtburchak ichida turishi shart.',
-  'delivery.regions.field.swLat': 'JGʻ kenglik',
-  'delivery.regions.field.swLon': 'JGʻ uzunlik',
-  'delivery.regions.field.neLat': 'ShSh kenglik',
-  'delivery.regions.field.neLon': 'ShSh uzunlik',
   'delivery.regions.field.centreLat': 'Markaz kengligi',
   'delivery.regions.field.centreLon': 'Markaz uzunligi',
 

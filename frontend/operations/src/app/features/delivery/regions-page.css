@@ -117,7 +117,7 @@
 .dialog {
   background: var(--q-canvas);
   padding: 20px;
-  width: 460px;
+  width: 560px;
   max-width: 90vw;
   max-height: 90vh;
   overflow: auto;
@@ -186,4 +186,9 @@
   background: var(--q-surface-1);
   border-color: var(--q-hairline);
   color: var(--q-ink-muted);
+}
+
+.regions__bbox {
+  display: block;
+  margin-bottom: 12px;
 }

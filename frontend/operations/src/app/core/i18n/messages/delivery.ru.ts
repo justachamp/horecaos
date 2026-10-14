@@ -491,10 +491,6 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
   'delivery.regions.field.nameIn': 'Название ({locale})',
   'delivery.regions.field.boxHint':
     'Северо-восточный угол должен быть севернее и восточнее юго-западного, а центр — внутри прямоугольника.',
-  'delivery.regions.field.swLat': 'ЮЗ широта',
-  'delivery.regions.field.swLon': 'ЮЗ долгота',
-  'delivery.regions.field.neLat': 'СВ широта',
-  'delivery.regions.field.neLon': 'СВ долгота',
   'delivery.regions.field.centreLat': 'Широта центра',
   'delivery.regions.field.centreLon': 'Долгота центра',
 

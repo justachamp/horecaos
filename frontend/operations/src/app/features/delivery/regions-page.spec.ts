@@ -8,6 +8,7 @@ import { Auth } from '../../core/auth/auth';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { I18n, Locale } from '../../core/i18n/i18n';
 import { LocaleSetView } from '../../core/i18n/locale-labels';
+import { NullMapProvider, provideNullMapProvider } from '../../shared/ui/map/null-map-provider';
 import { RegionResponse, RegionsApi } from './regions-api';
 import { RegionsPage } from './regions-page';
 
@@ -54,15 +55,18 @@ async function flushMicrotasks(): Promise<void> {
 
 describe('RegionsPage', () => {
   let fixture: ComponentFixture<RegionsPage>;
+  let mapProvider: NullMapProvider;
 
   async function render(api: Partial<RegionsApi>, locale: Locale = 'en'): Promise<void> {
     const withLocaleSet: Partial<RegionsApi> = {
       localeSet: () => Promise.resolve(PLATFORM_SET),
       ...api,
     };
+    mapProvider = new NullMapProvider();
     await TestBed.configureTestingModule({
       imports: [RegionsPage],
       providers: [
+        provideNullMapProvider(mapProvider),
         {
           provide: CurrentBrand,
           useValue: {
@@ -123,10 +127,10 @@ describe('RegionsPage', () => {
     // be checked.
     for (const [testid, value] of [
       ['region-code', 'bukhara'],
-      ['region-sw-lat', '39.6'],
-      ['region-sw-lon', '64.1'],
-      ['region-ne-lat', '39.9'],
-      ['region-ne-lon', '64.5'],
+      ['q-bbox-sw-lat', '39.6'],
+      ['q-bbox-sw-lon', '64.1'],
+      ['q-bbox-ne-lat', '39.9'],
+      ['q-bbox-ne-lon', '64.5'],
       ['region-centre-lat', '39.75'],
       ['region-centre-lon', '64.3'],
     ] as const) {
@@ -134,11 +138,11 @@ describe('RegionsPage', () => {
       input.value = value;
       input.dispatchEvent(new Event('input'));
     }
-    for (const input of host().querySelectorAll<HTMLInputElement>('.dialog input[type="text"]')) {
-      if (input.getAttribute('data-testid') !== 'region-code') {
-        input.value = 'Bukhara';
-        input.dispatchEvent(new Event('input'));
-      }
+    for (const input of host().querySelectorAll<HTMLInputElement>(
+      '[data-testid^="region-name-"]',
+    )) {
+      input.value = 'Bukhara';
+      input.dispatchEvent(new Event('input'));
     }
     fixture.detectChanges();
     host().querySelector<HTMLButtonElement>('[data-testid="region-submit"]')!.click();
@@ -199,7 +203,9 @@ describe('RegionsPage', () => {
 
     host().querySelector<HTMLButtonElement>('.regions__create')!.click();
     fixture.detectChanges();
-    for (const input of host().querySelectorAll<HTMLInputElement>('.dialog input[type="text"]')) {
+    for (const input of host().querySelectorAll<HTMLInputElement>(
+      '[data-testid="region-code"], [data-testid^="region-name-"]',
+    )) {
       input.value = 'X';
       input.dispatchEvent(new Event('input'));
     }
@@ -377,5 +383,112 @@ describe('RegionsPage', () => {
     fixture.detectChanges();
 
     expect(host().querySelector('[data-testid="regions-denied"]')).not.toBeNull();
+  });
+
+  // ------------------------------- row X.4: the bounding-box editor on Delivery -> Regions
+
+  describe('the bounding-box editor (ADR 0145, row X.4)', () => {
+    const settle = async (): Promise<void> => {
+      await flushMicrotasks();
+      fixture.detectChanges();
+      await flushMicrotasks();
+      fixture.detectChanges();
+    };
+
+    const open = async (api: Partial<RegionsApi>): Promise<void> => {
+      await render(api);
+      host().querySelector<HTMLButtonElement>('[data-testid="region-edit"]')!.click();
+      fixture.detectChanges();
+      await settle();
+    };
+
+    const type = (testid: string, value: string): void => {
+      const input = host().querySelector<HTMLInputElement>(`[data-testid="${testid}"]`)!;
+      input.value = value;
+      input.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    };
+
+    it('replaces the four typed numbers with the editor: the region’s box is on the map and in the editor’s own fields', async () => {
+      await open({ list: vi.fn().mockResolvedValue([TENANT_REGION]) });
+
+      expect(host().querySelector('[data-testid="q-bbox-editor"]')).not.toBeNull();
+      expect(host().querySelector('[data-testid="region-sw-lat"]')).toBeNull();
+      expect(host().querySelector<HTMLInputElement>('[data-testid="q-bbox-sw-lat"]')!.value).toBe(
+        '39.4',
+      );
+      expect(host().querySelector<HTMLInputElement>('[data-testid="q-bbox-ne-lon"]')!.value).toBe(
+        '67.2',
+      );
+      expect(mapProvider.map.liveRectangles).toHaveLength(1);
+      expect(mapProvider.map.liveRectangles[0].bounds).toEqual({
+        southWest: { latitude: 39.4, longitude: 66.7 },
+        northEast: { latitude: 39.9, longitude: 67.2 },
+      });
+      // The centre stays a pair of plain inputs.
+      expect(host().querySelector('[data-testid="region-centre-lat"]')).not.toBeNull();
+      expect(host().querySelector('[data-testid="region-centre-lon"]')).not.toBeNull();
+    });
+
+    it('sends the box a person dragged on the map, not the one the form opened with', async () => {
+      const update = vi.fn().mockResolvedValue(undefined);
+      await open({ list: vi.fn().mockResolvedValue([TENANT_REGION]), update });
+
+      mapProvider.map.liveRectangles[0].simulateResize({
+        southWest: { latitude: 39.3, longitude: 66.6 },
+        northEast: { latitude: 40.0, longitude: 67.3 },
+      });
+      fixture.detectChanges();
+      host().querySelector<HTMLButtonElement>('[data-testid="region-submit"]')!.click();
+      await flushMicrotasks();
+
+      const body = update.mock.calls[0][2];
+      expect([body.bboxSwLat, body.bboxSwLon, body.bboxNeLat, body.bboxNeLon]).toEqual([
+        39.3, 66.6, 40.0, 67.3,
+      ]);
+      // Dragging the box does not move the centre the operator typed.
+      expect([body.centreLat, body.centreLon]).toEqual([39.65, 66.96]);
+    });
+
+    it('moves the rectangle when a number is typed, and keeps the last good box when the typed one is upside down', async () => {
+      const update = vi.fn().mockResolvedValue(undefined);
+      await open({ list: vi.fn().mockResolvedValue([TENANT_REGION]), update });
+
+      type('q-bbox-ne-lat', '39.95');
+      expect(mapProvider.map.liveRectangles[0].bounds.northEast.latitude).toBe(39.95);
+
+      // North-east south of the south-west corner: the editor says so and emits nothing.
+      type('q-bbox-ne-lat', '39.0');
+      expect(host().querySelector('[data-testid="q-bbox-problems"]')).not.toBeNull();
+      host().querySelector<HTMLButtonElement>('[data-testid="region-submit"]')!.click();
+      await flushMicrotasks();
+
+      expect(update.mock.calls[0][2].bboxNeLat).toBe(39.95);
+    });
+
+    it('still lets a box be typed when the map cannot be drawn', async () => {
+      const create = vi.fn().mockResolvedValue({ regionId: 'region-new', code: 'KHIVA' });
+      await render({ list: vi.fn().mockResolvedValue([]), create });
+      mapProvider.loadError = new Error('network');
+      host().querySelector<HTMLButtonElement>('.regions__create')!.click();
+      fixture.detectChanges();
+      await settle();
+
+      type('region-code', 'khiva');
+      type('region-name-ru', 'Хива');
+      type('q-bbox-sw-lat', '41.2');
+      type('q-bbox-sw-lon', '60.2');
+      type('q-bbox-ne-lat', '41.5');
+      type('q-bbox-ne-lon', '60.6');
+      type('region-centre-lat', '41.38');
+      type('region-centre-lon', '60.36');
+      host().querySelector<HTMLButtonElement>('[data-testid="region-submit"]')!.click();
+      await flushMicrotasks();
+
+      const body = create.mock.calls[0][1];
+      expect([body.bboxSwLat, body.bboxSwLon, body.bboxNeLat, body.bboxNeLon]).toEqual([
+        41.2, 60.2, 41.5, 60.6,
+      ]);
+    });
   });
 });
