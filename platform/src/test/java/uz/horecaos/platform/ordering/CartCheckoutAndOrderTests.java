@@ -7194,6 +7194,39 @@ class CartCheckoutAndOrderTests {
     }
 
     @Test
+    @DisplayName("the facts an order message may say are read from the real tables, and carry no customer (ADR 0184)")
+    void anOrderMessageReadsItsFactsFromTheRealTables() {
+        UUID order = orderIdOf(placeOrder("idem-notification-facts"));
+        var directory = new JdbcOrderDirectory(orderStore, jdbc);
+
+        var facts = directory.notificationFacts(TENANT, order).orElseThrow();
+
+        assertThat(facts.brandDisplayName())
+                .as("the brand's own name, which is what a customer calls the restaurant")
+                .isEqualTo("Brand");
+        assertThat(facts.timezone())
+                .as("the location's zone, so the promised time reads on the branch's clock")
+                .isEqualTo("Asia/Tashkent");
+        assertThat(facts.currency()).isEqualTo("UZS");
+        var stored = orderStore.find(TENANT, order).orElseThrow();
+        assertThat(facts.discountMinor()).isEqualTo(stored.discountMinor());
+        assertThat(facts.feeMinor()).isEqualTo(stored.feeMinor());
+        assertThat(facts.promisedAt()).isEqualTo(stored.promise().promisedAt());
+        assertThat(facts.prepMinutes()).isEqualTo(stored.promise().prepMinutes());
+        assertThat(facts.lines()).singleElement().satisfies(line -> {
+            assertThat(line.name()).isEqualTo("Qo'y burger");
+            assertThat(line.quantity()).isEqualByComparingTo("2");
+            assertThat(line.lineTotalMinor()).isPositive();
+        });
+        assertThat(facts.toString())
+                .as("nothing about the person who ordered travels with the order's facts")
+                .doesNotContain(CUSTOMER.toString());
+        assertThat(directory.notificationFacts(UUID.randomUUID(), order))
+                .as("another tenant is told nothing")
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("a delivery order publishes OrderFulfilling at the handover, and no completion yet (ADR 0184)")
     void aDeliveryHandoverPublishesFulfilling() {
         UUID order = orderIdOf(placeDeliveryOrder("idem-fulfilling-event"));
