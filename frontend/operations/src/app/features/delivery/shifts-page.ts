@@ -15,6 +15,7 @@ import { describeApiError } from '../orders/order-errors';
 import { PlanShiftDialog, PlanShiftSubmission } from './plan-shift-dialog';
 import { Toasts } from '../../shared/ui/toast';
 import { StatusPill, StatusTone } from '../../shared/ui/status-pill';
+import { registerShiftsKeys } from './shifts-keys';
 
 /** See `order-queue.ts`'s identical constant — no location carries a timezone on any response this board reaches yet. */
 const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
@@ -56,6 +57,8 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ShiftsPage implements OnInit {
+  /** couriers.md §7: the shift board's keys. */
+  private readonly keys = registerShiftsKeys();
   private readonly api = inject(CouriersApi);
   private readonly location = inject(CurrentLocation);
   private readonly toasts = inject(Toasts);

@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
@@ -11,6 +11,7 @@ import {
   ShiftView,
 } from '../couriers/couriers-api';
 import { I18n } from '../../core/i18n/i18n';
+import { ShortcutRegistry } from '../../shared/keyboard/shortcut-registry';
 import { ShiftsPage } from './shifts-page';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
@@ -355,5 +356,133 @@ describe('ShiftsPage', () => {
       'l1',
       expect.objectContaining({ courierId: 'courier-1' }),
     );
+  });
+});
+
+describe('ShiftsPage: the keys (couriers.md §7, gap map row X.1)', () => {
+  let fixture: ComponentFixture<ShiftsPage>;
+
+  async function render(api: Partial<CouriersApi>): Promise<void> {
+    await TestBed.configureTestingModule({
+      imports: [ShiftsPage],
+      providers: [
+        {
+          provide: CurrentLocation,
+          useValue: {
+            scope: signal<LocationScope | null>(SCOPE),
+            denied: signal(false),
+            ensureLoaded: () => Promise.resolve(),
+          },
+        },
+        { provide: CouriersApi, useValue: api },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    fixture = TestBed.createComponent(ShiftsPage);
+    fixture.detectChanges();
+    await flushMicrotasks();
+    fixture.detectChanges();
+  }
+
+  function key(value: string): boolean {
+    const event = new KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'target', { value: document.activeElement ?? document.body });
+    return TestBed.inject(ShortcutRegistry).dispatch(event);
+  }
+
+  /** Puts the cursor on row `index` the way an operator does: j from the top. */
+  function cursorOn(index: number): HTMLElement {
+    (document.activeElement as HTMLElement | null)?.blur();
+    for (let step = 0; step <= index; step++) {
+      key('j');
+    }
+    return rows()[index];
+  }
+
+  const rows = (): HTMLElement[] => [
+    ...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+      '[data-testid="shift-row"]',
+    ),
+  ];
+
+  afterEach(() => {
+    document.body.querySelectorAll('q-confirm-dialog').forEach((node) => node.remove());
+  });
+
+  it('j and k move between the shift rows, and the scope is on the cheat-sheet', async () => {
+    await render(
+      apiDefaults({
+        shifts: () =>
+          Promise.resolve([shift({}), shift({ shiftId: 'shift-2', status: 'AWAITING_APPROVAL' })]),
+      }),
+    );
+    const scope = TestBed.inject(ShortcutRegistry)
+      .scopes()
+      .find((candidate) => candidate.id === 'courier-shifts')!;
+    expect(scope.shortcuts.flatMap((shortcut) => shortcut.caps)).toEqual(
+      expect.arrayContaining(['j', 'k', 'p', 'c']),
+    );
+
+    expect(key('j')).toBe(true);
+    expect(document.activeElement).toBe(rows()[0]);
+    key('j');
+    expect(document.activeElement).toBe(rows()[1]);
+    key('k');
+    expect(document.activeElement).toBe(rows()[0]);
+  });
+
+  it('p approves the focused shift when it awaits approval, and does nothing on one that does not', async () => {
+    const approveShift = vi.fn().mockResolvedValue(undefined);
+    await render(
+      apiDefaults({
+        shifts: () =>
+          Promise.resolve([shift({}), shift({ shiftId: 'shift-2', status: 'AWAITING_APPROVAL' })]),
+        approveShift,
+      }),
+    );
+    cursorOn(0);
+    expect(key('p'), 'an open shift has no approve button').toBe(false);
+
+    cursorOn(1);
+    expect(key('p')).toBe(true);
+    await flushMicrotasks();
+
+    expect(approveShift).toHaveBeenCalledWith('t1', 'shift-2', expect.any(String));
+  });
+
+  it('c asks before it closes an open shift, and closes only on yes', async () => {
+    const closeShift = vi.fn().mockResolvedValue(undefined);
+    await render(apiDefaults({ shifts: () => Promise.resolve([shift({})]), closeShift }));
+    cursorOn(0);
+
+    expect(key('c')).toBe(true);
+    await flushMicrotasks();
+    const dialog = document.body.querySelector('q-confirm-dialog')!;
+    expect(dialog.textContent).toContain("Close this courier's shift?");
+    expect(closeShift).not.toHaveBeenCalled();
+    [...dialog.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent!.trim() === 'Keep it open')!
+      .click();
+    await flushMicrotasks();
+    expect(closeShift).not.toHaveBeenCalled();
+
+    cursorOn(0);
+    key('c');
+    await flushMicrotasks();
+    [...document.body.querySelectorAll<HTMLButtonElement>('q-confirm-dialog button')]
+      .find((button) => button.textContent!.trim() === 'Close the shift')!
+      .click();
+    await flushMicrotasks();
+
+    expect(closeShift).toHaveBeenCalledOnce();
+  });
+
+  it('c does nothing on a shift that is not open', async () => {
+    await render(
+      apiDefaults({ shifts: () => Promise.resolve([shift({ status: 'AWAITING_APPROVAL' })]) }),
+    );
+    cursorOn(0);
+
+    expect(key('c')).toBe(false);
   });
 });

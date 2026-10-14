@@ -16,6 +16,7 @@ import {
   LocationView,
   ServiceMode,
 } from './locations-api';
+import { registerLocationsListKeys } from './locations-keys';
 
 type StateFilter = 'ALL' | ServiceMode;
 const ALL = 'ALL';
@@ -58,6 +59,8 @@ function severityRank(mode: ServiceMode): number {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LocationsPage {
+  /** brands-and-locations.md §1.8: the branch list's keys. */
+  private readonly keys = registerLocationsListKeys();
   private readonly api = inject(LocationsApi);
   private readonly location = inject(CurrentLocation);
   private readonly route = inject(ActivatedRoute);

@@ -2,7 +2,11 @@
   <section class="q-schedule-grid__weekly">
     <h3 class="q-emphasis">{{ 'ui.scheduleGrid.weeklyTitle' | t }}</h3>
     @for (day of days; track day) {
-      <div class="q-schedule-grid__row" [attr.data-testid]="'q-schedule-grid-row-' + day">
+      <div
+        class="q-schedule-grid__row"
+        [attr.data-testid]="'q-schedule-grid-row-' + day"
+        (keydown)="onRowKeydown($event, day)"
+      >
         <span class="q-body-sm q-schedule-grid__day-label">{{ dayLabel(day) }}</span>
         <div class="q-schedule-grid__windows">
           @for (rule of rulesFor(day); track rule) {

@@ -231,4 +231,96 @@ describe('ScheduleGrid', () => {
 
     expect(emitted?.[0]).toEqual({ ...exception, reason: 'Public holiday' });
   });
+
+  // ---- brands-and-locations.md §4.7: «Alt+↓ copies the focused day's windows to the next day»
+
+  describe('Alt+Down copies the focused day to the next', () => {
+    const MONDAY_WINDOWS: ScheduleRule[] = [
+      { dayOfWeek: 1, opensAt: '09:00', closesAt: '13:00' },
+      { dayOfWeek: 1, opensAt: '14:00', closesAt: '22:00' },
+    ];
+
+    function altDown(fixture: ReturnType<typeof render>, day: number): KeyboardEvent {
+      const row = (fixture.nativeElement as HTMLElement).querySelector(
+        `[data-testid="q-schedule-grid-row-${day}"] [data-testid="q-time-input"]`,
+      ) as HTMLElement;
+      const event = new KeyboardEvent('keydown', {
+        key: 'ArrowDown',
+        altKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      row.dispatchEvent(event);
+      return event;
+    }
+
+    it('replaces the next day’s windows with a copy of this day’s, leaving every other day alone', () => {
+      const fixture = render();
+      const tuesday: ScheduleRule = { dayOfWeek: 2, opensAt: '10:00', closesAt: '16:00' };
+      const sunday: ScheduleRule = { dayOfWeek: 7, opensAt: '11:00', closesAt: '15:00' };
+      fixture.componentRef.setInput('rules', [...MONDAY_WINDOWS, tuesday, sunday]);
+      fixture.detectChanges();
+      let emitted: readonly ScheduleRule[] | undefined;
+      fixture.componentInstance.rulesChange.subscribe((r) => (emitted = r));
+
+      const event = altDown(fixture, 1);
+
+      expect(event.defaultPrevented, 'the page does not scroll').toBe(true);
+      expect(emitted).toEqual([
+        ...MONDAY_WINDOWS,
+        { dayOfWeek: 2, opensAt: '09:00', closesAt: '13:00' },
+        { dayOfWeek: 2, opensAt: '14:00', closesAt: '22:00' },
+        sunday,
+      ]);
+    });
+
+    it('on a day with no windows it clears the next day: copying «closed» is a copy too', () => {
+      const fixture = render();
+      const tuesday: ScheduleRule = { dayOfWeek: 2, opensAt: '10:00', closesAt: '16:00' };
+      fixture.componentRef.setInput('rules', [tuesday]);
+      fixture.detectChanges();
+      let emitted: readonly ScheduleRule[] | undefined;
+      fixture.componentInstance.rulesChange.subscribe((r) => (emitted = r));
+      const add = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="q-schedule-grid-row-1"] [data-testid="q-schedule-grid-add-window-1"]',
+      ) as HTMLElement;
+
+      add.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true }),
+      );
+
+      expect(emitted).toEqual([]);
+    });
+
+    it('does nothing on the last day: the week does not wrap', () => {
+      const fixture = render();
+      fixture.componentRef.setInput('rules', [
+        ...MONDAY_WINDOWS,
+        { dayOfWeek: 7, opensAt: '11:00', closesAt: '15:00' },
+      ]);
+      fixture.detectChanges();
+      let emitted = false;
+      fixture.componentInstance.rulesChange.subscribe(() => (emitted = true));
+
+      const event = altDown(fixture, 7);
+
+      expect(emitted).toBe(false);
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it('is not an ordinary ArrowDown: without Alt the time field keeps stepping and nothing is copied', () => {
+      const fixture = render();
+      fixture.componentRef.setInput('rules', MONDAY_WINDOWS);
+      fixture.detectChanges();
+      const emitted: (readonly ScheduleRule[])[] = [];
+      fixture.componentInstance.rulesChange.subscribe((r) => emitted.push(r));
+      const input = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="q-schedule-grid-row-1"] [data-testid="q-time-input"]',
+      ) as HTMLElement;
+
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+
+      expect(emitted.every((rules) => rules.every((rule) => rule.dayOfWeek === 1))).toBe(true);
+    });
+  });
 });
