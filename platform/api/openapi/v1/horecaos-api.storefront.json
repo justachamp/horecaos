@@ -644,6 +644,29 @@
         },
         "type" : "object"
       },
+      "ComponentsView" : {
+        "properties" : {
+          "country" : {
+            "type" : "string"
+          },
+          "district" : {
+            "type" : "string"
+          },
+          "formatted" : {
+            "type" : "string"
+          },
+          "house" : {
+            "type" : "string"
+          },
+          "locality" : {
+            "type" : "string"
+          },
+          "street" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ContactPointSummary" : {
         "properties" : {
           "id" : {
@@ -1418,6 +1441,29 @@
             "type" : "string"
           },
           "type" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "MapConfigResponse" : {
+        "properties" : {
+          "attribution" : {
+            "type" : "string"
+          },
+          "browserKey" : {
+            "type" : "string"
+          },
+          "configured" : {
+            "type" : "boolean"
+          },
+          "features" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "provider" : {
             "type" : "string"
           }
         },
@@ -2371,6 +2417,24 @@
         },
         "type" : "object"
       },
+      "PointBody" : {
+        "properties" : {
+          "latitude" : {
+            "format" : "double",
+            "maximum" : 90,
+            "minimum" : -90,
+            "type" : "number"
+          },
+          "longitude" : {
+            "format" : "double",
+            "maximum" : 180,
+            "minimum" : -180,
+            "type" : "number"
+          }
+        },
+        "required" : [ "latitude", "longitude" ],
+        "type" : "object"
+      },
       "Popup" : {
         "properties" : {
           "body" : {
@@ -2889,6 +2953,73 @@
         "required" : [ "phone" ],
         "type" : "object"
       },
+      "ResolutionsResponse" : {
+        "properties" : {
+          "reason" : {
+            "enum" : [ "NOT_CONFIGURED", "PROVIDER_REFUSED", "PROVIDER_UNAVAILABLE" ],
+            "type" : "string"
+          },
+          "results" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ResultView"
+            },
+            "type" : "array"
+          },
+          "status" : {
+            "enum" : [ "ANSWERED", "UNAVAILABLE" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ResultView" : {
+        "properties" : {
+          "components" : {
+            "$ref" : "#/components/schemas/ComponentsView"
+          },
+          "confidence" : {
+            "type" : "string"
+          },
+          "latitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "longitude" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "precision" : {
+            "type" : "string"
+          },
+          "provider" : {
+            "type" : "string"
+          },
+          "providerReference" : {
+            "type" : "string"
+          },
+          "resolvedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ReverseResolutionResponse" : {
+        "properties" : {
+          "reason" : {
+            "enum" : [ "NOT_CONFIGURED", "PROVIDER_REFUSED", "PROVIDER_UNAVAILABLE" ],
+            "type" : "string"
+          },
+          "result" : {
+            "$ref" : "#/components/schemas/ResultView"
+          },
+          "status" : {
+            "enum" : [ "ANSWERED", "UNAVAILABLE" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ReviewTag" : {
         "properties" : {
           "category" : {
@@ -3356,6 +3487,34 @@
         },
         "type" : "object"
       },
+      "StorefrontResolveRequest" : {
+        "properties" : {
+          "locale" : {
+            "pattern" : "^(ru|uz-Latn|en)$",
+            "type" : "string"
+          },
+          "text" : {
+            "maxLength" : 200,
+            "minLength" : 2,
+            "type" : "string"
+          }
+        },
+        "required" : [ "text" ],
+        "type" : "object"
+      },
+      "StorefrontReverseRequest" : {
+        "properties" : {
+          "locale" : {
+            "pattern" : "^(ru|uz-Latn|en)$",
+            "type" : "string"
+          },
+          "point" : {
+            "$ref" : "#/components/schemas/PointBody"
+          }
+        },
+        "required" : [ "point" ],
+        "type" : "object"
+      },
       "StorefrontReviewControllerReviewResponse" : {
         "properties" : {
           "comment" : {
@@ -3387,6 +3546,24 @@
             "type" : "array"
           }
         },
+        "type" : "object"
+      },
+      "StorefrontSuggestRequest" : {
+        "properties" : {
+          "locale" : {
+            "pattern" : "^(ru|uz-Latn|en)$",
+            "type" : "string"
+          },
+          "near" : {
+            "$ref" : "#/components/schemas/PointBody"
+          },
+          "text" : {
+            "maxLength" : 200,
+            "minLength" : 2,
+            "type" : "string"
+          }
+        },
+        "required" : [ "text" ],
         "type" : "object"
       },
       "StoryGroup" : {
@@ -3451,6 +3628,42 @@
             },
             "maxItems" : 5,
             "minItems" : 0,
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "SuggestionView" : {
+        "properties" : {
+          "fullText" : {
+            "type" : "string"
+          },
+          "providerReference" : {
+            "type" : "string"
+          },
+          "subtitle" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "SuggestionsResponse" : {
+        "properties" : {
+          "reason" : {
+            "enum" : [ "NOT_CONFIGURED", "PROVIDER_REFUSED", "PROVIDER_UNAVAILABLE" ],
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "ANSWERED", "UNAVAILABLE" ],
+            "type" : "string"
+          },
+          "suggestions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SuggestionView"
+            },
             "type" : "array"
           }
         },
@@ -5351,6 +5564,150 @@
         "x-horecaos-surface" : "published"
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/geocode/resolutions" : {
+      "post" : {
+        "description" : "Candidates best first, each with a point, normalized components, the provider's reference, a confidence, a precision and when it was calculated. A result outside the region's box is LOW_CONFIDENCE whatever the provider claimed. A result is a suggestion the customer confirms on a map; nothing here is stored, and nothing here can produce a GEOCODER point.",
+        "operationId" : "storefrontResolve",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StorefrontResolveRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ResolutionsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Find the places an address names",
+        "tags" : [ "Storefront address lookup" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/geocode/reverse-resolutions" : {
+      "post" : {
+        "description" : "The result is absent when the provider knows nothing there. The same region constraint and the same LOW_CONFIDENCE rule as a forward lookup.",
+        "operationId" : "storefrontReverseResolve",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StorefrontReverseRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReverseResolutionResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Name what is at a point",
+        "tags" : [ "Storefront address lookup" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/geocode/suggestions" : {
+      "post" : {
+        "description" : "Non-mutating; a POST only because the address text must stay out of the URL. Constrained to the tenant's region, ranked toward `near`. A provider that is not configured or is down answers 200 with status UNAVAILABLE, never an exception. Rate limited per customer and per tenant; answers are cached per tenant for the provider licence's limit.",
+        "operationId" : "storefrontSuggest",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StorefrontSuggestRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SuggestionsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Type-ahead completions for a half-typed address",
+        "tags" : [ "Storefront address lookup" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/identity/registrations" : {
       "post" : {
         "description" : "The identity comes from the caller's own token — issuer and subject, never a phone number, because a recycled number would otherwise hand one person another's order history. The grant is single-use and is only honoured at the brand it was proved for.",
@@ -5864,6 +6221,44 @@
         },
         "summary" : "Resolve serviceability for a channel and fulfilment mode",
         "tags" : [ "Serviceability" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/map-config" : {
+      "get" : {
+        "description" : "Names the provider, its public, referrer-restricted browser key (delivered here so it can be rotated without rebuilding or redeploying a storefront), the features on offer (TILES, SUGGEST, GEOCODE, REVERSE) and the provider's attribution text. `configured: false` means no map provider is set up in this environment: the screen must say so and let the customer type an address, never show an empty map. The server key is never in this response and is not representable in it. For a signed-in customer of this brand; a guest is not found.",
+        "operationId" : "storefrontMapConfig",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MapConfigResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What this environment's map is, and whether it works",
+        "tags" : [ "Storefront address lookup" ],
         "x-horecaos-surface" : "published"
       }
     },
@@ -7960,6 +8355,9 @@
   }, {
     "description" : "Scanning a table code, and the bill it leads to",
     "name" : "QR dine-in"
+  }, {
+    "description" : "Map configuration and address lookup for a customer's own session (ADR 0145)",
+    "name" : "Storefront address lookup"
   }, {
     "description" : "A restaurant's review summary, published comments and feedback tags",
     "name" : "Public reviews"

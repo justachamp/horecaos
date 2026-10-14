@@ -72,6 +72,11 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * order of decision 6: suggestions fail and the field becomes text; the map fails and the address
  * saves {@code NOT_GEOCODED}. Only a rate limit is a {@code 429}.
  *
+ * <p>The handlers and the request records are named {@code Storefront...} on purpose: springdoc gives
+ * a repeated method name a numeric suffix, and a repeated schema name the owning class's name as a
+ * prefix, in the order it meets the controllers, so a second {@code resolve} or {@code SuggestRequest}
+ * would have renamed the operation ids and schemas, and so the generated client, of the console's.
+ *
  * <p>Request and response bodies are never logged; the metric labels are provider, operation and
  * outcome only.
  */
@@ -104,7 +109,8 @@ public class StorefrontGeocodeController {
                     + "environment: the screen must say so and let the customer type an address, never "
                     + "show an empty map. The server key is never in this response and is not "
                     + "representable in it. For a signed-in customer of this brand; a guest is not found.")
-    public ResponseEntity<MapConfigResponse> mapConfig(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+    public ResponseEntity<MapConfigResponse> storefrontMapConfig(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId) {
         requireAccount(tenantId, brandId);
         return ResponseEntity.ok()
                 // Per customer (it answers only the signed-in), so private; a minute is long enough
@@ -123,8 +129,10 @@ public class StorefrontGeocodeController {
                     + "is not configured or is down answers 200 with status UNAVAILABLE, never an "
                     + "exception. Rate limited per customer and per tenant; answers are cached per "
                     + "tenant for the provider licence's limit.")
-    public ResponseEntity<SuggestionsResponse> suggest(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody SuggestRequest body) {
+    public ResponseEntity<SuggestionsResponse> storefrontSuggest(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @Valid @RequestBody StorefrontSuggestRequest body) {
         requireAccount(tenantId, brandId);
         GeocodeOutcome<List<GeoSuggestion>> outcome = geocoding.suggest(
                 Audience.CUSTOMER,
@@ -156,8 +164,10 @@ public class StorefrontGeocodeController {
                     + "result outside the region's box is LOW_CONFIDENCE whatever the provider "
                     + "claimed. A result is a suggestion the customer confirms on a map; nothing here "
                     + "is stored, and nothing here can produce a GEOCODER point.")
-    public ResponseEntity<ResolutionsResponse> resolve(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody ResolveRequest body) {
+    public ResponseEntity<ResolutionsResponse> storefrontResolve(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @Valid @RequestBody StorefrontResolveRequest body) {
         requireAccount(tenantId, brandId);
         GeocodeOutcome<List<GeocodeResult>> outcome = geocoding.geocode(
                 Audience.CUSTOMER, tenantId, geocoding.primaryRegionId(tenantId), body.text(), localeOf(body.locale()));
@@ -179,8 +189,10 @@ public class StorefrontGeocodeController {
             summary = "Name what is at a point",
             description = "The result is absent when the provider knows nothing there. The same "
                     + "region constraint and the same LOW_CONFIDENCE rule as a forward lookup.")
-    public ResponseEntity<ReverseResolutionResponse> reverseResolve(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody ReverseRequest body) {
+    public ResponseEntity<ReverseResolutionResponse> storefrontReverseResolve(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID brandId,
+            @Valid @RequestBody StorefrontReverseRequest body) {
         requireAccount(tenantId, brandId);
         GeocodeOutcome<Optional<GeocodeResult>> outcome = geocoding.reverse(
                 Audience.CUSTOMER,
@@ -219,16 +231,16 @@ public class StorefrontGeocodeController {
      *               rank nearer results first
      * @param locale {@code ru} (default), {@code uz-Latn} or {@code en}
      */
-    public record SuggestRequest(
+    public record StorefrontSuggestRequest(
             @NotBlank @Size(min = 2, max = 200) String text,
             @Valid @Nullable PointBody near,
             @Nullable @Pattern(regexp = LOCALE_PATTERN) String locale) {}
 
-    public record ResolveRequest(
+    public record StorefrontResolveRequest(
             @NotBlank @Size(min = 2, max = 200) String text,
             @Nullable @Pattern(regexp = LOCALE_PATTERN) String locale) {}
 
-    public record ReverseRequest(
+    public record StorefrontReverseRequest(
             @NotNull @Valid PointBody point,
             @Nullable @Pattern(regexp = LOCALE_PATTERN) String locale) {}
 }
