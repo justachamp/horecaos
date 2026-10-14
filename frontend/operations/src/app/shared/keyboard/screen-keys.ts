@@ -191,3 +191,23 @@ export function whenPresent(
     setTimeout(() => whenPresent(host, selector, then, attempts - 1), 20);
   }
 }
+
+/**
+ * Presses one item of the row-actions menu a `q-data-table` draws on `row`: opens the menu, then presses the
+ * item once the menu has been drawn. Returns false when the row has no menu or the menu holds no such item
+ * (the table draws only the items that row may have), so a key built on this never offers an action the menu
+ * would not. The menu closes itself on selection.
+ */
+export function pressRowMenuItem(row: HTMLElement, itemId: string): boolean {
+  const trigger = controlIn(row, '[data-testid="q-action-menu-trigger"]');
+  if (trigger === null) {
+    return false;
+  }
+  trigger.click();
+  whenPresent(row, `[data-testid="q-action-menu-item-${itemId}"]`, (item) => {
+    if (!(item instanceof HTMLButtonElement) || !item.disabled) {
+      item.click();
+    }
+  });
+  return true;
+}

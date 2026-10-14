@@ -315,6 +315,22 @@ describe('ShortcutRegistry', () => {
       expect(registry.dispatch(key('X', { shiftKey: true, ctrlKey: true }))).toBe(false);
     });
 
+    it('keeps a named key and its Shift form apart too: ↓ moves, Shift+↓ extends, and a screen that asked only for ↓ is not asked', () => {
+      const move = vi.fn();
+      const extend = vi.fn();
+      registry.register(scope('menus', shortcut(['ArrowDown'], move)));
+
+      expect(registry.dispatch(key('ArrowDown', { shiftKey: true }))).toBe(false);
+      expect(move).not.toHaveBeenCalled();
+      expect(registry.dispatch(key('ArrowDown'))).toBe(true);
+      expect(move).toHaveBeenCalledOnce();
+
+      registry.register(scope('menus-extend', shortcut(['ArrowDown'], extend, { shift: true })));
+      expect(registry.dispatch(key('ArrowDown', { shiftKey: true }))).toBe(true);
+      expect(extend).toHaveBeenCalledOnce();
+      expect(move).toHaveBeenCalledOnce();
+    });
+
     it('asks for the right cap on each platform', () => {
       const cap = modifierCap();
       expect(['Ctrl', '⌘']).toContain(cap);

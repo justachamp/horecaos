@@ -31,6 +31,7 @@ import { StopExplainerDialog } from './stop-explainer-dialog';
 import { StopPropagationBanner } from './stop-propagation-banner';
 import { StopInForce, StopScope, StopsApi } from './stop-scope-api';
 import { StopApplied, StopScopePanel } from './stop-scope-panel';
+import { registerStopListKeys } from './stop-list-keys';
 
 type StopTab = 'ALL' | 'AVAILABLE' | 'ON_STOP';
 
@@ -165,6 +166,8 @@ interface BulkAvailabilityResponse {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class StopListPage implements OnInit {
+  /** catalog.md §4.6: the stop list's keys press the screen's own one-tap button. */
+  private readonly keys = registerStopListKeys();
   private readonly api = inject(ApiClient);
   private readonly location = inject(CurrentLocation);
   private readonly stopsApi = inject(StopsApi);

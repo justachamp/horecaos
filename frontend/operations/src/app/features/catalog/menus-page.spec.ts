@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n } from '../../core/i18n/i18n';
+import { ShortcutRegistry } from '../../shared/keyboard/shortcut-registry';
 import { ChannelView, SalesChannelsApi } from '../settings/sales-channels/sales-channels-api';
 import { CatalogApi } from './catalog-api';
 import { InventoryApi } from './inventory-api';
@@ -531,4 +532,211 @@ describe('MenusPage', () => {
       });
     },
   );
+});
+
+describe('MenusPage: the keys (catalog.md §4.5, gap map row X.1)', () => {
+  function key(value: string, target?: HTMLElement, init: KeyboardEventInit = {}): boolean {
+    const event = new KeyboardEvent('keydown', {
+      key: value,
+      bubbles: true,
+      cancelable: true,
+      ...init,
+    });
+    Object.defineProperty(event, 'target', {
+      value: target ?? document.activeElement ?? document.body,
+    });
+    return TestBed.inject(ShortcutRegistry).dispatch(event);
+  }
+
+  const THREE = [
+    row({ variantId: 'v1', productName: 'Лагман', available: true }),
+    row({ variantId: 'v2', productName: 'Плов', available: true }),
+    row({ variantId: 'v3', productName: 'Сомса', available: false }),
+  ];
+
+  async function open(
+    inventory: Partial<InventoryApi> = {},
+    catalog: Partial<CatalogApi> = {},
+    channels: Partial<SalesChannelsApi> = {},
+  ): Promise<HTMLElement> {
+    configure(
+      { variantsAtLocation: () => of({ items: THREE, nextCursor: null }), ...catalog },
+      {},
+      inventory,
+      channels,
+    );
+    const harness = await RouterTestingHarness.create('/catalog/menus');
+    await flushMicrotasks();
+    harness.detectChanges();
+    return harness.routeNativeElement!;
+  }
+
+  const rows = (host: HTMLElement): HTMLElement[] => [
+    ...host.querySelectorAll<HTMLElement>('.menus__table tbody tr'),
+  ];
+
+  it('is on the cheat-sheet while the matrix is', async () => {
+    await open();
+    const scope = TestBed.inject(ShortcutRegistry)
+      .scopes()
+      .find((candidate) => candidate.id === 'catalog-menus')!;
+
+    expect(scope.title()).toBe('Меню');
+    expect(scope.shortcuts.flatMap((shortcut) => shortcut.caps)).toEqual([
+      '/',
+      'j',
+      '↓',
+      'k',
+      '↑',
+      'Space',
+      '1',
+      '2',
+      '3',
+      'Shift+↓',
+      'Shift+↑',
+      'f',
+      'Esc',
+    ]);
+  });
+
+  it('/ goes to the search box, and j and k move the row cursor', async () => {
+    const host = await open();
+
+    expect(key('/', document.body)).toBe(true);
+    expect(document.activeElement).toBe(host.querySelector('[data-testid="menus-search"]'));
+    (document.activeElement as HTMLElement).blur();
+
+    key('j');
+    expect(document.activeElement).toBe(rows(host)[0]);
+    key('ArrowDown');
+    expect(document.activeElement).toBe(rows(host)[1]);
+    key('k');
+    expect(document.activeElement).toBe(rows(host)[0]);
+  });
+
+  it('Space flips the branch cell through the audited inventory endpoint, as the click does', async () => {
+    const setAvailability = vi.fn().mockReturnValue(of(undefined));
+    const host = await open({ setAvailability });
+    key('j');
+    key('j');
+
+    expect(key(' ')).toBe(true);
+    await flushMicrotasks();
+
+    expect(setAvailability).toHaveBeenCalledWith(FAKE_SCOPE, 'v2', false);
+    expect(rows(host)[1].querySelector('[data-testid="menus-cell"]')?.textContent?.trim()).toBe(
+      'Стоп',
+    );
+  });
+
+  it('1 puts a stopped dish back on the menu and does nothing to one already on it; 2 is the reverse', async () => {
+    const setAvailability = vi.fn().mockReturnValue(of(undefined));
+    await open({ setAvailability });
+    key('j');
+
+    expect(key('1'), 'Лагман is on the menu already').toBe(false);
+    expect(key('2')).toBe(true);
+    await flushMicrotasks();
+    expect(setAvailability).toHaveBeenCalledWith(FAKE_SCOPE, 'v1', false);
+    expect(key('2'), 'now it is on stop already').toBe(false);
+
+    expect(key('1')).toBe(true);
+    await flushMicrotasks();
+    expect(setAvailability).toHaveBeenLastCalledWith(FAKE_SCOPE, 'v1', true);
+    expect(setAvailability).toHaveBeenCalledTimes(2);
+  });
+
+  it('3 hides the dish from the picked channel, and is not offered without one', async () => {
+    const setChannelOffering = vi.fn().mockReturnValue(of(undefined));
+    const host = await open(
+      {},
+      { channelExclusions: () => of({ excludedVariantIds: [] }), setChannelOffering },
+      { list: () => Promise.resolve([channel({ id: 'ch1' })]) },
+    );
+    key('j');
+    expect(key('3'), 'the hall has no channel to hide it from').toBe(false);
+
+    const select = host.querySelector<HTMLSelectElement>('[data-testid="menus-channel-select"]')!;
+    select.value = 'ch1';
+    select.dispatchEvent(new Event('change'));
+    await flushMicrotasks();
+    expect(document.activeElement, 'the cursor stays on its row when the channel changes').toBe(
+      rows(host)[0],
+    );
+
+    expect(key('3')).toBe(true);
+    await flushMicrotasks();
+    expect(setChannelOffering).toHaveBeenCalledWith(FAKE_SCOPE, 'ch1', 'v1', {
+      offered: false,
+      locationId: 'l1',
+    });
+    expect(key('3'), 'it is hidden already').toBe(false);
+  });
+
+  it('Shift+↓ ticks the row and the one below, extending along the column, and f fills their status', async () => {
+    const bulkSetOfferingStatus = vi.fn().mockReturnValue(of({ updatedCount: 2 }));
+    const host = await open({}, { bulkSetOfferingStatus });
+    key('j');
+
+    expect(key('ArrowDown', undefined, { shiftKey: true })).toBe(true);
+    expect(key('ArrowDown', undefined, { shiftKey: true })).toBe(true);
+    await flushMicrotasks();
+    const ticked = [
+      ...host.querySelectorAll<HTMLInputElement>('[data-testid="menus-row-checkbox"]'),
+    ].map((box) => box.checked);
+    expect(ticked).toEqual([true, true, true]);
+    expect(document.activeElement).toBe(rows(host)[2]);
+
+    key('k');
+    expect(key('f')).toBe(true);
+    await flushMicrotasks();
+    (
+      host.ownerDocument.querySelector('[data-testid="q-confirm-confirm"]') as HTMLButtonElement
+    ).click();
+    await flushMicrotasks();
+
+    expect(bulkSetOfferingStatus).toHaveBeenCalledWith(FAKE_SCOPE, 'l1', {
+      variantIds: ['v1', 'v2', 'v3'],
+      status: 'AVAILABLE',
+    });
+  });
+
+  it('f does nothing until a row is ticked, and Shift+↑ extends upwards', async () => {
+    const host = await open();
+    key('j');
+    key('j');
+    expect(key('f'), 'nothing is ticked, so there is no bulk bar to fill through').toBe(false);
+
+    expect(key('ArrowUp', undefined, { shiftKey: true })).toBe(true);
+    await flushMicrotasks();
+    const ticked = [
+      ...host.querySelectorAll<HTMLInputElement>('[data-testid="menus-row-checkbox"]'),
+    ].map((box) => box.checked);
+    expect(ticked).toEqual([true, true, false]);
+    expect(document.activeElement).toBe(rows(host)[0]);
+  });
+
+  it('Esc in the search box empties it, and a second Esc lets go of it', async () => {
+    const host = await open();
+    const search = host.querySelector<HTMLInputElement>('[data-testid="menus-search"]')!;
+    search.focus();
+    search.value = 'Пл';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(key('Escape', search)).toBe(true);
+    expect(search.value).toBe('');
+    expect(document.activeElement).toBe(search);
+
+    key('Escape', search);
+    expect(document.activeElement).not.toBe(search);
+  });
+
+  it('leaves a letter typed in the search box to the box', async () => {
+    const host = await open();
+    const search = host.querySelector<HTMLInputElement>('[data-testid="menus-search"]')!;
+    search.focus();
+
+    expect(key('f', search)).toBe(false);
+    expect(key('1', search)).toBe(false);
+  });
 });

@@ -266,7 +266,9 @@ function matches(shortcut: Shortcut, event: KeyboardEvent): boolean {
   if (wantsShift) {
     return event.shiftKey && keyNamed(shortcut, event);
   }
-  if (isLetter(event.key) && event.shiftKey) {
+  if (event.shiftKey && (isLetter(event.key) || event.key.length > 1)) {
+    // A Shift-letter, or Shift with a named key (↓, Enter, Tab), is another chord: it is answered only by a
+    // shortcut that asked for Shift, never by the plain key's.
     return false;
   }
   return shortcut.keys.includes(event.key);

@@ -9,6 +9,7 @@ import { CurrentBrand } from '../../core/auth/current-brand';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { I18n, Locale } from '../../core/i18n/i18n';
 import { LocaleSet } from '../../core/i18n/locale-set';
+import { ShortcutRegistry } from '../../shared/keyboard/shortcut-registry';
 import { CatalogApi } from './catalog-api';
 import { CategoriesPage } from './categories-page';
 import { CategorySummary } from './catalog-domain';
@@ -684,5 +685,78 @@ describe('CategoriesPage', () => {
     await flushMicrotasks();
 
     expect(archiveCategory).toHaveBeenCalledWith(FAKE_SCOPE, 'catalog-1', 'cat-1');
+  });
+});
+
+describe('CategoriesPage: the keys (catalog.md §4.3, gap map row X.1)', () => {
+  const TWO = [
+    category({ categoryId: 'a', code: 'A', name: 'Салаты', sortOrder: 0 }),
+    category({ categoryId: 'b', code: 'B', name: 'Супы', sortOrder: 1 }),
+  ];
+
+  async function open(updateCategory = vi.fn().mockReturnValue(of(undefined))): Promise<{
+    host: HTMLElement;
+    updateCategory: ReturnType<typeof vi.fn>;
+  }> {
+    configure({
+      listCatalogs: () =>
+        of([{ catalogId: 'catalog-1', code: 'MAIN', name: 'Основной', status: 'ACTIVE' }]),
+      listCategories: () => of(TWO),
+      updateCategory,
+    });
+    const harness = await RouterTestingHarness.create('/catalog/categories');
+    await flushMicrotasks();
+    harness.detectChanges();
+    return { host: harness.routeNativeElement!, updateCategory };
+  }
+
+  it('lists the tree’s own keys on the cheat-sheet while the tree is on screen', async () => {
+    await open();
+    const scope = TestBed.inject(ShortcutRegistry)
+      .scopes()
+      .find((candidate) => candidate.id === 'catalog-categories')!;
+
+    expect(scope.title()).toBe('Категории');
+    expect(scope.shortcuts.flatMap((shortcut) => shortcut.caps)).toEqual([
+      '↑',
+      '↓',
+      '←',
+      '→',
+      'Alt+↑',
+      'Alt+↓',
+      'Alt+←',
+      'Enter',
+    ]);
+  });
+
+  it('never consumes those keys itself: the registry leaves them to the focused row', async () => {
+    await open();
+    const registry = TestBed.inject(ShortcutRegistry);
+    const press = (init: KeyboardEventInit): boolean =>
+      registry.dispatch(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
+
+    expect(press({ key: 'ArrowDown' })).toBe(false);
+    expect(press({ key: 'ArrowUp', altKey: true })).toBe(false);
+    expect(press({ key: 'ArrowLeft', altKey: true })).toBe(false);
+    expect(press({ key: 'Enter' })).toBe(false);
+  });
+
+  it('what the sheet promises works: Alt+↓ on a row moves the category down among its siblings', async () => {
+    const { host, updateCategory } = await open();
+    const tree = host.querySelector('[role="tree"]') as HTMLElement;
+
+    const first = host.querySelector('[data-node-id="a"]') as HTMLElement;
+    first.focus();
+    tree.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true }),
+    );
+    await flushMicrotasks();
+
+    expect(updateCategory).toHaveBeenCalledWith(
+      FAKE_SCOPE,
+      'catalog-1',
+      'a',
+      expect.objectContaining({ parentCategoryId: null, sortOrder: 1 }),
+    );
   });
 });
