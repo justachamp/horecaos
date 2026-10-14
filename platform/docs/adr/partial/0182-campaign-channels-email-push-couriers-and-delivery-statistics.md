@@ -1,0 +1,172 @@
+# ADR 0182: Campaign channels: email, push, couriers, and what a report may say about delivery
+
+- Decision status: Accepted — proposed by Claude (operations batch 21, wave `w7-campaign-channels`); accepted by the platform owner 2026-10-14
+- Implementation status: Partial — email, the courier broadcast and the delivery statistics are built; push delivery is decided and not built. Email: `NotificationChannel.EMAIL` is wired, `SmtpEmailChannelAdapter` sends through `PlatformMailer` (ADR 0097) as provider type `PLATFORM_SMTP` with no installation or binding, `CampaignEmailDeliveryService` is the third `CampaignChannelDelivery` under `CampaignMessageRouter`, the sender name is the brand's display name over the one shared address, every message carries `List-Unsubscribe` and `List-Unsubscribe-Post` (RFC 8058) and a footer link to the platform-hosted page `/mail/unsubscribe/{token}` whose POST withdraws the customer's `EMAIL` consent, a relay rejection of an address is a hard bounce into ADR 0044 suppression, a per-tenant daily cap holds the excess until the next UTC day, and the console offers the channel with a sentence for each reason it cannot send. Couriers: V0671 gives `marketing.courier_broadcasts` a template and variables in place of free text, adds `marketing.courier_broadcast_recipients` (a ledger of who was addressed and why not), and gives the ADR 0020 pipeline a `COURIER_DISPATCH` class and a courier-addressed endpoint; `CourierContactSource` is real (`IdentityCourierContactSource`, a purpose-recorded read of the courier's login number from the identity provider that returns it for one message and stores nothing), `CourierBroadcastService` writes one intent and one ledger row per courier, and the console shows each brand's refusal and each courier's result. Statistics: `GET .../recipients/counts` now carries delivery outcome counts derived from the per-recipient evidence (delivered, read, failed, rejected, handed to the operator, no receipt, pending, withheld by reason, segments billed) with per-channel `reportsDelivery` and `reportsRead` flags, READ is carried from the status events instead of collapsing into DELIVERED, and Reports → Marketing prints «not reported by this channel» where a flag is false. Not built: Web Push delivery (service worker, subscribe prompt, VAPID, adapter, click callback, console push fields); nothing is delivered until the owner connects a mail provider and its DNS records; the courier path stays refused until the owner answers in writing that a courier's own number may be used and a gateway account is cleared for `COURIER`; VAS delivery receipts and marketing SMS wait on the facts ADR 0146 names; the unsubscribe page is served by the platform, not by the storefront apps
+- Date proposed: 2026-10-14
+- Date decided: 2026-10-14
+- Deciders: Ayubkhon Abbosov (platform owner), on options proposed by Claude
+- Depends on: ADR 0015, ADR 0020, ADR 0026, ADR 0028, ADR 0029, ADR 0044, ADR 0058, ADR 0091, ADR 0097, ADR 0112, ADR 0146
+- Supersedes / Superseded by: — (amends ADR 0112's open input «couriers as an audience», ADR 0146 Decision 8 and ADR 0097's table row «The ADR 0020 notification pipeline»; each carries a dated status addition pointing here, and none of their Decision, Alternatives or Consequences text is rewritten)
+- Open inputs: each is closed on the default this record states, and the rows that name another person or an external fact stay with them.
+  - **The hosted sending provider, the sending domain's SPF, DKIM and DMARC records, and the provider's feedback webhook** (platform owner). Nothing is delivered before they exist; the channel reports `EMAIL_NOT_CONFIGURED` until `horecaos.mail.*` is set. Runbook section «Email».
+  - **Counsel's confirmation that customer email addresses may be processed by a provider outside Uzbekistan under ZRU-547** (counsel). ADR 0097 asked the same of staff addresses; the customer's address is a wider class of data. Stays with counsel; default until answered: the channel is built and left unconfigured in production.
+  - **The per-tenant daily cap** (platform owner, with the provider's sending limits). Default 1000 messages per tenant per UTC day, `horecaos.notifications.email.daily-cap-per-tenant`.
+  - **A VAPID key pair and the browser push services' terms** (platform owner; counsel for the opt-in wording). Stays open until the push build step; a key is an ADR 0028 reference and never a value.
+  - **Whether a courier's own number may be used for dispatch SMS** (platform owner, counsel). The platform already holds the number as the courier's login (ADR 0116); the open question is purpose, not custody. Default: the courier path stays refused, with `COURIER_CONTACTS_NOT_WIRED`, until the installation setting `courierContactsCleared` is recorded.
+  - **A gateway account cleared for `COURIER`, and for `MARKETING`, per installation** (platform owner, with the gateway). Unchanged from ADR 0146 open input 1.
+  - **One captured VAS delivery receipt** (integration, with the provider). Unchanged from ADR 0146 open input 2; until it exists `reportsDelivery` is false for a VAS-bound brand and the report says so.
+
+**Decision record, 2026-10-14.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "accept all defaults, start batch 21" (batch 21); each decision below is taken at the value the owner chose or, where the owner said nothing else, at the smallest default the batch-21 plan proposed.
+
+## Context
+
+Three gap-map rows ask one question each of the campaign path ADR 0146 built for SMS.
+
+`6.4a` says a marketer who picks email or push gets a campaign that drafts, estimates and then cannot launch. The platform has an email relay (ADR 0097: `PlatformMailer` over one SMTP connection, used for an owner's invitation and a staff password reset) and a channel enum that already names `EMAIL` (`NotificationChannel.EMAIL`, declared and unwired; its consent channel, its contact method and its template channel check are all in place from V0026). ADR 0097's Alternatives table rejected the ADR 0020 pipeline for staff mail with the revisit trigger «a tenant sends email to its own customers», and that trigger is now met. Push has no provider in any Accepted record, neither storefront has a service worker, and the customer app is on hold (`mobile/README.md`).
+
+`6.4b` says a dispatcher can draft a courier SMS and the send is refused. The refusal hides two further gaps the gap map does not name. `CourierBroadcastService#send` only calls `store.recordSent(recipientCount)` after the wiring check and enqueues nothing, so with a wired source it would report `SENT` having messaged nobody; and V0307 stores a free-text message (`varchar(480)`) while ADR 0091 holds the VAS gateway as moderating, which withholds a wording it has not approved. The gap map's «no number to send to» is true of `fulfillment.couriers` and not of the platform: a courier is created phone-first and the number is the Keycloak username and `phone` attribute (ADR 0116, `CourierAccountProvisioningService`).
+
+`7.9b` says the report cannot tell a marketer how many messages arrived. The evidence exists: `CampaignMessageRouter.deliveryEvidence` gives every recipient of a campaign a state (V0494 keeps the receipt state and the segments on the attempt), but `recipientCounts` still groups the four send-pipeline states and its own description says "delivered versus failed is not answerable from here yet". And `NotificationDispatchService.record` and `DeliveryReceiptService` both collapse `READ` into `DELIVERED` on the attempt, so even a channel that reported a read could not be counted as one.
+
+## Decision
+
+### D13. Email is a customer campaign channel, through the mail module's relay
+
+1. **The relay is ADR 0097's.** `NotificationChannel.EMAIL` becomes wired. A `NotificationChannelAdapter` for the channel `EMAIL` and the provider type `PLATFORM_SMTP` sends through `PlatformMailer`; nothing opens a second SMTP connection. The platform's own relay needs no ADR 0026 installation or binding, so `NotificationGateway` resolves an adapter that declares itself platform-owned without a binding, and readiness is «the mailer is configured».
+2. **One shared sending identity, the tenant's name on it.** The envelope and header address is the deployment's `horecaos.mail.from`; the display name is the brand's `display_name`, sanitised for header injection. A tenant's own sending domain is not offered.
+3. **`MARKETING` only.** An `EMAIL` template of any other class is refused at authoring, and an `EMAIL` message of any other class is suppressed `CHANNEL_NOT_AVAILABLE`. Transactional email to customers (receipts, confirmations) is a later decision and not made here.
+4. **One-click unsubscribe is a consent withdrawal.** Every message carries `List-Unsubscribe: <https://…/mail/unsubscribe/{token}>`, `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058) and a footer link to the same address. A GET shows a confirmation page and changes nothing, because link scanners fetch every URL in a message; a POST records the withdrawal of the template's consent purpose on the `EMAIL` channel for the account, through the customers module's consent recorder, with the evidence reference `EMAIL_UNSUBSCRIBE`. The token is opaque (192 random bits, stored as its SHA-256), carries no address, and is valid for a year.
+5. **A hard bounce is a suppression.** An address the relay refuses for good (`MailOutcome.Rejected`) is a deliverability fact and goes to ADR 0044 suppression through `DeliverabilityFeedbackPort`, narrowly: only from a send of ours. A bounce or complaint the provider reports later needs its feedback webhook, which is an external fact and not built.
+6. **A per-tenant daily cap.** Campaign emails beyond `horecaos.notifications.email.daily-cap-per-tenant` per UTC day are held until the next day, not dropped (the message's own expiry may still end them). It bounds the blast radius of one tenant on the shared sender and replaces the money ceiling: `EMAIL` carries no marginal cost to the tenant, so `MarketingChannel.EMAIL.carriesMarginalCost()` becomes false and the ceiling is optional, as for push and Telegram.
+7. **The consent purpose covers email.** `MARKETING_PROMOTIONS` is described as «sent by SMS, email, Telegram, or push» (new registries, and V0671 for existing ones whose description is still the shipped text). Consent is already recorded per channel (ADR 0015), so no new purpose exists: a customer who consented to SMS has not consented to email.
+8. **Delivery is reported honestly.** A relay's acceptance is «handed to the operator». The channel reports neither delivery nor read until a provider feedback webhook exists (`reportsDelivery` and `reportsRead` false).
+
+### D14. Push is Web Push from the two storefronts, after an explicit opt-in
+
+1. **Web Push (RFC 8030) with VAPID (RFC 8292)**, sent from the platform to the browser vendors' push services. A subscription is created by the storefront's own service worker after the customer taps an explicit prompt, and is stored as an ADR 0020 recipient endpoint of the existing type `PUSH_TOKEN` (the endpoint URL and keys encrypted under ADR 0029, never in a log or an event). The consent channel is `PUSH`, recorded at the same moment as the subscription.
+2. **The VAPID private key is an ADR 0028 reference**, and the public key is served to the storefront.
+3. **No FCM, no APNs** until a customer app is in scope. Neither needs a third-party account at the platform's cost, and neither is reachable from a browser tab.
+4. **A read is a click.** The service worker reports a notification click to a platform endpoint carrying an opaque per-message token, which is the only read signal Web Push offers; `reportsRead` is true for the channel and `reportsDelivery` false (the push service accepts a message and reports nothing further).
+5. **This record decides; it does not build.** Web Push delivery is the next step of wave `w7-campaign-channels` and its checklist items stay unchecked below until it lands. Until then `PUSH` is reported `NO_DELIVERY_ADAPTER` and the console says so.
+
+### D15. Couriers are not a marketing audience
+
+1. **Separate operational messaging.** A courier broadcast is a dispatcher's operational message, not a campaign, and ADR 0112's customer-keyed audience is not widened to a courier identity. This answers ADR 0112's open input «couriers as an audience», and `marketing.campaign_recipients` is untouched.
+2. **The wording is an approved template.** A broadcast names an ADR 0020 `SMS` template of the new class `COURIER_DISPATCH` that the tenant authored and the gateway approved (ADR 0091 applies unchanged: an unapproved wording is withheld), and supplies values for the variables the template declares. Free text is gone; each value is a short string (at most 80 characters, no newline).
+3. **The same router and gateway, not the same consent.** The message is an ordinary ADR 0020 intent with purpose `COURIER` (ADR 0146 Decision 8's «same path»), so retries, reconciliation, expiry, receipts and the gateway's purpose gate are the ones SMS already has. A courier has no marketing consent, no frequency cap and no suppression, and none is invented: the class has no data subject in ADR 0015's sense.
+4. **The number is read from the identity provider and kept nowhere.** `CourierContactSource` resolves a courier's login number from the identity provider for one message, with a recorded purpose and an audit fact that names the courier and never the number, and the number lives inside one `NotificationDispatch`. It is not stored on the broadcast, the ledger or the endpoint. A send first asks, in one batched call, which of the targeted couriers have a number at all, so a courier with none appears in the ledger as `NO_CONTACT` instead of as a failure later.
+5. **A recipient ledger, not a count.** `marketing.courier_broadcast_recipients` has one row per targeted courier (the courier's non-personal reference and the notification id, or `NO_CONTACT`). The delivery state is never copied there: it is read from the notification's evidence, the rule ADR 0146 states for campaigns.
+6. **Both refusals are visible, per brand and per courier.** `SMS_PURPOSE_NOT_PERMITTED` (the brand's gateway account is not cleared for `COURIER`), `COURIER_CONTACTS_NOT_WIRED` (the owner has not recorded that a courier's number may be used, or the identity provider is not configured) and `SMS_ACCOUNT_MISCONFIGURED` and its siblings are said in a sentence in the console before a dispatcher drafts, and per courier after a send.
+7. **A Keycloak outage fails the send visibly.** An unreachable identity provider at the batched check fails the whole send with `COURIER_CONTACTS_UNAVAILABLE` and leaves the broadcast a draft; it never records couriers as having no number.
+
+### Statistics read the evidence and never copy it
+
+1. **The aggregate is a join read through the port.** `CampaignMessagePort.deliveryCounts` groups the latest attempt of each of a campaign's notifications into the states `stateOf` already gives a recipient row, plus `READ` (a `READ` status event on a delivered attempt), `WITHHELD` by suppression reason (a wording awaiting the gateway, consent withdrawn since expansion) and `PENDING`. It is not the `terminal_status` column ADR 0146 refuses to copy.
+2. **A channel says what it can report.** `reportsDelivery` and `reportsRead` are per channel and per brand: SMS reports delivery only where the brand's bound gateway has an enabled receipt source (ADR 0146 Decision 4), Telegram and email report neither, push reports a read by click. A figure for something the channel cannot report is «not reported by this channel», not zero, and a channel that gains a provider lights up by a flag and not by a code change in the report.
+3. **Telegram's word is «sent».** The Bot API accepts a message and reports no more, and the report says so instead of «handed to the operator».
+
+## Alternatives considered
+
+| Option | Why not chosen | Revisit when |
+|---|---|---|
+| A tenant sends from its own domain (SPF/DKIM per tenant) | Each tenant would need DNS records, a provider domain verification and a warm-up before its first campaign; a restaurant's first campaign would wait on its web agency. One shared domain with the tenant's name is what a pilot can use | A tenant's volume or brand demands its own sender, or the shared domain's reputation is hurt by one tenant |
+| A second SMTP configuration for tenants' email | Two connections, two passwords and two reputations for one platform; ADR 0097's decision 1 says nothing else opens a connection | The provider offers per-tenant sub-accounts the platform wants to bind per tenant |
+| An ADR 0026 installation and binding for the platform relay | A binding is a tenant's choice of account. This one is the deployment's, identical for every tenant, and a per-tenant row for it would be seeded in every tenant for no choice anyone makes | Email becomes a thing a tenant brings its own account for |
+| Transactional email in the same record | Different consent footing (no purpose) and different failure model; this record would decide it by accident | A tenant asks for emailed receipts |
+| Unsubscribe by an authenticated storefront page only | A mail client's «unsubscribe» button posts to the URL in the header and holds no session; without RFC 8058 the major mailbox providers show the user «report spam» instead, which is a complaint and a reputation cost | Never |
+| A signed token in the unsubscribe URL (HMAC) | Needs a platform signing secret and its rotation to unsubscribe one customer; a random token stored as a hash needs none and can be revoked row by row | The per-email token row becomes a storage problem |
+| FCM or APNs for push now | There is no customer app, so there is no device token to hold; both need a vendor account and a mobile build | The customer app leaves «on hold» |
+| Widen ADR 0112's audience to a courier identity | `campaign_recipients` is keyed by a customer account with a marketing consent purpose, and the V0307 comment rejects widening it; it would mean either lying about consent or giving a courier a consent record they never made | A tenant needs to market to its couriers (a courier app promotion), which is a different act from dispatch |
+| A direct gateway call per courier from the broadcast service | No intent row, so no retry, no reconciliation, no receipt and no ADR 0091 gate; a crash mid-loop leaves the dispatcher not knowing who was messaged | Never |
+| Free-text courier messages with the gateway approving each | VAS moderates wordings in advance, not per send; an unapproved text is withheld, so free text would be withheld in the one place it is typed | The gateway offers per-message approval |
+| Store the courier's number on the endpoint, encrypted | A second copy of a credential-grade identifier that the identity provider already holds and the courier can change; ADR 0097 made the same call for staff addresses | Reading from the identity provider per message proves too slow for large fleets |
+| Add `delivered` to the existing four counts without carrying READ | Reads would remain uncountable for a channel that reported them, which is exactly the change that should need no code | Never |
+| Poll the provider for each message's state to fill the report | Standing personal-data workload for a signal the provider offers by push (ADR 0146 Alternatives) | The VAS callback cannot be captured |
+
+## Consequences
+
+### Positive
+
+- A marketer can choose email as soon as a provider is connected, with consent, quiet hours, the daily cap, unsubscribe and suppression already in the path, and no second relay to operate.
+- A mailbox provider's own «unsubscribe» button works, which is what keeps the shared sender off spam lists.
+- A dispatcher's broadcast reaches couriers on the path every other SMS rides, with a per-courier answer, and the platform keeps no new copy of anyone's number.
+- The report answers the question its title asks, and says «not reported» where a channel cannot answer, instead of a zero that reads as a failure.
+
+### Negative
+
+- One sender reputation is shared by every tenant. A tenant that mails badly can hold back the others until the cap, a suppression or a manual stop acts.
+- Nothing is delivered until the owner connects a provider and publishes DNS records, and counsel confirms the cross-border processing of customer addresses; until then the console says `EMAIL_NOT_CONFIGURED`.
+- The unsubscribe page is served by the platform, in three languages, with no storefront chrome; a storefront-hosted page would look like the restaurant's.
+- Withdrawing through a link records source `STOREFRONT` with the evidence reference `EMAIL_UNSUBSCRIBE`, because the consent store's source list is closed (V0017); a new source value is a later migration.
+- Reading a courier's number is one identity-provider call per message plus one batched check per send. A large fleet makes a send slower and a Keycloak outage stops a send; the cost is accepted against holding a copy.
+- The courier template's variable values are dispatcher-typed strings. The gateway approves the wording and not the values, so a dispatcher can still put anything short in a value; the 80-character bound limits it and does not prevent it.
+- A broadcast's variables are validated against the template's declared variables at draft time, and a template edited afterwards can leave a draft whose variables no longer fit; the send re-checks and refuses.
+- Push is not delivered by this release, and `PUSH` still cannot launch.
+- Until the VAS callback is captured, an SMS campaign shows «handed to the operator» for every accepted message, successes included.
+
+### Accepted trade-offs
+
+- A held-over-cap message may expire before the next UTC day; a late promotion is not worth sending, and ADR 0020 already prefers silence to lateness.
+- The daily cap counts attempts, so a burst inside one dispatch pass can overshoot it by the size of the pass.
+- A courier with no number is reported as `NO_CONTACT` and not retried; the dispatcher fixes the courier's profile and drafts again.
+
+## Specification
+
+### Email
+
+- `PlatformMailer.send(OutgoingMail)` is unchanged for its existing callers. `OutgoingMail` gains an optional sender display name and an optional one-click unsubscribe URL (both null for staff mail); `SmtpPlatformMailer` sets `From` as `"<display name>" <address>`, `List-Unsubscribe`, `List-Unsubscribe-Post` and `Precedence: bulk` when they are present. A display name is stripped of control characters and quotes and cut to 60 characters; the address is never taken from a tenant.
+- `integration.camel.notification.SmtpEmailChannelAdapter`: `channel() = EMAIL`, `providerType() = PLATFORM_SMTP`, platform-owned (no binding). `describeAccount` is complete when the mailer is configured; `MailOutcome.Sent` maps to an accepted outcome with the provider status `SMTP_ACCEPTED`, `Rejected` to a rejection (`ADDRESS_REJECTED` and `ADDRESS_INVALID` carry the hard-bounce flag), `Failed` to retryable, `NotConfigured` to a rejection `EMAIL_NOT_CONFIGURED`. `resolve` answers uncertain: SMTP has no search.
+- `NotificationDispatch` gains `unsubscribeUrl` (null except for email) and the display name travels on the dispatch as `senderName`; neither is logged.
+- `notifications.unsubscribe_tokens` (V0671): `token_hash`, tenant, brand, account, notification, consent purpose, locale, created, expires; tenant-scoped, granted to the application role. `EmailUnsubscribeService` issues a token at dispatch and consumes it on POST.
+- `GET /mail/unsubscribe/{token}` renders the page; `POST` withdraws. Both answer the same 404 page for an unknown or expired token, are `permitAll` on the filter chain, hidden from the OpenAPI document (the contract is RFC 8058's), rate limited, and log no token.
+- `CampaignEmailDeliveryService` is a `CampaignChannelDelivery` for `EMAIL`. A campaign message becomes a `MARKETING` intent with `recipient_account_id` set, exactly as SMS does.
+- `EmailDailyCap` counts the tenant's `EMAIL` attempts since 00:00 UTC; `NotificationEligibilityService` holds a campaign email over the cap until the next 00:00 UTC.
+
+### Couriers
+
+- V0671: `marketing.courier_broadcasts` gains `template_key` and `variables` (jsonb), `message` becomes nullable and exactly one of the two is present; `marketing.courier_broadcast_recipients (id, tenant_id, broadcast_id, courier_id, courier_reference, state, refusal_code, notification_id, created_at)`; `notifications.recipient_endpoints` gains `courier_id` with endpoint type `COURIER` and a four-way destination check; the class `COURIER_DISPATCH` joins the three class checks.
+- `CourierContactSource` gains `addressable(tenantId, courierIds, purpose)` (a set, never a number) and `number(tenantId, courierId, purpose)` (one number, for one call). The implementation reads `StaffAccounts` on the courier's `principal_subject`.
+- `StaffAccounts` gains `phones(subjectIds, purpose)`. `profile()` remains the backfill's; this is the second reader and says why.
+- `CourierBroadcastService#send` checks the brand's `COURIER` wiring, the source, then asks the source which couriers are addressable, writes the ledger and one intent per addressable courier, and moves the broadcast to `SENT` with the count enqueued. A refusal records `FAILED` and the reason as before.
+- Console: Marketing → Courier broadcasts shows the brand's reason in words before drafting, a template picker and a field per variable, and after a send each courier's state and reason.
+
+### Statistics
+
+- `CampaignMessagePort.deliveryCounts(tenantId, campaignId)` and `reporting(tenantId, brandId, channel)`; `RecipientCountsResponse` gains a `delivery` object and the `ChannelResponse` gains the two flags. `DeliveryEvidence.state` gains `READ` and `WITHHELD`, and a `reason`.
+- Reports → Marketing, campaign tab: the delivery rows next to the four pipeline counts, each figure either a number or «not reported by this channel».
+
+### Security and privacy
+
+No address, number, token or body in a log, an event, an error, a URL query or a dead-letter summary (ADR 0029). The unsubscribe token is a path segment and is never logged. A courier's number is read for one call, appears in no audit fact, and `NotificationDispatch#toString` already omits it. Every new mutating endpoint declares a capability (ADR 0025) and the public unsubscribe pair is the one exception, authorised by possession of the token.
+
+### Testing
+
+Email through the real dispatch path against a recording mailer and, for the wire, Mailpit; the unsubscribe flow through consent; the daily cap with an advanced clock; courier send against `FakeSmsGateway` and a fake identity source with a source that cannot be reached; delivery counts against attempts in every state, including a read; the report and the console specs; `ChangeDocumentUsageTests`, `EndpointCapabilityDeclarationTests` and `ModularArchitectureTests` unchanged and green.
+
+## Rollout and rollback
+
+Additive. Every new behaviour is dark until configured: email until `horecaos.mail.*` is set, the courier path until the owner records the courier-number answer and clears the gateway account, the receipt-driven delivery figures until a receipt source is enabled. Rolling back leaves the new tables unread. V0671 changes `marketing.courier_broadcasts.message` to nullable; every existing row keeps its text.
+
+## Implementation checklist
+
+- [x] Email: channel wired, platform-owned adapter, delivery service, sender name, unsubscribe (header, footer, page, consent withdrawal), hard-bounce suppression, daily cap
+- [x] Email: console channel picker, wiring sentences, template editor, consent description
+- [x] Couriers: ledger, template and variables, `COURIER_DISPATCH`, courier endpoint, real source, per-courier intents
+- [x] Couriers: console reasons per brand and per courier
+- [x] Statistics: delivery counts from the evidence, READ carried, per-channel flags, report tab
+- [ ] Push: service worker and subscribe prompt in both storefronts
+- [ ] Push: subscription endpoint, VAPID handling, Web Push adapter, `CampaignPushDeliveryService`
+- [ ] Push: click callback, 3:1 cover, console push fields and counts
+- [ ] A mail provider, the sending domain's records, counsel's answer (platform owner, counsel)
+- [ ] The owner's answer on courier numbers; a gateway account cleared for `COURIER` and `MARKETING` (platform owner)
+- [ ] One captured VAS receipt callback (integration)
+
+## Exit criteria
+
+A campaign on `EMAIL` for a brand with a configured relay reaches a consenting customer from the brand's name, carries a working one-click unsubscribe whose POST makes the next campaign refuse that customer with `CONSENT_WITHHELD`, and shows in Reports → Marketing as handed to the operator with delivery and read stated as not reported. A courier broadcast drafted from an approved template reaches each addressable courier through the SMS gateway, shows each courier's state, and shows a courier without a number as such. Reports → Marketing prints delivered, failed, rejected, handed to the operator, no receipt and pending from the recipients' evidence, and prints a read count the first time a channel reports one without a code change.
+
+## References
+
+- ADR 0015, ADR 0020, ADR 0026, ADR 0028, ADR 0029, ADR 0044, ADR 0058, ADR 0091, ADR 0097, ADR 0112, ADR 0116, ADR 0146
+- RFC 8058 (one-click unsubscribe), RFC 8030 and RFC 8292 (Web Push and VAPID)
+- `docs/runbooks/external-connections/w7-campaign-channels.md`
