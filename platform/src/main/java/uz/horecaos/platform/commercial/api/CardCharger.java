@@ -1,7 +1,8 @@
-package uz.horecaos.platform.commercial.application;
+package uz.horecaos.platform.commercial.api;
 
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import uz.horecaos.platform.commercial.application.CardTokenReferences;
 
 /**
  * Charging a tenant's stored card for a statement's remainder (ADR 0095

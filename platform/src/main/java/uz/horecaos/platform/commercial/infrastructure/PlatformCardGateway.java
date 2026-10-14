@@ -12,11 +12,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import uz.horecaos.platform.commercial.application.CardAccount;
-import uz.horecaos.platform.commercial.application.CardCharger;
+import uz.horecaos.platform.commercial.api.CardAccount;
+import uz.horecaos.platform.commercial.api.CardCharger;
+import uz.horecaos.platform.commercial.api.CardEnrolment;
+import uz.horecaos.platform.commercial.api.CardProviderAdapter;
 import uz.horecaos.platform.commercial.application.CardChargingAvailability;
-import uz.horecaos.platform.commercial.application.CardEnrolment;
-import uz.horecaos.platform.commercial.application.CardProviderAdapter;
 import uz.horecaos.platform.commercial.application.CardTokenReferences;
 import uz.horecaos.platform.commercial.domain.PlatformCardInstallation;
 import uz.horecaos.platform.commercial.infrastructure.persistence.JdbcPlatformCardInstallationStore;
@@ -124,13 +124,29 @@ public class PlatformCardGateway implements CardCharger, CardEnrolment, CardChar
     @Override
     public ConfirmOutcome confirm(
             UUID tenantId, String sessionReference, String providerToken, String verificationCode) {
+        return confirm(tenantId, sessionReference, providerToken, verificationCode, null);
+    }
+
+    @Override
+    public ConfirmOutcome confirm(
+            UUID tenantId,
+            String sessionReference,
+            String providerToken,
+            String verificationCode,
+            @Nullable String cardExpiry) {
         Optional<Active> active = active();
         if (active.isEmpty()) {
             return new ConfirmOutcome.NotConfigured();
         }
         ConfirmOutcome outcome = active.get()
                 .adapter()
-                .confirm(active.get().account(), tenantId, sessionReference, providerToken, verificationCode);
+                .confirm(
+                        active.get().account(),
+                        tenantId,
+                        sessionReference,
+                        providerToken,
+                        verificationCode,
+                        cardExpiry);
         if (outcome instanceof ConfirmOutcome.Enrolled enrolled) {
             // Bound to the account that minted it, so a later change of account cannot send it elsewhere.
             return new ConfirmOutcome.Enrolled(
@@ -185,7 +201,13 @@ public class PlatformCardGateway implements CardCharger, CardEnrolment, CardChar
                         found.id(),
                         found.providerType(),
                         found.environmentCode(),
+                        found.environmentCode() == null
+                                ? null
+                                : installations
+                                        .environmentBaseUrl(found.environmentCode())
+                                        .orElse(null),
                         found.secretReference(),
+                        found.externalAccountReference(),
                         found.nonSensitiveConfig())));
     }
 
