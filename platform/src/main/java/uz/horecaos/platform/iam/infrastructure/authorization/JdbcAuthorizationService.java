@@ -7,11 +7,15 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionOperations;
+import uz.horecaos.platform.configuration.rls.TenantRlsSession;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CapabilityView;
@@ -59,13 +63,32 @@ public class JdbcAuthorizationService implements AuthorizationService {
     private final Clock clock;
     private final CurrentActor currentActor;
     private final TenantSuspensionLookup suspensions;
+    private final TenantRlsSession rls;
+    private final @Nullable TransactionOperations transactions;
 
+    /**
+     * For a fixture that builds this by hand on the table owner's connection, which PostgreSQL
+     * exempts from row-level security: nothing to bind, so nothing is bound.
+     */
     public JdbcAuthorizationService(
             JdbcClient jdbc, Clock clock, CurrentActor currentActor, TenantSuspensionLookup suspensions) {
+        this(jdbc, clock, currentActor, suspensions, TenantRlsSession.notEnforced(), null);
+    }
+
+    @Autowired
+    public JdbcAuthorizationService(
+            JdbcClient jdbc,
+            Clock clock,
+            CurrentActor currentActor,
+            TenantSuspensionLookup suspensions,
+            TenantRlsSession rls,
+            @Nullable TransactionOperations transactions) {
         this.jdbc = jdbc;
         this.clock = clock;
         this.currentActor = currentActor;
         this.suspensions = suspensions;
+        this.rls = rls;
+        this.transactions = transactions;
     }
 
     /**
@@ -121,6 +144,25 @@ public class JdbcAuthorizationService implements AuthorizationService {
     private boolean isPlatformAdmin(String subject) {
         var actor = currentActor.get();
         return actor != null && subject.equals(actor.subject()) && actor.hasGlobalRole(PLATFORM_ADMIN);
+    }
+
+    /**
+     * One grant read for every capability, so a caller testing a whole job pays once (ADR 0186).
+     * Exactly the union of what {@link #has} answers: the grants that apply and cover the
+     * scope, plus the one capability the platform-admin bootstrap confers.
+     */
+    @Override
+    public Set<Capability> held(String subject, ResourceScope scope) {
+        Set<Capability> held = EnumSet.noneOf(Capability.class);
+        for (GrantRow grant : applicableGrants(subject, scope.tenantId())) {
+            if (grant.scope().covers(scope)) {
+                held.add(grant.capability());
+            }
+        }
+        if (isPlatformAdmin(subject)) {
+            held.add(BOOTSTRAP_CAPABILITY);
+        }
+        return held;
     }
 
     private boolean hasGrant(String subject, Capability capability, ResourceScope scope) {
@@ -229,20 +271,48 @@ public class JdbcAuthorizationService implements AuthorizationService {
      */
     @Cacheable(cacheNames = "iam.grants", key = "#subject + '|' + #tenantId", sync = true)
     public List<GrantRow> grantsFor(String subject, @Nullable UUID tenantId) {
-        return jdbc.sql(SELECT_GRANTS)
-                .param("subject", subject)
-                .param("tenantId", tenantId)
-                .param("now", clock.instant().atOffset(ZoneOffset.UTC))
-                .query((resultSet, rowNumber) -> {
-                    ScopeType scopeType = ScopeType.valueOf(resultSet.getString("scope_type"));
-                    UUID scopeId = resultSet.getObject("scope_id", UUID.class);
-                    UUID grantTenant = resultSet.getObject("tenant_id", UUID.class);
-                    return new GrantRow(
-                            toScope(scopeType, grantTenant, scopeId),
-                            resultSet.getString("role_code"),
-                            Capability.require(resultSet.getString("capability_code")));
-                })
-                .list();
+        // ADR 0186 / V0693: a tenant's own jobs are visible to a session that has bound that
+        // tenant and to no other. A read for no tenant sees the platform's jobs only, which is
+        // all a PLATFORM grant can name (V0089), so there is nothing to bind.
+        return readingRoles(
+                tenantId,
+                () -> jdbc
+                        .sql(SELECT_GRANTS)
+                        .param("subject", subject)
+                        .param("tenantId", tenantId)
+                        .param("now", clock.instant().atOffset(ZoneOffset.UTC))
+                        .query((resultSet, rowNumber) -> {
+                            ScopeType scopeType = ScopeType.valueOf(resultSet.getString("scope_type"));
+                            UUID scopeId = resultSet.getObject("scope_id", UUID.class);
+                            UUID grantTenant = resultSet.getObject("tenant_id", UUID.class);
+                            // Fail closed on a capability the code no longer declares (ADR 0186): a
+                            // tenant job can hold a code a later release removed, and that code grants
+                            // nothing. Throwing here would instead take away every capability the
+                            // holder has, in every job, until somebody edited the job.
+                            String roleCode = resultSet.getString("role_code");
+                            return Capability.find(resultSet.getString("capability_code"))
+                                    .map(capability -> new GrantRow(
+                                            toScope(scopeType, grantTenant, scopeId), roleCode, capability));
+                        })
+                        .list()
+                        .stream()
+                        .flatMap(java.util.Optional::stream)
+                        .toList());
+    }
+
+    /**
+     * Runs a read of {@code iam.roles} with the tenant bound, in a transaction if there is not
+     * one already: {@code set_config(..., true)} lasts for the transaction, and an
+     * autocommit statement is its own transaction, so a bind outside one binds nothing.
+     */
+    private <T> T readingRoles(@Nullable UUID tenantId, Supplier<T> read) {
+        if (tenantId == null || transactions == null) {
+            return read.get();
+        }
+        return java.util.Objects.requireNonNull(transactions.execute(status -> {
+            rls.bindTenant(tenantId);
+            return read.get();
+        }));
     }
 
     /**

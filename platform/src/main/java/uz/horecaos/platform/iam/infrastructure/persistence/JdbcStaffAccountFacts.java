@@ -8,8 +8,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.configuration.rls.TenantRlsSession;
 import uz.horecaos.platform.iam.application.mfa.StaffAccountFacts;
 
 /** {@link StaffAccountFacts} over {@code iam.grants} and {@code iam.roles}. */
@@ -18,10 +21,18 @@ class JdbcStaffAccountFacts implements StaffAccountFacts {
 
     private final JdbcClient jdbc;
     private final Clock clock;
+    private final TenantRlsSession rls;
 
+    /** For a fixture on the table owner's connection, which row-level security exempts anyway. */
     JdbcStaffAccountFacts(JdbcClient jdbc, Clock clock) {
+        this(jdbc, clock, TenantRlsSession.notEnforced());
+    }
+
+    @Autowired
+    JdbcStaffAccountFacts(JdbcClient jdbc, Clock clock, TenantRlsSession rls) {
         this.jdbc = jdbc;
         this.clock = clock;
+        this.rls = rls;
     }
 
     @Override
@@ -42,8 +53,14 @@ class JdbcStaffAccountFacts implements StaffAccountFacts {
                 .single();
     }
 
+    /**
+     * Across every tenant the subject works in, so it reads under the exempt role: the roles
+     * named may be a tenant's own jobs (V0693, ADR 0186), and no single tenant is bound.
+     */
     @Override
+    @Transactional(readOnly = true)
     public Map<UUID, Set<String>> rolesByTenant(String subject) {
+        rls.bindPlatform();
         Map<UUID, Set<String>> byTenant = new HashMap<>();
         jdbc.sql("""
                         SELECT g.tenant_id, r.code
@@ -80,7 +97,9 @@ class JdbcStaffAccountFacts implements StaffAccountFacts {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public boolean holdsRoleInTenant(String subject, UUID tenantId, String roleCode) {
+        rls.bindTenant(tenantId);
         return jdbc.sql("""
                         SELECT EXISTS (
                             SELECT 1

@@ -15,8 +15,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.configuration.rls.TenantRlsSession;
 
 /**
  * {@code iam.staff_members}, its counter, and the two reads over {@code
@@ -43,9 +46,23 @@ public class JdbcStaffMemberStore {
             """;
 
     private final JdbcClient jdbc;
+    private final TenantRlsSession rls;
 
+    /** For a fixture on the table owner's connection, which row-level security exempts anyway. */
     public JdbcStaffMemberStore(JdbcClient jdbc) {
+        this(jdbc, TenantRlsSession.notEnforced());
+    }
+
+    /**
+     * Every read below that joins a grant to its role ({@code iam.roles} has row-level security,
+     * V0693, ADR 0186) binds the tenant it is about, or the exempt role for the reconcilers that
+     * deliberately span tenants. Without the binding a tenant-defined job's holders silently drop
+     * out of the join while the platform's jobs keep working.
+     */
+    @Autowired
+    public JdbcStaffMemberStore(JdbcClient jdbc, TenantRlsSession rls) {
         this.jdbc = jdbc;
+        this.rls = rls;
     }
 
     // ------------------------------------------------------------------ writes
@@ -244,11 +261,13 @@ public class JdbcStaffMemberStore {
      * grants without a colleague behind them, and counting them would make a
      * device a member of staff.
      */
+    @Transactional(readOnly = true)
     public Map<String, List<GrantPlace>> activeGrantPlaces(
             UUID tenantId, @Nullable Collection<String> subjects, Instant now, Set<String> machineRoleCodes) {
         if (subjects != null && subjects.isEmpty()) {
             return Map.of();
         }
+        rls.bindTenant(tenantId);
         String sql = """
                 SELECT g.principal_subject, g.scope_type, g.scope_id, l.brand_id AS location_brand_id
                   FROM iam.grants g
@@ -282,7 +301,9 @@ public class JdbcStaffMemberStore {
     }
 
     /** The grants {@code subject} holds in this tenant right now, with their ids, so each can be revoked on its own. */
+    @Transactional(readOnly = true)
     public List<ActiveGrant> activeGrantsOf(UUID tenantId, String subject, Instant now, Set<String> machineRoleCodes) {
+        rls.bindTenant(tenantId);
         return jdbc.sql("""
                         SELECT g.id, g.scope_type, g.scope_id, l.brand_id AS location_brand_id
                           FROM iam.grants g
@@ -316,7 +337,9 @@ public class JdbcStaffMemberStore {
      * colleague, a HorecaOS support person -- must answer nothing, not leak the
      * name Keycloak happens to hold.
      */
+    @Transactional(readOnly = true)
     public boolean hasEverHeldStaffJob(UUID tenantId, String subject, Set<String> machineRoleCodes) {
+        rls.bindTenant(tenantId);
         return jdbc.sql("""
                         SELECT EXISTS (
                             SELECT 1 FROM iam.grants g
@@ -346,8 +369,10 @@ public class JdbcStaffMemberStore {
      *
      * @param after null for the first page
      */
+    @Transactional(readOnly = true)
     public List<SubjectRef> unbackedActiveSubjects(
             Instant now, Set<String> machineRoleCodes, int limit, @Nullable SubjectRef after) {
+        rls.bindPlatform();
         String pastCursor =
                 after == null ? "" : "AND (g.tenant_id, g.principal_subject) > (:afterTenant, :afterSubject)";
         JdbcClient.StatementSpec statement = jdbc.sql("""
@@ -378,7 +403,9 @@ public class JdbcStaffMemberStore {
                 .list();
     }
 
+    @Transactional(readOnly = true)
     public long countUnbackedActiveSubjects(Instant now, Set<String> machineRoleCodes) {
+        rls.bindPlatform();
         return jdbc.sql("""
                         SELECT count(*) FROM (
                             SELECT DISTINCT g.tenant_id, g.principal_subject
@@ -400,7 +427,9 @@ public class JdbcStaffMemberStore {
     }
 
     /** Ended members who still hold an active staff job: the drift the read-time flag shows. */
+    @Transactional(readOnly = true)
     public long countEndedWithAccess(Instant now, Set<String> machineRoleCodes) {
+        rls.bindPlatform();
         return jdbc.sql("""
                         SELECT count(*) FROM iam.staff_members m
                          WHERE m.employment_status = 'ENDED'

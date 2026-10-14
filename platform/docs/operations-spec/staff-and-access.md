@@ -393,15 +393,19 @@ no shift-tracked job, the tab is **absent**, not empty.
 | Field | Type | Source |
 |---|---|---|
 | Способ входа | Text: «Логин и пароль» \| «Логин, пароль и код», with each authenticator's name and date and **Сбросить второй фактор** | Keycloak's credential list, cached 60 s — **not projected, §11.9** (ADR 0148) |
-| Последний вход | Timestamp + coarse device string | **Not built — §11.6** |
-| Активные сеансы | Count + **Завершить все** | **Not built — §11.6** |
-| PIN на терминале | Set / not set + **Сбросить** | **Not built — §11.7** |
+| Последний вход | Timestamp + coarse device string | **Declined for a colleague (ADR 0176, §11.6)**; the person sees their own on «Мой профиль» |
+| Активные сеансы | Count + **Завершить все** | **Declined for a colleague (ADR 0176, §11.6)**; the person ends their own on «Мой профиль» |
+| PIN на терминале | Set / not set + **Сбросить** | Built (ADR 0155, §11.7) |
 | Внутренний идентификатор | Mono + copy | `iam.grants.principal_subject` |
 
-Actions: **Сбросить пароль** (triggers Keycloak's own reset flow; HorecaOS never
-handles the password), **Сбросить PIN**, **Завершить все сеансы**. All three
-require confirmation and a reason. None of the three exists in the backend
-today.
+Actions: **Сбросить PIN** is built (ADR 0155, `staff-pin-panel`) and asks for a
+confirmation and a reason. **Завершить все сеансы** for a colleague is declined
+(ADR 0176, §11.6): a person ends their own from «Мой профиль», and a colleague who
+has left is locked out by ending their employment. **Сбросить пароль** is the
+person's own act, never an administrator's: they ask for a reset on the sign-in page
+or from «Безопасность» in «Мой профиль» (ADR 0098), Keycloak's own flow carries it
+and HorecaOS never handles the password. A reset ends every sign-in, the console's
+included.
 
 ### States
 
@@ -936,6 +940,12 @@ never sees the value), «Мой PIN» (set or change, at a terminal only — the
 shows the state and a reset, never an entry field), active sessions with a
 «Выйти везде» action.
 
+Built (batch 21): «Сменить пароль» is a card that sends the person to ADR 0098's reset
+flow with their sign-in name already filled in (carried in the router's state, never in the
+address). It says, before the button, that a reset ends **every** sign-in, this console's
+included, and that the link arrives by email. Where the platform has no mail provider
+configured it says that too and sends nothing.
+
 **Мои должности** — read-only. The same assignment cards as §3, without any
 action. A person should be able to see what they have; they should never be able
 to change it, and the absence of controls is how that is communicated.
@@ -1069,10 +1079,24 @@ change. **ADR 0039** for the read; the write path is done.
 
 ### 11.6 Last sign-in, active sessions, session termination
 
-Keycloak holds all three. Nothing projects them and no endpoint exposes them.
-ADR 0009's scheduled drift report is the nearest existing mechanism and is not a
-substitute — it compares memberships, not sessions. **ADR 0009**, with the
-projection likely belonging to the new staff-identity ADR from §11.1.
+**Built for the person's own account (ADR 0176); declined for a colleague's.** Keycloak
+decides whether a session is alive and the platform keeps what it was: `iam.staff_sign_ins`
+(V0528) holds, per sign-in, a device label out of three closed sets (browser, operating
+system, form), the times and an end reason, and **no address, header, position or device
+identifier**. «Мой профиль» → «Сеансы» lists the signed-in person's sessions, marks «Это
+устройство», and ends one or all of them (`GET`, `POST .../terminations` and
+`POST .../{sessionId}/terminations` under `.../staff/me/sessions`), each act audited with a
+reason and a count. A password reset (ADR 0098) ends every session and marks the history
+`PASSWORD_RESET` only after Keycloak confirmed it.
+
+What the person card's «Безопасность» tab does **not** show, by decision: a manager gets no
+view of a colleague's sign-ins or sessions (ADR 0176, Accepted 2026-10-07). The tab says so in
+the manager's words and names the way a departed colleague is locked out: ending their
+employment. The terminal PIN is built (ADR 0155, §11.7) and shows its state on this tab.
+
+Not yet proven: no real realm has served the list (`docs/runbooks/staff-sessions.md`, «Last
+executed: never»), and a deployment needs `HORECAOS_KEYCLOAK_STAFF_LOGIN_CLIENT_UUID`; without
+it the card lists the platform's own record only.
 
 ### 11.7 Shared-terminal identity and PINs
 

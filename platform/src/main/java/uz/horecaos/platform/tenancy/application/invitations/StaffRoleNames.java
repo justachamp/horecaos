@@ -37,6 +37,11 @@ final class StaffRoleNames {
 
     private StaffRoleNames() {}
 
+    /** Whether this table names the code, i.e. whether it is one of the eight code-owned jobs. */
+    static boolean names(String roleCode) {
+        return NAMES.containsKey(roleCode);
+    }
+
     /** The role's name in this language, or the raw code for one this table does not name -- never blank. */
     static String of(String roleCode, String locale) {
         Names names = NAMES.get(roleCode);

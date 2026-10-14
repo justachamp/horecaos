@@ -2,11 +2,13 @@ package uz.horecaos.platform.iam.infrastructure.authorization;
 
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.configuration.rls.TenantRlsSession;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 
@@ -18,14 +20,29 @@ import uz.horecaos.platform.iam.api.PlatformRole;
  * what a role means. Synchronising at startup keeps the two from drifting
  * without hard-coding identifiers in a migration, which would make every
  * bundle change a schema change.
+ *
+ * <p>Writes the platform's rows and nothing else (ADR 0186): a tenant's own jobs are never
+ * listed, replaced or retired here, because every statement below names a role id derived
+ * from a code-owned {@link PlatformRole}. What it replaces wholesale is a platform role's
+ * capability list, so a capability removed from a bundle in code disappears from the table.
  */
 @Component
 public class RoleRegistrySynchronizer implements ApplicationRunner {
 
-    private final JdbcClient jdbc;
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(RoleRegistrySynchronizer.class);
 
+    private final JdbcClient jdbc;
+    private final TenantRlsSession rls;
+
+    /** For a fixture on the table owner's connection, which row-level security exempts anyway. */
     public RoleRegistrySynchronizer(JdbcClient jdbc) {
+        this(jdbc, TenantRlsSession.notEnforced());
+    }
+
+    @Autowired
+    public RoleRegistrySynchronizer(JdbcClient jdbc, TenantRlsSession rls) {
         this.jdbc = jdbc;
+        this.rls = rls;
     }
 
     @Override
@@ -36,6 +53,10 @@ public class RoleRegistrySynchronizer implements ApplicationRunner {
 
     @Transactional
     public void synchronize() {
+        // ADR 0186 / V0693: the platform's jobs belong to no tenant, and no tenant session may
+        // write them. They are written under the exempt role, for this transaction only.
+        rls.bindPlatform();
+
         for (PlatformRole role : PlatformRole.values()) {
             UUID roleId = platformRoleId(role);
 
@@ -71,6 +92,8 @@ public class RoleRegistrySynchronizer implements ApplicationRunner {
             }
         }
 
+        pruneRemovedCapabilitiesFromTenantJobs();
+
         jdbc.sql("DELETE FROM iam.capability_registry_snapshot").update();
         for (Capability capability : Capability.values()) {
             jdbc.sql("""
@@ -81,6 +104,32 @@ public class RoleRegistrySynchronizer implements ApplicationRunner {
                     .param("resourceType", capability.resourceType())
                     .param("action", capability.action())
                     .update();
+        }
+    }
+
+    /**
+     * A tenant job names capability codes the way a platform job does, and a release can
+     * remove a code from {@link Capability}. A platform job is replaced wholesale above, so the
+     * removed code leaves with it; a tenant job is not ours to replace, so the codes that no
+     * longer exist are removed from it here (ADR 0186, fail closed). The authorization read
+     * ignores an unknown code in the meantime, so a job is never <em>more</em> than its
+     * remaining capabilities at any instant.
+     *
+     * <p>Logs a count, never a code list or a tenant.
+     */
+    private void pruneRemovedCapabilitiesFromTenantJobs() {
+        String[] known = java.util.Arrays.stream(Capability.values())
+                .map(Capability::code)
+                .toArray(String[]::new);
+        int removed = jdbc.sql("""
+                DELETE FROM iam.role_capabilities rc
+                 USING iam.roles r
+                 WHERE r.id = rc.role_id
+                   AND r.tenant_id IS NOT NULL
+                   AND rc.capability_code <> ALL(:known)
+                """).param("known", known).update();
+        if (removed > 0) {
+            LOGGER.warn("Removed {} capability code(s) the code no longer declares from tenant-defined jobs", removed);
         }
     }
 

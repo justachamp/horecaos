@@ -9,8 +9,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.configuration.rls.TenantRlsSession;
 
 /**
  * {@code tenant.staff_invitations} (ADR 0116, V0313).
@@ -32,9 +35,17 @@ public class JdbcStaffInvitationStore {
             """;
 
     private final JdbcClient jdbc;
+    private final TenantRlsSession rls;
 
+    /** For a fixture on the table owner's connection, which row-level security exempts anyway. */
     public JdbcStaffInvitationStore(JdbcClient jdbc) {
+        this(jdbc, TenantRlsSession.notEnforced());
+    }
+
+    @Autowired
+    public JdbcStaffInvitationStore(JdbcClient jdbc, TenantRlsSession rls) {
         this.jdbc = jdbc;
+        this.rls = rls;
     }
 
     public void insert(
@@ -215,14 +226,42 @@ public class JdbcStaffInvitationStore {
                 .optional();
     }
 
-    /** The job name a grant carries, resolved through {@code iam.roles} -- platform and tenant-defined alike. */
-    public Optional<String> roleCodeOfGrant(UUID grantId) {
+    /**
+     * The job code a grant carries, resolved through {@code iam.roles} -- platform and
+     * tenant-defined alike. Names the tenant because a tenant's own jobs are visible only to a
+     * session that has bound it (V0693, ADR 0186).
+     */
+    @Transactional(readOnly = true)
+    public Optional<String> roleCodeOfGrant(UUID tenantId, UUID grantId) {
+        rls.bindTenant(tenantId);
         return jdbc.sql("""
                         SELECT r.code
                           FROM iam.grants g
                           JOIN iam.roles r ON r.id = g.role_id
-                         WHERE g.id = :grantId
-                        """).param("grantId", grantId).query(String.class).optional();
+                         WHERE g.id = :grantId AND g.tenant_id = :tenantId
+                        """)
+                .param("grantId", grantId)
+                .param("tenantId", tenantId)
+                .query(String.class)
+                .optional();
+    }
+
+    /**
+     * The name a tenant gave its own job, for the invitation a person reads before they have an
+     * account. Empty for a code-owned job, whose name is translated, and for a code that is not
+     * this tenant's.
+     */
+    @Transactional(readOnly = true)
+    public Optional<String> customJobName(UUID tenantId, String roleCode) {
+        rls.bindTenant(tenantId);
+        return jdbc.sql("""
+                        SELECT name FROM iam.roles
+                         WHERE tenant_id = :tenantId AND code = :code AND NOT is_platform_defined
+                        """)
+                .param("tenantId", tenantId)
+                .param("code", roleCode)
+                .query(String.class)
+                .optional();
     }
 
     private static OffsetDateTime utc(Instant instant) {

@@ -1615,6 +1615,17 @@ public enum Capability {
     IAM_GRANT_MANAGE("iam.grant.manage", "iam", "grant.manage"),
 
     /**
+     * ADR 0186: defining, editing and retiring the tenant's own jobs -- named subsets of
+     * this catalogue, never a capability of their own.
+     *
+     * <p>Declared at {@code TENANT} scope and held by {@code tenant-owner} and
+     * {@code tenant-admin} only. Not part of the platform-admin bootstrap, which stays one
+     * capability wide ({@link #IAM_GRANT_MANAGE}). It is also on the deny-list a tenant job
+     * is built under: a job can never carry the power to define jobs, or to give them away.
+     */
+    IAM_ROLE_MANAGE("iam.role.manage", "iam", "role.manage"),
+
+    /**
      * ADR 0148: reading whether a person holds a second factor, how many authenticators
      * and when each was added -- the «Способ входа» field on the person card and the column
      * on the staff list. Never a secret and never a code: the platform holds neither.

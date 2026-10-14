@@ -56,4 +56,25 @@ public interface TenantRlsSession {
      * same way a forgotten predicate defeats the application-level one.
      */
     void bindPlatform();
+
+    /**
+     * A session that binds nothing, for a fixture that builds a service by hand on the table
+     * owner's connection.
+     *
+     * <p>PostgreSQL exempts a table's owner from its own row-level security, so a test that
+     * connects as the migrator sees every row whatever is or is not bound, and the binding
+     * statements would only cost round trips. This exists so those fixtures keep their
+     * constructors; it is never what a running application wires, and a suite that means to
+     * prove a policy (as {@code IamRolesRowLevelSecurityTests} does) connects as the
+     * application role and uses {@link JdbcTenantRlsSession}.
+     */
+    static TenantRlsSession notEnforced() {
+        return new TenantRlsSession() {
+            @Override
+            public void bindTenant(UUID tenantId) {}
+
+            @Override
+            public void bindPlatform() {}
+        };
+    }
 }

@@ -1,27 +1,28 @@
 # ADR 0176: Staff sessions: sign-in history and active sessions
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Not started — a staff member can sign in and sign out of this
-  device and nothing else about their sessions. What exists is the sign-in path and one
-  Keycloak operation, not a history or a list. `StaffSessionController` (ADR 0062) takes
-  a username and password and `StaffDirectGrantClient.signIn` exchanges them with
-  Keycloak on the confidential `horecaos-staff-login` client with the scope `openid
-  offline_access organization`, so every staff refresh token is an offline token and
-  Keycloak answers `refresh_expires_in: 0`; the controller reads the caller's address
-  (`getRemoteAddr`) only to hash it with the username into a rate-limit bucket key, and
-  reads no `User-Agent` at all. `DELETE
-  .../auth/sessions/current` revokes one refresh token (RFC 7009, best effort).
-  `KeycloakStaffAccounts#logoutEverywhere` ends every session of an account and is
-  called only by `PasswordResetService` (ADR 0098), after a reset; it makes two admin
-  calls, `POST /users/{id}/logout` and `DELETE /users/{id}/consents/{client}`, because
-  the first removes only online sessions and the staff tokens are offline ones. There is
-  no table, endpoint, capability or screen for sign-in history or active sessions;
-  «Мой профиль» renders the sentence `staff.myProfile.security.notBuilt` where
-  «Безопасность» should be. `infra/keycloak/realm/horecaos-realm.json` sets no
-  session lifespan and no event configuration, so Keycloak's defaults apply to both.
-  `StaffSecurityFact` (ADR 0098) is the audit shape for what happens to a staff
-  account, and `iam.staff_members (tenant_id, principal_subject)` (V0453,
-  `uq_staff_member_subject`) is the key a per-person record can reference.
+- Implementation status: Partial — built end to end and proven against fakes and a throwaway
+  Keycloak; no real realm has served it. V0528 adds `iam.staff_sign_ins` (a device label out
+  of three closed sets, the times, an end reason from a closed list, and no address, header or
+  device identifier, held by a canary test). `StaffSessionLedger` records a sign-in and a
+  refresh from `StaffAuthService` and marks the history `PASSWORD_RESET` only after
+  `PasswordResetService`'s `logoutEverywhere` succeeded. The `StaffSessions` port, its
+  `KeycloakStaffSessions` adapter and a stateful fake list the account's sessions from Keycloak
+  and end one or all of them. `StaffSessionsController` serves `GET`, `POST .../terminations`
+  and `POST .../{sessionId}/terminations` under
+  `/api/v1/operations/tenants/{tenantId}/staff/me/sessions`; each act is audited with a reason
+  from a closed list and a count, never a device. `StaffSignInSweeper` is report-only against
+  `iam.staff_sign_in_retention_days` (ADR 0030, 180 by default). «Мой профиль» carries the
+  «Сеансы» card (`my-profile-sessions-card`) with «Это устройство», «Неизвестное устройство»
+  and the confirmation, after which the console clears its tokens. The probe
+  `infra/keycloak/spikes/staff-sessions-probe.py` ran once against Keycloak 26.7;
+  `create-staff-login-client.sh` prints `HORECAOS_KEYCLOAK_STAFF_LOGIN_CLIENT_UUID`, which
+  `application.yml` and both compose files read. What is not done: no real realm has served
+  the session list (`docs/runbooks/staff-sessions.md`, «Last executed: never»), the variable
+  is not set on pre-production, and with it unset the card lists only the platform's own
+  record and says it could not ask the sign-in service. A manager's view of a colleague's
+  sign-ins is declined by this record for v1 and is not owed: a departed colleague is locked
+  out by ending employment. The gap-map row `X.5` is for the owner to re-audit.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides
@@ -473,21 +474,27 @@ Rollback is removing the screen and the recording call: the table is additive an
 
 ## Implementation checklist
 
-- [ ] Owner accepts the record or answers the open inputs.
-- [ ] Probe script under `infra/keycloak/spikes/` and its recorded result.
-- [ ] `horecaos.keycloak.staff-login-client-uuid` written by
-      `create-staff-login-client.sh`, read at startup, documented in the production runbook.
-- [ ] Migration for `iam.staff_sign_ins`; `GRANT`s; the closed-set checks.
-- [ ] `StaffSessionLedger`, the device-label parser and its vectors; `StaffAuthService`
+- [x] Owner accepts the record or answers the open inputs (2026-10-07).
+- [x] Probe script under `infra/keycloak/spikes/` and its recorded result
+      (`staff-sessions-probe.py`, Keycloak 26.7, result in its header).
+- [x] `horecaos.keycloak.staff-login-client-uuid` written by
+      `create-staff-login-client.sh`, read at startup (`application.yml`,
+      `KeycloakConfiguration`), documented in `docs/runbooks/staff-sessions.md`. Setting it on
+      pre-production is an owner step (`docs/runbooks/external-connections/w13-staff-access.md`).
+- [x] Migration for `iam.staff_sign_ins` (V0528); `GRANT`s; the closed-set checks.
+- [x] `StaffSessionLedger`, the device-label parser and its vectors; `StaffAuthService`
       calls it after sign-in and refresh; `PasswordResetService` calls it after, and only
       after, `logoutEverywhere` succeeds.
-- [ ] `StaffSessions` port, `KeycloakStaffSessions` adapter and its fake.
-- [ ] The three routes; rate limits; idempotency; OpenAPI baselines for all five
+- [x] `StaffSessions` port, `KeycloakStaffSessions` adapter and its fake.
+- [x] The three routes; rate limits; idempotency; OpenAPI baselines for all five
       documents and the generated clients.
-- [ ] `IamConfigurationKeys` with the retention key; the report-only sweeper.
-- [ ] Audit facts and their sentences in three languages.
-- [ ] «Сеансы» card in «Мой профиль», the confirmation, the sign-out path, strings.
-- [ ] `staff-and-access.md` §11.6 and gap-map row `X.5` updated when this lands.
+- [x] `IamConfigurationKeys` with the retention key; the report-only sweeper.
+- [x] Audit facts and their sentences in three languages.
+- [x] «Сеансы» card in «Мой профиль», the confirmation, the sign-out path, strings.
+- [x] `staff-and-access.md` §11.6 updated (batch 21). The gap-map row `X.5` is the owner's
+      re-audit to update.
+- [ ] A real realm serves the session list once (`staff-sessions.md`, «Last executed»), with
+      `HORECAOS_KEYCLOAK_STAFF_LOGIN_CLIENT_UUID` set on pre-production. External step.
 
 ## Exit criteria
 

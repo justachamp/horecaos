@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -13,10 +14,12 @@ import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.configuration.rls.TenantRlsSession;
 import uz.horecaos.platform.iam.api.AuthorizationService;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.GrantChanged;
@@ -73,18 +76,43 @@ public class GrantManagementService implements GrantAuthority {
     private final JdbcAuthorizationService cacheOwner;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    private final TenantRlsSession rls;
 
+    /** For a fixture on the table owner's connection, which row-level security exempts anyway. */
     public GrantManagementService(
             JdbcClient jdbc,
             AuthorizationService authorization,
             JdbcAuthorizationService cacheOwner,
             ApplicationEventPublisher events,
             Clock clock) {
+        this(jdbc, authorization, cacheOwner, events, clock, TenantRlsSession.notEnforced());
+    }
+
+    @Autowired
+    public GrantManagementService(
+            JdbcClient jdbc,
+            AuthorizationService authorization,
+            JdbcAuthorizationService cacheOwner,
+            ApplicationEventPublisher events,
+            Clock clock,
+            TenantRlsSession rls) {
         this.jdbc = jdbc;
         this.authorization = authorization;
         this.cacheOwner = cacheOwner;
         this.events = events;
         this.clock = clock;
+        this.rls = rls;
+    }
+
+    /**
+     * Binds the tenant a role read or write belongs to (V0693: {@code iam.roles} has row-level
+     * security). A platform-scope grant has no tenant and names only a code-owned role, which
+     * every session can read.
+     */
+    private void bind(@Nullable UUID tenantId) {
+        if (tenantId != null) {
+            rls.bindTenant(tenantId);
+        }
     }
 
     /**
@@ -107,6 +135,7 @@ public class GrantManagementService implements GrantAuthority {
 
     @Transactional
     public UUID grant(GrantCommand command, String granterSubject) {
+        bind(command.scope().tenantId());
         // Ordered the way CapabilityEnforcementInterceptor orders its own two
         // checks, and for the same reason. Resolving the role first would make
         // the pair of answers an oracle: 404 for a role code that names nothing
@@ -210,6 +239,7 @@ public class GrantManagementService implements GrantAuthority {
      */
     @Transactional
     public UUID grantSystemInitiated(GrantCommand command, String systemActor) {
+        bind(command.scope().tenantId());
         ResolvedRole role = resolveRole(command.roleCode(), command.scope().tenantId());
         if (role.capabilities().contains(Capability.PLATFORM_ADMIN)) {
             throw new IllegalArgumentException(
@@ -270,6 +300,7 @@ public class GrantManagementService implements GrantAuthority {
                 .filter(PlatformRole::supportSessionOnly)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "A support session confers a support-session role and nothing else"));
+        bind(command.scope().tenantId());
         ResolvedRole role = resolveRole(platformRole.code(), command.scope().tenantId());
         Instant now = clock.instant();
 
@@ -432,8 +463,10 @@ public class GrantManagementService implements GrantAuthority {
      * @param boundary a {@code BRAND} or {@code LOCATION} scope; anything wider is
      *                 {@link #listForTenant}'s business
      */
+    @Transactional(readOnly = true)
     public List<GrantView> listWithin(ResourceScope boundary, boolean includeInactive) {
         requireBranchBoundary(boundary);
+        bind(boundary.tenantId());
         String within = boundary.type() == ResourceScope.ScopeType.LOCATION
                 ? "(g.scope_type = 'LOCATION' AND g.scope_id = :locationId)"
                 : """
@@ -477,6 +510,7 @@ public class GrantManagementService implements GrantAuthority {
     public boolean revokeWithin(ResourceScope boundary, UUID grantId, String revokerSubject, String reason) {
         requireBranchBoundary(boundary);
         UUID tenantId = Objects.requireNonNull(boundary.tenantId());
+        bind(tenantId);
         var row = jdbc.sql("""
                 SELECT g.role_id, g.scope_type, g.scope_id
                   FROM iam.grants g
@@ -500,8 +534,10 @@ public class GrantManagementService implements GrantAuthority {
                 .param("roleId", row.get().roleId())
                 .query(String.class)
                 .list()) {
-            Capability capability = Capability.require(code);
-            if (!authorization.has(revokerSubject, capability, grantScope)) {
+            // A code the build no longer declares grants nothing (ADR 0186), so it is not
+            // something the revoker has to hold in order to take the job away.
+            Capability capability = Capability.find(code).orElse(null);
+            if (capability != null && !authorization.has(revokerSubject, capability, grantScope)) {
                 throw new AuthorizationService.AccessDeniedException(capability, grantScope);
             }
         }
@@ -509,36 +545,70 @@ public class GrantManagementService implements GrantAuthority {
     }
 
     /**
-     * The tenant-visible jobs, each with whether {@code granterSubject} may confer
-     * it at {@code scope} right now (ADR 0103).
+     * The tenant-visible jobs -- the code-owned bundles and the tenant's own (ADR 0186) -- each
+     * with whether {@code granterSubject} may confer it at {@code scope} right now (ADR 0103).
      *
-     * <p>Answered by running {@link #requireGrantable} itself and reading its
-     * refusal, not by a second copy of its rules: the picker a branch manager is
-     * shown and the check that runs when she presses the button then cannot
-     * disagree, which is the whole of staff-and-access.md §0's "never taunt her
-     * with a job she cannot give".
+     * <p>Answered by running {@link #requireGrantable} itself and reading its refusal, not by a
+     * second copy of its rules: the picker a branch manager is shown and the check that runs
+     * when she presses the button then cannot disagree, which is the whole of
+     * staff-and-access.md §0's "never taunt her with a job she cannot give". One {@link
+     * GrantContext} is shared by every job, so the granter's grants are read once for the list
+     * rather than once per capability per job.
      */
+    @Transactional(readOnly = true)
     public List<GrantableRole> grantableRoles(ResourceScope scope, String granterSubject) {
-        return TenantRoleCatalog.tenantVisible().stream()
-                .map(descriptor -> {
-                    PlatformRole role = PlatformRole.find(descriptor.code()).orElseThrow();
-                    ResolvedRole resolved = new ResolvedRole(
-                            RoleRegistrySynchronizer.platformRoleId(role), role.code(), role.capabilities(), true);
-                    boolean grantable = true;
-                    try {
-                        requireGrantable(resolved, scope, granterSubject);
-                    } catch (AuthorizationService.AccessDeniedException refused) {
-                        grantable = false;
-                    } catch (ApiException refused) {
-                        if (refused.errorCode() != ErrorCode.INSUFFICIENT_CAPABILITY) {
-                            throw refused;
-                        }
-                        grantable = false;
-                    }
-                    return new GrantableRole(
-                            descriptor.code(), descriptor.scopeType(), descriptor.capabilities(), grantable);
-                })
-                .toList();
+        bind(scope.tenantId());
+        GrantContext context = new GrantContext(granterSubject, scope);
+        List<GrantableRole> jobs = new ArrayList<>();
+        for (TenantRoleCatalog.RoleDescriptor descriptor : TenantRoleCatalog.tenantVisible()) {
+            PlatformRole role = PlatformRole.find(descriptor.code()).orElseThrow();
+            ResolvedRole resolved = new ResolvedRole(
+                    RoleRegistrySynchronizer.platformRoleId(role),
+                    role.code(),
+                    role.capabilities(),
+                    true,
+                    role.scopeType());
+            jobs.add(new GrantableRole(
+                    descriptor.code(),
+                    descriptor.scopeType(),
+                    descriptor.capabilities(),
+                    grantable(resolved, scope, granterSubject, context),
+                    false,
+                    null,
+                    null,
+                    "ACTIVE"));
+        }
+        UUID tenantId = scope.tenantId();
+        if (tenantId != null) {
+            for (TenantJob job : TenantJobReads.list(jdbc, tenantId, false, clock.instant())) {
+                ResolvedRole resolved =
+                        new ResolvedRole(job.id(), job.code(), declared(job.capabilities()), false, job.scopeType());
+                jobs.add(new GrantableRole(
+                        job.code(),
+                        job.scopeType(),
+                        Set.copyOf(job.capabilities()),
+                        grantable(resolved, scope, granterSubject, context),
+                        true,
+                        job.name(),
+                        job.version(),
+                        job.status()));
+            }
+        }
+        return List.copyOf(jobs);
+    }
+
+    private boolean grantable(ResolvedRole role, ResourceScope scope, String granterSubject, GrantContext context) {
+        try {
+            requireGrantable(role, scope, granterSubject, context);
+            return true;
+        } catch (AuthorizationService.AccessDeniedException refused) {
+            return false;
+        } catch (ApiException refused) {
+            if (refused.errorCode() != ErrorCode.INSUFFICIENT_CAPABILITY) {
+                throw refused;
+            }
+            return false;
+        }
     }
 
     /**
@@ -604,6 +674,7 @@ public class GrantManagementService implements GrantAuthority {
     }
 
     /** Active grants only, the historical default — see {@link #listForTenant(UUID, boolean)}. */
+    @Transactional(readOnly = true)
     public List<GrantView> listForTenant(UUID tenantId) {
         return listForTenant(tenantId, false);
     }
@@ -616,7 +687,9 @@ public class GrantManagementService implements GrantAuthority {
      *                         §11.2's "restore" action both need to see what
      *                         was taken away, not just what remains
      */
+    @Transactional(readOnly = true)
     public List<GrantView> listForTenant(UUID tenantId, boolean includeInactive) {
+        bind(tenantId);
         return jdbc.sql("""
                 SELECT g.id, g.principal_subject, r.code AS role_code, g.scope_type, g.scope_id,
                        g.status, g.granted_by, g.reason, g.valid_from, g.valid_until,
@@ -645,7 +718,9 @@ public class GrantManagementService implements GrantAuthority {
      * JdbcAuthorizationService#SELECT_GRANTS} already uses to answer {@code
      * has()}, so the two never disagree about which grants carry a capability.
      */
+    @Transactional(readOnly = true)
     public List<GrantView> grantsCarrying(UUID tenantId, String subject, Capability capability) {
+        bind(tenantId);
         return jdbc.sql("""
                 SELECT g.id, g.principal_subject, r.code AS role_code, g.scope_type, g.scope_id,
                        g.status, g.granted_by, g.reason, g.valid_from, g.valid_until,
@@ -716,6 +791,10 @@ public class GrantManagementService implements GrantAuthority {
      * must still not carry the superuser capability.
      */
     private void requireGrantable(ResolvedRole role, ResourceScope scope, String granterSubject) {
+        requireGrantable(role, scope, granterSubject, new GrantContext(granterSubject, scope));
+    }
+
+    private void requireGrantable(ResolvedRole role, ResourceScope scope, String granterSubject, GrantContext context) {
         if (role.capabilities().contains(Capability.PLATFORM_ADMIN)) {
             throw new IllegalArgumentException(
                     "platform.admin is issued by Keycloak and is never granted through this API");
@@ -727,13 +806,14 @@ public class GrantManagementService implements GrantAuthority {
                     ErrorCode.VALIDATION_FAILED, "This role is conferred only by opening a support session");
         }
 
+        Set<Capability> held = context.held();
         for (Capability capability : role.capabilities()) {
-            if (!authorization.has(granterSubject, capability, scope)) {
+            if (!held.contains(capability)) {
                 throw new AuthorizationService.AccessDeniedException(capability, scope);
             }
         }
 
-        requireWithinABranchGranter(role, scope, granterSubject);
+        requireWithinABranchGranter(role, scope, context);
     }
 
     /**
@@ -744,33 +824,63 @@ public class GrantManagementService implements GrantAuthority {
      * hierarchy that exists, because {@link ResourceScope#covers} is a statement
      * about levels: a brand manager naming {@code location(her brand, somebody
      * else's location)} would pass every capability check above and confer a job
-     * at a branch of another brand. And the job must be code-owned and no broader
-     * than the scope it is given at: a company-level job such as
-     * {@code tenant-finance} has no meaning "at one branch", and the subset rule
-     * alone would let a manager whose bundle happens to hold all of a narrower
-     * job's capabilities hand out a company-level one with a branch's reach
-     * looking like a company's.
+     * at a branch of another brand. And the job must be no broader than the scope
+     * it is given at: a company-level job such as {@code tenant-finance} has no
+     * meaning "at one branch", and the subset rule alone would let a manager whose
+     * bundle happens to hold all of a narrower job's capabilities hand out a
+     * company-level one with a branch's reach looking like a company's.
+     *
+     * <p>The job's level is its own, wherever it is defined (ADR 0186): the code-owned
+     * registry's for a bundle, the tenant's declared {@code scope_type} for a job the tenant
+     * wrote. This used to refuse any job that was not code-owned, which was the right answer
+     * while no other kind could exist.
      *
      * <p>A tenant-wide granter is exempt on purpose: this changes nothing for the
      * owner and the administrator, who may already give any job at any level.
      */
-    private void requireWithinABranchGranter(ResolvedRole role, ResourceScope scope, String granterSubject) {
-        if (scope.type() == ResourceScope.ScopeType.PLATFORM || holdsGrantManagementTenantWide(granterSubject, scope)) {
+    private void requireWithinABranchGranter(ResolvedRole role, ResourceScope scope, GrantContext context) {
+        if (scope.type() == ResourceScope.ScopeType.PLATFORM || context.tenantWide()) {
             return;
         }
         requireRealHierarchy(scope);
-        PlatformRole platformRole =
-                role.platformDefined() ? PlatformRole.find(role.code()).orElse(null) : null;
-        if (platformRole == null
-                || platformRole.scopeType().ordinal() < scope.type().ordinal()) {
+        if (role.scopeType().ordinal() < scope.type().ordinal()) {
             throw ApiException.insufficientCapability(Capability.IAM_GRANT_MANAGE.code(), "TENANT");
         }
     }
 
-    private boolean holdsGrantManagementTenantWide(String granterSubject, ResourceScope scope) {
-        UUID tenantId = scope.tenantId();
-        return tenantId != null
-                && authorization.has(granterSubject, Capability.IAM_GRANT_MANAGE, ResourceScope.tenant(tenantId));
+    /**
+     * What one granter holds at one scope, read when first needed and then reused: the subset
+     * rule is a membership test against it, and the branch-granter rule asks whether the
+     * granter's {@code iam.grant.manage} is company-wide.
+     */
+    private final class GrantContext {
+
+        private final String granterSubject;
+        private final ResourceScope scope;
+        private @Nullable Set<Capability> held;
+        private @Nullable Boolean tenantWide;
+
+        GrantContext(String granterSubject, ResourceScope scope) {
+            this.granterSubject = granterSubject;
+            this.scope = scope;
+        }
+
+        Set<Capability> held() {
+            if (held == null) {
+                held = authorization.held(granterSubject, scope);
+            }
+            return held;
+        }
+
+        boolean tenantWide() {
+            if (tenantWide == null) {
+                UUID tenantId = scope.tenantId();
+                tenantWide = tenantId != null
+                        && authorization.has(
+                                granterSubject, Capability.IAM_GRANT_MANAGE, ResourceScope.tenant(tenantId));
+            }
+            return tenantWide;
+        }
     }
 
     private void requireRealHierarchy(ResourceScope scope) {
@@ -837,7 +947,11 @@ public class GrantManagementService implements GrantAuthority {
         if (platformRole.isPresent()) {
             PlatformRole role = platformRole.get();
             return new ResolvedRole(
-                    RoleRegistrySynchronizer.platformRoleId(role), role.code(), role.capabilities(), true);
+                    RoleRegistrySynchronizer.platformRoleId(role),
+                    role.code(),
+                    role.capabilities(),
+                    true,
+                    role.scopeType());
         }
 
         // A platform-scope grant belongs to no tenant, so there is no tenant whose
@@ -848,29 +962,47 @@ public class GrantManagementService implements GrantAuthority {
             throw new NoSuchRoleException();
         }
 
-        UUID roleId = jdbc.sql("""
-                SELECT id
+        // FOR SHARE: a grant being made and a job being closed (TenantRoleService.retire locks
+        // the same row FOR UPDATE) then serialize, so a job cannot be retired in the instant
+        // between this read and the insert that names it (ADR 0186).
+        var row = jdbc.sql("""
+                SELECT id, scope_type
                   FROM iam.roles
                  WHERE code = :code
                    AND tenant_id = :tenantId
                    AND status = 'ACTIVE'
+                   FOR SHARE
                 """)
                 .param("code", roleCode)
                 .param("tenantId", tenantId)
-                .query(UUID.class)
+                .query((rs, n) -> Map.entry(
+                        rs.getObject("id", UUID.class), ResourceScope.ScopeType.valueOf(rs.getString("scope_type"))))
                 .optional()
                 .orElseThrow(NoSuchRoleException::new);
+        UUID roleId = row.getKey();
 
         // A tenant-defined role's capabilities live in the table; a platform
         // role's live in code. Both are then subject to the same two rules
         // above, which is the point of resolving to one shape here.
-        Set<Capability> capabilities = jdbc.sql("""
+        Set<Capability> capabilities = declared(
+                jdbc.sql("""
                 SELECT capability_code FROM iam.role_capabilities WHERE role_id = :roleId
-                """).param("roleId", roleId).query(String.class).list().stream()
-                .map(Capability::require)
-                .collect(java.util.stream.Collectors.toCollection(() -> EnumSet.noneOf(Capability.class)));
+                """).param("roleId", roleId).query(String.class).list());
 
-        return new ResolvedRole(roleId, roleCode, capabilities, false);
+        return new ResolvedRole(roleId, roleCode, capabilities, false, row.getValue());
+    }
+
+    /**
+     * The capabilities among these codes that the build still declares. A tenant job can hold a
+     * code a later release removed (ADR 0186); such a code grants nothing, so it is neither
+     * required of a granter nor counted in what the job confers.
+     */
+    private static Set<Capability> declared(java.util.Collection<String> codes) {
+        Set<Capability> capabilities = EnumSet.noneOf(Capability.class);
+        for (String code : codes) {
+            Capability.find(code).ifPresent(capabilities::add);
+        }
+        return capabilities;
     }
 
     /**
@@ -931,6 +1063,9 @@ public class GrantManagementService implements GrantAuthority {
      * @param code            the role code, for the audit entry
      * @param capabilities    from {@link PlatformRole} for a platform role, from
      *                        {@code iam.role_capabilities} for a tenant-defined one
+     * @param scopeType       the level the job is normally given at: from {@link PlatformRole}
+     *                        for a platform role, the tenant's declared {@code scope_type} for
+     *                        its own (ADR 0186)
      * @param platformDefined whether this is a platform role rather than one the
      *                        tenant defined. Written onto the grant as
      *                        {@code role_is_platform}, which V0089's foreign key
@@ -939,7 +1074,12 @@ public class GrantManagementService implements GrantAuthority {
      *                        does not match the role is refused by the key rather
      *                        than trusted.
      */
-    private record ResolvedRole(UUID id, String code, Set<Capability> capabilities, boolean platformDefined) {}
+    private record ResolvedRole(
+            UUID id,
+            String code,
+            Set<Capability> capabilities,
+            boolean platformDefined,
+            ResourceScope.ScopeType scopeType) {}
 
     /**
      * A request to grant one role to one principal at one scope.
@@ -981,9 +1121,21 @@ public class GrantManagementService implements GrantAuthority {
      * One tenant-visible job as a particular granter sees it at a particular scope.
      *
      * @param grantable whether the granter may confer it there; false is "do not offer", never an error
+     * @param custom    true for a job the tenant defined (ADR 0186), false for a code-owned bundle
+     * @param name      the tenant's own name for a custom job; null for a bundle, whose name is a
+     *                  translation the console owns
+     * @param version   the If-Match version of a custom job; null for a bundle
+     * @param status    {@code ACTIVE} for every job in this list
      */
     public record GrantableRole(
-            String code, ResourceScope.ScopeType scopeType, Set<String> capabilities, boolean grantable) {}
+            String code,
+            ResourceScope.ScopeType scopeType,
+            Set<String> capabilities,
+            boolean grantable,
+            boolean custom,
+            @Nullable String name,
+            @Nullable Long version,
+            String status) {}
 
     /** The names a branch manager's team view groups its people under. */
     public record PlaceDirectory(List<BrandPlace> brands, List<LocationPlace> locations) {

@@ -26,7 +26,6 @@ import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.iam.api.TenantOrganizationDirectory;
-import uz.horecaos.platform.iam.api.TenantRoleCatalog;
 import uz.horecaos.platform.iam.application.AccessCheckService;
 import uz.horecaos.platform.iam.application.AccessCheckService.AccessCheckAnswer;
 import uz.horecaos.platform.iam.application.AccessCheckService.Verdict;
@@ -288,13 +287,16 @@ public class GrantController {
     @GetMapping("/control-plane/tenants/{tenantId}/roles")
     @RequiresCapability(Capability.IAM_GRANT_MANAGE)
     @Operation(
-            summary = "List the platform-defined jobs a tenant may see",
+            summary = "List the jobs a tenant may see: the platform's and its own",
             description = "The eight tenant-visible PlatformRole bundles (staff-and-access.md §5 "
-                    + "\"Должности\"), each with its capability codes. platform-admin and "
-                    + "platform-support are never included. Tenant-defined roles are not yet "
-                    + "supported (ADR 0025's deferred item) and so are not yet in this list.")
-    List<TenantRoleCatalog.RoleDescriptor> roles(@PathVariable UUID tenantId) {
-        return TenantRoleCatalog.tenantVisible();
+                    + "\"Должности\"), each with its capability codes, followed by the jobs the company "
+                    + "defined itself (ADR 0186: custom=true, with the company's own name, version and "
+                    + "status). grantable says whether the caller could give the job company-wide right "
+                    + "now, by the grant route's own rule. platform-admin and platform-support are never "
+                    + "included.")
+    List<GrantManagementService.GrantableRole> roles(@PathVariable UUID tenantId) {
+        return grants.grantableRoles(
+                ResourceScope.tenant(tenantId), currentActor.get().subject());
     }
 
     @PostMapping("/control-plane/tenants/{tenantId}/grants")
