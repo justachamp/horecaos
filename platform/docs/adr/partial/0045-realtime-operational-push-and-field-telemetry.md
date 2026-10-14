@@ -834,7 +834,7 @@ are unchanged.
 
 ## Status addition (2026-10-14)
 
-Two things this record described and left unbuilt now exist, under [ADR 0179](0179-the-courier-client.md),
+Two things this record described and left unbuilt now exist, under [ADR 0179](../partial/0179-the-courier-client.md),
 and nothing above is changed. The courier's own path, which this record's `CourierDutyController`
 note called "a second controller with its own declaration, not a widening of this one", is
 `courier.web.CourierSelfDutyController` under `courier.telemetry`, reaching this module through
