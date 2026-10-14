@@ -122,7 +122,8 @@ describe('OwnPreferences (ADR 0160)', () => {
   it('drops a column, a tab or a view this release does not know instead of trusting it', async () => {
     const prefs = await load({
       ORDER_BOARD: stored({
-        columns: { show: ['courierEta', 'discount'], hide: ['source'] },
+        // Two names a later release might add: this one does not know them, so it keeps neither.
+        columns: { show: ['sparkle', 'discount'], hide: ['giftWrap'] },
         savedViews: [
           {
             id: VIEW_ID,
@@ -145,6 +146,18 @@ describe('OwnPreferences (ADR 0160)', () => {
     expect(prefs.orderBoard().savedViews).toEqual([
       { id: VIEW_ID, label: 'Known', tab: 'attention', filters: { lateOnly: true } },
     ]);
+  });
+
+  it('keeps the five columns schema 2 added, which a schema-1 release would have had to drop', async () => {
+    const prefs = await load({
+      ORDER_BOARD: stored({
+        columns: { show: ['courierEta', 'source', 'fiscal', 'distance', 'externalNumber'] },
+      }),
+    });
+
+    expect(prefs.orderBoard().columns).toEqual({
+      show: ['courierEta', 'source', 'fiscal', 'distance', 'externalNumber'],
+    });
   });
 
   it('puts a change made while the first read is in flight on the platform’s document, and never over it', async () => {

@@ -15,7 +15,7 @@
 
 .sheet__row {
   display: grid;
-  grid-template-columns: 96px 1fr;
+  grid-template-columns: 152px 1fr;
   align-items: baseline;
   gap: 8px;
   padding: 3px 0;
@@ -26,6 +26,11 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+.sheet__then {
+  align-self: center;
+  color: var(--q-ink-muted);
 }
 
 .sheet__label {

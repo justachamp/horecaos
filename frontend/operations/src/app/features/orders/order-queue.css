@@ -256,3 +256,39 @@
 .order-queue__bulk-unavailable {
   color: var(--q-ink-subtle);
 }
+
+/* The payment method's mark sits before the status word, a hair apart. */
+.order-row__payment-mark {
+  margin-inline-end: 4px;
+  color: var(--q-ink-muted);
+}
+
+/* «4 поз · Лагман…»: one line, cut with an ellipsis; the full first position is the title. */
+.order-row__items {
+  max-inline-size: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The «Ф» chip: a flat square like the table chip, toned by the receipt's state, never by colour alone --
+ * its accessible name and title carry the status in words. */
+.order-row__fiscal-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-surface-1);
+  color: var(--q-ink);
+  font-weight: 600;
+}
+.order-row__fiscal-chip--ok {
+  border-color: var(--q-success);
+}
+.order-row__fiscal-chip--attention {
+  border-color: var(--q-error);
+  color: var(--q-error);
+}
+.order-row__fiscal-chip--none {
+  color: var(--q-ink-muted);
+  font-weight: 400;
+}

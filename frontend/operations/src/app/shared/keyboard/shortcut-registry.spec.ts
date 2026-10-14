@@ -1,9 +1,15 @@
 import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Modal } from '../ui/modal';
-import { Shortcut, ShortcutRegistry, ShortcutScope } from './shortcut-registry';
+import {
+  CHORD_WINDOW_MS,
+  Shortcut,
+  ShortcutRegistry,
+  ShortcutScope,
+  modifierCap,
+} from './shortcut-registry';
 
 function key(
   value: string,
@@ -230,5 +236,196 @@ describe('ShortcutRegistry', () => {
     expect(registry.sheetOpen()).toBe(true);
     registry.closeSheet();
     expect(registry.sheetOpen()).toBe(false);
+  });
+
+  describe('a chord a screen asks for by name (batch 21, row X.1)', () => {
+    it('answers Ctrl+Enter and Cmd+Enter to a shortcut that opted in, and to nothing else', () => {
+      const create = vi.fn();
+      const plain = vi.fn();
+      registry.register(
+        scope(
+          'new-order',
+          shortcut(['Enter'], create, { modifier: 'ctrlOrCmd', inField: true }),
+          shortcut(['r'], plain),
+        ),
+      );
+      const field = document.createElement('input');
+
+      expect(registry.dispatch(key('Enter', { ctrlKey: true }, field))).toBe(true);
+      expect(registry.dispatch(key('Enter', { metaKey: true }, field))).toBe(true);
+      expect(create).toHaveBeenCalledTimes(2);
+      // The same keys with a modifier the shortcut did not name are not its keys.
+      expect(registry.dispatch(key('Enter', { ctrlKey: true, shiftKey: true }, field))).toBe(false);
+      expect(registry.dispatch(key('Enter', { ctrlKey: true, altKey: true }, field))).toBe(false);
+      expect(registry.dispatch(key('Enter', {}, field))).toBe(false);
+      // And a shortcut that named no modifier still does not answer Ctrl+R: that is the browser's reload.
+      expect(registry.dispatch(key('r', { ctrlKey: true }))).toBe(false);
+      expect(plain).not.toHaveBeenCalled();
+      expect(create).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not run a modified chord inside a field unless it says it is meant to', () => {
+      const save = vi.fn();
+      registry.register(scope('hours', shortcut(['s'], save, { modifier: 'ctrlOrCmd' })));
+      const field = document.createElement('input');
+
+      expect(registry.dispatch(key('s', { ctrlKey: true }, field))).toBe(false);
+      expect(registry.dispatch(key('S', { ctrlKey: true }))).toBe(true);
+      expect(save).toHaveBeenCalledOnce();
+    });
+
+    it('matches Alt+arrows and the Alt+digit row by position, because Alt+1 prints another character on a Mac', () => {
+      const down = vi.fn();
+      const jump = vi.fn();
+      registry.register(
+        scope(
+          'hours',
+          shortcut(['ArrowDown'], down, { modifier: 'alt', inField: true }),
+          shortcut(['1'], jump, { modifier: 'alt', codes: ['Digit1'] }),
+        ),
+      );
+
+      expect(
+        registry.dispatch(key('ArrowDown', { altKey: true }, document.createElement('input'))),
+      ).toBe(true);
+      expect(registry.dispatch(key('ArrowDown'))).toBe(false);
+      expect(registry.dispatch(key('¡', { altKey: true, code: 'Digit1' }))).toBe(true);
+      expect(registry.dispatch(key('1', { altKey: true }))).toBe(true);
+      expect(registry.dispatch(key('1'))).toBe(false);
+      expect(registry.dispatch(key('¡', { altKey: true, ctrlKey: true, code: 'Digit1' }))).toBe(
+        false,
+      );
+      expect(down).toHaveBeenCalledOnce();
+      expect(jump).toHaveBeenCalledTimes(2);
+    });
+
+    it('lets a screen use Shift+X as its own key, apart from x, and never for a shortcut that did not ask', () => {
+      const lower = vi.fn();
+      const upper = vi.fn();
+      registry.register(
+        scope('dispatch', shortcut(['x'], lower), shortcut(['x'], upper, { shift: true })),
+      );
+
+      expect(registry.dispatch(key('X', { shiftKey: true }))).toBe(true);
+      expect(upper).toHaveBeenCalledOnce();
+      expect(lower).not.toHaveBeenCalled();
+      expect(registry.dispatch(key('x'))).toBe(true);
+      expect(lower).toHaveBeenCalledOnce();
+      expect(upper).toHaveBeenCalledOnce();
+      expect(registry.dispatch(key('X', { shiftKey: true, ctrlKey: true }))).toBe(false);
+    });
+
+    it('asks for the right cap on each platform', () => {
+      const cap = modifierCap();
+      expect(['Ctrl', '⌘']).toContain(cap);
+    });
+  });
+
+  describe('a two-key chord, «g» then «l»', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function chord(run: () => void, extra: Partial<Shortcut> = {}): Shortcut {
+      return {
+        keys: [],
+        sequence: ['g', 'l'],
+        caps: ['g', 'l'],
+        label: () => 'Go to locations',
+        run,
+        ...extra,
+      };
+    }
+
+    it('runs on the second key, takes both keys from the page, and nothing runs on the first', () => {
+      const go = vi.fn();
+      registry.register(scope('shell', chord(go)));
+      const first = key('g');
+      const second = key('l');
+
+      expect(registry.dispatch(first)).toBe(true);
+      expect(first.defaultPrevented).toBe(true);
+      expect(go).not.toHaveBeenCalled();
+      expect(registry.pendingChord).toBe('g');
+      expect(registry.dispatch(second)).toBe(true);
+      expect(second.defaultPrevented).toBe(true);
+      expect(go).toHaveBeenCalledOnce();
+      expect(registry.pendingChord).toBeNull();
+    });
+
+    it('forgets the first key after the window, so a later «l» is only an «l»', () => {
+      const go = vi.fn();
+      const plainL = vi.fn();
+      registry.register(scope('shell', chord(go), shortcut(['l'], plainL)));
+
+      registry.dispatch(key('g'));
+      vi.advanceTimersByTime(CHORD_WINDOW_MS + 1);
+      expect(registry.pendingChord).toBeNull();
+      registry.dispatch(key('l'));
+
+      expect(go).not.toHaveBeenCalled();
+      expect(plainL).toHaveBeenCalledOnce();
+    });
+
+    it('disarms on a key that completes nothing and handles that key as itself', () => {
+      const go = vi.fn();
+      const other = vi.fn();
+      registry.register(scope('shell', chord(go), shortcut(['j'], other)));
+
+      registry.dispatch(key('g'));
+      registry.dispatch(key('j'));
+      registry.dispatch(key('l'));
+
+      expect(other).toHaveBeenCalledOnce();
+      expect(go).not.toHaveBeenCalled();
+    });
+
+    it('does not arm while the operator is typing or a dialog is open', () => {
+      const go = vi.fn();
+      registry.register(scope('shell', chord(go)));
+
+      expect(registry.dispatch(key('g', {}, document.createElement('input')))).toBe(false);
+      expect(registry.pendingChord).toBeNull();
+      registry.dispatch(key('l', {}, document.createElement('input')));
+      expect(go).not.toHaveBeenCalled();
+
+      const stray = document.createElement('div');
+      stray.setAttribute('aria-modal', 'true');
+      document.body.appendChild(stray);
+      try {
+        expect(registry.dispatch(key('g'))).toBe(false);
+        expect(registry.pendingChord).toBeNull();
+      } finally {
+        stray.remove();
+      }
+    });
+
+    it('leaves «g» to a single-key shortcut that wants it, rather than waiting for a second key', () => {
+      const go = vi.fn();
+      const single = vi.fn();
+      registry.register(scope('shell', chord(go)));
+      registry.register(scope('screen', shortcut(['g'], single)));
+
+      expect(registry.dispatch(key('g'))).toBe(true);
+      expect(single).toHaveBeenCalledOnce();
+      expect(registry.pendingChord).toBeNull();
+    });
+
+    it('does not arm for a chord whose screen says it cannot act, and does not treat Shift+G as g', () => {
+      const go = vi.fn();
+      registry.register(scope('shell', chord(go, { enabled: () => false })));
+
+      expect(registry.dispatch(key('g'))).toBe(false);
+      expect(registry.pendingChord).toBeNull();
+
+      registry.register(scope('shell', chord(go)));
+      expect(registry.dispatch(key('G', { shiftKey: true }))).toBe(false);
+      expect(registry.dispatch(key('g', { ctrlKey: true }))).toBe(false);
+      expect(registry.pendingChord).toBeNull();
+    });
   });
 });

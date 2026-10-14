@@ -7198,6 +7198,10 @@ export interface OperationsOrderControllerOrderSummaryResponse {
   actions?: Array<OrderActionResponse>;
   approvalDeadlineAt?: string;
   channelCode?: string;
+  channelDisplayName?: string;
+  channelIcon?: string;
+  channelSystemType?: string;
+  courierEtaAt?: string;
   courierId?: string;
   createdAt?: string;
   createdByActorId?: string;
@@ -7206,11 +7210,18 @@ export interface OperationsOrderControllerOrderSummaryResponse {
   currency?: string;
   customerAccountId?: string;
   discountMinor?: number;
+  distanceMeters?: number;
+  externalNumber?: string;
   feeMinor?: number;
+  firstItemName?: string;
+  fiscalStatus?: string;
   fulfillmentMode?: string;
   guestReferenceHash?: string;
+  itemCount?: number;
   locationId?: string;
   orderId?: string;
+  origin?: string;
+  paymentMethodCode?: string;
   paymentStatusProjection?: string;
   processAttention?: string;
   promiseBasis?: string;
@@ -7390,8 +7401,8 @@ export interface OrderActionResponse {
 }
 
 export interface OrderBoardColumnsChange {
-  hide?: Array<"branch" | "channel" | "customer" | "items" | "payment" | "courier" | "createdBy" | "acceptedBy" | "courierType" | "discount">;
-  show?: Array<"branch" | "channel" | "customer" | "items" | "payment" | "courier" | "createdBy" | "acceptedBy" | "courierType" | "discount">;
+  hide?: Array<"branch" | "channel" | "customer" | "items" | "payment" | "courier" | "createdBy" | "acceptedBy" | "courierType" | "discount" | "courierEta" | "source" | "fiscal" | "distance" | "externalNumber">;
+  show?: Array<"branch" | "channel" | "customer" | "items" | "payment" | "courier" | "createdBy" | "acceptedBy" | "courierType" | "discount" | "courierEta" | "source" | "fiscal" | "distance" | "externalNumber">;
 }
 
 export interface OrderBoardPreferencesDocument {
@@ -14556,7 +14567,7 @@ export interface Operations {
   "activateRedemptionPolicy": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/redemption-policies/{policyId}/activate"; request: { parameters: { path: { brandId: string; policyId: string; tenantId: string } } }; responses: { "200": unknown } };
   "retireRedemptionPolicy": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/loyalty/redemption-policies/{policyId}/retire"; request: { parameters: { path: { brandId: string; policyId: string; tenantId: string } } }; responses: { "200": unknown } };
   "mapConfig": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/map-config"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": MapConfigResponse } };
-  "board_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/orders/board"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { callbackRequested?: boolean; channelCode?: string; courierId?: string; createdByActorId?: string; cursor?: string; fiscalStatus?: Array<string>; from?: string; fulfillmentMode?: string; late?: boolean; limit?: number; locationId?: Array<string>; marketplaceBindingId?: string; origin?: string; paymentMethodCode?: string; paymentStatus?: string; problem?: boolean; reference?: string; status?: Array<string>; to?: string } } }; responses: { "200": PageOperationsOrderControllerOrderSummaryResponse } };
+  "board_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/orders/board"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { callbackRequested?: boolean; channelCode?: string; courierId?: string; createdByActorId?: string; cursor?: string; fiscalStatus?: Array<string>; from?: string; fulfillmentMode?: string; include?: Array<string>; late?: boolean; limit?: number; locationId?: Array<string>; marketplaceBindingId?: string; origin?: string; paymentMethodCode?: string; paymentStatus?: string; problem?: boolean; reference?: string; status?: Array<string>; to?: string } } }; responses: { "200": PageOperationsOrderControllerOrderSummaryResponse } };
   "counts_2": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/orders/counts"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { period?: "ALL_TIME" | "BUSINESS_DAY" } } }; responses: { "200": BrandOrderCountsResponse } };
   "marketplaceBindings_1": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/orders/marketplace-bindings"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { locationId?: Array<string> } } }; responses: { "200": MarketplaceBindingsResponse } };
   "forBrand": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/orders/operators/today"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": OperatorTodayLeaderboardResponse } };
@@ -15104,7 +15115,7 @@ export interface Operations {
   "list_9": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { limit?: number; status?: Array<string> } } }; responses: { "200": Array<OperationsOrderControllerOrderSummaryResponse> } };
   "place": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; locationId: string; tenantId: string } }; body: PlaceOrderRequest }; responses: { "200": PlaceOrderResponse } };
   "aggregatorEntry": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/aggregator-entries"; request: { parameters: { header: { "Idempotency-Key": string }; path: { brandId: string; locationId: string; tenantId: string } }; body: AggregatorOrderRequest }; responses: { "200": PlaceOrderResponse } };
-  "board": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/board"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { callbackRequested?: boolean; channelCode?: string; courierId?: string; createdByActorId?: string; cursor?: string; fiscalStatus?: Array<string>; from?: string; fulfillmentMode?: string; late?: boolean; limit?: number; marketplaceBindingId?: string; origin?: string; paymentMethodCode?: string; paymentStatus?: string; problem?: boolean; reference?: string; status?: Array<string>; to?: string } } }; responses: { "200": PageOperationsOrderControllerOrderSummaryResponse } };
+  "board": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/board"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string }; query: { callbackRequested?: boolean; channelCode?: string; courierId?: string; createdByActorId?: string; cursor?: string; fiscalStatus?: Array<string>; from?: string; fulfillmentMode?: string; include?: Array<string>; late?: boolean; limit?: number; marketplaceBindingId?: string; origin?: string; paymentMethodCode?: string; paymentStatus?: string; problem?: boolean; reference?: string; status?: Array<string>; to?: string } } }; responses: { "200": PageOperationsOrderControllerOrderSummaryResponse } };
   "branchOverrideReasons": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/branch-override-reasons"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } } }; responses: { "200": Array<BranchOverrideReasonResponse> } };
   "resolveBranches": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/branch-resolution"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BranchResolutionRequest }; responses: { "200": BranchResolutionResponse } };
   "bulkAction": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/bulk-actions"; request: { parameters: { path: { brandId: string; locationId: string; tenantId: string } }; body: BulkActionRequest }; responses: { "200": BulkActionResponse } };
