@@ -27,7 +27,14 @@ const WALLET_REASON_KEYS: Readonly<Partial<Record<string, MessageKey>>> = {
   SESSION_EXPIRED: 'finance.wallet.reason.SESSION_EXPIRED',
   WRONG_CODE: 'finance.wallet.reason.WRONG_CODE',
   UNKNOWN_CARD_TOKEN: 'finance.wallet.reason.UNKNOWN_CARD_TOKEN',
+  CARD_EXPIRED: 'finance.wallet.reason.CARD_EXPIRED',
+  CARD_EXPIRY_REQUIRED: 'finance.wallet.reason.CARD_EXPIRY_REQUIRED',
+  PROVIDER_UNAVAILABLE: 'finance.wallet.reason.PROVIDER_UNAVAILABLE',
+  PROVIDER_NOT_CONNECTED: 'finance.wallet.reason.PROVIDER_NOT_CONNECTED',
 };
+
+/** A provider's own numbered refusal (`CLICK_ERROR_-301`): its table is unpublished, so the number is not worded. */
+const PROVIDER_ERROR_PREFIX = 'CLICK_ERROR_';
 
 type Translate = (key: MessageKey, values?: Readonly<Record<string, string | number>>) => string;
 
@@ -37,7 +44,12 @@ export function describeWalletError(error: unknown, translate: Translate): strin
     return translate('error.unknown.noReference');
   }
   const reason = error.problem?.['reason'];
-  const key = typeof reason === 'string' ? WALLET_REASON_KEYS[reason] : undefined;
+  const key =
+    typeof reason === 'string'
+      ? reason.startsWith(PROVIDER_ERROR_PREFIX)
+        ? 'finance.wallet.reason.PROVIDER_REFUSED'
+        : WALLET_REASON_KEYS[reason]
+      : undefined;
   return key ? translate(key) : describeApiError(error, translate);
 }
 
@@ -47,5 +59,20 @@ export function describeWalletError(error: unknown, translate: Translate): strin
  * repository actually emits is listed; a real provider's codes are added when its adapter exists.
  */
 export function declineReasonKey(reason: string | null): MessageKey | null {
-  return reason === 'INSUFFICIENT_FUNDS' ? 'finance.wallet.decline.INSUFFICIENT_FUNDS' : null;
+  if (reason === null) {
+    return null;
+  }
+  if (reason.startsWith(PROVIDER_ERROR_PREFIX)) {
+    return 'finance.wallet.decline.PROVIDER_ERROR';
+  }
+  switch (reason) {
+    case 'INSUFFICIENT_FUNDS':
+      return 'finance.wallet.decline.INSUFFICIENT_FUNDS';
+    case 'PAYMENT_DECLINED':
+      return 'finance.wallet.decline.PAYMENT_DECLINED';
+    case 'PROVIDER_REJECTED':
+      return 'finance.wallet.decline.PROVIDER_REJECTED';
+    default:
+      return null;
+  }
 }

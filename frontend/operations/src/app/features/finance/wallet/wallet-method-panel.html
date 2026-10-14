@@ -92,43 +92,96 @@
           {{ 'finance.wallet.enrol.testHint' | t }}
         </p>
       }
+      @if (browserTokenise()) {
+        <p class="q-body-sm muted" data-testid="wallet-enrolment-browser-lead">
+          {{ 'finance.wallet.enrol.browser.lead' | t }}
+        </p>
+      }
+      @if (tokeniseError(); as message) {
+        <p class="q-body-sm error" role="alert" data-testid="wallet-enrolment-error">
+          {{ message }}
+        </p>
+      }
       <div class="form">
-        <label class="field q-caption">
-          {{ 'finance.wallet.enrol.token' | t }}
-          <input
-            type="text"
-            autocomplete="off"
-            spellcheck="false"
-            name="providerToken"
-            [value]="providerToken()"
-            (input)="providerToken.set($any($event.target).value)"
-            data-testid="wallet-enrolment-token"
-          />
-        </label>
-        <label class="field q-caption">
-          {{ 'finance.wallet.enrol.code' | t }}
-          <input
-            type="text"
-            inputmode="numeric"
-            autocomplete="one-time-code"
-            name="verificationCode"
-            [value]="verificationCode()"
-            (input)="verificationCode.set($any($event.target).value)"
-            data-testid="wallet-enrolment-code"
-          />
-        </label>
-        <button
-          type="submit"
-          class="primary"
-          [disabled]="!canConfirm()"
-          data-testid="wallet-enrolment-confirm"
-        >
-          {{ 'finance.wallet.enrol.confirm' | t }}
-        </button>
+        @if (browserTokenise()) {
+          @if (tokenised() === null) {
+            <label class="field q-caption">
+              {{ 'finance.wallet.enrol.browser.number' | t }}
+              <input
+                type="text"
+                inputmode="numeric"
+                autocomplete="cc-number"
+                spellcheck="false"
+                [value]="cardNumber()"
+                (input)="cardNumber.set($any($event.target).value)"
+                data-testid="wallet-enrolment-card-number"
+              />
+            </label>
+            <label class="field q-caption">
+              {{ 'finance.wallet.enrol.browser.expiry' | t }}
+              <input
+                type="text"
+                inputmode="numeric"
+                autocomplete="cc-exp"
+                placeholder="MM/YY"
+                maxlength="5"
+                [value]="cardExpiry()"
+                (input)="cardExpiry.set($any($event.target).value)"
+                data-testid="wallet-enrolment-card-expiry"
+              />
+            </label>
+            <button
+              type="button"
+              class="primary"
+              [disabled]="!canTokenise()"
+              (click)="tokenise()"
+              data-testid="wallet-enrolment-tokenise"
+            >
+              {{ 'finance.wallet.enrol.browser.send' | t }}
+            </button>
+          } @else {
+            <p class="q-body-sm" data-testid="wallet-enrolment-phone-hint">{{ phoneHint() }}</p>
+          }
+        } @else {
+          <label class="field q-caption">
+            {{ 'finance.wallet.enrol.token' | t }}
+            <input
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              name="providerToken"
+              [value]="providerToken()"
+              (input)="providerToken.set($any($event.target).value)"
+              data-testid="wallet-enrolment-token"
+            />
+          </label>
+        }
+        @if (!browserTokenise() || tokenised() !== null) {
+          <label class="field q-caption">
+            {{ 'finance.wallet.enrol.code' | t }}
+            <input
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              name="verificationCode"
+              [value]="verificationCode()"
+              (input)="verificationCode.set($any($event.target).value)"
+              data-testid="wallet-enrolment-code"
+            />
+          </label>
+          <button
+            type="submit"
+            class="primary"
+            [disabled]="!canConfirm()"
+            data-testid="wallet-enrolment-confirm"
+          >
+            {{ 'finance.wallet.enrol.confirm' | t }}
+          </button>
+        }
         <button
           type="button"
           class="secondary"
-          [disabled]="busy() === 'confirm'"
+          [disabled]="busy() === 'confirm' || busy() === 'tokenise'"
           (click)="cancelEnrolment()"
           data-testid="wallet-enrolment-cancel"
         >

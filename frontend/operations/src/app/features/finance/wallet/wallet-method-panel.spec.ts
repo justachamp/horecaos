@@ -4,11 +4,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { I18n } from '../../../core/i18n/i18n';
+import { CardTokeniser, TokeniseError } from './card-tokeniser';
 import { TenantWalletView, WalletApi } from './wallet-api';
 import { WalletMethodPanel } from './wallet-method-panel';
 import {
   CARD,
   ENROLMENT,
+  ENROLMENT_BROWSER,
   TENANT_ID,
   TOP_UP_PENDING,
   WALLET,
@@ -54,6 +56,7 @@ describe('WalletMethodPanel', () => {
     removeCard: ReturnType<typeof vi.fn>;
     choosePaymentMethod: ReturnType<typeof vi.fn>;
   };
+  let tokeniser: { tokenise: ReturnType<typeof vi.fn> };
 
   const root = (): HTMLElement => fixture.nativeElement;
   const q = (testid: string): HTMLElement | null =>
@@ -77,9 +80,15 @@ describe('WalletMethodPanel', () => {
       removeCard: vi.fn().mockResolvedValue({ paymentMethod: 'INVOICE' }),
       choosePaymentMethod: vi.fn().mockResolvedValue({ paymentMethod: 'CARD' }),
     };
+    tokeniser = {
+      tokenise: vi.fn().mockResolvedValue({ token: 'tok-click-1', maskedPhone: '+998*******97' }),
+    };
     await TestBed.configureTestingModule({
       imports: [Host],
-      providers: [{ provide: WalletApi, useValue: api }],
+      providers: [
+        { provide: WalletApi, useValue: api },
+        { provide: CardTokeniser, useValue: tokeniser },
+      ],
     }).compileComponents();
     TestBed.inject(I18n).setLocale('en');
     fixture = TestBed.createComponent(Host);
@@ -273,5 +282,133 @@ describe('WalletMethodPanel', () => {
     await click('wallet-method-save');
     expect(q('wallet-method-error')?.textContent).toContain('There is no card on file');
     expect(host.changedCount).toBe(0);
+  });
+
+  // ----------------------------------------- the provider's form hands the token over (ADR 0095)
+
+  async function openBrowserEnrolment(): Promise<void> {
+    api.beginCardEnrolment.mockResolvedValue(ENROLMENT_BROWSER);
+    await show({ ...WALLET, card: null });
+    await click('wallet-card-add');
+  }
+
+  it('asks for the card and its expiry, not for a token, when the provider tokenises in the browser', async () => {
+    await openBrowserEnrolment();
+
+    expect(q('wallet-enrolment-card-number')).not.toBeNull();
+    expect(q('wallet-enrolment-card-expiry')).not.toBeNull();
+    expect(q('wallet-enrolment-token')).toBeNull();
+    expect(q('wallet-enrolment-code')).toBeNull();
+    expect((q('wallet-enrolment-tokenise') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('sends the number to the provider alone, clears it, and then asks only for the bank’s code', async () => {
+    await openBrowserEnrolment();
+
+    type('wallet-enrolment-card-number', '8600 1234 1234 4242');
+    type('wallet-enrolment-card-expiry', '12/30');
+    expect((q('wallet-enrolment-tokenise') as HTMLButtonElement).disabled).toBe(false);
+    await click('wallet-enrolment-tokenise');
+
+    expect(tokeniser.tokenise).toHaveBeenCalledWith({
+      url: 'https://api.click.uz/v2/merchant/card_token/request',
+      serviceId: '100100',
+      cardNumber: '8600123412344242',
+      expiry: '1230',
+      temporary: '0',
+    });
+    expect((q('wallet-enrolment-card-number') as HTMLInputElement | null)?.value ?? '').toBe('');
+    expect(q('wallet-enrolment-phone-hint')?.textContent).toContain('+998*******97');
+    expect(q('wallet-enrolment-token')).toBeNull();
+
+    type('wallet-enrolment-code', '246810');
+    await click('wallet-enrolment-confirm');
+
+    expect(api.confirmCard).toHaveBeenCalledTimes(1);
+    const [, intent] = api.confirmCard.mock.calls[0];
+    expect(intent.body).toEqual({
+      sessionReference: 'session-2',
+      providerToken: 'tok-click-1',
+      verificationCode: '246810',
+      cardExpiry: '1230',
+    });
+    expect(JSON.stringify(api.confirmCard.mock.calls)).not.toContain('8600');
+    expect(host.changedCount).toBe(1);
+  });
+
+  it('does not offer to send the code until the number is sixteen digits and the expiry is a real month and year', async () => {
+    await openBrowserEnrolment();
+    const tokenise = (): boolean => (q('wallet-enrolment-tokenise') as HTMLButtonElement).disabled;
+
+    type('wallet-enrolment-card-number', '8600 1234 1234');
+    type('wallet-enrolment-card-expiry', '12/30');
+    expect(tokenise()).toBe(true);
+
+    type('wallet-enrolment-card-number', '8600123412344242');
+    type('wallet-enrolment-card-expiry', '13/30');
+    expect(tokenise()).toBe(true);
+
+    type('wallet-enrolment-card-expiry', '1230');
+    expect(tokenise()).toBe(false);
+    await click('wallet-enrolment-tokenise');
+    expect(tokeniser.tokenise).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the number even when the provider refuses it, and says what happened without echoing it', async () => {
+    tokeniser.tokenise.mockRejectedValue(new TokeniseError('REFUSED'));
+    await openBrowserEnrolment();
+    type('wallet-enrolment-card-number', '8600123412344242');
+    type('wallet-enrolment-card-expiry', '1230');
+
+    await click('wallet-enrolment-tokenise');
+
+    expect((q('wallet-enrolment-card-number') as HTMLInputElement).value).toBe('');
+    expect(q('wallet-enrolment-error')?.textContent ?? '').toContain('did not accept that card');
+    expect(root().textContent).not.toContain('4242');
+    expect(q('wallet-enrolment-code')).toBeNull();
+    expect(api.confirmCard).not.toHaveBeenCalled();
+  });
+
+  it('says plainly that nothing reached HorecaOS when the provider cannot be reached', async () => {
+    tokeniser.tokenise.mockRejectedValue(new TokeniseError('UNREACHABLE'));
+    await openBrowserEnrolment();
+    type('wallet-enrolment-card-number', '8600123412344242');
+    type('wallet-enrolment-card-expiry', '1230');
+
+    await click('wallet-enrolment-tokenise');
+
+    expect(q('wallet-enrolment-error')?.textContent ?? '').toContain(
+      'Nothing was sent to HorecaOS',
+    );
+    expect((q('wallet-enrolment-card-number') as HTMLInputElement).value).toBe('');
+  });
+
+  it('forgets the token and the number when the cardholder cancels', async () => {
+    await openBrowserEnrolment();
+    type('wallet-enrolment-card-number', '8600123412344242');
+    type('wallet-enrolment-card-expiry', '1230');
+    await click('wallet-enrolment-tokenise');
+    expect(q('wallet-enrolment-code')).not.toBeNull();
+
+    await click('wallet-enrolment-cancel');
+    await click('wallet-card-add');
+
+    expect(q('wallet-enrolment-code')).toBeNull();
+    expect((q('wallet-enrolment-card-number') as HTMLInputElement).value).toBe('');
+    expect((q('wallet-enrolment-tokenise') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('shows the bank’s refusal of the code in words and keeps the token for another try', async () => {
+    api.confirmCard.mockRejectedValue(refusal('WRONG_CODE'));
+    await openBrowserEnrolment();
+    type('wallet-enrolment-card-number', '8600123412344242');
+    type('wallet-enrolment-card-expiry', '1230');
+    await click('wallet-enrolment-tokenise');
+    type('wallet-enrolment-code', '000111');
+    await click('wallet-enrolment-confirm');
+
+    expect(q('wallet-method-error')?.textContent).toContain('code from your bank is wrong');
+    expect(q('wallet-enrolment-code')).not.toBeNull();
+    expect(tokeniser.tokenise).toHaveBeenCalledTimes(1);
   });
 });

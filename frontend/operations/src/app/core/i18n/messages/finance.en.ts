@@ -612,6 +612,29 @@ export const financeEn = {
     'HorecaOS can no longer charge it, and you are collected by card today, so you will be collected by invoice and bank transfer instead. Money you already added stays in your wallet.',
   'finance.wallet.card.remove.confirm': 'Remove card',
   'finance.wallet.card.remove.cancel': 'Keep it',
+  'finance.wallet.enrol.browser.lead':
+    'Type your card number and expiry below. They are sent straight to the card provider, not to HorecaOS, and are cleared from this page as soon as the provider answers. The provider then texts a code to your phone.',
+  'finance.wallet.enrol.browser.number': 'Card number',
+  'finance.wallet.enrol.browser.expiry': 'Expiry (MM/YY)',
+  'finance.wallet.enrol.browser.send': 'Send me the code',
+  'finance.wallet.enrol.browser.sent': 'The provider texted a code to {phone}.',
+  'finance.wallet.enrol.browser.sentNoPhone':
+    'The provider texted a code to the phone registered for this card.',
+  'finance.wallet.enrol.browser.unreachable':
+    'Could not reach the card provider. Nothing was sent to HorecaOS. Try again.',
+  'finance.wallet.enrol.browser.refused':
+    'The card provider did not accept that card. Check the number and the expiry.',
+  'finance.wallet.enrol.browser.unreadable':
+    'The card provider’s answer could not be read. Try again.',
+  'finance.wallet.reason.CARD_EXPIRED': 'That card has expired.',
+  'finance.wallet.reason.CARD_EXPIRY_REQUIRED': 'Enter the card’s expiry as a month and a year.',
+  'finance.wallet.reason.PROVIDER_UNAVAILABLE':
+    'The card provider is not answering. Try again in a few minutes.',
+  'finance.wallet.reason.PROVIDER_NOT_CONNECTED': 'Card payments are not connected right now.',
+  'finance.wallet.reason.PROVIDER_REFUSED': 'The card provider did not accept this.',
+  'finance.wallet.decline.PROVIDER_ERROR': 'declined by the card provider',
+  'finance.wallet.decline.PAYMENT_DECLINED': 'declined',
+  'finance.wallet.decline.PROVIDER_REJECTED': 'refused by the card provider',
   'finance.wallet.enrol.title': 'Add your card',
   'finance.wallet.enrol.lead':
     'Enter the card in the payment provider’s own form, then enter here the code that form gives back and the code your bank texts you.',
