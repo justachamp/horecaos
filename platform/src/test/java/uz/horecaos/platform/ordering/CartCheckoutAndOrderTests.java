@@ -201,6 +201,9 @@ class CartCheckoutAndOrderTests {
      */
     private MutableConfigurationResolver orderingConfig;
 
+    /** Where the auto-accept gate counts the orders it held and the ones it could not (ADR 0177). */
+    private final SimpleMeterRegistry autoAcceptMeters = new SimpleMeterRegistry();
+
     private CheckoutService checkout;
     private OrderStateService orderState;
     private PosApprovalDecisionPortAdapter posDecisions;
@@ -618,7 +621,8 @@ class CartCheckoutAndOrderTests {
                                 jdbc, objectMapper)),
                 new uz.horecaos.platform.pricing.application.PromotionRedemptionService(
                         new uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromotionStore(
-                                jdbc, objectMapper)));
+                                jdbc, objectMapper)),
+                autoAcceptMeters);
 
         checkout = checkoutWith.apply(UNWIRED_PAYMENTS);
         // ADR 0075's port over the same services, so a bot repeat and a
@@ -657,12 +661,14 @@ class CartCheckoutAndOrderTests {
                         serviceability,
                         channelStore,
                         orderStore,
-                        clock),
+                        clock,
+                        orderingConfig),
                 new uz.horecaos.platform.ordering.infrastructure.customer.JdbcCustomerAddressBook(
                         jdbc, protection, objectMapper),
                 orderStore,
                 new JdbcAuditRecorder(jdbc, objectMapper),
-                clock);
+                clock,
+                orderingConfig);
 
         seedTenancyAndCatalog();
         seedPublication("STOREFRONT");
@@ -1034,12 +1040,14 @@ class CartCheckoutAndOrderTests {
                         new ServiceabilityService(new JdbcServiceabilityStore(jdbc), clock),
                         new JdbcSalesChannelStore(jdbc),
                         orderStore,
-                        clock),
+                        clock,
+                        orderingConfig),
                 new uz.horecaos.platform.ordering.infrastructure.customer.JdbcCustomerAddressBook(
                         jdbc, protection, objectMapper),
                 orderStore,
                 new JdbcAuditRecorder(jdbc, objectMapper),
-                clock);
+                clock,
+                orderingConfig);
 
         var withCode = new uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand(
                 TENANT,
@@ -7687,13 +7695,31 @@ class CartCheckoutAndOrderTests {
 
     /** Switches the location to RESTAURANT_APPROVAL with a five-minute deadline. */
     private void requireApproval() {
-        var policy = new OrderAcceptancePolicy(
+        activateAcceptance(new OrderAcceptancePolicy(
                 AcceptanceMode.RESTAURANT_APPROVAL,
                 ApprovalChannel.HORECAOS_OPERATIONS,
                 300,
                 ApprovalTimeoutAction.AUTO_REJECT,
                 true,
-                true);
+                true));
+    }
+
+    /**
+     * ADR 0177: {@code AUTO_CONFIRM} that carries the approval path an order an auto-accept gate holds
+     * back follows -- the operations console, five minutes, then reject. Without a gate set it confirms
+     * every order exactly as a plain {@code AUTO_CONFIRM} does.
+     */
+    private void autoConfirmWithAHoldBackPath() {
+        activateAcceptance(new OrderAcceptancePolicy(
+                AcceptanceMode.AUTO_CONFIRM,
+                ApprovalChannel.HORECAOS_OPERATIONS,
+                300,
+                ApprovalTimeoutAction.AUTO_REJECT,
+                true,
+                true));
+    }
+
+    private void activateAcceptance(OrderAcceptancePolicy policy) {
         UUID policyId = UUID.randomUUID();
         var from = java.time.OffsetDateTime.ofInstant(NOW.minus(Duration.ofDays(1)), ZoneOffset.UTC);
 
@@ -7722,6 +7748,179 @@ class CartCheckoutAndOrderTests {
                 .param("locationId", LOCATION)
                 .param("policyId", policyId)
                 .update();
+    }
+
+    // ===================== ADR 0177 decision 3: the two auto-accept gates, read at checkout
+
+    @Test
+    @DisplayName(
+            "an AUTO_CONFIRM order on a channel outside the eligible list waits on the document's own approval path")
+    void aChannelTheGateDoesNotListWaitsForApproval() {
+        autoConfirmWithAHoldBackPath();
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_ELIGIBLE_CHANNELS_CODE, "call-centre");
+
+        var placed = placeOrder("idem-gate-channel");
+
+        assertThat(placed.status())
+                .as("the storefront is not in the list, so the platform does not accept it on its own")
+                .isEqualTo(OrderStatus.AWAITING_APPROVAL);
+        var order = orderStore.find(TENANT, orderIdOf(placed)).orElseThrow();
+        assertThat(order.acceptanceMode())
+                .as("what actually governed this order; the pinned policy is still AUTO_CONFIRM")
+                .isEqualTo("RESTAURANT_APPROVAL");
+        assertThat(order.approvalChannel()).isEqualTo("HORECAOS_OPERATIONS");
+        assertThat(order.approvalTimeoutAction()).isEqualTo("AUTO_REJECT");
+        assertThat(order.approvalDeadlineAt()).isEqualTo(clock.instant().plus(Duration.ofMinutes(5)));
+        assertThat(pendingApprovalTimers(orderIdOf(placed))).isEqualTo(1L);
+        assertThat(jdbc.sql("""
+                                SELECT reason_code FROM ordering.order_state_history
+                                WHERE order_id = :id AND to_status = 'AWAITING_APPROVAL'
+                                """)
+                        .param("id", orderIdOf(placed))
+                        .query(String.class)
+                        .single())
+                .as("why this order is waiting, in the history that answers 'why is it stuck'")
+                .isEqualTo("AUTO_ACCEPT_HELD_CHANNEL");
+        assertThat(published.events)
+                .anyMatch(event -> event instanceof OrderAwaitingApproval awaiting
+                        && awaiting.orderId().equals(orderIdOf(placed))
+                        && "HORECAOS_OPERATIONS".equals(awaiting.approvalChannel()));
+        assertThat(autoAcceptMeters
+                        .counter("horecaos.order.auto_accept_gate", "outcome", "held", "reason", "CHANNEL_NOT_ELIGIBLE")
+                        .count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName(
+            "an order on an eligible channel is auto-confirmed, whatever the case of the list, and ALL gates nothing")
+    void anEligibleChannelAndAnEmptyGateAreStillAutoConfirmed() {
+        autoConfirmWithAHoldBackPath();
+
+        var noGate = placeOrder("idem-gate-none");
+        assertThat(noGate.status())
+                .as("a hold-back path with no gate set confirms exactly as a plain AUTO_CONFIRM does")
+                .isEqualTo(OrderStatus.CONFIRMED);
+
+        orderingConfig.override(
+                OrderingConfigurationKeys.AUTO_ACCEPT_ELIGIBLE_CHANNELS_CODE, "call-centre, Storefront");
+        var listed = placeOrder("idem-gate-listed");
+        assertThat(listed.status()).isEqualTo(OrderStatus.CONFIRMED);
+
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_ELIGIBLE_CHANNELS_CODE, "ALL");
+        assertThat(placeOrder("idem-gate-all").status()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(jdbc.sql("""
+                                SELECT count(*) FROM ordering.order_state_history
+                                WHERE tenant_id = :t AND reason_code LIKE 'AUTO_ACCEPT_HELD%'
+                                """).param("t", TENANT).query(Long.class).single()).isZero();
+    }
+
+    @Test
+    @DisplayName("a customer with fewer completed orders than the minimum waits; a rejected order is not a success")
+    void theMinimumOfPriorSuccessfulOrdersIsCountedFromCompletedOrdersOnly() {
+        autoConfirmWithAHoldBackPath();
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_MIN_PRIOR_ORDERS_CODE, 1);
+
+        var first = placeOrder("idem-prior-1");
+        assertThat(first.status())
+                .as("a customer with no completed order is not yet trusted")
+                .isEqualTo(OrderStatus.AWAITING_APPROVAL);
+        assertThat(heldReason(orderIdOf(first))).isEqualTo("AUTO_ACCEPT_HELD_PRIOR_ORDERS");
+
+        tx(() -> orderState.decide(
+                TENANT, orderIdOf(first), decision("d-prior-reject", OrderStateService.DecisionAction.REJECT)));
+        assertThat(orderStore.find(TENANT, orderIdOf(first)).orElseThrow().status())
+                .isEqualTo(OrderStatus.REJECTED);
+        assertThat(placeOrder("idem-prior-2").status())
+                .as("a rejected order does not count as a prior success")
+                .isEqualTo(OrderStatus.AWAITING_APPROVAL);
+
+        orderingConfig.overrideAll(Map.of());
+        var trusted = placeOrder("idem-prior-3");
+        assertThat(trusted.status()).isEqualTo(OrderStatus.CONFIRMED);
+        handOver(orderIdOf(trusted));
+        assertThat(orderStore.countCompletedForCustomer(TENANT, BRAND, CUSTOMER))
+                .isEqualTo(1L);
+
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_MIN_PRIOR_ORDERS_CODE, 1);
+        assertThat(placeOrder("idem-prior-4").status())
+                .as("one completed order is a prior successful order")
+                .isEqualTo(OrderStatus.CONFIRMED);
+
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_MIN_PRIOR_ORDERS_CODE, 2);
+        assertThat(placeOrder("idem-prior-5").status()).as("but not two").isEqualTo(OrderStatus.AWAITING_APPROVAL);
+    }
+
+    @Test
+    @DisplayName("a guest counts as having no prior orders")
+    void aGuestHasNoPriorOrders() {
+        autoConfirmWithAHoldBackPath();
+        allowGuestOrders();
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_MIN_PRIOR_ORDERS_CODE, 1);
+
+        var guest = tx(() -> checkout.checkout(guestCheckoutCommand(readyGuestCart(), "idem-guest-gate")));
+
+        assertThat(guest.status()).isEqualTo(OrderStatus.AWAITING_APPROVAL);
+        assertThat(heldReason(orderIdOf(guest))).isEqualTo("AUTO_ACCEPT_HELD_PRIOR_ORDERS");
+    }
+
+    @Test
+    @DisplayName(
+            "a gate with no approval channel to hold on does not strand the order: it confirms, and the platform says so")
+    void aGateWithNowhereToSendTheOrderIsCountedAndTheOrderConfirms() {
+        // The platform default: AUTO_CONFIRM with no approval channel.
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_ELIGIBLE_CHANNELS_CODE, "call-centre");
+
+        var placed = placeOrder("idem-gate-unenforceable");
+
+        assertThat(placed.status())
+                .as("a customer is never left waiting on a decision nobody was asked to make")
+                .isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(autoAcceptMeters
+                        .counter(
+                                "horecaos.order.auto_accept_gate",
+                                "outcome",
+                                "unenforceable",
+                                "reason",
+                                "CHANNEL_NOT_ELIGIBLE")
+                        .count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName(
+            "a held order whose payment lands stays held for a decision, and one nobody decides follows the document's timeout action")
+    void aHeldOrderStaysHeldAfterItsPaymentAndExpiresAsTheDocumentSays() {
+        autoConfirmWithAHoldBackPath();
+        orderingConfig.override(OrderingConfigurationKeys.AUTO_ACCEPT_ELIGIBLE_CHANNELS_CODE, "call-centre");
+        var wired = checkoutWith.apply(realPayments(UUID.randomUUID()));
+        var placed = tx(() -> wired.checkout(checkoutCommand(readyCart(), "idem-gate-paid", "CLICK")));
+        assertThat(placed.status()).isEqualTo(OrderStatus.PAYMENT_AUTHORIZING);
+
+        UUID attempt = reservedAttempt(orderIdOf(placed), PaymentProviderType.CLICK, Duration.ofHours(12));
+        capturePayment(orderIdOf(placed), attempt);
+
+        var afterCapture = orderStore.find(TENANT, orderIdOf(placed)).orElseThrow();
+        assertThat(afterCapture.status())
+                .as(
+                        "the money is in, and a person still has to say yes: the pinned policy says AUTO_CONFIRM, the order's own mode does not")
+                .isEqualTo(OrderStatus.AWAITING_APPROVAL);
+        assertThat(pendingApprovalTimers(orderIdOf(placed))).isEqualTo(1L);
+
+        clock.advance(Duration.ofMinutes(6));
+        var lapsed = tx(() -> orderState.approvalDeadlineReached(TENANT, orderIdOf(placed)));
+
+        assertThat(lapsed.applied()).isTrue();
+        assertThat(lapsed.status())
+                .as("the document's timeout action is AUTO_REJECT")
+                .isEqualTo(OrderStatus.EXPIRED);
+    }
+
+    private String heldReason(UUID orderId) {
+        return jdbc.sql("""
+                        SELECT reason_code FROM ordering.order_state_history
+                        WHERE order_id = :id AND to_status = 'AWAITING_APPROVAL'
+                        """).param("id", orderId).query(String.class).single();
     }
 
     private <T> T tx(java.util.function.Supplier<T> work) {
@@ -8698,6 +8897,10 @@ class CartCheckoutAndOrderTests {
 
         void override(String keyCode, Object value) {
             delegate = new FakeConfigurationResolver(Map.of(keyCode, value));
+        }
+
+        void overrideAll(Map<String, Object> values) {
+            delegate = new FakeConfigurationResolver(values);
         }
 
         @Override

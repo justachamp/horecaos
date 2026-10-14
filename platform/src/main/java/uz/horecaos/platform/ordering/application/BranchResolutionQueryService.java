@@ -13,7 +13,10 @@ import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.fulfillment.api.BranchResolutionPort;
 import uz.horecaos.platform.fulfillment.api.BranchResolutionPort.DeliveryBranchMatch;
 import uz.horecaos.platform.fulfillment.api.BranchResolutionPort.PickupBranchCandidate;
+import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.ordering.api.OrderingConfigurationKeys;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
+import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.tenancy.api.SalesChannel;
@@ -51,6 +54,18 @@ import uz.horecaos.platform.web.api.ErrorCode;
  * that is currently open; if none is, it falls back to the top-ranked
  * candidate anyway, so the screen always has something to propose and a
  * reason to show for it.
+ *
+ * <p><strong>A pre-order asks the same question at a later time (ADR 0177, row {@code 10.3b}).</strong>
+ * When the caller passes {@code requestedFor}, every candidate's zone binding and service state are read
+ * <em>at that instant</em>, not now: a branch closed at this moment and open at the promised time is
+ * a candidate like any other. When no candidate is open then, the brand's
+ * {@code ordering.preorder_branch_resolution} picks among the closed ones, and the candidates are returned
+ * in that order after the open ones: {@code BY_OPENING_TIME} puts the branch that opens soonest first,
+ * {@code BY_DISTANCE} the nearest to the delivery point. A branch whose own policy refuses a pre-order into
+ * a closed slot ({@code acceptsScheduledOrders = false}) sorts behind those that accept one. A {@code PICKUP}
+ * order has no customer point to measure from, so {@code BY_DISTANCE} falls back to {@code BY_OPENING_TIME}
+ * there. The key is read at brand scope: the question is asked of the brand's branches, and the operator's
+ * screen and the server's own re-derivation at {@code place} must agree on it.
  */
 @Service
 public class BranchResolutionQueryService {
@@ -60,23 +75,42 @@ public class BranchResolutionQueryService {
     private final SalesChannelLookup channels;
     private final JdbcOrderStore orders;
     private final Clock clock;
+    private final ConfigurationResolver configuration;
 
     public BranchResolutionQueryService(
             BranchResolutionPort branches,
             ServiceabilityResolver serviceability,
             SalesChannelLookup channels,
             JdbcOrderStore orders,
-            Clock clock) {
+            Clock clock,
+            ConfigurationResolver configuration) {
         this.branches = branches;
         this.serviceability = serviceability;
         this.channels = channels;
         this.orders = orders;
         this.clock = clock;
+        this.configuration = configuration;
     }
 
+    /** An order for now: the branches are asked about this instant. */
     @Transactional(readOnly = true)
     public BranchResolution resolve(
             UUID tenantId, UUID brandId, FulfillmentMode mode, @Nullable GeoPoint point, String channelCode) {
+        return resolve(tenantId, brandId, mode, point, channelCode, null);
+    }
+
+    /**
+     * @param requestedFor the instant a pre-order is promised for, or null for an order for now; an instant that
+     *     is not in the future is treated as now (checkout refuses a time in the past on its own)
+     */
+    @Transactional(readOnly = true)
+    public BranchResolution resolve(
+            UUID tenantId,
+            UUID brandId,
+            FulfillmentMode mode,
+            @Nullable GeoPoint point,
+            String channelCode,
+            @Nullable Instant requestedFor) {
 
         if (mode == FulfillmentMode.DELIVERY && point == null) {
             throw new ApiException(
@@ -95,11 +129,14 @@ public class BranchResolutionQueryService {
         }
 
         Instant now = clock.instant();
+        boolean preOrder = requestedFor != null && requestedFor.isAfter(now);
+        // The instant every branch is asked about: the promised time for a pre-order, now otherwise.
+        Instant at = preOrder ? Objects.requireNonNull(requestedFor) : now;
         UUID channelId =
                 channels.byCode(tenantId, channelCode).map(SalesChannel::id).orElse(null);
         Map<UUID, Long> loadByLocation = loadByLocation(tenantId, brandId);
 
-        List<BranchCandidate> candidates = mode == FulfillmentMode.DELIVERY
+        List<BranchCandidate> ranked = mode == FulfillmentMode.DELIVERY
                 ? deliveryCandidates(
                         tenantId,
                         brandId,
@@ -107,11 +144,13 @@ public class BranchResolutionQueryService {
                         // because NullAway cannot see that cross-statement
                         // guarantee.
                         Objects.requireNonNull(point, "A DELIVERY resolution always carries a point here"),
-                        now,
+                        at,
                         channelId,
                         mode,
                         loadByLocation)
-                : pickupCandidates(tenantId, brandId, now, channelId, mode, loadByLocation);
+                : pickupCandidates(tenantId, brandId, at, channelId, mode, loadByLocation);
+
+        List<BranchCandidate> candidates = preOrder ? rankForPreOrder(tenantId, brandId, ranked, mode) : ranked;
 
         UUID proposed = candidates.stream()
                 .filter(BranchCandidate::available)
@@ -155,7 +194,10 @@ public class BranchResolutionQueryService {
                             loadByLocation.getOrDefault(match.locationId(), 0L),
                             match.zoneId(),
                             match.zonePriority(),
-                            match.zoneAreaSquareMeters());
+                            match.zoneAreaSquareMeters(),
+                            answer.nextAvailableAt(),
+                            answer.acceptsScheduledOrders(),
+                            distanceMeters(point, match.locationLatitude(), match.locationLongitude()));
                 })
                 .toList();
     }
@@ -191,9 +233,58 @@ public class BranchResolutionQueryService {
                             loadByLocation.getOrDefault(candidate.locationId(), 0L),
                             null,
                             null,
+                            null,
+                            answer.nextAvailableAt(),
+                            answer.acceptsScheduledOrders(),
                             null);
                 })
                 .toList();
+    }
+
+    /**
+     * The open candidates first, in the order they already had, then the closed ones in the order the brand's
+     * {@code ordering.preorder_branch_resolution} says (see this class's doc). Stable: candidates the policy
+     * cannot tell apart keep the zone or load order they arrived in.
+     */
+    private List<BranchCandidate> rankForPreOrder(
+            UUID tenantId, UUID brandId, List<BranchCandidate> candidates, FulfillmentMode mode) {
+        String configured = configuration.value(
+                OrderingConfigurationKeys.PREORDER_BRANCH_RESOLUTION, ResourceScope.brand(tenantId, brandId));
+        // A PICKUP order has no customer point, so "nearest" is not a question that can be asked of it.
+        boolean byDistance = "BY_DISTANCE".equals(configured) && mode == FulfillmentMode.DELIVERY;
+
+        Comparator<BranchCandidate> acceptingFirst =
+                Comparator.comparing((BranchCandidate candidate) -> !candidate.acceptsScheduledOrders());
+        Comparator<BranchCandidate> policy = byDistance
+                ? acceptingFirst.thenComparing(
+                        BranchCandidate::distanceMeters, Comparator.nullsLast(Comparator.<Double>naturalOrder()))
+                : acceptingFirst.thenComparing(
+                        BranchCandidate::nextAvailableAt, Comparator.nullsLast(Comparator.<Instant>naturalOrder()));
+
+        List<BranchCandidate> open =
+                candidates.stream().filter(BranchCandidate::available).toList();
+        List<BranchCandidate> closed = candidates.stream()
+                .filter(candidate -> !candidate.available())
+                .sorted(policy)
+                .toList();
+        return java.util.stream.Stream.concat(open.stream(), closed.stream()).toList();
+    }
+
+    /** Straight-line metres between two points (haversine); null when either end is unknown. */
+    private static @Nullable Double distanceMeters(
+            @Nullable GeoPoint from, @Nullable Double latitude, @Nullable Double longitude) {
+        if (from == null || latitude == null || longitude == null) {
+            return null;
+        }
+        double earthRadius = 6_371_000.0;
+        double deltaLatitude = Math.toRadians(latitude - from.latitude());
+        double deltaLongitude = Math.toRadians(longitude - from.longitude());
+        double a = Math.sin(deltaLatitude / 2) * Math.sin(deltaLatitude / 2)
+                + Math.cos(Math.toRadians(from.latitude()))
+                        * Math.cos(Math.toRadians(latitude))
+                        * Math.sin(deltaLongitude / 2)
+                        * Math.sin(deltaLongitude / 2);
+        return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
     private Serviceability resolve(
@@ -227,6 +318,11 @@ public class BranchResolutionQueryService {
      * @param zoneId               the winning DELIVERY zone, null for a PICKUP candidate
      * @param zonePriority         ADR 0037's first ranking key, null for a PICKUP candidate
      * @param zoneAreaSquareMeters ADR 0037's second ranking key, null for a PICKUP candidate
+     * @param nextAvailableAt      when the branch next opens for this channel and mode, where that is computable
+     *                             (ADR 0036); what {@code BY_OPENING_TIME} ranks closed candidates by
+     * @param acceptsScheduledOrders whether the branch's own policy takes a pre-order into a closed slot
+     * @param distanceMeters       straight-line distance from the delivery point to the branch, null for a
+     *                             PICKUP candidate or a branch with no point; what {@code BY_DISTANCE} ranks by
      */
     public record BranchCandidate(
             UUID locationId,
@@ -237,5 +333,8 @@ public class BranchResolutionQueryService {
             long activeOrderCount,
             @Nullable UUID zoneId,
             @Nullable Integer zonePriority,
-            @Nullable Double zoneAreaSquareMeters) {}
+            @Nullable Double zoneAreaSquareMeters,
+            @Nullable Instant nextAvailableAt,
+            boolean acceptsScheduledOrders,
+            @Nullable Double distanceMeters) {}
 }

@@ -421,7 +421,10 @@ public class OrderStateService {
         }
 
         var policy = acceptancePolicies.pinned(order.acceptancePolicyId(), order.acceptancePolicyVersion());
-        boolean approvalRequired = policy.mode() == AcceptanceMode.RESTAURANT_APPROVAL;
+        // The order's own mode snapshot, not the pinned policy's: an AUTO_CONFIRM policy can hold an
+        // order back behind an auto-accept gate (ADR 0177), and that order was written
+        // RESTAURANT_APPROVAL. For every other order the two say the same thing.
+        boolean approvalRequired = AcceptanceMode.RESTAURANT_APPROVAL.name().equals(order.acceptanceMode());
         OrderStatus target = approvalRequired ? OrderStatus.AWAITING_APPROVAL : OrderStatus.CONFIRMED;
         OrderStateMachine.require(OrderStatus.PAYMENT_AUTHORIZING, target);
 

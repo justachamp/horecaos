@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -110,6 +111,9 @@ class OperatorOrderEntryHttpTests {
      */
     private static final String STAFF = "order-entry-http-staff";
 
+    /** The tenant's owner, who sets Card 5 of the order policy through the settings API. */
+    private static final String OWNER = "order-entry-http-owner";
+
     private static final String OTHER_BRANCH_MANAGER = "order-entry-http-other-branch";
     private static final String UNGRANTED = "order-entry-http-ungranted";
     private static final ObjectMapper JSON = JsonMapper.builder().build();
@@ -186,6 +190,10 @@ class OperatorOrderEntryHttpTests {
 
     @Autowired
     @SuppressWarnings("NullAway")
+    private CacheManager cacheManager;
+
+    @Autowired
+    @SuppressWarnings("NullAway")
     private tools.jackson.databind.ObjectMapper objectMapper;
 
     private UUID catalogId;
@@ -240,6 +248,14 @@ class OperatorOrderEntryHttpTests {
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         jdbc.sql("TRUNCATE TABLE audit.audit_events CASCADE").update();
         roleRegistry.synchronize();
+        // A resolved configuration value is cached under the tenant's scope; this class reuses one
+        // tenant across its cases, so an earlier case's Card 5 setting must not outlive its rows.
+        cacheManager.getCacheNames().forEach(name -> {
+            var cache = cacheManager.getCache(name);
+            if (cache != null) {
+                cache.clear();
+            }
+        });
 
         seedTenancy();
         seedDeliveryZone();
@@ -250,6 +266,7 @@ class OperatorOrderEntryHttpTests {
         grant(MANAGER, LOCATION);
         grant(OTHER_BRANCH_MANAGER, OTHER_LOCATION);
         grant(STAFF, LOCATION, PlatformRole.LOCATION_STAFF);
+        grantTenant(OWNER, PlatformRole.TENANT_OWNER);
     }
 
     // ============================================================ row 1.3e: the server's price
@@ -744,6 +761,162 @@ class OperatorOrderEntryHttpTests {
         assertThat(tenantRoute.getResponse().getStatus())
                 .as("and never a TENANT route, which is why the tenant roles' routes stay for the Customers screen")
                 .isEqualTo(403);
+    }
+
+    // ======================= ADR 0177 decision 5: what the branch lets an operator do while keying an order in
+
+    /** The owner turns one Card 5 toggle off through the settings API, the way the order policy page does. */
+    private void setCard5(String key, boolean value) throws Exception {
+        MvcResult written = mvc.perform(
+                        post("/api/v1/operations/tenants/" + TENANT + "/configuration/keys/" + key + "/values")
+                                .with(tokenFor(OWNER))
+                                .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "card5-" + key + "-" + value)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                {"scopeType":"TENANT","brandId":null,"locationId":null,"explicitNull":false,
+                                 "booleanValue":%s,"integerValue":null,"decimalValue":null,"stringValue":null,
+                                 "expectedVersion":null,"reason":"order entry http test"}""".formatted(value)))
+                .andReturn();
+        assertThat(written.getResponse().getStatus())
+                .as(written.getResponse().getContentAsString())
+                .isEqualTo(200);
+    }
+
+    private JsonNode entryPolicy(String subject) throws Exception {
+        MvcResult read = mvc.perform(get(ordersPath(LOCATION) + "/entry-policy").with(tokenFor(subject)))
+                .andReturn();
+        assertThat(read.getResponse().getStatus())
+                .as(read.getResponse().getContentAsString())
+                .isEqualTo(200);
+        return JSON.readTree(read.getResponse().getContentAsString());
+    }
+
+    private static String withMember(String json, String member) {
+        return json.substring(0, json.length() - 1) + "," + member + "}";
+    }
+
+    @Test
+    @DisplayName("every operator toggle is on until a tenant turns it off, and the screen is told which")
+    void theOperatorTogglesDefaultToAllowed() throws Exception {
+        JsonNode policy = entryPolicy(STAFF);
+
+        assertThat(policy.path("promoCodeAllowed").asBoolean()).isTrue();
+        assertThat(policy.path("callbackFlagAllowed").asBoolean()).isTrue();
+        assertThat(policy.path("changeDueAllowed").asBoolean()).isTrue();
+        assertThat(mvc.perform(get(ordersPath(LOCATION) + "/entry-policy").with(tokenFor(UNGRANTED)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .as("it is the screen's own read: a principal that cannot place an order here may not read it")
+                .isEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("a promo code on an operator order is refused, priced and placed, where the tenant turned it off")
+    void aPromoCodeIsRefusedWhereTheTenantTurnedItOff() throws Exception {
+        activatePromoCode("OPERATOR10", 1_000);
+        assertThat(placeResult(pickupBody("OPERATOR10", null), STAFF, "promo-allowed")
+                        .getResponse()
+                        .getStatus())
+                .as("on by default: operators have applied promo codes since row 1.3e")
+                .isEqualTo(201);
+
+        setCard5("ordering.operator_promo_code_allowed", false);
+
+        assertThat(entryPolicy(STAFF).path("promoCodeAllowed").asBoolean()).isFalse();
+        List<Long> before = footprint();
+        MvcResult placeRefused = placeResult(pickupBody("OPERATOR10", null), STAFF, "promo-refused");
+        MvcResult quoteRefused = quoteResult(pickupBody("OPERATOR10", null), STAFF);
+        assertThat(placeRefused.getResponse().getStatus())
+                .as(placeRefused.getResponse().getContentAsString())
+                .isEqualTo(409);
+        assertThat(placeRefused.getResponse().getContentAsString()).contains("OPERATOR_PROMO_CODE_NOT_ALLOWED");
+        assertThat(quoteRefused.getResponse().getStatus()).isEqualTo(409);
+        assertThat(quoteRefused.getResponse().getContentAsString()).contains("OPERATOR_PROMO_CODE_NOT_ALLOWED");
+        assertThat(footprint()).as("a refusal leaves nothing behind").isEqualTo(before);
+
+        assertThat(placeResult(pickupBody(null, null), STAFF, "promo-none")
+                        .getResponse()
+                        .getStatus())
+                .as("an order with no promo code is unaffected")
+                .isEqualTo(201);
+
+        setCard5("ordering.operator_promo_code_allowed", true);
+        assertThat(placeResult(pickupBody("OPERATOR10", null), STAFF, "promo-back")
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(201);
+    }
+
+    @Test
+    @DisplayName(
+            "the cash tendered and the call-back flag are refused where the tenant turned them off, priced and placed")
+    void theCashTenderedAndTheCallbackFlagAreRefusedWhereTurnedOff() throws Exception {
+        setCard5("ordering.operator_change_due_allowed", false);
+        setCard5("ordering.operator_callback_flag_allowed", false);
+
+        MvcResult cashPlace = placeResult(pickupBody(null, 60_000L), STAFF, "cash-off");
+        MvcResult cashQuote = quoteResult(pickupBody(null, 60_000L), STAFF);
+        MvcResult flagPlace =
+                placeResult(withMember(pickupBody(null, null), "\"callbackRequested\":true"), STAFF, "flag-off");
+
+        assertThat(cashPlace.getResponse().getStatus()).isEqualTo(409);
+        assertThat(cashPlace.getResponse().getContentAsString()).contains("OPERATOR_CHANGE_DUE_NOT_ALLOWED");
+        assertThat(cashQuote.getResponse().getStatus()).isEqualTo(409);
+        assertThat(flagPlace.getResponse().getStatus()).isEqualTo(409);
+        assertThat(flagPlace.getResponse().getContentAsString()).contains("OPERATOR_CALLBACK_NOT_ALLOWED");
+        assertThat(jdbc.sql("SELECT count(*) FROM ordering.orders")
+                        .query(Long.class)
+                        .single())
+                .as("none of the three created an order")
+                .isZero();
+        JsonNode policy = entryPolicy(STAFF);
+        assertThat(policy.path("changeDueAllowed").asBoolean()).isFalse();
+        assertThat(policy.path("callbackFlagAllowed").asBoolean()).isFalse();
+        assertThat(policy.path("promoCodeAllowed").asBoolean()).isTrue();
+    }
+
+    @Test
+    @DisplayName("an operator flags an order for a call back as she keys it in, and a replay does not raise it again")
+    void theCallbackFlagIsOnTheOrderFromItsFirstRead() throws Exception {
+        String body = withMember(pickupBody(null, null), "\"callbackRequested\":true");
+
+        UUID orderId = place(body, STAFF, "callback-1");
+
+        assertThat(jdbc.sql("SELECT callback_requested FROM ordering.orders WHERE id = :id")
+                        .param("id", orderId)
+                        .query(Boolean.class)
+                        .single())
+                .isTrue();
+        MvcResult board = mvc.perform(get(ordersPath(LOCATION) + "/board")
+                        .param("callbackRequested", "true")
+                        .with(tokenFor(STAFF)))
+                .andReturn();
+        assertThat(JSON.readTree(board.getResponse().getContentAsString())
+                        .path("items")
+                        .toString())
+                .as("the board's «Требуется звонок» filter finds it at once")
+                .contains(orderId.toString());
+
+        // Somebody rings the customer back and clears it; a retry of the same request must not raise it again.
+        jdbc.sql("UPDATE ordering.orders SET callback_requested = false WHERE id = :id")
+                .param("id", orderId)
+                .update();
+        UUID again = place(body, STAFF, "callback-1");
+        assertThat(again).isEqualTo(orderId);
+        assertThat(jdbc.sql("SELECT callback_requested FROM ordering.orders WHERE id = :id")
+                        .param("id", orderId)
+                        .query(Boolean.class)
+                        .single())
+                .isFalse();
+
+        UUID plain = place(pickupBody(null, null), STAFF, "callback-none");
+        assertThat(jdbc.sql("SELECT callback_requested FROM ordering.orders WHERE id = :id")
+                        .param("id", plain)
+                        .query(Boolean.class)
+                        .single())
+                .as("an order that did not ask for one carries none")
+                .isFalse();
     }
 
     private UUID openAccountOnMiss(String phone) throws Exception {
@@ -1307,6 +1480,24 @@ class OperatorOrderEntryHttpTests {
                 .param("subject", subject)
                 .param("roleId", RoleRegistrySynchronizer.platformRoleId(role))
                 .param("scopeId", location)
+                .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
+    private void grantTenant(String subject, PlatformRole role) {
+        jdbc.sql("""
+                INSERT INTO iam.grants
+                    (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
+                     status, granted_by, reason, valid_from)
+                VALUES (:id, :tenantId, :subject, :roleId, true, 'TENANT', :scopeId,
+                        'ACTIVE', 'test-fixture', 'order entry http test', :validFrom)
+                ON CONFLICT DO NOTHING
+                """)
+                .param("id", UUID.nameUUIDFromBytes((subject + role.code() + TENANT).getBytes(UTF_8)))
+                .param("tenantId", TENANT)
+                .param("subject", subject)
+                .param("roleId", RoleRegistrySynchronizer.platformRoleId(role))
+                .param("scopeId", TENANT)
                 .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
                 .update();
     }

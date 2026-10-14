@@ -1,6 +1,5 @@
 package uz.horecaos.platform.tenancy.domain.configuration;
 
-import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -628,37 +627,13 @@ public final class ConfigurationKeys {
             .build();
 
     /**
-     * Wave P46 (gap map row {@code 10.3b}), settings.md §10.3 cards 2–5:
-     * order policy's eleven registry entries. Declared identically in {@code
-     * ordering.api.OrderingConfigurationKeys}, which is where every one of
-     * them is actually consumed once a reader exists — see that class's own
-     * doc for why none of them is consumed yet, and {@code
-     * OrderingConfigurationKeyTests} for the drift check.
+     * Wave P46 (gap map row {@code 10.3b}), settings.md §10.3 cards 2–5: order policy's registry
+     * entries, with ADR 0177's five retired (the business day's start hour, the average and maximum
+     * order minutes, the VAT rate, the routing poll interval -- none had a reader and each has a
+     * neighbour that owns the behaviour). Declared identically in {@code
+     * ordering.api.OrderingConfigurationKeys}, which is where every one of them is consumed -- see that
+     * class's own doc, and {@code OrderingConfigurationKeyTests} for the drift check.
      */
-    public static final ConfigurationKey<Integer> ORDERING_BUSINESS_DAY_START_HOUR = ConfigurationKey.of(
-                    "ordering.business_day_start_hour", Integer.class)
-            .defaultValue(6)
-            .ownedBy("ordering")
-            .tenantVisible()
-            .describedAs("The local hour (0-23) a trading day is considered to start.")
-            .build();
-
-    public static final ConfigurationKey<Integer> ORDERING_AVERAGE_ORDER_MINUTES = ConfigurationKey.of(
-                    "ordering.average_order_minutes", Integer.class)
-            .defaultValue(30)
-            .ownedBy("ordering")
-            .tenantVisible()
-            .describedAs("Minutes an order is expected to take from acceptance to ready.")
-            .build();
-
-    public static final ConfigurationKey<Integer> ORDERING_MAXIMUM_ORDER_MINUTES = ConfigurationKey.of(
-                    "ordering.maximum_order_minutes", Integer.class)
-            .defaultValue(60)
-            .ownedBy("ordering")
-            .tenantVisible()
-            .describedAs("Minutes beyond which an order is unambiguously overdue.")
-            .build();
-
     public static final ConfigurationKey<Integer> ORDERING_LATE_ORDER_THRESHOLD_MINUTES = ConfigurationKey.of(
                     "ordering.late_order_threshold_minutes", Integer.class)
             .defaultValue(45)
@@ -748,22 +723,6 @@ public final class ConfigurationKeys {
                     + "Delivery's own minimum comes from the service zone, not this key.")
             .build();
 
-    public static final ConfigurationKey<BigDecimal> ORDERING_VAT_RATE_PERCENT = ConfigurationKey.of(
-                    "ordering.vat_rate_percent", BigDecimal.class)
-            .defaultValue(new BigDecimal("12"))
-            .ownedBy("ordering")
-            .tenantVisible()
-            .describedAs("The VAT rate applied at checkout, as a percentage.")
-            .build();
-
-    public static final ConfigurationKey<Integer> ORDERING_ROUTING_POLL_INTERVAL_MINUTES = ConfigurationKey.of(
-                    "ordering.routing_poll_interval_minutes", Integer.class)
-            .defaultValue(2)
-            .ownedBy("ordering")
-            .tenantVisible()
-            .describedAs("Minutes between polls of the routing port while a delivery order awaits assignment.")
-            .build();
-
     public static final ConfigurationKey<String> ORDERING_PREORDER_BRANCH_RESOLUTION = ConfigurationKey.of(
                     "ordering.preorder_branch_resolution", String.class)
             .defaultValue("BY_DISTANCE")
@@ -775,10 +734,26 @@ public final class ConfigurationKeys {
 
     public static final ConfigurationKey<Boolean> ORDERING_OPERATOR_PROMO_CODE_ALLOWED = ConfigurationKey.of(
                     "ordering.operator_promo_code_allowed", Boolean.class)
-            .defaultValue(false)
+            .defaultValue(true)
             .ownedBy("ordering")
             .tenantVisible()
             .describedAs("Whether an operator hand-entering an order may apply a promo code.")
+            .build();
+
+    public static final ConfigurationKey<Boolean> ORDERING_OPERATOR_CALLBACK_FLAG_ALLOWED = ConfigurationKey.of(
+                    "ordering.operator_callback_flag_allowed", Boolean.class)
+            .defaultValue(true)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("Whether an operator keying in an order may flag it «call the customer back».")
+            .build();
+
+    public static final ConfigurationKey<Boolean> ORDERING_OPERATOR_CHANGE_DUE_ALLOWED = ConfigurationKey.of(
+                    "ordering.operator_change_due_allowed", Boolean.class)
+            .defaultValue(true)
+            .ownedBy("ordering")
+            .tenantVisible()
+            .describedAs("Whether an operator keying in a cash order may record the cash tendered (change due).")
             .build();
 
     public static final ConfigurationKey<String> ORDERING_AUTO_ACCEPT_ELIGIBLE_CHANNELS = ConfigurationKey.of(
@@ -786,8 +761,8 @@ public final class ConfigurationKeys {
             .defaultValue("ALL")
             .ownedBy("ordering")
             .tenantVisible()
-            .describedAs("\"ALL\", or a comma-separated list of sales channel codes eligible for "
-                    + "auto-accept. Not yet enforced.")
+            .describedAs("\"ALL\", or a comma-separated list of sales channel codes eligible for auto-accept; "
+                    + "an order on any other channel waits for the approval path of the acceptance policy.")
             .build();
 
     public static final ConfigurationKey<Integer> ORDERING_AUTO_ACCEPT_MIN_PRIOR_ORDERS = ConfigurationKey.of(
@@ -796,7 +771,7 @@ public final class ConfigurationKeys {
             .ownedBy("ordering")
             .tenantVisible()
             .describedAs("Prior successful orders a customer needs before auto-accept applies to "
-                    + "them. 0 means no gate. Not yet enforced.")
+                    + "them. 0 means no gate; a new customer's order waits for the approval path instead.")
             .build();
 
     /** ADR 0158's rollout gate, declared identically in {@code ordering.api.OrderingConfigurationKeys}. */
@@ -1374,9 +1349,6 @@ public final class ConfigurationKeys {
             TERMINAL_SESSION_MAX_HOURS,
             TERMINAL_ROSTER_DISPLAY,
             TERMINAL_ATTRIBUTION_DEFAULT,
-            ORDERING_BUSINESS_DAY_START_HOUR,
-            ORDERING_AVERAGE_ORDER_MINUTES,
-            ORDERING_MAXIMUM_ORDER_MINUTES,
             ORDERING_LATE_ORDER_THRESHOLD_MINUTES,
             KITCHEN_DISPLAY_NOT_SEEN_AFTER_MINUTES,
             FEATURE_PRINTING,
@@ -1386,10 +1358,10 @@ public final class ConfigurationKeys {
             ORDERING_AT_RISK_BEFORE_MINUTES,
             ORDERING_LATE_COLOUR,
             ORDERING_MINIMUM_ORDER_AMOUNT_MINOR,
-            ORDERING_VAT_RATE_PERCENT,
-            ORDERING_ROUTING_POLL_INTERVAL_MINUTES,
             ORDERING_PREORDER_BRANCH_RESOLUTION,
             ORDERING_OPERATOR_PROMO_CODE_ALLOWED,
+            ORDERING_OPERATOR_CALLBACK_FLAG_ALLOWED,
+            ORDERING_OPERATOR_CHANGE_DUE_ALLOWED,
             ORDERING_AUTO_ACCEPT_ELIGIBLE_CHANNELS,
             ORDERING_AUTO_ACCEPT_MIN_PRIOR_ORDERS,
             ORDERING_AUTO_ADD_ENABLED,

@@ -169,7 +169,13 @@ public class CheckoutService {
             // set exactly when approvalRequired is true.
             Instant approvalDeadline = Objects.requireNonNull(written.approvalDeadline());
             finalStatus = progression.awaitApproval(
-                    command, eligible.cart(), orderId, written.policy().policy(), approvalDeadline, now);
+                    command,
+                    eligible.cart(),
+                    orderId,
+                    written.policy().policy(),
+                    approvalDeadline,
+                    written.holdReasonCode(),
+                    now);
         } else {
             finalStatus = progression.confirmImmediately(
                     command, eligible.cart(), orderId, written.policy().policy(), eligible.quote(), now);

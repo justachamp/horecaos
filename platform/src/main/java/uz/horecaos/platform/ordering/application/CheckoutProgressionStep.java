@@ -2,6 +2,7 @@ package uz.horecaos.platform.ordering.application;
 
 import java.time.Instant;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import uz.horecaos.platform.ordering.api.OrderAwaitingApproval;
@@ -98,6 +99,7 @@ class CheckoutProgressionStep {
             UUID orderId,
             OrderAcceptancePolicy policy,
             Instant deadline,
+            @Nullable String holdReasonCode,
             Instant now) {
 
         OrderStateMachine.require(OrderStatus.RECEIVED, OrderStatus.AWAITING_APPROVAL);
@@ -112,7 +114,9 @@ class CheckoutProgressionStep {
                 OrderStatus.RECEIVED,
                 OrderStatus.AWAITING_APPROVAL,
                 TransitionTrigger.CHECKOUT,
-                null,
+                // ADR 0177: "why is this order waiting" for an AUTO_CONFIRM policy that did not confirm
+                // it. Null for restaurant approval, where waiting is what the policy says.
+                holdReasonCode,
                 command.actorType(),
                 command.actorId(),
                 command.correlationId(),

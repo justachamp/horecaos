@@ -524,8 +524,8 @@ public class OperationsOrderController {
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @Valid @RequestBody BranchResolutionRequest body) {
-        BranchResolution resolution =
-                branchResolution.resolve(tenantId, brandId, body.fulfillmentMode(), body.point(), body.channelCode());
+        BranchResolution resolution = branchResolution.resolve(
+                tenantId, brandId, body.fulfillmentMode(), body.point(), body.channelCode(), body.requestedFor());
         return ResponseEntity.ok(BranchResolutionResponse.of(resolution));
     }
 
@@ -603,7 +603,8 @@ public class OperationsOrderController {
                     body.overrideNote(),
                     body.dineInSessionId(),
                     body.cashTenderedMinor(),
-                    body.declinedAutoAddRuleIds() == null ? List.of() : body.declinedAutoAddRuleIds()));
+                    body.declinedAutoAddRuleIds() == null ? List.of() : body.declinedAutoAddRuleIds(),
+                    Boolean.TRUE.equals(body.callbackRequested())));
 
             if (result.outcome() == CheckoutService.CheckoutResult.Outcome.REJECTED) {
                 String rejectionCode =
@@ -688,7 +689,8 @@ public class OperationsOrderController {
                     body.overrideNote(),
                     body.dineInSessionId(),
                     body.cashTenderedMinor(),
-                    body.declinedAutoAddRuleIds() == null ? List.of() : body.declinedAutoAddRuleIds()));
+                    body.declinedAutoAddRuleIds() == null ? List.of() : body.declinedAutoAddRuleIds(),
+                    Boolean.TRUE.equals(body.callbackRequested())));
             return ResponseEntity.ok(OrderQuoteResponse.of(quote));
         } catch (CartService.CartRefusedException refused) {
             throw StorefrontOrderingController.refusal(refused);
@@ -2011,7 +2013,46 @@ public class OperationsOrderController {
             @Nullable @PositiveOrZero Long cashTenderedMinor,
             // ADR 0158: the rules whose lines the operator took off the basket the last quote showed,
             // each by the ruleId that quote named. The cart never evaluates them into this order.
-            @Nullable @Size(max = 50) List<UUID> declinedAutoAddRuleIds) {
+            @Nullable @Size(max = 50) List<UUID> declinedAutoAddRuleIds,
+            // ADR 0177: «Перезвонить клиенту» raised while the order is keyed in, boxed (Jackson 3 refuses a
+            // missing primitive) and refused with OPERATOR_CALLBACK_NOT_ALLOWED where the location turned it off.
+            @Nullable Boolean callbackRequested) {
+
+        /** A request that raises no callback flag: every client that predates ADR 0177. */
+        public PlaceOrderRequest(
+                UUID customerAccountId,
+                String channelCode,
+                FulfillmentMode fulfillmentMode,
+                List<OrderLineRequest> lines,
+                @Nullable DestinationRequest destination,
+                String paymentMethodCode,
+                @Nullable String promoCode,
+                @Nullable Instant requestedFor,
+                Boolean overrideOutOfHours,
+                @Nullable UUID proposedLocationId,
+                @Nullable String overrideReasonCode,
+                @Nullable String overrideNote,
+                @Nullable UUID dineInSessionId,
+                @Nullable Long cashTenderedMinor,
+                @Nullable List<UUID> declinedAutoAddRuleIds) {
+            this(
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines,
+                    destination,
+                    paymentMethodCode,
+                    promoCode,
+                    requestedFor,
+                    overrideOutOfHours,
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    cashTenderedMinor,
+                    declinedAutoAddRuleIds,
+                    null);
+        }
 
         /** A request that declines no auto-add rule: every client that predates ADR 0158. */
         public PlaceOrderRequest(
@@ -2044,6 +2085,7 @@ public class OperationsOrderController {
                     overrideNote,
                     dineInSessionId,
                     cashTenderedMinor,
+                    null,
                     null);
         }
     }
@@ -3022,11 +3064,22 @@ public class OperationsOrderController {
      * @param point null for PICKUP, required for DELIVERY — refused
      *              (VALIDATION_FAILED) by {@code BranchResolutionQueryService}
      *              when absent on a DELIVERY request
+     * @param requestedFor ADR 0177: the «Позже» time of a pre-order, or absent for an order for now.
+     *              The branches are asked whether they are open, and whether a zone binds, at that
+     *              instant, and when none is open then {@code ordering.preorder_branch_resolution}
+     *              ranks the closed ones
      */
     public record BranchResolutionRequest(
             @NotNull FulfillmentMode fulfillmentMode,
             @Nullable @Valid GeoPoint point,
-            @NotBlank String channelCode) {}
+            @NotBlank String channelCode,
+            @Nullable Instant requestedFor) {
+
+        /** A resolution for now: every client that predates the pre-order reader (ADR 0177). */
+        public BranchResolutionRequest(FulfillmentMode fulfillmentMode, @Nullable GeoPoint point, String channelCode) {
+            this(fulfillmentMode, point, channelCode, null);
+        }
+    }
 
     /**
      * One candidate branch — ranked by zone match for DELIVERY, by current
@@ -3048,7 +3101,10 @@ public class OperationsOrderController {
             long activeOrderCount,
             @Nullable UUID zoneId,
             @Nullable Integer zonePriority,
-            @Nullable Double zoneAreaSquareMeters) {
+            @Nullable Double zoneAreaSquareMeters,
+            @Nullable Instant nextAvailableAt,
+            boolean acceptsScheduledOrders,
+            @Nullable Double distanceMeters) {
 
         static BranchCandidateResponse of(BranchCandidate candidate) {
             return new BranchCandidateResponse(
@@ -3060,7 +3116,10 @@ public class OperationsOrderController {
                     candidate.activeOrderCount(),
                     candidate.zoneId(),
                     candidate.zonePriority(),
-                    candidate.zoneAreaSquareMeters());
+                    candidate.zoneAreaSquareMeters(),
+                    candidate.nextAvailableAt(),
+                    candidate.acceptsScheduledOrders(),
+                    candidate.distanceMeters());
         }
     }
 

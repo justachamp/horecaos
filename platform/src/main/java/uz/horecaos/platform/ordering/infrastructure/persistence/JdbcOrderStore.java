@@ -339,6 +339,27 @@ public class JdbcOrderStore {
     }
 
     /**
+     * Raises «Требуется звонок» on an order in the transaction that creates it (ADR 0177: the operator who
+     * keys an order in flags it for a call back, where before the flag existed only as the {@code
+     * SET_CALLBACK_REQUESTED} amendment after the order was there). Like {@link
+     * #recordCashTenderedAtCreation} it takes no version and writes no revision of its own, because it
+     * is part of the order as first written.
+     *
+     * @return false when the order already carries the flag or is not this tenant's
+     */
+    public boolean recordCallbackRequestedAtCreation(UUID tenantId, UUID orderId) {
+        return jdbc.sql("""
+                UPDATE ordering.orders
+                SET callback_requested = true, callback_resolved_at = NULL, callback_resolved_by = NULL
+                WHERE tenant_id = :tenantId AND id = :orderId AND NOT callback_requested
+                """)
+                        .param("tenantId", tenantId)
+                        .param("orderId", orderId)
+                        .update()
+                == 1;
+    }
+
+    /**
      * Closes a live line at a revision boundary (ADR 0039 {@code
      * CHANGE_LINE_QUANTITY}).
      *
@@ -1457,6 +1478,27 @@ public class JdbcOrderStore {
                 .param("liveTo", to == null ? null : utc(to))
                 .query((row, number) -> new LocationCountsRow(row.getObject("location_id", UUID.class), mapCounts(row)))
                 .list();
+    }
+
+    /**
+     * How many orders of one customer account in one brand ended {@code COMPLETED} (ADR 0177): the
+     * "prior successful orders" the {@code ordering.auto_accept_min_prior_orders} gate counts.
+     * Rejected, expired, cancelled and payment-failed orders are not successes, and an order still in
+     * flight has not succeeded yet. The account and the brand are both predicates, so another brand's
+     * history (the account is shared across a tenant's brands under {@code TENANT_SHARED}) does not
+     * lend a new customer trust here.
+     */
+    public long countCompletedForCustomer(UUID tenantId, UUID brandId, UUID customerAccountId) {
+        return jdbc.sql("""
+                        SELECT count(*) FROM ordering.orders
+                        WHERE tenant_id = :tenantId AND brand_id = :brandId
+                          AND customer_account_id = :accountId AND status = 'COMPLETED'
+                        """)
+                .param("tenantId", tenantId)
+                .param("brandId", brandId)
+                .param("accountId", customerAccountId)
+                .query(Long.class)
+                .single();
     }
 
     /**

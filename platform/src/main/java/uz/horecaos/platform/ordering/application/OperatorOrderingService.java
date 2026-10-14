@@ -17,10 +17,12 @@ import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.ordering.api.OrderingConfigurationKeys;
 import uz.horecaos.platform.ordering.domain.DeliveryDestination;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcBranchOverrideReasonStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcCartStore.CartRow;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
+import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.web.api.ApiException;
@@ -86,6 +88,7 @@ public class OperatorOrderingService {
     private final JdbcOrderStore orders;
     private final AuditRecorder audit;
     private final Clock clock;
+    private final ConfigurationResolver configuration;
 
     /**
      * Recorded as the ADR 0027 fact against the one reveal {@link
@@ -112,7 +115,8 @@ public class OperatorOrderingService {
             CustomerAddressBook addresses,
             JdbcOrderStore orders,
             AuditRecorder audit,
-            Clock clock) {
+            Clock clock,
+            ConfigurationResolver configuration) {
         this.carts = carts;
         this.checkout = checkout;
         this.overrideReasons = overrideReasons;
@@ -121,6 +125,36 @@ public class OperatorOrderingService {
         this.orders = orders;
         this.audit = audit;
         this.clock = clock;
+        this.configuration = configuration;
+    }
+
+    /**
+     * What this location lets an operator do while keying an order in (settings.md 10.3 card 5, ADR 0177):
+     * apply a promo code, flag the order for a call back, record the cash the customer will hand over.
+     * Read at the location the order is for, and also served to the New order screen
+     * ({@code OperatorOrderEntryPolicyController}) so it hides what the server would refuse.
+     */
+    public record EntryPolicy(boolean promoCodeAllowed, boolean callbackFlagAllowed, boolean changeDueAllowed) {}
+
+    public EntryPolicy entryPolicy(UUID tenantId, UUID brandId, UUID locationId) {
+        ResourceScope scope = ResourceScope.location(tenantId, brandId, locationId);
+        return new EntryPolicy(
+                allowed(OrderingConfigurationKeys.OPERATOR_PROMO_CODE_ALLOWED, scope),
+                allowed(OrderingConfigurationKeys.OPERATOR_CALLBACK_FLAG_ALLOWED, scope),
+                allowed(OrderingConfigurationKeys.OPERATOR_CHANGE_DUE_ALLOWED, scope));
+    }
+
+    /**
+     * An unset key resolves to its registered default, which is {@code true} for all three (behaviour
+     * preserving: operators have done each of these since rows 1.3e and 1.3), and only an explicit
+     * {@code false} refuses.
+     */
+    private boolean allowed(uz.horecaos.platform.tenancy.api.ConfigurationKey<Boolean> key, ResourceScope scope) {
+        return !Boolean.FALSE.equals(configuration.value(key, scope));
+    }
+
+    private static ApiException notAllowed(String reason, String message) {
+        return new ApiException(ErrorCode.RESOURCE_CONFLICT, message, Map.of("reason", reason));
     }
 
     /** One line an operator entered into the basket. */
@@ -255,10 +289,63 @@ public class OperatorOrderingService {
             @Nullable String overrideNote,
             @Nullable UUID dineInSessionId,
             @Nullable Long cashTenderedMinor,
-            List<UUID> declinedAutoAddRuleIds) {
+            List<UUID> declinedAutoAddRuleIds,
+            boolean callbackRequested) {
 
         public PlaceOrderCommand {
             declinedAutoAddRuleIds = List.copyOf(declinedAutoAddRuleIds);
+        }
+
+        /**
+         * An order that raises no callback flag at creation (ADR 0177): every caller that predates the flag
+         * being something the operator can set while keying the order in.
+         */
+        @SuppressWarnings("checkstyle:ParameterNumber")
+        public PlaceOrderCommand(
+                UUID tenantId,
+                UUID brandId,
+                UUID locationId,
+                UUID customerAccountId,
+                String channelCode,
+                FulfillmentMode fulfillmentMode,
+                List<OrderLine> lines,
+                @Nullable Destination destination,
+                String paymentMethodCode,
+                @Nullable String promoCode,
+                String idempotencyKey,
+                String operatorSubject,
+                @Nullable String correlationId,
+                @Nullable Instant requestedFor,
+                boolean overrideOutOfHours,
+                @Nullable UUID proposedLocationId,
+                @Nullable String overrideReasonCode,
+                @Nullable String overrideNote,
+                @Nullable UUID dineInSessionId,
+                @Nullable Long cashTenderedMinor,
+                List<UUID> declinedAutoAddRuleIds) {
+            this(
+                    tenantId,
+                    brandId,
+                    locationId,
+                    customerAccountId,
+                    channelCode,
+                    fulfillmentMode,
+                    lines,
+                    destination,
+                    paymentMethodCode,
+                    promoCode,
+                    idempotencyKey,
+                    operatorSubject,
+                    correlationId,
+                    requestedFor,
+                    overrideOutOfHours,
+                    proposedLocationId,
+                    overrideReasonCode,
+                    overrideNote,
+                    dineInSessionId,
+                    cashTenderedMinor,
+                    declinedAutoAddRuleIds,
+                    false);
         }
 
         /**
@@ -511,6 +598,15 @@ public class OperatorOrderingService {
             }
         }
 
+        // ADR 0177: the flag the operator raised while keying the order in is on it from the first read,
+        // written only on the write that created it (a REPLAYED retry must not raise it a second time
+        // after somebody has already rung the customer back and cleared it).
+        if (command.callbackRequested() && result.outcome() == CheckoutService.CheckoutResult.Outcome.CREATED) {
+            orders.recordCallbackRequestedAtCreation(
+                    command.tenantId(),
+                    Objects.requireNonNull(result.orderId(), "a created checkout always names an order"));
+        }
+
         // Audited only on the write that actually created the order — never on
         // a REJECTED outcome (nothing was placed to have a branch at all) and
         // never a second time on a REPLAYED retry of the same Idempotency-Key,
@@ -546,6 +642,22 @@ public class OperatorOrderingService {
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED,
                     "A " + command.fulfillmentMode() + " order is not eaten at a table, so it has no bill to go on");
+        }
+        EntryPolicy policy = entryPolicy(command.tenantId(), command.brandId(), command.locationId());
+        if (command.callbackRequested() && !policy.callbackFlagAllowed()) {
+            throw notAllowed(
+                    "OPERATOR_CALLBACK_NOT_ALLOWED",
+                    "This location does not let an operator flag an order for a call back");
+        }
+        if (command.cashTenderedMinor() != null && !policy.changeDueAllowed()) {
+            throw notAllowed(
+                    "OPERATOR_CHANGE_DUE_NOT_ALLOWED",
+                    "This location does not let an operator record the cash the customer will hand over");
+        }
+        if (command.promoCode() != null && !command.promoCode().isBlank() && !policy.promoCodeAllowed()) {
+            throw notAllowed(
+                    "OPERATOR_PROMO_CODE_NOT_ALLOWED",
+                    "This location does not let an operator apply a promo code to an order");
         }
         Long tendered = command.cashTenderedMinor();
         if (tendered != null) {
@@ -753,7 +865,13 @@ public class OperatorOrderingService {
             point = new GeoPoint(located.latitude(), located.longitude());
         }
         return branchResolution
-                .resolve(command.tenantId(), command.brandId(), command.fulfillmentMode(), point, command.channelCode())
+                .resolve(
+                        command.tenantId(),
+                        command.brandId(),
+                        command.fulfillmentMode(),
+                        point,
+                        command.channelCode(),
+                        command.requestedFor())
                 .proposedLocationId();
     }
 

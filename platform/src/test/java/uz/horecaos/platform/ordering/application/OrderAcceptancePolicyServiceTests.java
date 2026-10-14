@@ -247,15 +247,6 @@ class OrderAcceptancePolicyServiceTests {
     @Test
     void theDomainInvariantsSurvivedTheMigration() {
         assertThatThrownBy(() -> new OrderAcceptancePolicy(
-                        AcceptanceMode.AUTO_CONFIRM,
-                        ApprovalChannel.POS,
-                        0,
-                        ApprovalTimeoutAction.AUTO_REJECT,
-                        false,
-                        false))
-                .hasMessageContaining("Auto-confirm policies cannot have an approval channel");
-
-        assertThatThrownBy(() -> new OrderAcceptancePolicy(
                         AcceptanceMode.RESTAURANT_APPROVAL,
                         ApprovalChannel.EITHER,
                         5,
@@ -263,6 +254,60 @@ class OrderAcceptancePolicyServiceTests {
                         false,
                         false))
                 .hasMessageContaining("between 30 seconds and 30 minutes");
+
+        assertThatThrownBy(() -> new OrderAcceptancePolicy(
+                        AcceptanceMode.RESTAURANT_APPROVAL,
+                        ApprovalChannel.NONE,
+                        300,
+                        ApprovalTimeoutAction.AUTO_REJECT,
+                        false,
+                        false))
+                .hasMessageContaining("Restaurant approval requires an approval channel");
+    }
+
+    /**
+     * ADR 0177 decision 3: an AUTO_CONFIRM policy may now carry the approval path an order an auto-accept
+     * gate holds back follows. What it may not do is carry one the held order cannot wait on, so the
+     * bounded timeout restaurant approval needs applies to it too.
+     */
+    @Test
+    void anAutoConfirmPolicyMayCarryAnApprovalPathWithATimeoutTheHeldOrderCanWaitOn() {
+        var withPath = new OrderAcceptancePolicy(
+                AcceptanceMode.AUTO_CONFIRM, ApprovalChannel.POS, 300, ApprovalTimeoutAction.AUTO_REJECT, false, false);
+        assertThat(withPath.hasApprovalPath()).isTrue();
+        assertThat(withPath.approvalTimeout()).isEqualTo(java.time.Duration.ofMinutes(5));
+
+        assertThatThrownBy(() -> new OrderAcceptancePolicy(
+                        AcceptanceMode.AUTO_CONFIRM,
+                        ApprovalChannel.POS,
+                        0,
+                        ApprovalTimeoutAction.AUTO_REJECT,
+                        false,
+                        false))
+                .as("a hold-back path that expires at once is no path")
+                .hasMessageContaining("between 30 seconds and 30 minutes");
+        assertThatThrownBy(() -> new OrderAcceptancePolicy(
+                        AcceptanceMode.AUTO_CONFIRM,
+                        ApprovalChannel.EITHER,
+                        1_801,
+                        ApprovalTimeoutAction.AUTO_CONFIRM,
+                        false,
+                        false))
+                .hasMessageContaining("between 30 seconds and 30 minutes");
+
+        var plain = OrderAcceptancePolicy.platformDefault();
+        assertThat(plain.hasApprovalPath())
+                .as("the platform default has nowhere to send a held order")
+                .isFalse();
+        assertThat(new OrderAcceptancePolicy(
+                                AcceptanceMode.AUTO_CONFIRM,
+                                ApprovalChannel.NONE,
+                                300,
+                                ApprovalTimeoutAction.AUTO_REJECT,
+                                false,
+                                false)
+                        .hasApprovalPath())
+                .isFalse();
     }
 
     @Test
