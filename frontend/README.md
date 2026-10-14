@@ -47,7 +47,7 @@ beside the code as `*.spec.ts` (`ng test --watch=false`). Angular 22.
 
 ## courier/
 
-The installable web app a courier carries on shift ([ADR 0179](../platform/docs/adr/not-started/0179-the-courier-client.md)):
+The installable web app a courier carries on shift ([ADR 0179](../platform/docs/adr/partial/0179-the-courier-client.md)):
 Keycloak Authorization Code with PKCE as a public client, tokens in memory, the shell, a Today
 screen fed by `GET /api/v1/courier/tenants/{tenantId}/me`, a profile with the language and sign
 out, ru / uz-Latn / en, and an installable service-worker shell. Shift, duty indicator, telemetry,

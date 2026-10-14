@@ -3,7 +3,9 @@
  * their token subject within the tenant (`courier` OpenAPI group, `CourierSelfController`).
  *
  * Hand-written like every app's DTOs here (the generated clients are not consumed yet); the
- * platform's endpoint test pins the same field names, so a rename on either side fails a build.
+ * platform's `CourierSelfEndpointTests` reads the same field names off the real HTTP answer, so a
+ * rename on either side fails a build. The telemetry cadence is not here: the platform returns it
+ * with the duty session and on every batch, where the sender needs it.
  */
 export type EngagementStatus =
   'PENDING_VERIFICATION' | 'ACTIVE' | 'SUSPENDED_COMPLIANCE' | 'SUSPENDED_OPERATIONAL' | 'ENDED';
@@ -42,12 +44,6 @@ export interface CourierOpenShift {
   readonly version: number;
 }
 
-/** What the telemetry sender must obey: the platform owns the cadence, the device does not choose it. */
-export interface CourierTelemetryTerms {
-  readonly batchCadenceSeconds: number;
-  readonly maximumBatchSize: number;
-}
-
 export interface CourierProfile {
   readonly courierId: string;
   /** The tenant's own label for this courier. Not a name: the legal name stays protected on the platform. */
@@ -56,5 +52,4 @@ export interface CourierProfile {
   readonly engagement: CourierEngagement | null;
   readonly branches: readonly CourierBranch[];
   readonly openShift: CourierOpenShift | null;
-  readonly telemetry: CourierTelemetryTerms;
 }

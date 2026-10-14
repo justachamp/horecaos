@@ -1,7 +1,7 @@
 # HorecaOS Courier
 
 The app a courier carries on shift. An installable web app (PWA) on the platform's design system,
-decided in [ADR 0179](../../platform/docs/adr/not-started/0179-the-courier-client.md): Angular on the
+decided in [ADR 0179](../../platform/docs/adr/partial/0179-the-courier-client.md): Angular on the
 same toolchain as the storefronts, Keycloak Authorization Code with PKCE as a **public** client,
 foreground location with a screen wake lock. No Flutter, no Telegram mini app.
 
@@ -27,10 +27,12 @@ request that started it.
 
 **Tokens are held in memory only** (AGENTS.md). Reloading the page loses them, and that is cheap:
 the route guard sends the browser back to the authorization endpoint and Keycloak answers with a
-new code at once, without a password prompt, while the SSO session lives. The client's session
-lifetimes are set for a shift by `platform/infra/keycloak/create-courier-login-client.sh`. The only
-thing kept across the redirect is the verifier/state/nonce of the login in flight, in
-`sessionStorage`, single-use.
+new code at once, without a password prompt, while the SSO session lives. That session is the
+realm's -- 30 minutes idle and 10 hours at most at the defaults; Keycloak refuses a client
+lifetime longer than the realm's -- and an app in the foreground on duty keeps it alive by
+refreshing, so a phone locked on a long break signs in again and a working shift does not (ADR
+0179 puts the choice of raising it with the owner). The only thing kept across the redirect is the
+verifier/state/nonce of the login in flight, in `sessionStorage`, single-use.
 
 ## Configuration
 
@@ -60,7 +62,8 @@ npm run lint && npm run lint:rules && npm run format:check && npm run check:toke
 
 Against a local stack (`make up` in `platform/`), create the Keycloak client once with
 `platform/infra/keycloak/create-courier-login-client.sh`, then sign in as a courier account
-provisioned from the operations console.
+provisioned from the operations console (the account has no password until Keycloak's own flow
+sets one).
 
 ## Design system and languages
 

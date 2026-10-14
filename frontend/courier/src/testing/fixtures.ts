@@ -50,7 +50,6 @@ export function courierProfile(overrides: Partial<CourierProfile> = {}): Courier
       openedAt: '2026-10-14T04:30:00Z',
       version: 1,
     },
-    telemetry: { batchCadenceSeconds: 10, maximumBatchSize: 60 },
     ...overrides,
   };
 }

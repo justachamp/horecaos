@@ -23,8 +23,10 @@ export const REFRESH_SKEW_MS = 30_000;
  * operating system discarding a backgrounded tab, loses them -- and that is cheap, because the
  * Keycloak session cookie outlives the page: the route guard sends the browser back to the
  * authorization endpoint and the identity provider answers at once with a new code, with no
- * password prompt, until the SSO session itself ends. The client's session lifetimes are set for a
- * shift (see `create-courier-login-client.sh`), so that is a working day rather than half an hour.
+ * password prompt, until the SSO session itself ends. That session is the realm's (30 minutes
+ * idle, 10 hours at most at the defaults; a client cannot lengthen it, see
+ * `create-courier-login-client.sh`), and an app in the foreground on duty keeps it alive by
+ * refreshing, so a phone locked on a long break signs in again and a working shift does not.
  *
  * Renewal is single-flight: a screen firing three requests as the token lapses causes one refresh,
  * not three, which matters because a refresh token is rotated and the second use of a spent one
