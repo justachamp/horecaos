@@ -70,6 +70,7 @@ import {
 import { BasketLineView, NewOrderBasket } from './new-order-basket';
 import { NewOrderHeader } from './new-order-header';
 import { NewOrderMenuGrid } from './new-order-menu-grid';
+import { NO_REDEMPTION, NewOrderPoints, PointsAsk, RedemptionSelection } from './new-order-points';
 import {
   BasketLine,
   basketFactsFor,
@@ -252,6 +253,7 @@ interface PendingComboSelection {
     NewOrderBasket,
     NewOrderHeader,
     NewOrderMenuGrid,
+    NewOrderPoints,
     CustomerAddressEditor,
     MapPin,
   ],
@@ -1270,6 +1272,20 @@ export class NewOrderPage implements OnInit {
   protected readonly serverQuote = signal<OrderQuote | null>(null);
 
   /**
+   * X.1 (ADR 0185): the request the current server price answered, and where it was sent -- what the points
+   * control asks about. Null while there is no current price, so the control waits for it rather than offering
+   * points against a figure that has since moved.
+   */
+  protected readonly pointsAsk = signal<PointsAsk | null>(null);
+
+  /** What the points control says is being spent. Nothing, until the operator and the server agree on an amount. */
+  protected readonly redemption = signal<RedemptionSelection>(NO_REDEMPTION);
+
+  protected onRedemptionChanged(selection: RedemptionSelection): void {
+    this.redemption.set(selection);
+  }
+
+  /**
    * ADR 0158: the rules whose lines the operator took off. Each is remembered with what the quote said about
    * it, so a declined line can be shown and put back after the next quote no longer carries it.
    */
@@ -1320,7 +1336,11 @@ export class NewOrderPage implements OnInit {
 
   /** What the order would cost the customer, for «Сдача»: the server's figure, the menu sum until it arrives. */
   private readonly changeBaseMinor = computed(
-    () => this.serverQuote()?.totalMinor ?? this.total().subtotalMinor,
+    () =>
+      // Points the server has accepted are not cash: the customer hands over what is left (ADR 0185).
+      this.redemption().cashToCollectMinor ??
+      this.serverQuote()?.totalMinor ??
+      this.total().subtotalMinor,
   );
 
   /** The zone will not price this delivery at all (outside every zone, no tariff, past its reach). */
@@ -1512,6 +1532,7 @@ export class NewOrderPage implements OnInit {
       const sequence = this.quoteSequence;
       untracked(() => {
         this.serverQuote.set(null);
+        this.pointsAsk.set(null);
         this.quoteRefusal.set(null);
       });
       if (this.quoteTimer !== null) {
@@ -1634,6 +1655,7 @@ export class NewOrderPage implements OnInit {
       const quote = await this.api.quote(placeAtScope, request);
       if (sequence === this.quoteSequence) {
         this.serverQuote.set(quote);
+        this.pointsAsk.set({ scope: placeAtScope, request });
       }
     } catch (error) {
       if (sequence !== this.quoteSequence) {
@@ -1900,6 +1922,9 @@ export class NewOrderPage implements OnInit {
       (!this.isBranchOverride() ||
         (this.overrideReasonCode() !== null &&
           (!this.overrideReasonRequiresNote() || this.overrideNote().trim() !== ''))) &&
+      // X.1: points are sent only once the server has accepted this amount against this price and the
+      // operator has said the customer agreed (see `RedemptionSelection.ready`).
+      this.redemption().ready &&
       !this.submitting(),
   );
 
@@ -1977,6 +2002,8 @@ export class NewOrderPage implements OnInit {
     const override = place && this.isBranchOverride();
     const requestedForDate = place ? this.requestedForDate() : null;
     const tendered = this.cashTenderedMinor();
+    const redemption = this.redemption();
+    const spendsPoints = place && redemption.requestedMinor > 0 && redemption.ready;
     return {
       customerAccountId: customer.accountId,
       channelCode: this.channelCode(),
@@ -2000,6 +2027,11 @@ export class NewOrderPage implements OnInit {
       ...(this.declinedAutoAdd().size > 0
         ? { declinedAutoAddRuleIds: [...this.declinedAutoAdd().keys()] }
         : {}),
+      // X.1 (ADR 0046, ADR 0185): the points the customer pays part of the order with. A price does not
+      // depend on them, so a quote carries none; the order carries them with the operator's attestation,
+      // and the platform debits them inside the transaction that creates the order.
+      redeemFromBalanceMinor: spendsPoints ? redemption.requestedMinor : null,
+      operatorAttestsCustomerAgreement: spendsPoints ? true : null,
     };
   }
 

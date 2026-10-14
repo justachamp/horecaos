@@ -714,6 +714,12 @@
             </p>
           }
 
+          <q-new-order-points
+            [customerAccountId]="selectedCustomer()?.accountId ?? null"
+            [ask]="pointsAsk()"
+            (selectionChange)="onRedemptionChanged($event)"
+          />
+
           @if (paymentMethodCode() === 'CASH') {
             <label class="new-order__field">
               <span class="q-caption">{{ 'orders.newOrder.order.cashTendered' | t }}</span>

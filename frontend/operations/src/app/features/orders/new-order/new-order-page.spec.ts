@@ -20,9 +20,11 @@ import {
   BranchOverrideReason,
   CustomerLookupCandidate,
   NewOrderApi,
+  OperatorRedemptionOffer,
   OrderQuote,
   PlaceOrderResult,
   QuotedAutoAddLine,
+  RedemptionOffer,
   StorefrontMenu,
 } from './new-order-api';
 import { NewOrderPage } from './new-order-page';
@@ -252,6 +254,7 @@ describe('NewOrderPage', () => {
     searchItems: ReturnType<typeof vi.fn>;
     placeOrder: ReturnType<typeof vi.fn>;
     quote: ReturnType<typeof vi.fn>;
+    redemptionOffer: ReturnType<typeof vi.fn>;
     deliveryFeeQuote: ReturnType<typeof vi.fn>;
     resolveBranches: ReturnType<typeof vi.fn>;
     branchOverrideReasons: ReturnType<typeof vi.fn>;
@@ -306,6 +309,22 @@ describe('NewOrderPage', () => {
       // Row 1.3e: no server price unless a test supplies one -- the screen then falls back to
       // the menu arithmetic it always had, which is what every case that predates the quote asserts.
       quote: vi.fn().mockRejectedValue(new Error('no quote in this test')),
+      // X.1: a brand that does not redeem points unless a test says otherwise -- the control then is not there.
+      redemptionOffer: vi.fn().mockResolvedValue({
+        customerAccountId: 'acct-1',
+        orderTotal: { amountMinor: 0, currency: 'UZS' },
+        deliveryFee: { amountMinor: 0, currency: 'UZS' },
+        offer: {
+          accountId: null,
+          available: { amountMinor: 0, currency: 'UZS' },
+          maximum: { amountMinor: 0, currency: 'UZS' },
+          redeemable: false,
+          refusal: 'REDEMPTION_NOT_ENABLED',
+        },
+        requested: null,
+        requestedRefusal: null,
+        cashToCollect: null,
+      } satisfies OperatorRedemptionOffer),
       deliveryFeeQuote: vi
         .fn()
         .mockResolvedValue({ available: true, feeMinor: 15_000, reasonCode: null }),
@@ -3137,6 +3156,295 @@ describe('NewOrderPage', () => {
         quote.mock.calls[2][1].declinedAutoAddRuleIds,
         'putting it back stops declining it',
       ).toBeUndefined();
+    });
+
+    // ---------------------------------------------- X.1: paying part of the order with points (ADR 0185)
+
+    describe('paying part of the order with points', () => {
+      const POINTS_DEBOUNCE_MS = 250;
+
+      /** The server's answer for a 25 000 order, a customer with 40 000 points and a 20 000 cap. */
+      function offerOf(
+        requestedMinor: number | null = null,
+        offer: Partial<RedemptionOffer> = {},
+      ): OperatorRedemptionOffer {
+        const maximum = offer.maximum?.amountMinor ?? 20_000;
+        const exceeds = requestedMinor !== null && requestedMinor > maximum;
+        return {
+          customerAccountId: 'acct-1',
+          orderTotal: { amountMinor: 25_000, currency: 'UZS' },
+          deliveryFee: { amountMinor: 0, currency: 'UZS' },
+          offer: {
+            accountId: 'pa-1',
+            available: { amountMinor: 40_000, currency: 'UZS' },
+            maximum: { amountMinor: maximum, currency: 'UZS' },
+            redeemable: maximum > 0,
+            refusal: null,
+            ...offer,
+          },
+          requested:
+            requestedMinor === null ? null : { amountMinor: requestedMinor, currency: 'UZS' },
+          requestedRefusal: exceeds ? 'EXCEEDS_MAXIMUM' : null,
+          cashToCollect:
+            requestedMinor === null
+              ? { amountMinor: 25_000, currency: 'UZS' }
+              : exceeds
+                ? null
+                : { amountMinor: 25_000 - requestedMinor, currency: 'UZS' },
+        };
+      }
+
+      /** An offer API that answers like the server does: the figures follow the amount asked for. */
+      function offerApi(offer: Partial<RedemptionOffer> = {}) {
+        return vi
+          .fn()
+          .mockImplementation(
+            async (_scope: unknown, request: { redeemFromBalanceMinor?: number | null }) =>
+              offerOf(request.redeemFromBalanceMinor ?? null, offer),
+          );
+      }
+
+      async function afterThePointsDebounce(): Promise<void> {
+        await new Promise<void>((resolve) => setTimeout(resolve, POINTS_DEBOUNCE_MS + 80));
+        await flushMicrotasks();
+        fixture.detectChanges();
+      }
+
+      /** The basket is priced, and the points have been asked about. */
+      async function pricedBasket(): Promise<void> {
+        await startBasket();
+        await afterTheDebounce();
+        await afterThePointsDebounce();
+      }
+
+      function typePoints(amount: string): void {
+        const field = (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="new-order-points-amount"] input',
+        ) as HTMLInputElement;
+        field.value = amount;
+        field.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+      }
+
+      function agree(): void {
+        const box = (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="new-order-points-agreed"]',
+        ) as HTMLInputElement;
+        box.checked = true;
+        box.dispatchEvent(new Event('change'));
+        fixture.detectChanges();
+      }
+
+      function present(testId: string): boolean {
+        return (
+          (fixture.nativeElement as HTMLElement).querySelector(`[data-testid="${testId}"]`) !== null
+        );
+      }
+
+      const placed: PlaceOrderResult = {
+        orderId: 'order-1',
+        publicOrderNumber: '#0001',
+        status: 'CONFIRMED',
+        version: 1,
+        outcome: 'PLACED',
+        warnings: [],
+      };
+
+      it('asks only once the server has priced the basket, with the body the quote was asked with, and shows what may be spent', async () => {
+        const redemptionOffer = offerApi();
+        await render({ quote: vi.fn().mockResolvedValue(quoteOf()), redemptionOffer });
+        await startBasket();
+        await new Promise<void>((resolve) => setTimeout(resolve, 100));
+        expect(
+          redemptionOffer,
+          'no server price yet, so nothing to offer against',
+        ).not.toHaveBeenCalled();
+
+        await afterTheDebounce();
+        await afterThePointsDebounce();
+
+        expect(redemptionOffer).toHaveBeenCalledTimes(1);
+        const [scope, request] = redemptionOffer.mock.calls[0];
+        expect(scope).toEqual(SCOPE);
+        expect(request).toMatchObject({
+          customerAccountId: 'acct-1',
+          fulfillmentMode: 'PICKUP',
+          lines: [{ variantId: 'v-1', quantity: 1 }],
+        });
+        expect(request.redeemFromBalanceMinor, 'nothing typed yet').toBeNull();
+        expect(text('new-order-points-available')).toMatch(/40[\s,.  ]?000/);
+        expect(text('new-order-points-maximum')).toMatch(/20[\s,.  ]?000/);
+      });
+
+      it('shows nothing at all when the brand does not redeem points', async () => {
+        await render({
+          quote: vi.fn().mockResolvedValue(quoteOf()),
+          redemptionOffer: offerApi({
+            maximum: { amountMinor: 0, currency: 'UZS' },
+            redeemable: false,
+            refusal: 'REDEMPTION_NOT_ENABLED',
+          }),
+        });
+        await pricedBasket();
+
+        expect(present('new-order-points')).toBe(false);
+      });
+
+      it('says why when the customer has points but cannot spend them on this order', async () => {
+        await render({
+          quote: vi.fn().mockResolvedValue(quoteOf()),
+          redemptionOffer: offerApi({
+            maximum: { amountMinor: 0, currency: 'UZS' },
+            redeemable: false,
+            refusal: 'CHANNEL_NOT_ELIGIBLE',
+          }),
+        });
+        await pricedBasket();
+
+        expect(text('new-order-points-refusal')).toMatch(
+          /cannot be spent on orders from this channel/,
+        );
+        expect(present('new-order-points-amount'), 'no amount to type when none is allowed').toBe(
+          false,
+        );
+      });
+
+      it('previews the cash to collect from the server’s answer, and «Сдача» is worked out against it', async () => {
+        const redemptionOffer = offerApi();
+        await render({ quote: vi.fn().mockResolvedValue(quoteOf()), redemptionOffer });
+        await pricedBasket();
+
+        typePoints('10 000');
+        await afterThePointsDebounce();
+
+        expect(redemptionOffer.mock.calls.at(-1)![1].redeemFromBalanceMinor).toBe(10_000);
+        agree();
+        expect(text('new-order-points-cash')).toMatch(/15[\s,.  ]?000/);
+
+        fixture.componentInstance['cashTenderedMinor'].set(20_000);
+        fixture.detectChanges();
+        expect(
+          text('new-order-change-due'),
+          'the customer owes 15 000 in cash, not the 25 000 total',
+        ).toMatch(/5[\s,.  ]?000/);
+      });
+
+      it('does not let «Создать» send points until the server has accepted the amount and the operator has said the customer agreed', async () => {
+        const placeOrder = vi.fn().mockResolvedValue(placed);
+        await render({
+          quote: vi.fn().mockResolvedValue(quoteOf()),
+          redemptionOffer: offerApi(),
+          placeOrder,
+        });
+        vi.spyOn(router, 'navigate').mockResolvedValue(true);
+        await pricedBasket();
+
+        typePoints('10 000');
+        expect(
+          fixture.componentInstance['canSubmit'](),
+          'the server has not seen this amount yet',
+        ).toBe(false);
+        await afterThePointsDebounce();
+        expect(
+          fixture.componentInstance['canSubmit'](),
+          'accepted, but nobody has said the customer agreed',
+        ).toBe(false);
+        await fixture.componentInstance['submit']();
+        expect(placeOrder).not.toHaveBeenCalled();
+
+        agree();
+        expect(fixture.componentInstance['canSubmit']()).toBe(true);
+        await fixture.componentInstance['submit']();
+
+        expect(placeOrder).toHaveBeenCalledTimes(1);
+        expect(placeOrder.mock.calls[0][1]).toMatchObject({
+          redeemFromBalanceMinor: 10_000,
+          operatorAttestsCustomerAgreement: true,
+        });
+      });
+
+      it('sends no redemption with an order that spends no points', async () => {
+        const placeOrder = vi.fn().mockResolvedValue(placed);
+        await render({
+          quote: vi.fn().mockResolvedValue(quoteOf()),
+          redemptionOffer: offerApi(),
+          placeOrder,
+        });
+        vi.spyOn(router, 'navigate').mockResolvedValue(true);
+        await pricedBasket();
+
+        await fixture.componentInstance['submit']();
+
+        expect(placeOrder).toHaveBeenCalledTimes(1);
+        const request = placeOrder.mock.calls[0][1];
+        expect(request.redeemFromBalanceMinor).toBeNull();
+        expect(request.operatorAttestsCustomerAgreement).toBeNull();
+      });
+
+      it('names an amount above the maximum and keeps «Создать» from sending it', async () => {
+        await render({ quote: vi.fn().mockResolvedValue(quoteOf()), redemptionOffer: offerApi() });
+        await pricedBasket();
+
+        typePoints('30 000');
+        await afterThePointsDebounce();
+        agree();
+
+        expect(text('new-order-points-exceeds')).toMatch(/More than this order allows/);
+        expect(present('new-order-points-cash')).toBe(false);
+        expect(fixture.componentInstance['canSubmit']()).toBe(false);
+      });
+
+      it('asks to be agreed again when the amount changes', async () => {
+        await render({ quote: vi.fn().mockResolvedValue(quoteOf()), redemptionOffer: offerApi() });
+        await pricedBasket();
+        typePoints('10 000');
+        await afterThePointsDebounce();
+        agree();
+        expect(fixture.componentInstance['canSubmit']()).toBe(true);
+
+        typePoints('12 000');
+        await afterThePointsDebounce();
+
+        expect(
+          fixture.componentInstance['canSubmit'](),
+          'the customer agreed to 10 000, not to 12 000',
+        ).toBe(false);
+      });
+
+      it('holds «Создать» while a changed price is being re-asked, then lets it through on the new answer', async () => {
+        await render({ quote: vi.fn().mockResolvedValue(quoteOf()), redemptionOffer: offerApi() });
+        await pricedBasket();
+        typePoints('10 000');
+        await afterThePointsDebounce();
+        agree();
+        expect(fixture.componentInstance['canSubmit']()).toBe(true);
+
+        fixture.componentInstance['promoCode'].set('WELCOME');
+        fixture.detectChanges();
+        expect(
+          fixture.componentInstance['canSubmit'](),
+          'the price the amount was accepted against is gone',
+        ).toBe(false);
+
+        await afterTheDebounce();
+        await afterThePointsDebounce();
+        expect(fixture.componentInstance['canSubmit']()).toBe(true);
+      });
+
+      it('lets an order be placed without points when the points cannot be checked', async () => {
+        const placeOrder = vi.fn().mockResolvedValue(placed);
+        await render({
+          quote: vi.fn().mockResolvedValue(quoteOf()),
+          redemptionOffer: vi.fn().mockRejectedValue(new Error('offline')),
+          placeOrder,
+        });
+        vi.spyOn(router, 'navigate').mockResolvedValue(true);
+        await pricedBasket();
+
+        expect(present('new-order-points'), 'nothing typed, nothing to explain').toBe(false);
+        await fixture.componentInstance['submit']();
+        expect(placeOrder).toHaveBeenCalledTimes(1);
+      });
     });
   });
 });
