@@ -18,6 +18,7 @@ import { TPipe } from '../../../core/i18n/t.pipe';
 import { InlineAlert } from '../inline-alert';
 import {
   LatLng,
+  LineTone,
   MAP_PROVIDER,
   MapBounds,
   MapHandle,
@@ -26,6 +27,7 @@ import {
   PinHandle,
   PinTone,
   PolygonHandle,
+  PolylineHandle,
 } from './map-provider';
 
 /** A read-only pin, for a position that is shown and never edited: a courier, an order, a branch. */
@@ -53,6 +55,22 @@ export interface MapArea {
 }
 
 /**
+ * A read-only line between points: a leg of the dispatch board (branch to courier, courier to door).
+ * Always straight and always labelled as such by the screen that draws it; the canvas draws what it
+ * is given and has no road to follow.
+ */
+export interface MapLine {
+  readonly id: string;
+  /** Two or more points, in order. */
+  readonly path: readonly LatLng[];
+  /** Already translated, or tenant data; shown when the line is hovered. */
+  readonly label?: string;
+  readonly tone?: LineTone;
+  /** Dashes say "straight line, not the road". */
+  readonly dashed?: boolean;
+}
+
+/**
  * The map surface (ADR 0145 decision 1, row `X.4`): one place that asks the provider-neutral
  * {@link MapProvider} for a map and tells a screen honestly when it cannot have one.
  *
@@ -68,8 +86,9 @@ export interface MapArea {
  * map, and a person who cannot use a pointer can still place a pin (ADR 0145, negative
  * consequences; the accessibility rule that a drag must have a keyboard equivalent).
  *
- * It owns only the surface and two kinds of display-only overlay, {@link markers} and
- * {@link areas}, which cover the live courier map, today's orders and the zone-density view.
+ * It owns only the surface and three kinds of display-only overlay, {@link markers}, {@link areas}
+ * and {@link lines}, which cover the live courier map, today's orders, the zone-density view and
+ * the dispatch board's legs.
  * Anything a person edits is an editor's business (`q-map-pin`, `q-polygon-editor`,
  * `q-bbox-editor`), reached through {@link ready}, which hands over the live {@link MapHandle}.
  */
@@ -91,6 +110,7 @@ export class MapCanvas {
   readonly fitTo = input<MapBounds | null>(null);
   readonly markers = input<readonly MapMarker[]>([]);
   readonly areas = input<readonly MapArea[]>([]);
+  readonly lines = input<readonly MapLine[]>([]);
   /** The accessible name of the map region. */
   readonly label = input<string | null>(null);
   readonly height = input(360);
@@ -126,6 +146,7 @@ export class MapCanvas {
   private stopClicks: (() => void) | null = null;
   private readonly pins = new Map<string, PinHandle>();
   private readonly outlines = new Map<string, PolygonHandle>();
+  private readonly strokes = new Map<string, PolylineHandle>();
 
   constructor() {
     afterNextRender(() => void this.start());
@@ -155,6 +176,13 @@ export class MapCanvas {
       const map = this.handle();
       if (map) {
         this.syncAreas(map, this.areas());
+      }
+    });
+
+    effect(() => {
+      const map = this.handle();
+      if (map) {
+        this.syncLines(map, this.lines());
       }
     });
   }
@@ -245,6 +273,40 @@ export class MapCanvas {
             editable: false,
             intensity: area.intensity,
             label: area.label,
+          }),
+        );
+      }
+    }
+  }
+
+  /** Keyed like the pins, so a leg whose courier moved is one line redrawn, not torn down and rebuilt. */
+  private syncLines(map: MapHandle, lines: readonly MapLine[]): void {
+    // A line needs two points; anything shorter is not a line and is not drawn.
+    const drawable = lines.filter((line) => line.path.length >= 2);
+    const wanted = new Set(drawable.map((line) => line.id));
+    for (const [id, stroke] of this.strokes) {
+      if (!wanted.has(id)) {
+        stroke.remove();
+        this.strokes.delete(id);
+      }
+    }
+    for (const line of drawable) {
+      const existing = this.strokes.get(line.id);
+      if (existing) {
+        existing.setPath(line.path);
+        existing.setLook({
+          label: line.label ?? '',
+          tone: line.tone ?? 'default',
+          dashed: line.dashed ?? false,
+        });
+      } else {
+        this.strokes.set(
+          line.id,
+          map.addPolyline({
+            path: line.path,
+            label: line.label,
+            tone: line.tone,
+            dashed: line.dashed,
           }),
         );
       }

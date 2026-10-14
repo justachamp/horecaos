@@ -2,6 +2,7 @@ import { Provider } from '@angular/core';
 
 import {
   LatLng,
+  LineTone,
   MAP_PROVIDER,
   MapBounds,
   MapHandle,
@@ -13,6 +14,8 @@ import {
   PolygonHandle,
   PolygonLook,
   PolygonOptions,
+  PolylineHandle,
+  PolylineOptions,
   RectangleHandle,
   RectangleOptions,
   Unsubscribe,
@@ -82,6 +85,7 @@ export class NullMap implements MapHandle {
   readonly pins: NullPin[] = [];
   readonly polygons: NullPolygon[] = [];
   readonly rectangles: NullRectangle[] = [];
+  readonly polylines: NullPolyline[] = [];
   readonly fitted: MapBounds[] = [];
   centre: LatLng;
   zoom: number;
@@ -110,6 +114,12 @@ export class NullMap implements MapHandle {
     const rectangle = new NullRectangle(options);
     this.rectangles.push(rectangle);
     return rectangle;
+  }
+
+  addPolyline(options: PolylineOptions): PolylineHandle {
+    const polyline = new NullPolyline(options);
+    this.polylines.push(polyline);
+    return polyline;
   }
 
   fitBounds(bounds: MapBounds): void {
@@ -148,6 +158,10 @@ export class NullMap implements MapHandle {
 
   get liveRectangles(): NullRectangle[] {
     return this.rectangles.filter((rectangle) => !rectangle.removed);
+  }
+
+  get livePolylines(): NullPolyline[] {
+    return this.polylines.filter((polyline) => !polyline.removed);
   }
 }
 
@@ -294,6 +308,45 @@ export class NullRectangle implements RectangleHandle {
     }
     this.bounds = bounds;
     [...this.listeners].forEach((listener) => listener(bounds));
+  }
+}
+
+export class NullPolyline implements PolylineHandle {
+  path: readonly LatLng[];
+  label: string | undefined;
+  tone: LineTone;
+  dashed: boolean;
+  removed = false;
+
+  constructor(options: PolylineOptions) {
+    this.path = options.path;
+    this.label = options.label;
+    this.tone = options.tone ?? 'default';
+    this.dashed = options.dashed ?? false;
+  }
+
+  setPath(path: readonly LatLng[]): void {
+    this.path = path;
+  }
+
+  setLook(look: {
+    readonly label?: string;
+    readonly tone?: LineTone;
+    readonly dashed?: boolean;
+  }): void {
+    if (look.label !== undefined) {
+      this.label = look.label;
+    }
+    if (look.tone !== undefined) {
+      this.tone = look.tone;
+    }
+    if (look.dashed !== undefined) {
+      this.dashed = look.dashed;
+    }
+  }
+
+  remove(): void {
+    this.removed = true;
   }
 }
 

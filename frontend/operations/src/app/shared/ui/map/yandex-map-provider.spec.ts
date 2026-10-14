@@ -125,6 +125,7 @@ function fakeYmaps(): { ymaps: Ymaps; maps: FakeMap[] } {
     },
     Placemark: FakeObject,
     Polygon: FakeObject,
+    Polyline: FakeObject,
     Rectangle: FakeObject,
   } as unknown as Ymaps;
   return { ymaps, maps };
@@ -326,6 +327,48 @@ describe('YandexMapProvider', () => {
         'startEditing',
         'stopEditing',
       ]);
+    });
+
+    it('draws a line from its points in the vendor’s order, with the tone’s colour and a dash when asked', () => {
+      const plain = handle.addPolyline({ path: [at(41.3, 69.2), at(41.31, 69.21)] });
+      const dashed = handle.addPolyline({
+        path: [at(41.3, 69.2), at(41.4, 69.3), at(41.5, 69.4)],
+        label: 'Branch to courier',
+        tone: 'courier',
+        dashed: true,
+      });
+      const [plainObject, dashedObject] = maps[0].added;
+
+      expect(plainObject.geometry.getCoordinates()).toEqual([
+        [41.3, 69.2],
+        [41.31, 69.21],
+      ]);
+      expect(plainObject.initialOptions?.['strokeStyle']).toBe('solid');
+      expect(dashedObject.geometry.getCoordinates()).toEqual([
+        [41.3, 69.2],
+        [41.4, 69.3],
+        [41.5, 69.4],
+      ]);
+      expect(dashedObject.initialProperties?.['hintContent']).toBe('Branch to courier');
+      expect(dashedObject.initialOptions?.['strokeStyle']).toBe('dash');
+      expect(dashedObject.initialOptions?.['strokeColor']).not.toBe(
+        plainObject.initialOptions?.['strokeColor'],
+      );
+
+      plain.setPath([at(41.3, 69.2), at(41.35, 69.25)]);
+      plain.setLook({ label: 'Courier to door', tone: 'order', dashed: true });
+      expect(plainObject.geometry.getCoordinates()).toEqual([
+        [41.3, 69.2],
+        [41.35, 69.25],
+      ]);
+      expect(plainObject.hint.values.get('hintContent')).toBe('Courier to door');
+      expect(plainObject.options.values.get('strokeStyle')).toBe('dash');
+      expect(plainObject.options.values.get('strokeColor')).not.toBe(
+        dashedObject.initialOptions?.['strokeColor'],
+      );
+
+      dashed.remove();
+      expect(maps[0].removed).toEqual([dashedObject]);
     });
 
     it('reports a rectangle as south-west then north-east however the vendor leaves its corners', () => {
