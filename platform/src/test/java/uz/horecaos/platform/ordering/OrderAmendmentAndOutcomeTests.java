@@ -3651,6 +3651,27 @@ class OrderAmendmentAndOutcomeTests {
     }
 
     @Test
+    @DisplayName(
+            "a compensating override says nothing: the customer is not told twice, and not told falsely (ADR 0184)")
+    void aCompensatingOverridePublishesNoMilestone() {
+        UUID reasonId = operatorErrorReason();
+        UUID orderId = seedFulfillingOrder("idem-quiet-override");
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+        published.events.clear();
+
+        tx(() -> outcomes.override(
+                TENANT,
+                orderId,
+                OrderStatus.READY,
+                version,
+                new OrderOutcomeService.OverrideCommand(reasonId, "USER", "sharif", null)));
+
+        assertThat(published.events)
+                .as("FULFILLING back to READY is a correction through override(), not a forward edge")
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("overriding FULFILLING back to READY is refused once the branch has since filled up, "
             + "and leaves the order exactly as it was")
     void overridingFulfillingToReadyRefusesWhenTheBranchIsAtCapacity() {

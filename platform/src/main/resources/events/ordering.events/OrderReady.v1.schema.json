@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.horecaos.uz/events/ordering.events/OrderReady.v1.schema.json",
+  "title": "OrderReady v1 payload",
+  "description": "The food is ready (ADR 0019 READY, entered from PREPARING). For a pickup order, the moment the customer is told to come for it; for delivery it means waiting for a courier, which ADR 0045 does not message. Forward edge only: restoring READY from FULFILLING is a compensating correction (ADR 0110) and publishes nothing. Carries no customer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "orderId",
+    "fulfillmentMode",
+    "readyAt",
+    "status",
+    "orderVersion"
+  ],
+  "properties": {
+    "orderId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "brandId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "locationId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "fulfillmentMode": {
+      "type": "string",
+      "enum": [
+        "DELIVERY",
+        "PICKUP",
+        "DINE_IN"
+      ]
+    },
+    "readyAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "READY"
+      ]
+    },
+    "orderVersion": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

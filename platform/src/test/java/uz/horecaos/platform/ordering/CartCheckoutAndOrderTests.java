@@ -7149,16 +7149,34 @@ class CartCheckoutAndOrderTests {
     }
 
     @Test
-    @DisplayName("a completed order publishes OrderCompleted, and the three non-terminal steps still publish nothing")
+    @DisplayName("each kitchen step publishes its own fact, and a completion publishes OrderCompleted (ADR 0184)")
     void completionPublishesItsOwnEvent() {
         UUID order = orderIdOf(placeOrder("idem-completed-event"));
         published.clear();
 
         advance(order, OrderStatus.PREPARING);
         advance(order, OrderStatus.READY);
+        // PREPARING and READY had no reader until ADR 0184: ADR 0045 tells the customer each milestone, and
+        // notifications cannot trigger a message from a row in a history table.
         assertThat(published.ordering())
-                .as("PREPARING and READY still have no reader, and this comment's own reason still holds")
-                .isEmpty();
+                .extracting(OrderingEvent::eventType)
+                .containsExactly("OrderPreparing", "OrderReady");
+        assertThat(published.ordering().get(0))
+                .isInstanceOfSatisfying(uz.horecaos.platform.ordering.api.OrderPreparing.class, preparing -> {
+                    assertThat(preparing.orderId()).isEqualTo(order);
+                    assertThat(preparing.tenantId().value()).isEqualTo(TENANT);
+                    assertThat(preparing.fulfillmentMode()).isEqualTo("PICKUP");
+                    assertThat(preparing.preparingAt()).isEqualTo(clock.instant());
+                    assertThat(preparing.payload().toString())
+                            .as("no customer on a milestone: ADR 0029 keeps personal data off every topic")
+                            .doesNotContain(CUSTOMER.toString());
+                });
+        assertThat(published.ordering().get(1))
+                .isInstanceOfSatisfying(uz.horecaos.platform.ordering.api.OrderReady.class, ready -> {
+                    assertThat(ready.fulfillmentMode()).isEqualTo("PICKUP");
+                    assertThat(ready.orderVersion()).isGreaterThan(1);
+                });
+        published.clear();
 
         advance(order, OrderStatus.COMPLETED);
 
@@ -7172,6 +7190,29 @@ class CartCheckoutAndOrderTests {
                     // of every payload, and a rating prompt resolves the chat from
                     // the order id through an authorized call.
                     assertThat(completed.payload().toString()).doesNotContain(CUSTOMER.toString());
+                });
+    }
+
+    @Test
+    @DisplayName("a delivery order publishes OrderFulfilling at the handover, and no completion yet (ADR 0184)")
+    void aDeliveryHandoverPublishesFulfilling() {
+        UUID order = orderIdOf(placeDeliveryOrder("idem-fulfilling-event"));
+        published.clear();
+
+        advance(order, OrderStatus.PREPARING);
+        advance(order, OrderStatus.READY);
+        advance(order, OrderStatus.FULFILLING);
+
+        assertThat(published.ordering())
+                .extracting(OrderingEvent::eventType)
+                .containsExactly("OrderPreparing", "OrderReady", "OrderFulfilling");
+        assertThat(published.ordering().get(2))
+                .isInstanceOfSatisfying(uz.horecaos.platform.ordering.api.OrderFulfilling.class, fulfilling -> {
+                    assertThat(fulfilling.fulfillmentMode()).isEqualTo("DELIVERY");
+                    assertThat(fulfilling.handedOverAt()).isEqualTo(clock.instant());
+                    assertThat(fulfilling.payload().toString())
+                            .as("no courier and no customer on the fact: the consumer resolves the first name itself")
+                            .doesNotContain(CUSTOMER.toString());
                 });
     }
 

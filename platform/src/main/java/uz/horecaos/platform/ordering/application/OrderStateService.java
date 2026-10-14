@@ -28,7 +28,10 @@ import uz.horecaos.platform.ordering.api.OrderCapturedAfterLapse;
 import uz.horecaos.platform.ordering.api.OrderCompleted;
 import uz.horecaos.platform.ordering.api.OrderConfirmed;
 import uz.horecaos.platform.ordering.api.OrderExpired;
+import uz.horecaos.platform.ordering.api.OrderFulfilling;
 import uz.horecaos.platform.ordering.api.OrderPaymentLapsed;
+import uz.horecaos.platform.ordering.api.OrderPreparing;
+import uz.horecaos.platform.ordering.api.OrderReady;
 import uz.horecaos.platform.ordering.api.OrderRejected;
 import uz.horecaos.platform.ordering.api.OrderSettlementPort;
 import uz.horecaos.platform.ordering.domain.AcceptanceMode;
@@ -1713,12 +1716,49 @@ public class OrderStateService {
                         order.currency(),
                         order.totalMinor(),
                         version));
+            // ADR 0184. PREPARING, READY and FULFILLING were unpublished for as long as nothing
+            // outside ordering read them, and COMPLETED left that list when ADR 0075's rating
+            // prompt became its reader. These three have one now: ADR 0045 tells the customer each
+            // milestone as an ADR 0020 message, and notifications cannot trigger one from a row in
+            // the state history. Only the forward edges reach this method; a compensating edge
+            // (ADR 0110) goes through override() and is deliberately silent.
+            case PREPARING ->
+                events.publishEvent(new OrderPreparing(
+                        UUID.randomUUID(),
+                        tenant,
+                        order.orderId(),
+                        now,
+                        order.brandId(),
+                        order.locationId(),
+                        order.fulfillmentMode().name(),
+                        now,
+                        version));
+            case READY ->
+                events.publishEvent(new OrderReady(
+                        UUID.randomUUID(),
+                        tenant,
+                        order.orderId(),
+                        now,
+                        order.brandId(),
+                        order.locationId(),
+                        order.fulfillmentMode().name(),
+                        now,
+                        version));
+            case FULFILLING ->
+                events.publishEvent(new OrderFulfilling(
+                        UUID.randomUUID(),
+                        tenant,
+                        order.orderId(),
+                        now,
+                        order.brandId(),
+                        order.locationId(),
+                        order.fulfillmentMode().name(),
+                        now,
+                        version));
             default -> {
-                // PREPARING, READY and FULFILLING still have no external consumer,
-                // and stay unpublished for the reason this comment always gave.
-                // COMPLETED left the list when ADR 0075's rating prompt became its
-                // reader: a prompt has to know an order finished, and ADR 0071
-                // accepts a review only once it has.
+                // Every other status is either pre-confirmation machinery that has its own
+                // events (RECEIVED, AWAITING_APPROVAL) or a payment state that is not an order
+                // milestone a consumer reads (PAYMENT_AUTHORIZING).
             }
         }
     }

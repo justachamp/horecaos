@@ -139,6 +139,9 @@ holds organization and subject identifiers and applied configuration.
 | `OrderExpired` | 1 | `orderId` | [`OrderExpired.v1`](../../src/main/resources/events/ordering.events/OrderExpired.v1.schema.json) | `orderId`, brand/location, approval deadline, status, version |
 | `OrderPaymentLapsed` | 1 | `orderId` | [`OrderPaymentLapsed.v1`](../../src/main/resources/events/ordering.events/OrderPaymentLapsed.v1.schema.json) | `orderId`, brand/location, the lapsed window in minutes, status, version |
 | `OrderCancelled` | 1 | `orderId` | [`OrderCancelled.v1`](../../src/main/resources/events/ordering.events/OrderCancelled.v1.schema.json) | `orderId`, brand/location, cancelling actor type, reason code, previous status, status, version |
+| `OrderPreparing` | 1 | `orderId` | [`OrderPreparing.v1`](../../src/main/resources/events/ordering.events/OrderPreparing.v1.schema.json) | `orderId`, brand/location, fulfilment mode, preparing-at, status, version |
+| `OrderReady` | 1 | `orderId` | [`OrderReady.v1`](../../src/main/resources/events/ordering.events/OrderReady.v1.schema.json) | `orderId`, brand/location, fulfilment mode, ready-at, status, version |
+| `OrderFulfilling` | 1 | `orderId` | [`OrderFulfilling.v1`](../../src/main/resources/events/ordering.events/OrderFulfilling.v1.schema.json) | `orderId`, brand/location, fulfilment mode, handed-over-at, status, version |
 | `OrderCompleted` | 1 | `orderId` | [`OrderCompleted.v1`](../../src/main/resources/events/ordering.events/OrderCompleted.v1.schema.json) | `orderId`, brand/location, completed-at, currency, total, version |
 | `OrderAmendmentProposed` | 1 | `orderId` | [`OrderAmendmentProposed.v1`](../../src/main/resources/events/ordering.events/OrderAmendmentProposed.v1.schema.json) | `orderId`, brand/location, `amendmentId`, base revision, command types, amendment status, order version |
 | `OrderAmendmentApplied` | 1 | `orderId` | [`OrderAmendmentApplied.v1`](../../src/main/resources/events/ordering.events/OrderAmendmentApplied.v1.schema.json) | `orderId`, brand/location, `amendmentId`, applied revision, command types, delta total, order version |
@@ -172,17 +175,29 @@ window that elapsed and nothing about the money.
 `OrderCancelled` never follows `OrderConfirmed` in this release: cancellation
 after confirmation is ADR 0039's and the application refuses it.
 
-`PREPARING`, `READY` and `FULFILLING` transitions are recorded in
-`ordering.order_state_history` and have no event. They will get one when
-something reads it — ADR 0014 delivery or ADR 0020 notifications — rather than
-being published now to a catalogue with no consumer.
+`PREPARING`, `READY` and `FULFILLING` transitions were recorded in
+`ordering.order_state_history` and had no event, to be published when something
+read them. `COMPLETED` left that list when ADR 0075 became its reader: a rating
+prompt has to know an order finished, and ADR 0071 accepts a review only once it
+has. The other three left it with ADR 0184: ADR 0045 tells a customer each
+milestone as an ADR 0020 message, and `notifications` cannot trigger a message
+from a history row. `OrderPreparing`, `OrderReady` and `OrderFulfilling` are
+published from the same place as the others (`OrderStateService`'s consequences
+of a forward transition), the same rule applied rather than an exception to it.
+Only a forward edge publishes: ADR 0110's compensating edges (`READY` back to
+`PREPARING`, `FULFILLING` back to `READY`) are corrections, go through
+`override`, and say nothing, because a customer told twice that the kitchen has
+started has been told something false the second time. The fulfilment mode is
+on all three so a consumer words a message, or declines one (a delivery order's
+`READY` is «waiting for a courier», which ADR 0045 does not message), without a
+second read. None carries the customer or the courier: who ordered is resolved
+through an authorized call, because ADR 0029 keeps personal data off every
+topic, and the courier's first name that «on the way» may carry is resolved by
+the consumer through its own port at the moment it renders and is stored
+nowhere.
 
-`COMPLETED` was on that list until ADR 0075 became its reader: a rating prompt
-has to know an order finished, and ADR 0071 accepts a review only once it has.
-So `OrderCompleted` is published and the other three are not, which is the same
-rule applied rather than an exception to it. It carries no customer — who
-ordered is resolved through an authorized call, because ADR 0029 keeps personal
-data off every topic and a prompt needs only the order id to find the chat.
+`OrderCompleted` carries no customer either — a prompt needs only the order id
+to find the chat.
 
 `OrderAmendmentProposed`, `OrderAmendmentApplied`, `OrderAmendmentRejected`,
 `OrderRevisionCreated`, `OrderCallbackRequested` and `OrderCallbackResolved`
