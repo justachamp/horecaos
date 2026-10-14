@@ -840,6 +840,12 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
   'delivery.liveMap.map.pinLabel': '{courier}: активных заказов — {orders}',
   'delivery.liveMap.map.hint':
     'Каждая точка — курьер, чья последняя позиция достаточно свежая и точная, чтобы её рисовать; контуры — действующие зоны доставки. Курьеры на смене без точки перечислены ниже с причиной и не ставятся на карту наугад.',
+  'delivery.liveMap.state.label': 'Состояние курьера',
+  'delivery.liveMap.state.ON_SHIFT': 'На смене',
+  'delivery.liveMap.state.CARRYING': 'Везёт заказ',
+  'delivery.liveMap.state.IDLE': 'Свободен',
+  'delivery.liveMap.state.NO_SIGNAL': 'Нет сигнала',
+  'delivery.liveMap.state.empty': 'Сейчас нет курьеров в этом состоянии',
   'delivery.orderPoints.show': 'Показать сегодняшние заказы на доставку на карте',
   'delivery.orderPoints.refresh': 'Открыть заново',
   'delivery.orderPoints.openOnly': 'Только заказы в работе',
@@ -860,4 +866,14 @@ export const deliveryRu: AreaMessages<typeof deliveryEn> = {
   'delivery.orderPoints.legend.closed': 'заказ завершён или отменён',
   'delivery.dispatch.map.show': 'Карта',
   'delivery.dispatch.map.hide': 'Скрыть карту',
+  'delivery.dispatch.legs.branchToDoor':
+    'Заказ {number}: от филиала до двери, пока его никто не везёт — прямая линия, не дорога',
+  'delivery.dispatch.legs.branchToCourier':
+    'Заказ {number}: от филиала до курьера {courier} — прямая линия, не дорога',
+  'delivery.dispatch.legs.courierToDoor':
+    'Заказ {number}: от курьера {courier} до двери — прямая линия, не дорога',
+  'delivery.dispatch.legs.road': ' · дорога по плану {km} км',
+  'delivery.dispatch.legs.roadCaption': 'Заказ {number}: дорога по плану {km} км',
+  'delivery.dispatch.legs.note':
+    'Пунктир — прямые линии между двумя точками, а не дорога. Зелёная: от филиала до текущей позиции курьера. Красная: от позиции курьера до двери, а пока заказ никто не везёт — от филиала до двери.',
 };

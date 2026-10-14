@@ -848,6 +848,12 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.liveMap.map.pinLabel': '{courier}: faol buyurtmalar — {orders}',
   'delivery.liveMap.map.hint':
     'Har bir nuqta — oxirgi joylashuvi chizish uchun yetarlicha yangi va aniq boʻlgan kuryer; konturlar — amaldagi yetkazib berish zonalari. Nuqtasiz kuryerlar sababi bilan quyida keltirilgan, ular taxminan xaritaga qoʻyilmaydi.',
+  'delivery.liveMap.state.label': 'Kuryer holati',
+  'delivery.liveMap.state.ON_SHIFT': 'Smenada',
+  'delivery.liveMap.state.CARRYING': 'Buyurtma olib ketmoqda',
+  'delivery.liveMap.state.IDLE': 'Boʻsh',
+  'delivery.liveMap.state.NO_SIGNAL': 'Signal yoʻq',
+  'delivery.liveMap.state.empty': 'Hozir bu holatda kuryer yoʻq',
   'delivery.orderPoints.show': 'Bugungi yetkazib berish buyurtmalarini xaritada koʻrsatish',
   'delivery.orderPoints.refresh': 'Qayta ochish',
   'delivery.orderPoints.openOnly': 'Faqat jarayondagi buyurtmalar',
@@ -868,4 +874,14 @@ export const deliveryUzLatn: AreaMessages<typeof deliveryEn> = {
   'delivery.orderPoints.legend.closed': 'yakunlangan yoki bekor qilingan buyurtma',
   'delivery.dispatch.map.show': 'Xarita',
   'delivery.dispatch.map.hide': 'Xaritani yashirish',
+  'delivery.dispatch.legs.branchToDoor':
+    'Buyurtma {number}: filialdan eshikkacha, hozircha uni hech kim olib ketmayapti — toʻgʻri chiziq, yoʻl emas',
+  'delivery.dispatch.legs.branchToCourier':
+    'Buyurtma {number}: filialdan {courier} kuryergacha — toʻgʻri chiziq, yoʻl emas',
+  'delivery.dispatch.legs.courierToDoor':
+    'Buyurtma {number}: {courier} kuryerdan eshikkacha — toʻgʻri chiziq, yoʻl emas',
+  'delivery.dispatch.legs.road': ' · rejadagi yoʻl {km} km',
+  'delivery.dispatch.legs.roadCaption': 'Buyurtma {number}: rejadagi yoʻl {km} km',
+  'delivery.dispatch.legs.note':
+    'Punktir chiziqlar — ikki nuqta orasidagi toʻgʻri chiziqlar, yoʻl emas. Yashil: filialdan kuryerning hozirgi joyigacha. Qizil: kuryerning joyidan eshikkacha, buyurtmani hech kim olib ketmayotgan paytda esa filialdan eshikkacha.',
 };

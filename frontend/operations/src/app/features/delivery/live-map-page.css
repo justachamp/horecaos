@@ -38,6 +38,34 @@
   font-size: var(--q-type-caption);
 }
 
+.live-map__states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 16px 0;
+}
+
+.live-map__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  border: 1px solid var(--q-hairline);
+  border-radius: var(--q-radius);
+  background: var(--q-canvas);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.live-map__state--on {
+  border-color: var(--q-primary);
+  color: var(--q-primary);
+}
+
+.live-map__stateCount {
+  color: var(--q-ink-subtle);
+}
+
 .live-map__error-band {
   padding: 8px 16px;
   background: var(--q-error-tint);

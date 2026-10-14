@@ -839,6 +839,12 @@ export const deliveryEn = {
   'delivery.liveMap.map.pinLabel': '{courier}: {orders} active orders',
   'delivery.liveMap.map.hint':
     'Each pin is a courier whose last position is recent and precise enough to draw; the outlines are the live delivery zones. Couriers on duty without a pin are listed below with the reason, never placed on a guess.',
+  'delivery.liveMap.state.label': 'Work state',
+  'delivery.liveMap.state.ON_SHIFT': 'On shift',
+  'delivery.liveMap.state.CARRYING': 'Carrying',
+  'delivery.liveMap.state.IDLE': 'Idle',
+  'delivery.liveMap.state.NO_SIGNAL': 'No signal',
+  'delivery.liveMap.state.empty': 'No courier is in this state right now',
   'delivery.orderPoints.show': "Show today's delivery orders on the map",
   'delivery.orderPoints.refresh': 'Open them again',
   'delivery.orderPoints.openOnly': 'Only orders still in progress',
@@ -859,4 +865,14 @@ export const deliveryEn = {
   'delivery.orderPoints.legend.closed': 'order finished or cancelled',
   'delivery.dispatch.map.show': 'Map',
   'delivery.dispatch.map.hide': 'Hide the map',
+  'delivery.dispatch.legs.branchToDoor':
+    'Order {number}: branch to the door, nobody is carrying it yet — a straight line, not the road',
+  'delivery.dispatch.legs.branchToCourier':
+    'Order {number}: branch to courier {courier} — a straight line, not the road',
+  'delivery.dispatch.legs.courierToDoor':
+    'Order {number}: courier {courier} to the door — a straight line, not the road',
+  'delivery.dispatch.legs.road': ' · planned road {km} km',
+  'delivery.dispatch.legs.roadCaption': 'Order {number}: planned road {km} km',
+  'delivery.dispatch.legs.note':
+    'Dashed lines are straight lines between two points, not the road. Green: branch to the courier’s position now. Red: the courier’s position to the door, or the branch to the door while nobody is carrying the order.',
 } as const;

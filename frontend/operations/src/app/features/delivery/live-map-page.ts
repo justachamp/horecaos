@@ -14,6 +14,8 @@ import { CurrentLocation, LocationOption } from '../../core/auth/current-locatio
 import { TimeZone, formatClock, formatDateTime } from '../../core/format/datetime';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
+import { MessageKey } from '../../core/i18n/messages.en';
+import { CouriersApi } from '../couriers/couriers-api';
 import { describeApiError } from '../orders/order-errors';
 import { boundsOf } from '../../shared/ui/map/geometry';
 import { MapArea, MapCanvas, MapMarker } from '../../shared/ui/map/map-canvas';
@@ -32,6 +34,33 @@ import { outerRings } from './zone-geometry';
 
 /** couriers.md §4: "10s refresh". */
 const POLL_INTERVAL_MS = 10_000;
+
+/**
+ * couriers.md §4 "Filters": `On shift` / `Carrying` / `Idle` / `No signal`. Each courier in the fleet
+ * is in exactly one of the last three: no signal is the band the platform could not honestly draw
+ * (whatever it is carrying, because a courier with orders and no signal is the one a dispatcher
+ * most needs to find), carrying and idle split the rest by `activeAssignmentCount`. `ON_SHIFT` is
+ * everyone, which is also what the screen showed before there were filters.
+ */
+export type WorkState = 'ON_SHIFT' | 'CARRYING' | 'IDLE' | 'NO_SIGNAL';
+
+export const WORK_STATES: readonly WorkState[] = ['ON_SHIFT', 'CARRYING', 'IDLE', 'NO_SIGNAL'];
+
+const WORK_STATE_KEYS: Readonly<Record<WorkState, MessageKey>> = {
+  ON_SHIFT: 'delivery.liveMap.state.ON_SHIFT',
+  CARRYING: 'delivery.liveMap.state.CARRYING',
+  IDLE: 'delivery.liveMap.state.IDLE',
+  NO_SIGNAL: 'delivery.liveMap.state.NO_SIGNAL',
+};
+
+/**
+ * What to call a courier when the roster cannot say: the first eight characters of the id. A
+ * reference is what a person recognises, but the roster takes `courier.read`, which a caller with
+ * only `courier.position.read` does not hold, and a blank cell would be worse than a short code.
+ */
+function shortId(courierId: string): string {
+  return courierId.length > 12 ? courierId.slice(0, 8) : courierId;
+}
 
 /** See `order-queue.ts`'s identical constant — no location carries a timezone on any response this board reaches yet. */
 const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
@@ -64,10 +93,17 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
  * on a guess. A pin says the courier's reference and how many orders they carry, never a name
  * (ADR 0029: the protected name is behind its own reveal).
  *
- * **Not built**: work-state filters (couriers.md §4 also asks for these; only the branch filter is
- * this wave's row) and in-house-vs-provider-courier distinction — every courier
+ * **Couriers by reference (row 3.2, batch 21).** A pin, a table row, a no-signal row and the title of
+ * a revealed track say the courier's `displayReference` from the roster, as the dispatch board does,
+ * and not the UUID the position read carries. A caller without `courier.read` still has the fleet
+ * and sees a short id instead.
+ *
+ * **Work-state filters (couriers.md §4).** `On shift`, `Carrying`, `Idle`, `No signal`, each with a
+ * count; the choice holds through the ten-second refresh and applies to the map and the table alike.
+ *
+ * **Not a gap**: in-house-vs-provider-courier distinction — every courier
  * `OperationsCourierPositionController` reads is in-house; ADR 0045 records partner couriers with
- * no position at all as a rejected alternative, not a gap.
+ * no position at all as a rejected alternative.
  *
  * **The reveal renders what it decrypts, not a route.** A revealed window is a list of timestamped
  * points rather than a drawn path: drawing one stored track on the live map would put a person's
@@ -83,6 +119,7 @@ const PLACEHOLDER_TIME_ZONE: TimeZone = 'Asia/Tashkent';
 })
 export class LiveMapPage implements OnInit {
   private readonly positions = inject(CourierPositionsApi);
+  private readonly couriersApi = inject(CouriersApi);
   private readonly location = inject(CurrentLocation);
   private readonly toasts = inject(Toasts);
   private readonly zonesApi = inject(DeliveryZonesApi);
@@ -107,12 +144,48 @@ export class LiveMapPage implements OnInit {
   /** The brand's live zones, drawn under the couriers. Empty for a caller who may not read them. */
   private readonly outlines = signal<readonly ZoneOutlineResponse[]>([]);
 
+  /** Courier id to the reference the roster shows; empty for a caller who may not read the roster. */
+  private readonly references = signal<ReadonlyMap<string, string>>(new Map());
+
+  protected readonly workStates = WORK_STATES;
+  protected readonly workState = signal<WorkState>('ON_SHIFT');
+
+  /** The pins the chosen work state keeps. `No signal` is the band without a pin, so it keeps none. */
+  protected readonly visiblePins = computed<readonly CourierPin[]>(() => {
+    const pins = this.pins();
+    switch (this.workState()) {
+      case 'CARRYING':
+        return pins.filter((pin) => pin.activeAssignmentCount > 0);
+      case 'IDLE':
+        return pins.filter((pin) => pin.activeAssignmentCount === 0);
+      case 'NO_SIGNAL':
+        return [];
+      default:
+        return pins;
+    }
+  });
+
+  protected readonly visibleWithoutPin = computed<readonly CoarseCourier[]>(() =>
+    this.workState() === 'ON_SHIFT' || this.workState() === 'NO_SIGNAL' ? this.withoutPin() : [],
+  );
+
+  protected readonly workStateCounts = computed<Readonly<Record<WorkState, number>>>(() => {
+    const pins = this.pins();
+    const carrying = pins.filter((pin) => pin.activeAssignmentCount > 0).length;
+    return {
+      ON_SHIFT: pins.length + this.withoutPin().length,
+      CARRYING: carrying,
+      IDLE: pins.length - carrying,
+      NO_SIGNAL: this.withoutPin().length,
+    };
+  });
+
   protected readonly markers = computed<readonly MapMarker[]>(() =>
-    this.pins().map((pin) => ({
+    this.visiblePins().map((pin) => ({
       id: pin.courierId,
       position: { latitude: pin.latitude, longitude: pin.longitude },
       label: this.i18n.t('delivery.liveMap.map.pinLabel', {
-        courier: pin.courierId,
+        courier: this.courierRef(pin.courierId),
         orders: pin.activeAssignmentCount,
       }),
     })),
@@ -161,8 +234,45 @@ export class LiveMapPage implements OnInit {
 
   private async start(): Promise<void> {
     await this.location.ensureLoaded();
-    await Promise.all([this.refresh(), this.loadZones(), this.regions.ensureLoaded()]);
+    await Promise.all([
+      this.refresh(),
+      this.loadZones(),
+      this.loadReferences(),
+      this.regions.ensureLoaded(),
+    ]);
     this.openMap();
+  }
+
+  /**
+   * The roster, for the references only. Best effort: `courier.read` is a different capability from
+   * the one that opens this map, and a dispatcher without it still sees the fleet.
+   */
+  private async loadReferences(): Promise<void> {
+    const scope = this.location.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      const roster = await this.couriersApi.roster(scope.tenantId);
+      this.references.set(
+        new Map(roster.map((entry) => [entry.courierId, entry.displayReference])),
+      );
+    } catch {
+      this.references.set(new Map());
+    }
+  }
+
+  /** A courier by the reference the roster shows, else by a short id. */
+  protected courierRef(courierId: string): string {
+    return this.references().get(courierId) ?? shortId(courierId);
+  }
+
+  protected stateLabel(state: WorkState): string {
+    return this.i18n.t(WORK_STATE_KEYS[state]);
+  }
+
+  protected selectState(state: WorkState): void {
+    this.workState.set(state);
   }
 
   /** Best effort: a dispatcher who may not read zones still sees couriers, just not the zones under them. */

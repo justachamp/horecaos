@@ -178,3 +178,13 @@
 .dispatch__map {
   margin-bottom: 12px;
 }
+
+.dispatch__road {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--q-ink-subtle);
+}
