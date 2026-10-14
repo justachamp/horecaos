@@ -44,8 +44,8 @@ export const appConfig: ApplicationConfig = {
       }
     }),
     provideAppInitializer(() => {
-      // ADR 0167: a ?ref= landing counts one click on its attribution link. Not awaited -- nothing
-      // renders on the answer -- and the service swallows its own failures.
+      // ADR 0167, ADR 0183: a ?ref= landing, or a Mini App launched from a ?startapp= link, counts one click on
+      // its attribution link. Not awaited -- nothing renders on the answer -- and the service swallows its own failures.
       void inject(AttributionLanding).recordLanding();
     }),
     provideYaConfig(yaConfig),

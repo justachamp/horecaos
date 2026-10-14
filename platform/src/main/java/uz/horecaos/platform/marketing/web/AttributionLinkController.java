@@ -21,6 +21,8 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.marketing.application.AttributionLinkService;
+import uz.horecaos.platform.marketing.application.AttributionLinkUrls;
+import uz.horecaos.platform.marketing.application.AttributionLinkUrls.Rendered;
 import uz.horecaos.platform.marketing.infrastructure.persistence.JdbcAttributionLinkStore.AttributionLinkRow;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
@@ -41,10 +43,13 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
 public class AttributionLinkController {
 
     private final AttributionLinkService links;
+    private final AttributionLinkUrls urls;
     private final CurrentActor currentActor;
 
-    public AttributionLinkController(AttributionLinkService links, CurrentActor currentActor) {
+    public AttributionLinkController(
+            AttributionLinkService links, AttributionLinkUrls urls, CurrentActor currentActor) {
         this.links = links;
+        this.urls = urls;
         this.currentActor = currentActor;
     }
 
@@ -68,15 +73,23 @@ public class AttributionLinkController {
                 body.destinationId(),
                 body.validUntil(),
                 actorId());
-        return ResponseEntity.status(HttpStatus.CREATED).body(AttributionLinkResponse.of(links.require(tenantId, id)));
+        AttributionLinkRow minted = links.require(tenantId, id);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(AttributionLinkResponse.of(
+                        minted, urls.render(tenantId, brandId, minted.channel(), minted.token())));
     }
 
     @GetMapping
     @RequiresCapability(value = Capability.MARKETING_LINK_MANAGE, scope = ScopeType.BRAND)
-    @Operation(summary = "Every acquisition link this brand has minted, newest first")
+    @Operation(
+            summary = "Every acquisition link this brand has minted, newest first",
+            description = "Each carries url, the link as it is shared, built on the server from the brand's "
+                    + "verified storefront hostname, the bot's username and the Mini App's short name; or "
+                    + "unavailable, naming what is missing, and never both (ADR 0183).")
     public ResponseEntity<List<AttributionLinkResponse>> list(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        AttributionLinkUrls.Renderer renderer = urls.forBrand(tenantId, brandId);
         return ResponseEntity.ok(links.list(tenantId, brandId).stream()
-                .map(AttributionLinkResponse::of)
+                .map(link -> AttributionLinkResponse.of(link, renderer.render(link.channel(), link.token())))
                 .toList());
     }
 
@@ -126,9 +139,11 @@ public class AttributionLinkController {
             @Nullable Instant validUntil,
             int clickCount,
             UUID createdBy,
-            Instant createdAt) {
+            Instant createdAt,
+            @Nullable String url,
+            @Nullable String unavailable) {
 
-        static AttributionLinkResponse of(AttributionLinkRow row) {
+        static AttributionLinkResponse of(AttributionLinkRow row, Rendered rendered) {
             return new AttributionLinkResponse(
                     row.id(),
                     row.label(),
@@ -142,7 +157,11 @@ public class AttributionLinkController {
                     row.validUntil(),
                     row.clickCount(),
                     row.createdBy(),
-                    row.createdAt());
+                    row.createdAt(),
+                    rendered.url(),
+                    rendered.unavailable() == null
+                            ? null
+                            : rendered.unavailable().name());
         }
     }
 }

@@ -1,0 +1,172 @@
+<section class="setup" data-testid="mini-app-setup">
+  <h2 class="q-body setup__title">{{ 'marketing.miniApp.title' | t }}</h2>
+  <p class="q-body-sm">{{ 'marketing.miniApp.lead' | t }}</p>
+
+  @switch (state()) {
+    @case ('loading') {
+      <p class="q-body-sm" data-testid="mini-app-loading">{{ 'marketing.miniApp.loading' | t }}</p>
+    }
+    @case ('denied') {
+      <p class="q-body-sm" data-testid="mini-app-denied">{{ 'marketing.miniApp.denied' | t }}</p>
+    }
+    @case ('error') {
+      <p class="q-body-sm setup__error" data-testid="mini-app-error">
+        {{ 'marketing.miniApp.error' | t }}
+      </p>
+    }
+    @default {
+      <ol class="setup__steps">
+        @for (step of steps(); track step.code) {
+          <li
+            class="setup__step"
+            [class.setup__step--done]="step.state === 'DONE'"
+            [class.setup__step--next]="firstOpen() === step.code"
+            [attr.data-testid]="'mini-app-step-' + step.code"
+          >
+            <div class="setup__head">
+              <span class="q-body setup__name">{{ stepTitleKey(step) | t }}</span>
+              <span
+                class="q-caption setup__state"
+                [attr.data-state]="step.state"
+                [attr.data-testid]="'mini-app-state-' + step.code"
+              >
+                {{ stateKey(step) | t }}
+              </span>
+            </div>
+            <p class="q-body-sm setup__hint">{{ stepHintKey(step) | t }}</p>
+
+            @if (detailKey(step); as reason) {
+              <p
+                class="q-body-sm setup__reason"
+                [attr.data-testid]="'mini-app-detail-' + step.code"
+              >
+                {{ reason | t }}
+              </p>
+            }
+            @if (step.state !== 'DONE' && link(step); as target) {
+              <a
+                class="q-body-sm"
+                [routerLink]="target"
+                [attr.data-testid]="'mini-app-link-' + step.code"
+              >
+                → {{ 'marketing.miniApp.open' | t }}
+              </a>
+            }
+
+            @switch (step.code) {
+              @case ('STOREFRONT_ADDRESS') {
+                @if (view()?.miniAppUrl; as address) {
+                  <code class="q-body-sm" data-testid="mini-app-address">{{ address }}</code>
+                }
+              }
+              @case ('BOTFATHER_APP') {
+                @if (view()?.miniAppUrl; as address) {
+                  <ol class="setup__botfather" data-testid="mini-app-botfather">
+                    @for (line of botFatherLines(); track $index) {
+                      <li class="q-body-sm">{{ line }}</li>
+                    }
+                  </ol>
+                  <div class="setup__copy">
+                    <code class="q-body-sm" data-testid="mini-app-botfather-url">{{
+                      address
+                    }}</code>
+                    <button type="button" data-testid="mini-app-copy-url" (click)="copy(address)">
+                      {{ 'marketing.miniApp.copy' | t }}
+                    </button>
+                  </div>
+                  @if (view()?.channelId) {
+                    <label class="setup__field">
+                      <span class="q-caption">{{ 'marketing.miniApp.shortName' | t }}</span>
+                      <input
+                        type="text"
+                        maxlength="64"
+                        autocomplete="off"
+                        data-testid="mini-app-short-name"
+                        [value]="shortNameDraft()"
+                        (input)="shortNameDraft.set($any($event.target).value)"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      data-testid="mini-app-record-short-name"
+                      [disabled]="!canRecordShortName()"
+                      (click)="recordShortName()"
+                    >
+                      {{ 'marketing.miniApp.record' | t }}
+                    </button>
+                    @if (recordError(); as error) {
+                      <p
+                        class="q-body-sm setup__error"
+                        role="alert"
+                        data-testid="mini-app-record-error"
+                      >
+                        {{ error }}
+                      </p>
+                    }
+                  } @else {
+                    <p class="q-body-sm setup__reason" data-testid="mini-app-needs-channel">
+                      {{ 'marketing.miniApp.needsChannel' | t }}
+                    </p>
+                  }
+                } @else {
+                  <p class="q-body-sm setup__reason" data-testid="mini-app-needs-address">
+                    {{ 'marketing.miniApp.needsAddress' | t }}
+                  </p>
+                }
+              }
+              @case ('MENU_BUTTON') {
+                @if (view()?.menuButtonLabel; as label) {
+                  <p class="q-body-sm" data-testid="mini-app-menu-wanted">
+                    {{
+                      'marketing.miniApp.menu.wanted'
+                        | t: { label: label, url: view()?.miniAppUrl ?? '—' }
+                    }}
+                  </p>
+                }
+                @if (view()?.menuButtonUrl; as held) {
+                  <p class="q-body-sm" data-testid="mini-app-menu-held">
+                    {{ 'marketing.miniApp.menu.held' | t: { url: held } }}
+                  </p>
+                }
+                <button
+                  type="button"
+                  data-testid="mini-app-apply-menu-button"
+                  [disabled]="
+                    applying() || step.detail === 'NOT_READY' || step.detail === 'MINI_APP_OFF'
+                  "
+                  (click)="applyMenuButton()"
+                >
+                  {{ 'marketing.miniApp.menu.apply' | t }}
+                </button>
+                @if (appliedButNotShown()) {
+                  <p class="q-body-sm setup__error" role="alert" data-testid="mini-app-not-shown">
+                    {{ 'marketing.miniApp.menu.notShown' | t }}
+                  </p>
+                }
+                @if (applyError(); as error) {
+                  <p class="q-body-sm setup__error" role="alert" data-testid="mini-app-apply-error">
+                    {{ error }}
+                  </p>
+                }
+              }
+              @case ('TEST_LINK') {
+                @if (view()?.testLink; as testLink) {
+                  <div class="setup__copy">
+                    <code class="q-body-sm" data-testid="mini-app-test-link">{{ testLink }}</code>
+                    <button
+                      type="button"
+                      data-testid="mini-app-copy-test-link"
+                      (click)="copy(testLink)"
+                    >
+                      {{ 'marketing.miniApp.copy' | t }}
+                    </button>
+                  </div>
+                }
+              }
+            }
+          </li>
+        }
+      </ol>
+    }
+  }
+</section>

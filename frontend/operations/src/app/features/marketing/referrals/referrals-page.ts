@@ -8,6 +8,7 @@ import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
 import { AttributionLinkView, MarketingApi } from '../marketing-api';
+import { MiniAppSetupCard } from './mini-app-setup-card';
 import {
   DraftReferralProgramRequest,
   ReferralProgramView,
@@ -32,22 +33,18 @@ type RewardShape = 'BOTH_SIDES' | 'REFERRER_ONLY';
  * paid out, and why a referrer's own reward was skipped when their cap was
  * already reached.
  *
- * **Acquisition links (T18, operations §6.6a).** ADR 0044's own
- * `marketing.attribution_links` now exists — a marketer mints a trackable
- * website `?ref={token}` link or a Telegram `startapp` deep link for a
- * campaign or an influencer, both rendered from the token client-side. What
- * stays honestly not built, in this same screen rather than a separate
- * route: the guided Mini-App/BotFather setup flow, and recording which link
- * actually brought a given account or order (ADR 0044's own note: that half
- * needs columns on a customer account and an order, other modules' tables,
- * and is follow-on integration work for whichever surface serves the
- * redirect or deep link). A customer still gets a referral code and a
- * friend can still redeem it — `ReferralStorefrontController` exists for
- * exactly that, and is a distinct mechanism from an acquisition link.
+ * **Acquisition links (operations §6.6a, ADR 0044, ADR 0183).** A marketer mints a trackable link for a campaign or an
+ * influencer: the website (`?ref=`), the Telegram bot (`?start=`) or the Telegram Mini App (`?startapp=`). The platform builds each
+ * URL (the brand's verified storefront hostname, the bot's username, the Mini App's short name) and says what is missing when it
+ * cannot, so what is printed here can be copied and used. A click is counted by the storefront, the bot or the Mini App and is
+ * only ever a count: the chart says how many opened a link, never who. Which link brought a given account or order is
+ * **declined** until counsel answers (ADR 0183 D16), so there is nothing to show for it. The guided Mini App setup is the card
+ * under the links. A customer still gets a referral code and a friend can still redeem it — `ReferralStorefrontController`
+ * exists for exactly that, and is a distinct mechanism from an acquisition link.
  */
 @Component({
   selector: 'q-referrals-page',
-  imports: [TPipe],
+  imports: [TPipe, MiniAppSetupCard],
   templateUrl: './referrals-page.html',
   styleUrl: './referrals-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -57,6 +54,9 @@ export class ReferralsPage implements OnInit {
   private readonly marketing = inject(MarketingApi);
   private readonly brand = inject(CurrentBrand);
   protected readonly i18n = inject(I18n);
+
+  /** The working brand, for the guided Mini App setup card. */
+  protected readonly brandScope = this.brand.scope;
 
   protected readonly loading = signal(true);
   protected readonly denied = signal(false);
@@ -80,12 +80,8 @@ export class ReferralsPage implements OnInit {
   protected readonly linkFormChannel = signal('WEB');
   protected readonly linkFormDestinationType = signal('STOREFRONT_HOME');
   protected readonly linkFormDestinationId = signal('');
-  protected readonly linkChannels: readonly string[] = [
-    'WEB',
-    'TELEGRAM_BOT',
-    'TELEGRAM_MINI_APP',
-    'MOBILE_APP',
-  ];
+  /** What a marketer may mint. A mobile app link is no longer offered while the app is on hold (ADR 0055, ADR 0183). */
+  protected readonly linkChannels: readonly string[] = ['WEB', 'TELEGRAM_BOT', 'TELEGRAM_MINI_APP'];
   protected readonly linkDestinationTypes: readonly string[] = [
     'STOREFRONT_HOME',
     'CAMPAIGN',
@@ -190,18 +186,27 @@ export class ReferralsPage implements OnInit {
     return `marketing.attributionLinks.destinationType.${destinationType}` as MessageKey;
   }
 
-  /**
-   * What the console renders as the shareable link — computed here, never
-   * stored: a tenant's own domain can change without invalidating an issued
-   * token (ADR 0044's own note). The bot deep link is a placeholder shape
-   * ({@code https://t.me/<bot>?start=<token>}) until this build knows which
-   * bot a brand's Telegram channel actually is.
-   */
-  protected renderedLink(link: AttributionLinkView): string {
-    if (link.channel === 'WEB') {
-      return `https://{tenant-domain}/?ref=${link.token}`;
+  /** Why a link cannot be shared yet, in words: the platform sends a code, and the screen has the sentence. */
+  protected linkUnavailableKey(link: AttributionLinkView): MessageKey | null {
+    return link.url === null && link.unavailable !== null
+      ? (`marketing.attributionLinks.unavailable.${link.unavailable}` as MessageKey)
+      : null;
+  }
+
+  /** The id of the link whose URL was last copied, so its button can say so. */
+  protected readonly copiedLinkId = signal<string | null>(null);
+
+  protected async copyLink(link: AttributionLinkView): Promise<void> {
+    if (link.url === null) {
+      return;
     }
-    return `https://t.me/{bot}?start=${link.token}`;
+    try {
+      await navigator.clipboard.writeText(link.url);
+      this.copiedLinkId.set(link.linkId);
+    } catch {
+      // A browser that refuses the clipboard: the URL is on screen to be selected.
+      this.copiedLinkId.set(null);
+    }
   }
 
   protected openLinkForm(): void {

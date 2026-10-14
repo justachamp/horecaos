@@ -3,7 +3,6 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiClient } from '../../../core/api/api-client';
 import { command } from '../../../core/api/idempotency';
-import { LocationScope } from '../../../core/api/operations-paths';
 import { settingsPaths } from '../../../core/api/settings-paths';
 
 /** Why a Telegram channel has no Mini App address (`TelegramChannelSettingsService`). */
@@ -38,12 +37,17 @@ export interface TelegramSettingsRequest {
   readonly welcomeTexts: Readonly<Record<string, string>>;
 }
 
+/** A channel is a tenant's, not a branch's: the tenant is all the path needs, so the Referrals page can call it too. */
+export interface TenantRef {
+  readonly tenantId: string;
+}
+
 /** A TELEGRAM channel's own settings (ADR 0183 D27; row 10.5): control-plane, nested under the channel. */
 @Injectable({ providedIn: 'root' })
 export class TelegramSettingsApi {
   private readonly api = inject(ApiClient);
 
-  async read(scope: LocationScope, channelId: string): Promise<TelegramSettingsView> {
+  async read(scope: TenantRef, channelId: string): Promise<TelegramSettingsView> {
     const result = await firstValueFrom(
       this.api.get<TelegramSettingsView>(settingsPaths.channelTelegram(scope, channelId)),
     );
@@ -51,7 +55,7 @@ export class TelegramSettingsApi {
   }
 
   async save(
-    scope: LocationScope,
+    scope: TenantRef,
     channelId: string,
     request: TelegramSettingsRequest,
     expectedVersion: number,

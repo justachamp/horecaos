@@ -4,7 +4,7 @@ import { TestBed } from '@angular/core/testing';
 
 import { ApiClient } from '../api/api-client';
 import { APP_CONFIG } from '../config/app-config';
-import { AttributionLanding, refToken } from './attribution-landing';
+import { AttributionLanding, refToken, startAppToken } from './attribution-landing';
 import { Session } from '../auth/session';
 import {
   bearerInterceptor,
@@ -19,6 +19,8 @@ import { TranslateService } from '../../services/translate.service';
 class FakeApiClient {
   report = vi.fn().mockResolvedValue(undefined);
 }
+
+afterEach(() => sessionStorage.clear());
 
 function setUp(api = new FakeApiClient()): { landing: AttributionLanding; api: FakeApiClient } {
   sessionStorage.clear();
@@ -48,6 +50,66 @@ describe('refToken', () => {
     expect(refToken('?ref=' + 'x'.repeat(65))).toBeNull();
     expect(refToken('?ref=has space')).toBeNull();
     expect(refToken('?ref=semi%3Bcolon')).toBeNull();
+  });
+});
+
+describe('startAppToken', () => {
+  it('reads a Mini App start parameter that has the shape of a token', () => {
+    expect(startAppToken('abcd1234')).toBe('abcd1234');
+    expect(startAppToken('Ab_-9zZ')).toBe('Ab_-9zZ');
+  });
+
+  it('ignores no parameter, and a parameter that is a layout or anything else', () => {
+    expect(startAppToken(null)).toBeNull();
+    expect(startAppToken('')).toBeNull();
+    expect(startAppToken('mode=compact')).toBeNull();
+    expect(startAppToken('abc')).toBeNull();
+    expect(startAppToken('x'.repeat(65))).toBeNull();
+    expect(startAppToken('a b c d')).toBeNull();
+  });
+});
+
+describe('AttributionLanding from the Telegram Mini App (ADR 0183)', () => {
+  it('counts one click when the Mini App is launched from a startapp link, at the same endpoint', async () => {
+    const { landing, api } = setUp();
+
+    await landing.recordLanding('', 'liveToken01');
+
+    expect(api.report).toHaveBeenCalledTimes(1);
+    expect(api.report).toHaveBeenCalledWith(
+      '/storefront/tenants/tenant-1/brands/brand-1/attribution-links/liveToken01/clicks',
+    );
+  });
+
+  it('sends nothing for a Mini App opened from the menu button, or launched with a layout parameter', async () => {
+    const { landing, api } = setUp();
+
+    await landing.recordLanding('', null);
+    await landing.recordLanding('', 'mode=compact');
+    await landing.recordLanding('?mode=compact', 'mode=fullscreen');
+
+    expect(api.report).not.toHaveBeenCalled();
+  });
+
+  it('counts a relaunch of the same link once per tab session, and a different link separately', async () => {
+    const { landing, api } = setUp();
+
+    await landing.recordLanding('', 'liveToken01');
+    await landing.recordLanding('', 'liveToken01');
+    await landing.recordLanding('', 'otherToken2');
+
+    expect(api.report).toHaveBeenCalledTimes(2);
+  });
+
+  it('prefers the ?ref= of a web landing, and never counts both on one landing', async () => {
+    const { landing, api } = setUp();
+
+    await landing.recordLanding('?ref=webToken01', 'miniToken01');
+
+    expect(api.report).toHaveBeenCalledTimes(1);
+    expect(api.report).toHaveBeenCalledWith(
+      expect.stringContaining('/attribution-links/webToken01/clicks'),
+    );
   });
 });
 
