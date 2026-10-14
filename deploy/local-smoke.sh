@@ -139,8 +139,9 @@ build horecaos-edge               "${PLATFORM_DIR}"                 "${PLATFORM_
 build horecaos-storefront        "${REPO_ROOT}/frontend/storefront"    "${REPO_ROOT}/frontend/storefront/Dockerfile"
 build horecaos-control-plane     "${REPO_ROOT}/frontend/control-plane" "${REPO_ROOT}/frontend/control-plane/Dockerfile"
 build horecaos-operations        "${REPO_ROOT}/frontend/operations"    "${REPO_ROOT}/frontend/operations/Dockerfile"
+build horecaos-courier           "${REPO_ROOT}/frontend/courier"       "${REPO_ROOT}/frontend/courier/Dockerfile"
 
-say "All 8 images built"
+say "All 9 images built"
 
 # -----------------------------------------------------------------------------
 # 2. OpenBao: up, initialised, unsealed, non-interactively
@@ -496,7 +497,7 @@ check "realm imported"
 say "Starting Keycloak, the application, the frontends, and the edge"
 compose up -d keycloak >>"${LOG_FILE}" 2>&1
 wait_healthy keycloak 150 || die "Keycloak never became healthy after import."
-compose up -d edge storefront-web control-plane-web operations-web autoheal >>"${LOG_FILE}" 2>&1
+compose up -d edge storefront-web control-plane-web operations-web courier-web autoheal >>"${LOG_FILE}" 2>&1
 compose up -d platform-app >>"${LOG_FILE}" 2>&1
 
 wait_healthy platform-app 180 || die "platform-app never became healthy. See ${LOG_FILE} and platform/docs/runbooks/production-setup.md 'It did not come up'."
@@ -505,6 +506,7 @@ wait_healthy edge 30 || die "edge never became healthy."
 wait_healthy storefront-web 30 || fail "storefront-web never became healthy"
 wait_healthy control-plane-web 30 || fail "control-plane-web never became healthy"
 wait_healthy operations-web 30 || fail "operations-web never became healthy"
+wait_healthy courier-web 30 || fail "courier-web never became healthy"
 
 say "Full container status"
 compose ps | tee -a "${LOG_FILE}"
@@ -579,7 +581,7 @@ PICKUP_BODY="$(curl -sS --cacert "${CA_FILE}" --resolve api.horecaos.test:18443:
     "https://api.horecaos.test:18443/api/v1/storefront/pickup-locations?lat=41.311341&lon=69.282722" || true)"
 printf '    fixtureless pickup-locations fetch -> HTTP %s\n    body: %s\n' "${PICKUP_STATUS}" "${PICKUP_BODY}" | tee -a "${LOG_FILE}"
 
-for pair in "storefront:storefront.horecaos.test" "control-plane:admin.horecaos.test" "operations:operations.horecaos.test"; do
+for pair in "storefront:storefront.horecaos.test" "control-plane:admin.horecaos.test" "operations:operations.horecaos.test" "courier:courier.horecaos.test"; do
     name="${pair%%:*}"; host="${pair##*:}"
     status="$(curl_smoke_status "${host}" "/" || true)"
     if [ "${status}" = "200" ]; then

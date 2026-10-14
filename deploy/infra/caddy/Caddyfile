@@ -738,3 +738,66 @@
 		}
 	}
 }
+
+# ---------------------------------------------------------------------------
+# The courier app (ADR 0179). OPTIONAL: compose defaults HORECAOS_COURIER_ORIGIN
+# to http://courier.disabled.invalid, an address Caddy serves on port 80 for that
+# Host header alone -- no certificate is requested for it and nobody can reach
+# it -- so a host that has not set a courier origin (DNS, a Keycloak client, a
+# courier account) is unchanged by this block. Setting a real https origin turns
+# it on. The `tls` line is ignored for the http default, which Caddy accepts.
+# ---------------------------------------------------------------------------
+
+{$HORECAOS_COURIER_ORIGIN} {
+	tls {$HORECAOS_TLS_MODE}
+
+	encode zstd gzip
+
+	# The app calls its API same-origin, so no CORS entry on the API origin is needed, and it
+	# sends a Bearer token Keycloak issued to the public client horecaos-courier. Only the
+	# courier prefix is proxied: every other API path (staff, control plane, providers,
+	# actuator) belongs to its own origin and is refused here with a 404, not the SPA
+	# fallback, so a wrong path fails loudly instead of as HTML.
+	#
+	# No edge rate limit, deliberately: a courier's traffic is one batch every ten seconds,
+	# and mobile carriers put many couriers behind one address, so a per-IP budget would
+	# throttle a whole shift at once. The platform's own per-courier limiter (ADR 0033,
+	# 429 RATE_LIMIT_EXCEEDED) is the control that can see who is asking. The body ceiling is
+	# the platform's own (CachedBodyRequestFilter, 1 MiB): a batch of sixty readings is a few
+	# kilobytes.
+	handle /api/v1/courier/* {
+		request_body {
+			max_size 1048576
+		}
+		import platform_app_upstream
+	}
+
+	@api_elsewhere path /api/*
+	handle @api_elsewhere {
+		respond 404
+	}
+
+	handle {
+		reverse_proxy courier-web:80
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# The one origin on this host that is meant to read the device's position and hold a
+		# screen wake lock, and that is not meant to use anything else on the phone.
+		Permissions-Policy "geolocation=(self), screen-wake-lock=(self), camera=(), microphone=(), payment=()"
+		-Server
+	}
+
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>uri regexp "\?.*$" "?redacted"
+			}
+		}
+	}
+}

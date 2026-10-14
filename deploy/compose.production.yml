@@ -121,6 +121,9 @@ services:
       HORECAOS_STOREFRONT_ORIGIN: ${HORECAOS_STOREFRONT_ORIGIN:?set the public storefront origin, for example https://horecaos.uz}
       HORECAOS_OPERATIONS_ORIGIN: ${HORECAOS_OPERATIONS_ORIGIN:?set the public operations console origin, for example https://operations.horecaos.uz}
       HORECAOS_CONTROL_PLANE_ORIGIN: ${HORECAOS_CONTROL_PLANE_ORIGIN:?set the public control-plane origin, for example https://admin.horecaos.uz}
+      # ADR 0179. Optional: unset, this is an address nothing can reach, and the Caddyfile's
+      # courier block stays dormant. See the comment above that block.
+      HORECAOS_COURIER_ORIGIN: ${HORECAOS_COURIER_ORIGIN:-http://courier.disabled.invalid}
       HORECAOS_ACME_EMAIL: ${HORECAOS_ACME_EMAIL:?set the address ACME certificate expiry notices should go to}
       # ADR 0023: Payme's published source addresses, defence in depth for
       # /providers/payme/*. Deliberately defaulted to a non-routable address
@@ -294,6 +297,45 @@ services:
     restart: unless-stopped
     image: ${HORECAOS_REGISTRY}/horecaos-operations:${HORECAOS_FRONTEND_IMAGE_TAG:?set the frontend release tag}
     environment:
+      TZ: Asia/Tashkent
+    networks:
+      - public
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    labels:
+      autoheal: "true"
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+
+  courier-web:
+    # The courier PWA (ADR 0179, frontend/courier). Same nginx + envsubst shape as the other
+    # frontends and the same reasoning as storefront-web above; the image rewrites its own
+    # /config.json from these variables at every start, so the container is not read-only.
+    # It is always declared and idle until the edge has a courier origin to send to it.
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    image: ${HORECAOS_REGISTRY}/horecaos-courier:${HORECAOS_FRONTEND_IMAGE_TAG:?set the frontend release tag}
+    environment:
+      # Same-origin: the edge proxies /api/v1/courier/* for this origin and nothing else.
+      APP_API_BASE_URL: /api/v1
+      # The browser signs in at Keycloak directly, so this is the PUBLIC auth origin, and it
+      # must equal the realm's issuer (HORECAOS_AUTH_ORIGIN) exactly: the app refuses a
+      # discovery document that names another.
+      APP_ISSUER_URL: ${HORECAOS_AUTH_ORIGIN}/realms/horecaos
+      APP_CLIENT_ID: horecaos-courier
+      # The tenant this deployment's couriers work for. One container per tenant, like the
+      # storefront; defaults to the pilot tenant the storefront serves.
+      APP_TENANT_ID: ${HORECAOS_COURIER_TENANT_ID:-${HORECAOS_STOREFRONT_TENANT_ID}}
+      APP_DISPLAY_TIME_ZONE: Asia/Tashkent
       TZ: Asia/Tashkent
     networks:
       - public
