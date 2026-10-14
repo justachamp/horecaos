@@ -21,8 +21,9 @@
   — external uptime check and dead-man's-switch receiver — is configured outside this
   repository and is not verified; all thirteen of the runbooks that carry the line record "Last executed:
   never", and `deploy.md` and `restore.md` carry no such line at all; and there is no
-  staging VM, no blue/green swap script, no processor register and no sanitized-staging
-  procedure.
+  staging VM, no blue/green swap script, and no sanitized-staging procedure. A first processor
+  register exists (`docs/processor-register.md`, batch 21, seeded from the table below and
+  adding the ADR 0145 geocoder); counsel has not reviewed it.
 
   **2026-09-25:** MinIO's public images were withdrawn, so the object store
   this record names throughout — `compose.production.yaml`'s `minio` service,
@@ -552,7 +553,7 @@ these may see. It is a privacy and access-control artifact, not a residency one.
       environments with isolated identities, keys, buckets, topics, and realms.
 - [ ] Script the blue/green swap behind the reverse proxy before the maintenance
       window is needed rather than after.
-- [ ] Establish the processor register keyed by ADR 0029 data class.
+- [x] Establish the processor register keyed by ADR 0029 data class.
 - [ ] Define the sanitized staging dataset generation procedure.
 - [ ] Measure and record the restore time, and re-measure monthly.
 

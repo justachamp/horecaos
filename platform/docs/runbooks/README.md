@@ -50,6 +50,7 @@ That shapes them more than any style guide would.
 | [staff-shifts.md](staff-shifts.md) | Before switching attendance on for a company, a shift left open, reading a staff-hours divergence, why the payroll export refuses, and the partition hazard for the next fact table (ADR 0156) |
 | [marking-scanner-setup.md](marking-scanner-setup.md) | A branch that sells marked goods: the imager settings that matter, the one-minute self-test, the three preconditions for turning `feature.marked_goods` on, and what to do when a real code is refused (ADR 0161) |
 | [print-agent-and-printers.md](print-agent-and-printers.md) | Paper: enrolling a print agent on a branch machine, registering and replacing a printer, routing documents, and reading a dead print job (ADR 0154) |
+| [external-connections/w3-delivery-maps.md](external-connections/w3-delivery-maps.md) | Connecting the map provider (ADR 0145): the server key, the browser key, `HORECAOS_GEO_PROVIDER`, the licence question, the 200-address golden set and bake-off, restricting the old shared key, and counsel's view of the processor. One file per wave under `external-connections/` lists the facts that wave was built against a fake for |
 
 **A runbook that has never been executed is a draft.** Each file above carries a
 `Last executed` line in its header. Most read `never`; the few that have been run

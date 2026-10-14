@@ -161,6 +161,17 @@ the older `/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/or
 `src/app/core/api/operations-paths.ts` is the single file that knows this, so the
 day the controller moves, exactly one file changes.
 
+**A builder that points at a path the platform does not serve fails a test.**
+`src/app/core/api/path-conformance.spec.ts` calls every builder of every `*-paths.ts`
+file with marker arguments and requires the result to be a path published in
+`platform/api/openapi/v1/horecaos-api.operations.json` (builders on the control-plane
+and storefront prefixes are checked against those surfaces' own baselines). It exists
+because the live map's two builders spent a release on `/api/v1/operations/...` while
+the controller is mapped under `/api/v1/tenants/...`: every real call 404'd and no spec
+noticed, because each feature's spec replaces the API with a stub. A new `*-paths.ts`
+file is added to `PATH_FAMILIES` in that spec; a builder known to be wrong is listed in
+`KNOWN_MISMATCHES` with the row that owns the fix.
+
 ---
 
 ## Localisation
