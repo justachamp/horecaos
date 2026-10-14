@@ -1658,6 +1658,28 @@ public class JdbcReportingStore {
                 """).params(params).update();
     }
 
+    /**
+     * ADR 0038, ADR 0140: copies each redemption's branch and legal entity from the order's own fact, so the
+     * promotion metrics sit at the money grain without pricing knowing a legal entity.
+     *
+     * <p>Run after both facts of the day are written. A redemption is stamped when its order's fact exists and
+     * either of the two belongs to {@code day}, which also catches the redemption whose order's day closes after
+     * its own; one whose order has no fact yet stays unstamped until that day closes.
+     */
+    public void stampPromotionRedemptionGrain(UUID tenantId, LocalDate day) {
+        jdbc.sql("""
+                UPDATE reporting.fact_promotion_redemption r
+                   SET location_id = o.location_id,
+                       legal_entity_id = o.legal_entity_id
+                  FROM reporting.fact_order o
+                 WHERE r.tenant_id = :tenantId
+                   AND o.tenant_id = r.tenant_id AND o.order_id = r.order_id
+                   AND (r.business_date = :day OR o.business_date = :day)
+                   AND (r.location_id IS DISTINCT FROM o.location_id
+                        OR r.legal_entity_id IS DISTINCT FROM o.legal_entity_id)
+                """).param("tenantId", tenantId).param("day", day).update();
+    }
+
     /** ADR 0156. One row per closed staff shift; see {@code ReportingFacts.StaffShiftFact}. */
     public void insertStaffShiftFact(ReportingFacts.StaffShiftFact fact) {
         jdbc.sql("""
@@ -2067,8 +2089,27 @@ public class JdbcReportingStore {
      */
     public List<PromotionSummaryRow> readPromotionSummary(
             UUID tenantId, LocalDate from, LocalDate to, @Nullable UUID brandId) {
+        return readPromotionSummary(tenantId, from, to, brandId, null, null);
+    }
+
+    /**
+     * The same read at the money grain (ADR 0038): one row per promotion <em>and legal entity</em>, so a tenant
+     * trading as two companies is never handed one discount total, optionally narrowed to one branch or one entity.
+     *
+     * <p>A benefit grant has no promotion: its rows group by where the grant came from (the label the fact
+     * carries), and "without" for such a row is the entity's completed orders that carried no grant of that origin.
+     */
+    public List<PromotionSummaryRow> readPromotionSummary(
+            UUID tenantId,
+            LocalDate from,
+            LocalDate to,
+            @Nullable UUID brandId,
+            @Nullable UUID locationId,
+            @Nullable UUID legalEntityId) {
         List<PromotionSummaryRow> withRows = jdbc.sql("""
-                SELECT r.brand_id, r.promotion_id, max(r.promotion_code) AS promotion_code, r.source_kind,
+                SELECT r.brand_id, r.legal_entity_id, r.promotion_id,
+                       max(r.promotion_code) AS promotion_code,
+                       r.source_kind,
                        count(*) AS redemptions,
                        count(DISTINCT r.customer_subject_hash) AS unique_customers,
                        COALESCE(sum(r.discount_minor), 0) AS discount_minor,
@@ -2081,16 +2122,22 @@ public class JdbcReportingStore {
                     ON o.tenant_id = r.tenant_id AND o.order_id = r.order_id
                  WHERE r.tenant_id = :tenantId AND r.business_date BETWEEN :from AND :to
                    AND (CAST(:brandId AS uuid) IS NULL OR r.brand_id = CAST(:brandId AS uuid))
+                   AND (CAST(:locationId AS uuid) IS NULL OR r.location_id = CAST(:locationId AS uuid))
+                   AND (CAST(:legalEntityId AS uuid) IS NULL OR r.legal_entity_id = CAST(:legalEntityId AS uuid))
                    AND o.terminal_status NOT IN %s
-                 GROUP BY r.brand_id, r.promotion_id, r.source_kind
-                 ORDER BY discount_minor DESC, r.promotion_id
+                 GROUP BY r.brand_id, r.legal_entity_id, r.promotion_id, r.source_kind,
+                          (CASE WHEN r.source_kind = 'GRANT' THEN r.promotion_code END)
+                 ORDER BY discount_minor DESC, r.promotion_id NULLS LAST, r.source_kind
                 """.formatted(NOT_A_SALE))
                 .param("tenantId", tenantId)
                 .param("from", from)
                 .param("to", to)
                 .param("brandId", brandId)
+                .param("locationId", locationId)
+                .param("legalEntityId", legalEntityId)
                 .query((row, n) -> new PromotionSummaryRow(
                         row.getObject("brand_id", UUID.class),
+                        row.getObject("legal_entity_id", UUID.class),
                         row.getObject("promotion_id", UUID.class),
                         row.getString("promotion_code"),
                         row.getString("source_kind"),
@@ -2106,21 +2153,30 @@ public class JdbcReportingStore {
 
         List<PromotionSummaryRow> result = new ArrayList<>(withRows.size());
         for (PromotionSummaryRow with : withRows) {
+            boolean grant = "GRANT".equals(with.sourceKind());
             long[] without = jdbc.sql("""
                     SELECT COALESCE(sum(o.gross_revenue_som), 0) AS revenue, count(*) AS orders
                       FROM reporting.fact_order o
                      WHERE o.tenant_id = :tenantId AND o.brand_id = :brandId
                        AND o.business_date BETWEEN :from AND :to AND o.terminal_status = 'COMPLETED'
+                       AND o.legal_entity_id IS NOT DISTINCT FROM CAST(:legalEntityId AS uuid)
+                       AND (CAST(:locationId AS uuid) IS NULL OR o.location_id = CAST(:locationId AS uuid))
                        AND NOT EXISTS (
                            SELECT 1 FROM reporting.fact_promotion_redemption r
                             WHERE r.tenant_id = o.tenant_id AND r.order_id = o.order_id
-                              AND r.promotion_id = :promotionId)
+                              AND ((:grant = false AND r.promotion_id = CAST(:promotionId AS uuid))
+                                   OR (:grant = true AND r.source_kind = 'GRANT'
+                                       AND r.promotion_code = :promotionCode)))
                     """)
                     .param("tenantId", tenantId)
                     .param("brandId", with.brandId())
                     .param("from", from)
                     .param("to", to)
+                    .param("legalEntityId", with.legalEntityId())
+                    .param("locationId", locationId)
+                    .param("grant", grant)
                     .param("promotionId", with.promotionId())
+                    .param("promotionCode", with.promotionCode())
                     .query((row, n) -> new long[] {row.getLong("revenue"), row.getLong("orders")})
                     .single();
             result.add(with.withComparison(without[0], without[1]));
@@ -2135,7 +2191,7 @@ public class JdbcReportingStore {
                 SELECT r.redemption_id, r.business_date, r.brand_id, r.promotion_id, r.promotion_code,
                        r.definition_version, r.source_kind, r.order_id, r.customer_subject_hash,
                        r.discount_minor, r.markup_minor, r.currency, r.redeemed_at,
-                       o.terminal_status, o.channel_code
+                       o.terminal_status, o.channel_code, r.location_id, r.legal_entity_id
                   FROM reporting.fact_promotion_redemption r
                   LEFT JOIN reporting.fact_order o
                     ON o.tenant_id = r.tenant_id AND o.order_id = r.order_id
@@ -2165,7 +2221,9 @@ public class JdbcReportingStore {
                         row.getObject("redeemed_at", java.time.OffsetDateTime.class)
                                 .toInstant(),
                         row.getString("terminal_status"),
-                        row.getString("channel_code")))
+                        row.getString("channel_code"),
+                        row.getObject("location_id", UUID.class),
+                        row.getObject("legal_entity_id", UUID.class)))
                 .list();
     }
 
@@ -2177,7 +2235,8 @@ public class JdbcReportingStore {
      */
     public record PromotionSummaryRow(
             UUID brandId,
-            UUID promotionId,
+            @Nullable UUID legalEntityId,
+            @Nullable UUID promotionId,
             String promotionCode,
             String sourceKind,
             long redemptions,
@@ -2192,6 +2251,7 @@ public class JdbcReportingStore {
         PromotionSummaryRow withComparison(long revenueWithout, long completedWithout) {
             return new PromotionSummaryRow(
                     brandId,
+                    legalEntityId,
                     promotionId,
                     promotionCode,
                     sourceKind,
@@ -2219,7 +2279,7 @@ public class JdbcReportingStore {
             UUID redemptionId,
             LocalDate businessDate,
             UUID brandId,
-            UUID promotionId,
+            @Nullable UUID promotionId,
             String promotionCode,
             int definitionVersion,
             String sourceKind,
@@ -2230,7 +2290,9 @@ public class JdbcReportingStore {
             String currency,
             Instant redeemedAt,
             @Nullable String orderStatus,
-            @Nullable String channelCode) {}
+            @Nullable String channelCode,
+            @Nullable UUID locationId,
+            @Nullable UUID legalEntityId) {}
 
     /**
      * w6-reporting-facts, batch 11 (7.4c, ADR 0023/0125): every {@code

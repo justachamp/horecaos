@@ -49,16 +49,21 @@ public class PromotionReportController {
     @Operation(
             summary =
                     "7.9: promotion summary - redemptions, unique customers, discount given, average check with and without",
-            description = "One row per promotion over the closed business days in the range. Cancelled, "
-                    + "rejected, expired and payment-failed orders are excluded here and stay in the log. "
-                    + "The average check with and without is a comparison over the same brand and period, "
-                    + "not a causal uplift: customers who use a promotion differ from those who do not.")
+            description = "One row per promotion and legal entity over the closed business days in the range "
+                    + "(the promo.* metrics are money, and ADR 0038 refuses a total across two companies). "
+                    + "Cancelled, rejected, expired and payment-failed orders are excluded here and stay in "
+                    + "the log. A customer's one-off benefit grant has no promotion: its rows carry no "
+                    + "promotionId and are labelled by where the grant came from. The average check with and "
+                    + "without is a comparison over the same brand, entity and period, not a causal uplift: "
+                    + "customers who use a promotion differ from those who do not.")
     public ResponseEntity<SummaryResponse> summary(
             @PathVariable UUID tenantId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(required = false) @Nullable UUID brandId) {
-        var result = queries.promotionSummary(tenantId, from, to, brandId);
+            @RequestParam(required = false) @Nullable UUID brandId,
+            @RequestParam(required = false) @Nullable UUID locationId,
+            @RequestParam(required = false) @Nullable UUID legalEntityId) {
+        var result = queries.promotionSummary(tenantId, from, to, brandId, locationId, legalEntityId);
         return ResponseEntity.ok(new SummaryResponse(
                 result.rows().stream().map(SummaryRowResponse::of).toList(),
                 ReportingController.ProvenanceResponse.of(result.provenance())));
@@ -83,12 +88,15 @@ public class PromotionReportController {
     }
 
     /**
+     * @param legalEntityId the legal entity that took the orders' money (ADR 0038); null where none was recorded
+     * @param promotionId null for a customer's one-off benefit grant, which has no promotion behind it
      * @param averageCheckWithSom the mean gross revenue of completed orders that carried the promotion
      * @param averageCheckWithoutSom the same for the brand's completed orders in the period that did not; a comparison
      */
     public record SummaryRowResponse(
             UUID brandId,
-            UUID promotionId,
+            @Nullable UUID legalEntityId,
+            @Nullable UUID promotionId,
             String promotionCode,
             String sourceKind,
             long redemptions,
@@ -102,6 +110,7 @@ public class PromotionReportController {
         static SummaryRowResponse of(JdbcReportingStore.PromotionSummaryRow row) {
             return new SummaryRowResponse(
                     row.brandId(),
+                    row.legalEntityId(),
                     row.promotionId(),
                     row.promotionCode(),
                     row.sourceKind(),
@@ -126,7 +135,7 @@ public class PromotionReportController {
             UUID redemptionId,
             LocalDate businessDate,
             UUID brandId,
-            UUID promotionId,
+            @Nullable UUID promotionId,
             String promotionCode,
             int definitionVersion,
             String sourceKind,
@@ -137,7 +146,9 @@ public class PromotionReportController {
             String currency,
             Instant redeemedAt,
             @Nullable String orderStatus,
-            @Nullable String channelCode) {
+            @Nullable String channelCode,
+            @Nullable UUID locationId,
+            @Nullable UUID legalEntityId) {
 
         static RedemptionRowResponse of(JdbcReportingStore.PromotionRedemptionRow row) {
             return new RedemptionRowResponse(
@@ -155,7 +166,9 @@ public class PromotionReportController {
                     row.currency(),
                     row.redeemedAt(),
                     row.orderStatus(),
-                    row.channelCode());
+                    row.channelCode(),
+                    row.locationId(),
+                    row.legalEntityId());
         }
     }
 
