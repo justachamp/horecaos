@@ -267,6 +267,57 @@ describe('VariantPhysicalAttributes', () => {
     expect(el(fixture).textContent).not.toContain('per 100 g');
   });
 
+  // ADR 0137, row 4.2c: the code-owned accuracy line the menu draws under the table, previewed here.
+  describe('the accuracy line preview', () => {
+    const WITH_NUTRITION: PhysicalAttributesView = {
+      catchweight: false,
+      splittable: false,
+      caloriesKcalPer100: 215,
+      version: 2,
+    };
+
+    it('is shown, in all three menu languages, when the platform says the menu draws it', async () => {
+      configure({
+        physicalAttributes: vi.fn(() => of({ ...WITH_NUTRITION, nutritionAccuracyNotice: true })),
+      });
+      const fixture = await open();
+
+      const preview = field(fixture, 'physical-accuracy-preview');
+      expect(preview.textContent).toContain('under the table');
+      expect(preview.querySelector('[lang="ru"]')?.textContent).toContain('КБЖУ приблизительные');
+      expect(preview.querySelector('[lang="uz"]')?.textContent).toContain('taxminiy');
+      expect(preview.querySelector('[lang="en"]')?.textContent).toContain('approximate');
+    });
+
+    it('is not shown while the menu does not draw it', async () => {
+      configure({
+        physicalAttributes: vi.fn(() => of({ ...WITH_NUTRITION, nutritionAccuracyNotice: false })),
+      });
+      const fixture = await open();
+
+      expect(maybe(fixture, 'physical-accuracy-preview')).toBeNull();
+    });
+
+    it('is not shown from a platform that predates the switch', async () => {
+      configure({ physicalAttributes: vi.fn(() => of(WITH_NUTRITION)) });
+      const fixture = await open();
+
+      expect(maybe(fixture, 'physical-accuracy-preview')).toBeNull();
+    });
+
+    it('is not shown where there is no nutrition to qualify, and appears as soon as a figure is typed', async () => {
+      configure({
+        physicalAttributes: vi.fn(() => of({ ...NOTHING, nutritionAccuracyNotice: true })),
+      });
+      const fixture = await open();
+      expect(maybe(fixture, 'physical-accuracy-preview')).toBeNull();
+
+      await type(fixture, field<HTMLInputElement>(fixture, 'physical-calories'), '120');
+
+      expect(maybe(fixture, 'physical-accuracy-preview')).not.toBeNull();
+    });
+  });
+
   it('warns, before publication does, that a marked good cannot be sold by weight or in parts', async () => {
     configure();
     const fixture = await open(true);

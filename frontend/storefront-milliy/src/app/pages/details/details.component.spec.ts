@@ -82,6 +82,7 @@ function product(overrides: Partial<MenuItem> = {}): MenuItem {
 
 class FakeMenuService {
   readonly currency = signal<string | null>('UZS');
+  readonly nutritionAccuracyNotice = signal(false);
   item = vi.fn(async () => product());
 }
 class FakeUiCartService {
@@ -99,8 +100,9 @@ class FakeTranslateService {
   current = () => ({});
 }
 
-async function setUp(item: MenuItem = product()) {
+async function setUp(item: MenuItem = product(), accuracyNotice = false) {
   const menu = new FakeMenuService();
+  menu.nutritionAccuracyNotice.set(accuracyNotice);
   menu.item.mockResolvedValue(item);
   const cart = new FakeUiCartService();
 
@@ -776,6 +778,30 @@ describe('DetailsComponent -- portions and weighed items (ADR 0137)', () => {
       `350${NBSP}g`,
     );
     expect(host.querySelector('[data-testid="physical-nutrition"]')).not.toBeNull();
+  });
+
+  it('draws the accuracy line under the nutrition table only when the menu asks for it (row 4.2c)', async () => {
+    const withNutrition = withPhysical({
+      catchweight: false,
+      splittable: false,
+      netWeightGrams: 350,
+      nutrition: { caloriesKcalPer100: 215 },
+    });
+    const off = await setUp(withNutrition);
+    expect(
+      (off.fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="physical-nutrition-accuracy"]',
+      ),
+    ).toBeNull();
+    TestBed.resetTestingModule();
+
+    const on = await setUp(withNutrition, true);
+
+    expect(
+      (on.fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="physical-nutrition-accuracy"]',
+      )?.textContent,
+    ).toContain('physical.nutritionAccuracy');
   });
 
   it('says a weighed portion is priced per quantum and its final weight is set at handover', async () => {

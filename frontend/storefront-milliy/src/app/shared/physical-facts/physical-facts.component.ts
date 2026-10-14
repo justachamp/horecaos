@@ -44,6 +44,11 @@ export class PhysicalFactsComponent {
   /** ISO currency of the menu the variant came from; null before any menu is read. */
   readonly currency = input<string | null>(null);
   readonly compact = input(false);
+  /**
+   * ADR 0137, row 4.2c: draw the code-owned line saying the КБЖУ figures are approximate. Off unless the menu asks:
+   * whether any such line is required, and its wording, are for legal and product.
+   */
+  readonly accuracyNotice = input(false);
 
   protected readonly measure = computed(() => {
     const p = this.physical();

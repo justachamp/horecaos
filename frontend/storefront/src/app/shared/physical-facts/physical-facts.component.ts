@@ -40,6 +40,11 @@ export class PhysicalFactsComponent {
   /** The variant's price row: per unit, or per quantum for a weighed variant. */
   readonly priceMinor = input<number | null>(null);
   readonly compact = input(false);
+  /**
+   * ADR 0137, row 4.2c: draw the code-owned line saying the КБЖУ figures are approximate. Off unless the menu asks:
+   * whether any such line is required, and its wording, are for legal and product.
+   */
+  readonly accuracyNotice = input(false);
 
   protected readonly measure = computed(() => {
     const p = this.physical();

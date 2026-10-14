@@ -385,6 +385,14 @@ export const catalogUzLatn: AreaMessages<typeof catalogEn> = {
   'catalog.editor.physical.portion': 'Ulush hajmi',
   'catalog.editor.physical.portionHint': 'Miqdor oʻzgaradigan qadam, masalan 0,5',
   'catalog.editor.physical.nutrition': 'Ozuqaviy qiymat (KBJU)',
+  'catalog.editor.physical.accuracy.preview':
+    'Mijozlar bu qatorni jadval tagida, menyuni oʻqiyotgan tilida koʻradi:',
+  'catalog.editor.physical.accuracy.ru':
+    'Значения КБЖУ приблизительные и могут отличаться от фактических.',
+  'catalog.editor.physical.accuracy.uz':
+    'KBJU qiymatlari taxminiy va haqiqiyidan farq qilishi mumkin.',
+  'catalog.editor.physical.accuracy.en':
+    'Nutrition values are approximate and may differ from the actual product.',
   'catalog.editor.physical.per100g': '100 g uchun',
   'catalog.editor.physical.per100ml': '100 ml uchun',
   'catalog.editor.physical.calories': 'Kaloriya, kkal',

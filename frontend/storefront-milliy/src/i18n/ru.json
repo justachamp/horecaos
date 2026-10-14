@@ -582,6 +582,7 @@
     "nutritionPer100g": "на 100 г",
     "nutritionPer100ml": "на 100 мл",
     "nutritionPerUnit": "в порции ({{amount}})",
+    "nutritionAccuracy": "Значения КБЖУ приблизительные и могут отличаться от фактических.",
     "calories": "Калории",
     "proteins": "Белки",
     "fats": "Жиры",

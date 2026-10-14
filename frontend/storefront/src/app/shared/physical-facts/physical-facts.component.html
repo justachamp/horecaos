@@ -49,6 +49,11 @@
               }
             </tbody>
           </table>
+          @if (accuracyNotice()) {
+            <p class="mt-1.5 text-[11px] text-zinc-400" data-testid="physical-nutrition-accuracy">
+              {{ 'physical.nutritionAccuracy' | t }}
+            </p>
+          }
         </div>
       }
     </div>

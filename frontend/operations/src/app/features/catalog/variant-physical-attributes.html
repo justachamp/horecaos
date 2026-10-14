@@ -225,6 +225,16 @@
             }
           </label>
         </div>
+        @if (accuracyPreview()) {
+          <div class="physical__accuracy" data-testid="physical-accuracy-preview">
+            <span class="q-caption">{{ 'catalog.editor.physical.accuracy.preview' | t }}</span>
+            <ul class="physical__accuracy-lines">
+              <li class="q-caption" lang="ru">{{ 'catalog.editor.physical.accuracy.ru' | t }}</li>
+              <li class="q-caption" lang="uz">{{ 'catalog.editor.physical.accuracy.uz' | t }}</li>
+              <li class="q-caption" lang="en">{{ 'catalog.editor.physical.accuracy.en' | t }}</li>
+            </ul>
+          </div>
+        }
       </div>
 
       @if (clearing()) {

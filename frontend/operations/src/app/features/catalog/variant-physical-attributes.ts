@@ -157,6 +157,16 @@ export class VariantPhysicalAttributes {
     conflictsWithMarking(this.parsed().request, this.markingRequired()),
   );
 
+  /** Row 4.2c: the platform says the menu draws an accuracy line under the table, so the editor shows it. */
+  protected readonly accuracyPreview = computed(
+    () => this.stored()?.nutritionAccuracyNotice === true && this.nutritionFilled(),
+  );
+
+  private nutritionFilled(): boolean {
+    const form = this.form();
+    return [form.calories, form.protein, form.fat, form.carbs].some((value) => value.trim() !== '');
+  }
+
   protected readonly perUnitKey = computed<MessageKey>(() =>
     this.form().measure === 'VOLUME'
       ? 'catalog.editor.physical.per100ml'
