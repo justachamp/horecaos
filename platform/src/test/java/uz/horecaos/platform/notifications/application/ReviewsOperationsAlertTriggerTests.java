@@ -14,6 +14,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import uz.horecaos.platform.notifications.api.OperationsAlertPort;
 import uz.horecaos.platform.notifications.domain.NotificationClass;
@@ -21,6 +23,7 @@ import uz.horecaos.platform.notifications.domain.NotificationVariableCatalog;
 import uz.horecaos.platform.reviews.api.RecoveryAlertSettings;
 import uz.horecaos.platform.reviews.api.RecoveryCaseOpened;
 import uz.horecaos.platform.reviews.api.RecoveryCaseSlaBreached;
+import uz.horecaos.platform.reviews.api.ReviewSubmitted;
 
 /**
  * The chat alert service recovery raises (ADR 0159, Decision 10, ADR 0058): off unless the brand's policy asks
@@ -61,7 +64,7 @@ class ReviewsOperationsAlertTriggerTests {
                 return onBreach && TENANT.equals(tenantId) && BRAND.equals(brandId);
             }
         };
-        trigger = new ReviewsOperationsAlertTrigger(alerts, settings, Duration.ofDays(3));
+        trigger = new ReviewsOperationsAlertTrigger(alerts, settings, Duration.ofDays(3), Duration.ofDays(1));
     }
 
     private RecoveryCaseOpened opened() {
@@ -205,6 +208,79 @@ class ReviewsOperationsAlertTriggerTests {
                         anyString(),
                         any(),
                         any());
+    }
+
+    private ReviewSubmitted review(int rating) {
+        return new ReviewSubmitted(UUID.randomUUID(), TENANT, REVIEW, ORDER, BRAND, LOCATION, rating, true, 2, NOW);
+    }
+
+    @ParameterizedTest(name = "{0} stars is told as {1}")
+    @CsvSource({"5,REVIEW_POSITIVE", "4,REVIEW_POSITIVE", "3,REVIEW_NEGATIVE", "2,REVIEW_NEGATIVE", "1,REVIEW_NEGATIVE"
+    })
+    @DisplayName(
+            "a review is told as positive from four stars and as negative below, by its id and its stars alone (ADR 0187)")
+    void aReviewIsToldByItsRating(int rating, String expectedClass) {
+        ReviewSubmitted event = review(rating);
+
+        trigger.onReviewSubmitted(event);
+
+        ArgumentCaptor<Map<String, String>> variables = ArgumentCaptor.captor();
+        verify(alerts)
+                .fanOut(
+                        org.mockito.ArgumentMatchers.eq(TENANT),
+                        org.mockito.ArgumentMatchers.eq(BRAND),
+                        org.mockito.ArgumentMatchers.eq(LOCATION),
+                        org.mockito.ArgumentMatchers.eq(expectedClass),
+                        org.mockito.ArgumentMatchers.eq(expectedClass),
+                        org.mockito.ArgumentMatchers.eq("Review"),
+                        org.mockito.ArgumentMatchers.eq(REVIEW),
+                        org.mockito.ArgumentMatchers.eq(event.eventId()),
+                        org.mockito.ArgumentMatchers.eq(expectedClass + ":Review:" + REVIEW),
+                        variables.capture(),
+                        org.mockito.ArgumentMatchers.eq(Duration.ofDays(1)));
+        assertThat(variables.getValue())
+                .as("a review alert is made of two things; a customer, a comment and a tag are none of them")
+                .containsOnlyKeys("reviewId", "rating")
+                .containsEntry("reviewId", REVIEW.toString())
+                .containsEntry("rating", Integer.toString(rating));
+    }
+
+    @Test
+    @DisplayName("a review alert needs no policy switch: it is told with both recovery switches off")
+    void aReviewAlertIsNotGatedByTheRecoverySwitches() {
+        assertThat(onOpen).isFalse();
+        assertThat(onBreach).isFalse();
+
+        trigger.onReviewSubmitted(review(1));
+
+        verify(alerts)
+                .fanOut(
+                        any(),
+                        any(),
+                        any(),
+                        org.mockito.ArgumentMatchers.eq("REVIEW_NEGATIVE"),
+                        anyString(),
+                        anyString(),
+                        any(),
+                        any(),
+                        anyString(),
+                        any(),
+                        any());
+    }
+
+    @Test
+    @DisplayName("the review alert's variables are declared by the OPERATIONS_ALERT catalogue and every class exists")
+    void theReviewVariablesAreDeclared() {
+        var declared = NotificationVariableCatalog.forClass(NotificationClass.OPERATIONS_ALERT).stream()
+                .map(NotificationVariableCatalog.Variable::name)
+                .toList();
+        assertThat(declared).contains("reviewId", "rating");
+        assertThat(uz.horecaos.platform.integration.provider.telegram.TelegramEventClass.valueOf(
+                        ReviewsOperationsAlertTrigger.REVIEW_POSITIVE))
+                .isEqualTo(uz.horecaos.platform.integration.provider.telegram.TelegramEventClass.REVIEW_POSITIVE);
+        assertThat(uz.horecaos.platform.integration.provider.telegram.TelegramEventClass.valueOf(
+                        ReviewsOperationsAlertTrigger.REVIEW_NEGATIVE))
+                .isEqualTo(uz.horecaos.platform.integration.provider.telegram.TelegramEventClass.REVIEW_NEGATIVE);
     }
 
     @Test

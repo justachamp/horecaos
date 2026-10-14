@@ -1,5 +1,6 @@
+import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, firstValueFrom } from 'rxjs';
+import { Observable, firstValueFrom, map } from 'rxjs';
 
 import { ApiClient } from '../../../core/api/api-client';
 import { command } from '../../../core/api/idempotency';
@@ -70,6 +71,50 @@ export interface KioskView {
   readonly lastSeenBuild: string | null;
 }
 
+/** One picture on a KIOSK channel's idle loop (ADR 0187). `url` is a path on the API's own origin. */
+export interface IdleMediaItem {
+  readonly id: string;
+  readonly assetId: string;
+  readonly position: number;
+  readonly url: string;
+}
+
+/** Mirrors `KioskIdleMediaService.IdleMediaList`: the pictures in play order, the version the next change is sent against, and the platform's limits. */
+export interface IdleMediaList {
+  readonly channelId: string;
+  /** The `If-Match` of the next attach, reorder or remove; 0 for a channel that has never had a picture. */
+  readonly version: number;
+  readonly items: readonly IdleMediaItem[];
+  readonly maximumCount: number;
+  readonly maximumBytes: number;
+  /** `9:16`. */
+  readonly ratio: string;
+}
+
+export interface IdleUploadTicket {
+  readonly assetId: string;
+  readonly uploadUrl: string;
+  readonly requiredHeaders: Readonly<Record<string, string>>;
+  readonly expiresAt: string;
+}
+
+/** Where a picture's verification stands. `rejectionCode` is set only for `REJECTED`. */
+export interface IdleUploadState {
+  readonly assetId: string;
+  readonly status: 'PENDING_UPLOAD' | 'UPLOADED' | 'AVAILABLE' | 'REJECTED' | string;
+  readonly rejectionCode: string | null;
+}
+
+/** An upload the platform's own pipeline refused after reading the file: the reason is its code. */
+export class IdleUploadRejected extends Error {
+  constructor(readonly rejectionCode: string | null) {
+    super(`The picture was rejected (${rejectionCode ?? 'no reason given'})`);
+  }
+}
+
+/** The platform did not finish verifying the picture in the time the console waits. */
+export class IdleUploadTimedOut extends Error {}
+
 export interface KioskBinding {
   readonly displayName: string;
   readonly channelId: string;
@@ -82,6 +127,7 @@ export interface KioskBinding {
 @Injectable({ providedIn: 'root' })
 export class KioskApi {
   private readonly api = inject(ApiClient);
+  private readonly http = inject(HttpClient);
 
   async pending(scope: LocationScope, userCode: string): Promise<KioskPendingView> {
     const result = await firstValueFrom(
@@ -133,5 +179,111 @@ export class KioskApi {
       terminalPaths.kioskRevoke(scope, deviceId),
       command({ reason }),
     );
+  }
+
+  // ---- a KIOSK channel's idle media (ADR 0187) ----
+
+  async idleMedia(scope: LocationScope, channelId: string): Promise<IdleMediaList> {
+    const result = await firstValueFrom(
+      this.api.get<IdleMediaList>(terminalPaths.kioskIdleMedia(scope, channelId)),
+    );
+    return result.value;
+  }
+
+  attachIdle(
+    scope: LocationScope,
+    channelId: string,
+    assetId: string,
+    expectedVersion: number,
+  ): Observable<IdleMediaList> {
+    return this.api.post<{ assetId: string }, IdleMediaList>(
+      terminalPaths.kioskIdleMedia(scope, channelId),
+      command({ assetId }),
+      { expectedVersion },
+    );
+  }
+
+  reorderIdle(
+    scope: LocationScope,
+    channelId: string,
+    itemIds: readonly string[],
+    expectedVersion: number,
+  ): Observable<IdleMediaList> {
+    return this.api.put<{ itemIds: readonly string[] }, IdleMediaList>(
+      terminalPaths.kioskIdleMediaOrder(scope, channelId),
+      command({ itemIds }),
+      { expectedVersion },
+    );
+  }
+
+  removeIdle(
+    scope: LocationScope,
+    channelId: string,
+    itemId: string,
+    expectedVersion: number,
+  ): Observable<IdleMediaList> {
+    return this.api
+      .send<undefined, IdleMediaList>(
+        'DELETE',
+        terminalPaths.kioskIdleMediaItem(scope, channelId, itemId),
+        command(undefined),
+        { expectedVersion },
+      )
+      .pipe(map((response) => response.body as IdleMediaList));
+  }
+
+  /**
+   * The whole upload of one picture: ask for a constrained URL, put the bytes to the object store (not a platform call, so
+   * `ApiClient`'s conventions do not apply to that one request), claim it complete, and wait for the pipeline to read the
+   * file's own header and decide. Resolves with the asset id once it is `AVAILABLE`; rejects with
+   * {@link IdleUploadRejected} when the pipeline refused it and {@link IdleUploadTimedOut} when it has not decided.
+   */
+  async uploadIdlePicture(
+    scope: LocationScope,
+    channelId: string,
+    file: File,
+    wait: { readonly intervalMs?: number; readonly attempts?: number } = {},
+  ): Promise<string> {
+    const ticket = await firstValueFrom(
+      this.api.post<
+        { contentType: string; sizeBytes: number; filename: string },
+        IdleUploadTicket
+      >(
+        terminalPaths.kioskIdleMediaUploadRequest(scope, channelId),
+        command({
+          contentType: file.type || 'application/octet-stream',
+          sizeBytes: file.size,
+          filename: file.name,
+        }),
+      ),
+    );
+    await firstValueFrom(
+      this.http.put(ticket.uploadUrl, file, { headers: { ...ticket.requiredHeaders } }),
+    );
+    await firstValueFrom(
+      this.api.post<undefined, unknown>(
+        terminalPaths.kioskIdleMediaFinalize(scope, channelId, ticket.assetId),
+        command(undefined),
+      ),
+    );
+    const intervalMs = wait.intervalMs ?? 1000;
+    const attempts = wait.attempts ?? 30;
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      const state = (
+        await firstValueFrom(
+          this.api.get<IdleUploadState>(
+            terminalPaths.kioskIdleMediaUpload(scope, channelId, ticket.assetId),
+          ),
+        )
+      ).value;
+      if (state.status === 'AVAILABLE') {
+        return ticket.assetId;
+      }
+      if (state.status === 'REJECTED') {
+        throw new IdleUploadRejected(state.rejectionCode);
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, intervalMs));
+    }
+    throw new IdleUploadTimedOut();
   }
 }

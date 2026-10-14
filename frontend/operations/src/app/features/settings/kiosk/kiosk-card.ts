@@ -16,8 +16,10 @@ import { FeatureFlags } from '../../../core/feature-flags';
 import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { I18n } from '../../../core/i18n/i18n';
 import { TPipe } from '../../../core/i18n/t.pipe';
+import { LockedState } from '../../../shared/ui/locked-state';
 import { describeApiError } from '../../orders/order-errors';
 import { KioskApi, KioskChannelChoice, KioskView, kioskOffered } from './kiosk-api';
+import { KioskIdleMedia } from './kiosk-idle-media';
 
 /** How long a kiosk may go quiet before the list says so. A kiosk polls its record once a minute. */
 export const KIOSK_QUIET_AFTER_MINUTES = 5;
@@ -34,10 +36,14 @@ export const KIOSK_QUIET_AFTER_MINUTES = 5;
  *
  * Changing anything needs `kiosk.device.manage` at the branch, which the list itself also needs; the card hides what the
  * caller's grant cannot use and shows the server's refusal when it disagrees.
+ *
+ * Below the registry sit the channel's idle media (ADR 0187, D25: {@link KioskIdleMedia}) and the printer, bank terminal and
+ * marking block, which is a `LockedState` that names what is not built (settings.md §10.5): the card draws no field for
+ * hardware the platform does not integrate.
  */
 @Component({
   selector: 'q-kiosk-card',
-  imports: [TPipe, RouterLink],
+  imports: [TPipe, RouterLink, KioskIdleMedia, LockedState],
   templateUrl: './kiosk-card.html',
   styleUrl: './kiosk-card.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

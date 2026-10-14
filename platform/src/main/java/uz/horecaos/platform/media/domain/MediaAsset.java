@@ -31,6 +31,9 @@ import uz.horecaos.platform.media.api.MediaAssetStatus;
  *                              Keycloak subject was not a UUID — recorded for
  *                              attribution only, so an upload is never refused
  *                              over it
+ * @param purpose               null for every asset uploaded for a menu, a brand or a person; {@code
+ *                              KIOSK_IDLE} for a picture on a kiosk channel's idle loop (ADR 0187). A
+ *                              purposed asset is always a PUBLIC, TENANT-owned image
  * @param uploadedAt            when a {@code finalize} call last claimed the
  *                              upload complete, moving the asset out of
  *                              {@code PENDING_UPLOAD}. Null until then. Distinct
@@ -60,7 +63,8 @@ public record MediaAsset(
         @Nullable Instant uploadedAt,
         Instant createdAt,
         @Nullable String renditionProfile,
-        @Nullable Integer durationMs) {
+        @Nullable Integer durationMs,
+        @Nullable String purpose) {
 
     /** The profile that also renders {@link DerivativeVariant#HERO}. */
     public static final String CREATIVE_PROFILE = "CREATIVE";
@@ -107,6 +111,55 @@ public record MediaAsset(
                 uploadedAt,
                 createdAt,
                 null,
+                null,
+                null);
+    }
+
+    /** An asset with a rendition profile and a duration but no purpose: every asset before ADR 0187. */
+    public MediaAsset(
+            MediaAssetId assetId,
+            UUID tenantId,
+            MediaOwner owner,
+            String objectKey,
+            String bucket,
+            MediaAssetStatus status,
+            MediaVisibility visibility,
+            String declaredContentType,
+            long declaredSizeBytes,
+            @Nullable String declaredChecksumSha256,
+            @Nullable String verifiedContentType,
+            @Nullable Long verifiedSizeBytes,
+            @Nullable String verifiedChecksumSha256,
+            @Nullable String originalFilename,
+            @Nullable Integer widthPx,
+            @Nullable Integer heightPx,
+            @Nullable UUID createdBy,
+            @Nullable Instant uploadedAt,
+            Instant createdAt,
+            @Nullable String renditionProfile,
+            @Nullable Integer durationMs) {
+        this(
+                assetId,
+                tenantId,
+                owner,
+                objectKey,
+                bucket,
+                status,
+                visibility,
+                declaredContentType,
+                declaredSizeBytes,
+                declaredChecksumSha256,
+                verifiedContentType,
+                verifiedSizeBytes,
+                verifiedChecksumSha256,
+                originalFilename,
+                widthPx,
+                heightPx,
+                createdBy,
+                uploadedAt,
+                createdAt,
+                renditionProfile,
+                durationMs,
                 null);
     }
 
