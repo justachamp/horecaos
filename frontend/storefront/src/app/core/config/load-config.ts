@@ -93,7 +93,6 @@ function validate(body: unknown): AppConfig {
     brandId: requireUuid(raw, 'brandId'),
     defaultLocationId: optionalUuid(raw, 'defaultLocationId'),
     channel: requireText(raw, 'channel'),
-    yandexMapsApiKey: typeof raw['yandexMapsApiKey'] === 'string' ? raw['yandexMapsApiKey'] : '',
     brand: brandFrom(raw),
   };
 }

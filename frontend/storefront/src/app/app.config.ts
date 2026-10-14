@@ -7,23 +7,19 @@ import {
 import { PreloadAllModules, provideRouter, withPreloading } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 
-import { environment } from '../environments/environment';
 import { routes } from './app.routes';
 import { AttributionLanding } from './core/attribution/attribution-landing';
 import { TranslateService } from './services/translate.service';
 import { ThemeService } from './services/theme.service';
-import { provideYaConfig, YaConfig } from 'angular8-yandex-maps';
+import { provideYaConfig } from 'angular8-yandex-maps';
 import { errorNotificationInterceptor } from './interceptors/error-notification.interceptor';
+import { YA_MAPS_CONFIG } from './services/map-config.service';
 import {
   bearerInterceptor,
   conventionsInterceptor,
   expiredSessionInterceptor,
   problemDetailsInterceptor,
 } from './core/api/api.interceptors';
-
-const yaConfig: YaConfig = {
-  apikey: environment.yandexMapsApiKey,
-};
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -48,7 +44,9 @@ export const appConfig: ApplicationConfig = {
       // renders on the answer -- and the service swallows its own failures.
       void inject(AttributionLanding).recordLanding();
     }),
-    provideYaConfig(yaConfig),
+    // The map script's key is the platform's to deliver (GET .../map-config, ADR 0145 decision 4), so it
+    // can be rotated without a build; it used to be a literal in environment.ts, committed to git.
+    provideYaConfig(YA_MAPS_CONFIG),
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes, withPreloading(PreloadAllModules)),
     provideHttpClient(

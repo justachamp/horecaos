@@ -230,7 +230,6 @@ services:
       APP_BRAND_ID: ${HORECAOS_STOREFRONT_BRAND_ID:?set the pilot brand id}
       APP_DEFAULT_LOCATION_ID: ${HORECAOS_STOREFRONT_LOCATION_ID:?set the pilot location id}
       APP_CHANNEL: STOREFRONT
-      APP_YANDEX_MAPS_API_KEY: ${HORECAOS_YANDEX_MAPS_API_KEY:-}
       TZ: Asia/Tashkent
     networks:
       - public

@@ -45,8 +45,13 @@ export interface AppConfig {
    */
   readonly channel: string;
 
-  /** Yandex Maps browser key, for the address picker. Not a platform secret. */
-  readonly yandexMapsApiKey: string;
+  /**
+   * @deprecated Retired by ADR 0145 decision 4 and read by nothing. The map's browser key is
+   * delivered by `GET .../map-config` (see `MapConfigService`) so it can be rotated without a build,
+   * and no key is committed or defaulted anywhere. The field stays optional only so an older
+   * `config.json`, and the fixtures that still spell it, keep type-checking.
+   */
+  readonly yandexMapsApiKey?: string;
 
   /**
    * How this deployment presents itself: display name, mark, and the accent

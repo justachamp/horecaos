@@ -110,11 +110,18 @@ variables:
 | `APP_BRAND_ID` | the local fixture brand | `brandId` |
 | `APP_DEFAULT_LOCATION_ID` | the local fixture location | `defaultLocationId` |
 | `APP_CHANNEL` | `STOREFRONT` | `channel` |
-| `APP_YANDEX_MAPS_API_KEY` | the shared browser key already in `public/config.json` | `yandexMapsApiKey` |
 | `APP_BRAND_DISPLAY_NAME` | `Storefront` (neutral) | `brand.displayName` |
 | `APP_BRAND_LOGO_URL` | *(empty — renders the name as text instead)* | `brand.logoUrl` |
 | `APP_BRAND_ACCENT` | `#52525b` (neutral grey) | `brand.theme.accent` |
 | `APP_BRAND_ACCENT_DEEP` | `#3f3f46` (neutral grey) | `brand.theme.accentDeep` |
+
+**There is no map key here.** The address screen's map and lookups come from the platform:
+`GET /storefront/tenants/{tenant}/brands/{brand}/map-config` delivers the provider, its public
+browser key and the features on offer, and the lookups themselves
+(`POST .../geocode/suggestions|resolutions|reverse-resolutions`) are made by the platform with its own
+key, rate limited and metered (ADR 0145). With no provider set up the screen takes a typed address and
+saves it `NOT_GEOCODED`. A map key was a committed default in this image until batch 21; it was removed
+and `tools/checks/repo_hygiene.py` (`check_no_committed_map_key`) keeps it out.
 
 The defaults reproduce the same fixture tenant `public/config.json` already
 holds, so `docker run` with no environment variables set behaves like local
@@ -129,7 +136,6 @@ docker run -p 8080:80 \
   -e APP_BRAND_ID=<brand-uuid> \
   -e APP_DEFAULT_LOCATION_ID=<location-uuid> \
   -e APP_CHANNEL=STOREFRONT \
-  -e APP_YANDEX_MAPS_API_KEY=<key> \
   -e APP_BRAND_DISPLAY_NAME="Tandir House" \
   -e APP_BRAND_LOGO_URL=https://cdn.example.com/tandir-house/logo.svg \
   -e APP_BRAND_ACCENT=#c0392b \
