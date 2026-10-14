@@ -12,12 +12,10 @@ import {
 } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 
-import { environment } from '../environments/environment';
 import { routes } from './app.routes';
 import { AttributionLanding } from './core/attribution/attribution-landing';
 import { TranslateService } from './services/translate.service';
 import { ThemeService } from './services/theme.service';
-import { provideYaConfig, YaConfig } from 'angular8-yandex-maps';
 import { errorNotificationInterceptor } from './interceptors/error-notification.interceptor';
 import {
   bearerInterceptor,
@@ -25,10 +23,6 @@ import {
   expiredSessionInterceptor,
   problemDetailsInterceptor,
 } from './core/api/api.interceptors';
-
-const yaConfig: YaConfig = {
-  apikey: environment.yandexMapsApiKey,
-};
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -53,7 +47,6 @@ export const appConfig: ApplicationConfig = {
       // renders on the answer -- and the service swallows its own failures.
       void inject(AttributionLanding).recordLanding();
     }),
-    provideYaConfig(yaConfig),
     provideBrowserGlobalErrorListeners(),
     // Component input binding feeds a route param straight into a required
     // input, so a screen never reaches for the router to learn what it is showing.
