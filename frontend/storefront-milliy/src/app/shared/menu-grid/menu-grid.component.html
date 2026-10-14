@@ -7,7 +7,7 @@
   >
     {{ 'home.allCategories' | t }}
   </button>
-  @for (category of categories(); track category.id) {
+  @for (category of railCategories(); track category.id) {
     <button
       type="button"
       class="chip"
@@ -17,7 +17,26 @@
       {{ category.name }}
     </button>
   }
+  @if (marketplace() && categories().length > 0) {
+    <button
+      type="button"
+      class="chip chip--more"
+      data-testid="all-categories-open"
+      (click)="overlayOpen.set(true)"
+    >
+      {{ 'home.showAllCategories' | t }}
+    </button>
+  }
 </nav>
+
+@if (overlayOpen()) {
+  <app-categories-overlay
+    [categories]="categories()"
+    [selectedId]="activeCategoryId()"
+    (chosen)="chooseFromOverlay($event)"
+    (closed)="overlayOpen.set(false)"
+  />
+}
 
 @if (filterOptions().length > 0) {
   <nav

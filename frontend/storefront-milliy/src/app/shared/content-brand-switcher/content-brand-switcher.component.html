@@ -1,0 +1,40 @@
+@if (rail().length > 0) {
+  <nav
+    class="switcher"
+    data-testid="brand-switcher"
+    [attr.aria-label]="'content.brandSwitcher' | t"
+  >
+    <ul class="switcher__rail rail">
+      @for (item of rail(); track item.entry.targetBrandId) {
+        <li class="switcher__item">
+          <a
+            class="brand"
+            rel="noopener noreferrer"
+            [attr.href]="item.entry.url"
+            [attr.data-testid]="'brand-switcher-' + item.entry.targetBrandId"
+          >
+            <span class="brand__logo">
+              @if (item.plan; as logo) {
+                <app-content-media
+                  class="brand__picture"
+                  [plan]="logo"
+                  [alt]="item.entry.logo?.alt ?? ''"
+                  sizes="32px"
+                  (failed)="logoFailed(item.entry.targetBrandId)"
+                />
+              } @else {
+                <span
+                  class="brand__initial"
+                  data-testid="brand-switcher-initial"
+                  aria-hidden="true"
+                  >{{ item.initial }}</span
+                >
+              }
+            </span>
+            <span class="brand__name">{{ item.entry.name }}</span>
+          </a>
+        </li>
+      }
+    </ul>
+  </nav>
+}

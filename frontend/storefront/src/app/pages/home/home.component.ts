@@ -17,6 +17,8 @@ import { FoodCarouselComponent } from '../../shared/food-carousel/food-carousel.
 import { FoodCardComponent } from '../../shared/food-card/food-card.component';
 import { TopBarComponent } from '../../shared/top-bar/top-bar.component';
 import { PublicReviewsComponent } from '../../shared/public-reviews/public-reviews.component';
+import { CategoriesOverlayComponent } from '../../shared/categories-overlay/categories-overlay.component';
+import { ContentBrandSwitcherComponent } from '../../shared/content-brand-switcher/content-brand-switcher.component';
 import { ContentEntryComponent } from '../../shared/content-entry/content-entry.component';
 import { ContentCarouselComponent } from '../../shared/content-carousel/content-carousel.component';
 import { ContentGroupsComponent } from '../../shared/content-groups/content-groups.component';
@@ -51,6 +53,13 @@ const FULFILLMENT_MODE_KEY = 'horecaos_home_fulfillment_mode';
 
 type UiMode = 'delivery' | 'pickup';
 
+/**
+ * How many categories the marketplace layout's compact strip names before the rest go behind «all
+ * categories» (ADR 0183 D17). Five fits a phone's width without scrolling much and keeps the strip
+ * a strip.
+ */
+export const COMPACT_STRIP_SIZE = 5;
+
 function toBackendMode(mode: UiMode): FulfillmentMode {
   return mode === 'pickup' ? 'PICKUP' : 'DELIVERY';
 }
@@ -80,6 +89,8 @@ function persistMode(mode: UiMode): void {
   imports: [
     CommonModule,
     SectionHeaderComponent,
+    CategoriesOverlayComponent,
+    ContentBrandSwitcherComponent,
     FoodCarouselComponent,
     FoodCardComponent,
     TopBarComponent,
@@ -130,6 +141,29 @@ export class HomeComponent implements OnInit {
 
   /** Selected category id; null = "Hammasi" (all) */
   readonly selectedCategoryId = signal<string | null>(null);
+
+  /** The brand chose the marketplace layout (ADR 0183 D17); every other value is today's strip. */
+  protected readonly marketplace = computed(() => this.content.layout() === 'MARKETPLACE');
+  protected readonly categoriesOpen = signal(false);
+
+  /**
+   * The categories the menu strip draws. Standard: all of them, as it always did. Marketplace: the
+   * first few, with the selected category kept in view when it is further along, so choosing from
+   * the overlay never leaves the strip showing nothing selected.
+   */
+  protected readonly stripCategories = computed(() => {
+    const all = this.menuCategoryItems().map(({ id, name }) => ({ id, label: name }));
+    if (!this.marketplace() || all.length <= COMPACT_STRIP_SIZE) {
+      return all;
+    }
+    const head = all.slice(0, COMPACT_STRIP_SIZE);
+    const selected = this.selectedCategoryId();
+    const chosen = selected === null ? undefined : all.find((category) => category.id === selected);
+    if (chosen === undefined || head.some((category) => category.id === chosen.id)) {
+      return head;
+    }
+    return [...head.slice(0, COMPACT_STRIP_SIZE - 1), chosen];
+  });
 
   /** 'delivery' | 'pickup' - which mode is selected */
   readonly deliveryMode = signal<UiMode>('delivery');
@@ -325,6 +359,12 @@ export class HomeComponent implements OnInit {
 
   selectCategory(id: string | null): void {
     this.selectedCategoryId.set(id);
+  }
+
+  /** A choice made in the «all categories» overlay: apply it and close the overlay. */
+  protected chooseFromOverlay(id: string | null): void {
+    this.selectCategory(id);
+    this.categoriesOpen.set(false);
   }
 
   /**

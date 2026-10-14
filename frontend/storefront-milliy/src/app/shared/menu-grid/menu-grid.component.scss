@@ -23,6 +23,11 @@
   }
 }
 
+.chip--more {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--text-secondary);
+}
+
 .chips--tags {
   padding-top: 0;
 }

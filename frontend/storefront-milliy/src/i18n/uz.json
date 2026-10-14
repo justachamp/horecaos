@@ -77,7 +77,8 @@
     "storyPrevious": "Oldingi slayd",
     "storyProgress": "{{total}} tadan {{current}}-slayd",
     "openLink": "Batafsil",
-    "popupClose": "Yopish"
+    "popupClose": "Yopish",
+    "brandSwitcher": "Boshqa brendlarimiz"
   },
   "editorial": {
     "homeLabel": "Biz haqimizda",
@@ -114,6 +115,8 @@
     "searchHint": "Taom yoki oshxona qidirish",
     "categories": "Turkumlar",
     "allCategories": "Barchasi",
+    "showAllCategories": "Barcha toifalar",
+    "categoriesClose": "Yopish",
     "emptyMenu": "Bu filialda hozircha menyu yo‘q",
     "loadError": "Menyuni yuklab bo‘lmadi"
   },

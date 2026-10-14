@@ -77,7 +77,8 @@
     "storyPrevious": "Previous slide",
     "storyProgress": "Slide {{current}} of {{total}}",
     "openLink": "Learn more",
-    "popupClose": "Close"
+    "popupClose": "Close",
+    "brandSwitcher": "Our other brands"
   },
   "editorial": {
     "homeLabel": "More from us",
@@ -114,6 +115,8 @@
     "searchHint": "Search a dish or a kitchen",
     "categories": "Categories",
     "allCategories": "All",
+    "showAllCategories": "All categories",
+    "categoriesClose": "Close",
     "emptyMenu": "This branch has no menu yet",
     "loadError": "The menu could not be loaded"
   },

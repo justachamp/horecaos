@@ -1,0 +1,55 @@
+<div class="backdrop" data-testid="categories-overlay-backdrop" (click)="onBackdrop($event)">
+  <div
+    #dialog
+    class="sheet"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    aria-labelledby="categories-overlay-title"
+    (keydown)="onKeydown($event)"
+  >
+    <div class="sheet__head">
+      <h2 id="categories-overlay-title" class="sheet__title">
+        {{ 'home.showAllCategories' | t }}
+      </h2>
+      <button
+        #closeButton
+        type="button"
+        class="sheet__close"
+        data-testid="categories-overlay-close"
+        [attr.aria-label]="'home.categoriesClose' | t"
+        (click)="closed.emit()"
+      >
+        <app-icon name="close" [size]="20" />
+      </button>
+    </div>
+    <ul class="sheet__list">
+      <li>
+        <button
+          type="button"
+          class="choice"
+          [class.is-active]="selectedId() === null"
+          [attr.aria-current]="selectedId() === null ? 'true' : null"
+          data-testid="categories-overlay-all"
+          (click)="chosen.emit(null)"
+        >
+          {{ 'home.allCategories' | t }}
+        </button>
+      </li>
+      @for (category of categories(); track category.id) {
+        <li>
+          <button
+            type="button"
+            class="choice"
+            [class.is-active]="selectedId() === category.id"
+            [attr.aria-current]="selectedId() === category.id ? 'true' : null"
+            [attr.data-testid]="'categories-overlay-' + category.id"
+            (click)="chosen.emit(category.id)"
+          >
+            {{ category.name }}
+          </button>
+        </li>
+      }
+    </ul>
+  </div>
+</div>

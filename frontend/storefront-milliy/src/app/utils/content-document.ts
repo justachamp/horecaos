@@ -1,5 +1,6 @@
 import {
   type CarouselItemKind,
+  type ContentBrandSwitcherEntry,
   type ContentCarouselItem,
   type ContentGroup,
   type ContentGroupOrder,
@@ -15,6 +16,7 @@ import {
   type PopupCapMode,
   type PopupDaily,
 } from '../types/content.types';
+import { safeHttpsUrl } from './content-link';
 import { isRecord, optionalText, positiveInt, text } from './wire';
 
 /**
@@ -49,6 +51,33 @@ export function parseContentHome(
     stories: readList(raw['stories'], (entry) => readStoryGroup(entry, resolveUrl)),
     promoGrid: readList(raw['promoGrid'], (entry) => readCarouselItem(entry, resolveUrl)),
     popup: readPopup(raw['popup'], resolveUrl),
+    brandSwitcher: readList(raw['brandSwitcher'], (entry) => readSwitcherEntry(entry, resolveUrl)),
+    // Only the exact word turns the marketplace layout on: an unknown value from a later release
+    // must leave today's storefront as it is.
+    layout: raw['layout'] === 'MARKETPLACE' ? 'MARKETPLACE' : 'STANDARD',
+  };
+}
+
+function readSwitcherEntry(
+  value: unknown,
+  resolveUrl: (url: unknown) => string | null,
+): ContentBrandSwitcherEntry | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const targetBrandId = optionalText(value['targetBrandId']);
+  const name = optionalText(value['name']);
+  // The second check on an address that leaves the storefront: `https:` only, no credentials.
+  const url = safeHttpsUrl(optionalText(value['url']));
+  if (targetBrandId === undefined || name === undefined || url === null) {
+    return null;
+  }
+  const logo = value['logo'] === undefined ? null : parseContentMedia(value['logo'], resolveUrl);
+  return {
+    targetBrandId,
+    name,
+    ...(logo !== null && logo.kind === 'IMAGE' ? { logo } : {}),
+    url,
   };
 }
 
