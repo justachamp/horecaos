@@ -91,7 +91,12 @@ class PlatformRoleTests {
             Capability.COURIER_OFFER_DECLINE,
             Capability.COURIER_DELIVERY_ADVANCE,
             Capability.COURIER_DELIVERY_PAYMENT_CONFIRM,
-            Capability.COURIER_DELIVERY_LOCATION_REVEAL);
+            Capability.COURIER_DELIVERY_LOCATION_REVEAL,
+            // ADR 0179: the courier app's own record, and the courier's own duty session and
+            // observations -- the courier over their own record only (CourierSelfController,
+            // CourierSelfDutyController), never a manager.
+            Capability.COURIER_SELF_READ,
+            Capability.COURIER_TELEMETRY);
 
     /**
      * ADR 0045: capabilities that are in no bundle because being in one is the

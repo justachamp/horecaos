@@ -16,7 +16,7 @@ MVN ?= $(PLATFORM_DIR)tools/mvn-serial
 # src/main/java/uz/horecaos/platform/configuration/OpenApiSurface.java — the
 # membership test in OpenApiContractTests fails the build if a path fits none
 # of them, but nothing enforces this list matching that one automatically.
-OPENAPI_GROUPS := storefront control-plane operations providers
+OPENAPI_GROUPS := storefront control-plane operations providers courier
 
 .DEFAULT_GOAL := help
 

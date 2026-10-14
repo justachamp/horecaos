@@ -52,7 +52,7 @@ import uz.horecaos.platform.support.TestDatabase;
  * per-group documents are additive views over the same running API — filtered by path, never
  * regenerated — so they share this class's compatibility machinery rather than duplicating it.
  * {@link #everyPublishedPathBelongsToExactlyOneSurfaceGroup()} is the test that keeps the split
- * honest: it proves the four group documents partition the full document's paths exactly, so a
+ * honest: it proves the group documents partition the full document's paths exactly, so a
  * controller landing under a prefix no {@link OpenApiSurface} claims fails the build instead of
  * silently missing from every per-surface document and its generated TypeScript client.
  */

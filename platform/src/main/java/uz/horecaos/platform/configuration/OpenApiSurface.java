@@ -12,14 +12,14 @@ import java.util.List;
  * prefix fails the build instead of silently missing from every per-surface document and its
  * generated TypeScript client.
  *
- * <p>The four groups fold ADR 0031's five stated surfaces (platform-admin, control-plane,
- * operations, storefront, customer) plus the partner surface (ADR 0040) down to the three
- * frontends that exist today (storefront, operations, control-plane) plus a fourth for every
+ * <p>The five groups fold ADR 0031's five stated surfaces (platform-admin, control-plane,
+ * operations, storefront, customer) plus the partner surface (ADR 0040) down to the four
+ * frontends that exist today (storefront, operations, control-plane, courier) plus one for every
  * externally-initiated integration (payment provider callbacks and inbound partner/marketplace
  * traffic). {@code platform-admin} moved to {@code CONTROL_PLANE} in ADR 0066, once wave 28 gave
  * it the dedicated frontend this class's own history names as the open question; the courier's
- * own self-service endpoints still have none, so they remain in {@code operations} by
- * elimination — see {@code api/README.md} for the current table.
+ * own self-service endpoints followed to {@code COURIER} in ADR 0179, the same way, once
+ * {@code frontend/courier} gave them a consumer — see {@code api/README.md} for the current table.
  */
 enum OpenApiSurface {
 
@@ -45,21 +45,31 @@ enum OpenApiSurface {
     PROVIDERS("providers", "/providers/**", "/api/v1/partner/**"),
 
     /**
-     * Brand and location staff, plus everything operator-facing that is not one of the other
-     * three groups: today {@code /api/v1/tenants/**} (kitchen, dine-in, inventory, orders,
-     * reporting, and more), {@code /api/v1/session/**}, the {@code operations} Angular app's own
-     * {@code /api/v1/operations/**}, the courier's own {@code /api/v1/courier/**}, and an enrolled
-     * kitchen device's read of its own record, {@code /api/v1/devices/me} (ADR 0151; the device
-     * is operations' own principal, enrolled by a branch manager from the operations console).
-     * {@code /api/v1/platform-admin/**} moved out to {@link #CONTROL_PLANE} in ADR 0066.
+     * The courier's own self-service surface; the {@code courier} Angular app
+     * ({@code frontend/courier}, ADR 0179).
+     *
+     * <p>Everything under {@code /api/v1/courier/**} is a courier acting on their own record
+     * ({@code CourierSelfAuthorized}, ADR 0049): their profile, shift, breaks, duty session,
+     * observations, offers and deliveries. It sat in {@link #OPERATIONS} by elimination, because
+     * nothing consumed it (ADR 0057, ADR 0066: "splitting courier out is a fair question for a
+     * future ADR once a consumer exists"); {@code frontend/courier} is that consumer, so the
+     * paths, their baseline and their generated client now belong to it. The staff-facing sides of
+     * the same subject stay where they were: the roster and the dispatcher's duty management are
+     * under {@code /api/v1/tenants/**} and {@code /api/v1/operations/**}.
      */
-    OPERATIONS(
-            "operations",
-            "/api/v1/tenants/**",
-            "/api/v1/session/**",
-            "/api/v1/operations/**",
-            "/api/v1/courier/**",
-            "/api/v1/devices/**");
+    COURIER("courier", "/api/v1/courier/**"),
+
+    /**
+     * Brand and location staff, plus everything operator-facing that is not one of the other
+     * four groups: today {@code /api/v1/tenants/**} (kitchen, dine-in, inventory, orders,
+     * reporting, and more), {@code /api/v1/session/**}, the {@code operations} Angular app's own
+     * {@code /api/v1/operations/**}, and an enrolled kitchen device's read of its own record,
+     * {@code /api/v1/devices/me} (ADR 0151; the device is operations' own principal, enrolled by
+     * a branch manager from the operations console). {@code /api/v1/platform-admin/**} moved out
+     * to {@link #CONTROL_PLANE} in ADR 0066, and {@code /api/v1/courier/**} to {@link #COURIER} in
+     * ADR 0179.
+     */
+    OPERATIONS("operations", "/api/v1/tenants/**", "/api/v1/session/**", "/api/v1/operations/**", "/api/v1/devices/**");
 
     private final String id;
 

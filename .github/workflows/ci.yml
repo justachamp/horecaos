@@ -177,7 +177,7 @@ jobs:
             --input target/openapi/horecaos-api-v1.json \
             --output target/openapi/horecaos-api-v1.ts
           diff -u api/generated/horecaos-api-v1.ts target/openapi/horecaos-api-v1.ts
-          for group in storefront control-plane operations providers; do
+          for group in storefront control-plane operations providers courier; do
             python3 tools/openapi/generate_types.py \
               --input "target/openapi/horecaos-api-v1.$group.json" \
               --output "target/openapi/horecaos-api-v1.$group.ts"
