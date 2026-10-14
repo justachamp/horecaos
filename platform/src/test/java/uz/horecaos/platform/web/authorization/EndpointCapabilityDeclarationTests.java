@@ -852,7 +852,44 @@ class EndpointCapabilityDeclarationTests {
      * discipline every exemption here keeps.
      */
     private static boolean isGeocodeLookupEndpoint(Method handler) {
-        return GEOCODE_LOOKUP_PATHS.contains(pathOf(handler));
+        return GEOCODE_LOOKUP_PATHS.contains(pathOf(handler))
+                || STOREFRONT_GEOCODE_LOOKUP_PATHS.contains(pathOf(handler));
+    }
+
+    /**
+     * The three lookups again on the storefront surface (ADR 0145 decision 2, row X.4), for a
+     * customer's own session. Same exemption for the same reason, and a different authorization:
+     * ownership, not a capability. {@link #theStorefrontGeocodeLookupsAreOwnershipChecked} holds the
+     * other half.
+     */
+    private static final Set<String> STOREFRONT_GEOCODE_LOOKUP_PATHS = Set.of(
+            "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/geocode/suggestions",
+            "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/geocode/resolutions",
+            "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/geocode/reverse-resolutions");
+
+    @Test
+    void theStorefrontGeocodeLookupsAreOwnershipChecked() {
+        List<String> found = new ArrayList<>();
+        List<String> wrong = new ArrayList<>();
+
+        for (Method handler : allControllerMethods()) {
+            if (!STOREFRONT_GEOCODE_LOOKUP_PATHS.contains(pathOf(handler))) {
+                continue;
+            }
+            String where = handler.getDeclaringClass().getSimpleName() + "#" + handler.getName();
+            found.add(where);
+            if (handler.getAnnotation(CustomerOwned.class) == null) {
+                wrong.add(where + " is not @CustomerOwned");
+            }
+            if (handler.getAnnotation(RequiresCapability.class) != null) {
+                wrong.add(where + " declares a staff capability a customer does not hold");
+            }
+        }
+
+        assertThat(found)
+                .as("the three lookups the exemption names must all exist, or the exemption outlived them")
+                .hasSize(STOREFRONT_GEOCODE_LOOKUP_PATHS.size());
+        assertThat(wrong).isEmpty();
     }
 
     private static final Set<String> GEOCODE_LOOKUP_PATHS = geocodeLookupPaths();
@@ -874,7 +911,7 @@ class EndpointCapabilityDeclarationTests {
         List<String> wrong = new ArrayList<>();
 
         for (Method handler : allControllerMethods()) {
-            if (!isGeocodeLookupEndpoint(handler)) {
+            if (!GEOCODE_LOOKUP_PATHS.contains(pathOf(handler))) {
                 continue;
             }
             String where = handler.getDeclaringClass().getSimpleName() + "#" + handler.getName();

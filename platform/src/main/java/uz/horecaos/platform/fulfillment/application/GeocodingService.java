@@ -86,6 +86,33 @@ public class GeocodingService {
     static final RateLimiter.Policy SUGGEST_LIMIT = RateLimiter.Policy.strictPerMinute(90);
     static final RateLimiter.Policy LOOKUP_LIMIT = RateLimiter.Policy.strictPerMinute(30);
 
+    /**
+     * A customer types slower than a call-centre operator and is trusted less, so the storefront's
+     * per-person ceilings are lower than the console's (ADR 0145 decision 2: "rate limited and
+     * metered per tenant").
+     */
+    static final RateLimiter.Policy CUSTOMER_SUGGEST_LIMIT = RateLimiter.Policy.strictPerMinute(60);
+
+    static final RateLimiter.Policy CUSTOMER_LOOKUP_LIMIT = RateLimiter.Policy.strictPerMinute(20);
+
+    /**
+     * And the storefront has a ceiling for the whole tenant as well, because the provider's quota is
+     * one pool and an account costs a customer an SMS, not a grant: many people each under their own
+     * limit can still spend it. Sized for the pilot (a few hundred people on the address screen at
+     * once, each well under their own ceiling), and a closed limiter degrades the field to text.
+     */
+    static final RateLimiter.Policy CUSTOMER_TENANT_SUGGEST_LIMIT = RateLimiter.Policy.strictPerMinute(1200);
+
+    static final RateLimiter.Policy CUSTOMER_TENANT_LOOKUP_LIMIT = RateLimiter.Policy.strictPerMinute(600);
+
+    /** Who is asking, which decides the limits and what the ledger says it was for. */
+    public enum Audience {
+        /** A person on the operations console, authorised by a capability. */
+        STAFF,
+        /** A customer on a storefront, authorised by owning their session. */
+        CUSTOMER
+    }
+
     private static final String SUGGEST = "suggest";
     private static final String GEOCODE = "geocode";
     private static final String REVERSE = "reverse";
@@ -139,28 +166,48 @@ public class GeocodingService {
 
     public GeocodeOutcome<List<GeoSuggestion>> suggest(
             UUID tenantId, @Nullable UUID regionId, String text, @Nullable GeoPoint near, String locale) {
+        return suggest(Audience.STAFF, tenantId, regionId, text, near, locale);
+    }
+
+    public GeocodeOutcome<List<GeoSuggestion>> suggest(
+            Audience audience,
+            UUID tenantId,
+            @Nullable UUID regionId,
+            String text,
+            @Nullable GeoPoint near,
+            String locale) {
         RegionRow row = region(tenantId, regionId);
         GeoRegion region = toRegion(row);
         String key = key(
                 tenantId, row, locale, SUGGEST, normalize(text) + "|" + (near == null ? "-" : round(near, NEAR_GRID)));
-        return lookup(tenantId, SUGGEST, SUGGEST_LIMIT, key, () -> geocoder.suggest(text, region, near, locale));
+        return lookup(audience, tenantId, SUGGEST, key, () -> geocoder.suggest(text, region, near, locale));
     }
 
     public GeocodeOutcome<List<GeocodeResult>> geocode(
             UUID tenantId, @Nullable UUID regionId, String text, String locale) {
+        return geocode(Audience.STAFF, tenantId, regionId, text, locale);
+    }
+
+    public GeocodeOutcome<List<GeocodeResult>> geocode(
+            Audience audience, UUID tenantId, @Nullable UUID regionId, String text, String locale) {
         RegionRow row = region(tenantId, regionId);
         GeoRegion region = toRegion(row);
         String key = key(tenantId, row, locale, GEOCODE, normalize(text));
-        return lookup(tenantId, GEOCODE, LOOKUP_LIMIT, key, () -> geocoder.geocode(text, region, locale));
+        return lookup(audience, tenantId, GEOCODE, key, () -> geocoder.geocode(text, region, locale));
     }
 
     public GeocodeOutcome<Optional<GeocodeResult>> reverse(
             UUID tenantId, @Nullable UUID regionId, GeoPoint point, String locale) {
+        return reverse(Audience.STAFF, tenantId, regionId, point, locale);
+    }
+
+    public GeocodeOutcome<Optional<GeocodeResult>> reverse(
+            Audience audience, UUID tenantId, @Nullable UUID regionId, GeoPoint point, String locale) {
         RegionRow row = region(tenantId, regionId);
         GeoRegion region = toRegion(row);
         String key = key(tenantId, row, locale, REVERSE, round(point, REVERSE_GRID));
         // The cache holds lists; a reverse answer is a list of at most one.
-        GeocodeOutcome<List<GeocodeResult>> answered = lookup(tenantId, REVERSE, LOOKUP_LIMIT, key, () -> {
+        GeocodeOutcome<List<GeocodeResult>> answered = lookup(audience, tenantId, REVERSE, key, () -> {
             GeocodeOutcome<Optional<GeocodeResult>> outcome = geocoder.reverseGeocode(point, region, locale);
             return switch (outcome) {
                 case GeocodeOutcome.Answered<Optional<GeocodeResult>> found ->
@@ -176,21 +223,54 @@ public class GeocodingService {
         };
     }
 
+    /**
+     * The region a storefront lookup is made in: the tenant's own when it has one, else the
+     * platform's, by code. A customer cannot name a region (the screen has no such control, and
+     * letting the browser pick one is letting it pick a bounding box), and a tenant with several is
+     * served by the one it registered first by code, which is the order the console's
+     * {@code MapRegionService.primary} also uses.
+     *
+     * @throws ApiException {@code UNPROCESSABLE_STATE} when the tenant has no active region
+     */
+    public UUID primaryRegionId(UUID tenantId) {
+        List<RegionRow> active = regions.list(tenantId).stream()
+                .filter(row -> "ACTIVE".equals(row.status()))
+                .toList();
+        return active.stream()
+                .filter(row -> !row.platform())
+                .findFirst()
+                .or(() -> active.stream().findFirst())
+                .orElseThrow(() -> new ApiException(
+                        ErrorCode.UNPROCESSABLE_STATE,
+                        "This tenant has no active region. Register one before looking up addresses: the "
+                                + "region's box is what keeps a search in the right city.",
+                        Map.of("reason", "REGION_REQUIRED")))
+                .regionId();
+    }
+
     // ------------------------------------------------------------------ the shared path
 
     private <T extends List<?>> GeocodeOutcome<T> lookup(
-            UUID tenantId,
-            String operation,
-            RateLimiter.Policy policy,
-            String cacheKey,
-            Supplier<GeocodeOutcome<T>> call) {
+            Audience audience, UUID tenantId, String operation, String cacheKey, Supplier<GeocodeOutcome<T>> call) {
 
+        boolean suggest = SUGGEST.equals(operation);
+        RateLimiter.Policy personal =
+                switch (audience) {
+                    case STAFF -> suggest ? SUGGEST_LIMIT : LOOKUP_LIMIT;
+                    case CUSTOMER -> suggest ? CUSTOMER_SUGGEST_LIMIT : CUSTOMER_LOOKUP_LIMIT;
+                };
         RateLimiter.Decision decision = rateLimiter.check(
                 new RateLimiter.Key(
                         "geo." + operation,
                         tenantId.toString(),
                         currentActor.get().subject()),
-                policy);
+                personal);
+        if (decision.allowed() && audience == Audience.CUSTOMER) {
+            // The tenant's own ceiling for all its customers together: one provider quota, many accounts.
+            decision = rateLimiter.check(
+                    new RateLimiter.Key("geo.storefront." + operation, tenantId.toString(), "tenant"),
+                    suggest ? CUSTOMER_TENANT_SUGGEST_LIMIT : CUSTOMER_TENANT_LOOKUP_LIMIT);
+        }
         if (!decision.allowed()) {
             count(operation, "rate_limited");
             throw new ApiException(
@@ -217,7 +297,7 @@ public class GeocodingService {
             if (cache != null && !answered.value().isEmpty()) {
                 cache.put(cacheKey, answered.value());
             }
-            meter(tenantId, operation);
+            meter(tenantId, operation, audience);
             count(operation, "answered");
         } else if (outcome instanceof GeocodeOutcome.Unavailable<T> unavailable) {
             count(operation, unavailable.reason().name().toLowerCase(Locale.ROOT));
@@ -225,7 +305,7 @@ public class GeocodingService {
         return outcome;
     }
 
-    private void meter(UUID tenantId, String operation) {
+    private void meter(UUID tenantId, String operation, Audience audience) {
         try {
             usage.record(new UsageMovement(
                     tenantId,
@@ -236,7 +316,7 @@ public class GeocodingService {
                     // so the idempotency pair must never collapse two of them.
                     UUID.randomUUID().toString(),
                     clock.instant(),
-                    Map.of("operation", operation)));
+                    Map.of("operation", operation, "surface", audience.name().toLowerCase(Locale.ROOT))));
         } catch (RuntimeException failure) {
             // Metering is the ledger's job and a lookup is the person's: a ledger that cannot
             // be written must not take address search down with it. Class name only.
