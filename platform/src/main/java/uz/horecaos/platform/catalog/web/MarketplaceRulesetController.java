@@ -55,8 +55,8 @@ public class MarketplaceRulesetController {
             description = "ADR 0138. The closed, code-owned set. Empty until a per-marketplace ruleset is authored, "
                     + "which is the decision rather than a gap: the screen then says no ruleset is authored and "
                     + "offers only to clear a code.")
-    public KnownRulesetsResponse known(@PathVariable UUID tenantId) {
-        return new KnownRulesetsResponse(rulesets.knownCodes());
+    public MarketplaceRulesetsResponse knownMarketplaceRulesets(@PathVariable UUID tenantId) {
+        return new MarketplaceRulesetsResponse(rulesets.knownCodes());
     }
 
     @PutMapping("/{installationId}/bindings/{bindingId}/marketplace-ruleset")
@@ -68,12 +68,12 @@ public class MarketplaceRulesetController {
                     + "binding's version the editor read (it is on the binding list): another editor's change in "
                     + "between answers 409 STALE_VERSION, and naming the code already stored changes nothing and "
                     + "keeps the version. The response's ETag is the new version.")
-    public ResponseEntity<RulesetResponse> set(
+    public ResponseEntity<MarketplaceRulesetResponse> setMarketplaceRuleset(
             @PathVariable UUID tenantId,
             @PathVariable UUID installationId,
             @PathVariable UUID bindingId,
             HttpServletRequest http,
-            @Valid @RequestBody SetRulesetRequest request) {
+            @Valid @RequestBody SetMarketplaceRulesetRequest request) {
         long expected = AggregateVersion.requireIfMatch(http);
         try {
             Applied applied = rulesets.set(
@@ -85,7 +85,8 @@ public class MarketplaceRulesetController {
                     currentActor.get().subject());
             return ResponseEntity.ok()
                     .eTag(AggregateVersion.toETag(applied.version()))
-                    .body(new RulesetResponse(applied.bindingId(), applied.rulesetCode(), applied.version()));
+                    .body(new MarketplaceRulesetResponse(
+                            applied.bindingId(), applied.rulesetCode(), applied.version()));
         } catch (MarketplaceRulesetBindingService.UnknownBindingException unknown) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, unknown.getMessage());
         } catch (MarketplaceRulesetBindingService.UnknownRulesetException unknown) {
@@ -96,12 +97,13 @@ public class MarketplaceRulesetController {
         }
     }
 
-    public record KnownRulesetsResponse(List<String> knownCodes) {}
+    public record MarketplaceRulesetsResponse(List<String> knownCodes) {}
 
     /** @param code null clears the ruleset; the universal rules alone then apply */
-    public record SetRulesetRequest(
+    public record SetMarketplaceRulesetRequest(
             @Nullable @Size(max = 48) @Pattern(regexp = "^[A-Z][A-Z0-9_]*$")
             String code) {}
 
-    public record RulesetResponse(UUID bindingId, @Nullable String rulesetCode, long version) {}
+    public record MarketplaceRulesetResponse(
+            UUID bindingId, @Nullable String rulesetCode, long version) {}
 }

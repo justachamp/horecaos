@@ -27,9 +27,9 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.ordering.api.TillRevisionNotices.Notice;
 import uz.horecaos.platform.pos.application.PosOrderRevisionService;
-import uz.horecaos.platform.pos.web.OrderPosRevisionController.NoticeView;
-import uz.horecaos.platform.pos.web.OrderPosRevisionController.SendResponse;
+import uz.horecaos.platform.pos.web.OrderPosRevisionController.TillRevisionNoticeView;
 import uz.horecaos.platform.pos.web.OrderPosRevisionController.TillRevisionResponse;
+import uz.horecaos.platform.pos.web.OrderPosRevisionController.TillRevisionSendResponse;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
 
@@ -87,7 +87,7 @@ class OrderPosRevisionControllerTests {
         orderExists();
         when(revisions.view(TENANT, ORDER)).thenReturn(new PosOrderRevisionService.View(notice("OPEN"), true));
 
-        TillRevisionResponse body = bodyOf(controller.forOrder(TENANT, ORDER));
+        TillRevisionResponse body = bodyOf(controller.tillRevisionForOrder(TENANT, ORDER));
 
         assertThat(body.canTell()).isTrue();
         assertThat(noticeOf(body).tillTotalMinor()).isEqualTo(215_000);
@@ -102,7 +102,7 @@ class OrderPosRevisionControllerTests {
         orderExists();
         when(revisions.view(TENANT, ORDER)).thenReturn(new PosOrderRevisionService.View(null, false));
 
-        TillRevisionResponse body = bodyOf(controller.forOrder(TENANT, ORDER));
+        TillRevisionResponse body = bodyOf(controller.tillRevisionForOrder(TENANT, ORDER));
 
         assertThat(body.notice()).isNull();
         assertThat(body.canTell()).isFalse();
@@ -113,9 +113,10 @@ class OrderPosRevisionControllerTests {
     void anUnknownOrderIsNotFound() {
         when(orders.summary(TENANT, ORDER)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> controller.forOrder(TENANT, ORDER)).isInstanceOf(ApiException.class);
-        assertThatThrownBy(() -> controller.send(TENANT, ORDER)).isInstanceOf(ApiException.class);
-        assertThatThrownBy(() -> controller.acknowledge(TENANT, ORDER)).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> controller.tillRevisionForOrder(TENANT, ORDER)).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> controller.sendTillRevision(TENANT, ORDER)).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> controller.acknowledgeTillRevision(TENANT, ORDER))
+                .isInstanceOf(ApiException.class);
     }
 
     @Test
@@ -127,7 +128,7 @@ class OrderPosRevisionControllerTests {
                 .thenReturn(new PosOrderRevisionService.Result(
                         PosOrderRevisionService.Outcome.REJECTED, "CLOPOS_REFUSED", view));
 
-        SendResponse body = bodyOf(controller.send(TENANT, ORDER));
+        TillRevisionSendResponse body = bodyOf(controller.sendTillRevision(TENANT, ORDER));
 
         assertThat(body.outcome()).isEqualTo("REJECTED");
         assertThat(body.code()).isEqualTo("CLOPOS_REFUSED");
@@ -147,7 +148,7 @@ class OrderPosRevisionControllerTests {
                 .thenReturn(new PosOrderRevisionService.View(notice("ACKNOWLEDGED"), false));
         when(revisions.acknowledge(TENANT, ORDER, "operator-1")).thenReturn(true);
 
-        TillRevisionResponse body = bodyOf(controller.acknowledge(TENANT, ORDER));
+        TillRevisionResponse body = bodyOf(controller.acknowledgeTillRevision(TENANT, ORDER));
 
         assertThat(noticeOf(body).status()).isEqualTo("ACKNOWLEDGED");
         verify(audit).record(any(AuditFact.class));
@@ -160,16 +161,16 @@ class OrderPosRevisionControllerTests {
                 audit,
                 () -> new AuthenticatedActor("operator-1", Set.of(), Map.of()),
                 Clock.fixed(NOW, ZoneOffset.UTC));
-        assertThatThrownBy(() -> empty.acknowledge(TENANT, ORDER)).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> empty.acknowledgeTillRevision(TENANT, ORDER)).isInstanceOf(ApiException.class);
     }
 
     @Test
     @DisplayName("both mutations declare pos.export.resolve and the read declares pos.export.read (ADR 0025)")
     void everyRouteDeclaresItsCapability() throws Exception {
-        assertThat(capabilityOf("send")).isEqualTo(Capability.POS_EXPORT_RESOLVE);
-        assertThat(capabilityOf("acknowledge")).isEqualTo(Capability.POS_EXPORT_RESOLVE);
-        assertThat(capabilityOf("forOrder")).isEqualTo(Capability.POS_EXPORT_READ);
-        Method send = OrderPosRevisionController.class.getMethod("send", UUID.class, UUID.class);
+        assertThat(capabilityOf("sendTillRevision")).isEqualTo(Capability.POS_EXPORT_RESOLVE);
+        assertThat(capabilityOf("acknowledgeTillRevision")).isEqualTo(Capability.POS_EXPORT_RESOLVE);
+        assertThat(capabilityOf("tillRevisionForOrder")).isEqualTo(Capability.POS_EXPORT_READ);
+        Method send = OrderPosRevisionController.class.getMethod("sendTillRevision", UUID.class, UUID.class);
         assertThat(send.getAnnotation(RequiresCapability.class).mutating()).isTrue();
     }
 
@@ -177,7 +178,7 @@ class OrderPosRevisionControllerTests {
         return Objects.requireNonNull(response.getBody());
     }
 
-    private static NoticeView noticeOf(TillRevisionResponse response) {
+    private static TillRevisionNoticeView noticeOf(TillRevisionResponse response) {
         return Objects.requireNonNull(response.notice());
     }
 

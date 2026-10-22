@@ -77,7 +77,8 @@ public class OrderPosRevisionController {
                     + "status so a screen can say what happened. `canTell` is true only while a notice is "
                     + "open and the binding the order was exported through has ORDER_REVISION enabled and "
                     + "usable: no real vendor has it today.")
-    public ResponseEntity<TillRevisionResponse> forOrder(@PathVariable UUID tenantId, @PathVariable UUID orderId) {
+    public ResponseEntity<TillRevisionResponse> tillRevisionForOrder(
+            @PathVariable UUID tenantId, @PathVariable UUID orderId) {
         requireOrder(tenantId, orderId);
         return ResponseEntity.ok(TillRevisionResponse.of(revisions.view(tenantId, orderId)));
     }
@@ -90,7 +91,8 @@ public class OrderPosRevisionController {
                     + "the notice, so a repeat is the same send. Answers 200 with the outcome in the body: a "
                     + "refusal, an unreachable till and an unknown outcome are ordinary answers, and in each "
                     + "the notice stays open with a stable failure code.")
-    public ResponseEntity<SendResponse> send(@PathVariable UUID tenantId, @PathVariable UUID orderId) {
+    public ResponseEntity<TillRevisionSendResponse> sendTillRevision(
+            @PathVariable UUID tenantId, @PathVariable UUID orderId) {
         requireOrder(tenantId, orderId);
         String subject = currentActor.get().subject();
         PosOrderRevisionService.Result result = revisions.tell(tenantId, orderId, subject);
@@ -98,7 +100,7 @@ public class OrderPosRevisionController {
         if (notice != null) {
             audit(tenantId, notice, "pos.order_revision_send_requested", "TILL_REVISION_SENT", subject, result);
         }
-        return ResponseEntity.ok(new SendResponse(
+        return ResponseEntity.ok(new TillRevisionSendResponse(
                 result.outcome().name(), result.code(), messageFor(result), TillRevisionResponse.of(result.view())));
     }
 
@@ -108,7 +110,8 @@ public class OrderPosRevisionController {
             summary = "Say the till now agrees with the order",
             description = "A person changed the till by hand. Closes the open notice as ACKNOWLEDGED, audited "
                     + "against the person. 409 when no notice is open.")
-    public ResponseEntity<TillRevisionResponse> acknowledge(@PathVariable UUID tenantId, @PathVariable UUID orderId) {
+    public ResponseEntity<TillRevisionResponse> acknowledgeTillRevision(
+            @PathVariable UUID tenantId, @PathVariable UUID orderId) {
         requireOrder(tenantId, orderId);
         String subject = currentActor.get().subject();
         Notice before = revisions.view(tenantId, orderId).notice();
@@ -188,11 +191,11 @@ public class OrderPosRevisionController {
      * @param notice the order's open notice, or the latest closed one; null when there never was one
      * @param canTell whether the platform can tell the till itself right now
      */
-    public record TillRevisionResponse(@Nullable NoticeView notice, boolean canTell) {
+    public record TillRevisionResponse(@Nullable TillRevisionNoticeView notice, boolean canTell) {
 
         static TillRevisionResponse of(PosOrderRevisionService.View view) {
             return new TillRevisionResponse(
-                    view.notice() == null ? null : NoticeView.of(view.notice()), view.canTell());
+                    view.notice() == null ? null : TillRevisionNoticeView.of(view.notice()), view.canTell());
         }
     }
 
@@ -203,7 +206,7 @@ public class OrderPosRevisionController {
      * @param revisedTotalMinor what the order is worth now
      * @param failureCode a stable code for the last unsuccessful try to tell the till, or null
      */
-    public record NoticeView(
+    public record TillRevisionNoticeView(
             UUID noticeId,
             String status,
             String source,
@@ -216,8 +219,8 @@ public class OrderPosRevisionController {
             int attemptCount,
             @Nullable String failureCode) {
 
-        static NoticeView of(Notice notice) {
-            return new NoticeView(
+        static TillRevisionNoticeView of(Notice notice) {
+            return new TillRevisionNoticeView(
                     notice.id(),
                     notice.status(),
                     notice.source(),
@@ -237,6 +240,6 @@ public class OrderPosRevisionController {
      *     {@code RETRYABLE} or {@code UNCERTAIN}
      * @param message a fixed sentence for the outcome, null when it was told
      */
-    public record SendResponse(
+    public record TillRevisionSendResponse(
             String outcome, @Nullable String code, @Nullable String message, TillRevisionResponse revision) {}
 }

@@ -91,13 +91,13 @@ public class PartnerMenuController {
             description = "ADR 0040. Each branch the partner's installation is bound to through a live binding, "
                     + "by name, with whether its integration has a single active channel yet (a restaurant "
                     + "whose channelConfigured is false answers 409 CHANNEL_NOT_CONFIGURED on its menu).")
-    public ResponseEntity<RestaurantsResponse> restaurants(@PathVariable UUID tenantId) {
+    public ResponseEntity<PartnerRestaurantsResponse> partnerRestaurants(@PathVariable UUID tenantId) {
         PartnerPrincipal principal = authentication.authenticate(tokens.clientId(), tenantId);
         limit(principal, tenantId);
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
-                .body(new RestaurantsResponse(pull.restaurants(principal).stream()
-                        .map(RestaurantResponse::of)
+                .body(new PartnerRestaurantsResponse(pull.restaurants(principal).stream()
+                        .map(PartnerRestaurantResponse::of)
                         .toList()));
     }
 
@@ -114,7 +114,7 @@ public class PartnerMenuController {
                     + "the brand's own default. 404 when the restaurant is not one this credential is bound "
                     + "to; 409 CHANNEL_NOT_CONFIGURED when the integration has no single active channel yet; "
                     + "409 MENU_NOT_PUBLISHED when nothing has been published to the channel.")
-    public ResponseEntity<PartnerMenuResponse> menu(
+    public ResponseEntity<PartnerMenuResponse> partnerMenu(
             @PathVariable UUID tenantId,
             @PathVariable UUID locationId,
             @RequestParam(required = false) @Nullable String locale,
@@ -177,13 +177,14 @@ public class PartnerMenuController {
         }
     }
 
-    public record RestaurantsResponse(List<RestaurantResponse> restaurants) {}
+    public record PartnerRestaurantsResponse(List<PartnerRestaurantResponse> restaurants) {}
 
     /** @param channelConfigured false while the integration has no single active channel */
-    public record RestaurantResponse(UUID locationId, String name, boolean channelConfigured) {
+    public record PartnerRestaurantResponse(UUID locationId, String name, boolean channelConfigured) {
 
-        static RestaurantResponse of(Restaurant restaurant) {
-            return new RestaurantResponse(restaurant.locationId(), restaurant.name(), restaurant.channelConfigured());
+        static PartnerRestaurantResponse of(Restaurant restaurant) {
+            return new PartnerRestaurantResponse(
+                    restaurant.locationId(), restaurant.name(), restaurant.channelConfigured());
         }
     }
 
@@ -196,9 +197,9 @@ public class PartnerMenuController {
             UUID publicationId,
             String locale,
             @Nullable String currency,
-            List<CategoryResponse> categories,
-            List<ItemResponse> items,
-            List<ModifierGroupResponse> modifierGroups) {
+            List<PartnerMenuCategoryResponse> categories,
+            List<PartnerMenuItemResponse> items,
+            List<PartnerMenuModifierGroupResponse> modifierGroups) {
 
         static PartnerMenuResponse of(PulledMenu pulled) {
             ChannelMenuPort.ChannelMenu menu = pulled.menu();
@@ -207,62 +208,65 @@ public class PartnerMenuController {
                     menu.publicationId(),
                     menu.locale(),
                     menu.currency(),
-                    menu.categories().stream().map(CategoryResponse::of).toList(),
+                    menu.categories().stream()
+                            .map(PartnerMenuCategoryResponse::of)
+                            .toList(),
                     menu.items().stream()
-                            .map(item -> ItemResponse.of(item, pulled.partnerItemIds()))
+                            .map(item -> PartnerMenuItemResponse.of(item, pulled.partnerItemIds()))
                             .toList(),
                     menu.modifierGroups().stream()
-                            .map(ModifierGroupResponse::of)
+                            .map(PartnerMenuModifierGroupResponse::of)
                             .toList());
         }
     }
 
-    public record ImageResponse(String assetId, String url) {
+    public record PartnerMenuImageResponse(String assetId, String url) {
 
-        static ImageResponse of(Image image) {
-            return new ImageResponse(image.assetId(), image.url());
+        static PartnerMenuImageResponse of(Image image) {
+            return new PartnerMenuImageResponse(image.assetId(), image.url());
         }
     }
 
-    public record CategoryResponse(
+    public record PartnerMenuCategoryResponse(
             UUID categoryId,
             String code,
             String name,
             @Nullable UUID parentCategoryId,
             int sortOrder,
             List<UUID> productIds,
-            List<ImageResponse> images) {
+            List<PartnerMenuImageResponse> images) {
 
-        static CategoryResponse of(Category category) {
-            return new CategoryResponse(
+        static PartnerMenuCategoryResponse of(Category category) {
+            return new PartnerMenuCategoryResponse(
                     category.categoryId(),
                     category.code(),
                     category.name(),
                     category.parentCategoryId(),
                     category.sortOrder(),
                     category.productIds(),
-                    category.images().stream().map(ImageResponse::of).toList());
+                    category.images().stream().map(PartnerMenuImageResponse::of).toList());
         }
     }
 
-    public record ItemResponse(
+    public record PartnerMenuItemResponse(
             UUID productId,
             String code,
             String name,
             @Nullable String description,
-            List<ImageResponse> images,
-            List<VariantResponse> variants,
+            List<PartnerMenuImageResponse> images,
+            List<PartnerMenuVariantResponse> variants,
             List<UUID> modifierGroupIds) {
 
-        static ItemResponse of(Item item, Map<UUID, String> partnerItemIds) {
-            return new ItemResponse(
+        static PartnerMenuItemResponse of(Item item, Map<UUID, String> partnerItemIds) {
+            return new PartnerMenuItemResponse(
                     item.productId(),
                     item.code(),
                     item.name(),
                     item.description(),
-                    item.images().stream().map(ImageResponse::of).toList(),
+                    item.images().stream().map(PartnerMenuImageResponse::of).toList(),
                     item.variants().stream()
-                            .map(variant -> VariantResponse.of(variant, partnerItemIds.get(variant.variantId())))
+                            .map(variant ->
+                                    PartnerMenuVariantResponse.of(variant, partnerItemIds.get(variant.variantId())))
                             .toList(),
                     item.modifierGroupIds());
         }
@@ -273,7 +277,7 @@ public class PartnerMenuController {
      * @param orderable false means sold out or stopped on this channel here now
      * @param amountMinor null when no price resolves; never zero for "no price"
      */
-    public record VariantResponse(
+    public record PartnerMenuVariantResponse(
             UUID variantId,
             @Nullable String partnerItemId,
             @Nullable String sku,
@@ -283,10 +287,10 @@ public class PartnerMenuController {
             boolean orderable,
             boolean onSaleNow,
             @Nullable Long amountMinor,
-            List<ImageResponse> images) {
+            List<PartnerMenuImageResponse> images) {
 
-        static VariantResponse of(Variant variant, @Nullable String partnerItemId) {
-            return new VariantResponse(
+        static PartnerMenuVariantResponse of(Variant variant, @Nullable String partnerItemId) {
+            return new PartnerMenuVariantResponse(
                     variant.variantId(),
                     partnerItemId,
                     variant.sku(),
@@ -296,11 +300,11 @@ public class PartnerMenuController {
                     variant.orderable(),
                     variant.onSaleNow(),
                     variant.amountMinor(),
-                    variant.images().stream().map(ImageResponse::of).toList());
+                    variant.images().stream().map(PartnerMenuImageResponse::of).toList());
         }
     }
 
-    public record ModifierGroupResponse(
+    public record PartnerMenuModifierGroupResponse(
             UUID modifierGroupId,
             String code,
             String name,
@@ -308,10 +312,10 @@ public class PartnerMenuController {
             int minimumSelections,
             int maximumSelections,
             boolean allowSameOptionMultipleTimes,
-            List<ModifierOptionResponse> options) {
+            List<PartnerMenuModifierOptionResponse> options) {
 
-        static ModifierGroupResponse of(ModifierGroup group) {
-            return new ModifierGroupResponse(
+        static PartnerMenuModifierGroupResponse of(ModifierGroup group) {
+            return new PartnerMenuModifierGroupResponse(
                     group.modifierGroupId(),
                     group.code(),
                     group.name(),
@@ -319,19 +323,21 @@ public class PartnerMenuController {
                     group.minimumSelections(),
                     group.maximumSelections(),
                     group.allowSameOptionMultipleTimes(),
-                    group.options().stream().map(ModifierOptionResponse::of).toList());
+                    group.options().stream()
+                            .map(PartnerMenuModifierOptionResponse::of)
+                            .toList());
         }
     }
 
-    public record ModifierOptionResponse(
+    public record PartnerMenuModifierOptionResponse(
             UUID optionId,
             String code,
             @Nullable String name,
             int maximumQuantity,
             @Nullable Long amountMinor) {
 
-        static ModifierOptionResponse of(ModifierOption option) {
-            return new ModifierOptionResponse(
+        static PartnerMenuModifierOptionResponse of(ModifierOption option) {
+            return new PartnerMenuModifierOptionResponse(
                     option.optionId(), option.code(), option.name(), option.maximumQuantity(), option.amountMinor());
         }
     }
