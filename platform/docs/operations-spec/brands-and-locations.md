@@ -834,7 +834,7 @@ zone.
 | Field | Type | Source (ADR 0037) |
 |---|---|---|
 | Код | mono, unique per (tenant, brand) | `fulfillment.service_zones.code` |
-| Название (ru/uz/en) | text | `service_zones.display_name_ru/uz/en` |
+| Название (по языкам бренда) | text per language | `service_zone_translations.display_name`, one row per language (V0679 dropped the three fixed columns) |
 | Роль | DELIVERY / CATCHMENT | `service_zones.zone_role` |
 | Версия | integer + status DRAFT/ACTIVE/RETIRED/DISCARDED | `service_zone_versions.version`, `.status` |
 | Геометрия | polygon/multipolygon on the map | `service_zone_versions.area geography(MultiPolygon,4326)` |

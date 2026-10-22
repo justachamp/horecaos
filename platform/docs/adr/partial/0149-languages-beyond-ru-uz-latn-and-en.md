@@ -31,7 +31,12 @@
   set, the receipt footer and the document-language policy over the registry's messages tier narrowed to the
   brand, the reset and invitation requests sending the tag, the assistant's notes and disclosure served the
   detector's languages by `GET /api/v1/operations/assistant/languages`, with the assistant's stored ISO 639 codes
-  now a fourth named "not locales" exemption in the by-name scan); the Kazakh glyph audit
+  now a fourth named "not locales" exemption in the by-name scan); the legacy ru/uz/en columns of presets, regions
+  and zones gone from the schema and the wire (V0678: a preset's wording and an order line's snapshot of it live in
+  `comment_preset_translations` and `order_line_comment_preset_labels` alone; V0679: a region's and a zone's name in
+  `region_translations` and `service_zone_translations` alone, with `platform_region_names` for the platform's own
+  regions, which have no tenant to own a translation row; the requests carry `labels` / `displayNames` only and the
+  OpenAPI gate admits the removal through a named allowance); the Kazakh glyph audit
   (`frontend/tools/glyph-audit`, run by `npm run lint:rules` in both consoles: @ibm/plex-sans 1.1.0 draws every
   letter of Russian, Uzbek Latin, English and Kazakh; Georgian is absent and the audit says so; U+02BB-02BC are in no
   split subset of the package and ride the complete face, pinned per app); `alphabets.json` as the table every
@@ -39,7 +44,8 @@
   and its specs). Not built: the mobile app's catalogue and lists (Flutter is on hold, ADR 0055), the
   storefronts' catalogue files renamed to the registry's tags (`uz.json` stays: the catalogue id is the
   registry's `catalogCode`), a Georgian face (deferred to the first activation by the record's own
-  default), the legacy ru/uz/en columns of presets, regions and zones, and any language activation. The inventory the
+  default), the legacy ru/uz/en columns of kitchen stations (`kitchen.stations`: optional, the reserved V0680 is
+  unused), and any language activation. The inventory the
   record was written against, kept for the record as it stood on 2026-10-03 and not as it stands
   now: the platform speaks three languages and
   records that fact in more than sixty independent declarations, counted by grep on
