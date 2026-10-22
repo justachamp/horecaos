@@ -12720,6 +12720,17 @@
         },
         "type" : "object"
       },
+      "LockedByPlan" : {
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "entitlementKey" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "LoyaltyOperationsControllerAdjustmentRequest" : {
         "properties" : {
           "actorSubject" : {
@@ -14257,6 +14268,20 @@
         },
         "type" : "object"
       },
+      "OperationsConfigurationKeyPlacements" : {
+        "properties" : {
+          "keyCode" : {
+            "type" : "string"
+          },
+          "placements" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OperationsConfigurationPlacement"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "OperationsConfigurationKeyResponse" : {
         "properties" : {
           "code" : {
@@ -14266,8 +14291,14 @@
           "description" : {
             "type" : "string"
           },
+          "entitledBy" : {
+            "type" : "string"
+          },
           "explicitNullTerminates" : {
             "type" : "boolean"
+          },
+          "lockedByPlan" : {
+            "$ref" : "#/components/schemas/LockedByPlan"
           },
           "owningModule" : {
             "type" : "string"
@@ -14281,6 +14312,66 @@
           },
           "valueType" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OperationsConfigurationPlacement" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "brandName" : {
+            "type" : "string"
+          },
+          "changedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "changedByName" : {
+            "type" : "string"
+          },
+          "displayTruncated" : {
+            "type" : "boolean"
+          },
+          "displayValue" : {
+            "type" : "string"
+          },
+          "explicitNull" : {
+            "type" : "boolean"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationName" : {
+            "type" : "string"
+          },
+          "scopeType" : {
+            "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "OperationsConfigurationPlacementsResponse" : {
+        "properties" : {
+          "keys" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OperationsConfigurationKeyPlacements"
+            },
+            "type" : "array"
+          },
+          "policies" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OperationsPolicyPlacements"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -14305,6 +14396,9 @@
           },
           "keyCode" : {
             "type" : "string"
+          },
+          "lockedByPlan" : {
+            "$ref" : "#/components/schemas/LockedByPlan"
           },
           "source" : {
             "type" : "string"
@@ -15162,6 +15256,54 @@
           },
           "rePresented" : {
             "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "OperationsPolicyPlacement" : {
+        "properties" : {
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "brandName" : {
+            "type" : "string"
+          },
+          "changedByName" : {
+            "type" : "string"
+          },
+          "effectiveFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "locationId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "locationName" : {
+            "type" : "string"
+          },
+          "scopeType" : {
+            "enum" : [ "PLATFORM", "TENANT", "BRAND", "LOCATION" ],
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "OperationsPolicyPlacements" : {
+        "properties" : {
+          "placements" : {
+            "items" : {
+              "$ref" : "#/components/schemas/OperationsPolicyPlacement"
+            },
+            "type" : "array"
+          },
+          "policyCode" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -41872,6 +42014,15 @@
       "get" : {
         "description" : "ConfigurationKeys.all() filtered to tenantVisible() — the settings.md \"find a setting\" registry and the scope bar's own key picker. A platform-only default is absent here even though ConfigurationController's PLATFORM_ADMIN surface still lists it.",
         "operationId" : "keys",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
         "responses" : {
           "200" : {
             "content" : {
@@ -41994,6 +42145,35 @@
           }
         },
         "summary" : "Set the value stored at exactly one key and scope, for this tenant",
+        "tags" : [ "Operations configuration" ]
+      }
+    },
+    "/api/v1/operations/tenants/{tenantId}/configuration/placements" : {
+      "get" : {
+        "description" : "settings.md §10.0 «Find a setting»: for every key this tenant may see, the values stored for it at TENANT, BRAND and LOCATION scope (brand and branch named, the value shortened to a line of text, who set it and when), and for each listed policy family the newest published version at every scope that holds one. A key nobody has set has an empty list: the code default applies. Secrets are not configuration (ADR 0030), so values are shown; a long string is cut at 80 characters and flagged.",
+        "operationId" : "placements",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OperationsConfigurationPlacementsResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Where each setting and policy of this tenant is set",
         "tags" : [ "Operations configuration" ]
       }
     },

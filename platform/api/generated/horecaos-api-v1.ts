@@ -6076,6 +6076,11 @@ export interface LocationView {
   virtualTourUrl?: string;
 }
 
+export interface LockedByPlan {
+  description?: string;
+  entitlementKey?: string;
+}
+
 export interface LookupHit {
   id?: string;
   label?: string;
@@ -6972,14 +6977,40 @@ export interface OpenShiftRequest {
   point?: string;
 }
 
+export interface OperationsConfigurationKeyPlacements {
+  keyCode?: string;
+  placements?: Array<OperationsConfigurationPlacement>;
+}
+
 export interface OperationsConfigurationKeyResponse {
   code?: string;
   defaultValue?: unknown;
   description?: string;
+  entitledBy?: string;
   explicitNullTerminates?: boolean;
+  lockedByPlan?: LockedByPlan;
   owningModule?: string;
   settableScopes?: Array<"PLATFORM" | "TENANT" | "BRAND" | "LOCATION">;
   valueType?: string;
+}
+
+export interface OperationsConfigurationPlacement {
+  brandId?: string;
+  brandName?: string;
+  changedAt?: string;
+  changedByName?: string;
+  displayTruncated?: boolean;
+  displayValue?: string;
+  explicitNull?: boolean;
+  locationId?: string;
+  locationName?: string;
+  scopeType?: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION";
+  version?: number;
+}
+
+export interface OperationsConfigurationPlacementsResponse {
+  keys?: Array<OperationsConfigurationKeyPlacements>;
+  policies?: Array<OperationsPolicyPlacements>;
 }
 
 export interface OperationsConfigurationResolutionResponse {
@@ -6988,6 +7019,7 @@ export interface OperationsConfigurationResolutionResponse {
   describe?: string;
   inspectedLevels?: Array<OperationsTraceLevel>;
   keyCode?: string;
+  lockedByPlan?: LockedByPlan;
   source?: string;
   value?: unknown;
   winningScope?: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION";
@@ -7250,6 +7282,22 @@ export interface OperationsPaymentControllerPaymentSessionResponse {
   provider?: string;
   qrPayload?: string;
   rePresented?: boolean;
+}
+
+export interface OperationsPolicyPlacement {
+  brandId?: string;
+  brandName?: string;
+  changedByName?: string;
+  effectiveFrom?: string;
+  locationId?: string;
+  locationName?: string;
+  scopeType?: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION";
+  version?: number;
+}
+
+export interface OperationsPolicyPlacements {
+  placements?: Array<OperationsPolicyPlacement>;
+  policyCode?: string;
 }
 
 export interface OperationsRegionControllerLocaleSetResponse {
@@ -14628,9 +14676,10 @@ export interface Operations {
   "get_11": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/brands/{brandId}/terms-documents/{version}"; request: { parameters: { path: { brandId: string; tenantId: string; version: number } } }; responses: { "200": TermsVersionView } };
   "cashHandovers": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/cash-handovers"; request: { parameters: { path: { tenantId: string }; query: { limit?: number; locationId?: string; status?: string } } }; responses: { "200": Array<CashHandoverResponse> } };
   "confirmCash": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/cash-handovers/{handoverId}/confirm"; request: { parameters: { path: { handoverId: string; tenantId: string } }; body: ConfirmCashRequest }; responses: { "200": unknown } };
-  "keys": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/configuration/keys"; request: { parameters: Record<string, never> }; responses: { "200": Array<OperationsConfigurationKeyResponse> } };
+  "keys": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/configuration/keys"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<OperationsConfigurationKeyResponse> } };
   "resolution": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/configuration/keys/{code}/resolution"; request: { parameters: { path: { code: string; tenantId: string }; query: { brandId?: string; locationId?: string; scopeType: "PLATFORM" | "TENANT" | "BRAND" | "LOCATION" } } }; responses: { "200": OperationsConfigurationResolutionResponse } };
   "setValue": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/configuration/keys/{code}/values"; request: { parameters: { path: { code: string; tenantId: string } }; body: OperationsSetConfigurationValueRequest }; responses: { "200": OperationsConfigurationValueResponse } };
+  "placements": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/configuration/placements"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": OperationsConfigurationPlacementsResponse } };
   "suspend_6": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-engagements/{engagementId}/suspend"; request: { parameters: { path: { engagementId: string; tenantId: string } }; body: SuspendRequest }; responses: { "200": unknown } };
   "verify_2": { method: "POST"; path: "/api/v1/operations/tenants/{tenantId}/courier-engagements/{engagementId}/verify"; request: { parameters: { path: { engagementId: string; tenantId: string } }; body: VerifyRequest }; responses: { "200": EngagementResponse } };
   "courierGroups": { method: "GET"; path: "/api/v1/operations/tenants/{tenantId}/courier-groups"; request: { parameters: { path: { tenantId: string } } }; responses: { "200": Array<CourierGroupResponse> } };
