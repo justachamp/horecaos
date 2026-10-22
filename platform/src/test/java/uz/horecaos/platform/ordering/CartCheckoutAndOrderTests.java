@@ -7785,6 +7785,12 @@ class CartCheckoutAndOrderTests {
                 .anyMatch(event -> event instanceof OrderAwaitingApproval awaiting
                         && awaiting.orderId().equals(orderIdOf(placed))
                         && "HORECAOS_OPERATIONS".equals(awaiting.approvalChannel()));
+        assertThat(published.events)
+                .as(
+                        "the event says what the order row says: a consumer must not read AUTO_CONFIRM for an order a person decides")
+                .anyMatch(event -> event instanceof OrderReceived received
+                        && received.orderId().equals(orderIdOf(placed))
+                        && "RESTAURANT_APPROVAL".equals(received.acceptanceMode()));
         assertThat(autoAcceptMeters
                         .counter("horecaos.order.auto_accept_gate", "outcome", "held", "reason", "CHANNEL_NOT_ELIGIBLE")
                         .count())

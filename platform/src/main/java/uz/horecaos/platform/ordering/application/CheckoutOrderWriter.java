@@ -267,7 +267,9 @@ class CheckoutOrderWriter {
                 channel.code(),
                 publicNumber,
                 cart.fulfillmentMode().name(),
-                policy.policy().mode().name(),
+                // What governed this order, which is the row's snapshot above: an order an auto-accept gate
+                // held back is RESTAURANT_APPROVAL here whatever the pinned policy says (ADR 0177).
+                effectiveMode.name(),
                 policy.policyId(),
                 policy.policyVersion(),
                 OrderStatus.RECEIVED.name(),

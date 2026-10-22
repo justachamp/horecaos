@@ -22,6 +22,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -37,6 +38,9 @@ import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
 import uz.horecaos.platform.support.TestDatabase;
+import uz.horecaos.platform.support.printing.MutableClock;
+import uz.horecaos.platform.web.cache.InProcessRateLimiter;
+import uz.horecaos.platform.web.cache.RateLimiter;
 
 /**
  * Row 1.3a, over real HTTP: {@code LOCATION_STAFF}/{@code LOCATION_MANAGER}
@@ -101,6 +105,14 @@ class OperationsCustomerControllerHttpTests {
              "fields":{"line1":"Navoi ko'chasi 7","city":"Tashkent","district":"Chilonzor","landmark":"opposite the bank"},
              "latitude":null,"longitude":null,"coordinateSource":"LANDMARK_ONLY"}""";
 
+    /**
+     * The clock the rate limiter under test reads. A token bucket refills with time, so a flood asserted against the
+     * wall clock is only a flood when the machine is quick: on a loaded one each call takes as long as a token
+     * takes to come back and the bucket never empties. This clock stands still during a test, so the allowance is
+     * exactly the policy's, and moves on between tests so no test spends another's.
+     */
+    private static final MutableClock LIMITER_CLOCK = new MutableClock();
+
     @SuppressWarnings("NullAway")
     private static TestDatabase.Handle db;
 
@@ -138,6 +150,7 @@ class OperationsCustomerControllerHttpTests {
 
     @BeforeEach
     void reset() {
+        LIMITER_CLOCK.advance(Duration.ofMinutes(10));
         jdbc.sql("TRUNCATE TABLE platform.idempotency_records").update();
         jdbc.sql("TRUNCATE TABLE audit.audit_events").update();
         jdbc.sql("TRUNCATE TABLE customer.consent_decisions, customer.addresses, "
@@ -561,26 +574,25 @@ class OperationsCustomerControllerHttpTests {
     void theMaskedListIsRateLimitedPerOperator() throws Exception {
         UUID account = openAccount(RATE_LIMITED);
 
-        // A token bucket refills while the calls are made, so the 61st is not necessarily the first
-        // refusal: the allowance is finite when a refusal arrives within a few calls of the budget.
+        // The limiter's clock stands still, so the allowance is the policy's own: exactly `budget` lists are
+        // served and the next is refused, however long the calls take.
         int budget = (int) OperationsCustomerController.LIST_LIMIT.permits();
-        MvcResult refused = null;
-        int served = 0;
-        for (int call = 0; call < budget * 3 && refused == null; call++) {
-            MvcResult answer = list(RATE_LIMITED, account);
-            if (answer.getResponse().getStatus() == 429) {
-                refused = answer;
-            } else {
-                assertThat(answer.getResponse().getStatus()).isEqualTo(200);
-                served++;
-            }
+        for (int call = 0; call < budget; call++) {
+            assertThat(list(RATE_LIMITED, account).getResponse().getStatus())
+                    .as("list %s of %s", call + 1, budget)
+                    .isEqualTo(200);
         }
+        MvcResult refusal = list(RATE_LIMITED, account);
 
-        MvcResult refusal = java.util.Objects.requireNonNull(refused, "a flood of masked lists must be refused");
-        assertThat(served).isGreaterThanOrEqualTo(budget).isLessThan(budget * 2);
+        assertThat(refusal.getResponse().getStatus()).isEqualTo(429);
         assertThat(refusal.getResponse().getContentAsString(UTF_8)).contains("RATE_LIMIT_EXCEEDED");
         assertThat(list(STAFF, account).getResponse().getStatus())
                 .as("another operator's allowance is her own")
+                .isEqualTo(200);
+
+        LIMITER_CLOCK.advance(Duration.ofMinutes(1));
+        assertThat(list(RATE_LIMITED, account).getResponse().getStatus())
+                .as("a minute later the allowance is back")
                 .isEqualTo(200);
     }
 
@@ -699,6 +711,13 @@ class OperationsCustomerControllerHttpTests {
 
     @TestConfiguration(proxyBeanMethods = false)
     static class StubIssuer {
+
+        /** The production limiter, reading the clock this class moves instead of the wall clock. */
+        @Bean
+        @Primary
+        RateLimiter testRateLimiter() {
+            return new InProcessRateLimiter(LIMITER_CLOCK);
+        }
 
         @Bean
         JwtDecoder jwtDecoder() {

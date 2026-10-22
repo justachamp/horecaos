@@ -128,15 +128,15 @@ interface PendingComboSelection {
 /**
  * New order — orders.md §5, the call-centre order-entry screen (wave P13).
  *
- * **Built this wave.** The three-pane composer: phone lookup and
+ * **Built in wave P13 (the paragraphs are by wave; the ones on the address pane and on what is not
+ * built, further down, say what is current).** The three-pane composer: phone lookup and
  * create-on-miss (§5.3, reusing `CreateCustomerDialog`/`CustomersApi` from
  * the Customers section rather than a second create-customer form), item
  * search over the published menu plus the category grid fallback (§5.5),
  * modifier selection (`q-item-modifier-dialog`), a running total, and
  * `Создать` — `POST .../orders` with an `Idempotency-Key`, routing straight
- * to the created order (§5.6). Fulfilment is `PICKUP` only: `DELIVERY` needs
- * the address pane wave `P14` owns, and offering it here would mean
- * inventing an address flow this wave's brief explicitly says not to build.
+ * to the created order (§5.6). That wave offered `PICKUP` only: `DELIVERY` waited for the
+ * address pane wave `P14` built (below), and is offered now.
  *
  * **Wave P14 adds** the address pane's structured half (§5.4, row `1.3b`):
  * the customer's saved addresses, an inline «+ новый адрес» with the

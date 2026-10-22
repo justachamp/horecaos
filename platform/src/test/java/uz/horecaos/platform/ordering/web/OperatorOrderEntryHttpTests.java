@@ -205,6 +205,7 @@ class OperatorOrderEntryHttpTests {
 
     @BeforeEach
     void reset() {
+        card5Versions.clear();
         jdbc.sql("TRUNCATE TABLE platform.idempotency_records").update();
         jdbc.sql("""
                 TRUNCATE TABLE dinein.session_orders, dinein.session_tables, dinein.table_sessions,
@@ -765,8 +766,15 @@ class OperatorOrderEntryHttpTests {
 
     // ======================= ADR 0177 decision 5: what the branch lets an operator do while keying an order in
 
-    /** The owner turns one Card 5 toggle off through the settings API, the way the order policy page does. */
+    /**
+     * The version of each Card 5 row this case has written, by key: a second write to the same scope must
+     * carry the version the first one returned (the settings API refuses a blind overwrite), as the page does.
+     */
+    private final java.util.Map<String, Long> card5Versions = new java.util.HashMap<>();
+
+    /** The owner sets one Card 5 toggle through the settings API, the way the order policy page does. */
     private void setCard5(String key, boolean value) throws Exception {
+        Long expected = card5Versions.get(key);
         MvcResult written = mvc.perform(
                         post("/api/v1/operations/tenants/" + TENANT + "/configuration/keys/" + key + "/values")
                                 .with(tokenFor(OWNER))
@@ -775,11 +783,16 @@ class OperatorOrderEntryHttpTests {
                                 .content("""
                                 {"scopeType":"TENANT","brandId":null,"locationId":null,"explicitNull":false,
                                  "booleanValue":%s,"integerValue":null,"decimalValue":null,"stringValue":null,
-                                 "expectedVersion":null,"reason":"order entry http test"}""".formatted(value)))
+                                 "expectedVersion":%s,"reason":"order entry http test"}""".formatted(value, expected)))
                 .andReturn();
         assertThat(written.getResponse().getStatus())
                 .as(written.getResponse().getContentAsString())
                 .isEqualTo(200);
+        card5Versions.put(
+                key,
+                JSON.readTree(written.getResponse().getContentAsString())
+                        .path("version")
+                        .asLong());
     }
 
     private JsonNode entryPolicy(String subject) throws Exception {
