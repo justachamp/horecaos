@@ -134,21 +134,44 @@ operator checkout passed a literal zero.
 
 ## Specification
 
-- **Offer, customer side.** `GET /api/v1/storefront/cart/orders/redemption-offer` style read keyed
-  by the customer's own cart: `PointsRedemptionPort.quote` over the cart's priced total, delivery
-  fee, currency and channel. Ownership comes from `CurrentCustomer`; there is no account id in the
-  URL, so one customer cannot read another's.
-- **Offer, operations twin.** The same quote for an identified customer and a priced draft of an
-  operator order, under a capability that already guards reading a customer's loyalty balance.
-- **Balance, customer side.** `GET /api/v1/storefront/loyalty/balance` returns the signed-in
-  customer's own account at the tenant's brand, via ownership rather than `LOYALTY_READ`.
+All four reads sit under the storefront's tenant and brand path, and are authorised by ownership
+(`@CustomerOwned`, no ADR 0025 capability): the customer's account comes from the caller's own token
+and the brand in the path, never from an identifier in the request, and another customer's cart or
+order and a missing one are answered with the same 404.
+
+- **Offer, customer side.** `GET /api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/redemption-offer`.
+  `PointsRedemptionPort.quote` over the figures of the quote the cart is bound to (total, delivery
+  fee, currency, channel, and the promotion flag), so the maximum is the one checkout will accept. A
+  cart not yet priced, or whose quote has expired, offers nothing and says `CART_NOT_PRICED` or
+  `QUOTE_EXPIRED`; a guest cart says `SIGN_IN_REQUIRED`. Ordering declares `RedemptionOfferPort`;
+  loyalty answers it (`LoyaltyRedemptionOffers`), as payments answers `OrderSettlementPort`.
+- **Offer, operations twin.** `POST /api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/redemption-offer`,
+  `ORDER_PLACE` at `LOCATION` scope (the capability that places the order the offer is for), with
+  the body of `POST .../orders` and an `Idempotency-Key`. The basket is priced by the operator
+  quote's own path inside a transaction that is always rolled back, so nothing survives. The answer
+  carries the offer against the booked figure and, when the body names a `redeemFromBalanceMinor`,
+  the cash the customer would still owe (`cashToCollect`), or `requestedRefusal: EXCEEDS_MAXIMUM`.
+- **Balance, customer side.** `GET /api/v1/storefront/tenants/{tenantId}/brands/{brandId}/loyalty/balance`
+  returns the signed-in customer's own account at that brand, or `accountId: null` and no amounts
+  for a customer who has earned nothing there. Not cached.
+- **The split on the order page.** `GET /api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/payment-split`:
+  the tenders of the order's settlement in the order they settle, as `POINTS` and `MONEY` with the
+  money tender's method code and each tender's status, and nothing a staff member would be told for
+  a stated purpose (no refunded figure, intent or loyalty reservation). An order with no settlement
+  answers `404 NO_PAYMENT_SPLIT`.
 - **Operator redemption.** The operations order-create body gains a boxed `redeemFromBalanceMinor`
   and an `operatorAttestsCustomerAgreement` flag; the flag is required when the amount is above
-  zero, the guard refuses a guest and a customer other than the one on the order, and one
-  `ordering.order.redemption_attested` audit fact records who attested.
+  zero (`REDEMPTION_NEEDS_CUSTOMER_AGREEMENT`), the points are always the identified customer's own
+  account's (the order's customer, never a second one), the checkout guard still refuses a guest and
+  an amount that leaves no money to collect, and one `ordering.order.redemption_attested` audit fact
+  records who attested. The quote and the offer
+  never see the redemption: it changes what is collected, not what the basket costs.
 - **Money-leg re-plan.** `OrderSettlementPort.replanMoneyLeg` re-points the one planned money
-  tender to the new method's registry row and returns the amount due; `applyPaymentMethodChange`
-  opens the intent for that figure.
+  tender to the new method's registry row, and to the amended total when the same amendment
+  repriced the order, and returns the amount due; `applyPaymentMethodChange` opens the intent for
+  that figure. A settlement that is not `PLANNED`, has settled money, has a money tender with an
+  intent already, or would be left with no money to collect refuses the amendment
+  (`SETTLEMENT_NOT_REPLANNABLE`) before any provider is called.
 - **Receipt lines for a provider-paid order** are the fiscal line builder's (wave `w11`); this wave
   builds against the current bridge.
 

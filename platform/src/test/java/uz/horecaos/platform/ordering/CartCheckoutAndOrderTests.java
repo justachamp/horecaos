@@ -7539,6 +7539,19 @@ class CartCheckoutAndOrderTests {
 
     // ------------------------------- ADR 0185: points at order entry, and what can be offered before it
 
+    /**
+     * Takes the second ACTIVE branch of the fixture out of the resolver's reach. The operator path re-resolves the
+     * branch itself and ranks a PICKUP order's candidates by load, so the moment one order stands at {@link #LOCATION}
+     * the quieter {@code MAIN02} becomes the proposal and a second placement at {@code LOCATION} would need a branch
+     * override reason. A test that places two orders to prove something about points is not about that rule.
+     */
+    private void onlyTheOrderingBranchIsActive() {
+        jdbc.sql("UPDATE tenant.locations SET status = 'SUSPENDED' WHERE tenant_id = :tenantId AND id = :id")
+                .param("tenantId", TENANT)
+                .param("id", OTHER_LOCATION)
+                .update();
+    }
+
     /** Two burgers at 50 000 each, for the customer the call is from, with part paid from their points. */
     private uz.horecaos.platform.ordering.application.OperatorOrderingService.PlaceOrderCommand operatorOrder(
             String idempotencyKey, long redeemMinor, boolean attested, @Nullable Long cashTenderedMinor) {
@@ -7604,6 +7617,7 @@ class CartCheckoutAndOrderTests {
     @Test
     @DisplayName("a replay of the same operator order takes no second hold and writes no second attestation")
     void aReplayedOperatorRedemptionIsNotTakenTwice() {
+        onlyTheOrderingBranchIsActive();
         seedRedemptionPolicy();
         seedBalance(30_000L);
         var command = operatorOrder("idem-op-redeem-replay", 10_000L, true, null);
@@ -7716,6 +7730,7 @@ class CartCheckoutAndOrderTests {
     @DisplayName(
             "the cash tendered is compared with the cash the customer still owes after their points, not the total")
     void theCashTenderedIsComparedWithTheMoneyLeg() {
+        onlyTheOrderingBranchIsActive();
         seedRedemptionPolicy();
         seedBalance(30_000L);
 
