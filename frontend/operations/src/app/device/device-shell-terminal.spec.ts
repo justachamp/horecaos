@@ -406,6 +406,31 @@ describe('DeviceShell: kiosk pairing and the terminal unlock', () => {
       });
     });
 
+    it('drops the pictures of a kiosk that is revoked: a re-paired kiosk plays its own channel’s, not the old one’s', async () => {
+      vi.useFakeTimers();
+      const me = vi
+        .fn()
+        .mockResolvedValueOnce(KIOSK)
+        .mockRejectedValue(new DeviceBoardError(401, 'refused'));
+      const kioskConfiguration = vi.fn().mockResolvedValue(
+        toKioskConfiguration({
+          idleMedia: [
+            { id: 'i1', assetId: 'a1', position: 0, url: '/api/v1/storefront/tenants/t1/media/a1' },
+          ],
+          idleMediaVersion: 1,
+        }),
+      );
+      await render(makeSession({ enrolled: true, profile: KIOSK }), { me, kioskConfiguration });
+      await vi.advanceTimersByTimeAsync(10);
+      fixture.detectChanges();
+      expect(byId('device-kiosk-idle')).not.toBeNull();
+
+      await vi.advanceTimersByTimeAsync(60_000);
+      fixture.detectChanges();
+
+      expect(byId('device-kiosk-idle')).toBeNull();
+    });
+
     it('returns to the pairing screen on the next read after a revoke', async () => {
       vi.useFakeTimers();
       const me = vi

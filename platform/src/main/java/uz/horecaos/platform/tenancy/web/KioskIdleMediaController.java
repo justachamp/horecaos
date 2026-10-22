@@ -58,6 +58,7 @@ public class KioskIdleMediaController {
     @GetMapping
     @RequiresCapability(value = Capability.KIOSK_DEVICE_MANAGE, scope = ScopeType.LOCATION)
     @Operation(
+            operationId = "kioskIdleMediaList",
             summary = "A KIOSK channel's idle media, in the order it plays",
             description = "At most eight pictures. The version is the If-Match of the next change; the limits "
                     + "(count, bytes, ratio) are the ones the platform enforces, so a screen never hard-codes them.")
@@ -73,59 +74,64 @@ public class KioskIdleMediaController {
     @PostMapping("/upload-requests")
     @RequiresCapability(value = Capability.KIOSK_DEVICE_MANAGE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
+            operationId = "kioskIdleMediaRequestUpload",
             summary = "Allocate an idle-media picture and return a constrained upload URL",
             description = "A public, tenant-owned still image (JPEG, PNG or WebP) of at most 1 MB, signed for exactly "
                     + "this key, type and size. Upload to it directly, then call finalize. The 9:16 shape is checked "
                     + "when the pipeline has read the file's own header: a wrong one ends REJECTED.")
-    public ResponseEntity<UploadTicketResponse> requestUpload(
+    public ResponseEntity<IdleMediaUploadTicketResponse> requestUpload(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID channelId,
-            @Valid @RequestBody UploadRequest body) {
+            @Valid @RequestBody IdleMediaUploadRequest body) {
         PurposedImages.UploadTicket ticket = idleMedia.requestUpload(
                 tenantId, locationId, channelId, body.contentType(), body.sizeBytes(), body.filename(), actorId());
-        return ResponseEntity.ok(new UploadTicketResponse(
+        return ResponseEntity.ok(new IdleMediaUploadTicketResponse(
                 ticket.assetId(), ticket.uploadUrl(), ticket.requiredHeaders(), ticket.expiresAt()));
     }
 
     @GetMapping("/uploads/{assetId}")
     @RequiresCapability(value = Capability.KIOSK_DEVICE_MANAGE, scope = ScopeType.LOCATION)
     @Operation(
+            operationId = "kioskIdleMediaUploadState",
             summary = "Where an idle-media upload's verification stands",
             description = "UPLOADED while the pipeline has not read the file, then AVAILABLE or REJECTED; a rejected "
                     + "picture carries the code it was refused with (PURPOSE_ASPECT_RATIO for a picture that is not "
                     + "9:16). A 404 for any asset that is not an idle-media picture of this tenant.")
-    public ResponseEntity<UploadStateResponse> uploadState(
+    public ResponseEntity<IdleMediaUploadStateResponse> uploadState(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID channelId,
             @PathVariable UUID assetId) {
         PurposedImages.UploadState state = idleMedia.uploadState(tenantId, locationId, channelId, assetId);
-        return ResponseEntity.ok(new UploadStateResponse(state.assetId(), state.status(), state.rejectionCode()));
+        return ResponseEntity.ok(
+                new IdleMediaUploadStateResponse(state.assetId(), state.status(), state.rejectionCode()));
     }
 
     @PostMapping("/uploads/{assetId}/finalize")
     @RequiresCapability(value = Capability.KIOSK_DEVICE_MANAGE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
+            operationId = "kioskIdleMediaFinalizeUpload",
             summary = "Record that an idle-media upload is complete and queue verification",
             description = "As the media route, for a picture allocated here. The status is UPLOADED; AVAILABLE or "
                     + "REJECTED follows, and only AVAILABLE can be attached. A 404 for any asset that is not an "
                     + "idle-media picture of this tenant.")
-    public ResponseEntity<FinalizeResponse> finalizeUpload(
+    public ResponseEntity<IdleMediaFinalizeResponse> finalizeUpload(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID channelId,
             @PathVariable UUID assetId) {
         MediaAssetStatus status = idleMedia.finalizeUpload(tenantId, locationId, channelId, assetId);
-        return ResponseEntity.ok(new FinalizeResponse(assetId, status));
+        return ResponseEntity.ok(new IdleMediaFinalizeResponse(assetId, status));
     }
 
     @PostMapping
     @RequiresCapability(value = Capability.KIOSK_DEVICE_MANAGE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
+            operationId = "kioskIdleMediaAttach",
             summary = "Put a verified picture at the end of the idle loop",
             description = "The picture is checked again here -- an idle-media picture of this tenant, 9:16, at most "
                     + "1 MB, verified -- and refused with IDLE_MEDIA_REFUSED and a reason otherwise, a ninth "
@@ -135,7 +141,7 @@ public class KioskIdleMediaController {
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID channelId,
-            @Valid @RequestBody AttachRequest body,
+            @Valid @RequestBody IdleMediaAttachRequest body,
             HttpServletRequest request) {
         int expected = Math.toIntExact(AggregateVersion.requireIfMatch(request));
         IdleMediaList list = idleMedia.attach(
@@ -152,6 +158,7 @@ public class KioskIdleMediaController {
     @PutMapping("/order")
     @RequiresCapability(value = Capability.KIOSK_DEVICE_MANAGE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
+            operationId = "kioskIdleMediaReorder",
             summary = "Put the idle loop in another order",
             description = "itemIds must list every picture on the loop exactly once; anything else is refused and "
                     + "nothing moves.")
@@ -160,7 +167,7 @@ public class KioskIdleMediaController {
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,
             @PathVariable UUID channelId,
-            @Valid @RequestBody OrderRequest body,
+            @Valid @RequestBody IdleMediaOrderRequest body,
             HttpServletRequest request) {
         int expected = Math.toIntExact(AggregateVersion.requireIfMatch(request));
         IdleMediaList list = idleMedia.reorder(
@@ -177,6 +184,7 @@ public class KioskIdleMediaController {
     @DeleteMapping("/{itemId}")
     @RequiresCapability(value = Capability.KIOSK_DEVICE_MANAGE, scope = ScopeType.LOCATION, mutating = true)
     @Operation(
+            operationId = "kioskIdleMediaRemove",
             summary = "Take a picture off the idle loop",
             description = "The pictures behind it move up. The asset itself is not deleted: the media pipeline's "
                     + "own retention decides that once nothing refers to it.")
@@ -210,19 +218,20 @@ public class KioskIdleMediaController {
 
     // -------------------------------------------------------------------------- bodies
 
-    record UploadRequest(
+    record IdleMediaUploadRequest(
             @NotBlank @Size(max = 128) String contentType,
             @NotNull @Positive Long sizeBytes,
             @Nullable @Size(max = 255) String filename) {}
 
-    record UploadTicketResponse(UUID assetId, URI uploadUrl, Map<String, String> requiredHeaders, Instant expiresAt) {}
+    record IdleMediaUploadTicketResponse(
+            UUID assetId, URI uploadUrl, Map<String, String> requiredHeaders, Instant expiresAt) {}
 
-    record UploadStateResponse(
+    record IdleMediaUploadStateResponse(
             UUID assetId, MediaAssetStatus status, @Nullable String rejectionCode) {}
 
-    record FinalizeResponse(UUID assetId, MediaAssetStatus status) {}
+    record IdleMediaFinalizeResponse(UUID assetId, MediaAssetStatus status) {}
 
-    record AttachRequest(@NotNull UUID assetId) {}
+    record IdleMediaAttachRequest(@NotNull UUID assetId) {}
 
-    record OrderRequest(@NotNull @Size(max = 8) List<@NotNull UUID> itemIds) {}
+    record IdleMediaOrderRequest(@NotNull @Size(max = 8) List<@NotNull UUID> itemIds) {}
 }

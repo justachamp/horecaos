@@ -23,8 +23,8 @@ import type {
 import { VduWall, VduWallPhase, WallboardVduFreshness } from '../wallboard-shell/vdu-wall';
 import { DeviceBoardError, DeviceBoardApi } from './device-board-api';
 import { DeviceClass, DeviceIdleMedia } from './device-profile';
-import { environment } from '../../environments/environment';
 import { DeviceAuthError, DeviceSession } from './device-session';
+import { KioskIdleLoop } from './kiosk-idle-loop';
 import { TerminalSession } from './terminal-session';
 import { TerminalUnlock } from './terminal-unlock';
 
@@ -89,7 +89,7 @@ interface EnrolmentState {
  */
 @Component({
   selector: 'app-device-shell',
-  imports: [TPipe, QQrCode, VduWall, TerminalUnlock],
+  imports: [TPipe, QQrCode, VduWall, TerminalUnlock, KioskIdleLoop],
   templateUrl: './device-shell.html',
   styleUrl: './device-shell.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -334,6 +334,12 @@ export class DeviceShell implements OnInit {
     }
   }
 
+  /** A kiosk that is revoked, reset or re-paired starts from no pictures: the next channel's are its own. */
+  private forgetIdleMedia(): void {
+    this.idleMedia.set([]);
+    this.idleIndex.set(0);
+  }
+
   /** The idle pictures, as the platform lists them now. A failed read keeps the last list on screen; the next minute asks again. */
   private async refreshIdleMedia(): Promise<void> {
     const scope = this.session.setup();
@@ -353,11 +359,6 @@ export class DeviceShell implements OnInit {
     } catch {
       // Keep what is playing. A refusal of the grant is caught by the record read beside this one.
     }
-  }
-
-  /** An idle picture's address on the API's own origin. */
-  protected idleSrc(picture: DeviceIdleMedia): string {
-    return `${environment.apiBaseUrl}${picture.url}`;
   }
 
   /** Reading its own record is the kiosk's presence signal; a refusal means its grant is gone and the pairing screen returns. */
@@ -486,6 +487,7 @@ export class DeviceShell implements OnInit {
     this.stopBoardPoll();
     this.stopWallPoll();
     this.stopKioskPoll();
+    this.forgetIdleMedia();
     this.session.forgetCredential();
     void this.terminal.lock();
     this.profilePhase.set('idle');
@@ -725,6 +727,7 @@ export class DeviceShell implements OnInit {
     this.stopBoardPoll();
     this.stopWallPoll();
     this.stopKioskPoll();
+    this.forgetIdleMedia();
     void this.terminal.lock();
     this.session.forgetCredential();
     this.session.clearSetup();

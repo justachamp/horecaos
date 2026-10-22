@@ -1,0 +1,15 @@
+<section class="idle" data-testid="device-kiosk-idle">
+  @for (shown of [picture()]; track shown.id) {
+    <img class="idle__picture" [src]="src(shown)" alt="" data-testid="device-kiosk-idle-picture" />
+  }
+  <dl class="idle__facts">
+    <div>
+      <dt>{{ 'device.kiosk.channel' | t }}</dt>
+      <dd data-testid="device-kiosk-channel">{{ channelName() }}</dd>
+    </div>
+    <div>
+      <dt>{{ 'device.kiosk.branch' | t }}</dt>
+      <dd data-testid="device-kiosk-branch">{{ branchName() }}</dd>
+    </div>
+  </dl>
+</section>

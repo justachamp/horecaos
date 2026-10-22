@@ -184,17 +184,18 @@ public class KioskIdleMediaService {
         created.put("channel", channel.code());
         created.put("assetId", assetId.toString());
         created.put("position", position);
-        record(
-                AUDIT_ATTACHED,
-                tenantId,
-                brandId,
-                locationId,
-                channelId,
-                version,
-                "A picture was added to the idle loop",
-                ChangeDocuments.created(created),
-                actorSubject,
-                now);
+        audit.record(fact(
+                        AUDIT_ATTACHED,
+                        tenantId,
+                        brandId,
+                        locationId,
+                        channelId,
+                        version,
+                        "A picture was added to the idle loop",
+                        actorSubject,
+                        now)
+                .changed(ChangeDocuments.created(created))
+                .build());
         return listOf(tenantId, channelId);
     }
 
@@ -223,17 +224,18 @@ public class KioskIdleMediaService {
         store.place(tenantId, channelId, orderedItemIds);
 
         List<ItemRow> after = store.items(tenantId, channelId);
-        record(
-                AUDIT_REORDERED,
-                tenantId,
-                brandId,
-                locationId,
-                channelId,
-                version,
-                "The idle loop of " + channel.code() + " was put in another order",
-                ChangeDocuments.diff(assetOrder(before), assetOrder(after)),
-                actorSubject,
-                now);
+        audit.record(fact(
+                        AUDIT_REORDERED,
+                        tenantId,
+                        brandId,
+                        locationId,
+                        channelId,
+                        version,
+                        "The idle loop of " + channel.code() + " was put in another order",
+                        actorSubject,
+                        now)
+                .changed(ChangeDocuments.diff(assetOrder(before), assetOrder(after)))
+                .build());
         return listOf(tenantId, channelId);
     }
 
@@ -256,17 +258,18 @@ public class KioskIdleMediaService {
             throw new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "No such picture on this idle loop");
         }
         List<ItemRow> after = store.items(tenantId, channelId);
-        record(
-                AUDIT_REMOVED,
-                tenantId,
-                brandId,
-                locationId,
-                channelId,
-                version,
-                "A picture was removed from the idle loop of " + channel.code(),
-                ChangeDocuments.diff(assetOrder(before), assetOrder(after)),
-                actorSubject,
-                now);
+        audit.record(fact(
+                        AUDIT_REMOVED,
+                        tenantId,
+                        brandId,
+                        locationId,
+                        channelId,
+                        version,
+                        "A picture was removed from the idle loop of " + channel.code(),
+                        actorSubject,
+                        now)
+                .changed(ChangeDocuments.diff(assetOrder(before), assetOrder(after)))
+                .build());
         return listOf(tenantId, channelId);
     }
 
@@ -303,7 +306,11 @@ public class KioskIdleMediaService {
         return document;
     }
 
-    private void record(
+    /**
+     * The fact every idle-media change writes, short of its change document: each call site builds that itself, as {@code
+     * ChangeDocuments.created} or {@code diff}, so the document is never a flat after-only map (Staff 9.3a).
+     */
+    private AuditFact.Builder fact(
             String action,
             UUID tenantId,
             UUID brandId,
@@ -311,21 +318,18 @@ public class KioskIdleMediaService {
             UUID channelId,
             int version,
             String because,
-            Map<String, Object> change,
             String actorSubject,
             Instant now) {
-        audit.record(AuditFact.of(action, AuditClass.BUSINESS)
+        return AuditFact.of(action, AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.location(tenantId, brandId, locationId))
                 .target("tenant.sales_channel", channelId)
                 .targetVersion((long) version)
                 .outcome(AuditFact.Outcome.SUCCEEDED)
                 .because(because)
-                .changed(change)
                 .usingCapability("kiosk.device.manage")
                 .correlatedBy(channelId.toString())
-                .occurredAt(now)
-                .build());
+                .occurredAt(now);
     }
 
     private void requireEnabled(UUID tenantId) {

@@ -246,6 +246,28 @@ class ReviewsOperationsAlertTriggerTests {
     }
 
     @Test
+    @DisplayName("a fault in telling a chat never fails the customer's review")
+    void aFailureToTellDoesNotFailTheSubmission() {
+        org.mockito.Mockito.doThrow(new IllegalStateException("the subscription lookup is down"))
+                .when(alerts)
+                .fanOut(
+                        any(),
+                        any(),
+                        any(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        any(),
+                        any(),
+                        anyString(),
+                        any(),
+                        any());
+
+        org.assertj.core.api.Assertions.assertThatCode(() -> trigger.onReviewSubmitted(review(1)))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
     @DisplayName("a review alert needs no policy switch: it is told with both recovery switches off")
     void aReviewAlertIsNotGatedByTheRecoverySwitches() {
         assertThat(onOpen).isFalse();

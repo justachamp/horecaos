@@ -167,6 +167,28 @@ class LoyaltyOperationsAlertTriggerTests {
     }
 
     @Test
+    @DisplayName("a fault in raising the alert does not fail the sync pass that found the difference")
+    void aFailureToTellDoesNotFailThePass() {
+        org.mockito.Mockito.doThrow(new IllegalStateException("the subscription lookup is down"))
+                .when(alerts)
+                .fanOut(
+                        any(),
+                        any(),
+                        any(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        any(),
+                        any(),
+                        anyString(),
+                        any(),
+                        any());
+
+        org.assertj.core.api.Assertions.assertThatCode(() -> trigger.onDiscrepancyOpened(opened(BINDING, "TILL_HIGHER")))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
     @DisplayName("the alert's variables are declared by the OPERATIONS_ALERT catalogue and its event class exists")
     void theVariablesAndTheClassAreDeclared() {
         trigger.onDiscrepancyOpened(opened(BINDING, "TILL_LOWER"));

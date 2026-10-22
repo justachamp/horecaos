@@ -3,6 +3,8 @@ package uz.horecaos.platform.notifications.application;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -29,6 +31,8 @@ import uz.horecaos.platform.reviews.api.ReviewSubmitted;
  */
 @Component
 public class ReviewsOperationsAlertTrigger {
+
+    private static final Logger log = LoggerFactory.getLogger(ReviewsOperationsAlertTrigger.class);
 
     /** The semantic template key and event class a tenant authors this alert's wording against. */
     public static final String RECOVERY_CASE_OPENED = "RECOVERY_CASE_OPENED";
@@ -71,25 +75,36 @@ public class ReviewsOperationsAlertTrigger {
      * or {@code REVIEW_NEGATIVE} (1 to 3). There is no policy switch -- a chat that subscribed asked to hear it -- and the
      * message is the review's id and its rating and nothing else: no customer, no comment, no tag (ADR 0029). One alert
      * per review however many times the fact is replayed.
+     *
+     * <p>{@code AFTER_COMMIT}, unlike the recovery alerts above, which start clocks and so commit with the case: this one is
+     * news. A fault in telling a chat must never fail the customer's submission, so it runs once the review is committed and
+     * a failure is logged by identifier and goes no further; a review whose alert was lost is still on the reviews screen.
      */
-    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onReviewSubmitted(ReviewSubmitted event) {
         String eventClass = event.rating() >= POSITIVE_FROM_RATING ? REVIEW_POSITIVE : REVIEW_NEGATIVE;
         Map<String, String> variables = new LinkedHashMap<>();
         variables.put("reviewId", event.reviewId().toString());
         variables.put("rating", Integer.toString(event.rating()));
-        operationsAlerts.fanOut(
-                event.tenantId(),
-                event.brandId(),
-                event.locationId(),
-                eventClass,
-                eventClass,
-                REVIEW_SUBJECT_TYPE,
-                event.reviewId(),
-                event.eventId(),
-                "%s:%s:%s".formatted(eventClass, REVIEW_SUBJECT_TYPE, event.reviewId()),
-                variables,
-                reviewExpiry);
+        try {
+            operationsAlerts.fanOut(
+                    event.tenantId(),
+                    event.brandId(),
+                    event.locationId(),
+                    eventClass,
+                    eventClass,
+                    REVIEW_SUBJECT_TYPE,
+                    event.reviewId(),
+                    event.eventId(),
+                    "%s:%s:%s".formatted(eventClass, REVIEW_SUBJECT_TYPE, event.reviewId()),
+                    variables,
+                    reviewExpiry);
+        } catch (RuntimeException failure) {
+            log.warn(
+                    "A review alert could not be raised for review {}: {}",
+                    event.reviewId(),
+                    failure.getClass().getSimpleName());
+        }
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)

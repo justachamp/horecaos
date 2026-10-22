@@ -146,6 +146,23 @@ describe('activity log action-code dictionary coverage', () => {
   });
 
   /**
+   * The kiosk idle-media facts (ADR 0187) are written through named constants in `KioskIdleMediaService`, so the scan above
+   * cannot discover them; this names them by hand, so the activity log reads a sentence and not a dotted code.
+   */
+  it('has a sentence in every locale for the kiosk idle-media facts, written through constants', () => {
+    for (const code of [
+      'kiosk.idle_media.attached',
+      'kiosk.idle_media.reordered',
+      'kiosk.idle_media.removed',
+    ]) {
+      for (const locale of LOCALES) {
+        const sentence = bulkActivityLogActionSentence(code, locale);
+        expect(sentence?.trim(), `${code} in ${locale}`).toBeTruthy();
+      }
+    }
+  });
+
+  /**
    * The staff record's audit facts (ADR 0139) are written through named
    * constants (`StaffMemberService.CREATED`, `StaffEmergencyContactService.READ`,
    * `LocationContactPersonService.UPDATED`, …), not `AuditFact.of("<code>", …)`

@@ -180,26 +180,11 @@
     </section>
   } @else if (isKiosk()) {
     @if (idlePicture(); as picture) {
-      <section class="device-shell__idle" data-testid="device-kiosk-idle">
-        @for (shown of [picture]; track shown.id) {
-          <img
-            class="device-shell__idle-picture"
-            [src]="idleSrc(shown)"
-            alt=""
-            data-testid="device-kiosk-idle-picture"
-          />
-        }
-        <dl class="device-shell__idle-facts">
-          <div>
-            <dt>{{ 'device.kiosk.channel' | t }}</dt>
-            <dd data-testid="device-kiosk-channel">{{ kioskChannel()?.channelName }}</dd>
-          </div>
-          <div>
-            <dt>{{ 'device.kiosk.branch' | t }}</dt>
-            <dd data-testid="device-kiosk-branch">{{ profile()?.locationName }}</dd>
-          </div>
-        </dl>
-      </section>
+      <app-kiosk-idle-loop
+        [picture]="picture"
+        [channelName]="kioskChannel()?.channelName ?? ''"
+        [branchName]="profile()?.locationName ?? ''"
+      />
     } @else {
       <section class="device-shell__panel" data-testid="device-kiosk-status">
         <h1 class="device-shell__title">{{ 'device.kiosk.title' | t }}</h1>

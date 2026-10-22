@@ -1,8 +1,26 @@
 # ADR 0187: Kiosk idle media, and the channel forms the console does not owe
 
 - Decision status: Accepted — proposed by Claude (batch 21); accepted by the platform owner 2026-10-14
-- Implementation status: Not started — written first; the building wave (`w14-channel-setup-pos-loyalty`) advances this line as each
-  piece lands.
+- Implementation status: Built — built and tested in this tree (batch 21, wave `w14-channel-setup-pos-loyalty`), behind
+  `feature.kiosk_devices` for the kiosk parts. `V0695` adds `media.assets.purpose` (always a `PUBLIC`, tenant-owned still image,
+  `ck_media_asset_purpose_shape`) and `tenant.kiosk_idle_media` with its version row (position 0 to 7 and a unique key, so a ninth
+  picture cannot exist); `V0696` widens the chat event-class CHECK with `REVIEW_POSITIVE`, `REVIEW_NEGATIVE` and
+  `LOYALTY_SYNC_DISCREPANCY`. `media` lends `MediaPurpose` and `PurposedImages` (an upload over 1 MB or not a still image is refused
+  at the request, verification rejects a picture that is not 9:16 with `PURPOSE_ASPECT_RATIO`, and the attach checks again);
+  `KioskIdleMediaService` and `KioskIdleMediaController` list, upload, finalize, attach, order and remove under
+  `kiosk.device.manage` with `If-Match` and an ADR 0027 fact each, and the pictures ride the kiosk's configuration read; the KIOSK
+  card shows *Idle screen pictures* (9:16 crop, 1 MB cap, order, remove, a `KioskFrame` preview) and draws the printer, terminal and
+  marking block as a `LockedState`; the device shell plays the loop; the hub draws the failed-installation banner, the AGGREGATOR
+  and CALL_CENTRE read-only summaries and an honest locked state for `IOS` and `ANDROID`; a chat can subscribe to the two review
+  classes, and a review reaches it by id and stars only. D26 and D28 are recorded and `settings.md` §10.5 and the IA row `10.5` are
+  amended. Row `6.3b`, ADR 0171's undone parts: the rollout and `till_keeps_balance` are staged from the console, the push is a
+  30-second sweep that meets the 60-second window, a difference reaches the brand's chats, and the consent gate is built dark.
+  Proved by `KioskIdleMediaHttpTests`, `MediaLifecycleTests`, `PurposedImagesAdapterTests`, `MediaPurposeTests`,
+  `ReviewsOperationsAlertTriggerTests`, `LoyaltyOperationsAlertTriggerTests`, `LoyaltyPosSyncStagingTests`,
+  `TelegramRoutingControllerEndpointTests` and the specs of the KIOSK card, the idle panel, the device shell, the hub and the
+  till-sync panel. Not claimed, because they are external facts and not this record's: no kiosk unit has played a picture, no real
+  BotFather round trip has run, no iiko or R-Keeper wallet adapter exists and counsel has not answered on consent
+  (`docs/runbooks/external-connections/w14-channel-setup-pos-loyalty.md`).
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: proposed by Claude (batch 21); Ayubkhon Abbosov (platform owner) decides
@@ -109,7 +127,9 @@ app, with an honest locked state in the hub until then.**
    `ReviewsOperationsAlertTrigger` listens to the in-process `ReviewSubmitted` and fans out through `OperationsAlertPort`;
    the message carries the review's id and its rating and nothing else (ADR 0029: no customer, no comment, no tag). A
    chat hears it only if it subscribed (no default set includes the new classes; a subscription is the opt-in, unlike the
-   recovery alerts, which also need a policy switch because they start clocks).
+   recovery alerts, which also need a policy switch because they start clocks). It runs after the review commits and a fault in telling
+   a chat is logged by identifier, never raised: a customer's review is not failed by a chat, where a recovery alert commits with its case
+   because it starts clocks.
 6. **Hub completeness.** For `AGGREGATOR` the hub links to Integrations (read-only here: an aggregator is an installation
    with mappings, not a storefront); for `CALL_CENTRE` it shows a read-only summary of order policy card 5; a channel whose
    installation last failed shows a banner at the top of the form for every type that has an installation; every type
@@ -265,15 +285,15 @@ V0695 and V0696 are additive and stay.
 
 ## Implementation checklist
 
-- [ ] V0695: the purpose column, its checks, the idle-media table and its versions table, granted.
-- [ ] Row `6.3b`: the staging endpoints and console control, the push sweep, the discrepancy alert, the dark consent gate.
-- [ ] `media`: the purposed upload and finalize port, the verification rule for ratio, the size rule at the request.
-- [ ] `tenancy`: the idle-media service and the endpoints; the configuration read; the usage probe; the audit facts.
-- [ ] V0696 and `TelegramEventClass`; the review trigger; the OPERATIONS_ALERT variable catalogue.
-- [ ] Console: the idle-media panel, the LockedState block, the hub completeness, the IOS/ANDROID locked state, i18n in ru, uz-Latn, en.
-- [ ] Device shell: play the list.
-- [ ] `docs/runbooks/external-connections/w14-channel-setup-pos-loyalty.md`.
-- [ ] A dated status addition on ADR 0162; IA row `10.5` and `settings.md` §10.5 amended.
+- [x] V0695: the purpose column, its checks, the idle-media table and its versions table, granted.
+- [x] Row `6.3b`: the staging endpoints and console control, the push sweep, the discrepancy alert, the dark consent gate.
+- [x] `media`: the purposed upload and finalize port, the verification rule for ratio, the size rule at the request.
+- [x] `tenancy`: the idle-media service and the endpoints; the configuration read; the usage probe; the audit facts.
+- [x] V0696 and `TelegramEventClass`; the review trigger; the OPERATIONS_ALERT variable catalogue.
+- [x] Console: the idle-media panel, the LockedState block, the hub completeness, the IOS/ANDROID locked state, i18n in ru, uz-Latn, en.
+- [x] Device shell: play the list.
+- [x] `docs/runbooks/external-connections/w14-channel-setup-pos-loyalty.md`.
+- [x] A dated status addition on ADR 0162; IA row `10.5` and `settings.md` §10.5 amended.
 
 ## Exit criteria
 

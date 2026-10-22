@@ -169,6 +169,40 @@ class TelegramRoutingControllerEndpointTests {
         assertThat(bindingStatus()).isEqualTo("SUSPENDED");
     }
 
+    @Test
+    void theReviewAndTillClassesAreOfferedAndAChatCanSubscribeToThem() throws Exception {
+        MvcResult eventClasses = mvc.perform(get(ROUTING + "/event-classes").with(tokenFor(MANAGER)))
+                .andReturn();
+        String body = eventClasses.getResponse().getContentAsString();
+        for (String eventClass : java.util.List.of("REVIEW_POSITIVE", "REVIEW_NEGATIVE", "LOYALTY_SYNC_DISCREPANCY")) {
+            assertThat(body)
+                    .as(eventClass + " is offered to the routing screen")
+                    .contains(eventClass);
+        }
+
+        for (String eventClass : java.util.List.of("REVIEW_POSITIVE", "REVIEW_NEGATIVE", "LOYALTY_SYNC_DISCREPANCY")) {
+            MvcResult subscribed = mvc.perform(post(ROUTING + "/bindings/" + BINDING + "/subscriptions")
+                            .with(tokenFor(MANAGER))
+                            .header(IdempotencyInterceptor.IDEMPOTENCY_KEY_HEADER, "subscribe-" + eventClass)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"eventClass\":\"" + eventClass + "\",\"enabled\":true}"))
+                    .andReturn();
+            assertThat(subscribed.getResponse().getStatus()).as(eventClass).isEqualTo(204);
+        }
+
+        assertThat(jdbc.sql("""
+                        SELECT event_class FROM integration.telegram_binding_events
+                         WHERE tenant_id = :t AND binding_id = :b AND enabled
+                           AND event_class IN ('REVIEW_POSITIVE', 'REVIEW_NEGATIVE', 'LOYALTY_SYNC_DISCREPANCY')
+                        """)
+                        .param("t", TENANT)
+                        .param("b", BINDING)
+                        .query(String.class)
+                        .list())
+                .as("the database's own check admits all three, and a chat hears only what it subscribed to")
+                .containsExactlyInAnyOrder("REVIEW_POSITIVE", "REVIEW_NEGATIVE", "LOYALTY_SYNC_DISCREPANCY");
+    }
+
     // ------------------------------------------------------------------ fixtures
 
     private String bindingStatus() {

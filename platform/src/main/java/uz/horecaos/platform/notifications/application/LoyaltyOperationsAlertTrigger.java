@@ -6,6 +6,8 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -32,6 +34,8 @@ import uz.horecaos.platform.notifications.api.OperationsAlertPort;
  */
 @Component
 public class LoyaltyOperationsAlertTrigger {
+
+    private static final Logger log = LoggerFactory.getLogger(LoyaltyOperationsAlertTrigger.class);
 
     /** The semantic template key and event class a tenant authors this alert's wording against. */
     public static final String LOYALTY_SYNC_DISCREPANCY = "LOYALTY_SYNC_DISCREPANCY";
@@ -73,24 +77,35 @@ public class LoyaltyOperationsAlertTrigger {
         variables.put("bindingId", event.bindingId().toString());
         variables.put("discrepancyId", event.discrepancyId().toString());
         variables.put("discrepancyKind", event.kind());
-        operationsAlerts.fanOut(
-                event.tenantId(),
-                event.brandId(),
-                // A binding belongs to the brand: the chats bound to the brand as a whole hear it.
-                null,
-                LOYALTY_SYNC_DISCREPANCY,
-                LOYALTY_SYNC_DISCREPANCY,
-                SUBJECT_TYPE,
-                event.bindingId(),
-                null,
-                "%s:%s:%s:%s:%s"
-                        .formatted(
-                                LOYALTY_SYNC_DISCREPANCY,
-                                SUBJECT_TYPE,
-                                event.bindingId(),
-                                event.kind(),
-                                clock.instant().atZone(ZoneOffset.UTC).toLocalDate()),
-                variables,
-                expiry);
+        try {
+            operationsAlerts.fanOut(
+                    event.tenantId(),
+                    event.brandId(),
+                    // A binding belongs to the brand: the chats bound to the brand as a whole hear it.
+                    null,
+                    LOYALTY_SYNC_DISCREPANCY,
+                    LOYALTY_SYNC_DISCREPANCY,
+                    SUBJECT_TYPE,
+                    event.bindingId(),
+                    null,
+                    "%s:%s:%s:%s:%s"
+                            .formatted(
+                                    LOYALTY_SYNC_DISCREPANCY,
+                                    SUBJECT_TYPE,
+                                    event.bindingId(),
+                                    event.kind(),
+                                    clock.instant().atZone(ZoneOffset.UTC).toLocalDate()),
+                    variables,
+                    expiry);
+        } catch (RuntimeException failure) {
+            // The sync pass published this from outside any transaction, so a fault here would otherwise fail the pass
+            // that found the difference. The difference is written and listed; only the telling is lost, and the next
+            // pass that finds a new one tells again. Identifiers only (ADR 0029).
+            log.warn(
+                    "A till-sync alert could not be raised for binding {} ({}): {}",
+                    event.bindingId(),
+                    event.kind(),
+                    failure.getClass().getSimpleName());
+        }
     }
 }
