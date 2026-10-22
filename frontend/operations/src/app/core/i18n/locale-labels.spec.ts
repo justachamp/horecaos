@@ -5,7 +5,6 @@ import {
   labelDrafts,
   labelsToSend,
   pickLabel,
-  platformColumns,
   presetLabelFor,
 } from './locale-labels';
 
@@ -72,41 +71,6 @@ describe('changedLabels', () => {
       changedLabels(['ru', 'kaa', 'en'], { ru: 'Центр', kaa: 'Orayı', en: '' }, loaded),
     ).toEqual({ kaa: 'Orayı' });
     expect(changedLabels(['ru'], { ru: 'Центр' }, undefined)).toEqual({ ru: 'Центр' });
-  });
-});
-
-describe('platformColumns', () => {
-  const stored = { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onion' };
-
-  it('uses the wording of an offered platform language the operator filled in', () => {
-    expect(
-      platformColumns(['ru', 'uz-Latn', 'en'], { ru: 'А', 'uz-Latn': 'B', en: 'C' }, 'ru'),
-    ).toEqual({ ru: 'А', 'uz-Latn': 'B', en: 'C' });
-  });
-
-  it('round-trips a platform language the editor does not offer exactly as the row has it', () => {
-    expect(platformColumns(['ru', 'en'], { ru: 'Новое', en: '' }, 'ru', stored)).toEqual({
-      ru: 'Новое',
-      'uz-Latn': 'Piyozsiz',
-      // Cleared but offered: "leave it", so the stored wording, not a blank.
-      en: 'No onion',
-    });
-  });
-
-  it('words a platform language nobody offered with the default language on a create', () => {
-    expect(
-      platformColumns(['uz-Latn', 'en'], { 'uz-Latn': 'Piyozsiz', en: 'No onion' }, 'uz-Latn'),
-    ).toEqual({
-      ru: 'Piyozsiz',
-      'uz-Latn': 'Piyozsiz',
-      en: 'No onion',
-    });
-  });
-
-  it('ignores a draft keyed by a language that is not offered', () => {
-    expect(
-      platformColumns(['ru'], { ru: 'А', 'uz-Latn': 'HIDDEN DRAFT' }, 'ru', stored)['uz-Latn'],
-    ).toBe('Piyozsiz');
   });
 });
 

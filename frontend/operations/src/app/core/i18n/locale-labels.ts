@@ -96,47 +96,6 @@ export function changedLabels(
   );
 }
 
-/** The platform triple's wording, as the three columns a request must still carry. */
-export interface PlatformColumns {
-  readonly ru: string;
-  readonly 'uz-Latn': string;
-  readonly en: string;
-}
-
-/**
- * The three platform columns a create or a rewrite must carry.
- *
- * The OpenAPI contract keeps `labelRu`/`labelUz`/`labelEn` (and the regions'
- * and zones' `displayName*`) *required* — it refuses to make a published
- * required request field optional — so an editor that offers only some of the
- * platform languages still has to name all three. For each one:
- *
- * 1. an offered language the operator filled in → that wording;
- * 2. else, on an edit, the wording the row already has — a language the
- *    editor does not offer is round-tripped **unchanged**, never blanked or
- *    replaced (this is the client half of row 10.12's never-delete guarantee
- *    for the triple; a language beyond it is simply left out of `labels` and
- *    the server keeps it);
- * 3. else (a create) → the wording in the default language, which the form
- *    has already required — the same fallback the server applies to a service
- *    caller that leaves one out.
- */
-export function platformColumns(
-  offered: readonly string[],
-  drafts: LabelsByLocale,
-  defaultLocale: string,
-  existing?: PlatformColumns | null,
-): PlatformColumns {
-  const typed = (locale: 'ru' | 'uz-Latn' | 'en'): string =>
-    offered.includes(locale) ? (drafts[locale] ?? '').trim() : '';
-  const fallback = (drafts[defaultLocale] ?? '').trim();
-  return {
-    ru: typed('ru') || existing?.ru || fallback,
-    'uz-Latn': typed('uz-Latn') || existing?.['uz-Latn'] || fallback,
-    en: typed('en') || existing?.en || fallback,
-  };
-}
-
 /** The locale's name for an operator: "Russian", "Uzbek (Latin)", "English" — or the bare tag for one this console has no name for. */
 export function localeDisplayName(i18n: I18n, locale: string, registry?: PlatformLocales): string {
   switch (locale) {

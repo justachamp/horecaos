@@ -17,9 +17,7 @@ const TENANT_REGION: RegionResponse = {
   regionId: 'region-1',
   platform: false,
   code: 'SAMARKAND',
-  displayNameRu: 'Самарканд',
-  displayNameUz: 'Samarqand',
-  displayNameEn: 'Samarkand',
+  displayNames: { ru: 'Самарканд', 'uz-Latn': 'Samarqand', en: 'Samarkand' },
   centreLat: 39.65,
   centreLon: 66.96,
   bboxSwLat: 39.4,
@@ -35,9 +33,7 @@ const PLATFORM_REGION: RegionResponse = {
   regionId: 'region-platform',
   platform: true,
   code: 'TASHKENT',
-  displayNameRu: 'Ташкент',
-  displayNameUz: 'Toshkent',
-  displayNameEn: 'Tashkent',
+  displayNames: { ru: 'Ташкент', 'uz-Latn': 'Toshkent', en: 'Tashkent' },
 };
 
 /** The tenant whose brands have not chosen a set: the platform triple, ru first. */
@@ -215,14 +211,11 @@ describe('RegionsPage', () => {
   });
 
   it('shows a region named only in the per-locale map, and falls back through the tenant’s languages', async () => {
-    // The platform columns are blank (a hand-written row); the map carries the
-    // names. A row must not render as an empty cell.
+    // The map holds blank entries (a hand-written row) beside the names. A row must not render as an
+    // empty cell.
     const named: RegionResponse = {
       ...TENANT_REGION,
-      displayNameRu: '',
-      displayNameUz: '',
-      displayNameEn: '',
-      displayNames: { kaa: 'Samarqand-kaa', en: 'Samarkand' },
+      displayNames: { ru: '', 'uz-Latn': '', kaa: 'Samarqand-kaa', en: 'Samarkand' },
     };
     await render({ list: vi.fn().mockResolvedValue([named]) }, 'ru');
 
@@ -270,10 +263,8 @@ describe('RegionsPage', () => {
     expect(create).toHaveBeenCalledTimes(1);
     const body = create.mock.calls[0][1];
     expect(body.displayNames).toEqual({ 'uz-Latn': 'Buxoro', en: 'Bukhara' });
-    // The contract keeps the platform triple required: ru is not offered, so it takes the default's name.
-    expect(body.displayNameRu).toBe('Buxoro');
-    expect(body.displayNameUz).toBe('Buxoro');
-    expect(body.displayNameEn).toBe('Bukhara');
+    // The three fixed fields left the wire with their columns (V0679).
+    expect(Object.keys(body)).not.toContain('displayNameRu');
   });
 
   it('never sends, blanks or deletes a language the tenant does not offer when it rewrites the region', async () => {
@@ -317,11 +308,7 @@ describe('RegionsPage', () => {
     expect(Object.keys(body.displayNames)).not.toContain('uz-Latn');
     expect(Object.keys(body.displayNames)).not.toContain('kaa');
     expect(Object.values(body.displayNames)).not.toContain('');
-    // The contract keeps the platform triple required, so the columns still go back: the
-    // edited one changed, the hidden uz-Latn and the cleared en exactly as the region has them.
-    expect(body.displayNameRu).toBe('Самарканд (город)');
-    expect(body.displayNameUz).toBe('Samarqand');
-    expect(body.displayNameEn).toBe('Samarkand');
+    expect(Object.keys(body)).not.toContain('displayNameUz');
   });
 
   it('falls back to the platform triple when the tenant’s language set cannot be read', async () => {

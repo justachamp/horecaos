@@ -16,15 +16,11 @@ export interface RegionResponse {
    */
   readonly platform: boolean;
   readonly code: string;
-  readonly displayNameRu: string;
-  readonly displayNameUz: string;
-  readonly displayNameEn: string;
   /**
-   * Every language the region has a name in (row 10.12): the platform triple
-   * from its columns, then any other from the per-locale table, each once. A
-   * platform region answers its three columns alone.
+   * Every language the region has a name in (row 10.12), each once: from the per-locale table for a tenant's
+   * own region, from the platform's names for a platform region (V0679). The only shape a region's name has.
    */
-  readonly displayNames?: LabelsByLocale;
+  readonly displayNames: LabelsByLocale;
   readonly centreLat: number;
   readonly centreLon: number;
   readonly bboxSwLat: number;
@@ -47,17 +43,8 @@ export interface RegionResponse {
 export interface RegionGeographyRequest {
   readonly code: string;
   /**
-   * The platform triple's names — still *required* (the OpenAPI contract cannot
-   * relax a published required request field), so an editor that offers only
-   * some of the platform languages fills the others (see `platformColumns`).
-   */
-  readonly displayNameRu: string;
-  readonly displayNameUz: string;
-  readonly displayNameEn: string;
-  /**
-   * The name per locale (row 10.12), additive: the way to name a language
-   * beyond the triple. On a rewrite only the languages named are written, so a
-   * language the editor does not offer keeps its name.
+   * The name per locale (row 10.12). The tenant's default language is required on a create; on a rewrite only
+   * the languages named are written, so a language the editor does not offer keeps its name.
    */
   readonly displayNames: LabelsByLocale;
   readonly centreLat: number;
