@@ -13,7 +13,7 @@
     "format": "prettier --write \"src/**/*.{ts,html,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,html,css,json}\"",
     "lint": "eslint \"src/**/*.{ts,html,css}\"",
-    "lint:rules": "node ../tools/lint-config.test.mjs"
+    "lint:rules": "node ../tools/lint-config.test.mjs && node ../tools/glyph-audit/glyph-audit.mjs"
   },
   "private": true,
   "packageManager": "npm@11.17.0",
