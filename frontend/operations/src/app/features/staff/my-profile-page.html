@@ -82,7 +82,7 @@
               <div>
                 <dt class="q-caption">{{ 'staff.profile.field.phone' | t }}</dt>
                 <dd class="q-body-sm q-tnum" data-testid="my-profile-phone">
-                  {{ person.phone ?? '—' }}
+                  {{ person.phone ? (person.phone | phone) : '—' }}
                 </dd>
               </div>
               <div>

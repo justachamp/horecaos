@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentBrand } from '../../../core/auth/current-brand';
+import { formatDate } from '../../../core/format/datetime';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
@@ -30,6 +31,9 @@ import {
 } from './segments-api';
 
 type LoadState = 'loading' | 'ready' | 'denied' | 'error';
+
+/** The console's clock until a screen reads the tenant's own zone (ADR 0055: every tenant trades in Tashkent). */
+const PLACEHOLDER_TIME_ZONE = 'Asia/Tashkent';
 
 /**
  * The closed predicate catalogue (ADR 0044, `PredicateType`), expressed as a
@@ -399,7 +403,7 @@ export class SegmentsPage {
   // ------------------------------------------------------------------ format
 
   protected formatUpdatedAt(iso: string): string {
-    return new Date(iso).toLocaleDateString(this.i18n.locale() === 'en' ? 'en-GB' : 'ru-RU');
+    return formatDate(new Date(iso), PLACEHOLDER_TIME_ZONE);
   }
 
   private describe(error: unknown): string {

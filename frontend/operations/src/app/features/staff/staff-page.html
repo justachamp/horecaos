@@ -154,7 +154,7 @@
                       @if (person.member) {
                         <p class="q-caption person-meta" data-testid="staff-row-meta">
                           @if (maskedPhoneOf(person); as phone) {
-                            <span class="q-tnum">{{ phone }}</span> ·
+                            <span class="q-tnum">{{ phone | phone }}</span> ·
                           }
                           <span class="q-mono">{{ person.member.displayReference }}</span>
                         </p>

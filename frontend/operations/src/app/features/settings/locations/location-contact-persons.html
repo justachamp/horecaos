@@ -40,7 +40,9 @@
                     'staff.status.ended' | t
                   }}</span>
                 } @else if (contact.phone; as phone) {
-                  <a class="q-body-sm q-tnum item__phone" [href]="'tel:' + phone">{{ phone }}</a>
+                  <a class="q-body-sm q-tnum item__phone" [href]="'tel:' + phone">{{
+                    phone | phone
+                  }}</a>
                 } @else {
                   <span class="q-body-sm hint">—</span>
                 }

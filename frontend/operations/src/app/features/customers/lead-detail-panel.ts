@@ -13,6 +13,7 @@ import { RouterLink } from '@angular/router';
 import { ApiError } from '../../core/api/problem-details';
 import { SessionCapabilities } from '../../core/auth/session-capabilities';
 import { formatDateTime } from '../../core/format/datetime';
+import { PhonePipe } from '../../core/format/phone.pipe';
 import { I18n } from '../../core/i18n/i18n';
 import { TPipe } from '../../core/i18n/t.pipe';
 import { describeApiError } from '../orders/order-errors';
@@ -65,7 +66,7 @@ type Action = 'schedule' | 'convert' | 'decline' | 'lose' | 'assign';
  */
 @Component({
   selector: 'q-lead-detail-panel',
-  imports: [TPipe, RouterLink, CallRecorder],
+  imports: [TPipe, PhonePipe, RouterLink, CallRecorder],
   templateUrl: './lead-detail-panel.html',
   styleUrl: './lead-detail-panel.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

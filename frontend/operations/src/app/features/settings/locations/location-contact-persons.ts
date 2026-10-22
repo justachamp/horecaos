@@ -13,6 +13,7 @@ import { LocationScope } from '../../../core/api/operations-paths';
 import { ApiError } from '../../../core/api/problem-details';
 import { StaffMember, hasName } from '../../../core/api/staff-member';
 import { SessionCapabilities } from '../../../core/auth/session-capabilities';
+import { PhonePipe } from '../../../core/format/phone.pipe';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
@@ -70,7 +71,7 @@ interface ContactDraft {
  */
 @Component({
   selector: 'q-location-contact-persons',
-  imports: [TPipe],
+  imports: [TPipe, PhonePipe],
   templateUrl: './location-contact-persons.html',
   styleUrl: './location-contact-persons.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

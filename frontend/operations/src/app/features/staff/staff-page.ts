@@ -3,6 +3,7 @@ import { ActivatedRoute, Router, RouterOutlet } from '@angular/router';
 
 import { Auth } from '../../core/auth/auth';
 import { CurrentTenant } from '../../core/auth/current-tenant';
+import { PhonePipe } from '../../core/format/phone.pipe';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
@@ -75,6 +76,7 @@ interface GroupRow {
   selector: 'q-staff-page',
   imports: [
     TPipe,
+    PhonePipe,
     RouterOutlet,
     StaffJobDialog,
     StaffAccessDialog,

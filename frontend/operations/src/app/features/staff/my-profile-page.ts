@@ -7,6 +7,7 @@ import { OwnProfile } from '../../core/auth/own-profile';
 import { ScopeGrant } from '../../core/auth/session-context';
 import { ApiError } from '../../core/api/problem-details';
 import { StaffMember, hasName } from '../../core/api/staff-member';
+import { PhonePipe } from '../../core/format/phone.pipe';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { localeDisplayName } from '../../core/i18n/locale-labels';
@@ -79,6 +80,7 @@ interface CapabilityGroup {
   selector: 'q-my-profile-page',
   imports: [
     TPipe,
+    PhonePipe,
     StaffProfileForm,
     MyProfileMfaCard,
     MyProfilePinCard,

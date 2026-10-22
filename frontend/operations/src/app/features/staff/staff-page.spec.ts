@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Auth } from '../../core/auth/auth';
 import { CurrentTenant } from '../../core/auth/current-tenant';
+import { applyRegionalFormats, resetRegionalFormats } from '../../core/format/regional-format';
 import { I18n } from '../../core/i18n/i18n';
 import { GrantView } from './staff-api';
 import { StaffApi } from './staff-api';
@@ -372,6 +373,24 @@ describe('StaffPage: the tenant’s record of each person (ADR 0139)', () => {
     expect(text).toContain('+998 90 ••• •• 42');
     expect(text).toContain('S-0001');
     expect(text).not.toContain('subject-1');
+  });
+
+  it('writes the masked phone in the brand’s pattern, the bullets staying where they are', async () => {
+    // A mask bullet counts as a digit slot (phone.ts), so the pattern re-writes the masked string and
+    // never reveals a digit the platform withheld.
+    applyRegionalFormats({ phoneDisplayPattern: '+### (##) ###-##-##' });
+    try {
+      const { fixture } = await setUp(
+        [grant({ principalSubject: 'subject-1' })],
+        'the-operator',
+        [],
+        [staffMember({ principalSubject: 'subject-1' })],
+      );
+
+      expect(textOf(fixture)).toContain('+998 (90) •••-••-42');
+    } finally {
+      resetRegionalFormats();
+    }
   });
 
   it('never shows a full phone number on the list, even if the payload carried one', async () => {

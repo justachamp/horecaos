@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
 import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
@@ -12,6 +12,7 @@ import { CurrentTenant } from '../../core/auth/current-tenant';
 import { OwnProfile } from '../../core/auth/own-profile';
 import { OwnPreferences } from '../../core/preferences/own-preferences';
 import { ScopeGrant } from '../../core/auth/session-context';
+import { applyRegionalFormats, resetRegionalFormats } from '../../core/format/regional-format';
 import { I18n } from '../../core/i18n/i18n';
 import { MyProfilePage } from './my-profile-page';
 import { StaffApi } from './staff-api';
@@ -209,6 +210,19 @@ describe('MyProfilePage: «Личные данные» (ADR 0139, rows 0.2c and 
     expect(personal.textContent).toContain('+998901234542');
     expect(personal.textContent).toContain('S-0001');
     expect(personal.textContent).toContain('Работает');
+  });
+
+  describe('my contact phone follows the brand’s display pattern (row 10.12)', () => {
+    afterEach(() => resetRegionalFormats());
+
+    it('writes my phone in the pattern', async () => {
+      applyRegionalFormats({ phoneDisplayPattern: '+### (##) ###-##-##' });
+      const { fixture } = await setUp([], null, ME);
+
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="my-profile-phone"]').textContent.trim(),
+      ).toBe('+998 (90) 123-45-42');
+    });
   });
 
   it('hands my record to the shell chip as soon as it is read', async () => {

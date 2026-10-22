@@ -78,6 +78,22 @@ describe('ForgotPasswordPage', () => {
     expect(resets.request).toHaveBeenCalledWith('aziza', 'en');
   });
 
+  // ADR 0149, Decision 5: the console used to turn `uz-Latn` into a bare `uz` and every other tag into
+  // `ru` before asking for the email, so a reader of a language the platform sends in would have got
+  // Russian. It sends the tag it reads; the API reads an alias and decides what the platform sends in.
+  it.each(['uz-Latn', 'ru', 'en'] as const)(
+    'sends the tag %s as it is, not a three-value code',
+    async (tag) => {
+      resets.request.mockResolvedValue(undefined);
+      TestBed.inject(I18n).setLocale(tag);
+
+      type('aziza');
+      await submit();
+
+      expect(resets.request).toHaveBeenCalledWith('aziza', tag);
+    },
+  );
+
   /**
    * The property ADR 0098 exists to protect, asserted where it can actually be
    * broken. The platform answers 202 for an account that exists and one that

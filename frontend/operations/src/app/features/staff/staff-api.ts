@@ -77,7 +77,8 @@ export interface StaffInvitationRequest {
   readonly locationId?: string;
   readonly reason: string;
   readonly validUntil?: string;
-  readonly locale?: 'uz' | 'ru' | 'en';
+  /** A registry tag (`ru`, `uz-Latn`, `en`, …); a bare `uz` is still read as `uz-Latn`, and a language the platform does not send in falls back to `ru`. */
+  readonly locale?: string;
 }
 
 /** Mirrors `StaffInvitationController.StaffInvitationCreatedResponse`. */

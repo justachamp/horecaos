@@ -11,6 +11,7 @@ import { firstValueFrom } from 'rxjs';
 import { formatTime, zonedTimeToInstant, type TimeZone } from '../../core/format/datetime';
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation } from '../../core/auth/current-location';
+import { PhonePipe } from '../../core/format/phone.pipe';
 import { I18n } from '../../core/i18n/i18n';
 import { MessageKey } from '../../core/i18n/messages.en';
 import { TPipe } from '../../core/i18n/t.pipe';
@@ -126,7 +127,7 @@ interface RevealedGuest {
  */
 @Component({
   selector: 'q-reservations-page',
-  imports: [TPipe, OrderReasonDialog, TimelineScheduler],
+  imports: [TPipe, PhonePipe, OrderReasonDialog, TimelineScheduler],
   templateUrl: './reservations-page.html',
   styleUrl: './reservations-page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,

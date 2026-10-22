@@ -108,7 +108,7 @@
       <dl class="fields revealed" data-testid="lead-revealed">
         <div class="field">
           <dt class="q-caption">{{ 'customers.leads.detail.phone' | t }}</dt>
-          <dd class="q-body-sm q-tnum" data-testid="lead-phone">{{ contact.phone }}</dd>
+          <dd class="q-body-sm q-tnum" data-testid="lead-phone">{{ contact.phone | phone }}</dd>
         </div>
         @if (contact.displayName) {
           <div class="field">

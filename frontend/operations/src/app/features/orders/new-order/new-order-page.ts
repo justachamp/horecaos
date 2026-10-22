@@ -22,6 +22,7 @@ import { formatMoney } from '../../../core/format/money';
 import { I18n } from '../../../core/i18n/i18n';
 import { presetLabelFor } from '../../../core/i18n/locale-labels';
 import { MessageKey } from '../../../core/i18n/messages.en';
+import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { Combobox, ComboboxOption } from '../../../shared/ui/combobox';
 import { DeniedState } from '../../../shared/ui/denied-state';
@@ -269,6 +270,7 @@ export class NewOrderPage implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly toasts = inject(Toasts);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
 
   private readonly phoneInput = viewChild<ElementRef<HTMLInputElement>>('phoneInput');
   private readonly tablePicker = viewChild(DineInTablePicker);
@@ -396,10 +398,9 @@ export class NewOrderPage implements OnInit {
   }
 
   private menuLocale(): string {
-    // The menu endpoint's locale is `ru`/`uz`/`en`; the console's own
-    // `uz-Latn` locale maps to the menu's `uz`, same mapping `stop-list-page.ts`
-    // already applies for the identical reason.
-    return this.i18n.locale() === 'uz-Latn' ? 'uz' : this.i18n.locale();
+    // The menu endpoint speaks the catalog's code for a language, which the registry
+    // names (`uz` for the console's `uz-Latn`; ADR 0149, Decision 5).
+    return this.registry.catalogCode(this.i18n.locale());
   }
 
   private readonly variantIndex = computed(() => {
@@ -1299,7 +1300,9 @@ export class NewOrderPage implements OnInit {
   /** The rule's wording for the operator's language, else its code. */
   protected autoAddLabel(line: QuotedAutoAddLine): string {
     const locale = this.i18n.locale();
-    const keys = locale === 'uz-Latn' ? ['uz-Latn', 'uz'] : [locale];
+    // The rule's text is keyed by the tag it was authored under or by the catalog's code for it
+    // (`uz` for `uz-Latn`); the registry says which, so no language is special-cased here.
+    const keys = new Set([locale, this.registry.catalogCode(locale)]);
     for (const key of keys) {
       const text = line.customerText[key];
       if (text && text.trim().length > 0) {
