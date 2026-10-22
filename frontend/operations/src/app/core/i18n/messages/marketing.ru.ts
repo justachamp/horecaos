@@ -734,10 +734,12 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
     'Почта на этом развёртывании не настроена: почтовый сервер не указан, поэтому отправить ничего нельзя. Пока владелец платформы не подключит провайдера рассылки, email-кампанию запустить нельзя.',
   'marketing.wiring.EMAIL_PURPOSE_NOT_PERMITTED':
     'Почтовый сервис платформы отправляет только рассылки кампаний.',
+  'marketing.wiring.PUSH_NOT_CONFIGURED':
+    'Push не настроен на этом развёртывании: у платформы нет ключей и контакта для отправки, поэтому ничего отправить нельзя. Пока владелец платформы их не подключит, push-кампанию запустить нельзя.',
+  'marketing.wiring.PUSH_PURPOSE_NOT_PERMITTED':
+    'Push-сервис платформы передаёт только кампании и ничего другого.',
   'marketing.wiring.ACCOUNT_MISCONFIGURED':
     'В аккаунте для этого канала не хватает части настроек.',
-  'marketing.wiring.NO_DELIVERY_ADAPTER.PUSH':
-    'Push не подключён: провайдера push-уведомлений пока нет, поэтому отправить гостю push нельзя.',
   'marketing.wiring.UNKNOWN':
     'Этот канал сейчас не может доставлять сообщения для этого бренда ({reason}).',
   'marketing.refusal.SCENARIO_CONFLICT':
@@ -1089,6 +1091,24 @@ export const marketingRu: AreaMessages<typeof marketingEn> = {
   'marketing.delivery.READ': 'Прочитано',
   'marketing.delivery.WITHHELD': 'Удержано',
   'marketing.delivery.HANDED_TO_OPERATOR.MESSAGING_APP': 'Отправлено',
+  'marketing.delivery.HANDED_TO_OPERATOR.PUSH': 'Принято push-сервисом',
+  'marketing.delivery.READ.PUSH': 'Нажато',
+  'marketing.delivery.reason.PUSH_SUBSCRIPTION_GONE':
+    'Push-сервис браузера сообщает, что подписка закончилась: пока клиент снова не включит push, достучаться до него здесь нельзя',
+  'marketing.delivery.reason.PUSH_VAPID_REJECTED':
+    'Push-сервис не принял ключ отправителя платформы для этой подписки (ключ сменили после того, как клиент подписался)',
+  'marketing.delivery.reason.PUSH_NOT_CONFIGURED': 'На этом развёртывании не настроен push',
+  'marketing.delivery.reason.PUSH_PAYLOAD_TOO_LARGE': 'Push-сервис отклонил размер сообщения',
+  'marketing.delivery.reason.PUSH_REQUEST_REFUSED': 'Push-сервис отклонил сообщение',
+  'marketing.delivery.reason.PUSH_PAYLOAD_UNUSABLE':
+    'Сообщение не удалось зашифровать для этой подписки',
+  'marketing.delivery.reason.PUSH_REDIRECT_REFUSED':
+    'Push-сервис перенаправил запрос; платформа переадресациям не следует',
+  'marketing.delivery.reason.PUSH_SERVICE_ERROR': 'Push-сервис раз за разом отвечал ошибкой',
+  'marketing.delivery.reason.PUSH_RATE_LIMITED':
+    'Push-сервис раз за разом просил платформу снизить темп',
+  'marketing.delivery.reason.PUSH_SERVICE_UNREACHABLE': 'Push-сервис недоступен',
+  'marketing.delivery.reason.PUSH_SECRET_UNAVAILABLE': 'Ключ push платформы недоступен',
   'marketing.delivery.counts.notReported': 'Этот канал не сообщает',
   'marketing.delivery.counts.segments': 'Оплачено сегментов',
   'marketing.delivery.counts.withheldTitle': 'Удержано по причине',

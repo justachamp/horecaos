@@ -83,7 +83,7 @@
         class="q-body field"
         [value]="newNotificationClass()"
         (change)="newNotificationClass.set($any($event.target).value)"
-        [disabled]="createSubmitting()"
+        [disabled]="createSubmitting() || classIsFixed()"
       >
         @for (option of notificationClasses; track option) {
           <option [value]="option">{{ option }}</option>
@@ -97,7 +97,7 @@
         id="template-channel"
         class="q-body field"
         [value]="newChannel()"
-        (change)="newChannel.set($any($event.target).value)"
+        (change)="chooseChannel($any($event.target).value)"
         [disabled]="createSubmitting()"
       >
         @for (option of channels; track option) {
@@ -110,6 +110,21 @@
         }
       </select>
       <p class="q-caption hint">{{ 'settings.notifications.field.channel.hint' | t }}</p>
+
+      @if (needsConsentPurpose()) {
+        <label class="q-caption" for="template-consent-purpose">{{
+          'settings.notifications.field.consentPurpose' | t
+        }}</label>
+        <input
+          id="template-consent-purpose"
+          class="q-body field"
+          type="text"
+          [value]="newConsentPurpose()"
+          (input)="newConsentPurpose.set($any($event.target).value)"
+          [disabled]="createSubmitting()"
+        />
+        <p class="q-caption hint">{{ 'settings.notifications.field.consentPurpose.hint' | t }}</p>
+      }
 
       <!-- Gap-map row 10.9a: one template key, kept to (fulfilment mode ×
            channel source) as separate rows rather than one field the

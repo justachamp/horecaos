@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input } from '@an
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
-import { handedKey } from '../channel-wiring';
+import { handedKey, readKey } from '../channel-wiring';
 import { explainDeliveryReason } from '../delivery-reasons';
 import { DeliveryCountsView } from '../marketing-api';
 
@@ -47,6 +47,7 @@ export class DeliveryCounts {
     () => this.counts().reportsDelivery || this.counts().noReceipt > 0,
   );
   protected readonly handedLabel = computed<MessageKey>(() => handedKey(this.channel()));
+  protected readonly readLabel = computed<MessageKey>(() => readKey(this.channel()));
   protected readonly withheldReasons = computed<readonly (readonly [string, number])[]>(() =>
     Object.entries(this.counts().withheldByReason),
   );

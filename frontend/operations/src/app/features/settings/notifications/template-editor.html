@@ -43,12 +43,14 @@
 
     @if (hasSubject()) {
       <label class="q-caption" [for]="'subject-' + activeLocale()">{{
-        'settings.notifications.editor.subject' | t
+        (isPush() ? 'settings.notifications.editor.title' : 'settings.notifications.editor.subject')
+          | t
       }}</label>
       <input
         [id]="'subject-' + activeLocale()"
         class="q-body field"
         type="text"
+        data-testid="editor-subject"
         [value]="subjectOf(activeLocale())"
         (input)="setSubject(activeLocale(), $any($event.target).value)"
       />
@@ -65,6 +67,16 @@
       [value]="bodyOf(activeLocale())"
       (input)="setBody(activeLocale(), $any($event.target).value)"
     ></textarea>
+
+    @if (isPush()) {
+      <q-push-wording-fields
+        [scope]="scope()"
+        [coverAssetId]="coverAssetId()"
+        [targetPath]="targetPath()"
+        (coverChange)="coverAssetId.set($event)"
+        (targetPathChange)="targetPath.set($event)"
+      />
+    }
 
     <span class="q-caption">{{ 'settings.notifications.editor.variables' | t }}</span>
     <div class="variable-chips" data-testid="variable-chips">
@@ -115,6 +127,9 @@
 
   <div class="editor__preview">
     <q-phone-frame [caption]="'settings.notifications.editor.preview' | t">
+      @if (isPush() && subjectOf(activeLocale()).trim().length > 0) {
+        <div class="preview-title" data-testid="preview-title">{{ subjectOf(activeLocale()) }}</div>
+      }
       <div class="preview-message" data-testid="preview-body">{{ preview() }}</div>
     </q-phone-frame>
   </div>

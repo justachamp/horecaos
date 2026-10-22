@@ -733,10 +733,12 @@ export const marketingEn = {
     'Email is not set up on this deployment: no mail server is configured, so nothing can be sent. Until the platform owner connects a sending provider, an email campaign cannot be launched.',
   'marketing.wiring.EMAIL_PURPOSE_NOT_PERMITTED':
     'The platform’s mail service carries campaign email and nothing else.',
+  'marketing.wiring.PUSH_NOT_CONFIGURED':
+    'Push is not set up on this deployment: the platform’s push identity (a key pair and a contact) is not configured, so nothing can be sent. Until the platform owner connects it, a push campaign cannot be launched.',
+  'marketing.wiring.PUSH_PURPOSE_NOT_PERMITTED':
+    'The platform’s push service carries campaign push and nothing else.',
   'marketing.wiring.ACCOUNT_MISCONFIGURED':
     'The account for this channel is missing part of its configuration.',
-  'marketing.wiring.NO_DELIVERY_ADAPTER.PUSH':
-    'Push is not connected: no push provider exists yet, so nothing can send a push notification to a guest.',
   'marketing.wiring.UNKNOWN': 'This channel cannot deliver for this brand right now ({reason}).',
   'marketing.refusal.SCENARIO_CONFLICT':
     'Another live scenario gave this guest an offer a moment ago',
@@ -1090,6 +1092,25 @@ export const marketingEn = {
   'marketing.delivery.READ': 'Read',
   'marketing.delivery.WITHHELD': 'Withheld',
   'marketing.delivery.HANDED_TO_OPERATOR.MESSAGING_APP': 'Sent',
+  'marketing.delivery.HANDED_TO_OPERATOR.PUSH': 'Accepted by the push service',
+  'marketing.delivery.READ.PUSH': 'Tapped',
+  'marketing.delivery.reason.PUSH_SUBSCRIPTION_GONE':
+    'The browser’s push service says this subscription is over, so the customer is no longer reachable here until they turn push on again',
+  'marketing.delivery.reason.PUSH_VAPID_REJECTED':
+    'The push service did not accept the platform’s sending identity for this subscription (the key was changed after the customer subscribed)',
+  'marketing.delivery.reason.PUSH_NOT_CONFIGURED': 'Push is not set up on this deployment',
+  'marketing.delivery.reason.PUSH_PAYLOAD_TOO_LARGE':
+    'The push service refused the size of the message',
+  'marketing.delivery.reason.PUSH_REQUEST_REFUSED': 'The push service refused the message',
+  'marketing.delivery.reason.PUSH_PAYLOAD_UNUSABLE':
+    'The message could not be encrypted to this subscription',
+  'marketing.delivery.reason.PUSH_REDIRECT_REFUSED':
+    'The push service redirected the request, which is never followed',
+  'marketing.delivery.reason.PUSH_SERVICE_ERROR': 'The push service failed repeatedly',
+  'marketing.delivery.reason.PUSH_RATE_LIMITED':
+    'The push service kept asking the platform to slow down',
+  'marketing.delivery.reason.PUSH_SERVICE_UNREACHABLE': 'The push service could not be reached',
+  'marketing.delivery.reason.PUSH_SECRET_UNAVAILABLE': 'The platform’s push key is not available',
   'marketing.delivery.counts.notReported': 'Not reported by this channel',
   'marketing.delivery.counts.segments': 'Segments billed',
   'marketing.delivery.counts.withheldTitle': 'Withheld because',

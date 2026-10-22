@@ -41,6 +41,22 @@ const NOTIFICATION_CLASSES: readonly string[] = [
   'COURIER_DISPATCH',
 ];
 
+/**
+ * The classes that need a consent purpose to check against (`NotificationClass.requiresConsent()`): a
+ * message the customer opted into receiving. A marketing template cannot be created without one, which
+ * is why the create form asks.
+ */
+const CONSENT_CLASSES: ReadonlySet<string> = new Set(['MARKETING', 'TRANSACTIONAL_OPTIONAL']);
+
+/** The consent purpose a campaign is sent under unless a tenant has defined its own. */
+const DEFAULT_CONSENT_PURPOSE = 'MARKETING_PROMOTIONS';
+
+/**
+ * The channels the platform sends from its own account, for campaigns only (ADR 0182): email through its
+ * mail relay and push through its Web Push. A template on either is a marketing template.
+ */
+const MARKETING_ONLY_CHANNELS: ReadonlySet<string> = new Set(['EMAIL', 'PUSH']);
+
 const PAYMENT_LINK_CODE = 'notifications.payment_link_auto_send';
 const AGGREGATOR_SHIFT_CODE = 'notifications.aggregator_shift_notifications_enabled';
 
@@ -97,6 +113,13 @@ export class NotificationsPage {
   protected readonly newTemplateKey = signal('');
   protected readonly newNotificationClass = signal(NOTIFICATION_CLASSES[0]);
   protected readonly newChannel = signal(NOTIFICATION_CHANNELS[0]);
+  protected readonly newConsentPurpose = signal(DEFAULT_CONSENT_PURPOSE);
+  /** Whether the chosen class needs a consent purpose, which the form then asks for. */
+  protected readonly needsConsentPurpose = computed(() =>
+    CONSENT_CLASSES.has(this.newNotificationClass()),
+  );
+  /** Email and push carry campaigns and nothing else, so the class is not a choice there. */
+  protected readonly classIsFixed = computed(() => MARKETING_ONLY_CHANNELS.has(this.newChannel()));
   /** `''` is "every fulfilment mode" / "every channel source" — the wildcard row, sent as `null`. */
   protected readonly newFulfilmentMode = signal('');
   protected readonly newChannelSource = signal('');
@@ -188,7 +211,19 @@ export class NotificationsPage {
   // ------------------------------------------------------------- create
 
   protected canCreate(): boolean {
-    return !this.createSubmitting() && this.newTemplateKey().trim().length > 0;
+    return (
+      !this.createSubmitting() &&
+      this.newTemplateKey().trim().length > 0 &&
+      (!this.needsConsentPurpose() || this.newConsentPurpose().trim().length > 0)
+    );
+  }
+
+  /** Picking email or push makes the template a marketing one: those channels carry nothing else. */
+  protected chooseChannel(channel: string): void {
+    this.newChannel.set(channel);
+    if (MARKETING_ONLY_CHANNELS.has(channel)) {
+      this.newNotificationClass.set('MARKETING');
+    }
   }
 
   protected async submitCreate(): Promise<void> {
@@ -203,6 +238,7 @@ export class NotificationsPage {
         templateKey: this.newTemplateKey().trim(),
         notificationClass: this.newNotificationClass(),
         channel: this.newChannel(),
+        ...(this.needsConsentPurpose() ? { consentPurpose: this.newConsentPurpose().trim() } : {}),
         fulfillmentMode: this.newFulfilmentMode() === '' ? null : this.newFulfilmentMode(),
         channelSource: this.newChannelSource() === '' ? null : this.newChannelSource(),
       });

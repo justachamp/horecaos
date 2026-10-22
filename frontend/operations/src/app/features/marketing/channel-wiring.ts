@@ -19,9 +19,13 @@ import { ChannelView } from './marketing-api';
  * **Email is honest about its relay.** A campaign email leaves through the platform's own mail
  * relay (ADR 0097, ADR 0182): there is no per-brand account to connect, so the only reasons it
  * cannot send are `EMAIL_NOT_CONFIGURED` (this deployment has no mail server set up) and
- * `EMAIL_PURPOSE_NOT_PERMITTED` (the relay carries campaign email and nothing else). **Push is
- * honest about not being connected:** no push delivery exists yet (ADR 0182 decides Web Push and
- * does not build it), so nothing can send a push notification to a guest.
+ * `EMAIL_PURPOSE_NOT_PERMITTED` (the relay carries campaign email and nothing else).
+ *
+ * **Push is honest about its identity.** A campaign push leaves through the platform's own Web Push
+ * (ADR 0182, D14): there is no per-brand account either, so the only reasons it cannot send are
+ * `PUSH_NOT_CONFIGURED` (this deployment has no sending key pair and contact set up) and
+ * `PUSH_PURPOSE_NOT_PERMITTED` (it carries campaign push and nothing else). Whether a *customer* can
+ * receive one is not a wiring question: it is consent and a subscription, said per recipient.
  *
  * **A courier SMS has its own reasons and its own sentences** (`courierWiringSentence`): the same
  * account codes mean something different there. An SMS account that cannot carry marketing is a
@@ -38,12 +42,9 @@ const WIRING_KEYS: Readonly<Record<string, MessageKey>> = {
   NO_DELIVERY_ADAPTER: 'marketing.wiring.NO_DELIVERY_ADAPTER',
   EMAIL_NOT_CONFIGURED: 'marketing.wiring.EMAIL_NOT_CONFIGURED',
   EMAIL_PURPOSE_NOT_PERMITTED: 'marketing.wiring.EMAIL_PURPOSE_NOT_PERMITTED',
+  PUSH_NOT_CONFIGURED: 'marketing.wiring.PUSH_NOT_CONFIGURED',
+  PUSH_PURPOSE_NOT_PERMITTED: 'marketing.wiring.PUSH_PURPOSE_NOT_PERMITTED',
   ACCOUNT_MISCONFIGURED: 'marketing.wiring.ACCOUNT_MISCONFIGURED',
-};
-
-/** The channel whose "no delivery path" has a different, more useful sentence of its own. */
-const NO_DELIVERY_KEYS: Readonly<Record<string, MessageKey>> = {
-  PUSH: 'marketing.wiring.NO_DELIVERY_ADAPTER.PUSH',
 };
 
 export interface WiringSentence {
@@ -55,10 +56,7 @@ export interface WiringSentence {
  * The sentence for a channel that is not wired. A code this build does not know still gets a
  * sentence, with the code in it for support, rather than a blank or a guess.
  */
-export function wiringSentence(channel: string, reason: string | null): WiringSentence {
-  if (reason === 'NO_DELIVERY_ADAPTER' && NO_DELIVERY_KEYS[channel] !== undefined) {
-    return { key: NO_DELIVERY_KEYS[channel] };
-  }
+export function wiringSentence(_channel: string, reason: string | null): WiringSentence {
   const key = reason === null ? undefined : WIRING_KEYS[reason];
   if (key !== undefined) {
     return { key };
@@ -147,10 +145,26 @@ export function courierCodeIn(detail: string | null | undefined): string | null 
 /**
  * The words for a message's delivery state, per channel (ADR 0182). «Handed to the operator» is what a
  * gateway that accepted a message and reported nothing earns; Telegram has no operator in between,
- * its Bot API takes the message and that is all it says, so there the honest word is «sent».
+ * its Bot API takes the message and that is all it says, so there the honest word is «sent»; and a
+ * browser vendor's push service accepts a message and says no more, which is «accepted by the push
+ * service».
  */
 export function handedKey(channel: string | null): MessageKey {
-  return channel === 'MESSAGING_APP'
-    ? 'marketing.delivery.HANDED_TO_OPERATOR.MESSAGING_APP'
-    : 'marketing.delivery.HANDED_TO_OPERATOR';
+  switch (channel) {
+    case 'MESSAGING_APP':
+      return 'marketing.delivery.HANDED_TO_OPERATOR.MESSAGING_APP';
+    case 'PUSH':
+      return 'marketing.delivery.HANDED_TO_OPERATOR.PUSH';
+    default:
+      return 'marketing.delivery.HANDED_TO_OPERATOR';
+  }
+}
+
+/**
+ * The word for a read, per channel (ADR 0182, D14). Email would call it «opened»; the only read signal
+ * Web Push offers is the customer tapping the notification, and saying «read» of a tap would claim more
+ * than the service worker saw.
+ */
+export function readKey(channel: string | null): MessageKey {
+  return channel === 'PUSH' ? 'marketing.delivery.READ.PUSH' : 'marketing.delivery.READ';
 }

@@ -281,6 +281,78 @@ describe('NotificationsPage', () => {
     });
   });
 
+  it('creating a push template makes it a marketing one and asks for its consent purpose (ADR 0182)', async () => {
+    const toggle = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
+    ).find((button) => button.textContent?.includes('New template')) as HTMLButtonElement;
+    toggle.click();
+    fixture.detectChanges();
+
+    const setInput = (id: string, value: string) => {
+      const el = fixture.nativeElement.querySelector(id) as HTMLInputElement;
+      el.value = value;
+      el.dispatchEvent(new Event('input'));
+    };
+    const channel = fixture.nativeElement.querySelector('#template-channel') as HTMLSelectElement;
+    channel.value = 'PUSH';
+    channel.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const classSelect = fixture.nativeElement.querySelector('#template-class') as HTMLSelectElement;
+    expect(classSelect.value).toBe('MARKETING');
+    expect(classSelect.disabled).toBe(true);
+    const purpose = fixture.nativeElement.querySelector(
+      '#template-consent-purpose',
+    ) as HTMLInputElement;
+    expect(purpose.value).toBe('MARKETING_PROMOTIONS');
+
+    setInput('#template-key', 'PROMO_PUSH');
+    fixture.detectChanges();
+    const submit = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.form__actions button'),
+    ).find((button) => button.textContent?.includes('Create')) as HTMLButtonElement;
+    expect(submit.disabled).toBe(false);
+    submit.click();
+    await flushMicrotasks();
+    fixture.detectChanges();
+
+    expect(api.create).toHaveBeenCalledWith(SCOPE, {
+      templateKey: 'PROMO_PUSH',
+      notificationClass: 'MARKETING',
+      channel: 'PUSH',
+      consentPurpose: 'MARKETING_PROMOTIONS',
+      fulfillmentMode: null,
+      channelSource: null,
+    });
+  });
+
+  it('a template whose class needs a consent purpose cannot be created without one', async () => {
+    const toggle = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
+    ).find((button) => button.textContent?.includes('New template')) as HTMLButtonElement;
+    toggle.click();
+    fixture.detectChanges();
+
+    const classSelect = fixture.nativeElement.querySelector('#template-class') as HTMLSelectElement;
+    classSelect.value = 'MARKETING';
+    classSelect.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    const key = fixture.nativeElement.querySelector('#template-key') as HTMLInputElement;
+    key.value = 'WIN_BACK';
+    key.dispatchEvent(new Event('input'));
+    const purpose = fixture.nativeElement.querySelector(
+      '#template-consent-purpose',
+    ) as HTMLInputElement;
+    purpose.value = '   ';
+    purpose.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const submit = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.form__actions button'),
+    ).find((button) => button.textContent?.includes('Create')) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+  });
+
   it('labels a variant row by its fulfilment mode and channel source, and a wildcard row "Any"', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     // TEMPLATE itself is a wildcard row (both null).

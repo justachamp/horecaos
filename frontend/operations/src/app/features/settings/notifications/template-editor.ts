@@ -17,12 +17,14 @@ import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { InlineAlert } from '../../../shared/ui/inline-alert';
 import { PhoneFrame } from '../../../shared/ui/phone-frame';
+import { PushWordingFields, pushTargetIsValid } from './push-wording-fields';
 import { describeApiError } from '../../orders/order-errors';
 import {
   NotificationsApi,
   VariableCatalogueEntry,
   VersionResult,
   WIRED_CHANNELS,
+  Wording,
   WordingResponse,
 } from './notifications-api';
 
@@ -65,7 +67,7 @@ function renderPreview(text: string): string {
  */
 @Component({
   selector: 'q-notification-template-editor',
-  imports: [TPipe, InlineAlert, PhoneFrame],
+  imports: [TPipe, InlineAlert, PhoneFrame, PushWordingFields],
   templateUrl: './template-editor.html',
   styleUrl: './template-editor.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -108,7 +110,14 @@ export class TemplateEditor {
   });
   protected readonly bodies = signal<Readonly<Record<string, string>>>({});
   protected readonly subjects = signal<Readonly<Record<string, string>>>({});
-  protected readonly hasSubject = computed(() => this.channel() === 'EMAIL');
+  /** An email has a subject and a push has a title: the same field, which every inbox and every lock screen shows. */
+  protected readonly hasSubject = computed(
+    () => this.channel() === 'EMAIL' || this.channel() === 'PUSH',
+  );
+  protected readonly isPush = computed(() => this.channel() === 'PUSH');
+  /** A push's cover and target are written once and sent with every language (ADR 0182, D14). */
+  protected readonly coverAssetId = signal<string | null>(null);
+  protected readonly targetPath = signal('');
   protected readonly isWired = computed(() => WIRED_CHANNELS.has(this.channel()));
 
   protected readonly catalogue = signal<readonly VariableCatalogueEntry[]>([]);
@@ -133,7 +142,8 @@ export class TemplateEditor {
           this.bodyOf(tag).trim().length > 0 &&
           // An email without a subject is filed under «no subject» by every inbox (ADR 0182).
           (!this.hasSubject() || this.subjectOf(tag).trim().length > 0),
-      ),
+      ) &&
+      (!this.isPush() || pushTargetIsValid(this.targetPath())),
   );
   protected readonly anyBodyStarted = computed(() =>
     this.localeTags().some((tag) => this.bodyOf(tag).trim().length > 0),
@@ -179,6 +189,13 @@ export class TemplateEditor {
       for (const row of prefill) {
         bodies[row.locale] = row.body;
         subjects[row.locale] = row.subject ?? '';
+        // One cover and one target for the version: the first language that carries them speaks for all.
+        if (this.coverAssetId() === null && row.coverAssetId) {
+          this.coverAssetId.set(row.coverAssetId);
+        }
+        if (this.targetPath() === '' && row.targetPath) {
+          this.targetPath.set(row.targetPath);
+        }
       }
       this.bodies.set(bodies);
       this.subjects.set(subjects);
@@ -247,14 +264,7 @@ export class TemplateEditor {
       }
 
       const outcome = await this.api.addVersion(this.scope(), this.templateId(), {
-        wordings: Object.fromEntries(
-          sent.map((tag) => [
-            tag,
-            this.hasSubject() && (subjects[tag] ?? '').trim().length > 0
-              ? { subject: (subjects[tag] ?? '').trim(), body: bodies[tag] ?? '' }
-              : { body: bodies[tag] ?? '' },
-          ]),
-        ),
+        wordings: Object.fromEntries(sent.map((tag) => [tag, this.wordingOf(tag)])),
         variablesSchema: schema,
       });
       this.result.set(outcome);
@@ -264,6 +274,22 @@ export class TemplateEditor {
     } finally {
       this.submitting.set(false);
     }
+  }
+
+  /** What is sent for one language: the text, and for a push its title, cover and target. */
+  private wordingOf(tag: string): Wording {
+    const body = this.bodies()[tag] ?? '';
+    const subject = (this.subjects()[tag] ?? '').trim();
+    const text: Wording = this.hasSubject() && subject.length > 0 ? { subject, body } : { body };
+    if (!this.isPush()) {
+      return text;
+    }
+    const target = this.targetPath().trim();
+    return {
+      ...text,
+      ...(this.coverAssetId() !== null ? { coverAssetId: this.coverAssetId() } : {}),
+      ...(target.length > 0 ? { targetPath: target } : {}),
+    };
   }
 
   protected cancel(): void {

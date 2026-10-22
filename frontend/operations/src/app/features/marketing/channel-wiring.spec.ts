@@ -6,6 +6,7 @@ import {
   courierWiringSentence,
   handedKey,
   isSelectable,
+  readKey,
   viewOf,
   wiringCodeIn,
   wiringSentence,
@@ -25,9 +26,18 @@ describe('wiringSentence', () => {
     );
   });
 
-  it('says push has no delivery in its own words, not a generic one', () => {
+  it('says why push cannot send: the platform’s sending identity is not set up, or it only carries campaigns (ADR 0182)', () => {
+    expect(wiringSentence('PUSH', 'PUSH_NOT_CONFIGURED').key).toBe(
+      'marketing.wiring.PUSH_NOT_CONFIGURED',
+    );
+    expect(wiringSentence('PUSH', 'PUSH_PURPOSE_NOT_PERMITTED').key).toBe(
+      'marketing.wiring.PUSH_PURPOSE_NOT_PERMITTED',
+    );
+  });
+
+  it('gives a channel with no delivery at all the one generic sentence, push included', () => {
     expect(wiringSentence('PUSH', 'NO_DELIVERY_ADAPTER').key).toBe(
-      'marketing.wiring.NO_DELIVERY_ADAPTER.PUSH',
+      'marketing.wiring.NO_DELIVERY_ADAPTER',
     );
     expect(wiringSentence('SMS', 'NO_DELIVERY_ADAPTER').key).toBe(
       'marketing.wiring.NO_DELIVERY_ADAPTER',
@@ -156,5 +166,15 @@ describe('handedKey', () => {
     expect(handedKey('SMS')).toBe('marketing.delivery.HANDED_TO_OPERATOR');
     expect(handedKey('EMAIL')).toBe('marketing.delivery.HANDED_TO_OPERATOR');
     expect(handedKey(null)).toBe('marketing.delivery.HANDED_TO_OPERATOR');
+    expect(handedKey('PUSH')).toBe('marketing.delivery.HANDED_TO_OPERATOR.PUSH');
+  });
+});
+
+describe('readKey', () => {
+  it('calls a tap a tap: Web Push reports a click, not that the message was read (ADR 0182)', () => {
+    expect(readKey('PUSH')).toBe('marketing.delivery.READ.PUSH');
+    expect(readKey('EMAIL')).toBe('marketing.delivery.READ');
+    expect(readKey('SMS')).toBe('marketing.delivery.READ');
+    expect(readKey(null)).toBe('marketing.delivery.READ');
   });
 });

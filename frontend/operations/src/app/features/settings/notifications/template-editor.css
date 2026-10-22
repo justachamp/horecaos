@@ -104,3 +104,10 @@
   word-break: break-word;
   font-size: var(--q-type-body-sm);
 }
+
+.preview-title {
+  padding: 16px 16px 0;
+  font-weight: 600;
+  font-size: var(--q-type-body-sm);
+  word-break: break-word;
+}

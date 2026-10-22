@@ -751,6 +751,28 @@ describe('CampaignDetailPane', () => {
     expect(facts.textContent).not.toContain('Handed to the operator');
   });
 
+  it('7.9b: a push a service accepted is «accepted by the push service», and a tap is «tapped», never «read» (ADR 0182)', async () => {
+    await render(OTHER_ID, campaign({ status: 'SENT', channel: 'PUSH' }), {
+      ...COUNTS,
+      delivery: delivery({
+        total: 4,
+        handedToOperator: 3,
+        delivered: 1,
+        read: 1,
+        reportsRead: true,
+      }),
+    });
+    const facts = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="delivery-counts"]',
+    ) as HTMLElement;
+
+    expect(facts.textContent).toContain('Accepted by the push service');
+    expect(facts.textContent).toContain('Tapped');
+    expect(facts.textContent).not.toContain('Read');
+    expect(facts.textContent).not.toContain('Handed to the operator');
+    expect(facts.querySelector('[data-testid="delivery-read"]')?.textContent).toContain('1');
+  });
+
   it('7.9b: messages withheld say why, in words', async () => {
     await render(OTHER_ID, campaign({ status: 'SENT', channel: 'SMS' }), {
       ...COUNTS,

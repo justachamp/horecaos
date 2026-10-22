@@ -51,6 +51,10 @@ export const CHANNEL_SOURCES: readonly string[] = [
 export interface Wording {
   readonly subject?: string;
   readonly body: string;
+  /** A push wording's 3:1 cover, an ADR 0010 media asset the tenant owns (ADR 0182, D14). */
+  readonly coverAssetId?: string | null;
+  /** A push wording's storefront path: a single leading slash, never an absolute URL (ADR 0182, D14). */
+  readonly targetPath?: string | null;
 }
 
 export interface AddVersionRequest {
@@ -85,6 +89,9 @@ export interface WordingResponse {
   readonly providerReviewReference: string | null;
   readonly providerReviewNote: string | null;
   readonly providerReviewUpdatedAt: string | null;
+  /** ADR 0182, D14: a push wording's cover and target; null on every other channel. */
+  readonly coverAssetId?: string | null;
+  readonly targetPath?: string | null;
 }
 
 /** One version's locale rows, grouped client-side from the flat `WordingResponse` list. */
@@ -143,7 +150,7 @@ export interface RoutingBinding {
 export const NOTIFICATION_CHANNELS: readonly string[] = ['SMS', 'TELEGRAM', 'PUSH', 'EMAIL'];
 
 /** `NotificationChannel.isWired()`, restated client-side so the editor can warn before a save round-trip. */
-export const WIRED_CHANNELS: ReadonlySet<string> = new Set(['SMS', 'TELEGRAM', 'EMAIL']);
+export const WIRED_CHANNELS: ReadonlySet<string> = new Set(['SMS', 'TELEGRAM', 'EMAIL', 'PUSH']);
 
 /**
  * 10.9 Notifications, Tab 1 (`NotificationTemplateController`, ADR 0020).

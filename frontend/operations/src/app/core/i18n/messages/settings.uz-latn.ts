@@ -759,6 +759,9 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.notifications.field.templateKey': 'Hodisa',
   'settings.notifications.field.notificationClass': 'Sinf',
   'settings.notifications.field.channel': 'Yetkazish kanali',
+  'settings.notifications.field.consentPurpose': 'Rozilik maqsadi',
+  'settings.notifications.field.consentPurpose.hint':
+    'Mijoz bu xabarni olishga bergan rozilik. Kampaniya faqat shu kanalda rozilik bergan mijozlarga yuboriladi; MARKETING_PROMOTIONS har bir tenantda bor.',
   'settings.notifications.field.status': 'Faol',
   'settings.notifications.field.activeVersion': 'Versiya',
   'settings.notifications.field.channel.hint':
@@ -789,6 +792,17 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.notifications.moderation.APPROVED': 'Tasdiqlangan',
   'settings.notifications.moderation.REJECTED': 'Shlyuz rad etdi',
   'settings.notifications.editor.subject': 'Mavzu',
+  'settings.notifications.editor.title': 'Sarlavha',
+  'settings.notifications.editor.push.target': 'Bosilganda ochiladi',
+  'settings.notifications.editor.push.target.hint':
+    'Vitrinadagi yoʻl, masalan /menu yoki /category/pizza. Boʻsh qolsa, bosh sahifa ochiladi.',
+  'settings.notifications.editor.push.target.invalid':
+    'Bitta slesh bilan boshlang va boʻsh joy qoʻymang: /menu, menu yoki //menu emas.',
+  'settings.notifications.editor.push.cover': 'Muqova rasmi',
+  'settings.notifications.editor.push.cover.hint':
+    'Majburiy emas. Mijoz matn tagida koʻradigan 3:1 rasm. Saqlashdan oldin uni 3:1 ga kesing.',
+  'settings.notifications.editor.push.cover.set': 'Muqova tanlangan',
+  'settings.notifications.editor.push.cover.remove': 'Muqovani olib tashlash',
   'settings.notifications.editor.body': 'Matn',
   'settings.notifications.editor.variables': 'Oʻzgaruvchi qoʻshish',
   'settings.notifications.editor.variables.empty':

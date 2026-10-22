@@ -28,6 +28,17 @@ describe('explainDeliveryReason', () => {
     expect(explainDeliveryReason('SMTP_UNAVAILABLE', english)).toContain('could not be reached');
   });
 
+  it('says why a push did not arrive, in words and not as the push service’s code (ADR 0182)', () => {
+    expect(explainDeliveryReason('PUSH_SUBSCRIPTION_GONE', english)).toContain(
+      'subscription is over',
+    );
+    expect(explainDeliveryReason('PUSH_VAPID_REJECTED', english)).toContain('sending identity');
+    expect(explainDeliveryReason('PUSH_SECRET_MISSING', english)).toBe(
+      explainDeliveryReason('PUSH_SECRET_INVALID', english),
+    );
+    expect(explainDeliveryReason('PUSH_SERVICE_ERROR', english)).not.toContain('Reason code');
+  });
+
   it('says why a courier was not messaged', () => {
     expect(explainDeliveryReason('COURIER_HAS_NO_NUMBER', english)).toContain('holds no number');
   });

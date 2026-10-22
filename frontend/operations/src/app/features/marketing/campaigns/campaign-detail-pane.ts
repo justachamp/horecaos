@@ -17,7 +17,13 @@ import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { describeApiError } from '../../orders/order-errors';
-import { WiringSentence, handedKey, wiringCodeIn, wiringSentence } from '../channel-wiring';
+import {
+  WiringSentence,
+  handedKey,
+  readKey,
+  wiringCodeIn,
+  wiringSentence,
+} from '../channel-wiring';
 import { CampaignView, MarketingApi, RecipientCountsView, RecipientView } from '../marketing-api';
 import { explainRefusal } from '../refusal-explainer';
 import { ScenarioPanel } from '../scenarios/scenario-panel';
@@ -240,13 +246,19 @@ export class CampaignDetailPane implements OnInit {
 
   /**
    * What the delivery path has reported about one message, in words. A message Telegram accepted is
-   * «sent»: its Bot API has no operator in between to hand it to (ADR 0182).
+   * «sent»: its Bot API has no operator in between to hand it to, and a push a customer tapped is
+   * «tapped», not «read» (ADR 0182).
    */
   protected deliveryText(state: string): string {
-    const key =
-      state === 'HANDED_TO_OPERATOR'
-        ? handedKey(this.campaign()?.channel ?? null)
-        : DELIVERY_KEYS[state];
+    const channel = this.campaign()?.channel ?? null;
+    let key: MessageKey | undefined;
+    if (state === 'HANDED_TO_OPERATOR') {
+      key = handedKey(channel);
+    } else if (state === 'READ') {
+      key = readKey(channel);
+    } else {
+      key = DELIVERY_KEYS[state];
+    }
     return key ? this.i18n.t(key) : state;
   }
 

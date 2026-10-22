@@ -66,7 +66,7 @@ const CHANNELS: readonly ChannelView[] = [
     channel: 'PUSH',
     carriesMarginalCost: false,
     isWired: false,
-    notWiredReason: 'NO_DELIVERY_ADAPTER',
+    notWiredReason: 'PUSH_NOT_CONFIGURED',
   },
   { channel: 'MESSAGING_APP', carriesMarginalCost: false, isWired: true, notWiredReason: null },
 ];
@@ -282,7 +282,7 @@ describe('steps that will be refused at launch', () => {
     expect(unwired.map((u) => [u.step, u.channel, u.sentence.key])).toEqual([
       [2, 'SMS', 'marketing.wiring.SMS_PURPOSE_NOT_PERMITTED'],
       [3, 'EMAIL', 'marketing.wiring.EMAIL_NOT_CONFIGURED'],
-      [4, 'PUSH', 'marketing.wiring.NO_DELIVERY_ADAPTER.PUSH'],
+      [4, 'PUSH', 'marketing.wiring.PUSH_NOT_CONFIGURED'],
     ]);
   });
 

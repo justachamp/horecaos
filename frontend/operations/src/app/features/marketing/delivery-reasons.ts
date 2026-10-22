@@ -36,6 +36,19 @@ const REASON_KEYS: Readonly<Record<string, MessageKey>> = {
   ADDRESS_INVALID: 'marketing.delivery.reason.ADDRESS_INVALID',
   MESSAGE_INVALID: 'marketing.delivery.reason.MESSAGE_INVALID',
   SMTP_UNAVAILABLE: 'marketing.delivery.reason.SMTP_UNAVAILABLE',
+  // Web Push (ADR 0182, D14): what a push service said, as a bounded code.
+  PUSH_SUBSCRIPTION_GONE: 'marketing.delivery.reason.PUSH_SUBSCRIPTION_GONE',
+  PUSH_VAPID_REJECTED: 'marketing.delivery.reason.PUSH_VAPID_REJECTED',
+  PUSH_NOT_CONFIGURED: 'marketing.delivery.reason.PUSH_NOT_CONFIGURED',
+  PUSH_PAYLOAD_TOO_LARGE: 'marketing.delivery.reason.PUSH_PAYLOAD_TOO_LARGE',
+  PUSH_REQUEST_REFUSED: 'marketing.delivery.reason.PUSH_REQUEST_REFUSED',
+  PUSH_PAYLOAD_UNUSABLE: 'marketing.delivery.reason.PUSH_PAYLOAD_UNUSABLE',
+  PUSH_REDIRECT_REFUSED: 'marketing.delivery.reason.PUSH_REDIRECT_REFUSED',
+  PUSH_SERVICE_ERROR: 'marketing.delivery.reason.PUSH_SERVICE_ERROR',
+  PUSH_RATE_LIMITED: 'marketing.delivery.reason.PUSH_RATE_LIMITED',
+  PUSH_SERVICE_UNREACHABLE: 'marketing.delivery.reason.PUSH_SERVICE_UNREACHABLE',
+  PUSH_SECRET_MISSING: 'marketing.delivery.reason.PUSH_SECRET_UNAVAILABLE',
+  PUSH_SECRET_INVALID: 'marketing.delivery.reason.PUSH_SECRET_UNAVAILABLE',
   // A courier broadcast's own.
   COURIER_HAS_NO_NUMBER: 'marketing.delivery.reason.COURIER_HAS_NO_NUMBER',
 };

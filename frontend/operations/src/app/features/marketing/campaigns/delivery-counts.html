@@ -10,7 +10,7 @@
     }
   </dd>
 
-  <dt>{{ 'marketing.delivery.READ' | t }}</dt>
+  <dt>{{ readLabel() | t }}</dt>
   <dd class="q-tnum" data-testid="delivery-read">
     @if (readShown()) {
       {{ counts().read }}

@@ -742,9 +742,11 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
     'Bu joylashtirishda elektron pochta sozlanmagan: pochta serveri koʻrsatilmagan, shuning uchun hech narsa yuborib boʻlmaydi. Platforma egasi yuboruvchi provayderni ulamaguncha email kampaniyasini ishga tushirib boʻlmaydi.',
   'marketing.wiring.EMAIL_PURPOSE_NOT_PERMITTED':
     'Platformaning pochta xizmati faqat kampaniya xatlarini yuboradi.',
+  'marketing.wiring.PUSH_NOT_CONFIGURED':
+    'Bu joylashtirishda push sozlanmagan: platformaning push kalitlari va aloqa manzili koʻrsatilmagan, shuning uchun hech narsa yuborib boʻlmaydi. Platforma egasi ularni ulamaguncha push kampaniyasini ishga tushirib boʻlmaydi.',
+  'marketing.wiring.PUSH_PURPOSE_NOT_PERMITTED':
+    'Platformaning push xizmati faqat kampaniya xabarlarini yuboradi.',
   'marketing.wiring.ACCOUNT_MISCONFIGURED': 'Bu kanal hisobining sozlamalari qisman yetishmaydi.',
-  'marketing.wiring.NO_DELIVERY_ADAPTER.PUSH':
-    'Push ulanmagan: push provayderi hali yoʻq, shuning uchun mehmonga push-xabar yuborib boʻlmaydi.',
   'marketing.wiring.UNKNOWN': 'Ushbu kanal hozir bu brend uchun xabar yetkaza olmaydi ({reason}).',
   'marketing.refusal.SCENARIO_CONFLICT': 'Boshqa faol ssenariy bu mehmonga hozirgina taklif bergan',
   'marketing.refusal.SCENARIO_PRIORITY_LOST':
@@ -1108,6 +1110,23 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.delivery.READ': 'Oʻqilgan',
   'marketing.delivery.WITHHELD': 'Ushlab qolingan',
   'marketing.delivery.HANDED_TO_OPERATOR.MESSAGING_APP': 'Yuborilgan',
+  'marketing.delivery.HANDED_TO_OPERATOR.PUSH': 'Push xizmati qabul qildi',
+  'marketing.delivery.READ.PUSH': 'Bosilgan',
+  'marketing.delivery.reason.PUSH_SUBSCRIPTION_GONE':
+    'Brauzerning push xizmati obuna tugaganini bildirdi: mijoz push-ni qayta yoqmaguncha unga bu yerdan yetib boʻlmaydi',
+  'marketing.delivery.reason.PUSH_VAPID_REJECTED':
+    'Push xizmati platformaning yuboruvchi kalitini bu obuna uchun qabul qilmadi (mijoz obuna boʻlgandan keyin kalit almashtirilgan)',
+  'marketing.delivery.reason.PUSH_NOT_CONFIGURED': 'Bu joylashtirishda push sozlanmagan',
+  'marketing.delivery.reason.PUSH_PAYLOAD_TOO_LARGE': 'Push xizmati xabar hajmini rad etdi',
+  'marketing.delivery.reason.PUSH_REQUEST_REFUSED': 'Push xizmati xabarni rad etdi',
+  'marketing.delivery.reason.PUSH_PAYLOAD_UNUSABLE': 'Xabarni bu obuna uchun shifrlab boʻlmadi',
+  'marketing.delivery.reason.PUSH_REDIRECT_REFUSED':
+    'Push xizmati soʻrovni boshqa manzilga yoʻnaltirdi; platforma bunga ergashmaydi',
+  'marketing.delivery.reason.PUSH_SERVICE_ERROR': 'Push xizmati qayta-qayta xato qaytardi',
+  'marketing.delivery.reason.PUSH_RATE_LIMITED':
+    'Push xizmati platformadan qayta-qayta sekinroq yuborishni soʻradi',
+  'marketing.delivery.reason.PUSH_SERVICE_UNREACHABLE': 'Push xizmatiga ulanib boʻlmadi',
+  'marketing.delivery.reason.PUSH_SECRET_UNAVAILABLE': 'Platformaning push kaliti mavjud emas',
   'marketing.delivery.counts.notReported': 'Bu kanal maʻlum qilmaydi',
   'marketing.delivery.counts.segments': 'Hisoblangan segmentlar',
   'marketing.delivery.counts.withheldTitle': 'Ushlab qolish sabablari',

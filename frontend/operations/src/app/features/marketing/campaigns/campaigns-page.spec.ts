@@ -816,7 +816,7 @@ describe('CampaignsPage', () => {
         channel: 'PUSH',
         carriesMarginalCost: false,
         isWired: false,
-        notWiredReason: 'NO_DELIVERY_ADAPTER',
+        notWiredReason: 'PUSH_NOT_CONFIGURED',
       },
       { channel: 'MESSAGING_APP', carriesMarginalCost: false, isWired: true, notWiredReason: null },
     ];
@@ -847,7 +847,7 @@ describe('CampaignsPage', () => {
       expect(hint.textContent).toContain('not cleared to carry marketing messages');
     });
 
-    it('says email is not set up and push is not connected, each in its own words', async () => {
+    it('says email and push are not set up on this deployment, each in its own words', async () => {
       await render([], GATED);
       (fixture.componentInstance as unknown as { openCreateCampaign(): void }).openCreateCampaign();
       fixture.detectChanges();
@@ -865,7 +865,7 @@ describe('CampaignsPage', () => {
 
       component.newCampaignChannel.set('PUSH');
       fixture.detectChanges();
-      expect(hint()).toContain('no push provider');
+      expect(hint()).toContain('Push is not set up on this deployment');
     });
 
     it('marks each unconnected channel in the list itself', async () => {

@@ -1,0 +1,58 @@
+<div class="push-fields" data-testid="push-fields">
+  <label class="q-caption" for="push-target">{{
+    'settings.notifications.editor.push.target' | t
+  }}</label>
+  <input
+    id="push-target"
+    class="q-body field"
+    type="text"
+    inputmode="url"
+    autocomplete="off"
+    placeholder="/menu"
+    data-testid="push-target"
+    [value]="targetPath()"
+    [attr.aria-invalid]="targetInvalid()"
+    (input)="onTarget($any($event.target).value)"
+  />
+  @if (targetInvalid()) {
+    <p class="q-body-sm error" role="alert" data-testid="push-target-invalid">
+      {{ 'settings.notifications.editor.push.target.invalid' | t }}
+    </p>
+  } @else {
+    <p class="q-caption hint">{{ 'settings.notifications.editor.push.target.hint' | t }}</p>
+  }
+
+  <span class="q-caption">{{ 'settings.notifications.editor.push.cover' | t }}</span>
+  <p class="q-caption hint">{{ 'settings.notifications.editor.push.cover.hint' | t }}</p>
+  <div class="cover">
+    @if (preview(); as url) {
+      <img class="cover__preview" [src]="url" alt="" data-testid="push-cover-preview" />
+    }
+    @if (coverAssetId()) {
+      <span class="q-caption" data-testid="push-cover-set">{{
+        'settings.notifications.editor.push.cover.set' | t
+      }}</span>
+      <button
+        type="button"
+        class="q-body secondary"
+        data-testid="push-cover-remove"
+        (click)="removeCover()"
+      >
+        {{ 'settings.notifications.editor.push.cover.remove' | t }}
+      </button>
+    }
+    <q-media-uploader
+      [aspectRatios]="coverRatios"
+      [accept]="coverAccept"
+      [maxSizeBytes]="coverMaximumBytes"
+      [uploading]="uploading()"
+      (cropped)="upload($event)"
+      (selected)="upload($event)"
+      (rejected)="onRejected($event)"
+      data-testid="push-cover-uploader"
+    />
+  </div>
+  @if (error(); as message) {
+    <p class="q-body-sm error" role="alert" data-testid="push-cover-error">{{ message }}</p>
+  }
+</div>
