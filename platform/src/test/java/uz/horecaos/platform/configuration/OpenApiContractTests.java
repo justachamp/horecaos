@@ -389,7 +389,12 @@ class OpenApiContractTests {
         }
         Set<String> oldRequired = strings(oldResolved.path("required"));
         Set<String> newRequired = strings(newResolved.path("required"));
-        assertThat(newRequired)
+        // The one exception is a request an Accepted ADR reshaped on purpose (ADR 0182's courier
+        // broadcast draft), named and kept narrow in AcceptedContractWidenings.
+        Set<String> mayBecomeRequired = AcceptedContractWidenings.mayBecomeRequired(context);
+        assertThat(newRequired.stream()
+                        .filter(property -> !mayBecomeRequired.contains(property))
+                        .collect(java.util.stream.Collectors.toSet()))
                 .as("schema for %s cannot make an existing optional field required", context)
                 .isSubsetOf(oldRequired);
         // The one exception is a relaxation an Accepted ADR made on purpose (ADR 0150's optional
@@ -400,8 +405,12 @@ class OpenApiContractTests {
                         .collect(java.util.stream.Collectors.toSet()))
                 .as("schema for %s cannot make a published required field optional", context)
                 .isSubsetOf(newRequired);
+        Set<String> mayBeRemoved = AcceptedContractWidenings.mayBeRemoved(context);
         oldResolved.path("properties").fieldNames().forEachRemaining(property -> {
             JsonNode newProperty = newResolved.path("properties").path(property);
+            if (newProperty.isMissingNode() && mayBeRemoved.contains(property)) {
+                return;
+            }
             assertThat(newProperty.isMissingNode())
                     .as("schema for %s cannot remove property %s", context, property)
                     .isFalse();

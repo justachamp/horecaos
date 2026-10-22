@@ -4,7 +4,8 @@ import java.util.Set;
 
 /**
  * The released-contract changes an Accepted ADR decided, and the only ones the OpenAPI
- * compatibility gate lets through (a type change, or a required request field made optional).
+ * compatibility gate lets through (a type change, a required request field made optional, or one
+ * request that swaps a published field for another).
  *
  * <p>{@link OpenApiContractTests} refuses any change of a published property's type, because
  * a client generated from the released document is entitled to it. ADR 0137 is a decision
@@ -21,6 +22,14 @@ import java.util.Set;
  * required, so relaxing it is the one place the gate's "cannot make a published required field
  * optional" is lifted. Relaxing a request is safe for a client generated from the released document
  * (it can still send the number); the response gains no required field and loses none.
+ *
+ * <p>ADR 0182 (D15) is the third, and the only one that changes a request's shape rather than relaxing
+ * it. A courier broadcast used to be drafted from free text ({@code message}); the SMS gateway
+ * approves wordings in advance (ADR 0091), so text typed into a form could never have been approved,
+ * and the draft now names an approved wording ({@code templateKey}) with its variables. The one
+ * client of that request is the operations console, which moved in the same change, so on that one
+ * request {@code message} may leave and {@code templateKey} may be required. The response keeps
+ * {@code message} (nullable) so a broadcast drafted before the change still reads.
  *
  * <p>The allowance is deliberately narrow. It names the properties, it admits one direction
  * of one type change, and it needs the property to be the one being compared rather than a
@@ -39,6 +48,10 @@ final class AcceptedContractWidenings {
 
     private static final Set<String> ADR_0150_MODES = Set.of("delivery", "pickup", "dineIn");
 
+    /** ADR 0182: the courier broadcast's draft, where free text gave way to an approved wording. */
+    private static final String ADR_0182_DRAFT_REQUEST =
+            "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/courier-broadcasts post request";
+
     private AcceptedContractWidenings() {}
 
     /**
@@ -51,7 +64,28 @@ final class AcceptedContractWidenings {
                 && ADR_0150_MODES.contains(context.substring(ADR_0150_EDITOR_REQUEST.length()))) {
             return Set.of("noPromiseFallbackSeconds");
         }
+        if (ADR_0182_DRAFT_REQUEST.equals(context)) {
+            return Set.of("message");
+        }
         return Set.of();
+    }
+
+    /**
+     * The properties of the schema at {@code context} that were optional or absent in the released
+     * contract and may be required now. Empty everywhere but ADR 0182's courier broadcast draft,
+     * where it is the approved wording's key.
+     */
+    static Set<String> mayBecomeRequired(String context) {
+        return ADR_0182_DRAFT_REQUEST.equals(context) ? Set.of("templateKey") : Set.of();
+    }
+
+    /**
+     * The properties of the schema at {@code context} that were published and may be gone now. Empty
+     * everywhere but ADR 0182's courier broadcast draft, where it is the free text the gateway could
+     * never have approved.
+     */
+    static Set<String> mayBeRemoved(String context) {
+        return ADR_0182_DRAFT_REQUEST.equals(context) ? Set.of("message") : Set.of();
     }
 
     /**

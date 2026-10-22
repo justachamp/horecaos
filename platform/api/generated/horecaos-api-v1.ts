@@ -1595,6 +1595,12 @@ export interface CallerNumberResponse {
   number?: string;
 }
 
+export interface CampaignDeliveryResponse {
+  campaignId?: string;
+  channel?: string;
+  delivery?: DeliveryCountsResponse;
+}
+
 export interface CampaignResponse {
   approvedBy?: string;
   audienceId?: string;
@@ -2100,6 +2106,8 @@ export interface ChannelResponse {
   channel?: string;
   isWired?: boolean;
   notWiredReason?: string;
+  reportsDelivery?: boolean;
+  reportsRead?: boolean;
 }
 
 export interface ChannelSetupControllerPresentationView {
@@ -2940,6 +2948,8 @@ export interface CourierBroadcastResponse {
   status?: string;
   targetGroupId?: string;
   targetKind?: string;
+  templateKey?: string;
+  variables?: { [key: string]: string };
 }
 
 export interface CourierBucketResponse {
@@ -3153,10 +3163,24 @@ export interface CourierPositionBody {
   longitude: number;
 }
 
+export interface CourierReadinessResponse {
+  isWired?: boolean;
+  reason?: string;
+  templates?: Array<CourierWordingResponse>;
+}
+
 export interface CourierResponse {
   courierId?: string;
   engagementId?: string;
   status?: string;
+}
+
+export interface CourierResultResponse {
+  courierReference?: string;
+  reason?: string;
+  receiptState?: string;
+  segmentsBilled?: number;
+  state?: string;
 }
 
 export interface CourierRosterReasonRequest {
@@ -3189,6 +3213,13 @@ export interface CourierTypeResponse {
   vehicleClass?: string;
   version?: number;
   workMode?: string;
+}
+
+export interface CourierWordingResponse {
+  awaitingGateway?: boolean;
+  bodiesByLocale?: { [key: string]: string };
+  templateKey?: string;
+  variables?: Array<string>;
 }
 
 export interface CoverageRequest {
@@ -3462,7 +3493,7 @@ export interface CreateTemplateRequest {
   channelSource?: "WEB" | "IOS" | "ANDROID" | "TELEGRAM" | "KIOSK" | "QR_TABLE" | "CALL_CENTRE" | "AGGREGATOR" | "POS";
   consentPurpose?: string;
   fulfillmentMode?: "DELIVERY" | "PICKUP" | "DINE_IN";
-  notificationClass: "TRANSACTIONAL_REQUIRED" | "TRANSACTIONAL_OPTIONAL" | "MARKETING" | "SECURITY" | "OPERATIONS_ALERT";
+  notificationClass: "TRANSACTIONAL_REQUIRED" | "TRANSACTIONAL_OPTIONAL" | "MARKETING" | "SECURITY" | "OPERATIONS_ALERT" | "COURIER_DISPATCH";
   templateKey: string;
 }
 
@@ -3880,6 +3911,22 @@ export interface DeliveryChargeResponse {
   reasonCode?: string;
 }
 
+export interface DeliveryCountsResponse {
+  delivered?: number;
+  failed?: number;
+  handedToOperator?: number;
+  noReceipt?: number;
+  pending?: number;
+  read?: number;
+  rejected?: number;
+  reportsDelivery?: boolean;
+  reportsRead?: boolean;
+  segmentsBilled?: number;
+  total?: number;
+  withheld?: number;
+  withheldByReason?: { [key: string]: number };
+}
+
 export interface DeliveryExceptionResponse {
   detail?: string;
   exceptionId?: string;
@@ -4255,9 +4302,10 @@ export interface DraftRedemptionPolicyRequest {
 }
 
 export interface DraftRequest {
-  message: string;
   targetGroupId?: string;
   targetKind: string;
+  templateKey: string;
+  variables?: { [key: string]: string };
 }
 
 export interface DraftRosterEntryRequest {
@@ -10032,6 +10080,7 @@ export interface RecentPlan {
 
 export interface RecipientCountsResponse {
   deferred?: number;
+  delivery?: DeliveryCountsResponse;
   pending?: number;
   queued?: number;
   refused?: number;
@@ -10042,6 +10091,7 @@ export interface RecipientCountsResponse {
 export interface RecipientResponse {
   customerAccountId?: string;
   deferredUntil?: string;
+  deliveryReason?: string;
   deliveryState?: string;
   notificationId?: string;
   receiptState?: string;
@@ -15198,6 +15248,7 @@ export interface Operations {
   "runs": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/automations/{ruleId}/runs"; request: { parameters: { path: { brandId: string; ruleId: string; tenantId: string } } }; responses: { "200": Array<AutomationRunResponse> } };
   "listCampaigns": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<CampaignResponse> } };
   "createCampaign": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CreateCampaignRequest }; responses: { "200": CampaignResponse } };
+  "campaignDeliveryCounts": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/delivery-counts"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<CampaignDeliveryResponse> } };
   "readCampaign": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } } }; responses: { "200": CampaignResponse } };
   "approve": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/approvals"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } }; body: OperationsMarketingControllerReasonRequest }; responses: { "200": unknown } };
   "estimate": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/estimates"; request: { parameters: { path: { brandId: string; campaignId: string; tenantId: string } } }; responses: { "200": EstimateResponse } };
@@ -15215,6 +15266,8 @@ export interface Operations {
   "remove_1": { method: "DELETE"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/contact-policy/overrides/{channel}/{campaignPurpose}/{period}"; request: { parameters: { path: { brandId: string; campaignPurpose: string; channel: string; period: string; tenantId: string }; query: { reason: string } } }; responses: { "200": unknown } };
   "list_5": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/courier-broadcasts"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<CourierBroadcastResponse> } };
   "draft": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/courier-broadcasts"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: DraftRequest }; responses: { "200": CourierBroadcastResponse } };
+  "courierBroadcastReadiness": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/courier-broadcasts/readiness"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": CourierReadinessResponse } };
+  "courierBroadcastRecipients": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/courier-broadcasts/{broadcastId}/recipients"; request: { parameters: { path: { brandId: string; broadcastId: string; tenantId: string } } }; responses: { "200": Array<CourierResultResponse> } };
   "send": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/courier-broadcasts/{broadcastId}/sends"; request: { parameters: { path: { brandId: string; broadcastId: string; tenantId: string } } }; responses: { "200": CourierBroadcastResponse } };
   "list_4": { method: "GET"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/offers"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": Array<OfferResponse> } };
   "create_2": { method: "POST"; path: "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/offers"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: OfferRequest }; responses: { "200": OfferResponse } };

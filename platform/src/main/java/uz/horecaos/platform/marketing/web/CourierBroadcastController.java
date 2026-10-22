@@ -52,6 +52,7 @@ public class CourierBroadcastController {
     @GetMapping("/readiness")
     @RequiresCapability(value = Capability.COURIER_BROADCAST_MANAGE, scope = ScopeType.BRAND)
     @Operation(
+            operationId = "courierBroadcastReadiness",
             summary = "Whether a courier SMS can leave for this brand, why not, and the wordings a dispatcher may name",
             description = "Read before drafting (ADR 0182). isWired is false with a stable code when the brand "
                     + "has no SMS account (NO_PROVIDER_BINDING, INSTALLATION_INACTIVE, SMS_ACCOUNT_MISCONFIGURED), "
@@ -60,13 +61,13 @@ public class CourierBroadcastController {
                     + "dispatcher's message (COURIER_CONTACTS_NOT_WIRED). templates lists the active wordings "
                     + "of the class COURIER_DISPATCH with the variables each declares and whether the SMS "
                     + "gateway has yet to approve it.")
-    public ResponseEntity<ReadinessResponse> readiness(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+    public ResponseEntity<CourierReadinessResponse> readiness(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
         CourierBroadcastService.Readiness readiness = broadcasts.readiness(tenantId, brandId);
-        return ResponseEntity.ok(new ReadinessResponse(
+        return ResponseEntity.ok(new CourierReadinessResponse(
                 readiness.isWired(),
                 readiness.reason(),
                 readiness.templates().stream()
-                        .map(template -> new TemplateResponse(
+                        .map(template -> new CourierWordingResponse(
                                 template.templateKey(),
                                 template.variables(),
                                 template.bodiesByLocale(),
@@ -112,6 +113,7 @@ public class CourierBroadcastController {
     @GetMapping("/{broadcastId}/recipients")
     @RequiresCapability(value = Capability.COURIER_BROADCAST_MANAGE, scope = ScopeType.BRAND)
     @Operation(
+            operationId = "courierBroadcastRecipients",
             summary = "What became of each courier a broadcast targeted",
             description = "One row per targeted courier, by their non-personal reference (K-014): the state of "
                     + "the message the gateway reported (PENDING, HANDED_TO_OPERATOR, DELIVERED, FAILED, "
@@ -209,15 +211,15 @@ public class CourierBroadcastController {
     }
 
     /** @param reason a stable code when a courier SMS cannot leave for this brand, null when it can */
-    public record ReadinessResponse(
-            boolean isWired, @Nullable String reason, List<TemplateResponse> templates) {}
+    public record CourierReadinessResponse(
+            boolean isWired, @Nullable String reason, List<CourierWordingResponse> templates) {}
 
     /**
      * @param variables the variables the wording uses, each needing a value
      * @param bodiesByLocale the wording per language tag, placeholders unexpanded
      * @param awaitingGateway whether the SMS gateway has yet to approve the wording
      */
-    public record TemplateResponse(
+    public record CourierWordingResponse(
             String templateKey, List<String> variables, Map<String, String> bodiesByLocale, boolean awaitingGateway) {}
 
     /** @param courierReference the courier's non-personal handle, e.g. K-014 */

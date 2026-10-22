@@ -5098,6 +5098,21 @@
         },
         "type" : "object"
       },
+      "CampaignDeliveryResponse" : {
+        "properties" : {
+          "campaignId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "channel" : {
+            "type" : "string"
+          },
+          "delivery" : {
+            "$ref" : "#/components/schemas/DeliveryCountsResponse"
+          }
+        },
+        "type" : "object"
+      },
       "CampaignResponse" : {
         "properties" : {
           "approvedBy" : {
@@ -6659,6 +6674,12 @@
           },
           "notWiredReason" : {
             "type" : "string"
+          },
+          "reportsDelivery" : {
+            "type" : "boolean"
+          },
+          "reportsRead" : {
+            "type" : "boolean"
           }
         },
         "type" : "object"
@@ -9229,6 +9250,15 @@
           },
           "targetKind" : {
             "type" : "string"
+          },
+          "templateKey" : {
+            "type" : "string"
+          },
+          "variables" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           }
         },
         "type" : "object"
@@ -9946,6 +9976,23 @@
         "required" : [ "accuracyMeters", "latitude", "longitude" ],
         "type" : "object"
       },
+      "CourierReadinessResponse" : {
+        "properties" : {
+          "isWired" : {
+            "type" : "boolean"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "templates" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CourierWordingResponse"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
       "CourierResponse" : {
         "properties" : {
           "courierId" : {
@@ -9957,6 +10004,27 @@
             "type" : "string"
           },
           "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierResultResponse" : {
+        "properties" : {
+          "courierReference" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "receiptState" : {
+            "type" : "string"
+          },
+          "segmentsBilled" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "state" : {
             "type" : "string"
           }
         },
@@ -10052,6 +10120,29 @@
           },
           "workMode" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CourierWordingResponse" : {
+        "properties" : {
+          "awaitingGateway" : {
+            "type" : "boolean"
+          },
+          "bodiesByLocale" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "templateKey" : {
+            "type" : "string"
+          },
+          "variables" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -11048,7 +11139,7 @@
             "type" : "string"
           },
           "notificationClass" : {
-            "enum" : [ "TRANSACTIONAL_REQUIRED", "TRANSACTIONAL_OPTIONAL", "MARKETING", "SECURITY", "OPERATIONS_ALERT" ],
+            "enum" : [ "TRANSACTIONAL_REQUIRED", "TRANSACTIONAL_OPTIONAL", "MARKETING", "SECURITY", "OPERATIONS_ALERT", "COURIER_DISPATCH" ],
             "type" : "string"
           },
           "templateKey" : {
@@ -12341,6 +12432,64 @@
         },
         "type" : "object"
       },
+      "DeliveryCountsResponse" : {
+        "properties" : {
+          "delivered" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "failed" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "handedToOperator" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "noReceipt" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "pending" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "read" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rejected" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "reportsDelivery" : {
+            "type" : "boolean"
+          },
+          "reportsRead" : {
+            "type" : "boolean"
+          },
+          "segmentsBilled" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "withheld" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "withheldByReason" : {
+            "additionalProperties" : {
+              "format" : "int32",
+              "type" : "integer"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
       "DeliveryExceptionResponse" : {
         "properties" : {
           "detail" : {
@@ -13592,11 +13741,6 @@
       },
       "DraftRequest" : {
         "properties" : {
-          "message" : {
-            "maxLength" : 480,
-            "minLength" : 0,
-            "type" : "string"
-          },
           "targetGroupId" : {
             "format" : "uuid",
             "type" : "string"
@@ -13604,9 +13748,20 @@
           "targetKind" : {
             "minLength" : 1,
             "type" : "string"
+          },
+          "templateKey" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "variables" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
           }
         },
-        "required" : [ "message", "targetKind" ],
+        "required" : [ "targetKind", "templateKey" ],
         "type" : "object"
       },
       "DraftRosterEntryRequest" : {
@@ -31635,6 +31790,9 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "delivery" : {
+            "$ref" : "#/components/schemas/DeliveryCountsResponse"
+          },
           "pending" : {
             "format" : "int32",
             "type" : "integer"
@@ -31668,6 +31826,9 @@
             "type" : "string"
           },
           "deferredUntil" : {
+            "type" : "string"
+          },
+          "deliveryReason" : {
             "type" : "string"
           },
           "deliveryState" : {
@@ -99761,6 +99922,46 @@
         "tags" : [ "Marketing" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/delivery-counts" : {
+      "get" : {
+        "description" : "The list a marketer compares campaigns by (row 7.9b, ADR 0182): for each of the brand's hundred newest campaigns, the same `delivery` object `recipients/counts` answers for one, derived when asked from the messages' own evidence. One read so a screen does not ask a hundred times; a campaign that created no messages counts zero.",
+        "operationId" : "campaignDeliveryCounts",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/CampaignDeliveryResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What became of the messages of each of the brand's recent campaigns, side by side",
+        "tags" : [ "Marketing" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}" : {
       "get" : {
         "description" : "Everything the detail screen renders honestly from: the four-eyes state (createdBy/approvedBy), the estimate as a range and not a promise, the reserved/spent split, and blockedCount/pausedAt for a paused send.",
@@ -100045,7 +100246,7 @@
     },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/campaigns/{campaignId}/recipients/counts" : {
       "get" : {
-        "description" : "The aggregate `recipients` itself makes a caller build by paging: pending, queued (handed to ADR 0020 for delivery), deferred (held past a quiet-hours boundary) and refused, plus the total attempted. Grouped by the same status `recipients` returns per row, not by the ADR 0020 terminal outcome — `terminal_status` is written by a projection this wave does not add, so 'delivered' vs 'failed' is not answerable from here yet. Read receipts have no data source at all: NotificationStatus has no READ and V0043 has no read_at, so the campaign tab that reads this says so rather than rendering a zero. Row 6.4 adds refusedByReason: the same REFUSED total, broken down by marketing.campaign_recipients.refusal_reason, so a 'suppressed' count is nameable (SUPPRESSED) without a reporting fact.",
+        "description" : "Two answers about one campaign. The send pipeline's own: pending, queued (handed to ADR 0020 for delivery), deferred (held past a quiet-hours boundary) and refused, plus the total attempted, with refusedByReason breaking the refused total down by reason. And, in `delivery`, what became of the messages that were created (ADR 0182): delivered, read, failed, rejected, handed to the operator, no receipt, pending, and withheld by reason, with the segments the gateway billed. The delivery figures are derived when asked from the same per-recipient evidence the recipients list shows, never copied onto the campaign, so a receipt that arrives a second later is in the next answer. `reportsDelivery` and `reportsRead` say what this campaign's channel can report for its brand: when one is false the figure it governs is not zero but unknown, and a caller must say so (delivered and read for a channel that reports neither are \"not reported by this channel\").",
         "operationId" : "recipientCounts",
         "parameters" : [ {
           "in" : "path",
@@ -100084,7 +100285,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "How many recipients ended each way (rows 7.9b/6.4) — the campaign history/statistics view",
+        "summary" : "How many recipients ended each way, and what happened to their messages (rows 7.9b/6.4)",
         "tags" : [ "Marketing" ]
       }
     },
@@ -100489,7 +100690,7 @@
         "tags" : [ "Courier broadcasts" ]
       },
       "post" : {
-        "description" : "Targets every active courier of the tenant, or one courier group. Drafted, not sent: a separate call opens the send, the same two-step shape as authoring and launching a campaign, so a mistyped message can be caught before anyone reads it.",
+        "description" : "Targets every active courier of the tenant, or one courier group, and names an approved wording (an active SMS template of the class COURIER_DISPATCH) with a value for each variable it declares. Free text is not accepted: the SMS gateway approves wordings in advance (ADR 0091). Drafted, not sent: a separate call opens the send, the same two-step shape as authoring and launching a campaign, so a mistyped value can be caught before anyone reads it.",
         "operationId" : "draft",
         "parameters" : [ {
           "in" : "path",
@@ -100534,9 +100735,94 @@
         "tags" : [ "Courier broadcasts" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/courier-broadcasts/readiness" : {
+      "get" : {
+        "description" : "Read before drafting (ADR 0182). isWired is false with a stable code when the brand has no SMS account (NO_PROVIDER_BINDING, INSTALLATION_INACTIVE, SMS_ACCOUNT_MISCONFIGURED), when its account has not been cleared to carry courier traffic (SMS_PURPOSE_NOT_PERMITTED), or when the owner has not recorded that a courier's own number may be used for a dispatcher's message (COURIER_CONTACTS_NOT_WIRED). templates lists the active wordings of the class COURIER_DISPATCH with the variables each declares and whether the SMS gateway has yet to approve it.",
+        "operationId" : "courierBroadcastReadiness",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CourierReadinessResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether a courier SMS can leave for this brand, why not, and the wordings a dispatcher may name",
+        "tags" : [ "Courier broadcasts" ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/courier-broadcasts/{broadcastId}/recipients" : {
+      "get" : {
+        "description" : "One row per targeted courier, by their non-personal reference (K-014): the state of the message the gateway reported (PENDING, HANDED_TO_OPERATOR, DELIVERED, FAILED, REJECTED, WITHHELD...) read from the message's own evidence, or NO_CONTACT for a courier the identity provider holds no usable number for. reason is a bounded code, never a number or a gateway's text.",
+        "operationId" : "courierBroadcastRecipients",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "broadcastId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/CourierResultResponse"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What became of each courier a broadcast targeted",
+        "tags" : [ "Courier broadcasts" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/marketing/courier-broadcasts/{broadcastId}/sends" : {
       "post" : {
-        "description" : "Resolves the target to a recipient count and opens the send. Refused, visibly, when SMS has no wired ADR 0020 delivery path — a dispatcher who tried to send sees why, rather than believing a message went out that never did.",
+        "description" : "Asks the identity provider which targeted couriers have a number, creates one ADR 0020 message for each that does, and records the rest as NO_CONTACT. Refused, visibly, with the stable code in the sentence, when the brand's gateway account is not cleared for courier traffic (SMS_PURPOSE_NOT_PERMITTED), when the owner has not recorded that a courier's number may be used (COURIER_CONTACTS_NOT_WIRED), when the wording is missing or awaits the gateway's approval, when no courier is active or none has a number. A 503 (COURIER_CONTACTS_UNAVAILABLE) means the identity provider could not be asked: nothing was sent and the broadcast is still a draft.",
         "operationId" : "send",
         "parameters" : [ {
           "in" : "path",
