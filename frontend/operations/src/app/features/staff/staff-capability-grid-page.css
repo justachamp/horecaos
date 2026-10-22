@@ -78,7 +78,7 @@
   display: inline-block;
   width: 14px;
   height: 14px;
-  margin-right: 4px;
+  margin-inline-end: 4px;
   border: 1px solid var(--q-hairline);
   border-radius: 3px;
   background: var(--q-canvas);
