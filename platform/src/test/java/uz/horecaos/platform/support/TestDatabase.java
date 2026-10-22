@@ -351,6 +351,13 @@ public final class TestDatabase {
                     .withDatabaseName(BOOTSTRAP_DATABASE)
                     .withUsername(MIGRATOR_ROLE)
                     .withPassword(MIGRATOR_ROLE)
+                    // The image's default is sixty seconds to say «ready to accept connections». Several
+                    // gates share this machine at once (the load average has stood near ninety on eighteen
+                    // cores), and a postgis initdb under that load takes longer than a minute: every
+                    // database-backed class then fails at its first line with ContainerLaunchException, which
+                    // reads as red and is not. Five minutes is a ceiling, not a wait; an idle machine
+                    // starts it in seconds.
+                    .withStartupTimeout(java.time.Duration.ofMinutes(5))
                     // Durability buys nothing in a database that is deleted when
                     // the JVM exits, and it is most of the cost of CREATE
                     // DATABASE, which this design performs once per test class.
