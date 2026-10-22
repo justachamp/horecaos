@@ -1,6 +1,7 @@
 package uz.horecaos.platform.payments;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -35,6 +36,8 @@ import uz.horecaos.platform.payments.application.FiscalReceiptPort;
 import uz.horecaos.platform.payments.application.PartnerFiscalizationBridge;
 import uz.horecaos.platform.payments.application.PaymentBindingResolver;
 import uz.horecaos.platform.payments.application.PaymentFiscalService;
+import uz.horecaos.platform.payments.application.PresentedReceipts;
+import uz.horecaos.platform.payments.application.ProtectedPresentedReceipts;
 import uz.horecaos.platform.payments.application.ProtectedSentEvidenceRecorder;
 import uz.horecaos.platform.payments.application.ReceiptLineBuilder;
 import uz.horecaos.platform.payments.domain.CaptureTiming;
@@ -42,6 +45,8 @@ import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.domain.FiscalReceiptLine;
 import uz.horecaos.platform.payments.domain.FiscalStatus;
 import uz.horecaos.platform.payments.domain.FiscalSubmission;
+import uz.horecaos.platform.payments.domain.PaymentAttempt;
+import uz.horecaos.platform.payments.domain.PaymentAttemptStatus;
 import uz.horecaos.platform.payments.domain.PaymentIntent;
 import uz.horecaos.platform.payments.domain.PaymentIntentStatus;
 import uz.horecaos.platform.payments.domain.PaymentMethod;
@@ -113,6 +118,7 @@ class PartnerFiscalizationBridgeTests {
     @BeforeEach
     void wire() {
         jdbc.sql("DELETE FROM fiscal.fiscal_documents").update();
+        jdbc.sql("DELETE FROM payments.payment_attempts").update();
         jdbc.sql("DELETE FROM payments.merchant_bindings").update();
         jdbc.sql("DELETE FROM tenant.location_fiscal_assignments").update();
         jdbc.sql("DELETE FROM tenant.legal_entities").update();
@@ -1054,6 +1060,204 @@ class PartnerFiscalizationBridgeTests {
         public boolean carriesMarkingCodes() {
             return true;
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Payme: the lines go with the checkout, and the filing sends exactly those (ADR 0166 Decisions 6 and 9)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+            "a Payme checkout keeps the lines it carried behind a protected reference, and a rebuild is not what is filed")
+    void aPaymeCheckoutKeepsItsLinesAndTheFilingSendsThoseAsSent() throws Exception {
+        seedPaymeBinding();
+        UUID intentId = seedIntent(PaymentProviderType.PAYME, PAYME_ENTITY);
+        PaymentFiscalService service = paymeService();
+        ProtectedPresentedReceipts presented = presented(service);
+        PaymentAttempt attempt = seedPaymeAttempt(intentId);
+
+        // 1. The checkout is presented: the lines are built from the order and kept on the attempt.
+        var prepared = presented.prepare(attempt, ORDER);
+        assertThat(prepared).isInstanceOf(PresentedReceipts.Prepared.Ready.class);
+        String reference = new JdbcPaymentAttemptStore(jdbc)
+                .presentedReceiptReference(TENANT, attempt.id())
+                .orElseThrow();
+        assertThat(reference)
+                .as("a protected reference, not the lines")
+                .doesNotContain("Plov")
+                .doesNotContain("10901001001000000");
+
+        // 2. The catalogue moves before the order completes, as it can: a rebuild would now say something else.
+        world.classes.put(
+                World.PLOV_VARIANT,
+                new FiscalClassificationFacts("99999999999999999", "9999999", 796, "Renamed plov", null, false));
+        UUID documentId = seedPendingDocument(intentId);
+        PartnerFiscalizationBridge bridge =
+                new PartnerFiscalizationBridge(service, bindings, world.builder(service), presented, CLOCK);
+
+        Outcome outcome = bridge.retry(TENANT, documentId, "idem-payme");
+
+        // 3. What was filed is what Payme was given: the document keeps those lines as its sent request.
+        assertThat(outcome).isEqualTo(Outcome.UNCERTAIN);
+        List<Map<String, Object>> sent = sentRequestsOf(documentId);
+        assertThat(sent).hasSize(1);
+        assertThat(sentLineNames(documentId, sent.get(0))).containsExactly("Plov");
+        assertThat(sentEvidenceOf(documentId).get("sent_tender_split_reference"))
+                .as("the whole charge went through the provider as one payment")
+                .isNotNull();
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .isEqualTo(FiscalStatus.SUBMITTED);
+    }
+
+    @Test
+    @DisplayName("a re-presentation of a Payme checkout carries the lines the first one fixed, not a rebuild")
+    void aRePresentationCarriesTheFirstLines() {
+        seedPaymeBinding();
+        UUID intentId = seedIntent(PaymentProviderType.PAYME, PAYME_ENTITY);
+        ProtectedPresentedReceipts presented = presented(paymeService());
+        PaymentAttempt attempt = seedPaymeAttempt(intentId);
+        presented.prepare(attempt, ORDER);
+
+        world.classes.put(
+                World.PLOV_VARIANT,
+                new FiscalClassificationFacts("99999999999999999", "9999999", 796, "Renamed plov", null, false));
+        var again = presented.prepare(attempt, ORDER);
+
+        assertThat(again).isInstanceOfSatisfying(PresentedReceipts.Prepared.Ready.class, ready -> {
+            assertThat(ready.lines()).hasSize(1);
+            assertThat(ready.lines().get(0).fiscalName()).isEqualTo("Plov");
+            assertThat(ready.lines().get(0).mxikCode()).isEqualTo("10901001001000000");
+        });
+        assertThat(presented.lines(TENANT, attempt.id()).orElseThrow().get(0).fiscalName())
+                .isEqualTo("Plov");
+    }
+
+    @Test
+    @DisplayName("a Payme checkout whose order has an unclassified node is refused with the obstacle and keeps nothing")
+    void anUnbuildablePaymeReceiptKeepsNothing() {
+        seedPaymeBinding();
+        UUID intentId = seedIntent(PaymentProviderType.PAYME, PAYME_ENTITY);
+        ProtectedPresentedReceipts presented = presented(paymeService());
+        PaymentAttempt attempt = seedPaymeAttempt(intentId);
+        world.classes.clear();
+
+        var prepared = presented.prepare(attempt, ORDER);
+
+        assertThat(prepared)
+                .isInstanceOfSatisfying(
+                        PresentedReceipts.Prepared.Refused.class,
+                        refused -> assertThat(refused.code()).isEqualTo("CLASSIFICATION:CLASSIFICATION_MISSING"));
+        assertThat(new JdbcPaymentAttemptStore(jdbc).presentedReceiptReference(TENANT, attempt.id()))
+                .isEmpty();
+        assertThat(presented.lines(TENANT, attempt.id())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("the kept lines are bound to their attempt: the same ciphertext does not open under another")
+    void theKeptLinesAreBoundToTheirAttempt() {
+        seedPaymeBinding();
+        UUID intentId = seedIntent(PaymentProviderType.PAYME, PAYME_ENTITY);
+        ProtectedPresentedReceipts presented = presented(paymeService());
+        PaymentAttempt attempt = seedPaymeAttempt(intentId);
+        presented.prepare(attempt, ORDER);
+        String reference = new JdbcPaymentAttemptStore(jdbc)
+                .presentedReceiptReference(TENANT, attempt.id())
+                .orElseThrow();
+
+        assertThatThrownBy(() -> protection.reveal(
+                        TENANT,
+                        ProtectedValue.deserialize(reference),
+                        ProtectedPresentedReceipts.recordOf(UUID.randomUUID()),
+                        "test"))
+                .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    @DisplayName(
+            "a Click document is built from the order as before: Payme's presented lines are never consulted for it")
+    void clickIsUntouchedByPresentedLines() {
+        seedClickBinding();
+        UUID intentId = seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY);
+        UUID documentId = seedPendingDocument(intentId);
+        ScriptedClick click = new ScriptedClick();
+        PaymentFiscalService service = new PaymentFiscalService(
+                documents, List.of(click), event -> {}, new RecordingProviderActivityRecorder());
+        fiscalService = service;
+        PresentedReceipts neverAsked = new PresentedReceipts() {
+            @Override
+            public Prepared prepare(PaymentAttempt attempt, UUID orderId) {
+                throw new AssertionError("Click never prepares Payme lines");
+            }
+
+            @Override
+            public Optional<List<FiscalReceiptLine>> lines(UUID tenantId, UUID attemptId) {
+                throw new AssertionError("not for Click");
+            }
+
+            @Override
+            public Optional<List<FiscalReceiptLine>> linesOfIntent(UUID tenantId, UUID intentId) {
+                throw new AssertionError("not for Click");
+            }
+        };
+
+        Outcome outcome = new PartnerFiscalizationBridge(service, bindings, world.builder(service), neverAsked, CLOCK)
+                .retry(TENANT, documentId, "idem-click");
+
+        assertThat(outcome).isNotEqualTo(Outcome.NO_PROVIDER_PATH);
+        assertThat(click.submitted).hasSize(1);
+        assertThat(click.submitted.get(0).lines()).hasSize(1);
+    }
+
+    private PaymentFiscalService paymeService() {
+        PaymentFiscalService service = new PaymentFiscalService(
+                documents,
+                List.of(new PaymeFiscalAdapter(intents, CLOCK)),
+                event -> {},
+                new RecordingProviderActivityRecorder(),
+                new ProtectedSentEvidenceRecorder(
+                        TestProtection.envelope(),
+                        documents,
+                        tools.jackson.databind.json.JsonMapper.builder().build()));
+        fiscalService = service;
+        return service;
+    }
+
+    private ProtectedPresentedReceipts presented(PaymentFiscalService service) {
+        return new ProtectedPresentedReceipts(
+                world.builder(service),
+                protection,
+                new JdbcPaymentAttemptStore(jdbc),
+                tools.jackson.databind.json.JsonMapper.builder().build(),
+                CLOCK);
+    }
+
+    private PaymentAttempt seedPaymeAttempt(UUID intentId) {
+        UUID merchantBinding = jdbc.sql("SELECT id FROM payments.merchant_bindings WHERE provider_type = 'PAYME'")
+                .query(UUID.class)
+                .single();
+        PaymentAttempt attempt = new PaymentAttempt(
+                UUID.randomUUID(),
+                TENANT,
+                intentId,
+                PaymentProviderType.PAYME,
+                merchantBinding,
+                "mtid-" + UUID.randomUUID(),
+                java.time.LocalDate.of(2026, 8, 24),
+                null,
+                null,
+                new SomAmount(15_000L, "UZS"),
+                PaymentAttemptStatus.INITIATED,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                1,
+                CLOCK.instant(),
+                null);
+        new JdbcPaymentAttemptStore(jdbc).insert(attempt);
+        return attempt;
     }
 
     // ------------------------------------------------------------------- helpers

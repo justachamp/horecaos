@@ -709,6 +709,11 @@ export interface PageView {
   version?: number;
 }
 
+export interface PaymentFormResponse {
+  action?: string;
+  fields?: { [key: string]: string };
+}
+
 export interface PaymentMethodsResponse {
   cartId?: string;
   channelId?: string;
@@ -1094,6 +1099,7 @@ export interface StorefrontPaymentControllerPaymentSessionResponse {
   checkoutUrl?: string;
   currency?: string;
   expiresAt?: string;
+  form?: PaymentFormResponse;
   merchantTransId?: string;
   presentation?: string;
   presentationCount?: number;

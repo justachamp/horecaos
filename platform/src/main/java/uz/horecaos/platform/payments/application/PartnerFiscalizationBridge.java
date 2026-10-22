@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.fiscal.api.PartnerFiscalizationPort;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
@@ -56,17 +57,30 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
     private final PaymentFiscalService fiscalDocuments;
     private final PaymentBindingResolver bindings;
     private final ReceiptLineBuilder lines;
+    private final PresentedReceipts presented;
     private final Clock clock;
 
+    @Autowired
+    public PartnerFiscalizationBridge(
+            PaymentFiscalService fiscalDocuments,
+            PaymentBindingResolver bindings,
+            ReceiptLineBuilder lines,
+            PresentedReceipts presented,
+            Clock clock) {
+        this.fiscalDocuments = fiscalDocuments;
+        this.bindings = bindings;
+        this.lines = lines;
+        this.presented = presented;
+        this.clock = clock;
+    }
+
+    /** For callers whose providers never carry the lines on the checkout (Click only). */
     public PartnerFiscalizationBridge(
             PaymentFiscalService fiscalDocuments,
             PaymentBindingResolver bindings,
             ReceiptLineBuilder lines,
             Clock clock) {
-        this.fiscalDocuments = fiscalDocuments;
-        this.bindings = bindings;
-        this.lines = lines;
-        this.clock = clock;
+        this(fiscalDocuments, bindings, lines, PresentedReceipts.NONE, clock);
     }
 
     @Override
@@ -105,7 +119,17 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
         }
 
         FiscalDocument submittable = document;
-        if (document.lines().isEmpty()) {
+        Optional<List<FiscalReceiptLine>> carried =
+                providerType == PaymentProviderType.PAYME && document.paymentIntentId() != null
+                        ? presented.linesOfIntent(tenantId, document.paymentIntentId())
+                        : Optional.empty();
+        if (carried.isPresent()) {
+            // ADR 0166 Decision 6, "stored as sent": Payme took these lines WITH THE CHECKOUT, before the
+            // customer paid, so they are the receipt. Building them again from the order as it stands now
+            // would file a different document from the one Payme holds, or block a payment that has already
+            // been taken because the catalogue moved in between.
+            submittable = copyWithLines(document, carried.get());
+        } else if (document.lines().isEmpty()) {
             Optional<String> filedUnder = fiscalDocuments.sellerTaxpayerNumber(tenantId, documentId);
             if (filedUnder.isEmpty()) {
                 // ADR 0166, Decision 3 and 9: the seller of a real receipt is the taxpayer the document

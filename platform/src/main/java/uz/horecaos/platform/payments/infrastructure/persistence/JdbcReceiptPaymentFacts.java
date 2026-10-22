@@ -2,10 +2,10 @@ package uz.horecaos.platform.payments.infrastructure.persistence;
 
 import java.util.OptionalLong;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.payments.application.ReceiptPaymentFacts;
-import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.settlement.JdbcSettlementStore;
 import uz.horecaos.platform.payments.settlement.JdbcSettlementStore.TenderRow;
 import uz.horecaos.platform.payments.settlement.TenderStatus;
@@ -24,11 +24,11 @@ public class JdbcReceiptPaymentFacts implements ReceiptPaymentFacts {
 
     @Override
     @Transactional(readOnly = true)
-    public OptionalLong providerAmountMinor(UUID tenantId, FiscalDocument document) {
-        if (document.paymentIntentId() == null) {
+    public OptionalLong providerAmountMinor(UUID tenantId, @Nullable UUID paymentIntentId) {
+        if (paymentIntentId == null) {
             return OptionalLong.empty();
         }
-        return intents.find(tenantId, document.paymentIntentId())
+        return intents.find(tenantId, paymentIntentId)
                 .map(intent -> OptionalLong.of(intent.amount().value()))
                 .orElse(OptionalLong.empty());
     }

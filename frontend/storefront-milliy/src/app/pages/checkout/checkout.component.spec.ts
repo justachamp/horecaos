@@ -12,7 +12,10 @@ import {
 import type { GiftOfferGroup } from '../../services/applied-promotions';
 import { DeliverySelectionService } from '../../services/delivery-selection.service';
 import { AddressBookService } from '../../services/address-book.service';
-import { PaymentSessionService } from '../../services/payment-session.service';
+import {
+  PaymentSessionService,
+  type PaymentSessionResponse,
+} from '../../services/payment-session.service';
 import { TranslateService } from '../../services/translate.service';
 import type { PricedCart, CheckoutResult, FulfillmentMode } from '../../services/cart.service';
 import { HorecaOSApiError } from '../../core/api/problem-details';
@@ -142,7 +145,7 @@ class FakeAddressBookService {
 }
 
 class FakePaymentSessionService {
-  open = vi.fn(async () => ({
+  open = vi.fn(async (_orderId: string): Promise<PaymentSessionResponse> => ({
     attemptId: 'a1',
     merchantTransId: 'm1',
     provider: 'CLICK',
@@ -301,6 +304,48 @@ describe('CheckoutComponent.confirm -- guards that must hold before the platform
     // the customer straight to the order list the way a CASH order does.
     expect(navigateSpy).not.toHaveBeenCalledWith(['/orders']);
     expect(cart.discard).toHaveBeenCalled();
+  });
+
+  it('posts the checkout form when the session carries one (Payme with a fiscalised cashbox), and does not follow the link', async () => {
+    const { fixture, cart, paymentSession, router } = await setUp((cart) => {
+      cart.paymentMethods = vi.fn(async () => ['PAYME']);
+    });
+    paymentSession.open.mockResolvedValue({
+      attemptId: 'a2',
+      merchantTransId: 'm2',
+      provider: 'PAYME',
+      presentation: 'PAYMENT_LINK',
+      checkoutUrl: 'https://checkout.payme.example/abc',
+      qrPayload: null,
+      expiresAt: new Date().toISOString(),
+      amountMinor: 25_000,
+      currency: 'UZS',
+      rePresented: false,
+      presentationCount: 1,
+      form: {
+        action: 'https://checkout.payme.example/',
+        fields: { merchant: 'cashbox-1', amount: '1500000', detail: 'ZGV0YWls' },
+      },
+    });
+    const redirectSpy = vi
+      .spyOn(
+        fixture.componentInstance as unknown as { redirectTo(url: string): void },
+        'redirectTo',
+      )
+      .mockImplementation(() => {});
+    const submit = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {});
+    const navigateSpy = vi.spyOn(router, 'navigate');
+
+    (fixture.nativeElement.querySelector('.cta') as HTMLButtonElement).click();
+    await fixture.whenStable();
+
+    expect(submit).toHaveBeenCalledTimes(1);
+    const form = document.body.querySelector('form') as HTMLFormElement;
+    expect((form.querySelector('input[name="detail"]') as HTMLInputElement).value).toBe('ZGV0YWls');
+    expect(redirectSpy).not.toHaveBeenCalled();
+    expect(navigateSpy).not.toHaveBeenCalledWith(['/orders']);
+    expect(cart.discard).toHaveBeenCalled();
+    form.remove();
   });
 
   it('still lands the customer on /orders, with a translated notice, when the payment session cannot be opened', async () => {

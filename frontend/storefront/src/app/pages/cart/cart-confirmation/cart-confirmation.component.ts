@@ -8,6 +8,7 @@ import { type HiddenChargeRow, UiCartService } from '../../../services/ui-cart.s
 import { DeliverySelectionService } from '../../../services/delivery-selection.service';
 import { OrdersService } from '../../../services/orders.service';
 import { PaymentSessionService } from '../../../services/payment-session.service';
+import { submitPaymentForm } from '../../../services/payment-form';
 import { NotificationService } from '../../../services/notification.service';
 import { GiftOffersComponent } from '../../../shared/gift-offers/gift-offers.component';
 import { PromoCodeComponent } from '../../../shared/promo-code/promo-code.component';
@@ -456,6 +457,11 @@ export class CartConfirmationComponent implements OnInit {
       if (PaymentSessionService.requiresOnlineSession(paymentMethodCode)) {
         try {
           const session = await this.paymentSessions.open(result.orderId);
+          if (session.form && submitPaymentForm(session.form)) {
+            // Payme on a fiscalised cashbox: the receipt detail is a field of the checkout form, which a link
+            // cannot carry, so the browser POSTs the form the platform built. Nothing after this runs.
+            return;
+          }
           if (session.checkoutUrl) {
             // A different host's checkout page, not an Angular route -- a full
             // navigation, and nothing after this line runs.

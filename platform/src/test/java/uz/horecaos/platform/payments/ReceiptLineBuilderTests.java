@@ -559,7 +559,7 @@ class ReceiptLineBuilderTests {
         };
         ReceiptPaymentFacts payments = new ReceiptPaymentFacts() {
             @Override
-            public OptionalLong providerAmountMinor(UUID tenantId, FiscalDocument document) {
+            public OptionalLong providerAmountMinor(UUID tenantId, @Nullable UUID paymentIntentId) {
                 return paid;
             }
 

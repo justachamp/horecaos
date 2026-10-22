@@ -2,6 +2,7 @@ package uz.horecaos.platform.payments.application;
 
 import java.util.OptionalLong;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 
 /**
@@ -20,7 +21,17 @@ public interface ReceiptPaymentFacts {
      *
      * @return empty when the document names no payment intent, or the intent cannot be read
      */
-    OptionalLong providerAmountMinor(UUID tenantId, FiscalDocument document);
+    default OptionalLong providerAmountMinor(UUID tenantId, FiscalDocument document) {
+        return providerAmountMinor(tenantId, document.paymentIntentId());
+    }
+
+    /**
+     * What the provider payment behind this intent was asked to collect: the same answer for a receipt built
+     * before a document exists (Payme's, fixed with the checkout).
+     *
+     * @return empty when no intent is named, or it cannot be read
+     */
+    OptionalLong providerAmountMinor(UUID tenantId, @Nullable UUID paymentIntentId);
 
     /** The points tender of the order's settlement that actually settled, or zero when there is none. */
     long pointsRedeemedMinor(UUID tenantId, UUID orderId);

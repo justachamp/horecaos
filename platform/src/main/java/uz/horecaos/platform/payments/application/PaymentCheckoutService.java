@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.payments.domain.PaymentAttempt;
@@ -64,8 +65,30 @@ public class PaymentCheckoutService {
     private final PaymentBindingResolver bindings;
     private final PaymentBusinessCalendar calendar;
     private final OrderDirectory orders;
+    private final PresentedReceipts receipts;
     private final Clock clock;
 
+    @Autowired
+    public PaymentCheckoutService(
+            JdbcPaymentIntentStore intents,
+            JdbcPaymentAttemptStore attempts,
+            PaymentAttemptService attemptService,
+            PaymentBindingResolver bindings,
+            PaymentBusinessCalendar calendar,
+            OrderDirectory orders,
+            PresentedReceipts receipts,
+            Clock clock) {
+        this.intents = intents;
+        this.attempts = attempts;
+        this.attemptService = attemptService;
+        this.bindings = bindings;
+        this.calendar = calendar;
+        this.orders = orders;
+        this.receipts = receipts;
+        this.clock = clock;
+    }
+
+    /** Without Payme receipt lines, for the callers that present no fiscalised Payme checkout. */
     public PaymentCheckoutService(
             JdbcPaymentIntentStore intents,
             JdbcPaymentAttemptStore attempts,
@@ -74,13 +97,7 @@ public class PaymentCheckoutService {
             PaymentBusinessCalendar calendar,
             OrderDirectory orders,
             Clock clock) {
-        this.intents = intents;
-        this.attempts = attempts;
-        this.attemptService = attemptService;
-        this.bindings = bindings;
-        this.calendar = calendar;
-        this.orders = orders;
-        this.clock = clock;
+        this(intents, attempts, attemptService, bindings, calendar, orders, PresentedReceipts.NONE, clock);
     }
 
     /**
@@ -148,6 +165,22 @@ public class PaymentCheckoutService {
 
         boolean rePresented = existing.isPresent();
 
+        if (binding.providerType() == PaymentProviderType.PAYME && binding.supportsPartnerFiscalization()) {
+            // ADR 0166 Decision 9: Payme takes the receipt lines WITH THE CHECKOUT, fixed before the customer
+            // pays, so a fiscalised cashbox is not presented a payment whose receipt cannot be built. No
+            // placeholder, no guess: the customer is told the order cannot be paid this way yet and an
+            // operator sees the named obstacle. A re-presentation carries the lines the first one fixed.
+            if (receipts.prepare(attempt, orderId) instanceof PresentedReceipts.Prepared.Refused refused) {
+                log.warn(
+                        "A Payme checkout for order {} was not presented: its receipt cannot be built ({})",
+                        orderId,
+                        refused.code());
+                throw new CheckoutRefusedException(
+                        "RECEIPT_NOT_BUILDABLE",
+                        "This order's receipt cannot be built, so it cannot be paid through Payme yet");
+            }
+        }
+
         ProviderInvoice invoice = attemptService
                 .present(attempt, binding, request)
                 .orElseThrow(() -> new CheckoutRefusedException(
@@ -171,7 +204,8 @@ public class PaymentCheckoutService {
                 attempt.amount().value(),
                 attempt.amount().currency(),
                 rePresented,
-                attempts.presentationCount(tenantId, attempt.id()));
+                attempts.presentationCount(tenantId, attempt.id()),
+                invoice.form());
     }
 
     /**
@@ -246,6 +280,8 @@ public class PaymentCheckoutService {
      *                           need it; a support view does
      * @param presentationCount  how many times a surface has now been handed over
      *                           for this attempt
+     * @param form               a checkout to POST instead of follow (Payme with a fiscalised cashbox: the
+     *                           receipt detail travels in a form field), or null
      */
     public record PaymentSession(
             UUID attemptId,
@@ -258,7 +294,36 @@ public class PaymentCheckoutService {
             long amountMinor,
             String currency,
             boolean rePresented,
-            int presentationCount) {}
+            int presentationCount,
+            ProviderInvoice.@Nullable PaymentForm form) {
+
+        public PaymentSession(
+                UUID attemptId,
+                String merchantTransId,
+                PaymentProviderType providerType,
+                PresentationKind presentationKind,
+                @Nullable String checkoutUrl,
+                @Nullable String qrPayload,
+                @Nullable Instant expiresAt,
+                long amountMinor,
+                String currency,
+                boolean rePresented,
+                int presentationCount) {
+            this(
+                    attemptId,
+                    merchantTransId,
+                    providerType,
+                    presentationKind,
+                    checkoutUrl,
+                    qrPayload,
+                    expiresAt,
+                    amountMinor,
+                    currency,
+                    rePresented,
+                    presentationCount,
+                    null);
+        }
+    }
 
     /**
      * A settled answer that this order cannot be presented for payment.

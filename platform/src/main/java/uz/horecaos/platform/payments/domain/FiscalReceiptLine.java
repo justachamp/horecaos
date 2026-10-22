@@ -53,7 +53,7 @@ public record FiscalReceiptLine(
         @Nullable SomAmount discount,
         @Nullable String barcode,
         List<String> markingCodes,
-        String commissionTin,
+        @Nullable String commissionTin,
         @Nullable String commissionPinfl,
         Kind kind) {
 
@@ -117,7 +117,7 @@ public record FiscalReceiptLine(
             @Nullable SomAmount discount,
             @Nullable String barcode,
             List<String> markingCodes,
-            String commissionTin,
+            @Nullable String commissionTin,
             @Nullable String commissionPinfl) {
         this(
                 fiscalName,

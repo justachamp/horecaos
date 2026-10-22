@@ -40,6 +40,8 @@ import uz.horecaos.platform.payments.application.ReceiptLineAllocator.Piece;
 import uz.horecaos.platform.payments.application.ReceiptLineAllocator.UnitPricing;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.domain.FiscalReceiptLine;
+import uz.horecaos.platform.payments.domain.PaymentAttempt;
+import uz.horecaos.platform.payments.domain.PaymentProviderType;
 import uz.horecaos.platform.payments.domain.SomAmount;
 
 /**
@@ -153,9 +155,66 @@ public class ReceiptLineBuilder {
     }
 
     /**
+     * What a receipt is built for: an order, the provider that will collect its payment, and the payment intent
+     * whose amount the lines must equal.
+     *
+     * <p>A fiscal document is one such subject, and the only one Click ever has: it fiscalizes after capture,
+     * from a document the obligation opener wrote. Payme is the other: its lines go out with the checkout, long
+     * before the order completes and a document exists, so the subject there is the payment attempt being
+     * presented. The builder asks the same questions either way and must not grow a second set of answers.
+     *
+     * @param referenceId the document or the attempt the receipt is built for, named in logs and audit
+     * @param referenceType {@code fiscal_document} or {@code payment_attempt}
+     */
+    public record Subject(
+            UUID tenantId,
+            UUID orderId,
+            @Nullable PaymentProviderType providerType,
+            @Nullable UUID paymentIntentId,
+            UUID referenceId,
+            String referenceType) {
+
+        public Subject {
+            Objects.requireNonNull(tenantId, "A tenant is required");
+            Objects.requireNonNull(orderId, "An order is required");
+            Objects.requireNonNull(referenceId, "A reference is required");
+            Objects.requireNonNull(referenceType, "A reference type is required");
+        }
+
+        public static Subject of(FiscalDocument document) {
+            return new Subject(
+                    document.tenantId(),
+                    document.orderId(),
+                    document.providerType(),
+                    document.paymentIntentId(),
+                    document.id(),
+                    "fiscal_document");
+        }
+
+        /** The payment attempt a Payme checkout is being presented for. */
+        public static Subject ofPresentedAttempt(PaymentAttempt attempt, UUID orderId) {
+            return new Subject(
+                    attempt.tenantId(),
+                    orderId,
+                    attempt.providerType(),
+                    attempt.intentId(),
+                    attempt.id(),
+                    "payment_attempt");
+        }
+    }
+
+    /**
      * @param sellerTin the taxpayer number the document was opened under, which Click files every line under
      */
     public Result build(FiscalDocument document, String sellerTin) {
+        return build(Subject.of(document), sellerTin);
+    }
+
+    /**
+     * @param sellerTin the taxpayer number the lines are filed under; null for a provider that has no field to
+     *     carry it (Payme, whose cashbox is the taxpayer), in which case no line states one
+     */
+    public Result build(Subject document, @Nullable String sellerTin) {
         UUID tenantId = document.tenantId();
         ReceiptOrder order = orders.find(tenantId, document.orderId()).orElse(null);
         if (order == null) {
@@ -196,7 +255,7 @@ public class ReceiptLineBuilder {
             // payment-options exclusion, and it refuses before anything is decrypted.
             log.warn(
                     "Fiscal document {} for order {} carries marked goods and its provider cannot carry codes; refusing",
-                    document.id(),
+                    document.referenceId(),
                     document.orderId());
             return new Result.Unprojectable("MARKING_CODES_UNSUPPORTED");
         }
@@ -306,7 +365,7 @@ public class ReceiptLineBuilder {
         }
 
         long receiptTotal = allocations.stream().mapToLong(Allocation::netMinor).sum();
-        OptionalLong collected = payments.providerAmountMinor(tenantId, document);
+        OptionalLong collected = payments.providerAmountMinor(tenantId, document.paymentIntentId());
         if (collected.isEmpty() || collected.getAsLong() != receiptTotal) {
             // The lines do not equal what the provider was asked to collect: a second money tender on the
             // order, or a payment restated after the order. Filing it would put a receipt on record that
@@ -449,7 +508,7 @@ public class ReceiptLineBuilder {
         return codes;
     }
 
-    private void recordDisclosure(FiscalDocument document, int disclosed) {
+    private void recordDisclosure(Subject document, int disclosed) {
         if (disclosed == 0) {
             return;
         }
@@ -458,20 +517,21 @@ public class ReceiptLineBuilder {
         audit.record(AuditFact.of("payments.document.marking_codes_disclosed", AuditClass.BUSINESS)
                 .by(ActorRef.systemJob("payments-fiscal"))
                 .at(ResourceScope.tenant(document.tenantId()))
-                .target("fiscal_document", document.id())
+                .target(document.referenceType(), document.referenceId())
                 .because(PURPOSE)
                 .changed(ChangeDocuments.created(
                         Map.of("orderId", document.orderId().toString(), "codeCount", disclosed)))
-                .correlatedBy(document.id().toString())
+                .correlatedBy(document.referenceId().toString())
                 .occurredAt(clock.instant())
                 .build());
     }
 
-    private Result.Blocked blocked(FiscalDocument document, Obstacle obstacle, String detail) {
+    private Result.Blocked blocked(Subject document, Obstacle obstacle, String detail) {
         // Identifiers and a code only (ADR 0029): which document, which order, what is wrong.
         log.warn(
-                "Fiscal document {} for order {} cannot have its receipt built: {} ({})",
-                document.id(),
+                "Receipt for {} {} of order {} cannot be built: {} ({})",
+                document.referenceType(),
+                document.referenceId(),
                 document.orderId(),
                 detail,
                 obstacle);

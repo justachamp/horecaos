@@ -38,7 +38,9 @@ import uz.horecaos.platform.ordering.api.OrderDirectory;
 import uz.horecaos.platform.payments.application.CapturedMoneyPort;
 import uz.horecaos.platform.payments.application.PaymentAttemptService;
 import uz.horecaos.platform.payments.application.PaymentCheckoutService;
+import uz.horecaos.platform.payments.application.PresentedReceipts;
 import uz.horecaos.platform.payments.domain.CaptureTiming;
+import uz.horecaos.platform.payments.domain.FiscalReceiptLine;
 import uz.horecaos.platform.payments.domain.PaymentAttempt;
 import uz.horecaos.platform.payments.domain.PaymentAttemptStatus;
 import uz.horecaos.platform.payments.domain.PaymentIntent;
@@ -54,6 +56,7 @@ import uz.horecaos.platform.payments.domain.UncertaintyResolver;
 import uz.horecaos.platform.payments.infrastructure.click.ClickMerchantApi;
 import uz.horecaos.platform.payments.infrastructure.click.ClickPaymentAdapter;
 import uz.horecaos.platform.payments.infrastructure.payme.PaymeProviderAdapter;
+import uz.horecaos.platform.payments.infrastructure.payme.PaymeReceiptSurface;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentAttemptStore;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentBindingResolver;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentBusinessCalendar;
@@ -512,6 +515,176 @@ class PaymentCheckoutSurfaceTests {
                 .isInstanceOfSatisfying(
                         PresentationFailure.Refused.class,
                         refused -> assertThat(refused.failureCode()).isEqualTo("PAYME_PUSH_UNSUPPORTED"));
+    }
+
+    // -----------------------------------------------------------------------
+    // Payme with a fiscalised cashbox: the receipt travels with the checkout (ADR 0166 Decision 9)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+            "a fiscalised Payme checkout is handed over as a form whose detail field is the receipt, and the link stays for the surfaces that cannot post")
+    void aFiscalisedPaymeCheckoutCarriesTheReceiptAsAForm() throws Exception {
+        givenIntent(PAYME_ORDER, PaymentProviderType.PAYME, PAYME_ENTITY);
+        PaymentCheckoutService fiscalised =
+                checkoutWith(new FixedReceipts(List.of(plov()), false), PaymeReceiptSurface.BOTH);
+
+        var session = fiscalised.openOrRePresent(TENANT, PAYME_ORDER, ACCOUNT, PresentationRequest.link());
+
+        assertThat(session.form()).isNotNull();
+        var form = Objects.requireNonNull(session.form());
+        assertThat(form.action()).isEqualTo(PAYME_CHECKOUT_HOST + "/");
+        assertThat(form.fields())
+                .containsEntry("merchant", PAYME_CASHBOX)
+                .containsEntry("amount", "1200000")
+                .containsEntry("account[order_id]", session.merchantTransId())
+                .containsKey("detail");
+        tools.jackson.databind.JsonNode detail = new tools.jackson.databind.ObjectMapper()
+                .readTree(new String(Base64.getDecoder().decode(form.fields().get("detail")), StandardCharsets.UTF_8));
+        assertThat(detail.path("receipt_type").asInt()).isZero();
+        tools.jackson.databind.JsonNode item = detail.path("items").path(0);
+        assertThat(item.path("title").asText()).isEqualTo("Plov");
+        assertThat(item.path("price").asLong())
+                .as("Payme's price is the unit price, in tiyin")
+                .isEqualTo(1_200_000L);
+        assertThat(item.path("count").asInt()).isEqualTo(1);
+        assertThat(item.path("code").asText()).isEqualTo("10901001001000000");
+        assertThat(item.path("package_code").asText()).isEqualTo("1500123");
+        assertThat(item.path("vat_percent").asInt()).isEqualTo(12);
+        assertThat(Objects.requireNonNull(session.checkoutUrl()))
+                .as("the GET link is still there, for a surface that cannot post")
+                .startsWith(PAYME_CHECKOUT_HOST + "/");
+    }
+
+    @Test
+    @DisplayName("a QR is never a form, and a checkout with the form surface switched off carries no form")
+    void aQrAndAFormlessSwitchCarryNoForm() {
+        givenIntent(PAYME_ORDER, PaymentProviderType.PAYME, PAYME_ENTITY);
+        FixedReceipts receipts = new FixedReceipts(List.of(plov()), false);
+
+        var qr = checkoutWith(receipts, PaymeReceiptSurface.BOTH)
+                .openOrRePresent(
+                        TENANT, PAYME_ORDER, ACCOUNT, new PresentationRequest(PresentationKind.QR, null, null, null));
+        assertThat(qr.form()).as("a QR is a picture of the link").isNull();
+        assertThat(qr.qrPayload()).isNotBlank();
+
+        var checkOnly = checkoutWith(receipts, PaymeReceiptSurface.CHECK)
+                .openOrRePresent(TENANT, PAYME_ORDER, ACCOUNT, PresentationRequest.link());
+        assertThat(checkOnly.form())
+                .as("CHECK carries the detail on CheckPerformTransaction only")
+                .isNull();
+    }
+
+    @Test
+    @DisplayName(
+            "a fiscalised Payme checkout whose receipt cannot be built is refused with a named code and hands out no link")
+    void aReceiptThatCannotBeBuiltIsNotPresented() {
+        givenIntent(PAYME_ORDER, PaymentProviderType.PAYME, PAYME_ENTITY);
+        FixedReceipts unbuildable = new FixedReceipts(List.of(), true);
+
+        assertThatThrownBy(() -> checkoutWith(unbuildable, PaymeReceiptSurface.BOTH)
+                        .openOrRePresent(TENANT, PAYME_ORDER, ACCOUNT, PresentationRequest.link()))
+                .isInstanceOfSatisfying(
+                        PaymentCheckoutService.CheckoutRefusedException.class,
+                        refused -> assertThat(refused.code()).isEqualTo("RECEIPT_NOT_BUILDABLE"));
+
+        // The attempt was opened and never presented: no link was ever produced for a payment with no receipt.
+        PaymentAttempt attempt = attempts.findOpenForIntent(
+                        TENANT,
+                        intents.findLiveForOrder(TENANT, PAYME_ORDER)
+                                .orElseThrow()
+                                .id())
+                .orElseThrow();
+        assertThat(attempt.status()).isEqualTo(PaymentAttemptStatus.INITIATED);
+        assertThat(attempts.presentationCount(TENANT, attempt.id())).isZero();
+    }
+
+    @Test
+    @DisplayName("a Click checkout never asks for Payme's receipt lines")
+    void clickNeverPreparesPaymeLines() {
+        givenIntent(CLICK_ORDER, PaymentProviderType.CLICK, CLICK_ENTITY);
+        FixedReceipts receipts = new FixedReceipts(List.of(plov()), true);
+
+        var session = checkoutWith(receipts, PaymeReceiptSurface.BOTH)
+                .openOrRePresent(TENANT, CLICK_ORDER, ACCOUNT, PresentationRequest.link());
+
+        assertThat(session.form()).isNull();
+        assertThat(receipts.prepared).isZero();
+    }
+
+    private PaymentCheckoutService checkoutWith(PresentedReceipts receipts, PaymeReceiptSurface surface) {
+        JdbcPaymentTransactionStore transactions = new JdbcPaymentTransactionStore(jdbc);
+        JdbcPaymentBindingResolver bindings = new JdbcPaymentBindingResolver(jdbc);
+        ClickPaymentAdapter click = new ClickPaymentAdapter(new ClickMerchantApi(transport, CLOCK), CLOCK);
+        PaymeProviderAdapter payme = new PaymeProviderAdapter(
+                new FixedInstallations(), attempts, true, receipts, surface, new tools.jackson.databind.ObjectMapper());
+        PaymentAttemptService service = new PaymentAttemptService(
+                intents,
+                attempts,
+                transactions,
+                bindings,
+                List.of(click, payme),
+                CapturedMoneyPort.NONE,
+                unitOfWork,
+                event -> {},
+                CLOCK);
+        return new PaymentCheckoutService(
+                intents,
+                attempts,
+                service,
+                bindings,
+                new JdbcPaymentBusinessCalendar(jdbc),
+                new SeededOrders(),
+                receipts,
+                CLOCK);
+    }
+
+    private static FiscalReceiptLine plov() {
+        return new FiscalReceiptLine(
+                "Plov",
+                "10901001001000000",
+                "1500123",
+                796L,
+                1,
+                new SomAmount(AMOUNT_SOM, "UZS"),
+                new SomAmount(1_286, "UZS"),
+                12,
+                null,
+                null,
+                List.of(),
+                null,
+                null);
+    }
+
+    /** Receipt lines the checkout carries, or an order whose receipt cannot be built. */
+    private static final class FixedReceipts implements PresentedReceipts {
+
+        private final List<FiscalReceiptLine> lines;
+        private final boolean unbuildable;
+        int prepared;
+
+        FixedReceipts(List<FiscalReceiptLine> lines, boolean unbuildable) {
+            this.lines = lines;
+            this.unbuildable = unbuildable;
+        }
+
+        @Override
+        public Prepared prepare(PaymentAttempt attempt, UUID orderId) {
+            prepared++;
+            return unbuildable
+                    ? new Prepared.Refused("CLASSIFICATION:CLASSIFICATION_MISSING")
+                    : new Prepared.Ready(lines);
+        }
+
+        @Override
+        public Optional<List<FiscalReceiptLine>> lines(UUID tenantId, UUID attemptId) {
+            return unbuildable ? Optional.empty() : Optional.of(lines);
+        }
+
+        @Override
+        public Optional<List<FiscalReceiptLine>> linesOfIntent(UUID tenantId, UUID intentId) {
+            return lines(tenantId, intentId);
+        }
     }
 
     // -----------------------------------------------------------------------
