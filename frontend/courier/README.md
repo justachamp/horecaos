@@ -46,6 +46,7 @@ from environment variables by `docker-entrypoint.sh`:
 | `APP_CLIENT_ID` | The public client | `horecaos-courier` |
 | `APP_TENANT_ID` | The tenant this deployment's couriers work for | the local fixture tenant |
 | `APP_DISPLAY_TIME_ZONE` | Zone times are shown in | `Asia/Tashkent` |
+| `APP_CURRENCY` | The ISO 4217 code couriers are settled in; sent when a shift opens and closes | `UZS` |
 
 A missing or malformed value stops the app at start with a plain message in three languages; it
 never falls back to a placeholder tenant.

@@ -34,6 +34,15 @@ export interface AppConfig {
 
   /** The IANA zone times are shown in. A courier's phone may be anywhere; the branch is in one place. */
   readonly displayTimeZone: string;
+
+  /**
+   * The ISO 4217 code of the currency this tenant's couriers are settled in (`UZS`).
+   *
+   * The platform keys a shift's cash handover on it, so the app sends it when a shift opens and
+   * closes. It is deployment configuration for the same reason the tenant is: one deployment
+   * serves one tenant's couriers, and the courier's own record does not carry it.
+   */
+  readonly currency: string;
 }
 
 export const APP_CONFIG = new InjectionToken<AppConfig>('APP_CONFIG');

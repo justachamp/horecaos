@@ -34,7 +34,7 @@ RUN chmod +x /docker-entrypoint.sh
 
 EXPOSE 80
 
-# APP_API_BASE_URL, APP_ISSUER_URL, APP_CLIENT_ID, APP_TENANT_ID, APP_DISPLAY_TIME_ZONE -- see
+# APP_API_BASE_URL, APP_ISSUER_URL, APP_CLIENT_ID, APP_TENANT_ID, APP_DISPLAY_TIME_ZONE, APP_CURRENCY -- see
 # docker-entrypoint.sh for what each defaults to when unset.
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]

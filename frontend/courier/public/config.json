@@ -3,5 +3,6 @@
   "issuerUrl": "http://localhost:8081/realms/horecaos",
   "clientId": "horecaos-courier",
   "tenantId": "10000000-0000-0000-0000-000000000001",
-  "displayTimeZone": "Asia/Tashkent"
+  "displayTimeZone": "Asia/Tashkent",
+  "currency": "UZS"
 }

@@ -6,6 +6,7 @@ const VALID = {
   clientId: 'horecaos-courier',
   tenantId: '10000000-0000-0000-0000-000000000001',
   displayTimeZone: 'Asia/Tashkent',
+  currency: 'UZS',
 };
 
 function serving(body: unknown, status = 200): typeof fetch {
@@ -22,6 +23,7 @@ describe('loadAppConfig', () => {
       clientId: 'horecaos-courier',
       tenantId: '10000000-0000-0000-0000-000000000001',
       displayTimeZone: 'Asia/Tashkent',
+      currency: 'UZS',
     });
   });
 
@@ -86,6 +88,24 @@ describe('loadAppConfig', () => {
     );
 
     expect(config.displayTimeZone).toBe('Asia/Tashkent');
+  });
+
+  it('defaults the settlement currency when the file names none, and reads it in capitals', async () => {
+    const withoutCurrency: Record<string, unknown> = { ...VALID };
+    delete withoutCurrency['currency'];
+
+    expect((await loadAppConfig(serving(withoutCurrency), 'https:')).currency).toBe('UZS');
+    expect((await loadAppConfig(serving({ ...VALID, currency: ' usd ' }), 'https:')).currency).toBe(
+      'USD',
+    );
+  });
+
+  it('refuses a currency that is not a three-letter code -- it is written into the shift and its cash handover', async () => {
+    for (const currency of ['so', 'UZSS', '$$$', 12]) {
+      await expect(loadAppConfig(serving({ ...VALID, currency }), 'https:')).rejects.toThrow(
+        'not a three-letter currency code',
+      );
+    }
   });
 
   it('reports a file that cannot be fetched, is not 200, or is not JSON as the start failing', async () => {

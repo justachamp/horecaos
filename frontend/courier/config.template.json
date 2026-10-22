@@ -3,5 +3,6 @@
   "issuerUrl": "${APP_ISSUER_URL}",
   "clientId": "${APP_CLIENT_ID}",
   "tenantId": "${APP_TENANT_ID}",
-  "displayTimeZone": "${APP_DISPLAY_TIME_ZONE}"
+  "displayTimeZone": "${APP_DISPLAY_TIME_ZONE}",
+  "currency": "${APP_CURRENCY}"
 }

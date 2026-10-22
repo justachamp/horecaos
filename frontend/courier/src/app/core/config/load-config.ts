@@ -8,6 +8,7 @@ import type { AppConfig } from './app-config';
 export const CONFIG_URL = 'config.json';
 
 const DEFAULT_TIME_ZONE = 'Asia/Tashkent';
+const DEFAULT_CURRENCY = 'UZS';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -74,6 +75,7 @@ function validate(body: unknown, pageProtocol: string): AppConfig {
     clientId: requireText(raw, 'clientId'),
     tenantId: requireUuid(raw, 'tenantId'),
     displayTimeZone: optionalZone(raw, 'displayTimeZone') ?? DEFAULT_TIME_ZONE,
+    currency: optionalCurrency(raw, 'currency') ?? DEFAULT_CURRENCY,
   };
 }
 
@@ -125,4 +127,23 @@ function optionalZone(raw: Record<string, unknown>, key: string): string | undef
   } catch {
     return undefined;
   }
+}
+
+/**
+ * An absent currency is the default; a present one that is not a three-letter code is a refusal to
+ * start, unlike a zone: a mistaken zone changes how a time reads, a mistaken currency is written
+ * into the shift and its cash handover.
+ */
+function optionalCurrency(raw: Record<string, unknown>, key: string): string | undefined {
+  const value = raw[key];
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+  const code = typeof value === 'string' ? value.trim().toUpperCase() : '';
+  if (!/^[A-Z]{3}$/.test(code)) {
+    throw new ConfigUnavailableError(
+      `${CONFIG_URL} has a "${key}" that is not a three-letter currency code.`,
+    );
+  }
+  return code;
 }

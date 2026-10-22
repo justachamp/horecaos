@@ -336,6 +336,8 @@ services:
       # storefront; defaults to the pilot tenant the storefront serves.
       APP_TENANT_ID: ${HORECAOS_COURIER_TENANT_ID:-${HORECAOS_STOREFRONT_TENANT_ID}}
       APP_DISPLAY_TIME_ZONE: Asia/Tashkent
+      # The currency this tenant's couriers are settled in; sent when a shift opens and closes.
+      APP_CURRENCY: ${HORECAOS_COURIER_CURRENCY:-UZS}
       TZ: Asia/Tashkent
     networks:
       - public

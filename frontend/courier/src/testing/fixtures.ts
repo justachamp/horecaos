@@ -11,6 +11,7 @@ export const TEST_CONFIG: AppConfig = {
   clientId: 'horecaos-courier',
   tenantId: TENANT_ID,
   displayTimeZone: 'Asia/Tashkent',
+  currency: 'UZS',
 };
 
 /** A courier with a main branch, an open shift and a valid registration. Override what a case is about. */
