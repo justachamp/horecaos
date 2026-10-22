@@ -3,6 +3,7 @@ package uz.horecaos.platform.fulfillment.application;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -103,14 +104,7 @@ public class ZoneBatchImportService {
     }
 
     private RowOutcome importOneRow(UUID tenantId, UUID brandId, ImportRow row) {
-        UUID zoneId = zones.createZone(
-                tenantId,
-                brandId,
-                row.role(),
-                row.code(),
-                row.displayNameRu(),
-                row.displayNameUz(),
-                row.displayNameEn());
+        UUID zoneId = zones.createZone(tenantId, brandId, row.role(), row.code(), row.names());
 
         ServiceZoneService.DraftedVersion drafted = zones.draftPolygonVersion(
                 new ServiceZoneService.NewVersion(
@@ -157,9 +151,7 @@ public class ZoneBatchImportService {
             String externalRef,
             ZoneRole role,
             String code,
-            String displayNameRu,
-            String displayNameUz,
-            String displayNameEn,
+            Map<String, String> names,
             @Nullable UUID regionId,
             int priority,
             String currency,

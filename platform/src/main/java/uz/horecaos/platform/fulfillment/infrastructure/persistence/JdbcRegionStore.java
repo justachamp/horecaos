@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -40,7 +39,7 @@ public class JdbcRegionStore {
     }
 
     private static final String SELECT_COLUMNS = """
-            SELECT id, tenant_id, code, display_name_ru, display_name_uz, display_name_en,
+            SELECT id, tenant_id, code,
                    centre_lat, centre_lon, bbox_sw_lat, bbox_sw_lon, bbox_ne_lat, bbox_ne_lon,
                    status, version
             """;
@@ -72,19 +71,16 @@ public class JdbcRegionStore {
     public void insert(UUID id, UUID tenantId, RegionGeography geography, Instant now) {
         jdbc.sql("""
                 INSERT INTO fulfillment.regions (
-                    id, tenant_id, code, display_name_ru, display_name_uz, display_name_en,
+                    id, tenant_id, code,
                     centre_lat, centre_lon, bbox_sw_lat, bbox_sw_lon, bbox_ne_lat, bbox_ne_lon,
                     status, version, created_at, updated_at)
-                VALUES (:id, :tenantId, :code, :nameRu, :nameUz, :nameEn,
+                VALUES (:id, :tenantId, :code,
                     :centreLat, :centreLon, :swLat, :swLon, :neLat, :neLon,
                     'ACTIVE', 1, :now, :now)
                 """)
                 .param("id", id)
                 .param("tenantId", tenantId)
                 .param("code", geography.code())
-                .param("nameRu", geography.displayNameRu())
-                .param("nameUz", geography.displayNameUz())
-                .param("nameEn", geography.displayNameEn())
                 .param("centreLat", geography.centreLat())
                 .param("centreLon", geography.centreLon())
                 .param("swLat", geography.bboxSwLat())
@@ -108,9 +104,9 @@ public class JdbcRegionStore {
      * it two operators editing the same region concurrently silently clobber
      * each other, the later write winning with no conflict surfaced to either.
      *
-     * <p>A null name in {@code geography} leaves that column as it was (row 10.12):
-     * an editor that shows only the locales a tenant supports names no others, and a
-     * write that replaced them would delete a translation nobody chose to delete.
+     * <p>The names are not written here: {@link #upsertTranslations} touches only the locales it
+     * names (row 10.12), because an editor that shows only the locales a tenant supports names no
+     * others, and a write that replaced them would delete a translation nobody chose to delete.
      *
      * @return 1 when a row of this tenant's was rewritten at exactly {@code
      *         expectedVersion}, 0 otherwise (not found, not owned, not active,
@@ -120,9 +116,6 @@ public class JdbcRegionStore {
         return jdbc.sql("""
                 UPDATE fulfillment.regions
                 SET code = :code,
-                    display_name_ru = COALESCE(:nameRu, display_name_ru),
-                    display_name_uz = COALESCE(:nameUz, display_name_uz),
-                    display_name_en = COALESCE(:nameEn, display_name_en),
                     centre_lat = :centreLat,
                     centre_lon = :centreLon,
                     bbox_sw_lat = :swLat,
@@ -137,9 +130,6 @@ public class JdbcRegionStore {
                 .param("regionId", regionId)
                 .param("tenantId", tenantId)
                 .param("code", geography.code())
-                .param("nameRu", geography.displayNameRu())
-                .param("nameUz", geography.displayNameUz())
-                .param("nameEn", geography.displayNameEn())
                 .param("centreLat", geography.centreLat())
                 .param("centreLon", geography.centreLon())
                 .param("swLat", geography.bboxSwLat())
@@ -172,8 +162,8 @@ public class JdbcRegionStore {
 
     /**
      * Every per-locale name the tenant's <em>own</em> regions carry, grouped by
-     * region. A platform region (tenant null) never has a row here (V0431), so a
-     * tenant's read of the platform's regions falls to their columns alone.
+     * region. A platform region (tenant null) never has a row here (V0431): its names are
+     * in {@link #platformNames}.
      */
     public Map<UUID, Map<String, String>> translationsForTenant(UUID tenantId) {
         Map<UUID, Map<String, String>> byRegion = new LinkedHashMap<>();
@@ -182,6 +172,25 @@ public class JdbcRegionStore {
                 WHERE tenant_id = :tenantId ORDER BY region_id, locale
                 """)
                 .param("tenantId", tenantId)
+                .query((row, number) -> {
+                    byRegion.computeIfAbsent(row.getObject("region_id", UUID.class), id -> new LinkedHashMap<>())
+                            .put(row.getString("locale"), row.getString("display_name"));
+                    return row.getString("locale");
+                })
+                .list();
+        return byRegion;
+    }
+
+    /**
+     * The names of every platform region, grouped by region (V0679). Platform reference data, the
+     * same for every tenant and small, so one read serves a whole list.
+     */
+    public Map<UUID, Map<String, String>> platformNames() {
+        Map<UUID, Map<String, String>> byRegion = new LinkedHashMap<>();
+        jdbc.sql("""
+                SELECT region_id, locale, display_name FROM fulfillment.platform_region_names
+                ORDER BY region_id, locale
+                """)
                 .query((row, number) -> {
                     byRegion.computeIfAbsent(row.getObject("region_id", UUID.class), id -> new LinkedHashMap<>())
                             .put(row.getString("locale"), row.getString("display_name"));
@@ -249,9 +258,6 @@ public class JdbcRegionStore {
                 rs.getObject("id", UUID.class),
                 owner == null,
                 rs.getString("code"),
-                rs.getString("display_name_ru"),
-                rs.getString("display_name_uz"),
-                rs.getString("display_name_en"),
                 rs.getDouble("centre_lat"),
                 rs.getDouble("centre_lon"),
                 rs.getDouble("bbox_sw_lat"),
@@ -275,9 +281,6 @@ public class JdbcRegionStore {
             UUID regionId,
             boolean platform,
             String code,
-            String displayNameRu,
-            String displayNameUz,
-            String displayNameEn,
             double centreLat,
             double centreLon,
             double bboxSwLat,
@@ -296,54 +299,17 @@ public class JdbcRegionStore {
      * reproduces them as readable refusals so an operator sees every problem at
      * once instead of a driver error.
      *
-     * @param displayNameRu/displayNameUz/displayNameEn the platform triple's names,
-     *        each optional since row 10.12; {@code RegionService} resolves them
-     *        against {@code names} before any write
-     * @param names the name per locale, overlaying the three fields above
+     * @param names the name per locale, the only shape a region's name has since V0679 (the platform
+     *        triple's three fields are gone); {@code RegionService} requires the tenant's default
+     *        language and writes exactly the locales named
      */
     public record RegionGeography(
             String code,
-            @Nullable String displayNameRu,
-            @Nullable String displayNameUz,
-            @Nullable String displayNameEn,
             double centreLat,
             double centreLon,
             double bboxSwLat,
             double bboxSwLon,
             double bboxNeLat,
             double bboxNeLon,
-            Map<String, String> names) {
-
-        /** The geography with all three platform names given and nothing else -- what predates row 10.12. */
-        public RegionGeography(
-                String code,
-                String displayNameRu,
-                String displayNameUz,
-                String displayNameEn,
-                double centreLat,
-                double centreLon,
-                double bboxSwLat,
-                double bboxSwLon,
-                double bboxNeLat,
-                double bboxNeLon) {
-            this(
-                    code,
-                    displayNameRu,
-                    displayNameUz,
-                    displayNameEn,
-                    centreLat,
-                    centreLon,
-                    bboxSwLat,
-                    bboxSwLon,
-                    bboxNeLat,
-                    bboxNeLon,
-                    Map.of());
-        }
-
-        /** The same geography with the platform triple set to the resolved names. */
-        public RegionGeography withTriple(@Nullable String ru, @Nullable String uz, @Nullable String en) {
-            return new RegionGeography(
-                    code, ru, uz, en, centreLat, centreLon, bboxSwLat, bboxSwLon, bboxNeLat, bboxNeLon, names);
-        }
-    }
+            Map<String, String> names) {}
 }

@@ -1,5 +1,6 @@
 package uz.horecaos.platform.configuration;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -28,7 +29,9 @@ import java.util.Set;
  * wire when the columns behind them were dropped, so that the map is the only shape of the wording. The
  * allowance names the three properties and the surfaces that carried them (the control-plane preset
  * endpoints, a product's offered presets, the storefront menu's {@code commentPresets[]} and an order
- * line's {@code commentPresets[]}); no other schema may lose a property. No production tenant exists
+ * line's {@code commentPresets[]}); V0679 does the same for a region's and a service zone's name
+ * ({@code displayNameRu/Uz/En}) and the dispatch editor's zone options ({@code nameRu/Uz/En}), which are
+ * now the {@code displayNames} / {@code names} maps alone; no other schema may lose a property. No production tenant exists
  * (ADR 0055), so a client generated from the released document has nobody to break.
  *
  * <p>The allowance is deliberately narrow. It names the properties, it admits one direction
@@ -51,16 +54,32 @@ final class AcceptedContractWidenings {
     /** ADR 0149: the three fixed-language fields a preset comment's wording no longer has. */
     private static final Set<String> ADR_0149_PRESET_LEGACY_LABELS = Set.of("labelRu", "labelUz", "labelEn");
 
+    /**
+     * ADR 0149: the fixed-language name fields a region, a service zone and a dispatch-rule zone option no
+     * longer have (V0679). {@code displayNameRu/Uz/En} on the region and zone surfaces, {@code nameEn/Ru/Uz} on
+     * the dispatch editor's zone options.
+     */
+    private static final Set<String> ADR_0149_NAME_LEGACY_FIELDS =
+            Set.of("displayNameRu", "displayNameUz", "displayNameEn", "nameRu", "nameUz", "nameEn");
+
+    /** The surfaces that carried them; a path fragment is enough, the property names do the narrowing. */
+    private static final List<String> ADR_0149_NAME_SURFACES =
+            List.of("/regions", "/service-zones", "/zones", "/dispatch-rules/options");
+
     private AcceptedContractWidenings() {}
 
     /**
      * The properties of the schema at {@code context} that the released contract carried and that may be gone
-     * now. Empty everywhere but the preset comment surfaces (ADR 0149, V0678): the control-plane endpoints
-     * under {@code /comment-presets} and every {@code commentPresets[]} array a response carries.
+     * now. Empty everywhere but the preset comment surfaces (ADR 0149, V0678: the control-plane endpoints
+     * under {@code /comment-presets} and every {@code commentPresets[]} array a response carries) and the
+     * region and zone surfaces (V0679: the regions, service zones and the dispatch editor's zone options).
      */
     static Set<String> mayBeRemoved(String context) {
         if (context.contains("/comment-presets") || context.endsWith("commentPresets[]")) {
             return ADR_0149_PRESET_LEGACY_LABELS;
+        }
+        if (ADR_0149_NAME_SURFACES.stream().anyMatch(context::contains)) {
+            return ADR_0149_NAME_LEGACY_FIELDS;
         }
         return Set.of();
     }

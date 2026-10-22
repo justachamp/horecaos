@@ -34,6 +34,7 @@ import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcRegionSto
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcServiceZoneStore;
 import uz.horecaos.platform.iam.api.AuthenticatedActor;
 import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.support.LocaleNames;
 import uz.horecaos.platform.support.TestDatabase;
 
 /**
@@ -115,7 +116,14 @@ class ZoneBatchImportServiceTests {
                 .create(
                         TENANT,
                         new RegionGeography(
-                                "TASHKENT", "Ташкент", "Toshkent", "Tashkent", 41.31, 69.24, 40.5, 68.5, 42.0, 70.0));
+                                "TASHKENT",
+                                41.31,
+                                69.24,
+                                40.5,
+                                68.5,
+                                42.0,
+                                70.0,
+                                LocaleNames.triple("Ташкент", "Toshkent", "Tashkent")));
     }
 
     @Test
@@ -183,7 +191,8 @@ class ZoneBatchImportServiceTests {
     @DisplayName("one row's failure does not poison the rest of the batch, and the report says which row failed")
     void oneBadRowDoesNotSinkTheBatch() {
         // Seed a zone whose code the batch will collide with.
-        zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "TAKEN", "existing", "existing", "existing");
+        zones.createZone(
+                TENANT, BRAND, ZoneRole.DELIVERY, "TAKEN", LocaleNames.triple("existing", "existing", "existing"));
 
         BatchImportReport report = batchImport.importBatch(
                 TENANT,
@@ -276,9 +285,7 @@ class ZoneBatchImportServiceTests {
                 externalRef,
                 ZoneRole.DELIVERY,
                 code,
-                code + " RU",
-                code + " UZ",
-                code + " EN",
+                LocaleNames.triple(code + " RU", code + " UZ", code + " EN"),
                 regionId,
                 0,
                 "UZS",

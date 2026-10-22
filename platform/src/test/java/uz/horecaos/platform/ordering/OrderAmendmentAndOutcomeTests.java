@@ -102,6 +102,7 @@ import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingCon
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
 import uz.horecaos.platform.support.FakeConfigurationResolver;
+import uz.horecaos.platform.support.LocaleNames;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
 import uz.horecaos.platform.tenancy.application.ServiceabilityService;
@@ -3848,9 +3849,7 @@ class OrderAmendmentAndOutcomeTests {
                 BRAND,
                 uz.horecaos.platform.fulfillment.domain.zone.ZoneRole.DELIVERY,
                 "AMEND-ZONE",
-                "Zone",
-                "Zone",
-                "Zone");
+                LocaleNames.triple("Zone", "Zone", "Zone"));
         var draftedZone = zoneService.draftCircleVersion(
                 new uz.horecaos.platform.fulfillment.application.ServiceZoneService.NewVersion(
                         TENANT,

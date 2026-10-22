@@ -117,6 +117,7 @@ import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosCapabilityStor
 import uz.horecaos.platform.pos.infrastructure.persistence.JdbcPosExportStore;
 import uz.horecaos.platform.reporting.application.DayCloseService;
 import uz.horecaos.platform.reporting.application.ReportQueryService;
+import uz.horecaos.platform.support.LocaleNames;
 import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.SignedInStaff;
 import uz.horecaos.platform.support.StubJwtIssuer;
@@ -2598,7 +2599,8 @@ class ComboOrderFlowEndToEndTests {
                 actor);
         tariffs.activate(TENANT, BRAND, tariffId, drafted.version(), actor);
 
-        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "DEFAULT", "Default", "Default", "Default");
+        UUID zoneId = zones.createZone(
+                TENANT, BRAND, ZoneRole.DELIVERY, "DEFAULT", LocaleNames.triple("Default", "Default", "Default"));
         var version = zones.draftCircleVersion(
                 new ServiceZoneService.NewVersion(
                         TENANT, BRAND, zoneId, ZoneRole.DELIVERY, null, 0, "UZS", tariffId, null, null, actor),

@@ -144,6 +144,7 @@ import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
 import uz.horecaos.platform.support.CommentPresetRows;
 import uz.horecaos.platform.support.FakeConfigurationResolver;
+import uz.horecaos.platform.support.LocaleNames;
 import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.FulfillmentMode;
@@ -7457,8 +7458,8 @@ class CartCheckoutAndOrderTests {
         // ceiling (r=10 km is ~314 km²) while covering every fixed test address
         // in this suite by a wide margin.
         UUID tariffId = seedFlatTariff("DEFAULT-ZERO", 10_000, 0L);
-        UUID zoneId =
-                zoneAuthoring.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "DEFAULT", "Default", "Default", "Default");
+        UUID zoneId = zoneAuthoring.createZone(
+                TENANT, BRAND, ZoneRole.DELIVERY, "DEFAULT", LocaleNames.triple("Default", "Default", "Default"));
         var drafted = zoneAuthoring.draftCircleVersion(
                 new ServiceZoneService.NewVersion(
                         TENANT, BRAND, zoneId, ZoneRole.DELIVERY, null, 0, "UZS", tariffId, null, null, DELIVERY_ACTOR),
@@ -7512,7 +7513,8 @@ class CartCheckoutAndOrderTests {
             int radiusMeters,
             @Nullable Long minBasketMinor,
             @Nullable Long freeDeliveryFromMinor) {
-        UUID zoneId = zoneAuthoring.createZone(TENANT, BRAND, ZoneRole.DELIVERY, code, code, code, code);
+        UUID zoneId =
+                zoneAuthoring.createZone(TENANT, BRAND, ZoneRole.DELIVERY, code, LocaleNames.triple(code, code, code));
         var drafted = zoneAuthoring.draftCircleVersion(
                 new ServiceZoneService.NewVersion(
                         TENANT,

@@ -1269,9 +1269,6 @@ export interface CreateTenantRequest {
 
 export interface CreateZoneRequest {
   code: string;
-  displayNameEn: string;
-  displayNameRu: string;
-  displayNameUz: string;
   displayNames?: { [key: string]: string };
   role: "DELIVERY" | "CATCHMENT";
 }
@@ -4441,9 +4438,6 @@ export interface ZoneSummaryResponse {
   code?: string;
   currency?: string;
   deliveryTariffId?: string;
-  displayNameEn?: string;
-  displayNameRu?: string;
-  displayNameUz?: string;
   displayNames?: { [key: string]: string };
   freeDeliveryFromMinor?: number;
   minBasketMinor?: number;

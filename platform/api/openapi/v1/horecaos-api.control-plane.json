@@ -4048,21 +4048,6 @@
             "minLength" : 0,
             "type" : "string"
           },
-          "displayNameEn" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "displayNameRu" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
-          "displayNameUz" : {
-            "maxLength" : 200,
-            "minLength" : 0,
-            "type" : "string"
-          },
           "displayNames" : {
             "additionalProperties" : {
               "type" : "string"
@@ -4074,7 +4059,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "code", "displayNameEn", "displayNameRu", "displayNameUz", "role" ],
+        "required" : [ "code", "role" ],
         "type" : "object"
       },
       "CredentialResponse" : {
@@ -13905,15 +13890,6 @@
           },
           "deliveryTariffId" : {
             "format" : "uuid",
-            "type" : "string"
-          },
-          "displayNameEn" : {
-            "type" : "string"
-          },
-          "displayNameRu" : {
-            "type" : "string"
-          },
-          "displayNameUz" : {
             "type" : "string"
           },
           "displayNames" : {

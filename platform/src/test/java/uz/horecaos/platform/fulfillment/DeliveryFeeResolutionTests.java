@@ -63,6 +63,7 @@ import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingCon
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
 import uz.horecaos.platform.support.FakeConfigurationResolver;
+import uz.horecaos.platform.support.LocaleNames;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.GeoPoint;
 import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcSalesChannelStore;
@@ -253,7 +254,8 @@ class DeliveryFeeResolutionTests {
     @Test
     @DisplayName("a zone drawn but never activated lists as drafted, not as absent or free")
     void listZonesShowsAnUnactivatedZoneAsDrafted() {
-        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "DRAFT-ONLY", "Draft", "Draft", "Draft");
+        UUID zoneId = zones.createZone(
+                TENANT, BRAND, ZoneRole.DELIVERY, "DRAFT-ONLY", LocaleNames.triple("Draft", "Draft", "Draft"));
 
         var summaries = zones.listZones(TENANT, BRAND);
 
@@ -379,7 +381,8 @@ class DeliveryFeeResolutionTests {
     @Test
     @DisplayName("a zone cannot be drawn around an unlocated branch")
     void anUnlocatedBranchCannotOriginateAZone() {
-        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "GHOST", "Призрак", "Arvoh", "Ghost");
+        UUID zoneId = zones.createZone(
+                TENANT, BRAND, ZoneRole.DELIVERY, "GHOST", LocaleNames.triple("Призрак", "Arvoh", "Ghost"));
 
         Throwable refusal = catchThrowable(() -> zones.draftCircleVersion(
                 new ServiceZoneService.NewVersion(
@@ -575,7 +578,8 @@ class DeliveryFeeResolutionTests {
     @Test
     @DisplayName("a zone cannot be bound to another brand's branch")
     void crossBrandBindingsFailAtTheDatabase() {
-        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "CITY2", "Город", "Shahar", "City");
+        UUID zoneId = zones.createZone(
+                TENANT, BRAND, ZoneRole.DELIVERY, "CITY2", LocaleNames.triple("Город", "Shahar", "City"));
         UUID otherBrand = UUID.randomUUID();
         UUID otherLocation = seedBrandAndLocation(TENANT, otherBrand, "OTHER", BRANCH_POINT);
 
@@ -589,7 +593,8 @@ class DeliveryFeeResolutionTests {
     @Test
     @DisplayName("a cross-tenant zone binding fails at the database")
     void crossTenantBindingsFailAtTheDatabase() {
-        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "CITY3", "Город", "Shahar", "City");
+        UUID zoneId = zones.createZone(
+                TENANT, BRAND, ZoneRole.DELIVERY, "CITY3", LocaleNames.triple("Город", "Shahar", "City"));
         UUID foreignBrand = UUID.randomUUID();
         UUID foreignLocation = seedBrandAndLocation(OTHER_TENANT, foreignBrand, "FOREIGN", BRANCH_POINT);
 
@@ -612,7 +617,8 @@ class DeliveryFeeResolutionTests {
     @Test
     @DisplayName("a zone version may name a platform region or its own, and no other tenant's")
     void aZoneVersionResolvesItsRegionInItsOwnTenant() {
-        UUID zoneId = zones.createZone(TENANT, BRAND, ZoneRole.DELIVERY, "REGIONED", "Регион", "Hudud", "Region");
+        UUID zoneId = zones.createZone(
+                TENANT, BRAND, ZoneRole.DELIVERY, "REGIONED", LocaleNames.triple("Регион", "Hudud", "Region"));
         UUID platformRegion = seedRegion(null, "TASHKENT_SHARED");
         UUID ownRegion = seedRegion(TENANT, "OWN_REGION");
         UUID foreignRegion = seedRegion(OTHER_TENANT, "FOREIGN_REGION");
@@ -1464,7 +1470,7 @@ class DeliveryFeeResolutionTests {
             @Nullable UUID tariffId,
             @Nullable Long freeFrom,
             @Nullable Long minBasket) {
-        UUID zoneId = zones.createZone(TENANT, BRAND, role, code, code, code, code);
+        UUID zoneId = zones.createZone(TENANT, BRAND, role, code, LocaleNames.triple(code, code, code));
         var drafted = zones.draftCircleVersion(
                 new ServiceZoneService.NewVersion(
                         TENANT, BRAND, zoneId, role, null, priority, "UZS", tariffId, freeFrom, minBasket, ACTOR),
@@ -1574,9 +1580,9 @@ class DeliveryFeeResolutionTests {
         UUID id = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO fulfillment.regions (
-                    id, tenant_id, code, display_name_ru, display_name_uz, display_name_en,
+                    id, tenant_id, code,
                     centre_lat, centre_lon, bbox_sw_lat, bbox_sw_lon, bbox_ne_lat, bbox_ne_lon)
-                VALUES (:id, :tenantId, :code, 'RU', 'UZ', 'EN',
+                VALUES (:id, :tenantId, :code,
                     41.31, 69.24, 40.5, 68.5, 42.0, 70.0)
                 """)
                 .param("id", id)

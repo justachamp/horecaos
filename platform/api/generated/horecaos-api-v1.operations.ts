@@ -706,9 +706,7 @@ export interface BatchImportZoneRow {
   code: string;
   currency: string;
   deliveryTariffId?: string;
-  displayNameEn: string;
-  displayNameRu: string;
-  displayNameUz: string;
+  displayNames?: { [key: string]: string };
   externalRef: string;
   freeDeliveryFromMinor?: number;
   geoJson: string;
@@ -2281,9 +2279,6 @@ export interface CreateTemplateRequest {
 
 export interface CreateZoneRequest {
   code: string;
-  displayNameEn: string;
-  displayNameRu: string;
-  displayNameUz: string;
   displayNames?: { [key: string]: string };
   role: "DELIVERY" | "CATCHMENT";
 }
@@ -6843,9 +6838,6 @@ export interface RegionGeographyRequest {
   centreLat?: number;
   centreLon?: number;
   code: string;
-  displayNameEn: string;
-  displayNameRu: string;
-  displayNameUz: string;
   displayNames?: { [key: string]: string };
   expectedVersion?: number;
 }
@@ -6863,9 +6855,6 @@ export interface RegionResponse {
   centreLat?: number;
   centreLon?: number;
   code?: string;
-  displayNameEn?: string;
-  displayNameRu?: string;
-  displayNameUz?: string;
   displayNames?: { [key: string]: string };
   platform?: boolean;
   regionId?: string;
@@ -7022,9 +7011,6 @@ export interface RemoveTenantCalendarHolidayRequest {
 }
 
 export interface RenameZoneRequest {
-  displayNameEn?: string;
-  displayNameRu?: string;
-  displayNameUz?: string;
   displayNames?: { [key: string]: string };
 }
 
@@ -9488,9 +9474,7 @@ export interface ZoneOption {
   brandId?: string;
   code?: string;
   id?: string;
-  nameEn?: string;
-  nameRu?: string;
-  nameUz?: string;
+  names?: { [key: string]: string };
   status?: string;
 }
 
@@ -9510,9 +9494,6 @@ export interface ZoneSummaryResponse {
   code?: string;
   currency?: string;
   deliveryTariffId?: string;
-  displayNameEn?: string;
-  displayNameRu?: string;
-  displayNameUz?: string;
   displayNames?: { [key: string]: string };
   freeDeliveryFromMinor?: number;
   minBasketMinor?: number;

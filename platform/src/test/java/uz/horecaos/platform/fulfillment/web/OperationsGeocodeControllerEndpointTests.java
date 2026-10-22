@@ -531,10 +531,10 @@ class OperationsGeocodeControllerEndpointTests {
     private void insertRegion(UUID tenantId, UUID regionId, String code, String status) {
         jdbc.sql("""
                 INSERT INTO fulfillment.regions (
-                    id, tenant_id, code, display_name_ru, display_name_uz, display_name_en,
+                    id, tenant_id, code,
                     centre_lat, centre_lon, bbox_sw_lat, bbox_sw_lon, bbox_ne_lat, bbox_ne_lon,
                     status, version)
-                VALUES (:id, :tenantId, :code, :code, :code, :code,
+                VALUES (:id, :tenantId, :code,
                     41.31, 69.24, 41.15, 69.04, 41.47, 69.46, :status, 1)
                 """)
                 .param("id", regionId)

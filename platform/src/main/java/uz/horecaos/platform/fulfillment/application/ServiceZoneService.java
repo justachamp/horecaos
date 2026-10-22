@@ -59,7 +59,7 @@ public class ServiceZoneService {
      */
     public static final double MAX_ZONE_AREA_SQUARE_METERS = 2_000_000_000d;
 
-    /** {@code display_name_*} and a translation row all fit this. */
+    /** A translation row's name ({@code service_zone_translations.display_name}) fits this. */
     static final int MAX_NAME_LENGTH = 200;
 
     private final JdbcServiceZoneStore store;
@@ -95,51 +95,27 @@ public class ServiceZoneService {
         this(store, objectMapper, clock, audit, currentActor, BrandLocaleLookup.platformFallback());
     }
 
-    @Transactional
-    public UUID createZone(
-            UUID tenantId, UUID brandId, ZoneRole role, String code, String nameRu, String nameUz, String nameEn) {
-        return createZone(tenantId, brandId, role, code, nameRu, nameUz, nameEn, Map.of());
-    }
-
     /**
      * Registers a zone lineage. Its name is authored in its <em>brand's</em>
      * supported languages (row 10.12): the brand's default is the one name it must
-     * have, every other locale is optional, and the three platform columns (NOT NULL)
-     * take that default for a triple locale not supplied. Every supplied name is also
-     * written to the per-locale table ({@code V0431}).
+     * have and every other locale is optional. Every supplied name is written to the
+     * per-locale table ({@code V0431}); since V0679 that table is the only place a
+     * zone's name lives.
      */
     @Transactional
-    public UUID createZone(
-            UUID tenantId,
-            UUID brandId,
-            ZoneRole role,
-            String code,
-            @Nullable String nameRu,
-            @Nullable String nameUz,
-            @Nullable String nameEn,
-            Map<String, String> names) {
-        Map<String, String> supplied = suppliedNames(nameRu, nameUz, nameEn, names);
+    public UUID createZone(UUID tenantId, UUID brandId, ZoneRole role, String code, Map<String, String> names) {
+        Map<String, String> supplied = suppliedNames(names);
         String defaultLocale = brandLocales
                 .brandDefaultLocale(tenantId, brandId)
                 .orElse(PlatformLocales.fallback().tag());
-        String defaultName = supplied.get(defaultLocale);
-        if (defaultName == null) {
+        if (supplied.get(defaultLocale) == null) {
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED,
                     "A zone needs its name in the brand's default language (%s)".formatted(defaultLocale));
         }
         UUID zoneId = UUID.randomUUID();
         Instant now = clock.instant();
-        store.insertZone(
-                zoneId,
-                tenantId,
-                brandId,
-                role,
-                code,
-                supplied.getOrDefault(LocalizedLabels.RU, defaultName),
-                supplied.getOrDefault(LocalizedLabels.UZ_LATN, defaultName),
-                supplied.getOrDefault(LocalizedLabels.EN, defaultName),
-                now);
+        store.insertZone(zoneId, tenantId, brandId, role, code, now);
         store.upsertTranslations(tenantId, brandId, zoneId, supplied, now);
 
         Map<String, Object> created = new LinkedHashMap<>();
@@ -170,17 +146,10 @@ public class ServiceZoneService {
      *         what another tenant's or another brand's zone id answers
      */
     @Transactional
-    public ZoneNames renameZone(
-            UUID tenantId,
-            UUID brandId,
-            UUID zoneId,
-            @Nullable String nameRu,
-            @Nullable String nameUz,
-            @Nullable String nameEn,
-            Map<String, String> names) {
+    public ZoneNames renameZone(UUID tenantId, UUID brandId, UUID zoneId, Map<String, String> names) {
         JdbcServiceZoneStore.ZoneSummaryRow current = store.findZone(tenantId, brandId, zoneId)
                 .orElseThrow(() -> new DeliveryResourceNotFoundException("No zone " + zoneId + " for this brand"));
-        Map<String, String> requested = suppliedNames(nameRu, nameUz, nameEn, names);
+        Map<String, String> requested = suppliedNames(names);
         if (requested.isEmpty()) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "Name at least one language to rename a zone");
         }
@@ -190,25 +159,18 @@ public class ServiceZoneService {
         // change nobody made, and at worst (the rename carries no version) a stale copy
         // laid over what another operator saved since.
         Map<String, String> supplied = new LinkedHashMap<>(requested);
-        supplied.entrySet().removeIf(entry -> entry.getValue().equals(currentName(current, existing, entry.getKey())));
+        supplied.entrySet().removeIf(entry -> entry.getValue().equals(existing.get(entry.getKey())));
         if (supplied.isEmpty()) {
-            return new ZoneNames(zoneId, mergedNames(current, existing));
+            return new ZoneNames(zoneId, LocalizedLabels.merge(existing));
         }
         Instant now = clock.instant();
-        store.updateNames(
-                tenantId,
-                brandId,
-                zoneId,
-                supplied.get(LocalizedLabels.RU),
-                supplied.get(LocalizedLabels.UZ_LATN),
-                supplied.get(LocalizedLabels.EN),
-                now);
+        store.touch(tenantId, brandId, zoneId, now);
         store.upsertTranslations(tenantId, brandId, zoneId, supplied, now);
 
         Map<String, Object> before = new LinkedHashMap<>();
         Map<String, Object> after = new LinkedHashMap<>();
         supplied.forEach((locale, name) -> {
-            before.put("displayName." + locale, currentName(current, existing, locale));
+            before.put("displayName." + locale, existing.get(locale));
             after.put("displayName." + locale, name);
         });
         audit.record(AuditFact.of("delivery.zone.renamed", AuditClass.BUSINESS)
@@ -224,36 +186,18 @@ public class ServiceZoneService {
                 .build());
         Map<String, String> translationsAfter = new LinkedHashMap<>(existing);
         translationsAfter.putAll(supplied);
-        JdbcServiceZoneStore.ZoneSummaryRow renamed = store.findZone(tenantId, brandId, zoneId)
-                .orElseThrow(() -> new DeliveryResourceNotFoundException("No zone " + zoneId + " for this brand"));
-        return new ZoneNames(zoneId, mergedNames(renamed, translationsAfter));
+        return new ZoneNames(zoneId, LocalizedLabels.merge(translationsAfter));
     }
 
     /** A zone's id and its merged names. */
     public record ZoneNames(UUID zoneId, Map<String, String> names) {}
 
-    private static @Nullable String currentName(
-            JdbcServiceZoneStore.ZoneSummaryRow zone, Map<String, String> translationRows, String locale) {
-        return switch (locale) {
-            case LocalizedLabels.RU -> zone.displayNameRu();
-            case LocalizedLabels.UZ_LATN -> zone.displayNameUz();
-            case LocalizedLabels.EN -> zone.displayNameEn();
-            default -> translationRows.get(locale);
-        };
-    }
-
-    private static Map<String, String> suppliedNames(
-            @Nullable String ru, @Nullable String uz, @Nullable String en, @Nullable Map<String, String> byLocale) {
+    private static Map<String, String> suppliedNames(@Nullable Map<String, String> byLocale) {
         try {
-            return LocalizedLabels.supplied(ru, uz, en, byLocale, MAX_NAME_LENGTH);
+            return LocalizedLabels.supplied(byLocale, MAX_NAME_LENGTH);
         } catch (IllegalArgumentException invalid) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
         }
-    }
-
-    private static Map<String, String> mergedNames(
-            JdbcServiceZoneStore.ZoneSummaryRow zone, Map<String, String> translationRows) {
-        return LocalizedLabels.merge(zone.displayNameRu(), zone.displayNameUz(), zone.displayNameEn(), translationRows);
     }
 
     /**
@@ -625,14 +569,14 @@ public class ServiceZoneService {
     }
 
     /**
-     * {@link #listZones} with each zone's name merged from the platform columns and
-     * the per-locale table, each locale once (row 10.12).
+     * {@link #listZones} with each zone's name per locale, each locale once (row 10.12;
+     * the translation table is the only place a name lives since V0679).
      */
     @Transactional(readOnly = true)
     public List<ZoneView> listZonesWithNames(UUID tenantId, UUID brandId) {
         Map<UUID, Map<String, String>> translations = store.translationsForBrand(tenantId, brandId);
         return store.listZones(tenantId, brandId).stream()
-                .map(zone -> new ZoneView(zone, mergedNames(zone, translations.getOrDefault(zone.id(), Map.of()))))
+                .map(zone -> new ZoneView(zone, LocalizedLabels.merge(translations.getOrDefault(zone.id(), Map.of()))))
                 .toList();
     }
 
@@ -641,8 +585,7 @@ public class ServiceZoneService {
     public ZoneDetailView zoneDetailWithNames(UUID tenantId, UUID brandId, UUID zoneId) {
         ZoneDetail detail = zoneDetail(tenantId, brandId, zoneId);
         return new ZoneDetailView(
-                new ZoneView(
-                        detail.zone(), mergedNames(detail.zone(), store.translationsFor(tenantId, brandId, zoneId))),
+                new ZoneView(detail.zone(), LocalizedLabels.merge(store.translationsFor(tenantId, brandId, zoneId))),
                 detail.boundLocationIds());
     }
 

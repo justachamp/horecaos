@@ -830,10 +830,8 @@ class DispatchRulesSourcingTests {
                 VALUES (:id, :tenantId, 'SIBLING', 'sibling', 'Sibling brand', 'ACTIVE', 0)
                 """).param("id", siblingBrand).param("tenantId", TENANT).update();
         jdbc.sql("""
-                INSERT INTO fulfillment.service_zones (id, tenant_id, brand_id, zone_role, code,
-                    display_name_ru, display_name_uz, display_name_en, status)
-                VALUES (:id, :tenantId, :brandId, 'DELIVERY', 'SIBLING-ZONE', 'Sib', 'Sib',
-                        'Sibling zone', 'ACTIVE')
+                INSERT INTO fulfillment.service_zones (id, tenant_id, brand_id, zone_role, code, status)
+                VALUES (:id, :tenantId, :brandId, 'DELIVERY', 'SIBLING-ZONE', 'ACTIVE')
                 """)
                 .param("id", siblingZone)
                 .param("tenantId", TENANT)
@@ -1007,10 +1005,9 @@ class DispatchRulesSourcingTests {
                 """).param("id", channelId).param("tenantId", TENANT).update();
         // The zones the rules below name. A zone is a delivery-role row of this brand.
         jdbc.sql("""
-                INSERT INTO fulfillment.service_zones (id, tenant_id, brand_id, zone_role, code,
-                    display_name_ru, display_name_uz, display_name_en, status)
-                VALUES (:far, :tenantId, :brandId, 'DELIVERY', 'FAR', 'Far', 'Far', 'Far', 'ACTIVE'),
-                       (:near, :tenantId, :brandId, 'DELIVERY', 'NEAR', 'Near', 'Near', 'Near', 'ACTIVE')
+                INSERT INTO fulfillment.service_zones (id, tenant_id, brand_id, zone_role, code, status)
+                VALUES (:far, :tenantId, :brandId, 'DELIVERY', 'FAR', 'ACTIVE'),
+                       (:near, :tenantId, :brandId, 'DELIVERY', 'NEAR', 'ACTIVE')
                 """)
                 .param("far", FAR_ZONE)
                 .param("near", NEAR_ZONE)

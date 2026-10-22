@@ -158,9 +158,12 @@ class OperationsDispatchRulesEndpointTests {
                 VALUES (:id, :t, 'STOREFRONT', 'WEB', 'Storefront', 'ACTIVE')
                 """).param("id", CHANNEL).param("t", TENANT).update();
         jdbc.sql("""
-                INSERT INTO fulfillment.service_zones (id, tenant_id, brand_id, zone_role, code,
-                    display_name_ru, display_name_uz, display_name_en, status)
-                VALUES (:id, :t, :b, 'DELIVERY', 'FAR', 'Far', 'Far', 'Far', 'ACTIVE')
+                INSERT INTO fulfillment.service_zones (id, tenant_id, brand_id, zone_role, code, status)
+                VALUES (:id, :t, :b, 'DELIVERY', 'FAR', 'ACTIVE')
+                """).param("id", FAR_ZONE).param("t", TENANT).param("b", BRAND).update();
+        jdbc.sql("""
+                INSERT INTO fulfillment.service_zone_translations (tenant_id, brand_id, zone_id, locale, display_name)
+                VALUES (:t, :b, :id, 'en', 'Far zone'), (:t, :b, :id, 'kaa', 'Uzaq aymaq')
                 """).param("id", FAR_ZONE).param("t", TENANT).param("b", BRAND).update();
 
         jdbc.sql("""
@@ -499,6 +502,12 @@ class OperationsDispatchRulesEndpointTests {
         assertThat(installations).containsExactlyInAnyOrder(YANDEX.toString(), NOOR.toString());
         assertThat(installations).doesNotContain(PAYME.toString(), FOREIGN_INSTALLATION.toString());
         assertThat(ids(body.path("zones"))).containsExactly(FAR_ZONE.toString());
+        JsonNode zone = body.path("zones").get(0);
+        assertThat(zone.path("names").path("en").asText()).isEqualTo("Far zone");
+        assertThat(zone.path("names").path("kaa").asText())
+                .as("a language the platform triple never held (V0679)")
+                .isEqualTo("Uzaq aymaq");
+        assertThat(zone.has("nameEn")).as("the fixed-language fields left the wire").isFalse();
         assertThat(ids(body.path("channels"))).containsExactly(CHANNEL.toString());
         assertThat(ids(body.path("locations"))).containsExactly(LOCATION.toString());
     }
