@@ -207,7 +207,7 @@ export const kitchenUzLatn: AreaMessages<typeof kitchenEn> = {
   'kitchen.stopList.decommission.reason.CHANNEL_SCOPE':
     'Bitta kanal uchun stop: yozish taomni stop qamramagan kanallarda ham toʻxtatgan boʻlardi',
   'kitchen.stopList.decommission.reason.MENU_NOT_EVERY_CHANNEL':
-    'Menyu bu yerda faqat baʼzi kanallarga chop etilgan: yozish taomni boshqalarida ham toʻxtatgan boʻlardi',
+    'Menyu bu yerda faqat baʻzi kanallarga chop etilgan: yozish taomni boshqalarida ham toʻxtatgan boʻlardi',
   'kitchen.stopList.decommission.reason.WRITE_FAILED':
     'Yozish muvaffaqiyatsiz: ishga tushirish bu stopni oʻtkazmaguncha oʻchirish bloklangan',
   'kitchen.stopList.stop.until': '{when} gacha',

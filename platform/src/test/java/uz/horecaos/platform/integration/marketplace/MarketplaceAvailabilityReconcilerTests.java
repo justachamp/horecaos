@@ -1523,6 +1523,7 @@ class MarketplaceAvailabilityReconcilerTests {
     void aDryRunCallsNobodyAndRecordsWhatItWouldSend() {
         World w = world();
         configuration.put("marketplace.availability.dry_run", true);
+        build();
 
         MarketplaceAvailabilityReconciler.BindingReport report = reconciler.reconcile(binding(w));
 
@@ -1557,6 +1558,7 @@ class MarketplaceAvailabilityReconcilerTests {
     void thePropagationReadShowsTheDryRun() {
         World w = world();
         configuration.put("marketplace.availability.dry_run", true);
+        build();
         reconcile(w);
 
         MarketplacePropagationQuery.Binding view =
@@ -1580,6 +1582,7 @@ class MarketplaceAvailabilityReconcilerTests {
     void aDryRunRecordsOnlyWhatMoved() {
         World w = world();
         configuration.put("marketplace.availability.dry_run", true);
+        build();
         reconcile(w);
         clock.advance(Duration.ofMinutes(10));
 
@@ -1625,11 +1628,13 @@ class MarketplaceAvailabilityReconcilerTests {
     void leavingTheDryRunSendsEverythingOnce() {
         World w = world();
         configuration.put("marketplace.availability.dry_run", true);
+        build();
         stop(w, w.variantA, StopScopeType.BRAND, null, null, null);
         reconcile(w);
         assertThat(partner.calls).isEmpty();
 
         configuration.put("marketplace.availability.dry_run", false);
+        build();
         clock.advance(Duration.ofMinutes(1));
         reconcile(w);
 
@@ -1696,6 +1701,7 @@ class MarketplaceAvailabilityReconcilerTests {
                 .isNotNull();
 
         configuration.put("marketplace.availability.reconcile_enabled", false);
+        build();
         clock.advance(Duration.ofMinutes(1));
         reconciler.tick();
         assertThat(propagation.at(w.tenant, w.location).get(0).incidentOpenSince())
@@ -1703,6 +1709,7 @@ class MarketplaceAvailabilityReconcilerTests {
                 .isNull();
 
         configuration.put("marketplace.availability.reconcile_enabled", true);
+        build();
         partner.script(refused(400));
         clock.advance(Duration.ofMinutes(1));
         reconciler.tick();
