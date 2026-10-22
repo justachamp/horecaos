@@ -557,6 +557,11 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.neighbours.outOfZone.MANUAL_REVIEW': 'Qoʻlda tekshirishga qoldirish',
   'settings.orderPolicy.neighbours.outOfZone.notApplied':
     'Hozircha qoʻllanilmaydi: yetkazib berish narxini hisoblash bunday manzilni bu yerda nima tanlangan boʻlishidan qatʻiy nazar baribir rad etadi.',
+  'settings.orderPolicy.neighbours.courierVisibility.label': 'Kuryer nimani koʻradi',
+  'settings.orderPolicy.neighbours.courierVisibility.READY_ONLY':
+    'Faqat oshxona tayyorlab boʻlgan buyurtmalarni',
+  'settings.orderPolicy.neighbours.courierVisibility.ANY':
+    'Hali tayyorlanayotgan buyurtmalarni ham',
   'settings.orderPolicy.neighbours.paidHold.label': 'Oshxona toʻlovni kutadi',
   'settings.orderPolicy.neighbours.paidHold.SHADOW': 'Sinov: faqat nimani ushlab qolishini sanaydi',
   'settings.orderPolicy.neighbours.paidHold.HOLD_UNTIL_PAID':

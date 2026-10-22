@@ -14,6 +14,7 @@ import { LocationScope } from '../../../core/api/operations-paths';
 import { I18n } from '../../../core/i18n/i18n';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
+import { CouriersApi } from '../../couriers/couriers-api';
 import { DeliveryTariffsApi } from '../../delivery/delivery-tariffs-api';
 import { PaidHoldApi } from '../../kitchen/paid-hold-api';
 import { ConfigurationApi } from '../configuration-api';
@@ -39,8 +40,9 @@ const OUT_OF_ZONE_POLICY_CODE = 'delivery.out_of_zone_policy';
  * The settings the information architecture lists on the order policy (10.3) but that live on a screen of
  * their own, shown as what is in force with the way to the screen that edits them (ADR 0177, row `10.3b`):
  * how a delivery is measured (`3.7`), the most orders a branch takes at once (`10.2c`), what happens to an
- * address outside every zone (`10.13`), whether the kitchen waits for payment (ADR 0168), and the call-centre
- * channel's payment methods and order types (`10.4b`).
+ * address outside every zone (`10.13`), whether a courier sees an order that is still cooking (`10.13`),
+ * whether the kitchen waits for payment (ADR 0168), and the call-centre channel's payment methods and
+ * order types (`10.4b`).
  *
  * Read-only by construction -- it holds no draft and calls only reads -- and each read fails on its own: a
  * role that cannot read one still sees the others, and the row says so. The pattern is the dispatch-rules
@@ -64,6 +66,7 @@ export class OrderPolicyNeighboursCard {
   private readonly channels = inject(SalesChannelsApi);
   private readonly configuration = inject(ConfigurationApi);
   private readonly paidHold = inject(PaidHoldApi);
+  private readonly couriers = inject(CouriersApi);
   private readonly i18n = inject(I18n);
 
   readonly tenantId = input.required<string | null>();
@@ -162,6 +165,22 @@ export class OrderPolicyNeighboursCard {
           noteKey: 'settings.orderPolicy.neighbours.outOfZone.notApplied',
         };
       }),
+      read('courierVisibility', async () => {
+        // Read at the level the bar is on, as the courier policy screen itself reads it.
+        const policy =
+          level === 'TENANT'
+            ? await this.couriers.policy(tenantId)
+            : here
+              ? await this.couriers.policy(tenantId, brandId, locationId)
+              : await this.couriers.policy(tenantId, brandId);
+        return {
+          value: this.i18n.t(
+            policy.kitchenReadyOnly
+              ? 'settings.orderPolicy.neighbours.courierVisibility.READY_ONLY'
+              : 'settings.orderPolicy.neighbours.courierVisibility.ANY',
+          ),
+        };
+      }),
       read('paidHold', async () => {
         const policy = await this.paidHold.policy(scope, level);
         return { value: this.i18n.t(paidHoldKey(policy.mode)) };
@@ -207,6 +226,13 @@ function initialRows(): readonly NeighbourRow[] {
     {
       id: 'outOfZone',
       labelKey: 'settings.orderPolicy.neighbours.outOfZone.label',
+      link: '/delivery/courier-policy',
+      value: null,
+      unreadable: false,
+    },
+    {
+      id: 'courierVisibility',
+      labelKey: 'settings.orderPolicy.neighbours.courierVisibility.label',
       link: '/delivery/courier-policy',
       value: null,
       unreadable: false,

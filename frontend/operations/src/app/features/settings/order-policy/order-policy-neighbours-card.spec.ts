@@ -3,6 +3,7 @@ import { provideRouter } from '@angular/router';
 import { describe, expect, it, vi } from 'vitest';
 
 import { I18n } from '../../../core/i18n/i18n';
+import { CouriersApi } from '../../couriers/couriers-api';
 import { DeliveryTariffsApi } from '../../delivery/delivery-tariffs-api';
 import { PaidHoldApi } from '../../kitchen/paid-hold-api';
 import { ConfigurationApi } from '../configuration-api';
@@ -10,17 +11,13 @@ import { LocationsApi } from '../locations/locations-api';
 import { SalesChannelsApi } from '../sales-channels/sales-channels-api';
 import { OrderPolicyNeighboursCard } from './order-policy-neighbours-card';
 
-async function flush(): Promise<void> {
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
-}
-
 interface Fakes {
   tariffs?: unknown;
   summary?: unknown;
   resolution?: unknown;
   hold?: unknown;
   channels?: unknown;
+  courierPolicy?: unknown;
 }
 
 async function mount(
@@ -29,8 +26,12 @@ async function mount(
 ): Promise<{
   fixture: ComponentFixture<OrderPolicyNeighboursCard>;
   summary: ReturnType<typeof vi.fn>;
+  courierPolicy: ReturnType<typeof vi.fn>;
 }> {
   const summary = vi.fn().mockResolvedValue(fakes.summary ?? { maxConcurrentOrders: 7 });
+  const courierPolicy = vi
+    .fn()
+    .mockResolvedValue(fakes.courierPolicy ?? { kitchenReadyOnly: true });
   await TestBed.configureTestingModule({
     imports: [OrderPolicyNeighboursCard],
     providers: [
@@ -54,6 +55,7 @@ async function mount(
         provide: SalesChannelsApi,
         useValue: { list: () => Promise.resolve(fakes.channels ?? []) },
       },
+      { provide: CouriersApi, useValue: { policy: courierPolicy } },
     ],
   }).compileComponents();
   TestBed.inject(I18n).setLocale('en');
@@ -63,9 +65,12 @@ async function mount(
   fixture.componentRef.setInput('brandId', 'b1');
   fixture.componentRef.setInput('locationId', inputs.locationId);
   fixture.detectChanges();
-  await flush();
-  fixture.detectChanges();
-  return { fixture, summary };
+  // Every row settles on its own read; wait for none of them to still be loading rather than for a number of turns.
+  await vi.waitFor(() => {
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Loading…');
+  });
+  return { fixture, summary, courierPolicy };
 }
 
 const value = (fixture: ComponentFixture<OrderPolicyNeighboursCard>, id: string): string =>
@@ -167,5 +172,51 @@ describe('OrderPolicyNeighboursCard', () => {
     );
     expect(value(has.fixture, 'callCentre')).toContain('3 payment methods');
     expect(value(has.fixture, 'callCentre')).toContain('Dine-in');
+  });
+
+  it('reads the courier policy at the level the bar is on, and says what a courier sees', async () => {
+    const tenant = await mount({ scopeType: 'TENANT', locationId: null });
+    expect(tenant.courierPolicy).toHaveBeenCalledWith('t1');
+    expect(value(tenant.fixture, 'courierVisibility')).toBe('Only orders the kitchen has finished');
+    TestBed.resetTestingModule();
+
+    const brand = await mount({ scopeType: 'BRAND', locationId: null });
+    expect(brand.courierPolicy).toHaveBeenCalledWith('t1', 'b1');
+    TestBed.resetTestingModule();
+
+    const here = await mount(
+      { scopeType: 'LOCATION', locationId: 'loc-1' },
+      { courierPolicy: { kitchenReadyOnly: false } },
+    );
+    expect(here.courierPolicy).toHaveBeenCalledWith('t1', 'b1', 'loc-1');
+    expect(value(here.fixture, 'courierVisibility')).toBe('Also orders still being cooked');
+  });
+
+  it('says the courier policy cannot be read, and still shows the other rows, when the role may not read it', async () => {
+    await TestBed.configureTestingModule({
+      imports: [OrderPolicyNeighboursCard],
+      providers: [
+        provideRouter([]),
+        { provide: DeliveryTariffsApi, useValue: { list: () => Promise.resolve([]) } },
+        { provide: LocationsApi, useValue: { serviceSummary: () => Promise.resolve({}) } },
+        { provide: ConfigurationApi, useValue: { resolution: () => Promise.resolve({}) } },
+        { provide: PaidHoldApi, useValue: { policy: () => Promise.resolve({ mode: 'OFF' }) } },
+        { provide: SalesChannelsApi, useValue: { list: () => Promise.resolve([]) } },
+        { provide: CouriersApi, useValue: { policy: () => Promise.reject(new Error('403')) } },
+      ],
+    }).compileComponents();
+    TestBed.inject(I18n).setLocale('en');
+    const fixture = TestBed.createComponent(OrderPolicyNeighboursCard);
+    fixture.componentRef.setInput('tenantId', 't1');
+    fixture.componentRef.setInput('scopeType', 'BRAND');
+    fixture.componentRef.setInput('brandId', 'b1');
+    fixture.componentRef.setInput('locationId', null);
+    fixture.detectChanges();
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(value(fixture, 'courierVisibility')).toContain('your role cannot read');
+      expect(value(fixture, 'paidHold')).toBe('Off');
+    });
   });
 });

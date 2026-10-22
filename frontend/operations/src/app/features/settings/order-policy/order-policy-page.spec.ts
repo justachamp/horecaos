@@ -8,6 +8,7 @@ import { ConfigurationResolutionView } from '../../../core/api/configuration';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { I18n } from '../../../core/i18n/i18n';
 import { Toasts } from '../../../shared/ui/toast';
+import { CouriersApi } from '../../couriers/couriers-api';
 import { DeliveryTariffsApi } from '../../delivery/delivery-tariffs-api';
 import { DispatchRulesApi } from '../../delivery/dispatch-rules-api';
 import { PaidHoldApi } from '../../kitchen/paid-hold-api';
@@ -224,6 +225,10 @@ describe('OrderPolicyPage', () => {
         {
           provide: PaidHoldApi,
           useValue: { policy: () => Promise.resolve({ mode: 'HOLD_UNTIL_PAID' }) },
+        },
+        {
+          provide: CouriersApi,
+          useValue: { policy: () => Promise.resolve({ kitchenReadyOnly: true }) },
         },
         provideRouter([]),
         { provide: CurrentTenant, useValue: new FakeCurrentTenant() },
@@ -927,16 +932,25 @@ describe('OrderPolicyPage', () => {
     expect(byTestId('neighbour-value-distanceMode')?.textContent).toContain('By road');
     expect(byTestId('neighbour-value-branchLimit')?.textContent).toContain('Set for each branch');
     expect(byTestId('neighbour-value-outOfZone')?.textContent).toContain('Reject');
+    expect(byTestId('neighbour-value-courierVisibility')?.textContent).toContain(
+      'Only orders the kitchen has finished',
+    );
     expect(byTestId('neighbour-value-paidHold')?.textContent).toContain('Holds an unpaid order');
     expect(byTestId('neighbour-value-callCentre')?.textContent).toContain('2 payment methods');
     expect(byTestId('neighbour-value-callCentre')?.textContent).toContain('Pickup, Delivery');
 
-    const links = ['distanceMode', 'branchLimit', 'outOfZone', 'paidHold', 'callCentre'].map((id) =>
-      byTestId(`neighbour-link-${id}`)?.getAttribute('href'),
-    );
+    const links = [
+      'distanceMode',
+      'branchLimit',
+      'outOfZone',
+      'courierVisibility',
+      'paidHold',
+      'callCentre',
+    ].map((id) => byTestId(`neighbour-link-${id}`)?.getAttribute('href'));
     expect(links).toEqual([
       '/delivery/tariffs',
       '/settings/locations',
+      '/delivery/courier-policy',
       '/delivery/courier-policy',
       '/kitchen/buffer',
       '/settings/sales-channels',

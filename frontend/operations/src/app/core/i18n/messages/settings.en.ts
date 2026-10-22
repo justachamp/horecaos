@@ -549,6 +549,10 @@ export const settingsEn = {
   'settings.orderPolicy.neighbours.outOfZone.MANUAL_REVIEW': 'Hold for manual review',
   'settings.orderPolicy.neighbours.outOfZone.notApplied':
     'Not applied yet: the delivery fee calculation still refuses such an address whatever this says.',
+  'settings.orderPolicy.neighbours.courierVisibility.label': 'What a courier sees',
+  'settings.orderPolicy.neighbours.courierVisibility.READY_ONLY':
+    'Only orders the kitchen has finished',
+  'settings.orderPolicy.neighbours.courierVisibility.ANY': 'Also orders still being cooked',
   'settings.orderPolicy.neighbours.paidHold.label': 'Kitchen waits for payment',
   'settings.orderPolicy.neighbours.paidHold.SHADOW': 'Trial: only counts what it would hold',
   'settings.orderPolicy.neighbours.paidHold.HOLD_UNTIL_PAID': 'Holds an unpaid order',

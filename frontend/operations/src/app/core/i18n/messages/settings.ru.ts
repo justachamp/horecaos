@@ -550,6 +550,10 @@ export const settingsRu: AreaMessages<typeof settingsEn> = {
   'settings.orderPolicy.neighbours.outOfZone.MANUAL_REVIEW': 'Передать на ручную проверку',
   'settings.orderPolicy.neighbours.outOfZone.notApplied':
     'Пока не применяется: расчёт стоимости доставки по-прежнему отклоняет такой адрес, что бы тут ни было выбрано.',
+  'settings.orderPolicy.neighbours.courierVisibility.label': 'Что видит курьер',
+  'settings.orderPolicy.neighbours.courierVisibility.READY_ONLY':
+    'Только заказы, которые кухня уже приготовила',
+  'settings.orderPolicy.neighbours.courierVisibility.ANY': 'Также заказы, которые ещё готовятся',
   'settings.orderPolicy.neighbours.paidHold.label': 'Кухня ждёт оплаты',
   'settings.orderPolicy.neighbours.paidHold.SHADOW':
     'Пробный режим: только считает, что задержала бы',
