@@ -1,28 +1,32 @@
 # ADR 0183: Acquisition links that work, the tenant's Mini App, and the storefront's brand switcher, branch order and layout
 
 - Decision status: Accepted — proposed by Claude (batch 21, wave `w8-acquisition-merchandising`); accepted by the platform owner 2026-10-14
-- Implementation status: Partial — being built in batch 21 (2026-10-14); this line is advanced when the wave's
-  integration lands. Four decisions are taken here (D16, D17, D18, D27), and the tables, endpoints and screens they
-  need are listed in the Specification.
+- Implementation status: Built — everything this record specifies exists and is exercised by a test: `V0674` to `V0676`,
+  the Telegram channel's own settings and the guided Mini App setup, server-built links with the bot and Mini App landings, the
+  dark page-load count, the funnel alert and the provisional-retention check, and the brand switcher, branch order and layout
+  with their console editors (batch 21, 2026-10-23). The three facts outside the platform stay open and are named, with where each
+  value goes and how to prove it, in `docs/runbooks/external-connections/w8-acquisition-merchandising.md`: the BotFather round
+  trip, counsel's answers (per-person attribution stays declined, the page-load count stays off, the 400-day retention stays
+  provisional), and a tenant that asks for the marketplace layout.
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: proposed by Claude (batch 21); Ayubkhon Abbosov (platform owner) decides
 - Depends on: [ADR 0025](../built/0025-fine-grained-authorization-and-capability-model.md),
   [ADR 0027](../built/0027-audit-evidence-and-approval-model.md),
-  [ADR 0028](0028-secrets-management-and-credential-lifecycle.md),
-  [ADR 0029](0029-pii-protection-envelope-encryption-and-key-rotation.md),
+  [ADR 0028](../partial/0028-secrets-management-and-credential-lifecycle.md),
+  [ADR 0029](../partial/0029-pii-protection-envelope-encryption-and-key-rotation.md),
   [ADR 0030](../built/0030-configuration-and-policy-resolution.md),
   [ADR 0031](../built/0031-http-api-conventions.md),
   [ADR 0033](../built/0033-caching-rate-limiting-and-shared-runtime-state.md),
-  [ADR 0036](0036-sales-channels-and-location-serviceability.md),
-  [ADR 0044](0044-marketing-campaigns-audiences-and-engagement.md),
+  [ADR 0036](../partial/0036-sales-channels-and-location-serviceability.md),
+  [ADR 0044](../partial/0044-marketing-campaigns-audiences-and-engagement.md),
   [ADR 0055](../meta/0055-greenfield-launch-scope.md),
-  [ADR 0058](0058-telegram-notification-channels.md),
-  [ADR 0065](0065-tenant-self-service-integrations-and-the-write-only-secret-door.md),
+  [ADR 0058](../partial/0058-telegram-notification-channels.md),
+  [ADR 0065](../partial/0065-tenant-self-service-integrations-and-the-write-only-secret-door.md),
   [ADR 0068](../built/0068-tenant-terms-of-service-documents.md),
-  [ADR 0075](0075-a-customer-orders-from-the-chat-they-are-already-in.md),
-  [ADR 0157](0157-content-and-merchandising-slots.md),
-  [ADR 0167](0167-behavioural-telemetry-lawful-basis-and-the-funnel.md)
+  [ADR 0075](../partial/0075-a-customer-orders-from-the-chat-they-are-already-in.md),
+  [ADR 0157](../partial/0157-content-and-merchandising-slots.md),
+  [ADR 0167](../partial/0167-behavioural-telemetry-lawful-basis-and-the-funnel.md)
 - Supersedes / Superseded by: — (amends nothing by editing it. It answers four open inputs and adds a dated
   status addition to each record it touches: ADR 0167 (D16 and D18), ADR 0157 (D17), ADR 0075 (D27), and ADR 0044
   (D16 and the link formats). No Decision, Alternatives or Consequences section of any of them is rewritten)

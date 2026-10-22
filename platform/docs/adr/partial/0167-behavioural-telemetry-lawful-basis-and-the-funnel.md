@@ -405,7 +405,7 @@ tenant's own installed tags and the link-click call on a `?ref=` landing.
 
 ## Status addition (2026-10-14)
 
-[ADR 0183](0183-acquisition-links-the-tenants-mini-app-and-storefront-merchandising.md) (Accepted 2026-10-14, batch 21) takes
+[ADR 0183](../built/0183-acquisition-links-the-tenants-mini-app-and-storefront-merchandising.md) (Accepted 2026-10-14, batch 21) takes
 two decisions that bear on this record. This record's Decision, Alternatives and Consequences are unchanged.
 
 - **Tier 2 is declined, not merely deferred (ADR 0183 D16).** Decision 4's tier 2, and the «Tier 2, not built» block of the

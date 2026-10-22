@@ -362,7 +362,7 @@ is unavailable.
 
 ## Status addition (2026-10-14)
 
-[ADR 0183](0183-acquisition-links-the-tenants-mini-app-and-storefront-merchandising.md) (Accepted 2026-10-14, batch 21, decision
+[ADR 0183](../built/0183-acquisition-links-the-tenants-mini-app-and-storefront-merchandising.md) (Accepted 2026-10-14, batch 21, decision
 D27) closes the open input «Where the tenant's Mini App lives». This record's Decision, Alternatives and Consequences
 are unchanged.
 

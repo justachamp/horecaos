@@ -858,7 +858,7 @@ this module owns has a stated retention window that a job actually enforces.
 
 ## Status addition (2026-10-14)
 
-[ADR 0183](0183-acquisition-links-the-tenants-mini-app-and-storefront-merchandising.md) (Accepted 2026-10-14, batch 21) completes
+[ADR 0183](../built/0183-acquisition-links-the-tenants-mini-app-and-storefront-merchandising.md) (Accepted 2026-10-14, batch 21) completes
 the half of «Attribution and referrals» that was deferred to «whichever surface serves the redirect or deep link», and
 declines the other half. This record's Decision, Alternatives and Consequences are unchanged.
 
