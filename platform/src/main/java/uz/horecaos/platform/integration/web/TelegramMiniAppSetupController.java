@@ -48,7 +48,7 @@ public class TelegramMiniAppSetupController {
             description = "Steps: CONNECT_BOT, REGISTER_WEBHOOK, TELEGRAM_CHANNEL, STOREFRONT_ADDRESS, BOTFATHER_APP, "
                     + "MENU_BUTTON, TEST_LINK; each DONE, TODO or UNKNOWN. BOTFATHER_APP is «recorded», never "
                     + "verified: Telegram has no API for /newapp. MENU_BUTTON is read back from Telegram.")
-    public MiniAppStatusView status(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+    public MiniAppStatusView miniAppSetupStatus(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
         return MiniAppStatusView.of(setup.status(tenantId, brandId));
     }
 
@@ -66,7 +66,8 @@ public class TelegramMiniAppSetupController {
                 tenantId, brandId, ActorRef.user(currentActor.get().subject(), null)));
     }
 
-    record MiniAppStepView(String code, String state, @Nullable String detail) {}
+    record MiniAppStepView(
+            String code, String state, @Nullable String detail) {}
 
     record MiniAppStatusView(
             List<MiniAppStepView> steps,
@@ -82,7 +83,8 @@ public class TelegramMiniAppSetupController {
         static MiniAppStatusView of(TelegramMiniAppSetupService.Status status) {
             return new MiniAppStatusView(
                     status.steps().stream()
-                            .map(step -> new MiniAppStepView(step.code(), step.state().name(), step.detail()))
+                            .map(step -> new MiniAppStepView(
+                                    step.code(), step.state().name(), step.detail()))
                             .toList(),
                     status.botUsername(),
                     status.miniAppUrl(),

@@ -41,8 +41,10 @@ public class StorefrontBranchOrderController {
     @Operation(
             summary = "The brand's branches in the order the storefront lists them with no customer point",
             description = "storefrontSortOrder is null for a branch nobody has placed; those sort last, by name.")
-    public List<StorefrontBranchView> read(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
-        return order.list(tenantId, brandId).stream().map(StorefrontBranchView::of).toList();
+    public List<StorefrontBranchView> readStorefrontBranchOrder(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        return order.list(tenantId, brandId).stream()
+                .map(StorefrontBranchView::of)
+                .toList();
     }
 
     @PutMapping
@@ -52,7 +54,7 @@ public class StorefrontBranchOrderController {
             description =
                     "Names the branches first to last. A branch of the brand that is left out goes back to unset and "
                             + "sorts last. 400 for a branch that is not this brand's or is named twice.")
-    public List<StorefrontBranchView> replace(
+    public List<StorefrontBranchView> replaceStorefrontBranchOrder(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody BranchOrderRequest body) {
         return order.replace(tenantId, brandId, body.locationIds()).stream()
                 .map(StorefrontBranchView::of)

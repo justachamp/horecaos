@@ -50,7 +50,7 @@ public class TelegramChannelSetupController {
                     + "miniAppUnavailable names why there is none (BRAND_NOT_CHOSEN, HOSTNAME_NOT_CLAIMED, "
                     + "HOSTNAME_NOT_VERIFIED, HOSTNAME_AMBIGUOUS). A channel nobody has configured reads as "
                     + "everything off. 400 for a channel that is not a TELEGRAM channel.")
-    public TelegramSettingsView read(@PathVariable UUID tenantId, @PathVariable UUID channelId) {
+    public TelegramSettingsView readTelegramSettings(@PathVariable UUID tenantId, @PathVariable UUID channelId) {
         return TelegramSettingsView.of(settings.view(tenantId, channelId));
     }
 
@@ -60,7 +60,7 @@ public class TelegramChannelSetupController {
             summary = "Replace this Telegram channel's settings",
             description = "A full replace: an omitted language drops its text and an omitted flag is false. "
                     + "Gated on the channel's version, like every facet of Channel setup. Never calls Telegram.")
-    public TelegramSettingsView replace(
+    public TelegramSettingsView replaceTelegramSettings(
             @PathVariable UUID tenantId,
             @PathVariable UUID channelId,
             @Valid @RequestBody TelegramSettingsRequest body,

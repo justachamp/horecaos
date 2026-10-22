@@ -56,7 +56,7 @@ public class BrandSwitcherController {
             description =
                     "shown is false for a hidden entry, an entry whose target brand is inactive, and an entry whose "
                             + "website channel has no verified hostname.")
-    public List<SwitcherEntryView> list(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+    public List<SwitcherEntryView> listSwitcherEntries(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
         return switcher.list(tenantId, brandId);
     }
 
@@ -122,7 +122,7 @@ public class BrandSwitcherController {
     @Operation(
             summary = "Set the order of the entries",
             description = "Names every entry of the brand's switcher exactly once, first to last.")
-    public List<SwitcherEntryView> reorder(
+    public List<SwitcherEntryView> reorderSwitcherEntries(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody SwitcherOrderRequest body) {
         return switcher.reorder(
                 tenantId, brandId, body.ids(), currentActor.get().subject());
