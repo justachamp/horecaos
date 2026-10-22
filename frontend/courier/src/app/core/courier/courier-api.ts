@@ -84,6 +84,19 @@ export class CourierApi {
     });
   }
 
+  /** The courier's statement about the bag they hand over, in minor units; a cashier confirms what was received. */
+  declareCash(
+    where: BranchRef,
+    handoverId: string,
+    declaredMinor: number,
+    key?: string,
+  ): Promise<void> {
+    return this.api.post<void>(`${this.branch(where)}/cash-handovers/${handoverId}/declaration`, {
+      body: { declaredMinor },
+      idempotencyKey: key,
+    });
+  }
+
   // -------------------------------------------------------------------- duty
 
   currentDuty(where: BranchRef): Promise<CurrentDuty> {

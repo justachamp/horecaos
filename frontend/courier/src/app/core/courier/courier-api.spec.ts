@@ -67,6 +67,15 @@ describe('CourierApi', () => {
     });
   });
 
+  it('declares the cash handed over, in minor units, against the handover the close opened', async () => {
+    await api.declareCash(WHERE, 'handover-1', 12_500_000, 'k1');
+
+    expect(post).toHaveBeenCalledWith(`${BRANCH}/cash-handovers/handover-1/declaration`, {
+      body: { declaredMinor: 12_500_000 },
+      idempotencyKey: 'k1',
+    });
+  });
+
   describe('duty and telemetry', () => {
     it('reads, opens and closes the courier’s own session at the branch', async () => {
       await api.currentDuty(WHERE);

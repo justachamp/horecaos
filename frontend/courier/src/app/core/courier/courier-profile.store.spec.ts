@@ -102,4 +102,51 @@ describe('CourierProfileStore', () => {
 
     expect(store.error()).toBeNull();
   });
+  describe('the branch the courier works at', () => {
+    it('is the open shift’s branch, even when it is not the main one', async () => {
+      const profile = courierProfile();
+      me.mockResolvedValue({
+        ...profile,
+        openShift: { ...profile.openShift!, locationId: profile.branches[1].locationId },
+      });
+
+      await store.load();
+
+      expect(store.workBranch()).toEqual({
+        brandId: profile.branches[1].brandId,
+        locationId: profile.branches[1].locationId,
+      });
+      expect(store.shiftBranch()).toEqual(store.workBranch());
+    });
+
+    it('is the main branch when no shift is open, and the shift branch is then nothing', async () => {
+      const profile = courierProfile({ openShift: null });
+      me.mockResolvedValue(profile);
+
+      await store.load();
+
+      expect(store.workBranch()).toEqual({
+        brandId: profile.branches[0].brandId,
+        locationId: profile.branches[0].locationId,
+      });
+      expect(store.shiftBranch()).toBeNull();
+    });
+
+    it('is nothing for a courier bound to no branch', async () => {
+      me.mockResolvedValue(courierProfile({ openShift: null, branches: [] }));
+
+      await store.load();
+
+      expect(store.workBranch()).toBeNull();
+    });
+  });
+
+  it('loads once for the screens that only need the record to be there', async () => {
+    me.mockResolvedValue(courierProfile());
+
+    await store.ensureLoaded();
+    await store.ensureLoaded();
+
+    expect(me).toHaveBeenCalledOnce();
+  });
 });
