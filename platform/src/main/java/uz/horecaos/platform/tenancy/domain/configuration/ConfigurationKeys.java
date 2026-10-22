@@ -437,6 +437,53 @@ public final class ConfigurationKeys {
             .build();
 
     /**
+     * ADR 0029, batch 21: the days the platform gives itself to answer a data-subject access request. Declared here so a
+     * stored row passes the startup validator, and identically in {@code customers.api.CustomerConfigurationKeys} where it
+     * is consumed, for the reason recorded on {@link #COMMERCIAL_ENFORCEMENT_CEILING}.
+     */
+    public static final ConfigurationKey<Integer> CUSTOMERS_DSAR_RESPONSE_DEADLINE_DAYS = ConfigurationKey.of(
+                    "customers.dsar_response_deadline_days", Integer.class)
+            .defaultValue(30)
+            .ownedBy("customers")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs(
+                    "Days from the day a data-subject access request is raised by which the tenant owes the customer "
+                            + "her data (ADR 0029). Provisional until legal confirms it.")
+            .build();
+
+    /** ADR 0029, batch 21: days a produced export stays in object storage. Declared twice; see above. */
+    public static final ConfigurationKey<Integer> CUSTOMERS_DSAR_BUNDLE_RETENTION_DAYS = ConfigurationKey.of(
+                    "customers.dsar_bundle_retention_days", Integer.class)
+            .defaultValue(7)
+            .ownedBy("customers")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+            .describedAs(
+                    "Days a produced data-subject export is kept in object storage before it is removed (ADR 0029).")
+            .build();
+
+    /** ADR 0029, batch 21: the Russian note that opens a data-subject export. Declared twice; see above. */
+    public static final ConfigurationKey<String> CUSTOMERS_DSAR_COVER_NOTE_RU =
+            coverNoteKey("customers.dsar_cover_note_ru", "Russian");
+
+    /** ADR 0029, batch 21: the Uzbek (Latin) note that opens a data-subject export. Declared twice; see above. */
+    public static final ConfigurationKey<String> CUSTOMERS_DSAR_COVER_NOTE_UZ_LATN =
+            coverNoteKey("customers.dsar_cover_note_uz_latn", "Uzbek (Latin)");
+
+    /** ADR 0029, batch 21: the English note that opens a data-subject export. Declared twice; see above. */
+    public static final ConfigurationKey<String> CUSTOMERS_DSAR_COVER_NOTE_EN =
+            coverNoteKey("customers.dsar_cover_note_en", "English");
+
+    private static ConfigurationKey<String> coverNoteKey(String code, String language) {
+        return ConfigurationKey.of(code, String.class)
+                .defaultValue("")
+                .ownedBy("customers")
+                .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
+                .describedAs("The " + language + " note that opens a data-subject export (ADR 0029). Blank keeps the "
+                        + "platform's provisional wording until legal's text is set.")
+                .build();
+    }
+
+    /**
      * ADR 0111: minutes before its time a scheduled lead callback joins the call centre's
      * needs-attention view again, declared identically in {@code
      * customers.api.CustomerConfigurationKeys} (customers cannot import this registry without a
@@ -1358,6 +1405,11 @@ public final class ConfigurationKeys {
             CUSTOMERS_OTP_DELIVERY_CHANNEL_ORDER,
             CUSTOMERS_PII_EXPORT_APPROVAL_THRESHOLD_ROWS,
             CUSTOMER_LEAD_CALLBACK_REMINDER_MINUTES,
+            CUSTOMERS_DSAR_RESPONSE_DEADLINE_DAYS,
+            CUSTOMERS_DSAR_BUNDLE_RETENTION_DAYS,
+            CUSTOMERS_DSAR_COVER_NOTE_RU,
+            CUSTOMERS_DSAR_COVER_NOTE_UZ_LATN,
+            CUSTOMERS_DSAR_COVER_NOTE_EN,
             ASSISTANT_ENABLED,
             ASSISTANT_MONTHLY_SPEND_CEILING_USD_CENTS,
             ASSISTANT_CONVERSATION_TURN_CAP,

@@ -73,6 +73,20 @@ public class JdbcCustomerErasureStore {
         return erased;
     }
 
+    /**
+     * Deletes the corrections made to the account. Each holds the value that was replaced, which is the old personal
+     * data, and the account is going: "preserving prior values under retention" (ADR 0029) ends with the person.
+     */
+    public int deleteCorrections(UUID tenantId, UUID accountId) {
+        return jdbc.sql("""
+                DELETE FROM customer.profile_corrections
+                 WHERE tenant_id = :tenantId AND customer_account_id = :accountId
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .update();
+    }
+
     /** What a customer favourited says what they like; none of it is kept for a person who has gone. */
     public int deleteFavourites(UUID tenantId, UUID accountId) {
         return jdbc.sql("DELETE FROM customer.favourites WHERE tenant_id = :tenantId AND account_id = :accountId")

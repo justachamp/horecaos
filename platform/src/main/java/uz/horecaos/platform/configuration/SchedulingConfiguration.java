@@ -261,10 +261,11 @@ public class SchedulingConfiguration {
      * sweeper (ADR 0159), {@code StaffSignInSweeper.sweepOnce} (ADR 0176), which ends the records of
      * sessions Keycloak no longer lists and deletes sign-in history past its retention, the IKPU/MXIK list's
      * freshness check (ADR 0173), the customer funnel's backfill, health probe and retention sweeper (ADR
-     * 0167) and the till-balance sync tick (ADR 0171). The
+     * 0167) and the till-balance sync tick (ADR 0171). Batch 21 added the data-subject export
+     * bundle sweeper ({@code ExportBundleSweeper}, ADR 0029) in the privacy wave. The
      * pool-size test counts them.
      */
-    static final int DEFAULT_POOL_SIZE = 93;
+    static final int DEFAULT_POOL_SIZE = 94;
 
     /**
      * The platform's scheduler, replacing Boot's single-threaded default.

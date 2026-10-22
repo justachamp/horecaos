@@ -56,6 +56,8 @@ public final class PiiEgressActions {
             new Action("customer.blacklist.revealed", Kind.REVEAL, Subject.CUSTOMER, "customers"),
             new Action("customer.lead.revealed", Kind.REVEAL, Subject.CUSTOMER, "customers"),
             new Action("customer.list.exported", Kind.EXPORT, Subject.CUSTOMER, "customers"),
+            new Action("customer.dsar.exported", Kind.EXPORT, Subject.CUSTOMER, "customers"),
+            new Action("customer.dsar.bundle_revealed", Kind.REVEAL, Subject.CUSTOMER, "customers"),
             // marketing
             new Action("MARKETING_AUDIENCE_EXPORTED", Kind.EXPORT, Subject.CUSTOMER, "marketing"),
             // orders and what hangs off them
