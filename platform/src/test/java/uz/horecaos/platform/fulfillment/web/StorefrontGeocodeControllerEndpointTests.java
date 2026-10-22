@@ -553,19 +553,25 @@ class StorefrontGeocodeControllerEndpointTests {
         @Bean
         @Primary
         RecordingRateLimiter recordingRateLimiter() {
-            return new RecordingRateLimiter(new InProcessRateLimiter(java.time.Clock.systemUTC()));
+            return new RecordingRateLimiter();
         }
     }
 
+    /**
+     * The real in-process limiter on a clock that does not move. A token bucket refills with time, so on
+     * the wall clock a test that makes twenty-one requests expects a refusal only if it finishes inside
+     * the seconds it takes to earn one token back, which a machine under load does not promise (this
+     * class went red at a load average of ninety). A stopped clock is the exact statement of the rule
+     * under test: this many permits, then no more. {@link #reset()} hands each test a full bucket.
+     */
     static final class RecordingRateLimiter implements RateLimiter {
 
-        private final RateLimiter delegate;
+        private static final java.time.Clock STOPPED =
+                java.time.Clock.fixed(java.time.Instant.parse("2026-10-23T00:00:00Z"), java.time.ZoneOffset.UTC);
+
+        private volatile RateLimiter delegate = new InProcessRateLimiter(STOPPED);
         private final List<String> asked = new CopyOnWriteArrayList<>();
         final AtomicBoolean denyTenantCeiling = new AtomicBoolean();
-
-        RecordingRateLimiter(RateLimiter delegate) {
-            this.delegate = delegate;
-        }
 
         @Override
         public Decision check(Key key, Policy policy) {
@@ -583,6 +589,7 @@ class StorefrontGeocodeControllerEndpointTests {
         void reset() {
             asked.clear();
             denyTenantCeiling.set(false);
+            delegate = new InProcessRateLimiter(STOPPED);
         }
     }
 }
