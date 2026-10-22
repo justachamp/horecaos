@@ -10,6 +10,15 @@ import {
 import { ApiError } from '../../../core/api/problem-details';
 import { CurrentLocation } from '../../../core/auth/current-location';
 import { I18n } from '../../../core/i18n/i18n';
+import {
+  LabelsByLocale,
+  labelDrafts,
+  labelsToSend,
+  localeDisplayName,
+  pickLabel,
+  platformLocaleSet,
+} from '../../../core/i18n/locale-labels';
+import { PlatformLocales } from '../../../core/i18n/platform-locales';
 import { TPipe } from '../../../core/i18n/t.pipe';
 import { InlineAlert } from '../../../shared/ui/inline-alert';
 import { Modal } from '../../../shared/ui/modal';
@@ -72,8 +81,15 @@ const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
  * liability party, customer refund, status), so the table keeps its own
  * rows and borrows only the gesture.
  *
- * Simplified relative to the spec: a reason's customer text covers three
- * locales without `LocalizedFieldGroup`'s completeness chips.
+ * **A reason's customer text is authored in the tenant's languages** (row 10.12, ADR 0149 Decisions 4
+ * and 5): one field per language of the union of its brands' supported sets, default first, read from
+ * `GET .../order-outcome-reasons/locale-set` — the same set the service refuses to leave a wording out
+ * of, so a tenant that serves a fourth language is asked for it here and is not met with a 400 from a
+ * form that could only send three. A wording a reason carries in a language outside the set is sent
+ * back unchanged by an edit, never dropped.
+ *
+ * Simplified relative to the spec: the fields are stacked, one per language, without
+ * `LocalizedFieldGroup`'s tabs and completeness chips (a reason's text is one short sentence).
  */
 @Component({
   selector: 'q-reference-data-page',
@@ -89,6 +105,11 @@ export class ReferenceDataPage {
   private readonly locationsApi = inject(LocationsApi);
   private readonly location = inject(CurrentLocation);
   protected readonly i18n = inject(I18n);
+  private readonly registry = inject(PlatformLocales);
+
+  /** The languages a reason is worded in; the registry's content tier until the tenant's own set is read. */
+  private readonly tenantLocaleSet = signal(platformLocaleSet(this.registry));
+  protected readonly reasonLocales = computed(() => this.tenantLocaleSet().locales);
 
   protected readonly fulfillmentModes = FULFILLMENT_MODES;
   protected readonly weekdays = WEEKDAYS;
@@ -111,9 +132,7 @@ export class ReferenceDataPage {
   protected readonly createError = signal<string | null>(null);
   protected readonly newInternalName = signal('');
   protected readonly newSystemCategory = signal('');
-  protected readonly newTextRu = signal('');
-  protected readonly newTextUz = signal('');
-  protected readonly newTextEn = signal('');
+  protected readonly newTexts = signal<LabelsByLocale>({});
   protected readonly newStockDisposition = signal<StockDisposition>('RELEASE');
   protected readonly newLiabilityParty = signal<LiabilityParty>('TENANT');
   protected readonly newCustomerRefund = signal<CustomerRefund>('NONE');
@@ -126,9 +145,7 @@ export class ReferenceDataPage {
   protected readonly editError = signal<string | null>(null);
   protected readonly editInternalName = signal('');
   protected readonly editSystemCategory = signal('');
-  protected readonly editTextRu = signal('');
-  protected readonly editTextUz = signal('');
-  protected readonly editTextEn = signal('');
+  protected readonly editTexts = signal<LabelsByLocale>({});
   protected readonly editStockDisposition = signal<StockDisposition>('RELEASE');
   protected readonly editLiabilityParty = signal<LiabilityParty>('TENANT');
   protected readonly editCustomerRefund = signal<CustomerRefund>('NONE');
@@ -242,9 +259,7 @@ export class ReferenceDataPage {
     this.newInternalName.set('');
     this.newSystemCategory.set(this.categoriesOf(kind)[0] ?? '');
     this.newStockDisposition.set(kind === 'LINE_REMOVAL' ? 'RETURN_TO_STOCK' : 'RELEASE');
-    this.newTextRu.set('');
-    this.newTextUz.set('');
-    this.newTextEn.set('');
+    this.newTexts.set(labelDrafts(this.reasonLocales(), null));
     this.newAllowedModes.set([]);
     this.createError.set(null);
     this.showCreateForm.set(kind);
@@ -264,15 +279,39 @@ export class ReferenceDataPage {
     );
   }
 
+  protected setNewText(locale: string, value: string): void {
+    this.newTexts.set({ ...this.newTexts(), [locale]: value });
+  }
+
+  protected setEditText(locale: string, value: string): void {
+    this.editTexts.set({ ...this.editTexts(), [locale]: value });
+  }
+
+  /**
+   * A reason's customer wording to show in the table: the operator's own language, then the tenant's
+   * languages in its order, then any wording at all — never an empty cell for a missing translation.
+   */
+  protected customerTextOf(reason: ReasonResponse): string {
+    return pickLabel(reason.customerTexts, this.i18n.locale(), this.reasonLocales());
+  }
+
+  /** A language's name in the console's own language, from the registry. */
+  protected localeLabel(locale: string): string {
+    return localeDisplayName(this.i18n, locale, this.registry);
+  }
+
+  /** Whether every language the tenant serves has a wording: what the service requires. */
+  private everyLanguageWorded(texts: LabelsByLocale): boolean {
+    return this.reasonLocales().every((locale) => (texts[locale] ?? '').trim().length > 0);
+  }
+
   protected canCreate(): boolean {
     const kind = this.showCreateForm();
     return (
       !this.createSubmitting() &&
       this.newInternalName().trim().length > 0 &&
       this.newSystemCategory().trim().length > 0 &&
-      this.newTextRu().trim().length > 0 &&
-      this.newTextUz().trim().length > 0 &&
-      this.newTextEn().trim().length > 0 &&
+      this.everyLanguageWorded(this.newTexts()) &&
       (kind !== 'COMPLETION' || this.newAllowedModes().length > 0) &&
       !(
         kind !== null &&
@@ -293,11 +332,7 @@ export class ReferenceDataPage {
       kind,
       systemCategory: this.newSystemCategory(),
       internalName: this.newInternalName().trim(),
-      customerTexts: {
-        ru: this.newTextRu().trim(),
-        'uz-Latn': this.newTextUz().trim(),
-        en: this.newTextEn().trim(),
-      },
+      customerTexts: labelsToSend(this.reasonLocales(), this.newTexts()),
       ...(kind === 'CANCELLATION'
         ? {
             stockDisposition: this.newStockDisposition(),
@@ -325,9 +360,7 @@ export class ReferenceDataPage {
   protected openEditForm(reason: ReasonResponse): void {
     this.editInternalName.set(reason.internalName);
     this.editSystemCategory.set(reason.systemCategory);
-    this.editTextRu.set(reason.customerTexts['ru'] ?? '');
-    this.editTextUz.set(reason.customerTexts['uz-Latn'] ?? '');
-    this.editTextEn.set(reason.customerTexts['en'] ?? '');
+    this.editTexts.set(labelDrafts(this.reasonLocales(), reason.customerTexts));
     this.editStockDisposition.set(reason.stockDisposition ?? 'RELEASE');
     this.editLiabilityParty.set(reason.liabilityParty ?? 'TENANT');
     this.editCustomerRefund.set(reason.customerRefund ?? 'NONE');
@@ -343,9 +376,7 @@ export class ReferenceDataPage {
       reason !== null &&
       this.editInternalName().trim().length > 0 &&
       this.editSystemCategory().trim().length > 0 &&
-      this.editTextRu().trim().length > 0 &&
-      this.editTextUz().trim().length > 0 &&
-      this.editTextEn().trim().length > 0 &&
+      this.everyLanguageWorded(this.editTexts()) &&
       (reason.kind !== 'COMPLETION' || this.editAllowedModes().length > 0) &&
       !this.unavailableCannotReturn(
         reason.kind,
@@ -367,10 +398,15 @@ export class ReferenceDataPage {
       kind: reason.kind,
       systemCategory: this.editSystemCategory(),
       internalName: this.editInternalName().trim(),
+      // A wording in a language outside the offered set is kept as it is: an edit writes a new version
+      // of the whole reason, and a language the form does not show must not be the one it forgets.
       customerTexts: {
-        ru: this.editTextRu().trim(),
-        'uz-Latn': this.editTextUz().trim(),
-        en: this.editTextEn().trim(),
+        ...Object.fromEntries(
+          Object.entries(reason.customerTexts).filter(
+            ([locale]) => !this.reasonLocales().includes(locale),
+          ),
+        ),
+        ...labelsToSend(this.reasonLocales(), this.editTexts()),
       },
       ...(reason.kind === 'CANCELLATION'
         ? {
@@ -439,6 +475,11 @@ export class ReferenceDataPage {
         this.api.categories(scope, 'COMPLETION'),
         this.api.categories(scope, 'LINE_REMOVAL'),
       ]);
+      // A set that cannot be read must not lose the registry: the form falls back to the languages
+      // the platform has live, which is what an unconfigured tenant owes anyway.
+      this.tenantLocaleSet.set(
+        await this.api.localeSet(scope).catch(() => platformLocaleSet(this.registry)),
+      );
       this.cancellationReasons.set(cancellation);
       this.completionReasons.set(completion);
       this.removalReasons.set(removal);

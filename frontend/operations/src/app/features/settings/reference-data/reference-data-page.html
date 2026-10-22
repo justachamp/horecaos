@@ -65,7 +65,7 @@
               </button>
             </td>
             <td class="q-body-sm">{{ reason.internalName }}</td>
-            <td class="q-body-sm">{{ reason.customerTexts['ru'] }}</td>
+            <td class="q-body-sm">{{ customerTextOf(reason) }}</td>
             <td class="q-body-sm">{{ reason.systemCategory }}</td>
             <td class="q-body-sm">{{ reason.stockDisposition }}</td>
             <td class="q-body-sm">{{ reason.liabilityParty }}</td>
@@ -148,7 +148,7 @@
               </button>
             </td>
             <td class="q-body-sm">{{ reason.internalName }}</td>
-            <td class="q-body-sm">{{ reason.customerTexts['ru'] }}</td>
+            <td class="q-body-sm">{{ customerTextOf(reason) }}</td>
             <td class="q-body-sm">{{ reason.systemCategory }}</td>
             <td class="q-body-sm">{{ reason.stockDisposition }}</td>
             <td class="q-body-sm">{{ reason.liabilityParty }}</td>
@@ -230,7 +230,7 @@
               </button>
             </td>
             <td class="q-body-sm">{{ reason.internalName }}</td>
-            <td class="q-body-sm">{{ reason.customerTexts['ru'] }}</td>
+            <td class="q-body-sm">{{ customerTextOf(reason) }}</td>
             <td class="q-body-sm">{{ reason.systemCategory }}</td>
             <td class="q-body-sm">
               @for (mode of reason.allowedFulfillmentModes; track mode) {
@@ -301,41 +301,20 @@
           }
         </select>
 
-        <label class="q-caption" for="reason-text-ru">{{
-          'settings.referenceData.field.customerTextRu' | t
-        }}</label>
-        <input
-          id="reason-text-ru"
-          class="q-body field"
-          type="text"
-          [value]="newTextRu()"
-          (input)="newTextRu.set($any($event.target).value)"
-          [disabled]="createSubmitting()"
-        />
-
-        <label class="q-caption" for="reason-text-uz">{{
-          'settings.referenceData.field.customerTextUz' | t
-        }}</label>
-        <input
-          id="reason-text-uz"
-          class="q-body field"
-          type="text"
-          [value]="newTextUz()"
-          (input)="newTextUz.set($any($event.target).value)"
-          [disabled]="createSubmitting()"
-        />
-
-        <label class="q-caption" for="reason-text-en">{{
-          'settings.referenceData.field.customerTextEn' | t
-        }}</label>
-        <input
-          id="reason-text-en"
-          class="q-body field"
-          type="text"
-          [value]="newTextEn()"
-          (input)="newTextEn.set($any($event.target).value)"
-          [disabled]="createSubmitting()"
-        />
+        @for (locale of reasonLocales(); track locale) {
+          <label class="q-caption" [attr.for]="'reason-text-' + locale">{{
+            'settings.referenceData.field.customerTextIn' | t: { language: localeLabel(locale) }
+          }}</label>
+          <input
+            [id]="'reason-text-' + locale"
+            class="q-body field"
+            type="text"
+            [attr.data-testid]="'reason-text-' + locale"
+            [value]="newTexts()[locale] ?? ''"
+            (input)="setNewText(locale, $any($event.target).value)"
+            [disabled]="createSubmitting()"
+          />
+        }
 
         @if (kind !== 'COMPLETION') {
           <label class="q-caption" for="reason-stock">{{
@@ -478,41 +457,20 @@
         }
       </select>
 
-      <label class="q-caption" for="edit-text-ru">{{
-        'settings.referenceData.field.customerTextRu' | t
-      }}</label>
-      <input
-        id="edit-text-ru"
-        class="q-body field"
-        type="text"
-        [value]="editTextRu()"
-        (input)="editTextRu.set($any($event.target).value)"
-        [disabled]="editSubmitting()"
-      />
-
-      <label class="q-caption" for="edit-text-uz">{{
-        'settings.referenceData.field.customerTextUz' | t
-      }}</label>
-      <input
-        id="edit-text-uz"
-        class="q-body field"
-        type="text"
-        [value]="editTextUz()"
-        (input)="editTextUz.set($any($event.target).value)"
-        [disabled]="editSubmitting()"
-      />
-
-      <label class="q-caption" for="edit-text-en">{{
-        'settings.referenceData.field.customerTextEn' | t
-      }}</label>
-      <input
-        id="edit-text-en"
-        class="q-body field"
-        type="text"
-        [value]="editTextEn()"
-        (input)="editTextEn.set($any($event.target).value)"
-        [disabled]="editSubmitting()"
-      />
+      @for (locale of reasonLocales(); track locale) {
+        <label class="q-caption" [attr.for]="'edit-text-' + locale">{{
+          'settings.referenceData.field.customerTextIn' | t: { language: localeLabel(locale) }
+        }}</label>
+        <input
+          [id]="'edit-text-' + locale"
+          class="q-body field"
+          type="text"
+          [attr.data-testid]="'edit-text-' + locale"
+          [value]="editTexts()[locale] ?? ''"
+          (input)="setEditText(locale, $any($event.target).value)"
+          [disabled]="editSubmitting()"
+        />
+      }
 
       @if (reason.kind !== 'COMPLETION') {
         <label class="q-caption" for="edit-stock">{{

@@ -8,6 +8,7 @@ import { ApiError, ApiErrorCode } from '../../core/api/problem-details';
 import { CurrentBrand } from '../../core/auth/current-brand';
 import { CurrentLocation } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
+import { LocaleSet } from '../../core/i18n/locale-set';
 import { Combobox } from '../../shared/ui/combobox';
 import { AutoAddApi, AutoAddRule } from './auto-add-api';
 import { AutoAddPage } from './auto-add-page';
@@ -45,6 +46,14 @@ function rule(overrides: Partial<AutoAddRule> = {}): AutoAddRule {
   };
 }
 
+/** The brand's language set as the page reads it: a brand serving four, default first, unless a test says otherwise. */
+class FakeLocaleSet {
+  readonly locales = signal<readonly string[]>(['ru', 'uz-Latn', 'en']);
+  readonly defaultLocale = signal('ru');
+  readonly isConfigured = signal(false);
+  ensureLoaded = vi.fn().mockResolvedValue(undefined);
+}
+
 async function flush(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -54,6 +63,7 @@ describe('AutoAddPage (ADR 0158)', () => {
   let fixture: ComponentFixture<AutoAddPage>;
   let api: Record<'list' | 'create' | 'replace' | 'archive' | 'simulate', ReturnType<typeof vi.fn>>;
   let host: HTMLElement;
+  let localeSet: FakeLocaleSet;
 
   async function render(rules: readonly AutoAddRule[] = [rule()]): Promise<void> {
     api = {
@@ -63,10 +73,12 @@ describe('AutoAddPage (ADR 0158)', () => {
       archive: vi.fn().mockResolvedValue(rule({ status: 'ARCHIVED' })),
       simulate: vi.fn(),
     };
+    localeSet = new FakeLocaleSet();
     await TestBed.configureTestingModule({
       imports: [AutoAddPage],
       providers: [
         { provide: AutoAddApi, useValue: api },
+        { provide: LocaleSet, useValue: localeSet },
         {
           provide: CatalogApi,
           useValue: {
@@ -189,6 +201,63 @@ describe('AutoAddPage (ADR 0158)', () => {
     });
     expect(body.fulfillmentModes).toEqual(['DELIVERY', 'PICKUP', 'DINE_IN']);
     expect(body.channelSystemTypes).not.toContain('AGGREGATOR');
+  });
+
+  // Row 10.12 (ADR 0149, Decision 5): the customer's wording follows the brand's languages.
+
+  it('draws one optional customer-text field per language of the brand, default first', async () => {
+    await render([]);
+    localeSet.locales.set(['uz-Latn', 'ru', 'kk']);
+    (host.querySelector('[data-testid="auto-add-create"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(
+      Array.from(host.querySelectorAll('input[id^="rule-text-"]')).map((input) => input.id),
+    ).toEqual(['rule-text-uz-Latn', 'rule-text-ru', 'rule-text-kk']);
+    expect(host.querySelector('label[for="rule-text-kk"]')?.textContent?.trim()).toBe(
+      'Customer text (Kazakh)',
+    );
+  });
+
+  it('sends only the wordings that were filled in, keyed by the brand’s tags', async () => {
+    await render([]);
+    localeSet.locales.set(['ru', 'uz-Latn', 'en', 'kk']);
+    (host.querySelector('[data-testid="auto-add-create"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    setValue('#rule-code', 'BOXTEXT');
+    pickIn('rule-add-picker', BOX);
+    setValue('#rule-quantity', '1');
+    setValue('#rule-text-ru', '  Коробка для доставки ');
+    setValue('#rule-text-kk', 'Жеткізу қорабы');
+
+    (host.querySelector('[data-testid="auto-add-save"]') as HTMLButtonElement).click();
+    await flush();
+
+    expect(api.create.mock.calls[0][1].customerText).toEqual({
+      ru: 'Коробка для доставки',
+      kk: 'Жеткізу қорабы',
+    });
+  });
+
+  it('shows a stored wording keyed by the catalog’s uz in the Uzbek field, and keeps a language it does not offer', async () => {
+    await render([rule({ customerText: { ru: 'Коробка', uz: 'Quti', ka: 'ყუთი' } })]);
+    const edit = Array.from(
+      host.querySelectorAll('[data-testid="auto-add-rule-BOX"] button.link'),
+    ).find((button) => button.textContent?.trim() === 'Edit') as HTMLButtonElement;
+    edit.click();
+    fixture.detectChanges();
+
+    expect((host.querySelector('#rule-text-uz-Latn') as HTMLInputElement).value).toBe('Quti');
+    expect(host.querySelector('#rule-text-ka')).toBeNull();
+
+    (host.querySelector('[data-testid="auto-add-save"]') as HTMLButtonElement).click();
+    await flush();
+
+    expect(api.replace.mock.calls[0][2].customerText).toEqual({
+      ru: 'Коробка',
+      'uz-Latn': 'Quti',
+      ka: 'ყუთი',
+    });
   });
 
   it('will not save a rule with no fulfilment mode or no channel', async () => {

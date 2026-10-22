@@ -778,6 +778,14 @@ export const settingsPaths = {
     return `${OPERATIONS}/tenants/${enc(scope.tenantId)}/order-outcome-reasons`;
   },
 
+  /**
+   * `OperationsOrderOutcomeReasonController.localeSet` — the languages a reason's customer wording is
+   * authored in (the union of the tenant's brands', default first). Needs `order.read`.
+   */
+  orderOutcomeReasonLocaleSet(scope: LocationScope): string {
+    return `${this.orderOutcomeReasons(scope)}/locale-set`;
+  },
+
   orderOutcomeReasonCategories(scope: LocationScope): string {
     return `${this.orderOutcomeReasons(scope)}/categories`;
   },
@@ -886,6 +894,16 @@ export const settingsPaths = {
    */
   assistantUsage(tenantId: string): string {
     return `${OPERATIONS}/tenants/${enc(tenantId)}/assistant/usage`;
+  },
+
+  /**
+   * `AssistantLanguageController.languages` — the languages the assistant answers in (its detector's
+   * vocabulary, ADR 0069), each with the platform language it is and the configuration key that holds
+   * the disclosure in it. A read of code, answered to any signed-in principal: a brand manager's grant
+   * stops at the brand and needs the list to write a note there.
+   */
+  assistantLanguages(): string {
+    return `${OPERATIONS}/assistant/languages`;
   },
 
   /**

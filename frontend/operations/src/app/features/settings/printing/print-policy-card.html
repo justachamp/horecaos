@@ -25,9 +25,9 @@
                 data-testid="print-policy-locale"
                 (change)="draft.set($any($event.target).value)"
               >
-                @for (locale of locales; track locale.code) {
-                  <option [value]="locale.code" [selected]="draft() === locale.code">
-                    {{ locale.labelKey | t }}
+                @for (locale of locales(); track locale) {
+                  <option [value]="locale" [selected]="draft() === locale">
+                    {{ localeLabel(locale) }}
                   </option>
                 }
               </select>

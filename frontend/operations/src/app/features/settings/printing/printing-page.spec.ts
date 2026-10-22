@@ -6,12 +6,13 @@ import { ApiError, ApiErrorCode } from '../../../core/api/problem-details';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { FeatureFlags } from '../../../core/feature-flags';
 import { I18n } from '../../../core/i18n/i18n';
+import { LocaleSet } from '../../../core/i18n/locale-set';
 import { KitchenApi } from '../../kitchen/kitchen-api';
 import { ConfigurationApi } from '../configuration-api';
 import { SettingsScope } from '../settings-scope';
 import { PrintingApi } from './printing-api';
 import { el, flush } from './printing-dom';
-import { agent, printer, profile, route, station } from './printing-fixtures';
+import { FakeBrandLocales, agent, printer, profile, route, station } from './printing-fixtures';
 import { PrintingPage } from './printing-page';
 
 class FakeTenant {
@@ -72,6 +73,7 @@ async function render(
           setValue: vi.fn(),
         },
       },
+      { provide: LocaleSet, useValue: new FakeBrandLocales() },
       { provide: CurrentTenant, useValue: options.tenant ?? new FakeTenant() },
       { provide: SettingsScope, useValue: options.scope ?? new FakeScope() },
       { provide: FeatureFlags, useValue: new FakeFlags(options.flagsOn ?? true) },
