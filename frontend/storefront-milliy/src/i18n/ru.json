@@ -169,6 +169,7 @@
     "offerDiscount": "Акция",
     "deliveryOfferNote": "Включая скидку на доставку {{amount}}",
     "surchargeNote": "Включая наценку {{amount}}",
+    "serviceChargeNote": "Включая сервисный сбор {{amount}}",
     "giftOffer": {
       "title": "Вас ждёт подарок",
       "choose": "Выберите подарок",

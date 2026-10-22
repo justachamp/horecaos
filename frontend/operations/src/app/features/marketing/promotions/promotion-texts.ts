@@ -92,6 +92,7 @@ const en = {
   'adjustment.DELIVERY_FEE_BENEFIT': 'Delivery benefit',
   'adjustment.DELIVERY_TARIFF_DISCOUNT': 'Tariff delivery discount',
   'adjustment.ITEM_MARKUP': 'Product markup',
+  'adjustment.ORDER_MARKUP': 'Service charge',
   'verdict.COUPON_NOT_PRESENTED': 'Needs a promo code that was not presented',
   'verdict.LIMIT_REACHED': 'Its redemption limit is used up',
   'verdict.NOT_CLAIMED_AT_PLACEMENT':
@@ -418,6 +419,7 @@ const ru: Record<PromotionTextKey, string> = {
   'adjustment.DELIVERY_FEE_BENEFIT': 'Льгота на доставку',
   'adjustment.DELIVERY_TARIFF_DISCOUNT': 'Скидка тарифа доставки',
   'adjustment.ITEM_MARKUP': 'Наценка на позицию',
+  'adjustment.ORDER_MARKUP': 'Сервисный сбор',
   'verdict.COUPON_NOT_PRESENTED': 'Нужен промокод, который не предъявлен',
   'verdict.LIMIT_REACHED': 'Лимит применений исчерпан',
   'verdict.NOT_CLAIMED_AT_PLACEMENT':
@@ -741,6 +743,7 @@ const uzLatn: Record<PromotionTextKey, string> = {
   'adjustment.DELIVERY_FEE_BENEFIT': 'Yetkazib berish imtiyozi',
   'adjustment.DELIVERY_TARIFF_DISCOUNT': 'Yetkazib berish tarifi chegirmasi',
   'adjustment.ITEM_MARKUP': 'Pozitsiyaga ustama',
+  'adjustment.ORDER_MARKUP': 'Xizmat haqi',
   'verdict.COUPON_NOT_PRESENTED': 'Taqdim etilmagan promokod kerak',
   'verdict.LIMIT_REACHED': 'Qoʻllanish limiti tugagan',
   'verdict.NOT_CLAIMED_AT_PLACEMENT':

@@ -285,6 +285,33 @@ describe('PromotionSimulator', () => {
     expect(result.textContent).not.toContain('abc');
   });
 
+  it('names an order-level service charge in words, not by its type code', async () => {
+    simulate.mockResolvedValue(
+      result({
+        feeMinor: 9_000,
+        adjustments: [
+          {
+            sequence: 1,
+            lineId: 'service-charge',
+            type: 'ORDER_MARKUP',
+            descriptionCode: 'PROMOTION',
+            promotionId: 'p-click',
+            definitionVersion: 1,
+            amountMinor: 9_000,
+          },
+        ],
+      }),
+    );
+    choose('sim-channel', 'WEB');
+    addDish('col', 0);
+    byId<HTMLButtonElement>('sim-run').click();
+    await settle();
+    const text = byId('sim-result').textContent ?? '';
+    expect(text).toContain('Service charge · CLICK5');
+    expect(text).not.toContain('adjustment.ORDER_MARKUP');
+    expect(text).not.toContain('ORDER_MARKUP');
+  });
+
   it('hands the engine’s verdicts to q-rule-simulator, with a reason for every promotion that did not apply', async () => {
     choose('sim-channel', 'WEB');
     addDish('col', 0);

@@ -17,7 +17,7 @@ export type PromotionSource = 'AUTOMATIC' | 'PROMO_CODE';
  * `discountMinor` of the priced cart or order; the other two are already inside the
  * figures the platform returns, and are explained rather than added.
  */
-export type PromotionEffect = 'DISCOUNT' | 'DELIVERY_DISCOUNT' | 'SURCHARGE';
+export type PromotionEffect = 'DISCOUNT' | 'DELIVERY_DISCOUNT' | 'SURCHARGE' | 'SERVICE_CHARGE';
 
 export interface AppliedPromotion {
   readonly source: PromotionSource;
@@ -77,6 +77,22 @@ export function discountLines(
 }
 
 /**
+ * The caption key for an effect that is already inside the platform's figures. A service charge is its own
+ * sentence (ADR 0140): it is added to the order after the discounts, and "surcharge" is what a marketer's
+ * product markup says.
+ */
+function noteKeyFor(effect: PromotionEffect): string {
+  switch (effect) {
+    case 'SURCHARGE':
+      return 'cart.surchargeNote';
+    case 'SERVICE_CHARGE':
+      return 'cart.serviceChargeNote';
+    default:
+      return 'cart.deliveryOfferNote';
+  }
+}
+
+/**
  * The benefits already reflected in the delivery price or the goods, to be shown as a
  * caption rather than a line, because adding them to the sum would count them twice.
  */
@@ -86,7 +102,7 @@ export function noteLines(
   return (applied ?? [])
     .filter((entry) => entry.effect !== 'DISCOUNT' && entry.amountMinor > 0)
     .map((entry) => ({
-      labelKey: entry.effect === 'SURCHARGE' ? 'cart.surchargeNote' : 'cart.deliveryOfferNote',
+      labelKey: noteKeyFor(entry.effect),
       amountMinor: entry.amountMinor,
     }));
 }

@@ -169,6 +169,7 @@
     "offerDiscount": "Special offer",
     "deliveryOfferNote": "Includes a delivery offer of {{amount}}",
     "surchargeNote": "Includes a surcharge of {{amount}}",
+    "serviceChargeNote": "Includes a service charge of {{amount}}",
     "giftOffer": {
       "title": "A free gift is waiting for you",
       "choose": "Choose your free gift",

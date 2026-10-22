@@ -104,6 +104,18 @@ describe('noteLines', () => {
   it('never repeats a discount, which is already a line of its own', () => {
     expect(noteLines([AUTO_DISCOUNT, CODE_DISCOUNT])).toEqual([]);
   });
+
+  it('says "service charge" for an order-level charge, not "surcharge"', () => {
+    const serviceCharge: AppliedPromotion = {
+      source: 'AUTOMATIC',
+      effect: 'SERVICE_CHARGE',
+      amountMinor: 9_000,
+    };
+    expect(noteLines([serviceCharge, SURCHARGE])).toEqual([
+      { labelKey: 'cart.serviceChargeNote', amountMinor: 9_000 },
+      { labelKey: 'cart.surchargeNote', amountMinor: 1_500 },
+    ]);
+  });
 });
 
 const FORMAT = (minor: number) => `${minor} som`;

@@ -170,6 +170,7 @@
     "offerDiscount": "Special offer",
     "deliveryOfferNote": "Includes a delivery offer of {{amount}}",
     "surchargeNote": "Includes a surcharge of {{amount}}",
+    "serviceChargeNote": "Includes a service charge of {{amount}}",
     "promoTitle": "Promo code",
     "promoPlaceholder": "Enter the code",
     "promoApply": "Apply",

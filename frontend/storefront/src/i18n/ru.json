@@ -170,6 +170,7 @@
     "offerDiscount": "Акция",
     "deliveryOfferNote": "Включая скидку на доставку {{amount}}",
     "surchargeNote": "Включая наценку {{amount}}",
+    "serviceChargeNote": "Включая сервисный сбор {{amount}}",
     "promoTitle": "Промокод",
     "promoPlaceholder": "Введите код",
     "promoApply": "Применить",

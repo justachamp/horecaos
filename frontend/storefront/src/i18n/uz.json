@@ -170,6 +170,7 @@
     "offerDiscount": "Aksiya",
     "deliveryOfferNote": "Yetkazib berish chegirmasi {{amount}} hisobga olingan",
     "surchargeNote": "Ustama {{amount}} hisobga olingan",
+    "serviceChargeNote": "Xizmat haqi {{amount}} hisobga olingan",
     "promoTitle": "Promokod",
     "promoPlaceholder": "Kodni kiriting",
     "promoApply": "Qo'llash",

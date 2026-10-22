@@ -169,6 +169,7 @@
     "offerDiscount": "Aksiya",
     "deliveryOfferNote": "Yetkazib berish chegirmasi {{amount}} hisobga olingan",
     "surchargeNote": "Ustama {{amount}} hisobga olingan",
+    "serviceChargeNote": "Xizmat haqi {{amount}} hisobga olingan",
     "giftOffer": {
       "title": "Sizni sovg'a kutmoqda",
       "choose": "Sovg'angizni tanlang",
