@@ -1,10 +1,16 @@
 # ADR 0185: A points redemption is taken at checkout and at order entry, and never recorded after
 
 - Decision status: Accepted — proposed by Claude (batch 21); accepted by the platform owner 2026-10-14
-- Implementation status: Partial — in progress (batch 21, wave `w12-money`). The record decides a
-  decline, so what it asks of a build is the producers that make the decline livable and nothing
-  that records a redemption late. Written first; the producers land with this wave and the status
-  line is advanced when they are proved.
+- Implementation status: Built (batch 21, wave `w12-money`, 2026-10-23). The decline stands: no command,
+  endpoint or console action adds a points tender to a settlement that already exists, and none was
+  written. The producers that make it livable exist and are tested: the money leg follows
+  `CHANGE_PAYMENT_METHOD` (`OrderSettlementPort.replanMoneyLeg`), a customer's cart offer and its
+  operations twin (`RedemptionOfferPort`, answered by loyalty), a customer's own balance, an
+  operator-taken order that redeems at entry with the operator's attestation, the New order console's
+  points control with the cash to collect, and the pay-with-points control and the order split in
+  both storefronts. One dependency is not this record's: for a provider-paid order the receipt lines
+  come from the fiscal line builder of wave `w11`, and this wave was built against the bridge as it
+  stood.
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: proposed by Claude (batch 21); Ayubkhon Abbosov (platform owner) decides
@@ -185,12 +191,12 @@ called. Rolling back is removing the endpoints; no migration is needed.
 ## Implementation checklist
 
 - [x] The decision is written first, as a decline with its trigger.
-- [ ] The money leg follows a payment-method change (`CHANGE_PAYMENT_METHOD` to a provider).
-- [ ] The customer's cart offer and its operations twin.
-- [ ] A customer reads their own points balance.
-- [ ] An operator-taken order carries a redemption at order entry.
-- [ ] The New order console's points control and cash-to-collect preview.
-- [ ] Both storefronts' pay-with-points control and the split on the order page.
+- [x] The money leg follows a payment-method change (`CHANGE_PAYMENT_METHOD` to a provider).
+- [x] The customer's cart offer and its operations twin.
+- [x] A customer reads their own points balance.
+- [x] An operator-taken order carries a redemption at order entry.
+- [x] The New order console's points control and cash-to-collect preview.
+- [x] Both storefronts' pay-with-points control and the split on the order page.
 
 ## Exit criteria
 

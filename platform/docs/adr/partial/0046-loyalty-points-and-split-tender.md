@@ -818,7 +818,7 @@ recomputing today's accrual rules.
 
 ### 2026-10-14 — a redemption is never recorded after checkout
 
-[ADR 0185](0185-a-redemption-is-taken-at-checkout-and-order-entry-never-recorded-after.md)
+[ADR 0185](../built/0185-a-redemption-is-taken-at-checkout-and-order-entry-never-recorded-after.md)
 declines a loyalty-redemption leg recorded after checkout and names what stands instead: the
 redemption stays inside checkout and operator order entry, as this record decides, and the console
 and both storefronts offer it there, never after. This record's Decision, Alternatives and
