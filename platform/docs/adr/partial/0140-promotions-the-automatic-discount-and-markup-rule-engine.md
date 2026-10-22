@@ -47,12 +47,16 @@
   (`V0669`), authored in the editor and shown by both storefronts in the customer's language with the
   kind of benefit as the fallback; the order-level markup and a `SERVICE_CHARGE` line (stage 5 of the
   engine, inside `fees`, with no tax share yet) **dark** behind `pricing.order_markup.enabled`, enforced
-  at authoring, at input resolution and at evaluation (`V0670`); and the console's re-quote panel on the
-  order pane with its re-check. **Not built:** switching the service charge on, which waits on finance
-  and counsel (the fiscal receipt line and tax classifier of a service line, whether a
-  payment-method-dependent surcharge is lawful), the dine-in session-rate feed that would supply a
-  rate, a surcharge wording for the order-level markup on the storefronts, and fee reports that would
-  count the charge in `fee_minor`; a polygon geozone (a delivery-zone condition matches by zone id).
+  at authoring, at input resolution and at evaluation (`V0670`), told to the customer by both
+  storefronts as «service charge» (the `SERVICE_CHARGE` effect of the applied-promotion read model) and
+  named in words by the console's simulator; and the console's re-quote panel on the order pane with
+  its re-check. **Not built:** switching the service charge on, which waits on finance and counsel
+  (the fiscal receipt line and tax classifier of a service line, whether a payment-method-dependent
+  surcharge is lawful), the dine-in session-rate feed that would supply a rate (ADR 0047: nothing
+  computes a charge from `dinein.location_settings.service_charge_rate_bp` yet, and a charge for a
+  table's round needs the cart's table binding read at quote time across `dinein`, `ordering` and
+  `pricing`), and fee reports that would count the charge apart from the delivery fee inside
+  `fee_minor`; a polygon geozone (a delivery-zone condition matches by zone id).
   **Declined for v1 by ADR 0181:** named-customer targeting (D11; revisit when a static audience is
   built), a customer-facing acceptance flow with a payment delta for a changed scheduled-order
   re-quote (D12: the findings stay evidence an operator acts on, at the confirmation and the kitchen

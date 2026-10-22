@@ -110,7 +110,13 @@ public record AppliedPromotions(
         /** Taken off the delivery charge; already reflected in {@code feeMinor}. */
         DELIVERY_DISCOUNT,
         /** Added to the goods by a markup; already reflected in the subtotal. */
-        SURCHARGE
+        SURCHARGE,
+        /**
+         * Added to the order by an order-level markup (ADR 0140, stage 5): a service charge computed on the goods
+         * after the discounts. Already reflected in the fees, never in the subtotal, so a customer reads it as a
+         * caption and not as a line that adds.
+         */
+        SERVICE_CHARGE
     }
 
     /**

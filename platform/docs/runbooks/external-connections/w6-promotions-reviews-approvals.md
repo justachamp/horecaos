@@ -33,8 +33,13 @@ settable at `PLATFORM` and `TENANT` only; it is not shown on the tenant's own Se
 - The fiscal receipt has no line or tax classifier for a service charge. The charge would travel inside the
   delivery-fee figure the receipt builder reads.
 - Fee reports count the charge in `fee_minor`, so a delivery-fee figure would include it.
-- The dine-in session-rate feed that would supply a rate for a table is not built.
-- The storefronts have no «service charge» wording for the order-level markup (they say «surcharge»).
+- The dine-in session-rate feed that would supply a rate for a table is not built: ADR 0047 says nothing
+  computes a charge from `dinein.location_settings.service_charge_rate_bp` (every session pins it), and doing
+  so needs the cart's table binding read at quote time across `dinein`, `ordering` and `pricing`. The order-level
+  markup is the only producer of a service charge today.
+- The storefronts say «service charge» for it as a caption (`cart.serviceChargeNote`: «Includes a service charge
+  of …»); the delivery row of a delivery cart reads the delivery charge on its own, so the charge is not folded
+  into it, but a pickup cart's total simply includes it, with the caption as the only explanation.
 
 **Where the value goes.** Finance supplies: the classifier code (ИКПУ/MXIK) and VAT treatment of a service
 line, and whether the line is separate on the fiscal receipt or inside the item lines. When answered, the

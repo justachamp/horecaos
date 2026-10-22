@@ -216,6 +216,51 @@ class AppliedPromotionTests {
         assertThat(result.applied()).containsExactly(new Applied(Source.AUTOMATIC, Effect.SURCHARGE, 9_000L));
     }
 
+    @Test
+    @DisplayName("an order-level service charge is a SERVICE_CHARGE entry: told to the customer, never a discount "
+            + "and never mistaken for a product surcharge")
+    void aServiceChargeIsItsOwnEffect() {
+        var serviceConfiguration = new PromotionDbFixture(
+                db,
+                TASHKENT_LUNCH,
+                Map.of(
+                        "pricing.order_markup.enabled", true,
+                        "pricing.promotion.approval.always_for_markup", false));
+        serviceConfiguration.activate(new PromotionDefinition(
+                "SERVICE10",
+                "Service charge",
+                Promotion.Kind.MARKUP,
+                Promotion.Scope.ORDER,
+                "service",
+                false,
+                0,
+                false,
+                null,
+                "UZS",
+                null,
+                null,
+                null,
+                null,
+                Promotion.LoyaltyAccrual.ACCRUE,
+                Promotion.LoyaltyRedemption.ALLOW,
+                List.of(),
+                List.of(action(1, Promotion.Action.Type.ORDER_PERCENTAGE_MARKUP, "basisPoints", 1_000L))));
+        Quote quote = serviceConfiguration.quotes.quote(
+                serviceConfiguration.cart(Map.of(serviceConfiguration.margheritaVariant, 2)));
+
+        var service = new AppliedPromotionService(
+                serviceConfiguration.pricingStore,
+                serviceConfiguration.promoCodeStore,
+                new PromoCodeEligibilityService(serviceConfiguration.promoCodeStore),
+                serviceConfiguration.clock);
+        AppliedPromotions result = service.describe(TENANT, quote.quoteId(), null);
+
+        // 2 x 45 000 = 90 000 goods; a 10% charge is 9 000, inside the fees and not the discount.
+        assertThat(quote.fees().minor()).isEqualTo(9_000L);
+        assertThat(quote.discount().minor()).isZero();
+        assertThat(result.applied()).containsExactly(new Applied(Source.AUTOMATIC, Effect.SERVICE_CHARGE, 9_000L));
+    }
+
     // ------------------------------------------------------------ gift offers
 
     @Test

@@ -1195,7 +1195,7 @@ public class StorefrontOrderingController {
     }
 
     /**
-     * @param feeMinor total fees — today, always the ADR 0037 delivery charge —
+     * @param feeMinor total fees — the ADR 0037 delivery charge and, once ADR 0140's order-level markup is switched on, its service charge —
      *                 already folded into {@code totalMinor}
      * @param delivery present only for a {@code DELIVERY} cart whose destination
      *                 has been priced; absent for a {@code PICKUP} cart and for
@@ -1295,8 +1295,11 @@ public class StorefrontOrderingController {
      * @param source      {@code AUTOMATIC} or {@code PROMO_CODE}
      * @param effect      {@code DISCOUNT} (taken off the goods, part of {@code
      *                    discountMinor}), {@code DELIVERY_DISCOUNT} (taken off the
-     *                    delivery charge, already in {@code feeMinor}) or {@code
-     *                    SURCHARGE} (added to the goods, already in the subtotal)
+     *                    delivery charge, already in {@code feeMinor}), {@code
+     *                    SURCHARGE} (added to the goods, already in the subtotal) or
+     *                    {@code SERVICE_CHARGE} (an order-level markup added after the
+     *                    discounts, already in {@code feeMinor}; dark until the fiscal
+     *                    answer, ADR 0140)
      * @param amountMinor always positive; the direction is the effect's
      * @param titles      what the marketer wrote for the customer, by locale (ADR 0140); empty when the
      *                    promotion has no wording, and then the entry is described by its kind of benefit.

@@ -149,6 +149,7 @@ public class AppliedPromotionService implements AppliedPromotionPort {
             case "ITEM_DISCOUNT", "ORDER_DISCOUNT" -> Effect.DISCOUNT;
             case "DELIVERY_FEE_BENEFIT" -> Effect.DELIVERY_DISCOUNT;
             case "ITEM_MARKUP" -> Effect.SURCHARGE;
+            case "ORDER_MARKUP" -> Effect.SERVICE_CHARGE;
             default -> null;
         };
     }
