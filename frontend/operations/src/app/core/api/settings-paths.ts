@@ -924,6 +924,19 @@ export const settingsPaths = {
   consentTypes(tenantId: string): string {
     return `${TENANT}/${enc(tenantId)}/consent-types`;
   },
+
+  /** `ConsentTypeController.localeSet` — the union of the tenant's brands' languages the purposes are read in. */
+  consentTypeLocaleSet(tenantId: string): string {
+    return `${TENANT}/${enc(tenantId)}/consent-types/locale-set`;
+  },
+
+  /**
+   * `RetentionWindowController.windows` — what each retention setting does for this tenant: the stored value, the
+   * window the job acts on, the platform floor, and whether it is provisional (ADR 0109, ADR 0029).
+   */
+  retentionWindows(tenantId: string): string {
+    return `${OPERATIONS}/tenants/${enc(tenantId)}/retention-windows`;
+  },
 } as const;
 
 function enc(value: string): string {

@@ -43,7 +43,8 @@ public class JdbcCartFunnelSource implements CartFunnelSource {
     @Override
     @Transactional(readOnly = true)
     public Instant retainedFrom(UUID tenantId) {
-        return clock.instant().minus(Duration.ofDays(retention.effectiveRetentionDays()));
+        return clock.instant()
+                .minus(Duration.ofDays(retention.windowFor(tenantId).effective()));
     }
 
     @Override

@@ -349,6 +349,16 @@ services:
       # against Spring Boot 4.1's relaxed-binding rules, not guessed.
       HORECAOS_CUSTOMERS_VERIFICATION_PRESET_PHONE: ${HORECAOS_VERIFICATION_PRESET_PHONE:-}
       HORECAOS_CUSTOMERS_VERIFICATION_PRESET_CODE: ${HORECAOS_VERIFICATION_PRESET_CODE:-}
+      # ADR 0029's "Provisional retention": the platform refuses to start on a production profile while any retention value
+      # is unconfirmed by legal (ProvisionalRetentionGuard). Confirming is these two lines in the environment file, nothing
+      # else; REPORT_ONLY keeps one deployment going while the signed document is obtained and warns on every start.
+      # platform/docs/runbooks/external-connections/w10-privacy.md has the steps and the way back.
+      HORECAOS_PRIVACY_RETENTION_CONFIRMED: ${HORECAOS_PRIVACY_RETENTION_CONFIRMED:-}
+      HORECAOS_PRIVACY_RETENTION_CONFIRMATION_REFERENCE: ${HORECAOS_PRIVACY_RETENTION_CONFIRMATION_REFERENCE:-}
+      HORECAOS_PRIVACY_RETENTION_CHECK: ${HORECAOS_PRIVACY_RETENTION_CHECK:-AUTO}
+      # Off by default. REPORT_ONLY counts consent decisions recorded under a purpose the tenant has not registered
+      # (horecaos.customers.consent.unregistered_purpose); it never refuses one.
+      HORECAOS_CUSTOMERS_CONSENT_PURPOSE_CHECK: ${HORECAOS_CUSTOMERS_CONSENT_PURPOSE_CHECK:-OFF}
 
       HORECAOS_DB_URL: jdbc:postgresql://platform-db:5432/horecaos
       HORECAOS_DB_USERNAME: horecaos_app

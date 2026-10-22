@@ -46,6 +46,37 @@
                   {{ 'settings.dataPrivacy.retention.source.tenant' | t }}
                 }
               </p>
+              @if (row.window(); as window) {
+                <div class="retention-window" [attr.data-testid]="'retention-window-' + row.code">
+                  <p class="q-caption" data-testid="retention-effective">
+                    {{
+                      'settings.dataPrivacy.retention.effective'
+                        | t: { value: window.effective, unit: unitLabel(window) }
+                    }}
+                  </p>
+                  <p class="q-caption" data-testid="retention-floor">
+                    {{
+                      'settings.dataPrivacy.retention.floor'
+                        | t: { value: window.floor, unit: unitLabel(window) }
+                    }}
+                  </p>
+                  <p class="q-caption">
+                    {{
+                      (window.appliesTo === 'ALL_TENANTS'
+                        ? 'settings.dataPrivacy.retention.scope.allTenants'
+                        : 'settings.dataPrivacy.retention.scope.perTenant'
+                      ) | t
+                    }}
+                  </p>
+                  @if (window.provisional) {
+                    <span
+                      class="status-pill status-pill--pending"
+                      data-testid="retention-provisional"
+                      >{{ 'settings.dataPrivacy.retention.provisional' | t }}</span
+                    >
+                  }
+                </div>
+              }
               @if (row.error(); as message) {
                 <p class="q-caption dialog__error">{{ message }}</p>
               }
@@ -207,7 +238,7 @@
       'notBuilt.body'
         | t
           : {
-              spec: 'ADR 0029 (PII protection) — export, correction, retention-expiry enforcement, legal hold and proof remain the larger privacy-operations surface this wave does not reach',
+              spec: 'ADR 0029 (PII protection) — a data subject’s export and the correction of their data remain the part of the privacy-operations surface not built; erasure, its proof, legal hold and retention are built',
             }
     }}
   </p>

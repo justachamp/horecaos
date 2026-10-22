@@ -1179,7 +1179,7 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
     'HorecaOSʻda ishga qabul yoki nomzodlar uchun maʻlumot modeli yoʻq — bu yerda saqlash uchun hech narsa yoʻq.',
   'settings.dataPrivacy.retention.status.notApplicable': 'Tegishli emas',
   'settings.dataPrivacy.retention.lead':
-    'Har bir maʻlumot turi qancha vaqt saqlanishini belgilang. Quyidagi har bir qiymatni faqat butun platforma uchun oshirish mumkin — qisqaroq qiymat boshqa kompaniyaning maʻlumotini muddatidan oldin hech qachon oʻchirmaydi.',
+    'Har bir maʻlumot turi qancha vaqt saqlanishini belgilang. Qiymat ostida platforma uni kompaniyangiz uchun nima qilayotgani koʻrsatiladi: tozalash hozir qoʻllaydigan muddat va platformaning pastki chegarasi — juda qisqa qiymat shu chegaragacha koʻtariladi. Tashlab ketilgan savatlar va tasdiqlanmagan kuryer arizalari sizning muddatingiz boʻyicha tozalanadi; kuryer joylashuvi tarixi barcha kompaniyalar uchun umumiy, shuning uchun ularga kerak boʻlgan eng uzun muddat boʻyicha tozalanadi.',
   'settings.dataPrivacy.retention.column.value': 'Joriy qiymat',
   'settings.dataPrivacy.retention.column.enforcedBy': 'Kim amalga oshiradi',
   'settings.dataPrivacy.retention.unit.days': 'kun',
@@ -1195,6 +1195,13 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.dataPrivacy.retention.invalidValue': 'Noldan katta butun son kiriting',
   'settings.dataPrivacy.retention.staleVersion':
     'Boshqa kimdir bu qiymatni allaqachon oʻzgartirdi — joriy qiymat koʻrsatilgan; hali ham kerak boʻlsa, qayta oʻzgartiring.',
+  'settings.dataPrivacy.retention.effective': 'Kompaniyangiz uchun amalda: {value} {unit}',
+  'settings.dataPrivacy.retention.floor':
+    'Platformaning pastki chegarasi: {value} {unit}. Kichikroq qiymat shu chegaragacha koʻtariladi.',
+  'settings.dataPrivacy.retention.scope.perTenant': 'Faqat kompaniyangizga tegishli.',
+  'settings.dataPrivacy.retention.scope.allTenants':
+    'Barcha kompaniyalar uchun umumiy muddat: kuryer tarixi hamma kompaniyalar maʻlumoti birga turadigan kunlik boʻlimlarda saqlanadi, shuning uchun boʻlim kerak boʻlgan eng uzun muddat boʻyicha oʻchiriladi. Bu yerdagi qisqaroq qiymat uni qisqartirmaydi.',
+  'settings.dataPrivacy.retention.provisional': 'Dastlabki qiymat — yuristlar tasdigʻini kutmoqda',
   'settings.dataPrivacy.consent.title': 'Rozilik',
   'settings.dataPrivacy.consent.lead':
     'Rozilik qarori bugun mijozning oʻz hisobida nimani qayd eta oladi.',
@@ -1380,6 +1387,28 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
     'Nuqtani filial eshigiga olib keling: xaritani bosing, nuqtani sudrang yoki koordinatalarni kiriting. Nuqta faqat siz surgan boʻlsangiz saqlanadi; filial nuqtasini koʻchirish mumkin, oʻchirib boʻlmaydi.',
   'settings.dataPrivacy.egress.action.orderMapPointsRevealed':
     'Kunlik yetkazib berish nuqtalari xaritada ochildi',
+  'settings.dataPrivacy.egress.action.leadRevealed':
+    'Qoʻngʻiroq markazidan qoʻngʻiroq qilgan odamning ismi yoki raqami koʻrsatildi',
+  'settings.dataPrivacy.egress.action.redemptionCustomerRevealed':
+    'Aksiyadan kim foydalangani koʻrsatildi',
+  'settings.dataPrivacy.egress.action.dropoffRevealed':
+    'Guruhlangan buyurtmalarning yetkazish manzillari koʻrsatildi',
+  'settings.dataPrivacy.egress.action.courierCustomerLocationRevealed':
+    'Kuryerga mijozning joylashuvi koʻrsatildi',
+  'settings.dataPrivacy.egress.action.fiscalEvidenceRevealed':
+    'Fiskal chekning saqlangan soʻrovi yoki javobi koʻrsatildi',
+  'settings.dataPrivacy.egress.action.reservationGuestRevealed':
+    'Bron mehmonining ismi yoki raqami koʻrsatildi',
+  'settings.dataPrivacy.egress.action.callerNumberRevealed':
+    'Qoʻngʻiroq kartochkasida qoʻngʻiroq qiluvchining raqami koʻrsatildi',
+  'settings.dataPrivacy.egress.action.reportExported': 'Hisobot yuklab olindi',
+  'settings.dataPrivacy.egress.action.courierTrackRevealed': 'Kuryer treki koʻrsatildi',
+  'settings.dataPrivacy.egress.action.courierRegistrationRevealed':
+    'Kuryerning roʻyxatdan oʻtish raqami koʻrsatildi',
+  'settings.dataPrivacy.egress.action.courierComplianceRevealed':
+    'Kuryerning hujjatlari koʻrsatildi',
+  'settings.dataPrivacy.egress.action.invitationRecipientRevealed':
+    'Taklif kimga yuborilgani koʻrsatildi',
 
   // Chat assistant (ADR 0069).
   'settings.nav.assistant': 'Chat yordamchisi',

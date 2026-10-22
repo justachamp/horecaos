@@ -27,9 +27,7 @@ const ERASURE_REQUEST: TenantErasureRequest = {
 const CONSENT_TYPE: ConsentType = {
   id: 'consent-1',
   code: 'MARKETING_SMS',
-  labelRu: 'СМС-маркетинг',
-  labelUz: 'SMS marketing',
-  labelEn: 'Marketing SMS',
+  labels: { ru: 'СМС-маркетинг', 'uz-Latn': 'SMS marketing', en: 'Marketing SMS' },
   description: null,
   channelSpecific: true,
   policyVersion: '1',
@@ -94,5 +92,39 @@ describe('DataPrivacyApi', () => {
     request.flush([CONSENT_TYPE]);
 
     expect(await promise).toEqual([CONSENT_TYPE]);
+  });
+
+  it('reads the languages a purpose is worded in from the consent-type controller’s locale-set route', async () => {
+    const promise = api.consentLocaleSet('t1');
+    const request = http.expectOne(
+      (candidate) => candidate.url === url('/api/v1/tenants/t1/consent-types/locale-set'),
+    );
+    expect(request.request.method).toBe('GET');
+    const set = { locales: ['ru', 'en'], defaultLocale: 'ru', configured: true };
+    request.flush(set);
+
+    expect(await promise).toEqual(set);
+  });
+
+  it('reads what each retention setting does from RetentionWindowController’s operations route', async () => {
+    const promise = api.retentionWindows('t1');
+    const request = http.expectOne(
+      (candidate) => candidate.url === url('/api/v1/operations/tenants/t1/retention-windows'),
+    );
+    expect(request.request.method).toBe('GET');
+    const window = {
+      code: 'ordering.cart_retention_days',
+      unit: 'DAYS',
+      platformDefault: 90,
+      floor: 1,
+      configured: 30,
+      effective: 30,
+      appliesTo: 'PER_TENANT',
+      enforcedBy: 'CartRetentionSweeper',
+      provisional: true,
+    };
+    request.flush([window]);
+
+    expect(await promise).toEqual([window]);
   });
 });

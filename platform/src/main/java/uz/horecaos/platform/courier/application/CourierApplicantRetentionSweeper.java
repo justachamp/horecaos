@@ -20,6 +20,11 @@ import uz.horecaos.platform.audit.api.AuditClass;
 import uz.horecaos.platform.audit.api.AuditFact;
 import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
+import uz.horecaos.platform.configuration.RetentionWindow;
+import uz.horecaos.platform.configuration.RetentionWindow.Scope;
+import uz.horecaos.platform.configuration.RetentionWindow.Unit;
+import uz.horecaos.platform.configuration.RetentionWindowProvider;
+import uz.horecaos.platform.configuration.TenantRetention;
 import uz.horecaos.platform.courier.api.CourierConfigurationKeys;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore;
 import uz.horecaos.platform.courier.infrastructure.persistence.JdbcCourierStore.ApplicantRef;
@@ -30,48 +35,50 @@ import uz.horecaos.platform.iam.api.protection.FieldProtection;
 /**
  * Erases courier applicants nobody verified (ADR 0092, decided 2026-09-11).
  *
- * <p>The decision was twelve months after an applicant is accepted or
- * rejected. The courier module has no rejection step: an application is
- * registered, and then either verified or left. An accepted applicant becomes
- * a courier whose record is their settlement history, kept for as long as
- * that history is. So the rule this enforces is the one the data supports: a
- * courier never verified, never on a shift, never paid, and untouched for
- * twelve months is a dead application, and their name -- the only personal
- * value an unverified application holds -- is overwritten with a tombstone,
- * the courier archived and their engagement ended. Each erasure is audited;
- * the log carries a count.
+ * <p>The decision was twelve months after an applicant is accepted or rejected. The courier module has no rejection step: an
+ * application is registered, and then either verified or left. An accepted applicant becomes a courier whose record is their
+ * settlement history, kept for as long as that history is. So the rule this enforces is the one the data supports: a courier
+ * never verified, never on a shift, never paid, and untouched for a full window is a dead application, and their name -- the
+ * only personal value an unverified application holds -- is overwritten with a tombstone, the courier archived and their
+ * engagement ended. Each erasure is audited; the log carries a count.
  *
- * <p><strong>Tenant self-service since ADR 0109 (Settings 10.11).</strong> One
- * pass sweeps every tenant's applicants, so it cannot honour a different
- * window per tenant directly; it sweeps on the longer of the platform default
- * and the largest value any tenant configured through {@link
- * CourierConfigurationKeys#APPLICANT_RETENTION_MONTHS}, the same rule {@code
- * CartRetentionSweeper.effectiveRetentionDays} and {@code
- * TrackRetentionSweeper.effectiveRetentionDays} already use — a stored value
- * can only lengthen the window, never shorten another tenant's.
+ * <p><strong>Each tenant is swept on its own window (ADR 0109, batch 21).</strong> The window is the tenant's own {@link
+ * CourierConfigurationKeys#APPLICANT_RETENTION_MONTHS} value, else the platform's, else {@code
+ * horecaos.courier.applicant-retention.months}, raised to {@link CourierConfigurationKeys#APPLICANT_RETENTION_FLOOR_MONTHS}.
+ * It used to be the longer of the platform default and the largest tenant value, so a tenant that asked for six months kept
+ * twelve without being told; a shorter window is now honoured and one tenant's choice no longer decides another's.
+ *
+ * <p>Destructive, so it can be started in report-only mode ({@code
+ * horecaos.courier.applicant-retention.report-only}): it counts what it would erase and erases nothing (ADR 0029).
  */
 @Component
-public class CourierApplicantRetentionSweeper {
+public class CourierApplicantRetentionSweeper implements RetentionWindowProvider {
 
     private static final Logger log = LoggerFactory.getLogger(CourierApplicantRetentionSweeper.class);
 
     private final Eraser eraser;
     private final JdbcClient jdbc;
+    private final JdbcCourierStore couriers;
     private final Clock clock;
-    private final int configuredRetentionMonths;
+    private final int defaultRetentionMonths;
     private final int batchSize;
+    private final boolean reportOnly;
 
     public CourierApplicantRetentionSweeper(
             Eraser eraser,
             JdbcClient jdbc,
+            JdbcCourierStore couriers,
             Clock clock,
             @Value("${horecaos.courier.applicant-retention.months:12}") int retentionMonths,
-            @Value("${horecaos.courier.applicant-retention.batch-size:100}") int batchSize) {
+            @Value("${horecaos.courier.applicant-retention.batch-size:100}") int batchSize,
+            @Value("${horecaos.courier.applicant-retention.report-only:false}") boolean reportOnly) {
         this.eraser = eraser;
         this.jdbc = jdbc;
+        this.couriers = couriers;
         this.clock = clock;
-        this.configuredRetentionMonths = retentionMonths;
+        this.defaultRetentionMonths = retentionMonths;
         this.batchSize = batchSize;
+        this.reportOnly = reportOnly;
     }
 
     @Scheduled(
@@ -88,9 +95,17 @@ public class CourierApplicantRetentionSweeper {
     /** @return how many applicants this pass erased, for a deterministic test */
     public int runOnce() {
         Instant now = clock.instant();
-        int retentionMonths = effectiveRetentionMonths();
-        Instant cutoff = now.atZone(ZoneOffset.UTC).minusMonths(retentionMonths).toInstant();
-        int erased = eraser.eraseBatch(cutoff, batchSize, now);
+        if (reportOnly) {
+            int wouldErase = couriers.countUnverifiedApplicants(now, defaultRetentionMonths, floorMonths());
+            if (wouldErase > 0) {
+                log.info(
+                        "Courier applicant retention sweep is report-only: {} unverified applicants are past their "
+                                + "tenant's window and would be erased",
+                        wouldErase);
+            }
+            return 0;
+        }
+        int erased = eraser.eraseBatch(batchSize, defaultRetentionMonths, floorMonths(), now);
         if (erased > 0) {
             log.info("Courier applicant retention sweep: {} unverified applicants erased", erased);
         }
@@ -98,23 +113,30 @@ public class CourierApplicantRetentionSweeper {
     }
 
     /**
-     * The platform default, or the longest value any tenant configured,
-     * whichever is greater — see this class's own doc for why a single sweep
-     * cannot simply resolve one tenant's value.
+     * The window this job applies to one tenant's applicants: its own months, else the platform's, else the default, raised
+     * to the floor. Read the way the sweep reads it.
      */
-    int effectiveRetentionMonths() {
-        Long longest = jdbc.sql("""
-                        SELECT max(integer_value) FROM tenant.configuration_values
-                         WHERE key_code = :keyCode AND is_explicit_null = false
-                        """)
-                .param("keyCode", CourierConfigurationKeys.APPLICANT_RETENTION_MONTHS_CODE)
-                .query(Long.class)
-                .optional()
-                .orElse(null);
+    @Override
+    public RetentionWindow windowFor(UUID tenantId) {
+        TenantRetention.Reading reading = TenantRetention.read(
+                jdbc,
+                tenantId,
+                CourierConfigurationKeys.APPLICANT_RETENTION_MONTHS_CODE,
+                defaultRetentionMonths,
+                floorMonths());
+        return new RetentionWindow(
+                CourierConfigurationKeys.APPLICANT_RETENTION_MONTHS_CODE,
+                Unit.MONTHS,
+                defaultRetentionMonths,
+                floorMonths(),
+                reading.configured(),
+                reading.effective(),
+                Scope.PER_TENANT,
+                CourierApplicantRetentionSweeper.class.getSimpleName());
+    }
 
-        return longest == null
-                ? configuredRetentionMonths
-                : Math.max(configuredRetentionMonths, Math.toIntExact(longest));
+    private static int floorMonths() {
+        return CourierConfigurationKeys.APPLICANT_RETENTION_FLOOR_MONTHS;
     }
 
     /**
@@ -140,8 +162,8 @@ public class CourierApplicantRetentionSweeper {
         }
 
         @Transactional
-        public int eraseBatch(Instant cutoff, int batchSize, Instant now) {
-            List<ApplicantRef> claimed = couriers.claimUnverifiedApplicants(cutoff, batchSize);
+        public int eraseBatch(int batchSize, int defaultMonths, int floorMonths, Instant now) {
+            List<ApplicantRef> claimed = couriers.claimUnverifiedApplicants(now, batchSize, defaultMonths, floorMonths);
             LocalDate today = LocalDate.ofInstant(now, ZoneOffset.UTC);
             String correlationId = UUID.randomUUID().toString();
             for (ApplicantRef applicant : claimed) {

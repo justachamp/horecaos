@@ -400,15 +400,25 @@ public final class OrderingConfigurationKeys {
             .build();
 
     /**
+     * The shortest abandoned-cart window the platform acts on (days). A value below it is raised to it. One day is the
+     * smallest whole window, and it is also what keeps the sweep clear of a cart that is still live: the sweep deletes only
+     * a cart whose own {@code expires_at} has passed too, so even this floor cannot reach a cart a customer can still check out.
+     * Provisional until legal sets the periods (ADR 0029), like the default.
+     */
+    public static final int CART_RETENTION_FLOOR_DAYS = 1;
+
+    /**
      * Days an abandoned cart is kept before {@code CartRetentionSweeper}
      * deletes it (ADR 0092). Ninety, matching that class's own {@code
      * @Value} default exactly — the same "a wired key's default is the live
      * value" discipline {@link #CART_EXPIRY_MINUTES} follows. Settable at the
-     * platform and per tenant, and only ever lengthened: {@code
-     * CartRetentionSweeper} sweeps on the longer of the platform default and
-     * the largest tenant-configured value, the same rule {@code
-     * TrackRetentionSweeper.effectiveRetentionDays} already uses, because a
-     * shorter stored value must never delete another tenant's cart early.
+     * platform and per tenant, and honoured per tenant since batch 21: {@code
+     * CartRetentionSweeper} resolves the window for each tenant (its own value,
+     * else the platform's, else this default), raised to {@link
+     * #CART_RETENTION_FLOOR_DAYS}, so a tenant that sets thirty days has its
+     * carts deleted at thirty and one that sets 180 keeps them for 180. It used
+     * to sweep on the longer of the platform default and the largest tenant
+     * value, which silently ignored a shorter one (ADR 0109).
      */
     public static final ConfigurationKey<Integer> CART_RETENTION_DAYS = ConfigurationKey.of(
                     CART_RETENTION_DAYS_CODE, Integer.class)

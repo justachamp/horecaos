@@ -380,6 +380,31 @@ class AuditQueryAndPartitionTests {
                 """).param("table", table).query(Boolean.class).single();
     }
 
+    /**
+     * Settings 10.11: the merchant's egress log reads the registry, not a list of its own. A reveal the console's old
+     * hand-kept list had never heard of (a lead's number) is returned, and the security events around it are not, so a
+     * page of two hundred is two hundred egress events and not two hundred of anything.
+     */
+    @Test
+    void thePiiEgressFilterReturnsTheRegisteredActionsAndNothingElse() {
+        record("customer.lead.revealed", TENANT, "operator-1");
+        record("dinein.reservation.guest_revealed", TENANT, "operator-1");
+        record("customer.erasure.requested", TENANT, "operator-1");
+        record("tenant.suspended", TENANT, "operator-1");
+        record("customer.lead.revealed", OTHER_TENANT, "operator-2");
+
+        var egress = queries.search(new AuditQueryService.AuditQuery(
+                TENANT, null, null, null, null, null, null, null, null, null, null, null, null, true));
+
+        assertThat(egress)
+                .extracting(AuditQueryService.AuditEventView::actionCode)
+                .containsExactlyInAnyOrder("customer.lead.revealed", "dinein.reservation.guest_revealed");
+        assertThat(queries.search(new AuditQueryService.AuditQuery(
+                        TENANT, null, null, null, null, null, null, null, null, null, null, null, null, false)))
+                .as("without the filter nothing is narrowed")
+                .hasSize(4);
+    }
+
     private void record(String actionCode, UUID tenantId, String actor) {
         recorder.record(AuditFact.of(actionCode, AuditClass.BUSINESS)
                 .by(ActorRef.user(actor, null))

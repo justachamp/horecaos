@@ -1166,7 +1166,7 @@ export const settingsEn = {
     'HorecaOS has no recruitment or candidate data model — there is nothing here to retain.',
   'settings.dataPrivacy.retention.status.notApplicable': 'Not applicable',
   'settings.dataPrivacy.retention.lead':
-    'Set how long each kind of data is kept. Every value below can only ever be raised for the whole platform by a shorter one you set — the sweep never deletes another tenant’s data early.',
+    'Set how long each kind of data is kept. Under each value the card shows what the platform actually does with it for your company: the window the schedule uses now, and the platform floor a value below it is raised to. Abandoned carts and unverified courier applicants are cleared on your own window; courier location history is shared by every company, so it is cleared on the longest window any of them needs.',
   'settings.dataPrivacy.retention.column.value': 'Current value',
   'settings.dataPrivacy.retention.column.enforcedBy': 'Enforced by',
   'settings.dataPrivacy.retention.unit.days': 'days',
@@ -1182,6 +1182,13 @@ export const settingsEn = {
   'settings.dataPrivacy.retention.invalidValue': 'Enter a whole number greater than zero',
   'settings.dataPrivacy.retention.staleVersion':
     'Somebody else changed this value first — the current value is shown; change it again if you still want to.',
+  'settings.dataPrivacy.retention.effective': 'In force for your company: {value} {unit}',
+  'settings.dataPrivacy.retention.floor':
+    'Platform floor: {value} {unit}. A lower value is raised to it.',
+  'settings.dataPrivacy.retention.scope.perTenant': 'Applies to your company only.',
+  'settings.dataPrivacy.retention.scope.allTenants':
+    'Shared with every company: courier history is stored in daily partitions that hold all of them, so a partition is dropped on the longest window any company needs. A shorter value here does not shorten it.',
+  'settings.dataPrivacy.retention.provisional': 'Provisional — awaiting legal confirmation',
   'settings.dataPrivacy.consent.title': 'Consent',
   'settings.dataPrivacy.consent.lead':
     'What a consent decision can record today, on a customer’s own account.',
@@ -1367,6 +1374,27 @@ export const settingsEn = {
     "Move the pin to the branch's door: click the map, drag the pin or type the coordinates. The point is saved only if you moved it, and a branch's pin can be moved but not removed.",
   'settings.dataPrivacy.egress.action.orderMapPointsRevealed':
     "Opened the day's delivery points on a map",
+  'settings.dataPrivacy.egress.action.leadRevealed':
+    'Revealed a caller’s name or number from the call desk',
+  'settings.dataPrivacy.egress.action.redemptionCustomerRevealed':
+    'Revealed who redeemed a promotion',
+  'settings.dataPrivacy.egress.action.dropoffRevealed':
+    'Revealed the drop-off addresses of grouped orders',
+  'settings.dataPrivacy.egress.action.courierCustomerLocationRevealed':
+    'A courier was shown a customer’s location',
+  'settings.dataPrivacy.egress.action.fiscalEvidenceRevealed':
+    'Revealed the stored request or response of a fiscal receipt',
+  'settings.dataPrivacy.egress.action.reservationGuestRevealed':
+    'Revealed a booking guest’s name or number',
+  'settings.dataPrivacy.egress.action.callerNumberRevealed':
+    'Revealed a caller’s number on the call card',
+  'settings.dataPrivacy.egress.action.reportExported': 'Exported a report',
+  'settings.dataPrivacy.egress.action.courierTrackRevealed': 'Revealed a courier’s track',
+  'settings.dataPrivacy.egress.action.courierRegistrationRevealed':
+    'Revealed a courier’s registration reference',
+  'settings.dataPrivacy.egress.action.courierComplianceRevealed': 'Revealed a courier’s documents',
+  'settings.dataPrivacy.egress.action.invitationRecipientRevealed':
+    'Revealed who an invitation was sent to',
 
   // Chat assistant (ADR 0069).
   'settings.nav.assistant': 'Chat assistant',
