@@ -846,3 +846,19 @@ collecting. Still unbuilt and still this record's rollout order: the courier tra
 and the recorded acknowledgement that must exist before ingest is switched on for a real tenant
 (the wording is external), and the visible on-duty indicator and the wake-locked sender in the courier
 app (client part 2).
+
+## Status addition (2026-10-23)
+
+The courier-side pieces this record named and left for the courier app now exist, under
+[ADR 0179](../partial/0179-the-courier-client.md), and nothing above is changed. The courier app
+(`frontend/courier`) shows the **visible on-duty indicator** on every screen while a duty session is
+open, holds a **screen wake lock** and runs the **sender** at the cadence the platform returns (it
+samples at most once in five seconds, keeps its readings through an outage, stops when the platform
+answers `NO_OPEN_DUTY_SESSION`, and says in words when the screen going to sleep has stopped the
+position). It ships a **versioned notice screen with a clearly marked draft text**, refuses to go on
+duty or send a position until the courier has acknowledged it, and the platform records each
+acknowledgement as an audit fact (`courier.telemetry_notice.acknowledged`, naming the courier, the
+version and the time). The platform records the acknowledgement and does not refuse a session
+without one. **Still unbuilt, and still this record's rollout order:** the notice's wording, which
+is the tenant's and counsel's; until it replaces the draft and the version changes, ingest is not to
+be switched on for a real tenant.

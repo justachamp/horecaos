@@ -1,30 +1,31 @@
 # ADR 0179: The courier client
 
 - Decision status: Accepted — proposed by Claude (batch 21); accepted by the platform owner 2026-10-14
-- Implementation status: Partial — the client exists and signs a courier in, and the platform
-  finally has the courier's own surface a client needs; the screens that make a courier
-  useful are not built. `frontend/courier` is an Angular 21 PWA with Authorization Code +
-  PKCE as a public client (`OidcClient`, `AuthService`: discovery with the issuer and
-  endpoint-origin checks, `state`, `nonce`, RFC 9207 `iss`, single-flight refresh, tokens in
-  memory only), the shell, a Today screen fed by `GET /api/v1/courier/tenants/{tenantId}/me`,
-  a profile, ru / uz-Latn / en catalogues split by area, an installable service-worker shell
-  whose update is offered and never applied behind the courier's back, a Dockerfile and nginx
-  with a runtime `config.json`, the `horecaos-courier` entry in the publish matrix and a
-  `frontend-build` leg with its token-drift step. The platform has a `courier` OpenAPI group of
-  its own (`OpenApiSurface.COURIER`, its baseline and generated client), `CourierSelfController`
-  (`GET .../me`: branches, open shift, duty state, registration status),
-  `CourierSelfDutyController` (the courier's own duty session and observation batch, over the
-  new `telemetry.api.CourierDutyPort`), the capabilities `courier.self.read` and
-  `courier.telemetry`, and the tie ADR 0045 stated and nothing built: a shift now tells its duty
-  session when a break starts and ends and when the shift ends, whoever ends it
-  (`DutySessionLifecyclePort`). `platform/infra/keycloak/create-courier-login-client.sh` creates
-  the public client with exact redirects, run twice and a full PKCE round trip proven against
-  a real Keycloak 26.7.0. What is not built: shift open/close/break screens, the duty indicator
-  and the telemetry sender with its wake lock (client part 2), the courier transparency notice
-  and the recorded acknowledgement that gate switching ingest on (part 2; the wording is
-  external), offers and deliveries (part 3), real-handset acceptance and a pre-production
-  Keycloak client and courier account (external), and a push channel for offers (ADR 0020), so
-  offers are polled.
+- Implementation status: Partial — everything the code can do is built; what remains is not
+  code. `frontend/courier` is an Angular 21 PWA with Authorization Code + PKCE as a public
+  client (`OidcClient`, `AuthService`: discovery with the issuer and endpoint-origin checks,
+  `state`, `nonce`, RFC 9207 `iss`, single-flight refresh, tokens in memory only), an installable
+  service-worker shell whose update is offered and never applied behind the courier's back, ru /
+  uz-Latn / en catalogues split by area and loaded by route, a Dockerfile and nginx with a runtime
+  `config.json`, the `horecaos-courier` entry in the publish matrix and a `frontend-build` leg.
+  The screens: Today (`GET .../me`), **Shift** (open at a branch, take and end a break, close
+  behind a confirmation, declare the cash handed over) with the **duty card** beneath it, the
+  **location notice**, **Offers** (polled), **Deliveries** and one **Delivery** with its steps
+  (arrive, pick up, confirm the cash, hand over) and the customer's address behind an audited
+  tap. A visible on-duty indicator sits under the top bar on every screen while a session is open.
+  The platform has the `courier` OpenAPI group (`OpenApiSurface.COURIER`), `CourierSelfController`
+  (`GET .../me`, `POST .../telemetry-notice-acknowledgements`), `CourierSelfDutyController`
+  (the courier's own duty session and observation batch over `telemetry.api.CourierDutyPort`), the
+  capabilities `courier.self.read` and `courier.telemetry`, and the tie ADR 0045 stated and
+  nothing built: a shift tells its duty session when a break starts and ends and when the shift
+  ends, whoever ends it (`DutySessionLifecyclePort`). `create-courier-login-client.sh` creates
+  the public client with exact redirects, proven by a full PKCE round trip against a real
+  Keycloak 26.7.0. What is not done, and is not the code's to do: acceptance on a real handset,
+  the pre-production Keycloak client, courier account and DNS (the owner,
+  `docs/runbooks/external-connections/w4-courier-client.md`), the notice's final wording (the
+  tenant and counsel; the screen ships a marked draft), the pickup and handover endpoints the gate
+  contract names (the delivery-maps wave builds them; this client is written to them, see
+  "The gates"), and a push channel for offers (ADR 0020), so offers are polled.
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: proposed by Claude (batch 21); Ayubkhon Abbosov (platform owner) decides
@@ -57,10 +58,12 @@
     one-time link by SMS, ADR 0020) is a later record. Blocks: onboarding more than a handful of
     couriers, not the build.
   - **The courier transparency notice** (tenant and counsel, owner: Ayubkhon Abbosov to
-    obtain). ADR 0045 makes it the precondition for switching ingest on. Proposed default:
-    client part 2 ships a versioned notice screen with placeholder text and a recorded
-    acknowledgement, and the courier-self endpoints here are not called by any client until
-    it exists. Blocks: switching telemetry on for a real tenant.
+    obtain). ADR 0045 makes it the precondition for switching ingest on. Taken at the proposed
+    default: the app ships a versioned notice screen with a clearly marked draft text
+    (`NOTICE_VERSION` says `draft`, and the screen carries a banner), refuses to go on duty or
+    send a position until the courier has acknowledged it, and the platform records each
+    acknowledgement as an audit fact. Replacing the text and the version is the whole of the
+    change when the wording arrives. Blocks: switching telemetry on for a real tenant.
   - **Pre-production wiring and a real handset** (platform owner). A phone with GPS, the
     `horecaos-courier` client created in the pre-production realm
     (`HORECAOS_COURIER_ORIGINS` set to the real origins), a courier account, a DNS name and
@@ -159,8 +162,13 @@ Telegram mini app for couriers.**
    tests against that.
 8. **Order of work.** Telemetry ingest ships last (ADR 0045's rollout): the sender, and the
    recorded acknowledgement of the transparency notice that must precede it, are client
-   part 2; the endpoints exist here so part 2 has something to call, and no client calls
-   them before then.
+   part 2. The app refuses to open a duty session or start the sender until the notice is
+   acknowledged, and the acknowledgement is recorded by the platform
+   (`POST .../telemetry-notice-acknowledgements`, an audit fact naming the courier, the notice
+   version and the time; there is no table, an acknowledgement being an event and not a state).
+   **The platform records it; it does not gate on it** — the gate is the app's, so a client
+   that did not ask would be tracked without the record. That is why the revisit trigger
+   below exists.
 
 ## Alternatives considered
 
@@ -174,6 +182,8 @@ Telegram mini app for couriers.**
 | Persist the refresh token (storage or `offline_access`) so a courier signs in once a month | AGENTS.md forbids persisting tokens; a personal phone is lost and shared more often than a till. The cost is the session lifetime above, and it is a configuration the owner can lengthen at the realm | The owner accepts a device-bound credential for this client, ideally with a passkey |
 | A courier-self controller inside `telemetry` | It closes a module cycle: `telemetry` would import `courier.api` for the self-authorization declaration while `courier` already imports `telemetry.api`. Moving the declaration to a neutral module would touch the imports of every courier controller other waves are editing | The declaration moves to a shared module for another reason |
 | A tenant-agnostic `GET /me` that lists a courier's workplaces | Nothing yet has a courier serving two tenants (a courier-service tenant is ADR 0164, not started), and it would be the only courier endpoint without the tenant in its path (ADR 0031). The tenant is configuration of the deployment | A courier genuinely works for more than one tenant on one handset |
+| The platform refuses a duty session until the notice has been acknowledged | It is the stronger guarantee, and it is a refusal added to `POST .../duty-sessions` that every existing test, every staff flow that opens a session for a courier and the telemetry module's own rollout would have to satisfy, for a notice whose wording does not exist yet. The record exists (an audit fact per acknowledgement), so a courier tracked without one is visible; prevention waits for the wording | The wording is agreed and ingest is about to be switched on for a real tenant, or an audit shows a session opened by a courier with no acknowledgement |
+| A table of acknowledgements, read back by `GET /me` so a new phone knows | An acknowledgement is an event, not a state: a table would hold the latest version and lose the history counsel will ask for, and the audit trail is already append-only with its own retention. A new phone asking again is the safe direction to be wrong in | Couriers complain of being asked on every new phone, or a subject-access request needs the current state without reading the trail |
 | Let the courier app send its own `courierId` as the staff batch does | The one parameter through which a courier could post as somebody else. The courier is the token's subject and nothing else | Never |
 
 ## Consequences
@@ -208,6 +218,15 @@ Telegram mini app for couriers.**
 - Tokens in memory mean every reload is a round trip to the identity provider. The identity
   provider is therefore on the courier's critical path in a way it is not for the staff
   consoles.
+- **The acknowledgement is recorded, not enforced, by the platform.** The app will not go on
+  duty without it, but a client that skipped it would be tracked all the same; the platform's
+  record would then show no acknowledgement for that courier, which is evidence of the failure
+  and not a prevention of it. Enforcing it server-side means a refusal in the duty-session open
+  that every existing test and client would have to satisfy.
+- **The pickup and handover calls are written to a contract whose server side is another wave's.**
+  Until it merges they answer `404`; the specs pin both branches of the answer and the paths.
+- **A phone clock that is wrong shows a wrong countdown on an offer.** The countdown is a guide;
+  the platform decides whether an offer is still there.
 - The frontends stay split across Angular 21 (both storefronts, courier) and 22 (operations,
   control-plane); the README already named this debt and a new app on the older line widens
   it by one. It moves with the storefronts.
@@ -233,9 +252,10 @@ Telegram mini app for couriers.**
   reads the track, and a stale or coarse position is absent, not approximate.
 - A deployment serves one tenant's couriers (the tenant is in `config.json`). A second tenant
   is a second container, as with the storefront.
-- The self endpoints exist before the notice does. Nothing calls them until client part 2
-  ships the notice and its acknowledgement, and the ingest rollout stays last; the gap is a
-  matter of sequence inside one wave, not of production.
+- The notice that ships is a draft. The platform has the mechanism (the screen, the version,
+  the recorded acknowledgement, the refusal to collect without it) and not the tenant's words;
+  ingest is not to be switched on for a real tenant until the wording replaces the draft and
+  the version changes. Nothing in the code can make that true, so the runbook says it.
 
 ## Specification
 
@@ -276,6 +296,7 @@ administrator, a courier of another tenant) is answered 404.
 | `POST …/duty-sessions` | `courier.telemetry` | `Idempotency-Key`; `{deviceId}`; refused 409 `NO_OPEN_SHIFT` or `REGISTRATION_LAPSED`; opening twice returns the open session; the gate resolves at the branch |
 | `POST …/duty-sessions/{id}/closures` | `courier.telemetry` | `Idempotency-Key`; only the courier's own open session, otherwise 404 |
 | `POST …/telemetry/observations` | `courier.telemetry` | no courier id in the body; exempt from the key (natural key); 422 `NO_OPEN_DUTY_SESSION` with nothing stored, including a batch for another branch's path; 202 with `suspended` during a break; `nextBatchAfterSeconds` on every answer |
+| `POST /telemetry-notice-acknowledgements` | `courier.telemetry` | tenant level; `Idempotency-Key`; `{version}` is a short identifier (letters, digits, `.`, `_`, `-`, at most 64), never free text; an audit fact `courier.telemetry_notice.acknowledged` (SECURITY) naming the courier, the version and the time; 404 for anyone who is not this tenant's courier |
 | the shift, break, close, cash-declaration, offer and delivery endpoints | as built | unchanged by this record |
 
 Capabilities `courier.self.read` and `courier.telemetry` are in no role bundle
@@ -295,8 +316,58 @@ session the courier already signed off keeps its own end reason.
 `src/app/core/auth` (`pkce.ts`, `oidc-client.ts`, `auth.service.ts`, `auth.guard.ts`),
 `core/api` (ADR 0031: `Idempotency-Key` on every mutation, `If-Match` as a weak validator,
 problem details, one renewal and one retry on a 401, the bearer sent only to the platform),
-`core/courier` (the `/me` store), `core/i18n`, `layout`, `features/{auth,home,profile}`.
-`frontend/courier/README.md` is the reference.
+`core/courier` (the `/me` store and every call of the courier surface), `core/device` (the
+phone's location, wake lock and battery behind injection seams, so a spec stands in for a
+handset), `core/telemetry` (the sender and the duty store), `core/notice`, `core/shift`,
+`core/offers`, `core/deliveries`, `core/work` (`WorkSession`: what hangs off an open shift
+follows the record), `core/i18n`, `features/{auth,home,profile,shift,duty,notice,offers,
+deliveries,work}`. `frontend/courier/README.md` is the reference. The rules that matter:
+
+- **One idempotency key per intent**, kept across a request that never arrived and dropped once
+  the platform has answered (`IntentKeys`): a courier whose connection drops after "picked up"
+  and who taps again replays the first answer, never performs the step twice.
+- **The sender** samples the phone behind a seam, at most one reading per five seconds, and
+  posts at the cadence the session names and each answer renews (clamped to the platform's
+  one-batch-per-five-seconds limit). A failed post keeps its readings (a late batch beats a gap,
+  bounded to five batches) and backs off; a batch the platform refuses as invalid is dropped so
+  one bad reading cannot starve the rest; `422 NO_OPEN_DUTY_SESSION` stops it for good and drops
+  what it held. A break the courier starts stops sampling altogether.
+- **The wake lock** is taken on going on duty and taken again whenever the page returns, because
+  the browser drops it whenever the page is hidden. The duty card says on the screen that asks
+  for it what a PWA cannot do with the screen off, and the indicator says in words whether the
+  position is really arriving (`tracking`, `searching` after 45 seconds without a fix, `denied`,
+  `break`, `unreachable`).
+- **Offers are polled every 15 seconds** (`OFFER_POLL_SECONDS`; the offer lives 60), paused while
+  the page is hidden, and the list keeps what it has when a poll fails. An offer that lapsed or
+  was taken is `NO_LONGER_AVAILABLE` with a 200: the app says so in a sentence, it is not an
+  error.
+- **Nothing personal outlives its screen.** The customer's address is returned by an audited
+  `POST`, held by the screen that asked, and dropped when hidden; the store of deliveries never
+  sees it. A position is read, handed to the one call that needs it and forgotten.
+- **Money is integer minor units**, formatted from the currency's own exponent, and the cash a
+  courier types is parsed on digits, not floats. The settlement currency is deployment
+  configuration (`APP_CURRENCY`, default `UZS`) because the courier's record does not carry it
+  and the platform keys a shift's cash handover on it.
+
+### The gates
+
+Every step answers in one of five ways and the screens branch on the way, never on a sentence
+(`classifyStepFailure`, `stepMessage`): it worked (and, in SOFT mode, the answer carries
+`checks: [{kind: GEO|PHOTO|PAYMENT, outcome: PASSED|FAILED|SKIPPED}]`, of which the ones that are
+not `PASSED` are told as a warning, because the step happened); it was refused by a hard gate
+(`409 GATE_FAILED`, the failed check kinds in the detail, named to the courier); it was refused by
+a rule (`422` with a `reason` from `GateRefusal`, twelve of them, each a sentence in three
+languages and a compile error if one is added without its sentence); it was changed under the
+courier (`STALE_VERSION`, reloaded and said so); or it did not arrive. Accepting an offer, arriving
+at the pickup and confirming the cash are `422` rules today; pickup and handover are the
+cross-wave contract with the delivery-maps wave: `POST .../deliveries/{id}/pickup` and
+`.../handover`, `If-Match` and an `Idempotency-Key` like every step, a body that carries the
+courier's position when the phone has one. **Those two paths do not exist on this branch.** The
+client is written to the contract and its specs pin the paths and both branches of the answer;
+until the server side merges, the pickup and handover buttons answer a `404`, and the line that
+changes if the server's shape differs is `CourierApi.gateStep`. A photo check needs a photo and
+the contract names no way to send one, so the client reports a `PHOTO` outcome and cannot
+satisfy it.
 
 ## Rollout and rollback
 
@@ -318,12 +389,16 @@ source, ADR 0045), delete the Keycloak client (every courier session ends), and 
 - [x] `GET .../me`, the courier's own duty session and observation batch, the two capabilities.
 - [x] The shift tells its duty session about breaks and its own end.
 - [x] `create-courier-login-client.sh`, run against a real Keycloak and a full PKCE round trip.
-- [ ] Client part 2: shift open/close/break, the duty indicator, the wake lock, the telemetry
-      sender at the server's cadence, the versioned transparency notice and its recorded
-      acknowledgement (wording is external; placeholder meanwhile).
-- [ ] Client part 3: offers (polled), accept and decline with position, my deliveries,
-      advance, the customer-location reveal, payment confirmation, the gate refusals by
-      reason.
+- [x] Client part 2: shift open/close/break and the cash declaration, the duty indicator, the
+      wake lock, the telemetry sender at the server's cadence, the versioned transparency notice
+      and its acknowledgement recorded by the platform (the wording is external; a marked draft
+      ships meanwhile).
+- [x] Client part 3: offers (polled), accept and decline with position, my deliveries, arrival,
+      pickup and handover (the gate contract), the customer-location reveal, payment
+      confirmation, and every refusal by reason.
+- [ ] The pickup and handover endpoints on the platform (the delivery-maps wave), so the two
+      buttons that call them work end to end.
+- [ ] The notice's final wording and its version (the tenant and counsel).
 - [ ] Pre-production: the Keycloak client, a courier account, DNS, and acceptance on a real
       handset with GPS (external).
 - [ ] A push channel for offers (ADR 0020).

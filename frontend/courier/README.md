@@ -10,13 +10,20 @@ foreground location with a screen wake lock. No Flutter, no Telegram mini app.
 | Screen | Route | What it does |
 |---|---|---|
 | Sign-in | `/auth/callback`, `/auth/error`, `/auth/signed-out` | The PKCE round trip, and the three ways it can end |
-| Today | `/` | Who the platform says this courier is, their branches, the open shift and duty state, the registration status (`GET /api/v1/courier/tenants/{tenantId}/me`) |
+| Today | `/` | Who the platform says this courier is, their branches, the open shift and duty state, the registration status (`GET .../me`) |
+| Offers | `/offers` | The offers the courier can take at the shift's branch, polled every 15 s; accept or decline with the courier's position; the customer's address where the tenant allows it before acceptance |
+| Deliveries | `/deliveries`, `/deliveries/:id` | What the courier carries and has finished; one delivery with its steps: arrived, picked up, the cash confirmed, handed over, the customer's address behind an audited tap |
+| Shift | `/shift` | Open a shift at a branch, start and end a break, close it behind a confirmation, declare the cash handed over; beneath it, the duty card: go on duty, with the location notice, the wake lock and the limit of a PWA said in words |
+| Location notice | `/notice` | What is collected, when, who sees it, for how long. **A marked draft until the tenant's wording replaces it**; accepting is recorded on the platform |
 | Profile | `/profile` | The account, the language, the app version, sign out |
 
-Not built yet, in this order: shift open/close/break, the duty indicator and the telemetry sender
-(with the courier transparency notice), then offers and deliveries. Every one of them calls the
-platform's existing courier endpoints (`CourierShiftController`, `CourierDeliveryController`, the
-`courier` OpenAPI group) -- this directory is the first client that does.
+While a duty session is open an indicator sits under the top bar on every screen and says in
+words whether the position is really arriving.
+
+Not built, and not code's to build: acceptance on a real handset, the pre-production Keycloak
+client and a courier account (`platform/docs/runbooks/external-connections/w4-courier-client.md`),
+the notice's final wording, push for offers (ADR 0020), and the pickup and handover endpoints the
+gate contract names, which another wave builds (ADR 0179, "The gates").
 
 ## Sign-in
 
@@ -77,6 +84,23 @@ Messages are `ru`, `uz-Latn` and `en`, split by feature area (`messages/<area>.<
 `core` is always loaded; a screen's area is loaded by `messagesGuard('<area>')` on its route. A new
 area needs its three modules, a line in `message-areas.ts` and one in `catalogue-loaders.ts`; the
 other two locales are typed against English, so an untranslated key fails the build.
+
+## How the app is put together
+
+`core/api` (`ApiClient`, `IntentKeys`: one idempotency key per intent, kept across a request that
+never arrived), `core/courier` (`CourierApi`, every call of the courier surface, and the `/me`
+store), `core/device` (location, wake lock and battery behind injection seams), `core/telemetry`
+(`TelemetrySender`, `DutyStore`), `core/notice`, `core/shift`, `core/offers`, `core/deliveries`
+(`DeliveriesStore`, `classifyStepFailure`, `stepMessage`), `core/work` (`WorkSession`). Screens are
+in `features/`. Specs run the real stores over a fake platform and a fake handset
+(`src/testing/work-harness.ts`, `fake-device.ts`): nothing in `core/` is replaced but `CourierApi`,
+the phone's location and its wake lock.
+
+Every step a courier takes answers in one of five ways and the screens branch on the way, never on
+a sentence: it worked (a soft gate's unconfirmed checks are a warning, not a failure), a hard gate
+refused it (`409 GATE_FAILED`, the failed checks named), a rule refused it (`422` with a `reason`,
+twelve of them, each with a sentence in three languages), it changed under the courier (reloaded),
+or it did not arrive.
 
 ## What a PWA cannot do
 

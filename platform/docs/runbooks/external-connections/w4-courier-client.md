@@ -12,21 +12,45 @@ telemetry ingest on: a self-employed courier is told what is collected, when, wh
 and for how long (30 days), and the app shows a visible on-duty indicator whenever collection
 is active. The tenant is the controller; the platform supplies the mechanism.
 
-**What exists.** The courier-self endpoints that would collect a position exist
-(`POST .../duty-sessions`, `POST .../telemetry/observations`, `courier.telemetry`) and no client
-calls them yet. The shift tells its session when a break starts and when the shift ends, so
-collection cannot outlive a shift. The versioned notice screen, its placeholder text and the
-recorded acknowledgement that must precede a courier's first duty session arrive with client
-part 2; **nothing is collected from a real courier before that and before the owner confirms
-the wording.**
+**What exists.** The whole mechanism, and a marked draft where the words go:
 
-**Where the value goes.** The notice text is versioned in the client (one catalogue entry per
-language and version). Replacing the placeholder with the agreed wording is a text change and a
-version bump; a courier who acknowledged an earlier version is asked again.
+- the `/notice` screen (`frontend/courier/src/app/features/notice`), its text in the
+  `notice.*` entries of `core/i18n/messages/notice.<ru|uz-latn|en>.ts`, a banner saying DRAFT, and
+  the version it shows;
+- `NOTICE_VERSION` (now `2026-10-draft-1`) and `NOTICE_IS_DRAFT` in
+  `frontend/courier/src/app/core/notice/notice.store.ts`;
+- the app refuses to go on duty, and the sender never starts, until the courier has acknowledged
+  the current version;
+- acknowledging posts the version to `POST /api/v1/courier/tenants/{tenantId}/telemetry-notice-acknowledgements`,
+  which writes an audit fact `courier.telemetry_notice.acknowledged` (class SECURITY, naming the
+  courier row, the version and the time; no position, no device); only after the platform has
+  confirmed does the phone remember it (`localStorage` key `courier.notice`: courier id, version,
+  time), so the courier is not asked again on that phone;
+- the shift tells its duty session when a break starts and ends and when the shift ends, so
+  collection cannot outlive a shift.
 
-**Prove it.** A courier on a handset sees the notice in their language before going on duty
-for the first time, cannot go on duty without acknowledging it, and the acknowledgement is
-recorded with the version. Until then the duty-session endpoint stays unused.
+**The platform records the acknowledgement; it does not refuse a duty session without one.** The
+gate is the app's. Until the wording replaces the draft and the version changes, **do not switch
+telemetry ingest on for a real tenant's couriers**: nothing in the code can stop you, and a
+courier tracked under a draft has been told nothing the tenant stands behind.
+
+**Where the value goes.** Replace the nine `notice.*` entries in each of the three catalogue
+files with the agreed text, set `NOTICE_IS_DRAFT` to `false` (the DRAFT banner goes with it),
+and change `NOTICE_VERSION` to the document's own version. Every courier who acknowledged an
+earlier version is asked again, and the new version is what the audit trail records.
+
+**Prove it.** A courier on a handset sees the notice in their language before going on duty for
+the first time, cannot go on duty without acknowledging it, and the platform has the record:
+
+```sql
+select occurred_at, actor_subject, target_id as courier_id, change_document
+from audit.audit_events
+where action_code = 'courier.telemetry_notice.acknowledged'
+order by occurred_at desc limit 5;
+```
+
+The `change_document` carries `noticeVersion` and nothing else. After the version is bumped, the
+same courier is asked again and a second row appears.
 
 **Open input (owner: Ayubkhon Abbosov, to obtain from the tenant and counsel):** the statutory
 basis for courier location processing under ZRU-547 and confirmation of the 30-day retention
@@ -37,8 +61,9 @@ track retention days, and nothing else.
 
 **What exists.** The app is built and its sign-in is proven against a fake identity provider
 that enforces PKCE (the specs) and against a real Keycloak 26.7.0 driven by a script with a
-real user (the round trip in ADR 0179). Geolocation is exercised in specs by emulation, not on a
-phone. Offers will be polled, not pushed.
+real user (the round trip in ADR 0179). Every screen (shift, duty, notice, offers, deliveries) is
+exercised in specs against a fake platform and a fake handset: geolocation and the wake lock are
+emulated, not read from a phone. Offers are polled, not pushed.
 
 **What is missing, and where each value goes.**
 
@@ -46,7 +71,7 @@ phone. Offers will be polled, not pushed.
 |---|---|
 | A DNS name for the courier origin, e.g. `courier.staging.horecaos.uz` | the DNS zone, pointing at the host; the certificate is Caddy's (automatic) |
 | The Keycloak client `horecaos-courier` for exactly that origin | created by `platform/infra/keycloak/create-courier-login-client.sh` (below) |
-| `HORECAOS_COURIER_ORIGIN` (and `HORECAOS_COURIER_TENANT_ID` if the couriers work for a tenant other than the storefront's pilot tenant) | `/etc/horecaos/production.env` |
+| `HORECAOS_COURIER_ORIGIN` (and `HORECAOS_COURIER_TENANT_ID` if the couriers work for a tenant other than the storefront's pilot tenant; `HORECAOS_COURIER_CURRENCY` if they are settled in anything but `UZS`) | `/etc/horecaos/production.env` |
 | A courier account | provisioned from the operations console (courier registration creates the Keycloak account and its organization membership; **it sets no password**, see step 2b) |
 | A phone with GPS | the owner's |
 
@@ -96,9 +121,15 @@ phone. Offers will be polled, not pushed.
 - `https://api…/api/v1/courier/tenants/<tenant>/me` with that courier's token answers 200; the
   same call from the courier origin's path for any non-courier prefix answers 404.
 - Install the app to the home screen: it opens standalone.
-- (Part 2 and after) go on duty with the screen on; the dispatcher's map shows the pin within
-  ten seconds and loses it within the hour of the shift ending; lock the phone and note the
-  gap, which ADR 0179 says is the limit of a PWA.
+- Open a shift (the Shift tab), read and accept the notice, go on duty with the screen on; the
+  dispatcher's map shows the pin within ten seconds and loses it when the shift closes; lock the
+  phone and note the gap, which ADR 0179 says is the limit of a PWA, and the indicator saying so
+  when the app is opened again.
+- Make an offer to the courier from the dispatch board: it appears on the Offers tab within
+  fifteen seconds; accept it, and the delivery appears under Deliveries. Walk it through arrival,
+  pickup, the cash and the handover on the phone. **Pickup and handover call
+  `POST .../deliveries/{id}/pickup` and `.../handover`, which the delivery-maps wave builds** (see
+  section 4); until that is merged they answer `404`.
 
 **Rollback.** Delete the Keycloak client (every courier session ends), unset
 `HORECAOS_COURIER_ORIGIN`, and `docker compose up -d`. Close every duty session to stop
@@ -118,3 +149,24 @@ fallback ADR 0045 requires of every live surface.
 **Prove it.** An offer made to a courier whose app is closed raises a notification on their
 phone and opens the app on the offer. Until then the polling path is the whole of the
 mechanism, and the dispatcher's board is the place a lapsed offer is seen.
+
+## 4. The pickup and handover endpoints (a dependency, not a fact)
+
+**What exists.** The courier app calls `POST .../deliveries/{id}/pickup` and `.../handover` and
+branches on the answer exactly as the cross-wave contract states: `409` with problem code
+`GATE_FAILED` (the failed check kinds in `detail`) when the location's gate mode is HARD and a
+check fails; a success carrying `checks: [{kind, outcome}]` in SOFT mode, whose unconfirmed
+checks the courier is told about. The specs pin both branches and both paths.
+
+**Where it connects.** The server side is the delivery-maps wave's. The client's one point of
+contact is `CourierApi.gateStep` (`frontend/courier/src/app/core/courier/courier-api.ts`): if the
+merged server takes another path, another body, or reports its checks elsewhere in the answer,
+that method and `describeSuccess` (`core/deliveries/step-outcome.ts`) are the two places to
+change. The request body is the courier's position when the phone has one, and `If-Match` and
+`Idempotency-Key` as on every step; the contract names no photo upload, so a `PHOTO` check is
+reported and cannot be satisfied from this app.
+
+**Prove it.** With the server side merged, set a location's gate mode to HARD, stand away from
+the branch and tap "Picked up": the app says the location could not be confirmed and the delivery
+stays where it was. Set it to SOFT and repeat: the delivery moves and the app says what the
+platform could not confirm. The persisted outcome is what `GEO_UNVERIFIED_RATE` reads.
