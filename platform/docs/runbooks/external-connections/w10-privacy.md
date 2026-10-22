@@ -13,7 +13,7 @@ delete `HORECAOS_PRIVACY_RETENTION_CONFIRMED` and the next start refuses again.
 
 ## 1. Legal's retention periods per data class and per job
 
-**What exists.** `ProvisionalRetention` lists seven numbers the platform acts on that a lawyer, not an engineer, owns:
+**What exists.** `ProvisionalRetention` lists nine values the platform acts on that a lawyer, not an engineer, owns:
 
 | Code | What it is | Provisional value |
 |---|---|---|
@@ -25,6 +25,7 @@ delete `HORECAOS_PRIVACY_RETENTION_CONFIRMED` and the next start refuses again.
 | `telemetry.track_retention_days` | a courier's track | 30 days; a tenant may set its own, never below the settlement period plus the dispute window |
 | `courier.applicant_retention_months` | a courier applicant nobody verified | 12 months; a tenant may set its own |
 | `iam.staff_sign_in_retention_days` | a staff sign-in record | 180 days; a tenant may set its own, 30 to 730 |
+| `customers.dsar_cover_note` | the wording that opens a data-subject export, and the days allowed to answer it (section 3) | platform wording, marked `PROVISIONAL` in the file; 30 days |
 
 `ProvisionalRetentionGuard` refuses a production start while any of them is unconfirmed. Local, test and default profiles log the
 list and continue.
@@ -88,20 +89,46 @@ The `purpose` column is free text; treat the result as staff-only.
 
 ## 3. The wording and response deadline of the cover note on a data-subject export
 
-**What exists.** Nothing yet. A data-subject export is the next step of this wave's item list and is not built in the step this
-record describes; the cover note belongs to the export bundle (ADR 0029). This section is here so the fact has a place to land
-and so nobody ships an export without it.
+**What exists.** A customer can ask for a copy of her data (storefront: Profile -> My data; console: the customer's *Copy &
+corrections* tab) and a person who holds `customer.pii.export` produces it, with a purpose and, where the tenant published an
+approval policy for `customer.pii.export`, a second person's approval (ADR 0029, status addition of 2026-10-23). The file is one
+JSON document; its first section, `cover`, carries three things legal owns:
 
-**Where the value goes.** When the export is built: the bundle's cover section reads its wording from configuration, one text per
-language, and the response deadline is an ADR 0030 integer (days). Neither has a key today.
+| ADR 0030 key | What it holds | Default |
+|---|---|---|
+| `customers.dsar_cover_note_ru`, `customers.dsar_cover_note_uz_latn`, `customers.dsar_cover_note_en` | The note that opens the file, one text per language, plain text up to 2,000 characters | blank: the platform's provisional wording is used and the file marks it `PROVISIONAL` |
+| `customers.dsar_response_deadline_days` | Days from the day the request is raised by which the customer is owed her data (1 to 90). Fixed on each request when it is raised; changing it later does not move a promise already made | 30 |
 
-**How to prove the connection.** Not applicable until the export exists. The proof then is: request an export for a test customer,
-open the bundle, and read the cover note in the customer's language with the legal deadline in it.
+Neither wording nor deadline is legal's answer yet; both are built so that giving the answer is a configuration change and not
+a release. `customers.dsar_bundle_retention_days` (1 to 30, default 7) is an engineering choice about how long the file waits
+in object storage and is not part of what legal confirms.
+
+**Where the value goes.** Set the three note keys and the deadline at platform scope (control plane, configuration) so every
+tenant carries the same text, or per tenant where a tenant's legal entity needs its own. Then record the confirmation in the
+environment as for the retention numbers in section 1: `HORECAOS_PRIVACY_RETENTION_CONFIRMED` naming `customers.dsar_cover_note`
+(or `all`) together with `HORECAOS_PRIVACY_RETENTION_CONFIRMATION_REFERENCE`. Until then a production start is refused.
+
+**How to prove the connection.**
+
+1. In a non-production deployment, raise a request for a test customer on the storefront (Profile -> My data) and see the due
+   date: it must be the deadline you set, counted from today.
+2. In the console, open that customer's *Copy & corrections* tab, produce the file with a purpose and open the link.
+3. In the file, `cover.noteStatus` must read `AUTHORED` for each of `ru`, `uz-latn` and `en` and `cover.note` must carry legal's
+   text; `cover.responseDeadlineDays` and `cover.responseDueAt` must match step 1. A language still reading `PROVISIONAL` has no
+   text set.
+4. In Settings -> Data & privacy, the request is in the worklist with its due date, and the egress log lists the production and
+   the link as personal data leaving.
+5. Delete the platform-scope note and produce a second file: the status returns to `PROVISIONAL`.
+
+A browser or a chat client is not a place to keep the file: the link works for five minutes, the file is removed after
+`customers.dsar_bundle_retention_days`, and an erasure of the customer removes it at once.
 
 ## What the wave does not touch
 
 - The platform-wide retention of the audit trail (ADR 0027) and of financial records: those are legal obligations the platform
   keeps regardless, and `class.financial` is on the list only so that the number is confirmed, not because a job reads it.
+- Whether a data subject is entitled to a tenant's internal notes about her (the reasons on a blacklist entry, staff notes on a
+  service-recovery case). The export withholds them and says so in its manifest; including them is a legal answer, not a build.
 - A decision on what happens to a customer's remaining loyalty balance when she is erased. The erasure suspends her points
   account and moves no points; closing it would forfeit them and paying them out is refused by the not-money rules (ADR 0046).
   That is the tenant's decision, to be taken with legal.

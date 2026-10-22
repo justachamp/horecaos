@@ -93,12 +93,12 @@ public class JdbcOrderExportStore {
                 .listOfRows();
     }
 
-    /** Carts she has not checked out, which still hold what she chose and where she asked it to go. */
-    public List<Map<String, Object>> openCarts(UUID tenantId, UUID accountId, int limit) {
+    /** Her carts, those she checked out and those she did not: each holds what she chose and where she asked it to go. */
+    public List<Map<String, Object>> carts(UUID tenantId, UUID accountId, int limit) {
         return jdbc.sql("""
                 SELECT c.id, c.brand_id, c.location_id, c.fulfillment_mode, c.currency, c.status, c.created_at
                   FROM ordering.carts c
-                 WHERE c.tenant_id = :tenantId AND c.customer_account_id = :accountId AND c.status <> 'CONVERTED'
+                 WHERE c.tenant_id = :tenantId AND c.customer_account_id = :accountId
                  ORDER BY c.created_at DESC, c.id DESC
                  LIMIT :limit
                 """)
@@ -109,12 +109,12 @@ public class JdbcOrderExportStore {
                 .listOfRows();
     }
 
-    public List<Map<String, Object>> openCartLines(UUID tenantId, UUID accountId, int limit) {
+    public List<Map<String, Object>> cartLines(UUID tenantId, UUID accountId, int limit) {
         return jdbc.sql("""
                 SELECT l.id, l.cart_id, l.variant_id, l.quantity, l.customer_note_encrypted, l.created_at
                   FROM ordering.cart_lines l
                   JOIN ordering.carts c ON c.tenant_id = l.tenant_id AND c.id = l.cart_id
-                 WHERE c.tenant_id = :tenantId AND c.customer_account_id = :accountId AND c.status <> 'CONVERTED'
+                 WHERE c.tenant_id = :tenantId AND c.customer_account_id = :accountId
                  ORDER BY c.created_at DESC, c.id DESC, l.created_at
                  LIMIT :limit
                 """)
@@ -125,13 +125,13 @@ public class JdbcOrderExportStore {
                 .listOfRows();
     }
 
-    public List<Map<String, Object>> openCartDestinations(UUID tenantId, UUID accountId, int limit) {
+    public List<Map<String, Object>> cartDestinations(UUID tenantId, UUID accountId, int limit) {
         return jdbc.sql("""
                 SELECT f.cart_id, f.address_encrypted, f.delivery_instructions_encrypted,
                        f.recipient_name_encrypted, f.recipient_phone_encrypted, f.latitude, f.longitude
                   FROM ordering.cart_fulfillment f
                   JOIN ordering.carts c ON c.tenant_id = f.tenant_id AND c.id = f.cart_id
-                 WHERE c.tenant_id = :tenantId AND c.customer_account_id = :accountId AND c.status <> 'CONVERTED'
+                 WHERE c.tenant_id = :tenantId AND c.customer_account_id = :accountId
                  ORDER BY c.created_at DESC, c.id DESC
                  LIMIT :limit
                 """)

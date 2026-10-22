@@ -215,6 +215,45 @@ on execution but do not yet implement export, correction, retention-expiry
 enforcement, legal hold, or proof, the rest of the privacy-operations surface
 this ADR names.
 
+## Status addition, 2026-10-23 (batch 21, wave w10-privacy)
+
+This is a dated addition to the record, not a change to what it decided: the Decision, Alternatives considered and
+Consequences above stand as accepted. It records how five of the six privacy operations the Decision lists were built, the
+defaults the build had to choose where no record fixed them, and what stays open. The status line and the checklist are
+left for the documentation close-out.
+
+**Export.** A data-subject export is a request with its own lifecycle (`customer.export_requests`, V0684) beside the
+erasure request: raised by the customer on the storefront (`POST .../me/export-request`) or by staff on her behalf
+(`customer.manage`), and produced by a person who holds `customer.pii.export`, under an ADR 0027 approval when the tenant has
+published a policy for that action, with a purpose they state. The format and delivery are the smallest default the Decision
+allows, and are written here because no record fixed them: **one JSON document per request** under a key made of the tenant
+and the request id, **a section per module** (a `customers.spi.CustomerExportParticipant` declaring its tables with
+`@ExportsCustomerData`, discovered by type the way the erasure participants are), values **decrypted under the declared
+purpose** with the audit fact (`customer.dsar.exported`) written before the first decrypt, a **manifest of counts per table**
+kept on the request and never a value, and a **link that expires in five minutes**, minted on each authorised read and itself
+an audit fact (`customer.dsar.bundle_revealed`). Both codes are registered in `PiiEgressActions`, so the merchant's egress log
+shows them. The file is kept for `customers.dsar_bundle_retention_days` (default 7) and then removed by `ExportBundleSweeper`,
+or at once when the customer is erased. What a participant leaves out on purpose is named in the manifest (staff notes on a
+service-recovery case, the reasons on a blacklist entry), and a build test (`ExportInventoryTests`) requires every table that
+carries a customer key or a PERSONAL column to be exported or exempt with a reason, as the erasure inventory does.
+
+**Correction.** `customer.profile_corrections` (V0684) keeps the value a correction replaced, protected under the envelope and
+bound to its own row, with a reference to the evidence (a ticket or document number: a pattern that refuses spaces, so prose
+and names are a validation error, enforced in the service and by the database). The edit itself goes through the existing
+profile, contact-point, address and date-of-birth methods, so versions and normalisation are not reimplemented. The prior
+value is returned only inside a data-subject export, and goes with the account on erasure.
+
+**Legal hold, proof, retention.** A hold on a named customer (V0682) is placed and lifted under two-person approval and refuses
+the erasure while it stands; an executed erasure stores per-module row counts as its proof (V0681); the abandoned-cart and
+courier-applicant sweeps honour a tenant's shorter window down to a floor, and `ProvisionalRetentionGuard` refuses a production
+start while a retention value is unconfirmed (the owner records legal's confirmation in the environment, with a reference).
+
+**Still open (legal, the Open input above).** The wording of the note that opens an export and the response deadline are ADR 0030
+keys with provisional defaults (`customers.dsar_cover_note_*`, `customers.dsar_response_deadline_days`); the bundle states
+whether it carries platform wording (`PROVISIONAL`) or text a platform administrator or tenant set (`AUTHORED`). Whether a data
+subject is entitled to the tenant's internal notes about her is withheld pending legal, not decided. Key rotation,
+re-encryption and masked projections are not part of this addition.
+
 ## Provisional retention
 
 Legal has not yet set retention periods or lawful basis per purpose. Rather than

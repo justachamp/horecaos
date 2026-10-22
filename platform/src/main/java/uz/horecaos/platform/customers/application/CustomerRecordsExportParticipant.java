@@ -46,7 +46,8 @@ import uz.horecaos.platform.iam.api.protection.ProtectedValue;
             "customer.blacklist_entries",
             "customer.leads",
             "customer.profile_corrections",
-            "customer.export_requests"
+            "customer.export_requests",
+            "customer.erasure_requests"
         })
 public class CustomerRecordsExportParticipant implements CustomerExportParticipant {
 
@@ -107,6 +108,7 @@ public class CustomerRecordsExportParticipant implements CustomerExportParticipa
         tables.add(ExportTable.ofNewestFirst(LEAD_TABLE, leads(subject)));
         tables.add(ExportTable.ofNewestFirst(CORRECTION_TABLE, corrections(subject)));
         tables.add(table("customer.export_requests", reads.exportRequests(tenantId, accountId)));
+        tables.add(table("customer.erasure_requests", reads.erasureRequests(tenantId, accountId)));
         return ExportSection.of(tables).withholding("blacklist_entries.reasons_are_staff_notes");
     }
 

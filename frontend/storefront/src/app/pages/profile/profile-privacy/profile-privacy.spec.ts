@@ -38,7 +38,9 @@ function setUp(signedIn = true) {
   const customers = {
     exportRequest: vi.fn(async (): Promise<ExportRequestStatus | null> => null),
     requestExport: vi.fn(async () => status()),
-    cancelExport: vi.fn(async () => status({ status: 'CANCELLED', cancelledAt: '2026-10-02T10:00:00Z' })),
+    cancelExport: vi.fn(async () =>
+      status({ status: 'CANCELLED', cancelledAt: '2026-10-02T10:00:00Z' }),
+    ),
     exportBundleLink: vi.fn(async () => ({
       url: 'https://files.test/mine',
       expiresAt: '2026-10-02T10:05:00Z',
@@ -54,7 +56,10 @@ function setUp(signedIn = true) {
   });
   const session = TestBed.inject(Session);
   if (signedIn) {
-    session.adopt({ accessToken: 'tok', expiresAt: new Date(Date.now() + 3_600_000).toISOString() });
+    session.adopt({
+      accessToken: 'tok',
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+    });
   }
   const fixture = TestBed.createComponent(ProfilePrivacyComponent);
   return { fixture, comp: fixture.componentInstance, customers };
@@ -102,7 +107,9 @@ describe('ProfilePrivacyComponent', () => {
       fixture.detectChanges();
       expect(host.querySelector('[data-testid="privacy-waiting"]')).not.toBeNull();
     });
-    expect(host.querySelector('[data-testid="privacy-due"]')?.textContent).toContain('profile.privacyDueBy');
+    expect(host.querySelector('[data-testid="privacy-due"]')?.textContent).toContain(
+      'profile.privacyDueBy',
+    );
     expect(host.querySelector('[data-testid="privacy-ask"]')).toBeNull();
     expect(host.querySelector('[data-testid="privacy-get-link"]')).toBeNull();
   });
@@ -124,7 +131,11 @@ describe('ProfilePrivacyComponent', () => {
   it('does not ask for the link until she presses the button, because each ask is recorded against her', async () => {
     const { fixture, customers } = setUp();
     customers.exportRequest.mockResolvedValue(
-      status({ status: 'COMPLETED', bundleAvailable: true, bundleExpiresAt: '2026-10-09T10:00:00Z' }),
+      status({
+        status: 'COMPLETED',
+        bundleAvailable: true,
+        bundleExpiresAt: '2026-10-09T10:00:00Z',
+      }),
     );
     const host = await mount(fixture);
 

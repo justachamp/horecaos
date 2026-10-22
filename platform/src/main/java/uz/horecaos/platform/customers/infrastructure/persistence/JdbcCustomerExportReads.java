@@ -120,4 +120,19 @@ public class JdbcCustomerExportReads {
                 .query()
                 .listOfRows();
     }
+
+    /** Her requests to be forgotten: when, how and where they stand; no reason, because none is taken. */
+    public List<Map<String, Object>> erasureRequests(UUID tenantId, UUID accountId) {
+        return jdbc.sql("""
+                SELECT id, status, requested_via, requested_at, completed_at, cancelled_at
+                  FROM customer.erasure_requests
+                 WHERE tenant_id = :tenantId AND customer_account_id = :accountId
+                 ORDER BY requested_at DESC, id DESC LIMIT :fetch
+                """)
+                .param("tenantId", tenantId)
+                .param("accountId", accountId)
+                .param("fetch", FETCH)
+                .query()
+                .listOfRows();
+    }
 }

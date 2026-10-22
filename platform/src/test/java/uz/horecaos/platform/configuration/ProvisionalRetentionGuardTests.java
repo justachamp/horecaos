@@ -42,6 +42,7 @@ class ProvisionalRetentionGuardTests {
                 .hasMessageContaining("ordering.cart_retention_days")
                 .hasMessageContaining("telemetry.track_retention_days")
                 .hasMessageContaining("courier.applicant_retention_months")
+                .hasMessageContaining("customers.dsar_cover_note")
                 .hasMessageContaining("class.personal");
     }
 
@@ -68,7 +69,8 @@ class ProvisionalRetentionGuardTests {
                 .containsExactly(
                         "telemetry.track_retention_days",
                         "courier.applicant_retention_months",
-                        "iam.staff_sign_in_retention_days");
+                        "iam.staff_sign_in_retention_days",
+                        "customers.dsar_cover_note");
         assertThat(partial.isProvisional("ordering.cart_retention_days")).isFalse();
         assertThat(partial.isProvisional("telemetry.track_retention_days")).isTrue();
         assertThatThrownBy(partial::check)

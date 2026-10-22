@@ -12,7 +12,8 @@ import java.util.Set;
  * courier tracks and nothing else. This is the list the rest hang on, and {@link ProvisionalRetentionGuard} is the check.
  *
  * <p>An entry is a number the platform acts on that a lawyer, not an engineer, has to own: the four class defaults the ADR
- * states, and every retention setting a tenant can see and change. {@code ProvisionalRetentionGuardTests} reads the code
+ * states, every retention setting a tenant can see and change, and the wording and deadline of the note that opens a
+ * data-subject export (ADR 0029's Open input names them with the periods). {@code ProvisionalRetentionGuardTests} reads the code
  * for tenant-visible retention keys, so a key added later without an entry here fails the build. (It found a fourth, the staff
  * sign-in record's, when this register was written.) Confirming one is not a code change. The owner
  * records legal's answer in the deployment's environment, {@code horecaos.privacy.retention.confirmed} (the codes below, or
@@ -71,7 +72,13 @@ public final class ProvisionalRetention {
                     "iam.staff_sign_in_retention_days",
                     "Staff sign-in records (browser, system, form and times; no address)",
                     "180 days, tenant-settable between 30 and 730",
-                    "ADR 0176"));
+                    "ADR 0176"),
+            new Entry(
+                    "customers.dsar_cover_note",
+                    "Data-subject export: the wording of the note that opens the file and the days allowed to answer"
+                            + " (customers.dsar_cover_note_ru, _uz_latn, _en and customers.dsar_response_deadline_days)",
+                    "platform wording and 30 days, both settable by the platform and per tenant",
+                    "ADR 0029"));
 
     private ProvisionalRetention() {}
 

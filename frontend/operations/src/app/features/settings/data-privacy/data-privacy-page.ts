@@ -384,13 +384,13 @@ export class DataPrivacyPage {
   private correctionSubjectKey(subject: string): MessageKey {
     switch (subject) {
       case 'DISPLAY_NAME':
-        return 'customers.data.correct.subject.DISPLAY_NAME';
+        return 'settings.dataPrivacy.requests.subject.DISPLAY_NAME';
       case 'DATE_OF_BIRTH':
-        return 'customers.data.correct.subject.DATE_OF_BIRTH';
+        return 'settings.dataPrivacy.requests.subject.DATE_OF_BIRTH';
       case 'CONTACT_POINT':
-        return 'customers.data.correct.subject.CONTACT_POINT';
+        return 'settings.dataPrivacy.requests.subject.CONTACT_POINT';
       default:
-        return 'customers.data.correct.subject.ADDRESS';
+        return 'settings.dataPrivacy.requests.subject.ADDRESS';
     }
   }
 

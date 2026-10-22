@@ -18,8 +18,9 @@ import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderExportS
 
 /**
  * A customer's orders as she can be given them (ADR 0029): what she ordered and paid, and the name, number and address the
- * order took at checkout, opened under the producing person's purpose. Alongside them, the carts she has not checked out
- * and the contact or address changes made to an order afterwards.
+ * order took at checkout, opened under the producing person's purpose. Alongside them, her carts (those that became an order
+ * hold the recipient and the note she gave, which can be someone else's name) and the contact or address changes made to an
+ * order afterwards.
  *
  * <p>What was erased is simply not there: an order whose copy of her identity was anonymised comes back with those fields
  * empty and {@code anonymizedAt} set, which is the truth about what the platform still holds. Money is an amount in minor
@@ -141,12 +142,12 @@ public class OrderingExportParticipant implements CustomerExportParticipant {
         }
 
         List<Map<String, @Nullable Object>> cartRows = new ArrayList<>();
-        for (Map<String, Object> raw : orders.openCarts(tenant, account, FETCH)) {
+        for (Map<String, Object> raw : orders.carts(tenant, account, FETCH)) {
             cartRows.add(ExportRow.render(raw));
         }
 
         List<Map<String, @Nullable Object>> cartLineRows = new ArrayList<>();
-        for (Map<String, Object> raw : orders.openCartLines(tenant, account, FETCH)) {
+        for (Map<String, Object> raw : orders.cartLines(tenant, account, FETCH)) {
             UUID id = ExportRow.id(raw, "id");
             cartLineRows.add(ExportRow.row()
                     .put("id", id)
@@ -166,7 +167,7 @@ public class OrderingExportParticipant implements CustomerExportParticipant {
         }
 
         List<Map<String, @Nullable Object>> destinationRows = new ArrayList<>();
-        for (Map<String, Object> raw : orders.openCartDestinations(tenant, account, FETCH)) {
+        for (Map<String, Object> raw : orders.cartDestinations(tenant, account, FETCH)) {
             UUID cartId = ExportRow.id(raw, "cart_id");
             destinationRows.add(ExportRow.row()
                     .put("cartId", cartId)

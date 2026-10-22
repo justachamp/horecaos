@@ -172,7 +172,9 @@ export class CustomerApi {
 
   /** Withdraws my waiting request. Refused (422) once the file has been produced. */
   cancelExport(idempotencyKey?: string): Promise<ExportRequestStatus> {
-    return this.api.mutate<ExportRequestStatus>('POST', `${this.exportPath}/cancel`, { idempotencyKey });
+    return this.api.mutate<ExportRequestStatus>('POST', `${this.exportPath}/cancel`, {
+      idempotencyKey,
+    });
   }
 
   /**

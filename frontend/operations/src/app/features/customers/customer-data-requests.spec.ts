@@ -81,9 +81,7 @@ const EVERYTHING: readonly Capability[] = ['CUSTOMER_MANAGE', 'CUSTOMER_PII_EXPO
 describe('CustomerDataRequests', () => {
   let api: Record<string, ReturnType<typeof vi.fn>>;
 
-  async function mount(
-    held: readonly Capability[] = EVERYTHING,
-  ): Promise<{
+  async function mount(held: readonly Capability[] = EVERYTHING): Promise<{
     fixture: ComponentFixture<CustomerDataRequests>;
     host: HTMLElement;
     corrected: () => number;

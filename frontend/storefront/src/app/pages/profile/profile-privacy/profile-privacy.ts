@@ -103,7 +103,11 @@ export class ProfilePrivacyComponent implements OnInit {
   /** Whether the last request ended without a file she can still open (withdrawn, or the file has expired). */
   mayAskAgain(): boolean {
     const current = this.request();
-    return current === null || current.status === 'CANCELLED' || (current.status === 'COMPLETED' && !current.bundleAvailable);
+    return (
+      current === null ||
+      current.status === 'CANCELLED' ||
+      (current.status === 'COMPLETED' && !current.bundleAvailable)
+    );
   }
 
   /** The due day in her own locale; never a time, which would promise a precision nobody offered. */
