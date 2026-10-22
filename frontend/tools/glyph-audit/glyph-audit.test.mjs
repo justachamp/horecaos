@@ -11,7 +11,7 @@
  * they need are not there; the audit itself still runs over that app.
  */
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -143,4 +143,67 @@ test('a stylesheet fetched at runtime fails: a face that arrives late is not in 
   );
   const result = auditApp({ appDir: dir, appName: 'probe', config });
   assert.match(result.failures.join('\n'), /import https:\/\/fonts\.googleapis\.com/);
+});
+
+/** An app directory with a src/ tree: the probe stylesheet plus the given files. */
+function appWithSources(files, angularStyles) {
+  const { dir, config } = appWith(rule(PLEX_COMPLETE, null), (config) => {
+    config.apps.probe.completeFaceAllowed = { 'ibm-plex-sans': ['U+0041-005A', 'U+0061-007A', 'U+0401', 'U+0410-044F', 'U+0451', 'U+02BB-02BC', 'U+2018-2019', 'U+0406', 'U+0456', 'U+0492-0493', 'U+049A-049B', 'U+04A2-04A3', 'U+04AE-04B1', 'U+04BA-04BB', 'U+04D8-04D9', 'U+04E8-04E9'] };
+    return config;
+  });
+  mkdirSync(join(dir, 'src'), { recursive: true });
+  for (const [name, text] of Object.entries(files)) {
+    writeFileSync(join(dir, 'src', name), text);
+  }
+  if (angularStyles) {
+    writeFileSync(
+      join(dir, 'angular.json'),
+      JSON.stringify({ projects: { probe: { architect: { build: { options: { styles: angularStyles } } } } } }),
+    );
+  }
+  return { dir, config };
+}
+
+test('a third-party font link or a demo-licensed family anywhere in the sources fails, a mention in a comment does not', { skip: !HAS_PLEX }, () => {
+  const clean = appWithSources({
+    'index.html': '<!-- once fetched from fonts.googleapis.com -->\n<html></html>',
+    'styles.scss': '// Halvar was here\n/* and fonts.gstatic.com */\nbody { color: red; }',
+  });
+  assert.deepEqual(auditApp({ appDir: clean.dir, appName: 'probe', config: clean.config }).failures, []);
+
+  const linked = appWithSources({
+    'index.html': '<link href="https://fonts.googleapis.com/css2?family=Poppins" rel="stylesheet" />',
+  });
+  assert.match(
+    auditApp({ appDir: linked.dir, appName: 'probe', config: linked.config }).failures.join('\n'),
+    /src\/index\.html names fonts\.googleapis\.com/,
+  );
+
+  const demo = appWithSources({ 'styles.scss': "body { font-family: 'Halvar Breit', sans-serif; }" });
+  assert.match(
+    auditApp({ appDir: demo.dir, appName: 'probe', config: demo.config }).failures.join('\n'),
+    /src\/styles\.scss names Halvar/,
+  );
+});
+
+test('the stylesheets angular.json builds are exactly the ones audited, and a Sass entry may not declare a face', { skip: !HAS_PLEX }, () => {
+  const unlisted = appWithSources({}, ['styles.css', 'other.css']);
+  assert.match(
+    auditApp({ appDir: unlisted.dir, appName: 'probe', config: unlisted.config }).failures.join('\n'),
+    /angular\.json builds other\.css, which the audit does not read/,
+  );
+
+  const phantom = appWithSources({}, ['other.css']);
+  assert.match(
+    auditApp({ appDir: phantom.dir, appName: 'probe', config: phantom.config }).failures.join('\n'),
+    /lists styles\.css, which angular\.json does not build/,
+  );
+
+  const sass = appWithSources({}, ['styles.css', 'src/theme.scss']);
+  mkdirSync(join(sass.dir, 'src'), { recursive: true });
+  writeFileSync(join(sass.dir, 'src/theme.scss'), '@font-face { font-family: X; src: url(x.woff2); }');
+  assert.match(
+    auditApp({ appDir: sass.dir, appName: 'probe', config: sass.config }).failures.join('\n'),
+    /src\/theme\.scss declares an @font-face/,
+  );
 });

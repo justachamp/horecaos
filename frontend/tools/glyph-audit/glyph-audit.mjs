@@ -28,8 +28,8 @@
  * skipped. The backend's PlatformLocalesTests is what makes that safe: it fails if such a language
  * is made live in any tier.
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { shippedFontFaces, parseUnicodeRange } from './css-faces.mjs';
@@ -59,6 +59,39 @@ export function describeCodePoints(codePoints) {
     index = end + 1;
   }
   return parts.join(' ');
+}
+
+/** The stylesheet entries angular.json builds, as paths relative to the app, or null when the app has no angular.json. */
+function builtStylesheets(appDir) {
+  const file = join(appDir, 'angular.json');
+  if (!existsSync(file)) {
+    return null;
+  }
+  const project = Object.values(JSON.parse(readFileSync(file, 'utf8')).projects)[0];
+  const styles = project?.architect?.build?.options?.styles ?? [];
+  return styles
+    .map((entry) => (typeof entry === 'string' ? entry : entry.input))
+    .map((entry) => entry.replace(/^\.\//, ''));
+}
+
+/** Every stylesheet, template and index.html under src/, minus comments: the text a browser is told. */
+function styleSources(appDir) {
+  const root = join(appDir, 'src');
+  if (!existsSync(root)) {
+    return [];
+  }
+  return readdirSync(root, { recursive: true })
+    .map(String)
+    .filter((name) => ['.css', '.scss', '.html'].includes(extname(name)))
+    .filter((name) => statSync(join(root, name)).isFile())
+    .map((name) => {
+      let text = readFileSync(join(root, name), 'utf8');
+      text = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '');
+      if (extname(name) === '.scss') {
+        text = text.replace(/^\s*\/\/.*$/gm, '');
+      }
+      return { file: relative(appDir, join(root, name)), text };
+    });
 }
 
 /**
@@ -186,6 +219,38 @@ export function auditApp({ appDir, appName = basename(appDir), config }) {
 
   if (remote.length > 0) {
     failures.push(`the stylesheets import ${remote.join(', ')} at runtime; a face fetched late is not part of the first frame (ADR 0035)`);
+  }
+
+  // The audit must read what the build ships: the plain-CSS entries of angular.json are exactly the
+  // stylesheets listed for the app (a Sass entry is not read, so it may not declare a face; the scan below
+  // catches the families it must not name).
+  const built = builtStylesheets(appDir);
+  if (built !== null) {
+    const builtCss = built.filter((entry) => entry.endsWith('.css'));
+    for (const entry of builtCss.filter((candidate) => !app.stylesheets.includes(candidate))) {
+      failures.push(`angular.json builds ${entry}, which the audit does not read: list it under apps.${appName}.stylesheets`);
+    }
+    for (const entry of app.stylesheets.filter((candidate) => !builtCss.includes(candidate))) {
+      failures.push(`apps.${appName}.stylesheets lists ${entry}, which angular.json does not build`);
+    }
+    for (const entry of built.filter((candidate) => candidate.endsWith('.scss'))) {
+      const sass = join(appDir, entry);
+      if (existsSync(sass) && /@font-face/.test(readFileSync(sass, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, ''))) {
+        failures.push(`${entry} declares an @font-face: declare faces in plain CSS where the audit can read them`);
+      }
+    }
+  }
+
+  // What may not appear in any stylesheet, template or index.html.
+  const forbidden = alphabets.forbiddenInStyleSources ?? [];
+  if (forbidden.length > 0) {
+    for (const { file, text } of styleSources(appDir)) {
+      for (const needle of forbidden) {
+        if (text.includes(needle)) {
+          failures.push(`${file} names ${needle}: ${alphabets.forbiddenInStyleSourcesBecause ?? 'not allowed'}`);
+        }
+      }
+    }
   }
 
   return { ok: failures.length === 0, languages, completeFace, remote, failures };

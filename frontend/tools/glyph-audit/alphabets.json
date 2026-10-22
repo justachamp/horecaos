@@ -60,6 +60,12 @@
       ]
     }
   },
+  "forbiddenInStyleSources": [
+    "fonts.googleapis.com",
+    "fonts.gstatic.com",
+    "Halvar"
+  ],
+  "forbiddenInStyleSourcesBecause": "A face fetched from a third party at runtime arrives after first paint (ADR 0035), and the Halvar demo faces are licensed for personal use only and lack the Uzbek modifier letters (gap-map row X.40). Every app's stylesheets, templates and index.html are scanned, comments excepted.",
   "apps": {
     "operations": {
       "stylesheets": [
@@ -76,6 +82,26 @@
         "src/styles.css"
       ],
       "completeFaceAllowed": {}
+    },
+    "storefront": {
+      "stylesheets": [
+        "node_modules/@ibm/plex-sans/css/ibm-plex-sans-default.css"
+      ],
+      "completeFaceAllowed": {
+        "ibm-plex-sans": [
+          "U+02BB-02BC"
+        ]
+      }
+    },
+    "storefront-milliy": {
+      "stylesheets": [
+        "node_modules/@ibm/plex-sans/css/ibm-plex-sans-default.css"
+      ],
+      "completeFaceAllowed": {
+        "ibm-plex-sans": [
+          "U+02BB-02BC"
+        ]
+      }
     }
   }
 }

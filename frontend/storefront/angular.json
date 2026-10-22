@@ -30,6 +30,7 @@
               }
             ],
             "styles": [
+              "node_modules/@ibm/plex-sans/css/ibm-plex-sans-default.css",
               "src/styles.scss"
             ]
           },
