@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { LocationScope, operationsPaths } from './operations-paths';
+import { LocationScope, courierPaths, operationsPaths } from './operations-paths';
 
 const SCOPE: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };
 
@@ -269,6 +269,36 @@ describe('operationsPaths courier positions (OperationsCourierPositionController
     );
     expect(operationsPaths.courierTrackReveals(SCOPE, 'a/b')).toBe(
       '/api/v1/tenants/t1/brands/b1/locations/l1/operations/couriers/a%2Fb/track-reveals',
+    );
+  });
+});
+
+/** ADR 0178: the courier's lifecycle, app access and rule preview, on the tenant-scoped operations prefix. */
+describe('courierPaths (ADR 0178)', () => {
+  it('builds the correction on the courier and the lifecycle steps beneath it', () => {
+    expect(courierPaths.courierCorrection('t1', 'c1')).toBe(
+      '/api/v1/operations/tenants/t1/couriers/c1',
+    );
+    expect(courierPaths.courierEngagementEnding('t1', 'c1')).toBe(
+      '/api/v1/operations/tenants/t1/couriers/c1/engagement-ending',
+    );
+    expect(courierPaths.courierArchival('t1', 'c1')).toBe(
+      '/api/v1/operations/tenants/t1/couriers/c1/archival',
+    );
+  });
+
+  it('builds the access state and the invitation beneath the courier, encoded', () => {
+    expect(courierPaths.courierAccess('t1', 'c1')).toBe(
+      '/api/v1/operations/tenants/t1/couriers/c1/access',
+    );
+    expect(courierPaths.courierAccessInvitations('t1', 'a/b')).toBe(
+      '/api/v1/operations/tenants/t1/couriers/a%2Fb/access-invitations',
+    );
+  });
+
+  it('builds the rule preview beside the registry, not under a courier', () => {
+    expect(courierPaths.adjustmentRuleSimulations('t1')).toBe(
+      '/api/v1/operations/tenants/t1/adjustment-rule-simulations',
     );
   });
 });

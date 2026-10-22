@@ -1360,6 +1360,40 @@ export const courierPaths = {
     return `${this.adjustmentReasons(tenantId)}/${encodeURIComponent(reasonId)}/archival`;
   },
 
+  /**
+   * Preview a bonus or penalty rule against the shifts and settlement periods of the last days
+   * (`OperationsCourierRuleSimulationController`, ADR 0178). A `POST` because its body is a rule that
+   * does not exist yet; it writes nothing.
+   */
+  adjustmentRuleSimulations(tenantId: string): string {
+    return `/api/v1/operations/tenants/${encodeURIComponent(tenantId)}/adjustment-rule-simulations`;
+  },
+
+  /** Correct a courier's display reference or type (`PUT`, `expectedVersion` in the body). Mutation: key required. */
+  courierCorrection(tenantId: string, courierId: string): string {
+    return this.courier(tenantId, courierId);
+  },
+
+  /** End the courier's engagement (`POST`, ADR 0178). Mutation: key required. */
+  courierEngagementEnding(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/engagement-ending`;
+  },
+
+  /** Archive a courier whose balance is zero (`POST`, ADR 0178). Mutation: key required. */
+  courierArchival(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/archival`;
+  },
+
+  /** Where a courier's app access stands: never a number, never a link (`GET`, ADR 0178). */
+  courierAccess(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/access`;
+  },
+
+  /** Text the courier a link to set their own password, first sign-in or reset (`POST`, ADR 0178). Mutation: key required. */
+  courierAccessInvitations(tenantId: string, courierId: string): string {
+    return `${this.courier(tenantId, courierId)}/access-invitations`;
+  },
+
   /** Record a bonus or a penalty against one courier. Mutation: key required. */
   courierAdjustments(tenantId: string, courierId: string): string {
     return `${this.courier(tenantId, courierId)}/adjustments`;

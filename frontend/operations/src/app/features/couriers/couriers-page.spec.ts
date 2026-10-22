@@ -1,10 +1,14 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { LocationScope } from '../../core/api/operations-paths';
 import { CurrentLocation, LocationOption } from '../../core/auth/current-location';
 import { I18n } from '../../core/i18n/i18n';
+import { MediaUploader } from '../../shared/ui/media-uploader';
+import { MediaApi } from '../catalog/media-api';
 import { CourierDetailResponse, CouriersApi, RosterEntryResponse } from './couriers-api';
 import { CouriersPage } from './couriers-page';
 
@@ -55,13 +59,22 @@ async function flushMicrotasks(): Promise<void> {
 describe('CouriersPage', () => {
   let fixture: ComponentFixture<CouriersPage>;
 
+  /** What the photo flow calls: upload answers an asset id, the signed URL answers a link. */
+  const media = {
+    upload: vi.fn(),
+    downloadUrl: vi.fn(),
+  };
+
   async function render(
     api: Partial<CouriersApi>,
     options: readonly LocationOption[] = [],
   ): Promise<HTMLElement> {
+    media.upload = vi.fn().mockReturnValue(of({ assetId: 'asset-1', status: 'UPLOADED' }));
+    media.downloadUrl = vi.fn().mockReturnValue(of('https://files.example.test/signed-photo'));
     await TestBed.configureTestingModule({
       imports: [CouriersPage],
       providers: [
+        { provide: MediaApi, useValue: media },
         {
           provide: CurrentLocation,
           useValue: {
@@ -80,6 +93,7 @@ describe('CouriersPage', () => {
           useValue: {
             groups: vi.fn().mockResolvedValue([]),
             adjustmentReasons: vi.fn().mockResolvedValue([]),
+            accessState: vi.fn().mockResolvedValue({ state: 'NONE', smsConnected: true }),
             ...api,
           },
         },
@@ -273,6 +287,147 @@ describe('CouriersPage', () => {
     // endpoint reads an absent field as "leave it alone".
     expect(body.drivingLicence).toBeUndefined();
     expect(body.homeAddress).toBeUndefined();
+  });
+
+  // ------------------------------------------------------------------ the photo (IA 3.3)
+
+  function photoFile(): File {
+    return new File(['bytes'], 'courier.jpg', { type: 'image/jpeg' });
+  }
+
+  function uploaderIn(selector: string): MediaUploader {
+    return fixture.debugElement.query(By.css(selector)).injector.get(MediaUploader);
+  }
+
+  it('files the photo given at registration as a private asset of the tenant', async () => {
+    const register = vi.fn().mockResolvedValue({ courierId: 'c2', engagementId: 'e2' });
+    const host = await render({
+      roster: vi.fn().mockResolvedValue([]),
+      types: vi.fn().mockResolvedValue([
+        {
+          courierTypeId: 'type-1',
+          code: 'SCOOTER',
+          displayName: 'Scooter',
+          vehicleClass: 'SCOOTER',
+          minDistanceMeters: 0,
+          maxConcurrentAssignments: 2,
+          offerTtlSeconds: 60,
+        },
+      ]),
+      register,
+    });
+    host.querySelector<HTMLButtonElement>('.couriers__register')!.click();
+    fixture.detectChanges();
+
+    const file = photoFile();
+    uploaderIn('[data-testid="register-photo-uploader"]').selected.emit(file);
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(host.querySelector('[data-testid="register-photo-preview"]')).not.toBeNull();
+    });
+    expect(media.upload).toHaveBeenCalledWith('t1', 'TENANT', 't1', 'PRIVATE', file);
+
+    typeByLabel(host, 'First name', 'Alisher');
+    typeByLabel(host, 'Last name', 'Karimov');
+    typeByLabel(host, 'Phone', '+998901234567');
+    typeByLabel(host, 'Display reference (e.g. K-014)', 'K-900');
+    typeByLabel(host, 'Reason', 'onboarding a rider');
+    [...host.querySelectorAll('button')]
+      .find((button) => button.textContent?.trim() === 'Register')!
+      .click();
+
+    await vi.waitFor(() => expect(register).toHaveBeenCalledOnce());
+    expect(register.mock.calls[0][1].photoMediaId).toBe('asset-1');
+  });
+
+  it('registers without a photo when none was chosen, because a courier starting tonight is not blocked on one', async () => {
+    const register = vi.fn().mockResolvedValue({ courierId: 'c2', engagementId: 'e2' });
+    const host = await render({
+      roster: vi.fn().mockResolvedValue([]),
+      types: vi.fn().mockResolvedValue([
+        {
+          courierTypeId: 'type-1',
+          code: 'SCOOTER',
+          displayName: 'Scooter',
+          vehicleClass: 'SCOOTER',
+          minDistanceMeters: 0,
+          maxConcurrentAssignments: 2,
+          offerTtlSeconds: 60,
+        },
+      ]),
+      register,
+    });
+    host.querySelector<HTMLButtonElement>('.couriers__register')!.click();
+    fixture.detectChanges();
+    typeByLabel(host, 'First name', 'Alisher');
+    typeByLabel(host, 'Last name', 'Karimov');
+    typeByLabel(host, 'Phone', '+998901234567');
+    typeByLabel(host, 'Display reference (e.g. K-014)', 'K-901');
+    typeByLabel(host, 'Reason', 'onboarding a rider');
+    [...host.querySelectorAll('button')]
+      .find((button) => button.textContent?.trim() === 'Register')!
+      .click();
+
+    await vi.waitFor(() => expect(register).toHaveBeenCalledOnce());
+    expect(register.mock.calls[0][1].photoMediaId).toBeUndefined();
+  });
+
+  it('shows the open courier’s photo from a signed link and replaces it as a compliance-file write', async () => {
+    const recordComplianceFile = vi.fn().mockResolvedValue(undefined);
+    const courier = vi
+      .fn()
+      .mockResolvedValueOnce({ ...DETAIL, photoMediaId: 'p1' })
+      .mockResolvedValue({ ...DETAIL, photoMediaId: 'asset-1' });
+    const host = await render({
+      roster: vi.fn().mockResolvedValue([COURIER]),
+      types: vi.fn().mockResolvedValue([]),
+      courier,
+      recordComplianceFile,
+    });
+
+    await click(host, 'courier-open');
+
+    expect(media.downloadUrl).toHaveBeenCalledWith('t1', 'p1', 'THUMBNAIL');
+    expect(host.querySelector('[data-testid="courier-photo"]')?.getAttribute('src')).toBe(
+      'https://files.example.test/signed-photo',
+    );
+
+    uploaderIn('[data-testid="courier-photo-uploader"]').selected.emit(photoFile());
+    await vi.waitFor(() => expect(recordComplianceFile).toHaveBeenCalledOnce());
+    expect(recordComplianceFile).toHaveBeenCalledWith('t1', 'courier-1', {
+      photoMediaId: 'asset-1',
+      reason: 'Courier photo',
+    });
+  });
+
+  it('says there is no photo, rather than a broken picture, when the courier has none', async () => {
+    const host = await render({
+      roster: vi.fn().mockResolvedValue([COURIER]),
+      types: vi.fn().mockResolvedValue([]),
+      courier: vi.fn().mockResolvedValue(DETAIL),
+    });
+
+    await click(host, 'courier-open');
+
+    expect(host.querySelector('[data-testid="courier-photo"]')).toBeNull();
+    expect(host.querySelector('[data-testid="courier-photo-none"]')).not.toBeNull();
+    expect(media.downloadUrl).not.toHaveBeenCalled();
+  });
+
+  it('puts the app-access and the correct/end/archive cards in the open record', async () => {
+    const host = await render({
+      roster: vi.fn().mockResolvedValue([COURIER]),
+      types: vi.fn().mockResolvedValue([]),
+      courier: vi.fn().mockResolvedValue(DETAIL),
+    });
+
+    await click(host, 'courier-open');
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(host.querySelector('[data-testid="courier-access-invite"]')).not.toBeNull();
+    });
+
+    expect(host.querySelector('[data-testid="courier-lifecycle-edit"]')).not.toBeNull();
   });
 
   // ------------------------------------------------------------------ verify

@@ -49,6 +49,7 @@ import uz.horecaos.platform.courier.application.CourierLedgerService;
 import uz.horecaos.platform.courier.application.CourierPolicyResolver;
 import uz.horecaos.platform.courier.application.CourierRateCardService;
 import uz.horecaos.platform.courier.application.CourierRosterQueryService;
+import uz.horecaos.platform.courier.application.CourierRuleSimulator;
 import uz.horecaos.platform.courier.application.CourierSettlementService;
 import uz.horecaos.platform.courier.application.CourierShiftService;
 import uz.horecaos.platform.courier.application.DeliveryCostQueryService;
@@ -1308,6 +1309,133 @@ class CourierCompensationTests {
                 .filteredOn(entry -> "ONE_DELIVERY".equals(entry.reasonCode()))
                 .as("re-evaluating posts the same entry back, not a second one")
                 .hasSize(1);
+    }
+
+    // ------------------------------------------------ ADR 0178: the rule simulator replays the evaluator
+
+    @Test
+    @DisplayName("the simulator names who a SHIFT rule would have hit and for how much, writes nothing, and then "
+            + "the real evaluator posts exactly that")
+    void theSimulatorPredictsWhatTheEvaluatorThenPosts() {
+        ShiftRow shift = openShift();
+        accruals.recordDelivery(deliveryOnShift(shift.id(), 3_000, 0));
+        accruals.recordDelivery(deliveryOnShift(shift.id(), 3_000, 0));
+        clock.set(NOON.plus(Duration.ofHours(5)));
+        shifts.close(new CourierShiftService.CloseShift(
+                TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
+        CourierRuleSimulator simulator = new CourierRuleSimulator(ledgerStore, shiftStore, courierStore, clock);
+        long entriesBefore =
+                ledgerStore.entriesOfCourier(TENANT, courierId, 500).size();
+
+        CourierRuleSimulator.Simulation hit = simulator.simulate(
+                TENANT,
+                new CourierRuleSimulator.Candidate("DELIVERED_VOLUME", "GTE", 2, "SHIFT", 50_000, UZS),
+                7,
+                null);
+        CourierRuleSimulator.Simulation miss = simulator.simulate(
+                TENANT,
+                new CourierRuleSimulator.Candidate("DELIVERED_VOLUME", "GTE", 3, "SHIFT", 50_000, UZS),
+                7,
+                null);
+
+        assertThat(hit.windowsReplayed()).isEqualTo(1);
+        assertThat(hit.couriersHit()).isEqualTo(1);
+        assertThat(hit.totalAmountMinor()).isEqualTo(50_000);
+        assertThat(hit.hits()).singleElement().satisfies(row -> {
+            assertThat(row.courierId()).isEqualTo(courierId);
+            assertThat(row.courierReference())
+                    .as("a display reference, never a name")
+                    .isNotBlank();
+            assertThat(row.windowId()).isEqualTo(shift.id());
+            assertThat(row.value()).as("what the basis read: two deliveries").isEqualTo(2);
+        });
+        assertThat(miss.windowsReplayed())
+                .as("«nobody» is told apart from «nothing was there to look at»")
+                .isEqualTo(1);
+        assertThat(miss.hits()).isEmpty();
+        assertThat(ledgerStore.entriesOfCourier(TENANT, courierId, 500))
+                .as("a preview writes nothing")
+                .hasSize((int) entriesBefore);
+
+        courierStore.insertAdjustmentReason(
+                UUID.randomUUID(),
+                TENANT,
+                "TWO_IN_A_SHIFT_LATER",
+                "BONUS",
+                "DELIVERED_VOLUME",
+                "Two or more deliveries in one shift",
+                new JdbcCourierStore.RuleConfig(50_000, UZS, "GTE", 2, "SHIFT", "SHIFT_CLOSE"));
+        List<CourierAdjustmentService.Outcome> posted = adjustmentRules.evaluateShiftClose(
+                TENANT, shiftStore.findShift(TENANT, shift.id()).orElseThrow());
+        assertThat(posted).hasSize(1);
+        assertThat(entriesOfType(LedgerEntryType.BONUS))
+                .filteredOn(entry -> "TWO_IN_A_SHIFT_LATER".equals(entry.reasonCode()))
+                .singleElement()
+                .satisfies(entry -> assertThat(entry.amountMinor()).isEqualTo(hit.totalAmountMinor()));
+    }
+
+    @Test
+    @DisplayName(
+            "the simulator replays an open settlement period as it stands and says so, and narrows shifts by branch")
+    void theSimulatorReplaysAnOpenPeriodAndFiltersShiftsByBranch() {
+        accruals.recordDelivery(delivery(deliveredShipment(), 4000, 0));
+        CourierRuleSimulator simulator = new CourierRuleSimulator(ledgerStore, shiftStore, courierStore, clock);
+
+        CourierRuleSimulator.Simulation period = simulator.simulate(
+                TENANT,
+                new CourierRuleSimulator.Candidate("DELIVERED_VOLUME", "GTE", 1, "SETTLEMENT_PERIOD", -20_000, UZS),
+                7,
+                null);
+
+        assertThat(period.couriersHit()).isEqualTo(1);
+        assertThat(period.totalAmountMinor())
+                .as("a penalty rule's amount is negative")
+                .isEqualTo(-20_000);
+        assertThat(period.includesOpenPeriods()).isTrue();
+        assertThat(period.hits().getFirst().windowStillOpen()).isTrue();
+
+        ShiftRow shift = openShift();
+        accruals.recordDelivery(deliveryOnShift(shift.id(), 3_000, 0));
+        clock.set(NOON.plus(Duration.ofHours(5)));
+        shifts.close(new CourierShiftService.CloseShift(
+                TENANT, shift.id(), ShiftActor.COURIER, courier(), null, "done", null, UZS));
+        assertThat(simulator
+                        .simulate(
+                                TENANT,
+                                new CourierRuleSimulator.Candidate("DELIVERED_VOLUME", "GTE", 1, "SHIFT", 1_000, UZS),
+                                7,
+                                UUID.randomUUID())
+                        .windowsReplayed())
+                .as("another branch's shifts are not this branch's")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("the simulator refuses what the evaluator would never read, and a window or lookback it does not know")
+    void theSimulatorRefusesWhatNothingReads() {
+        CourierRuleSimulator simulator = new CourierRuleSimulator(ledgerStore, shiftStore, courierStore, clock);
+
+        Throwable dead = catchThrowable(() -> simulator.simulate(
+                TENANT, new CourierRuleSimulator.Candidate("ORDER_DAMAGED", "GTE", 1, "SHIFT", -1_000, UZS), 7, null));
+        assertThat(dead).isInstanceOf(ApiException.class);
+        assertThat(((ApiException) dead).errorCode()).isEqualTo(ErrorCode.UNPROCESSABLE_STATE);
+        assertThat(((ApiException) dead).properties()).containsEntry("reason", "BASIS_HAS_NO_EVALUATOR_READER");
+
+        assertThat(((ApiException) catchThrowable(() -> simulator.simulate(
+                                TENANT,
+                                new CourierRuleSimulator.Candidate("CASH_VARIANCE", "GTE", 1, "SHIFT", -1_000, UZS),
+                                7,
+                                null)))
+                        .errorCode())
+                .as("CASH_VARIANCE is read at period close only")
+                .isEqualTo(ErrorCode.VALIDATION_FAILED);
+        assertThat(((ApiException) catchThrowable(() -> simulator.simulate(
+                                TENANT,
+                                new CourierRuleSimulator.Candidate("ON_TIME_RATE", "GTE", 1, "SHIFT", 1_000, UZS),
+                                0,
+                                null)))
+                        .errorCode())
+                .isEqualTo(ErrorCode.VALIDATION_FAILED);
     }
 
     @Test

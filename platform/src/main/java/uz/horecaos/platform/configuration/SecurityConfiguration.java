@@ -484,6 +484,17 @@ public class SecurityConfiguration {
                                 "/api/v1/operations/auth/password-resets/inspect",
                                 "/api/v1/operations/auth/password-resets/accept")
                         .permitAll()
+                        // ADR 0178: a courier setting their own password from the link they
+                        // were texted. Somebody with no password has no session to present,
+                        // so requiring one would refuse exactly the visitor this exists for.
+                        // What authorises both calls is the one-time token in the body,
+                        // checked against the hash the relay kept; CourierAccessController
+                        // rate-limits both per caller address.
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/operations/courier-access/inspect",
+                                "/api/v1/operations/courier-access/accept")
+                        .permitAll()
                         // ADR 0079: a kitchen display device with no credential of its
                         // own asking for one. Unauthenticated for the same reason the
                         // storefront's pre-account identity endpoints above are: there

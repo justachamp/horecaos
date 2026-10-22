@@ -843,6 +843,70 @@
             </select>
           </label>
         }
+        @if (newReasonWired()) {
+          <div class="rates__detail-panel" data-testid="rule-simulation">
+            <h4 class="q-caption">{{ 'delivery.rates.reasons.sim.heading' | t }}</h4>
+            <p class="rates__hint">{{ 'delivery.rates.reasons.sim.hint' | t }}</p>
+            <label class="rates__field">
+              {{ 'delivery.rates.reasons.sim.lookback' | t }}
+              <select
+                [value]="simLookbackDays()"
+                (change)="simLookbackDays.set(+$any($event.target).value)"
+                data-testid="rule-simulation-lookback"
+              >
+                <option value="7">7</option>
+                <option value="14">14</option>
+                <option value="30">30</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              [disabled]="!canSimulate()"
+              (click)="runSimulation()"
+              data-testid="rule-simulation-run"
+            >
+              {{ 'delivery.rates.reasons.sim.run' | t }}
+            </button>
+            @if (simError(); as error) {
+              <p class="rates__error-band" role="alert" data-testid="rule-simulation-error">
+                {{ error }}
+              </p>
+            }
+            @if (simVerdict(); as verdict) {
+              <q-rule-simulator [catalogue]="[]" [rules]="simRules()" [externalResults]="verdict" />
+              @if (simulation(); as result) {
+                @if (result.includesOpenPeriods) {
+                  <p class="rates__hint" data-testid="rule-simulation-open-period">
+                    {{ 'delivery.rates.reasons.sim.openPeriod' | t }}
+                  </p>
+                }
+                @if (result.truncated) {
+                  <p class="rates__hint">{{ 'delivery.rates.reasons.sim.truncated' | t }}</p>
+                }
+                @if (result.hits.length > 0) {
+                  <table class="rates__table" data-testid="rule-simulation-hits">
+                    <thead>
+                      <tr>
+                        <th>{{ 'delivery.rates.reasons.sim.courier' | t }}</th>
+                        <th>{{ 'delivery.rates.reasons.sim.reading' | t }}</th>
+                        <th>{{ 'delivery.rates.reasons.sim.amount' | t }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (hit of result.hits; track hit.windowId) {
+                        <tr data-testid="rule-simulation-hit">
+                          <td class="q-mono">{{ hit.courierReference ?? hit.courierId }}</td>
+                          <td class="q-tnum">{{ hit.value }}</td>
+                          <td class="q-tnum">{{ simMoney(hit.amountMinor, hit.currency) }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+              }
+            }
+          </div>
+        }
         <div class="rates__modal-actions">
           <button type="button" (click)="closeReasonForm()">
             {{ 'delivery.rates.cancel' | t }}

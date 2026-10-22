@@ -135,6 +135,7 @@ class EndpointCapabilityDeclarationTests {
                     || isStaffMfaEndpoint(handler)
                     || isStaffInvitationEndpoint(handler)
                     || isStaffPasswordResetEndpoint(handler)
+                    || isCourierAccessLinkEndpoint(handler)
                     || isPreAccountTelegramSignInEndpoint(handler)
                     || isDeviceEnrolmentBootstrapEndpoint(handler)
                     || isScopeResolvedCourierPolicyEndpoint(handler)
@@ -267,6 +268,7 @@ class EndpointCapabilityDeclarationTests {
                     || isStaffMfaEndpoint(handler)
                     || isStaffInvitationEndpoint(handler)
                     || isStaffPasswordResetEndpoint(handler)
+                    || isCourierAccessLinkEndpoint(handler)
                     || isPreAccountTelegramSignInEndpoint(handler)
                     || isDeviceEnrolmentBootstrapEndpoint(handler)
                     || isPreAccountPickupLocationSearchEndpoint(handler)
@@ -277,6 +279,7 @@ class EndpointCapabilityDeclarationTests {
                     || isDispatchRuleSimulationEndpoint(handler)
                     || isPromotionSimulationEndpoint(handler)
                     || isAutoAddSimulationEndpoint(handler)
+                    || isCourierRuleSimulationEndpoint(handler)
                     || isGeocodeLookupEndpoint(handler)
                     || isPrintPreviewEndpoint(handler)) {
                 continue;
@@ -570,6 +573,18 @@ class EndpointCapabilityDeclarationTests {
             }
         }
         return false;
+    }
+
+    /**
+     * ADR 0178: a courier setting their own password from the link they were texted. The reasoning
+     * {@link #isStaffPasswordResetEndpoint} states applies unchanged: no password means no session and so no
+     * capability, the one-time token in the body authorises both calls, replay finds a spent link, and ADR 0033
+     * rate-limits both per caller address. Exact paths, like every other exemption.
+     */
+    private static boolean isCourierAccessLinkEndpoint(Method handler) {
+        String path = pathOf(handler);
+        return path.equals("/api/v1/operations/courier-access/inspect")
+                || path.equals("/api/v1/operations/courier-access/accept");
     }
 
     /**
@@ -1013,6 +1028,19 @@ class EndpointCapabilityDeclarationTests {
     private static boolean isAutoAddSimulationEndpoint(Method handler) {
         return pathOf(handler)
                 .equals("/api/v1/control-plane/tenants/{tenantId}/brands/{brandId}/catalog/auto-add-rules/simulations");
+    }
+
+    /**
+     * Whether this endpoint is the courier bonus and penalty rule simulator (ADR 0178): a POST only because its input
+     * is a candidate rule, not a query string.
+     *
+     * <p>It replays the evaluator's arithmetic over shifts and periods already closed and writes nothing -- no ledger
+     * entry, no approval, no state -- so there is no effect for a replay key to guard. It is not exempt from
+     * authorization: it declares {@code courier.adjustment.reason.manage}, the capability of authoring the rule.
+     * Matched on the exact path, as every exemption here is.
+     */
+    private static boolean isCourierRuleSimulationEndpoint(Method handler) {
+        return pathOf(handler).equals("/api/v1/operations/tenants/{tenantId}/adjustment-rule-simulations");
     }
 
     /**

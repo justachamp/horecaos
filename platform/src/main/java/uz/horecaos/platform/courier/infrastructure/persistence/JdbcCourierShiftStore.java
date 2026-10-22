@@ -76,6 +76,25 @@ public class JdbcCourierShiftStore {
                 .optional();
     }
 
+    /**
+     * Shifts that closed since {@code since}, newest first, for the rule simulator's read-only replay (ADR 0178).
+     * Only {@code CLOSED} ones: those are the shifts a {@code SHIFT_CLOSE} rule has been evaluated over.
+     */
+    public List<ShiftRow> closedSince(UUID tenantId, Instant since, @Nullable UUID locationId, int limit) {
+        return jdbc.sql(SELECT_SHIFT + """
+                 WHERE tenant_id = :tenantId AND status = 'CLOSED' AND closed_at >= :since
+                   AND (CAST(:locationId AS uuid) IS NULL OR location_id = :locationId)
+                 ORDER BY closed_at DESC
+                 LIMIT :limit
+                """)
+                .param("tenantId", tenantId)
+                .param("since", JdbcCourierStore.utc(since))
+                .param("locationId", locationId)
+                .param("limit", limit)
+                .query(JdbcCourierShiftStore::mapShift)
+                .list();
+    }
+
     public Optional<ShiftRow> findLiveShift(UUID tenantId, UUID courierId) {
         return jdbc.sql(SELECT_SHIFT + """
                  WHERE tenant_id = :tenantId AND courier_id = :courierId

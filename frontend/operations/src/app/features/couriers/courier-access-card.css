@@ -1,0 +1,53 @@
+:host {
+  display: block;
+}
+
+.access {
+  margin-top: 16px;
+}
+
+.access__heading {
+  margin: 0 0 4px;
+  color: var(--q-ink-subtle);
+}
+
+.access__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.access__actions button {
+  padding: 4px 10px;
+  border: 1px solid var(--q-hairline);
+  background: var(--q-canvas);
+  border-radius: var(--q-radius);
+  cursor: pointer;
+  font-size: var(--q-type-body-xs);
+}
+
+.access__actions button.access__primary {
+  border-color: var(--q-primary);
+  color: var(--q-primary);
+}
+
+.access__actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.access__note {
+  margin: 0;
+  color: var(--q-ink-muted);
+}
+
+.access__warning {
+  margin: 4px 0 0;
+  color: var(--q-ink-muted);
+}
+
+.access__error {
+  margin: 4px 0 0;
+  color: var(--q-error-text);
+}

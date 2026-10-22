@@ -41,6 +41,8 @@ export interface RosterEntryResponse {
    */
   readonly online?: boolean;
   readonly lastSeenAt?: string | null;
+  /** The version a correction sends back as `expectedVersion` (ADR 0031, ADR 0178). */
+  readonly version?: number;
 }
 
 /** Mirrors `OperationsCourierController.CourierTypeResponse`. */
@@ -125,6 +127,93 @@ export interface RegisterCourierRequest extends CourierComplianceFileRequest {
   /** ISO date. */
   readonly engagedFrom: string;
   readonly reason: string;
+}
+
+/** Mirrors `OperationsCourierLifecycleController.UpdateCourierRequest` (ADR 0178). Name the reference, the type, or both. */
+export interface CorrectCourierRequest {
+  readonly expectedVersion: number;
+  readonly displayReference?: string | null;
+  readonly courierTypeId?: string | null;
+  readonly reason: string;
+}
+
+/** Mirrors `OperationsCourierLifecycleController.CourierCorrectedResponse`. */
+export interface CourierCorrectedResponse {
+  readonly courierId: string;
+  readonly displayReference: string;
+  readonly courierTypeId: string;
+  readonly status: string;
+  readonly version: number;
+}
+
+/** `INVITE` is a first sign-in; `RESET` replaces access the courier already has. */
+export type CourierAccessKind = 'INVITE' | 'RESET';
+
+/**
+ * Mirrors `OperationsCourierAccessController.AccessStateResponse` (ADR 0178). Never a phone number and never a
+ * link: the courier is texted, and the console only learns where it stands.
+ */
+export interface CourierAccessState {
+  /** `NONE` | `QUEUED` | `SENT` | `EXPIRED` | `ACCEPTED` | `VOIDED` | `FAILED`. */
+  readonly state: string;
+  readonly kind?: CourierAccessKind | null;
+  readonly requestedAt?: string | null;
+  readonly sentAt?: string | null;
+  readonly expiresAt?: string | null;
+  readonly acceptedAt?: string | null;
+  /** A stable code such as `SMS_NOT_CONNECTED`, `NO_PHONE_NUMBER` or `SMS_PURPOSE_NOT_PERMITTED`. */
+  readonly lastErrorCode?: string | null;
+  /** False while no SMS gateway carries courier messages: an invitation then waits. */
+  readonly smsConnected: boolean;
+}
+
+/** Mirrors `OperationsCourierAccessController.IssuedResponse`. */
+export interface CourierAccessIssued {
+  readonly invitationId: string;
+  readonly kind: CourierAccessKind;
+  readonly status: string;
+  readonly smsConnected: boolean;
+}
+
+/** Mirrors `OperationsCourierRuleSimulationController.SimulateRuleRequest` (ADR 0178). */
+export interface SimulateRuleRequest {
+  readonly outcomeBasis: string;
+  readonly ruleComparator: string;
+  readonly ruleThreshold: number;
+  /** `SHIFT` | `SETTLEMENT_PERIOD`. */
+  readonly ruleWindow: string;
+  /** Negative for a penalty. */
+  readonly ruleAmountMinor: number;
+  readonly ruleCurrency: string;
+  readonly lookbackDays?: number | null;
+  readonly locationId?: string | null;
+}
+
+/** Mirrors `OperationsCourierRuleSimulationController.HitResponse`. A reference, never a name. */
+export interface RuleSimulationHit {
+  readonly courierId: string;
+  readonly courierReference?: string | null;
+  readonly windowId: string;
+  readonly windowEnd?: string | null;
+  readonly value: number;
+  readonly amountMinor: number;
+  readonly currency: string;
+  readonly windowStatus: string;
+  readonly windowStillOpen: boolean;
+}
+
+/** Mirrors `OperationsCourierRuleSimulationController.SimulationResponse`. */
+export interface RuleSimulation {
+  readonly lookbackDays: number;
+  readonly window: string;
+  /** How many closed shifts or periods were looked at: «nobody» is not «nothing to look at». */
+  readonly windowsReplayed: number;
+  readonly couriersHit: number;
+  readonly totalAmountMinor: number;
+  readonly currency: string;
+  readonly truncated: boolean;
+  readonly includesOpenPeriods: boolean;
+  readonly hits: readonly RuleSimulationHit[];
 }
 
 /** Mirrors `OperationsCourierController.CourierGroupResponse`. */
@@ -431,6 +520,12 @@ export interface CourierPolicyView {
    */
   readonly runPayMode?: RunPayMode | null;
   /**
+   * ADR 0042, ADR 0178: how firmly the pickup and the handover hold a courier to the position check.
+   * `SOFT` (the default, and what a platform that predates the field answers) records a failed check
+   * and lets the step go ahead; `HARD` refuses it.
+   */
+  readonly pickupHandoverGate?: PickupHandoverGate;
+  /**
    * Set instead of a new version when publishing `FIRST_FULL_THEN_INCREMENT` needs a second signature
    * (ADR 0050): the document in force is unchanged and the same publication succeeds once it is approved.
    */
@@ -441,6 +536,8 @@ export interface CourierPolicyView {
 }
 
 export type RunPayMode = 'PER_ORDER' | 'FIRST_FULL_THEN_INCREMENT';
+
+export type PickupHandoverGate = 'SOFT' | 'HARD';
 
 /** Mirrors `OperationsCourierController.CourierPolicyWriteRequest` — every field required (whole-document publish). */
 export interface CourierPolicyWriteInput {
@@ -461,6 +558,8 @@ export interface CourierPolicyWriteInput {
   readonly onlineWithinMinutes: number;
   /** ADR 0170. Null leaves the pay mode undecided. */
   readonly runPayMode?: RunPayMode | null;
+  /** ADR 0178. Absent is `SOFT`. */
+  readonly pickupHandoverGate?: PickupHandoverGate;
   /** ADR 0170. Required, and true, when this publication moves the pay mode to `FIRST_FULL_THEN_INCREMENT`. */
   readonly acknowledgeEngagementTerms?: boolean | null;
   readonly reason: string;
@@ -525,6 +624,75 @@ export class CouriersApi {
     await firstValueFrom(
       this.api.post<SuspendEngagementRequest, void>(
         courierPaths.courierEngagementSuspend(tenantId, engagementId),
+        command(request),
+      ),
+    );
+  }
+
+  // --------------------------------------- IA 3.3, correct, end and archive (ADR 0178)
+
+  async correct(
+    tenantId: string,
+    courierId: string,
+    request: CorrectCourierRequest,
+  ): Promise<CourierCorrectedResponse> {
+    return firstValueFrom(
+      this.api.put<CorrectCourierRequest, CourierCorrectedResponse>(
+        courierPaths.courierCorrection(tenantId, courierId),
+        command(request),
+      ),
+    );
+  }
+
+  async endEngagement(tenantId: string, courierId: string, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<{ reason: string }, void>(
+        courierPaths.courierEngagementEnding(tenantId, courierId),
+        command({ reason }),
+      ),
+    );
+  }
+
+  async archive(tenantId: string, courierId: string, reason: string): Promise<void> {
+    await firstValueFrom(
+      this.api.post<{ reason: string }, void>(
+        courierPaths.courierArchival(tenantId, courierId),
+        command({ reason }),
+      ),
+    );
+  }
+
+  // ----------------------------------------- IA 3.3, the app account (ADR 0178)
+
+  async accessState(tenantId: string, courierId: string): Promise<CourierAccessState> {
+    const result = await firstValueFrom(
+      this.api.get<CourierAccessState>(courierPaths.courierAccess(tenantId, courierId)),
+    );
+    return result.value;
+  }
+
+  /** Texts the courier a link to set their own password. The console never sees the link. */
+  async invite(
+    tenantId: string,
+    courierId: string,
+    kind: CourierAccessKind,
+    locale: string,
+  ): Promise<CourierAccessIssued> {
+    return firstValueFrom(
+      this.api.post<{ kind: CourierAccessKind; locale: string }, CourierAccessIssued>(
+        courierPaths.courierAccessInvitations(tenantId, courierId),
+        command({ kind, locale }),
+      ),
+    );
+  }
+
+  // ----------------------------------------- IA 3.4, the rule simulator (ADR 0178)
+
+  /** Who a rule would have hit in the last days and for how much; writes nothing. */
+  simulateRule(tenantId: string, request: SimulateRuleRequest): Promise<RuleSimulation> {
+    return firstValueFrom(
+      this.api.post<SimulateRuleRequest, RuleSimulation>(
+        courierPaths.adjustmentRuleSimulations(tenantId),
         command(request),
       ),
     );
