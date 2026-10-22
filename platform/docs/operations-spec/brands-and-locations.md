@@ -1024,7 +1024,7 @@ Tabbed record: `Профиль · Медиа · Филиалы · Графики
 | Телефон | phone | **not built** — no column |
 | Телеграм-бот | handle | **not built — ADR 0020 / channel setup** |
 | Страна | dropdown driving currency, phone format, timezone | **not built at brand level** — `tenant.tenants.default_currency` / `.default_timezone` exist at tenant scope only; per-brand currency is an IA requirement (2.3) with no column |
-| Языки, язык по умолчанию | multi-select + default | **not built** — `platform.default_locale` exists as an ADR 0030 configuration key at PLATFORM scope and can be overridden at BRAND scope today, which covers the default but not the supported set |
+| Языки, язык по умолчанию | multi-select + default | **built** — `tenant.brand_locales` (V0242): the brand's own supported set and one default, validated against the registry's content tier (ADR 0149); the brand-profile screen edits it, every localized editor reads it, and a storefront offers exactly it. (`platform.default_locale`, which this row used to cite, was deleted by V0194.) |
 | Валюта | read-only | `tenant.tenants.default_currency` |
 | Старый идентификатор | mono, read-only, visible only during migration | `tenant.brands.legacy_company_id` |
 

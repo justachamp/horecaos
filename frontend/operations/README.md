@@ -247,13 +247,21 @@ is activated by the registry's existence; `kk` and `ka` are declared with no tie
    it (`messages/<area>.<locale>.ts`, typed so a missing key fails the build; the control plane's
    `messages.<locale>.ts`), the face is bundled and the glyph audit has passed, then the entry gains
    `STAFF_UI`. Russian stays the staff default.
-4. **Script and layout** -- the bundled `@ibm/plex-sans` covers Latin, Latin Extended and Cyrillic,
-   and neither Kazakh's extra Cyrillic letters nor Georgian. Kazakh: audit the bundled face against
-   the Kazakh alphabet and add a second face only if it fails. Georgian: an openly licensed face chosen
-   at activation, declared as its own `@font-face` with a `unicode-range` and loaded only when the
-   locale is active, so a Russian-speaking cashier never downloads Mkhedruli. A right-to-left language
-   is not a checklist item: it reaches order lines, receipts, fiscal documents and SMS and needs its own
-   record.
+4. **Script and layout** -- run `npm run lint:rules`: it includes the **glyph audit**
+   (`frontend/tools/glyph-audit`, which reads the font files each console ships and checks every
+   letter of every language in `alphabets.json`). As of 2026-10-23 the bundled `@ibm/plex-sans` 1.1.0
+   (and the control plane's `@fontsource` subsets) draw every letter of Russian, Uzbek Latin, English
+   **and Kazakh** (Ә Ғ Қ Ң Ө Ұ Ү Һ І, both cases), so Kazakh needs no second face; Georgian is absent,
+   which the audit says out loud ("declared, no face shipped"). Activating a language therefore starts
+   with a row for it in `alphabets.json` (a backend test fails without one) and, if its face is a new
+   one, a shipped `@font-face`; the audit then fails the build if a letter of the language is not drawn.
+   Georgian: an openly licensed face chosen at activation, declared as its own `@font-face` with a
+   `unicode-range` and loaded only when the locale is active, so a Russian-speaking cashier never
+   downloads Mkhedruli; flip `"shipped": true` for `georgian-lazy` in `alphabets.json` in the same
+   change. The Uzbek modifier letters U+02BB-02BC are in no split subset of `@ibm/plex-sans`, so a
+   screen that shows `Oʻ` fetches the complete face (about 60 KB a weight); the audit pins that list
+   per app (`completeFaceAllowed`) so the cost cannot grow unseen. A right-to-left language is not a
+   checklist item: it reaches order lines, receipts, fiscal documents and SMS and needs its own record.
 
 What activating adds *no* migration and *no* change to any module other than its catalogue: the
 locale columns are a BCP 47 shape check (V0499), the brand's supported set is the tenant's choice,

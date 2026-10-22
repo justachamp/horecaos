@@ -1224,7 +1224,7 @@ who will never open any other settings screen, and because half the console's ot
 | Field | Type | Source |
 |---|---|---|
 | Поддерживаемые языки | multi-select over **the registry's content tier** (`GET /api/v1/operations/locales`, ADR 0149): `ru, uz-Latn, en` live; `kk`, `ka` declared and offered nowhere until a release makes them live. `uz-Cyrl` and `kaa` are not declared (the registry has room for both) | **built** (10.1's brand profile, V0242 `tenant.brand_locales`): the brand's own set and default, validated against the registry's content tier, not a list this screen keeps. A bare `uz` from an older client is read as `uz-Latn` and never stored |
-| Язык по умолчанию | single select | `platform.default_locale` (`ConfigurationKeys.DEFAULT_LOCALE`, default `"uz"`, tenant-visible) — a **real registered key today**, resolvable at every level |
+| Язык по умолчанию | single select | **built** (10.1's brand profile): `tenant.brand_locales.is_default`, one per brand, which must be one of the brand's own set. It is also what a storefront opens in (`GET /api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locales`, ADR 0149). The configuration key `platform.default_locale` this row used to cite was deleted by V0194 (ADR 0030); nothing reads a platform-wide default language any more, and a brand that has chosen none falls back to the registry's `ru` |
 | Валюта | read-only `UZS` | `tenant.tenants.default_currency` |
 | Часовой пояс | IANA | `tenant.tenants.default_timezone`; per-location `tenant.locations.timezone` |
 | Формат даты | read-only `DD.MM` | platform reference data (control-plane 8.3) |
@@ -1238,7 +1238,15 @@ customer: notification wordings, the bot, emails, SMS) and **staff UI** (the con
 activating one in a tier is a release, never a tenant's configuration. What this screen therefore means:
 
 - the languages it offers are the registry's content tier; a declared language that is not live is not on
-  the list, and adding one needs no change here;
+  the list, and adding one needs no change here. The same holds for every form that authors in a brand's
+  languages: a cancellation, line-removal or completion reason is worded in the **union of the tenant's brands**
+  (`GET .../order-outcome-reasons/locale-set`, the very set the service refuses to leave a wording out of), an
+  auto-add rule's customer text in the brand's set, a receipt footer and the document-language policy in the
+  registry's messages tier narrowed to the brand's set, and a storefront offers a language when the registry has
+  it live, the build has its catalogue and the brand serves it;
+- the assistant's notes and disclosure sentences are the one exception: they are written in the languages
+  its detector has word lists for (`GET /api/v1/operations/assistant/languages`), which are ISO 639 codes and not
+  platform tags (ADR 0149, Decision 3, "not locales");
 - **"all of this brand's languages are required"**: a notification template version needs a wording in
   every language *the template's brand serves* (a tenant-wide template: the union of the tenant's
   brands) before it can be saved or activated, not in every language the platform has. A customer whose
@@ -1538,7 +1546,7 @@ Named precisely, with the owning decision. Everything not listed here is built a
 |---|---|
 | A purpose/role column on `media.assets`, so "the logo" and "the aggregator banner" are distinguishable | ADR 0010 |
 | Brand contact fields and a brand description with translations | ADR 0002 |
-| Per-brand supported-language set (only `platform.default_locale` exists) | ADR 0030 key, content ADR 0002 |
+| ~~Per-brand supported-language set~~ — built: `tenant.brand_locales` (V0242), read by every localized editor and by the storefronts (`GET .../brands/{brandId}/locales`, ADR 0149). `platform.default_locale`, which this row used to cite, was deleted by V0194 | ADR 0149 |
 | Location sort order and venue attributes (branch tags built wave P37 — `BranchTagController`, §10.10) | ADR 0002 |
 | Courier policy settings: billing mode, shift enforcement, ready-only visibility, address-before-accept, post-delivery payment check, acceptance SLA, max concurrent orders, GPS radii | ADR 0042, Proposed |
 | ~~Business calendar, business-day boundary that may cross midnight, weekend definition~~ — built wave P37, `BusinessCalendarController`, §10.10. Delever's forecast-window default (09:00→09:00) is still an open product question the matrix records | ADR 0043 |

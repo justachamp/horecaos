@@ -110,3 +110,73 @@ log, filter by `courier.first_name.disclosed_to_customer`: one fact per message,
 name.
 
 **To undo.** Remove `{{courierFirstName}}` from the template and activate the new version.
+
+# Languages and type (rows 10.12 and X.40, ADR 0149)
+
+The next three sections are the facts the languages-and-type step waits on. The code that waits for each is
+built and tested against a stand-in; none of them is a language being live.
+
+## Activating Kazakh or Georgian
+
+**What exists.** `kk` and `ka` are declared in `PlatformLocales` (`tenancy.api`) with no tier live. The
+mechanism that makes a language live is rehearsed with a synthetic fifth language: `PlatformLocales.rehearseActivation`
+(a test seam) declares it live in the content and messages tiers, and `ActivationRehearsalTests` (backend),
+the two storefronts' `activation-rehearsal.spec.ts`, the operations console's and the control plane's prove
+that the brand editor's closed set, the template requirement («a brand that serves it owes a wording in
+it»), the sets a tenant-scoped vocabulary is authored in, the public registry read and a brand's own set,
+the storefront pickers and `<html lang dir>` all follow with no migration and no change to any module other
+than a catalogue. What is not built, because it is people's work: the translations. The record forbids a silent
+machine fallback.
+
+**Where the value goes.** Per tier, as a release started by a signed tenant (ADR 0090):
+
+1. *Content* — add the language's catalogue file to each storefront's `src/i18n/` and its id to
+   `BUILD_CATALOGUE_IDS` in that storefront's `lang.service.ts`; then the registry entry gains `CONTENT`.
+2. *Messages* — a wording for every template key the brand uses, the Telegram bot's replies and the
+   transactional emails translated, any SMS wording through ADR 0091's gate and the gateway (ADR 0146); then
+   the entry gains `MESSAGES`.
+3. *Staff UI* — both consoles' catalogues (`messages/<area>.<locale>.ts`, the control plane's
+   `messages.<locale>.ts`) and `LOCALES` in `core/i18n/i18n.ts`; then the entry gains `STAFF_UI`.
+4. The tenant then chooses the language in its brand's supported set.
+
+**How to prove it.** Run `npm run lint:rules` in both consoles (the glyph audit) and the backend's
+`PlatformLocalesTests`; open a storefront served by a brand that has chosen the language: the picker offers
+it, `<html lang>` carries its tag, and a notification to a customer whose profile names it is written in it.
+Order a cancellation in that language and read it on the receipt.
+
+**To undo.** Remove the tier from the registry entry. A brand's stored choice is then simply not offered, and
+nothing already written is lost.
+
+## Mobile app locale lists and ARB catalogues
+
+**What exists.** Nothing is built in Dart. The Flutter customer app is on hold (ADR 0055), so
+`mobile/lib/src/l10n/supported_locales.dart`, `mobile/l10n.yaml` and the `app_*.arb` catalogues still carry
+their own three-language lists.
+
+**Where the value goes.** The owner's decision to resume Flutter. When it is taken, the app reads the
+registry's content tier (`GET /api/v1/storefront/locales`) and a brand's own set
+(`GET /api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locales`), the way the web storefronts do, and its
+catalogues follow the registry's catalogue ids.
+
+**How to prove it.** The mobile app's picker offers exactly what the web storefront's offers for the same
+brand.
+
+**To undo.** Nothing to undo; nothing was changed.
+
+## The Georgian face
+
+**What exists.** The registry declares `georgian-lazy` as `ka`'s face; `frontend/tools/glyph-audit/alphabets.json`
+marks it `"shipped": false`, so the glyph audit reports «declared, no face shipped» and does not fail, and
+`PlatformLocalesTests.everyLanguageHasAnAlphabetRow` fails the build if `ka` is made live over a face that is
+not shipped. @ibm/plex-sans has no Georgian glyph (the audit's test proves it can say so).
+
+**Where the value goes.** The design owner's choice of an openly licensed face and its licence (Noto Sans
+Georgian under the SIL Open Font License 1.1 is the smallest default). It is added as its own `@font-face`
+with `unicode-range: U+10A0-10FF, U+1C90-1CBF, U+2D00-2D2F`, loaded only when the locale is active, in each
+app that serves Georgian; the licence text goes beside the font files; `"shipped": true` is set for
+`georgian-lazy` in `alphabets.json` and the apps are listed under it.
+
+**How to prove it.** `npm run lint:rules` reports `ka` as `covered`; a Russian-speaking cashier's network log
+shows no Georgian font request.
+
+**To undo.** Set the face back to not shipped and remove the `@font-face`; the audit goes back to «declared».

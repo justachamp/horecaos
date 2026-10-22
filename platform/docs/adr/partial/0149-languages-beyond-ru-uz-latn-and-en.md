@@ -19,11 +19,27 @@
   editors, a template's wordings, audience languages, staff languages, the catalog's codes, the
   switcher narrowed to the staff-UI tier) with their hand-kept lists and `uz` conversions removed, a
   logical-properties ratchet on both, the storefront's one `platformTag`, the activation checklist in
-  `frontend/operations/README.md`, `settings.md` §10.12 and the IA's type-stack line. Not built: the
-  mobile app's catalogue and lists (Flutter is on hold), the storefronts' catalogue files under the
-  registry's tags (`uz.json` stays, behind `platformTag`) and their reading of the registry rather
-  than a compiled-in language set, the Kazakh glyph audit and a Georgian face (both deferred to the
-  first activation, by the record's own default), and any language activation. The inventory the
+  `frontend/operations/README.md`, `settings.md` §10.12 and the IA's type-stack line. Built in wave 21
+  (2026-10-23): a brand's own content languages on the public storefront surface
+  (`GET /api/v1/storefront/tenants/{tenantId}/brands/{brandId}/locales`, default first, left to the registry's
+  live content tier); both storefronts reading the registry and the brand's set (`PlatformLocales` and
+  `LangService`: a language is offered when the registry has it live in the content tier, the build has its
+  catalogue and the brand serves it; the brand's default is the initial language; `<html lang dir>` follow the
+  active language; `platformTag` is the registry's `catalogCode`, not a table, in both apps); the operations
+  console's last hand-kept lists and `uz` conversions gone (reference-data reason wordings in the tenant's
+  union through `GET .../order-outcome-reasons/locale-set`, the auto-add rule's customer text over the brand's
+  set, the receipt footer and the document-language policy over the registry's messages tier narrowed to the
+  brand, the reset and invitation requests sending the tag, the assistant's notes and disclosure served the
+  detector's languages by `GET /api/v1/operations/assistant/languages`, with the assistant's stored ISO 639 codes
+  now a fourth named "not locales" exemption in the by-name scan); the Kazakh glyph audit
+  (`frontend/tools/glyph-audit`, run by `npm run lint:rules` in both consoles: @ibm/plex-sans 1.1.0 draws every
+  letter of Russian, Uzbek Latin, English and Kazakh; Georgian is absent and the audit says so; U+02BB-02BC are in no
+  split subset of the package and ride the complete face, pinned per app); `alphabets.json` as the table every
+  declared language must have a row in (a backend test); and the activation rehearsal (`rehearseActivation`
+  and its specs). Not built: the mobile app's catalogue and lists (Flutter is on hold, ADR 0055), the
+  storefronts' catalogue files renamed to the registry's tags (`uz.json` stays: the catalogue id is the
+  registry's `catalogCode`), a Georgian face (deferred to the first activation by the record's own
+  default), the legacy ru/uz/en columns of presets, regions and zones, and any language activation. The inventory the
   record was written against, kept for the record as it stood on 2026-10-03 and not as it stands
   now: the platform speaks three languages and
   records that fact in more than sixty independent declarations, counted by grep on
@@ -129,6 +145,15 @@
 closed on its proposed default.
 
 **Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "lets finish all" over every record still Proposed on this date. Every open input above is closed on the default this record proposes for it; an input that names a person other than the owner, or an external fact (a licence term, a provider capability, a tax treatment, an account that does not exist yet), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation of what this record decides and has not yet built starts in operations batch 19 and 20 (2026-10-07).
+
+**Status addition, 2026-10-23 (wave 21).** Decision 3's third group ("Not locales": ISO 639 language codes that
+are not platform tags) names `iam.staff_members.spoken_languages`, Payme's page language and the SMS subtag.
+It also holds the assistant's own codes: `assistant.knowledge_entries.locale` and `assistant.turns.locale` store
+`ru`, `uz` and `en`, the vocabulary of the assistant's language detector (`ReplyLocale.SUPPORTED`, ADR 0069),
+because a detector has word lists for a language and not for a script. They are not migrated; the by-name scan
+in `LanguageRegistryMigrationTests` names both columns and asserts they still hold a bare `uz`, and the
+console reads the list from `GET /api/v1/operations/assistant/languages` instead of keeping one. This adds a
+member to a category the Decision already admits; it changes nothing the Decision decides.
 
 ## Context
 
@@ -507,14 +532,21 @@ and why it is the last step that touches data.
 - [x] The migration and its by-name test; the `uz` data rewrite in six columns; the
       no-bare-`uz`-anywhere-else scan with its three named exemptions; the mail module
       on the registry.
-- [ ] Frontend mirrors removed (the nineteen lists and the sixteen conversions, bar the
+- [x] Frontend mirrors removed (the nineteen lists and the sixteen conversions, bar the
       catalog's); `dir` set; the logical-properties lint on touched files. Done in the
-      operations console and the control plane and, for the conversions, the storefront; the
-      storefronts' language sets and the mobile app are not.
+      operations console, the control plane and both storefronts (2026-10-23). The mobile app's lists and
+      catalogues are held with the Flutter app (ADR 0055) and are an external fact, not an open box here.
 - [x] Per-language activation checklist written into `frontend/operations/README.md`
       beside the section that prices a fourth locale, which this record replaces.
-- [ ] Glyph audit of the bundled face against Kazakh; a Georgian face chosen with its
-      licence (at activation, not now).
+- [x] Glyph audit of the bundled face against Kazakh (2026-10-23, `frontend/tools/glyph-audit`, a gate in
+      both consoles' `lint:rules`): @ibm/plex-sans 1.1.0 (Light, Regular, SemiBold) and the control plane's
+      @fontsource subsets draw every letter of ru, uz-Latn, en and kk (Ә Ғ Қ Ң Ө Ұ Ү Һ І, both cases), so Kazakh
+      needs no second face; Georgian is absent from Plex (the audit's falsifiable case); U+02BB-02BC are in no
+      split subset of @ibm/plex-sans and ride its complete face (about 60 KB a weight), pinned per app.
+- [ ] A Georgian face chosen with its licence (at activation, not now): an external fact, the first Georgian
+      tenant's (ADR 0090). The registry's `georgian-lazy` face id is declared and `alphabets.json` marks it not
+      shipped, so the audit says "declared, no face shipped" and a backend test fails if `ka` is made live over
+      it.
 - [x] Update `settings.md` §10.12 and the IA's `X.40` line.
 
 ## Exit criteria
