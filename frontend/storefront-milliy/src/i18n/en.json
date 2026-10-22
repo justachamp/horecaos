@@ -383,6 +383,19 @@
     "modifierOption": "Option",
     "modifiersIncomplete": "Choose the required options above before adding to cart."
   },
+  "push": {
+    "title": "Offers from us",
+    "text": "Get a notification on this device when we have a promotion. You can turn it off here at any time.",
+    "turnOn": "Turn on notifications",
+    "turnOff": "Turn off",
+    "notNow": "Not now",
+    "consentNote": "By turning it on you agree to receive promotional messages from this restaurant on this device.",
+    "onTitle": "Notifications are on",
+    "onText": "We will send you offers on this device.",
+    "blocked": "Notifications are blocked in this browser. Allow them in the browser’s site settings to turn them on.",
+    "enabled": "Notifications are on",
+    "disabled": "Notifications are off"
+  },
   "terms": {
     "agreementTitle": "Public offer agreement",
     "loadError": "The terms of service could not be loaded. Please try again.",

@@ -354,6 +354,19 @@
     "fromPrice": "{{price}} dan",
     "ingredients": "Tarkibi"
   },
+  "push": {
+    "title": "Bizdan takliflar",
+    "text": "Aksiyamiz boʻlganda shu qurilmada bildirishnoma oling. Uni shu yerdan istalgan vaqtda oʻchirishingiz mumkin.",
+    "turnOn": "Bildirishnomalarni yoqish",
+    "turnOff": "Oʻchirish",
+    "notNow": "Hozir emas",
+    "consentNote": "Yoqish bilan siz ushbu restoranning reklama xabarlarini shu qurilmada olishga rozilik bildirasiz.",
+    "onTitle": "Bildirishnomalar yoqilgan",
+    "onText": "Sizga shu qurilmaga takliflar yuboramiz.",
+    "blocked": "Bildirishnomalar bu brauzerda bloklangan. Yoqish uchun brauzerning sayt sozlamalarida ularga ruxsat bering.",
+    "enabled": "Bildirishnomalar yoqildi",
+    "disabled": "Bildirishnomalar oʻchirildi"
+  },
   "terms": {
     "agreementTitle": "Ommaviy oferta bo'yicha shartnoma",
     "loadError": "Foydalanish shartlarini yuklab bo'lmadi. Qayta urinib ko'ring.",
