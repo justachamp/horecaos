@@ -75,7 +75,7 @@ public class StorefrontPushSubscriptionController {
                     + "storefront does not show the prompt. `publicKey` is the application server key "
                     + "(VAPID, base64url) the browser must subscribe under; it is not a secret. `subscribed` is "
                     + "true when the customer has a live subscription at this brand.")
-    public ResponseEntity<PushStatusResponse> status(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+    public ResponseEntity<PushStatusResponse> pushStatus(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
         UUID accountId = accountId(tenantId, brandId);
         Readiness readiness = transport.readiness(tenantId, brandId, "PUSH", "MARKETING");
         boolean available = readiness.ready() && !publicKey.isEmpty();
@@ -93,7 +93,7 @@ public class StorefrontPushSubscriptionController {
                     + "browser. Records the customer's consent to promotional push in the same step. 400 with a "
                     + "bounded reason (`PUSH_ENDPOINT_NOT_ALLOWED`, `PUSH_KEYS_INVALID`, ...) when the "
                     + "subscription is not one the platform will send to.")
-    public ResponseEntity<Void> subscribe(
+    public ResponseEntity<Void> subscribeToPush(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody PushSubscribeRequest request) {
         UUID accountId = accountId(tenantId, brandId);
         try {
@@ -120,7 +120,7 @@ public class StorefrontPushSubscriptionController {
             description = "Ends the customer's subscription at this brand and withdraws their consent to "
                     + "promotional push. 204 whether or not it was on: turning off what is off is the state that was "
                     + "asked for.")
-    public ResponseEntity<Void> unsubscribe(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+    public ResponseEntity<Void> unsubscribeFromPush(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
         subscriptions.unsubscribe(tenantId, brandId, accountId(tenantId, brandId));
         return ResponseEntity.noContent().build();
     }

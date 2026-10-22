@@ -9452,13 +9452,16 @@ export interface WindowWriteRequest {
 
 export interface WordingRequest {
   body: string;
+  coverAssetId?: string;
   subject?: string;
+  targetPath?: string;
 }
 
 export interface WordingResponse {
   approvedBy?: string;
   body?: string;
   contentHash?: string;
+  coverAssetId?: string;
   locale?: string;
   providerReview?: string;
   providerReviewNote?: string;
@@ -9466,6 +9469,7 @@ export interface WordingResponse {
   providerReviewUpdatedAt?: string;
   status?: string;
   subject?: string;
+  targetPath?: string;
   variablesSchema?: { [key: string]: string };
   versionNumber?: number;
 }

@@ -29847,8 +29847,17 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "coverAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "subject" : {
             "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "targetPath" : {
+            "maxLength" : 199,
             "minLength" : 0,
             "type" : "string"
           }
@@ -29865,6 +29874,10 @@
             "type" : "string"
           },
           "contentHash" : {
+            "type" : "string"
+          },
+          "coverAssetId" : {
+            "format" : "uuid",
             "type" : "string"
           },
           "locale" : {
@@ -29886,6 +29899,9 @@
             "type" : "string"
           },
           "subject" : {
+            "type" : "string"
+          },
+          "targetPath" : {
             "type" : "string"
           },
           "variablesSchema" : {

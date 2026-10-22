@@ -30827,6 +30827,54 @@
         },
         "type" : "object"
       },
+      "PushStatusResponse" : {
+        "properties" : {
+          "available" : {
+            "type" : "boolean"
+          },
+          "publicKey" : {
+            "type" : "string"
+          },
+          "subscribed" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "PushSubscribeRequest" : {
+        "properties" : {
+          "endpoint" : {
+            "maxLength" : 2048,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "expirationTime" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "keys" : {
+            "$ref" : "#/components/schemas/PushSubscriptionKeys"
+          }
+        },
+        "required" : [ "endpoint", "keys" ],
+        "type" : "object"
+      },
+      "PushSubscriptionKeys" : {
+        "properties" : {
+          "auth" : {
+            "maxLength" : 256,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "p256dh" : {
+            "maxLength" : 256,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "auth", "p256dh" ],
+        "type" : "object"
+      },
       "PutLineRequest" : {
         "properties" : {
           "comboPicks" : {
@@ -43937,8 +43985,17 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "coverAssetId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
           "subject" : {
             "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "targetPath" : {
+            "maxLength" : 199,
             "minLength" : 0,
             "type" : "string"
           }
@@ -43955,6 +44012,10 @@
             "type" : "string"
           },
           "contentHash" : {
+            "type" : "string"
+          },
+          "coverAssetId" : {
+            "format" : "uuid",
             "type" : "string"
           },
           "locale" : {
@@ -43976,6 +44037,9 @@
             "type" : "string"
           },
           "subject" : {
+            "type" : "string"
+          },
+          "targetPath" : {
             "type" : "string"
           },
           "variablesSchema" : {
@@ -86544,6 +86608,111 @@
         "tags" : [ "Presented offers" ]
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/push" : {
+      "get" : {
+        "description" : "`available` is false until the platform's push identity is configured, and then the storefront does not show the prompt. `publicKey` is the application server key (VAPID, base64url) the browser must subscribe under; it is not a secret. `subscribed` is true when the customer has a live subscription at this brand.",
+        "operationId" : "pushStatus",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PushStatusResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether push can be offered, and whether this customer has turned it on",
+        "tags" : [ "Web Push" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/push/subscription" : {
+      "delete" : {
+        "description" : "Ends the customer's subscription at this brand and withdraws their consent to promotional push. 204 whether or not it was on: turning off what is off is the state that was asked for.",
+        "operationId" : "unsubscribeFromPush",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Turn push off",
+        "tags" : [ "Web Push" ]
+      },
+      "put" : {
+        "description" : "The browser's own `PushSubscription.toJSON()`. Replaces the customer's earlier subscription at this brand, and ends any other customer's subscription for this browser. Records the customer's consent to promotional push in the same step. 400 with a bounded reason (`PUSH_ENDPOINT_NOT_ALLOWED`, `PUSH_KEYS_INVALID`, ...) when the subscription is not one the platform will send to.",
+        "operationId" : "subscribeToPush",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PushSubscribeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Turn push on in this browser",
+        "tags" : [ "Web Push" ]
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/me" : {
       "get" : {
         "description" : "Mints the code on first read rather than requiring a separate create call — a customer's own code is a durable identity, not a resource with a creation step worth exposing.",
@@ -109104,6 +109273,9 @@
   }, {
     "description" : "A brand's own referral reward shape, amounts, cap, and redemption window",
     "name" : "Referral program"
+  }, {
+    "description" : "A customer's opt-in to promotional notifications in their own browser",
+    "name" : "Web Push"
   }, {
     "description" : "Per-guest steps with a wait, a control group and a decision log (ADR 0112)",
     "name" : "Marketing scenarios"

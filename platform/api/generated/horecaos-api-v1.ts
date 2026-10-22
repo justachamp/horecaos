@@ -9780,6 +9780,23 @@ export interface PushResultResponse {
   status?: string;
 }
 
+export interface PushStatusResponse {
+  available?: boolean;
+  publicKey?: string;
+  subscribed?: boolean;
+}
+
+export interface PushSubscribeRequest {
+  endpoint: string;
+  expirationTime?: number;
+  keys: PushSubscriptionKeys;
+}
+
+export interface PushSubscriptionKeys {
+  auth: string;
+  p256dh: string;
+}
+
 export interface PutLineRequest {
   comboPicks?: Array<ComboPickRequest>;
   commentPresetCodes?: Array<string>;
@@ -13942,13 +13959,16 @@ export interface WindowWriteRequest {
 
 export interface WordingRequest {
   body: string;
+  coverAssetId?: string;
   subject?: string;
+  targetPath?: string;
 }
 
 export interface WordingResponse {
   approvedBy?: string;
   body?: string;
   contentHash?: string;
+  coverAssetId?: string;
   locale?: string;
   providerReview?: string;
   providerReviewNote?: string;
@@ -13956,6 +13976,7 @@ export interface WordingResponse {
   providerReviewUpdatedAt?: string;
   status?: string;
   subject?: string;
+  targetPath?: string;
   variablesSchema?: { [key: string]: string };
   versionNumber?: number;
 }
@@ -15005,6 +15026,9 @@ export interface Operations {
   "submit_2": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/review"; request: { parameters: { path: { brandId: string; orderId: string; tenantId: string } }; body: SubmitReviewRequest }; responses: { "200": StorefrontReviewControllerReviewResponse } };
   "poll_2": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/presented-offers"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { surface?: string } } }; responses: { "200": Array<Banner> } };
   "dismiss": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/presented-offers/{presentedOfferId}/dismissals"; request: { parameters: { path: { brandId: string; presentedOfferId: string; tenantId: string } } }; responses: { "200": unknown } };
+  "pushStatus": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/push"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": PushStatusResponse } };
+  "unsubscribeFromPush": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/push/subscription"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": unknown } };
+  "subscribeToPush": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/push/subscription"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: PushSubscribeRequest }; responses: { "200": unknown } };
   "myReferral": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/me"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": MyReferralResponse } };
   "redeem": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/referrals/redemptions"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: RedeemRequest }; responses: { "200": ReferralStorefrontControllerRedemptionResponse } };
   "myReviews": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/reviews"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { cursor?: string; limit?: number } } }; responses: { "200": PageStorefrontReviewControllerReviewResponse } };
