@@ -103,7 +103,8 @@ public class StorefrontPaymentSplitController {
      * @param kind       {@code POINTS} or {@code MONEY}
      * @param methodCode the payment method of a {@code MONEY} tender (CASH, CLICK, PAYME...), null for points
      */
-    public record PaymentSplitTenderResponse(String kind, @Nullable String methodCode, ApiMoney amount, String status) {
+    public record PaymentSplitTenderResponse(
+            String kind, @Nullable String methodCode, ApiMoney amount, String status) {
 
         static PaymentSplitTenderResponse of(TenderRow tender, Optional<String> methodCode) {
             return new PaymentSplitTenderResponse(
