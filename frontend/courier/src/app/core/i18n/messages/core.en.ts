@@ -32,4 +32,7 @@ export const coreEn = {
   'duty.indicator.denied': 'On duty · location is blocked',
   'duty.indicator.break': 'On break · location not shared',
   'duty.indicator.unreachable': 'On duty · cannot reach the server',
+  'shell.nav.offers': 'Offers',
+  'shell.nav.deliveries': 'Deliveries',
+  'shell.nav.waiting': '{count} waiting',
 } as const;

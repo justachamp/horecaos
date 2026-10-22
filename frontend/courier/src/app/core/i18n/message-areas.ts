@@ -6,6 +6,15 @@
  * the screens a courier has not opened yet only when they open them. A new feature adds its area
  * here, its three catalogue modules, and a line in `catalogue-loaders.ts`.
  */
-export const MESSAGE_AREAS = ['core', 'home', 'profile', 'shift', 'notice'] as const;
+export const MESSAGE_AREAS = [
+  'core',
+  'home',
+  'profile',
+  'shift',
+  'notice',
+  'work',
+  'offers',
+  'deliveries',
+] as const;
 
 export type MessageArea = (typeof MESSAGE_AREAS)[number];

@@ -17,6 +17,9 @@ export const CATALOGUE_LOADERS: CatalogueLoaders = {
     profile: () => import('./messages/profile.ru').then((m) => m.profileRu),
     shift: () => import('./messages/shift.ru').then((m) => m.shiftRu),
     notice: () => import('./messages/notice.ru').then((m) => m.noticeRu),
+    work: () => import('./messages/work.ru').then((m) => m.workRu),
+    offers: () => import('./messages/offers.ru').then((m) => m.offersRu),
+    deliveries: () => import('./messages/deliveries.ru').then((m) => m.deliveriesRu),
   },
   'uz-Latn': {
     core: () => import('./messages/core.uz-latn').then((m) => m.coreUzLatn),
@@ -24,6 +27,9 @@ export const CATALOGUE_LOADERS: CatalogueLoaders = {
     profile: () => import('./messages/profile.uz-latn').then((m) => m.profileUzLatn),
     shift: () => import('./messages/shift.uz-latn').then((m) => m.shiftUzLatn),
     notice: () => import('./messages/notice.uz-latn').then((m) => m.noticeUzLatn),
+    work: () => import('./messages/work.uz-latn').then((m) => m.workUzLatn),
+    offers: () => import('./messages/offers.uz-latn').then((m) => m.offersUzLatn),
+    deliveries: () => import('./messages/deliveries.uz-latn').then((m) => m.deliveriesUzLatn),
   },
   en: {
     core: () => import('./messages/core.en').then((m) => m.coreEn),
@@ -31,5 +37,8 @@ export const CATALOGUE_LOADERS: CatalogueLoaders = {
     profile: () => import('./messages/profile.en').then((m) => m.profileEn),
     shift: () => import('./messages/shift.en').then((m) => m.shiftEn),
     notice: () => import('./messages/notice.en').then((m) => m.noticeEn),
+    work: () => import('./messages/work.en').then((m) => m.workEn),
+    offers: () => import('./messages/offers.en').then((m) => m.offersEn),
+    deliveries: () => import('./messages/deliveries.en').then((m) => m.deliveriesEn),
   },
 };

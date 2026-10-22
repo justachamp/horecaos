@@ -13,6 +13,15 @@ import { shiftUzLatn } from './messages/shift.uz-latn';
 import { noticeEn } from './messages/notice.en';
 import { noticeRu } from './messages/notice.ru';
 import { noticeUzLatn } from './messages/notice.uz-latn';
+import { workEn } from './messages/work.en';
+import { workRu } from './messages/work.ru';
+import { workUzLatn } from './messages/work.uz-latn';
+import { offersEn } from './messages/offers.en';
+import { offersRu } from './messages/offers.ru';
+import { offersUzLatn } from './messages/offers.uz-latn';
+import { deliveriesEn } from './messages/deliveries.en';
+import { deliveriesRu } from './messages/deliveries.ru';
+import { deliveriesUzLatn } from './messages/deliveries.uz-latn';
 import { CATALOGUE_LOADERS } from './catalogue-loaders';
 import { MESSAGE_AREAS } from './message-areas';
 
@@ -22,6 +31,9 @@ const AREAS: Record<string, Record<'en' | 'ru' | 'uz-Latn', Record<string, strin
   profile: { en: profileEn, ru: profileRu, 'uz-Latn': profileUzLatn },
   shift: { en: shiftEn, ru: shiftRu, 'uz-Latn': shiftUzLatn },
   notice: { en: noticeEn, ru: noticeRu, 'uz-Latn': noticeUzLatn },
+  work: { en: workEn, ru: workRu, 'uz-Latn': workUzLatn },
+  offers: { en: offersEn, ru: offersRu, 'uz-Latn': offersUzLatn },
+  deliveries: { en: deliveriesEn, ru: deliveriesRu, 'uz-Latn': deliveriesUzLatn },
 };
 
 const placeholders = (text: string) =>

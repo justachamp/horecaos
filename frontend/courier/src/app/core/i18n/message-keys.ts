@@ -3,6 +3,9 @@ import type { homeEn } from './messages/home.en';
 import type { profileEn } from './messages/profile.en';
 import type { shiftEn } from './messages/shift.en';
 import type { noticeEn } from './messages/notice.en';
+import type { workEn } from './messages/work.en';
+import type { offersEn } from './messages/offers.en';
+import type { deliveriesEn } from './messages/deliveries.en';
 
 /**
  * Every key the application may ask for, derived from the English area modules.
@@ -17,4 +20,7 @@ export type MessageKey =
   | keyof typeof homeEn
   | keyof typeof profileEn
   | keyof typeof shiftEn
-  | keyof typeof noticeEn;
+  | keyof typeof noticeEn
+  | keyof typeof workEn
+  | keyof typeof offersEn
+  | keyof typeof deliveriesEn;

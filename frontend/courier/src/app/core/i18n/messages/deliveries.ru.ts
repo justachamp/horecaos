@@ -1,0 +1,28 @@
+import type { deliveriesEn } from './deliveries.en';
+
+export const deliveriesRu = {
+  'deliveries.title': 'Доставки',
+  'deliveries.empty': 'Сейчас у вас нет заказов в работе.',
+  'deliveries.refresh': 'Обновить',
+  'deliveries.back': 'Все доставки',
+  'deliveries.notFound': 'Эта доставка не ваша или её больше нет.',
+  'deliveries.status.ASSIGNED': 'Езжайте на точку выдачи',
+  'deliveries.status.PICKUP_PENDING': 'Ожидание на точке выдачи',
+  'deliveries.status.PICKED_UP': 'В пути',
+  'deliveries.status.DELIVERED': 'Доставлено',
+  'deliveries.status.CANCELLED': 'Отменено',
+  'deliveries.step.arrive': 'Я на месте',
+  'deliveries.step.pickup': 'Забрал',
+  'deliveries.step.handover': 'Передал клиенту',
+  'deliveries.cash.title': 'Наличные',
+  'deliveries.cash.first': 'Подтвердите наличные, прежде чем передать заказ.',
+  'deliveries.cash.label': 'Получено наличными ({currency})',
+  'deliveries.cash.confirm': 'Подтвердить наличные',
+  'deliveries.cash.confirmed': 'Наличные подтверждены: {amount}',
+  'deliveries.cash.invalid': 'Введите сумму, например 125000.',
+  'deliveries.delivered': 'Доставлено в {time}',
+  'deliveries.cancelled': 'Эта доставка отменена.',
+  'deliveries.done.arrive': 'Платформа отметила, что вы на точке выдачи.',
+  'deliveries.done.pickup': 'Заказ забран. Отвезите его клиенту.',
+  'deliveries.done.handover': 'Доставлено. Спасибо.',
+} as const satisfies Record<keyof typeof deliveriesEn, string>;

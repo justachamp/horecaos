@@ -1,0 +1,17 @@
+export const offersEn = {
+  'offers.title': 'Offers',
+  'offers.empty': 'No offers right now. New ones appear here by themselves.',
+  'offers.noShift.title': 'No shift is open',
+  'offers.noShift.body': 'Open a shift to receive offers.',
+  'offers.noShift.link': 'Go to the shift',
+  'offers.polling': 'Looking for new offers every {seconds} seconds. Updated {time}.',
+  'offers.lapses': 'Lapses in {seconds} s',
+  'offers.lapsed': 'Lapsed',
+  'offers.earning': 'You earn {amount}',
+  'offers.earning.increment': 'Extra for joining the run you already carry',
+  'offers.earning.none': 'No pay quote for this offer',
+  'offers.accept': 'Accept',
+  'offers.decline': 'Decline',
+  'offers.gone': 'That offer is no longer available.',
+  'offers.declined': 'Offer declined.',
+} as const;
