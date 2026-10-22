@@ -3,11 +3,14 @@ package uz.horecaos.platform.commercial.api;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.Set;
 import java.util.UUID;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+import java.util.stream.Collectors;
 
 /**
  * The contract every {@link CardProviderAdapter} keeps (ADR 0095, ADR 0007), as one suite that runs against
@@ -18,6 +21,12 @@ import org.junit.jupiter.api.Test;
  * here is one the settlement and top-up code relies on, so each is pinned where it is made. A fake that says
  * yes proves nothing about the code that talks to it; running the same assertions against the adapter that
  * speaks the provider's wire is what makes the fake's behaviour evidence about the real one.
+ *
+ * <p>The rules are plain assertions, not tests, on purpose: CI's shard enumeration (tools/ci/shard_tests.py) expects a
+ * report from every class that holds a test annotation, and an abstract base never produces one. Each implementation's
+ * own test class declares one test per rule, named as the rule is minus the {@code assert}, and calls it.
+ * {@link #assertEveryRuleHasATestHere()} is the guard that keeps that list whole: a rule added here without a test
+ * in a class that runs this contract fails there, by name.
  *
  * <p>What is deliberately not here is what only one provider can promise. The in-process double refuses a key
  * reused with different parameters and scopes a card to its tenant; Click holds neither, and its adapter keeps
@@ -72,11 +81,25 @@ public abstract class CardProviderContract {
         return ((CardEnrolment.ConfirmOutcome.Enrolled) outcome).cardTokenReference();
     }
 
-    // ------------------------------------------------------------------ the tests
+    /** Fails by name when a rule below has no test of its own in the class that runs this contract. */
+    protected final void assertEveryRuleHasATestHere() {
+        Set<String> rules = Arrays.stream(CardProviderContract.class.getDeclaredMethods())
+                .filter(method -> !Modifier.isStatic(method.getModifiers()))
+                .map(Method::getName)
+                .filter(name -> name.startsWith("assert") && !name.equals("assertEveryRuleHasATestHere"))
+                .map(name -> Character.toLowerCase(name.charAt(6)) + name.substring(7))
+                .collect(Collectors.toSet());
+        Set<String> tested = Arrays.stream(getClass().getDeclaredMethods())
+                .filter(method -> method.isAnnotationPresent(org.junit.jupiter.api.Test.class))
+                .map(Method::getName)
+                .collect(Collectors.toSet());
+        assertThat(rules).as("the contract has its rules").isNotEmpty();
+        assertThat(tested).as("every rule of the contract needs a test here").containsAll(rules);
+    }
 
-    @Test
-    @DisplayName("an enrolment opens a session that lasts a while and is never a secret")
-    void anEnrolmentOpensASession() {
+    // ------------------------------------------------------------------ the rules
+
+    protected final void assertAnEnrolmentOpensASession() {
         CardEnrolment.BeginOutcome.Begun begun = begin(TENANT);
 
         assertThat(begun.sessionReference()).isNotBlank();
@@ -86,9 +109,7 @@ public abstract class CardProviderContract {
                 .noneMatch(value -> value.contains("secret"));
     }
 
-    @Test
-    @DisplayName("an enrolled card says which card, never which reference")
-    void anEnrolledCardNeverShowsItsReferenceInItsOwnDescription() {
+    protected final void assertAnEnrolledCardNeverShowsItsReferenceInItsOwnDescription() {
         CardEnrolment.ConfirmOutcome outcome = confirm(begin(TENANT), TENANT, Card.APPROVING, bankCode());
 
         CardEnrolment.ConfirmOutcome.Enrolled enrolled = (CardEnrolment.ConfirmOutcome.Enrolled) outcome;
@@ -97,9 +118,7 @@ public abstract class CardProviderContract {
         assertThat(moneyMoved()).as("enrolling a card charges nothing").isZero();
     }
 
-    @Test
-    @DisplayName("a session nobody opened, or another tenant's, is refused as unknown")
-    void aSessionIsOnlyEverUsableByTheTenantItWasOpenedFor() {
+    protected final void assertASessionIsOnlyEverUsableByTheTenantItWasOpenedFor() {
         CardEnrolment.BeginOutcome.Begun begun = begin(TENANT);
 
         assertThat(confirm(begun, OTHER_TENANT, Card.APPROVING, bankCode()))
@@ -111,9 +130,7 @@ public abstract class CardProviderContract {
                 .isEqualTo(new CardEnrolment.ConfirmOutcome.Refused("SESSION_UNKNOWN"));
     }
 
-    @Test
-    @DisplayName("a wrong bank code is refused and the session survives, so the cardholder can try again")
-    void aWrongCodeIsRefusedAndTheSessionSurvives() {
+    protected final void assertAWrongCodeIsRefusedAndTheSessionSurvives() {
         CardEnrolment.BeginOutcome.Begun begun = begin(TENANT);
 
         assertThat(confirm(begun, TENANT, Card.APPROVING, "999999"))
@@ -122,9 +139,7 @@ public abstract class CardProviderContract {
                 .isInstanceOf(CardEnrolment.ConfirmOutcome.Enrolled.class);
     }
 
-    @Test
-    @DisplayName("a session expires with the clock")
-    void aSessionExpiresWithTheClock() {
+    protected final void assertASessionExpiresWithTheClock() {
         CardEnrolment.BeginOutcome.Begun late = begin(TENANT);
 
         advanceClock(Duration.ofMinutes(16));
@@ -133,9 +148,7 @@ public abstract class CardProviderContract {
                 .isEqualTo(new CardEnrolment.ConfirmOutcome.Refused("SESSION_EXPIRED"));
     }
 
-    @Test
-    @DisplayName("the same key is the same attempt: one charge, however often it is asked, and the same answer")
-    void theSameKeyIsOneCharge() {
+    protected final void assertTheSameKeyIsOneCharge() {
         String token = enrol(TENANT, Card.APPROVING);
 
         CardCharger.Outcome first = adapter().charge(account(), TENANT, token, 500_000, "UZS", "key-1");
@@ -146,9 +159,7 @@ public abstract class CardProviderContract {
         assertThat(moneyMoved()).as("one charge, however often it is asked").isEqualTo(1);
     }
 
-    @Test
-    @DisplayName("a declined charge moves no money and says it was declined")
-    void aDeclineMovesNothing() {
+    protected final void assertADeclineMovesNothing() {
         String token = enrol(TENANT, Card.DECLINING);
 
         assertThat(adapter().charge(account(), TENANT, token, 500_000, "UZS", "key-1"))
@@ -157,10 +168,7 @@ public abstract class CardProviderContract {
         assertThat(moneyMoved()).isZero();
     }
 
-    @Test
-    @DisplayName(
-            "an answer lost after the money moved is not an answer, status says it succeeded, and a replay is the same attempt")
-    void aLostAnswerMovedTheMoneyAndStatusSaysSo() {
+    protected final void assertALostAnswerMovedTheMoneyAndStatusSaysSo() {
         String token = enrol(TENANT, Card.LOSING_THE_ANSWER);
 
         assertThatThrownBy(() -> adapter().charge(account(), TENANT, token, 500_000, "UZS", "key-1"))
@@ -179,17 +187,13 @@ public abstract class CardProviderContract {
                 .isInstanceOf(CardCharger.StatusOutcome.NotSucceeded.class);
     }
 
-    @Test
-    @DisplayName("no card on file is a refusal, never a charge")
-    void noTokenIsNoCharge() {
+    protected final void assertNoTokenIsNoCharge() {
         assertThat(adapter().charge(account(), TENANT, null, 1_000, "UZS", "key-1"))
                 .isEqualTo(new CardCharger.Outcome.Failed("NO_CARD_ON_FILE"));
         assertThat(moneyMoved()).isZero();
     }
 
-    @Test
-    @DisplayName("a revoked card cannot be charged and cannot be revoked twice")
-    void aRevokedTokenCannotBeChargedAndCannotBeRevokedTwice() {
+    protected final void assertARevokedTokenCannotBeChargedAndCannotBeRevokedTwice() {
         String token = enrol(TENANT, Card.APPROVING);
 
         assertThat(adapter().revoke(account(), token)).isInstanceOf(CardEnrolment.RevokeOutcome.Revoked.class);
@@ -199,10 +203,7 @@ public abstract class CardProviderContract {
         assertThat(moneyMoved()).isZero();
     }
 
-    @Test
-    @DisplayName(
-            "a charge stays answerable and replayable after its card is revoked: what a card paid is a record of the account")
-    void aChargeStaysAnswerableAndReplayableAfterItsCardIsRevoked() {
+    protected final void assertAChargeStaysAnswerableAndReplayableAfterItsCardIsRevoked() {
         // A tenant replaces its card while a top-up charged on the old one has no answer yet. The old reference
         // is revoked at once, and the attempt is still asked about, and replayed, under its own key (ADR 0095).
         // A provider that forgot the charge with the card would turn money taken into money never recorded; this

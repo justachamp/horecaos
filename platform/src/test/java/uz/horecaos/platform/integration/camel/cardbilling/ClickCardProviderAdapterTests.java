@@ -229,6 +229,82 @@ class ClickCardProviderAdapterTests extends CardProviderContract {
 
     // ------------------------------------------------------------------ the wire
 
+    // ------------------------------------------------------------ the shared contract, one test per rule
+
+    @Test
+    @DisplayName("every rule of the shared contract has a test in this class")
+    void everyRuleOfTheContractHasATestHere() {
+        assertEveryRuleHasATestHere();
+    }
+
+    @Test
+    @DisplayName("an enrolment opens a session that lasts a while and is never a secret")
+    void anEnrolmentOpensASession() {
+        assertAnEnrolmentOpensASession();
+    }
+
+    @Test
+    @DisplayName("an enrolled card says which card, never which reference")
+    void anEnrolledCardNeverShowsItsReferenceInItsOwnDescription() {
+        assertAnEnrolledCardNeverShowsItsReferenceInItsOwnDescription();
+    }
+
+    @Test
+    @DisplayName("a session nobody opened, or another tenant's, is refused as unknown")
+    void aSessionIsOnlyEverUsableByTheTenantItWasOpenedFor() {
+        assertASessionIsOnlyEverUsableByTheTenantItWasOpenedFor();
+    }
+
+    @Test
+    @DisplayName("a wrong bank code is refused and the session survives, so the cardholder can try again")
+    void aWrongCodeIsRefusedAndTheSessionSurvives() {
+        assertAWrongCodeIsRefusedAndTheSessionSurvives();
+    }
+
+    @Test
+    @DisplayName("a session expires with the clock")
+    void aSessionExpiresWithTheClock() {
+        assertASessionExpiresWithTheClock();
+    }
+
+    @Test
+    @DisplayName("the same key is the same attempt: one charge, however often it is asked, and the same answer")
+    void theSameKeyIsOneCharge() {
+        assertTheSameKeyIsOneCharge();
+    }
+
+    @Test
+    @DisplayName("a declined charge moves no money and says it was declined")
+    void aDeclineMovesNothing() {
+        assertADeclineMovesNothing();
+    }
+
+    @Test
+    @DisplayName(
+            "an answer lost after the money moved is not an answer, status says it succeeded, and a replay is the same attempt")
+    void aLostAnswerMovedTheMoneyAndStatusSaysSo() {
+        assertALostAnswerMovedTheMoneyAndStatusSaysSo();
+    }
+
+    @Test
+    @DisplayName("no card on file is a refusal, never a charge")
+    void noTokenIsNoCharge() {
+        assertNoTokenIsNoCharge();
+    }
+
+    @Test
+    @DisplayName("a revoked card cannot be charged and cannot be revoked twice")
+    void aRevokedTokenCannotBeChargedAndCannotBeRevokedTwice() {
+        assertARevokedTokenCannotBeChargedAndCannotBeRevokedTwice();
+    }
+
+    @Test
+    @DisplayName(
+            "a charge stays answerable and replayable after its card is revoked: what a card paid is a record of the account")
+    void aChargeStaysAnswerableAndReplayableAfterItsCardIsRevoked() {
+        assertAChargeStaysAnswerableAndReplayableAfterItsCardIsRevoked();
+    }
+
     @Test
     @DisplayName("Auth is sha1(timestamp + secret) behind the merchant user id, exactly as Click documents it")
     void authFollowsClicksFormula() {
