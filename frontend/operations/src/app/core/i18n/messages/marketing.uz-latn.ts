@@ -325,7 +325,7 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.miniApp.detail.MENU_BUTTON.OTHER_BRAND':
     'Telegram kanalining Mini App i boshqa brend vitrinasini ochadi. Qisqa nomni shu yerda yozib qoʻysangiz, u shu brendga oʻtadi.',
   'marketing.miniApp.detail.TEST_LINK.NOT_READY':
-    'Bot va qisqa nom maʼlum boʻlgach, havola paydo boʻladi.',
+    'Bot va qisqa nom maʻlum boʻlgach, havola paydo boʻladi.',
   'marketing.miniApp.botFather.step1': 'Telegramda @BotFather ni oching va /newapp yuboring.',
   'marketing.miniApp.botFather.step2': 'Botingizni tanlang: @{bot}.',
   'marketing.miniApp.botFather.step3':

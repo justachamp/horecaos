@@ -415,7 +415,7 @@ export const settingsUzLatn: AreaMessages<typeof settingsEn> = {
   'settings.telegram.save': 'Saqlash',
   'settings.telegram.saved': 'Saqlandi.',
   'settings.telegram.stale':
-    'Kanal boshqa oynada oʻzgartirilgan, maʼlumotlar qayta yuklandi. Oʻzgartirishni takrorlang.',
+    'Kanal boshqa oynada oʻzgartirilgan, maʻlumotlar qayta yuklandi. Oʻzgartirishni takrorlang.',
   'settings.telegram.guided': 'Mini App ni bosqichma-bosqich sozlash',
   'settings.channelSetup.hostname.title': 'Sayt manzili',
   'settings.channelSetup.hostname.verified': 'tasdiqlangan',
