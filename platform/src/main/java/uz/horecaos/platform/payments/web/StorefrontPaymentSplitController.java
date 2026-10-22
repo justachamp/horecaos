@@ -81,8 +81,8 @@ public class StorefrontPaymentSplitController {
                         ErrorCode.RESOURCE_NOT_FOUND,
                         "This order has no payment to show",
                         java.util.Map.of("reason", "NO_PAYMENT_SPLIT")));
-        List<TenderResponse> tenders = settlements.tendersOf(tenantId, settlement.id()).stream()
-                .map(tender -> TenderResponse.of(tender, methodCode(tenantId, tender)))
+        List<PaymentSplitTenderResponse> tenders = settlements.tendersOf(tenantId, settlement.id()).stream()
+                .map(tender -> PaymentSplitTenderResponse.of(tender, methodCode(tenantId, tender)))
                 .toList();
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
@@ -97,16 +97,16 @@ public class StorefrontPaymentSplitController {
      * @param total what the order is worth, which the tenders sum to
      * @param tenders in the order they settle: the points first, because that is how the stored plan is sequenced
      */
-    public record PaymentSplitResponse(UUID orderId, ApiMoney total, List<TenderResponse> tenders) {}
+    public record PaymentSplitResponse(UUID orderId, ApiMoney total, List<PaymentSplitTenderResponse> tenders) {}
 
     /**
      * @param kind       {@code POINTS} or {@code MONEY}
      * @param methodCode the payment method of a {@code MONEY} tender (CASH, CLICK, PAYME...), null for points
      */
-    public record TenderResponse(String kind, @Nullable String methodCode, ApiMoney amount, String status) {
+    public record PaymentSplitTenderResponse(String kind, @Nullable String methodCode, ApiMoney amount, String status) {
 
-        static TenderResponse of(TenderRow tender, Optional<String> methodCode) {
-            return new TenderResponse(
+        static PaymentSplitTenderResponse of(TenderRow tender, Optional<String> methodCode) {
+            return new PaymentSplitTenderResponse(
                     tender.settlesFromBalance() ? "POINTS" : "MONEY",
                     tender.settlesFromBalance() ? null : methodCode.orElse(null),
                     ApiMoney.of(tender.amountMinor(), tender.currency()),

@@ -47,7 +47,7 @@ export interface PointsBalance {
   readonly nextExpiryAmount: Money | null;
 }
 
-/** `StorefrontPaymentSplitController.TenderResponse`. */
+/** `StorefrontPaymentSplitController.PaymentSplitTenderResponse`. */
 export interface PaymentTender {
   readonly kind: 'POINTS' | 'MONEY';
   /** The payment method of a `MONEY` tender (`CASH`, `CLICK`, `PAYME`); null for points. */

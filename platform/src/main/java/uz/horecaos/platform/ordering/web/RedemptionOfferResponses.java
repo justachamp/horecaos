@@ -23,15 +23,15 @@ final class RedemptionOfferResponses {
      * @param maximum    the largest redemption this order permits; zero when {@code refusal} is set
      * @param refusal    a code that says why nothing is redeemable, or null
      */
-    record Offer(
+    record RedemptionOfferView(
             @Nullable UUID accountId,
             ApiMoney available,
             ApiMoney maximum,
             boolean redeemable,
             @Nullable String refusal) {
 
-        static Offer of(RedemptionOfferPort.Offer offer) {
-            return new Offer(
+        static RedemptionOfferView of(RedemptionOfferPort.Offer offer) {
+            return new RedemptionOfferView(
                     offer.accountId(),
                     ApiMoney.of(offer.availableMinor(), offer.currency()),
                     ApiMoney.of(offer.maximumMinor(), offer.currency()),

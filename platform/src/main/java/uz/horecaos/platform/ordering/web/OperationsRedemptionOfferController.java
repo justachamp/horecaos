@@ -86,7 +86,7 @@ public class OperationsRedemptionOfferController {
                     body.customerAccountId(),
                     ApiMoney.of(made.orderTotalMinor(), made.currency()),
                     ApiMoney.of(made.deliveryFeeMinor(), made.currency()),
-                    RedemptionOfferResponses.Offer.of(made.offer()),
+                    RedemptionOfferResponses.RedemptionOfferView.of(made.offer()),
                     requested == 0L ? null : ApiMoney.of(requested, made.currency()),
                     requested == 0L || cash != null ? null : "EXCEEDS_MAXIMUM",
                     cash == null ? null : ApiMoney.of(cash, made.currency())));
@@ -111,7 +111,7 @@ public class OperationsRedemptionOfferController {
             UUID customerAccountId,
             ApiMoney orderTotal,
             ApiMoney deliveryFee,
-            RedemptionOfferResponses.Offer offer,
+            RedemptionOfferResponses.RedemptionOfferView offer,
             @Nullable ApiMoney requested,
             @Nullable String requestedRefusal,
             @Nullable ApiMoney cashToCollect) {}

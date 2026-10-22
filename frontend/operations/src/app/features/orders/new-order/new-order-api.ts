@@ -413,7 +413,7 @@ export interface QuotedAutoAddLine {
 // -------------------------------------------------------- X.1: spending points on the order (ADR 0185)
 
 /**
- * `RedemptionOfferResponses.Offer` -- what the customer may spend of their points on this order.
+ * `RedemptionOfferResponses.RedemptionOfferView` -- what the customer may spend of their points on this order.
  * `maximum` is zero exactly when `redeemable` is false, and `refusal` then says why (`NO_ACCOUNT`,
  * `REDEMPTION_NOT_ENABLED`, `CHANNEL_NOT_ELIGIBLE`, `ACCOUNT_NOT_ACTIVE`, `ORDER_NOT_ELIGIBLE`,
  * `INSUFFICIENT_BALANCE`, `REDEMPTION_BLOCKED_BY_PROMOTION`).

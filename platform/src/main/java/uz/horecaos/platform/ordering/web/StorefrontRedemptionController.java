@@ -70,7 +70,7 @@ public class StorefrontRedemptionController {
                         offer.cartId(),
                         offer.priced(),
                         ApiMoney.of(offer.orderTotalMinor(), offer.currency()),
-                        RedemptionOfferResponses.Offer.of(offer.offer())));
+                        RedemptionOfferResponses.RedemptionOfferView.of(offer.offer())));
     }
 
     /**
@@ -78,5 +78,5 @@ public class StorefrontRedemptionController {
      * @param orderTotal the figure the order would be placed at; the cash still owed is this less what is redeemed
      */
     public record CartRedemptionOfferResponse(
-            UUID cartId, boolean priced, ApiMoney orderTotal, RedemptionOfferResponses.Offer offer) {}
+            UUID cartId, boolean priced, ApiMoney orderTotal, RedemptionOfferResponses.RedemptionOfferView offer) {}
 }
