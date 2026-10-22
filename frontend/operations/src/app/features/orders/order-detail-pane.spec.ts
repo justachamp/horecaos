@@ -308,15 +308,11 @@ describe('OrderDetailPane: rendering the loaded order', () => {
               commentPresets: [
                 {
                   code: 'NO_ONIONS',
-                  labelRu: 'Без лука',
-                  labelUz: 'Piyozsiz',
-                  labelEn: 'No onions',
+                  labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions' },
                 },
                 {
                   code: 'EXTRA_SPICY',
-                  labelRu: 'Поострее',
-                  labelUz: 'Achchiqroq',
-                  labelEn: 'Extra spicy',
+                  labels: { ru: 'Поострее', 'uz-Latn': 'Achchiqroq', en: 'Extra spicy' },
                 },
               ],
               lineId: 'line-1',
@@ -350,17 +346,11 @@ describe('OrderDetailPane: rendering the loaded order', () => {
               commentPresets: [
                 {
                   code: 'NO_ONIONS',
-                  labelRu: '',
-                  labelUz: '',
-                  labelEn: '',
                   labels: { kaa: 'Piyazsiz' },
                 },
                 {
                   code: 'EXTRA_SPICY',
-                  labelRu: 'Поострее',
-                  labelUz: 'Achchiqroq',
-                  labelEn: 'Extra spicy',
-                  labels: { en: 'Extra spicy, please' },
+                  labels: { ru: 'Поострее', 'uz-Latn': 'Achchiqroq', en: 'Extra spicy, please' },
                 },
               ],
               lineId: 'line-1',

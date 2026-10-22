@@ -22,6 +22,15 @@ import java.util.Set;
  * optional" is lifted. Relaxing a request is safe for a client generated from the released document
  * (it can still send the number); the response gains no required field and loses none.
  *
+ * <p>ADR 0149 (Decision 3, and the headers of V0430, V0433 and V0678) is the third, and the first
+ * <em>removal</em>: a preset comment's wording was three fixed fields ({@code labelRu}, {@code labelUz},
+ * {@code labelEn}) beside a {@code labels} map for any further language, and the three fixed fields left the
+ * wire when the columns behind them were dropped, so that the map is the only shape of the wording. The
+ * allowance names the three properties and the surfaces that carried them (the control-plane preset
+ * endpoints, a product's offered presets, the storefront menu's {@code commentPresets[]} and an order
+ * line's {@code commentPresets[]}); no other schema may lose a property. No production tenant exists
+ * (ADR 0055), so a client generated from the released document has nobody to break.
+ *
  * <p>The allowance is deliberately narrow. It names the properties, it admits one direction
  * of one type change, and it needs the property to be the one being compared rather than a
  * path that merely ends in the same word. A new endpoint, a price, a count or any other
@@ -39,7 +48,22 @@ final class AcceptedContractWidenings {
 
     private static final Set<String> ADR_0150_MODES = Set.of("delivery", "pickup", "dineIn");
 
+    /** ADR 0149: the three fixed-language fields a preset comment's wording no longer has. */
+    private static final Set<String> ADR_0149_PRESET_LEGACY_LABELS = Set.of("labelRu", "labelUz", "labelEn");
+
     private AcceptedContractWidenings() {}
+
+    /**
+     * The properties of the schema at {@code context} that the released contract carried and that may be gone
+     * now. Empty everywhere but the preset comment surfaces (ADR 0149, V0678): the control-plane endpoints
+     * under {@code /comment-presets} and every {@code commentPresets[]} array a response carries.
+     */
+    static Set<String> mayBeRemoved(String context) {
+        if (context.contains("/comment-presets") || context.endsWith("commentPresets[]")) {
+            return ADR_0149_PRESET_LEGACY_LABELS;
+        }
+        return Set.of();
+    }
 
     /**
      * The properties of the schema at {@code context} that were required in the released contract and

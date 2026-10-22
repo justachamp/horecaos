@@ -2179,9 +2179,6 @@ public class OrderAmendmentService {
                         newLineId,
                         preset.sourcePresetId(),
                         preset.code(),
-                        preset.labelRu(),
-                        preset.labelUz(),
-                        preset.labelEn(),
                         preset.labels(),
                         preset.sortOrder());
             }

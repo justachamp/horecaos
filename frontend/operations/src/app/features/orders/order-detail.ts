@@ -115,13 +115,10 @@ export interface OrderLineCatchweight {
 /** `OperationsOrderController.CommentPresetChip`. */
 export interface OrderLineCommentPreset {
   readonly code: string;
-  readonly labelRu: string;
-  readonly labelUz: string;
-  readonly labelEn: string;
   /**
-   * Every wording the line's snapshot holds, by locale: the triple plus any locale a tenant's
-   * brands support beyond it (row 10.12). Optional so a fixture, or an older platform, still reads;
-   * the console renders through `presetLabelFor`, this map first and the three fields above as the floor.
+   * Every wording the line's snapshot holds, by locale, the platform triple first (row 10.12; the
+   * only shape of it since V0678). Optional so a fixture, or an older platform, still reads; the
+   * console renders through `presetLabelFor`.
    */
   readonly labels?: Readonly<Record<string, string>>;
 }

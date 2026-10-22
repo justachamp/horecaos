@@ -28,15 +28,11 @@ import { ECOMMERCE_CONTRACT_VERSION } from '../../core/analytics/ecommerce-event
 
 const NO_ONIONS = {
   code: 'NO_ONIONS',
-  labelRu: 'Без лука',
-  labelUz: 'Piyozsiz',
-  labelEn: 'No onions',
+  labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions' },
 };
 const EXTRA_SPICY = {
   code: 'EXTRA_SPICY',
-  labelRu: 'Поострее',
-  labelUz: 'Achchiqroq',
-  labelEn: 'Extra spicy',
+  labels: { ru: 'Поострее', 'uz-Latn': 'Achchiqroq', en: 'Extra spicy' },
 };
 
 function menuItem(overrides: Partial<MenuItem> = {}): MenuItem {

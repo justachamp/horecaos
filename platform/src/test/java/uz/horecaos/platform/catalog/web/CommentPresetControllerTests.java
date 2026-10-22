@@ -36,6 +36,7 @@ import tools.jackson.databind.json.JsonMapper;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCommentPresetStore;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
+import uz.horecaos.platform.support.CommentPresetRows;
 import uz.horecaos.platform.support.StubJwtIssuer;
 import uz.horecaos.platform.support.TestDatabase;
 
@@ -207,8 +208,7 @@ class CommentPresetControllerTests {
                         .header("Idempotency-Key", "comment-preset-create-200-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"code":"NO_ONION","labelRu":"Без лука","labelUz":"Piyozsiz",\
-                                "labelEn":"No onion","posModifierCode":null,"sortOrder":0}\
+                                {"code":"NO_ONION","labels":{"ru":"Без лука","uz-Latn":"Piyozsiz","en":"No onion"},"posModifierCode":null,"sortOrder":0}\
                                 """))
                 .andReturn();
 
@@ -240,7 +240,7 @@ class CommentPresetControllerTests {
                         .header("Idempotency-Key", "comment-preset-create-400-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"labelRu":"Без лука","labelUz":"Piyozsiz","labelEn":"No onion",\
+                                {"labels":{"ru":"Без лука","uz-Latn":"Piyozsiz","en":"No onion"},\
                                 "posModifierCode":null,"sortOrder":0}\
                                 """))
                 .andReturn();
@@ -298,7 +298,7 @@ class CommentPresetControllerTests {
                         .header("Idempotency-Key", "comment-preset-update-400-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"labelRu":"Без лука!","labelUz":"Piyozsiz!","labelEn":"No onion!",\
+                                {"labels":{"ru":"Без лука!","uz-Latn":"Piyozsiz!","en":"No onion!"},\
                                 "posModifierCode":null,"sortOrder":0,"status":"ACTIVE"}\
                                 """))
                 .andReturn();
@@ -318,7 +318,7 @@ class CommentPresetControllerTests {
                         .header("Idempotency-Key", "comment-preset-update-400-2")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"labelRu":"Без лука!","labelUz":"Piyozsiz!","labelEn":"No onion!",\
+                                {"labels":{"ru":"Без лука!","uz-Latn":"Piyozsiz!","en":"No onion!"},\
                                 "posModifierCode":null,"status":"ACTIVE","expectedVersion":1}\
                                 """))
                 .andReturn();
@@ -368,37 +368,25 @@ class CommentPresetControllerTests {
     // ------------------------------------------------- row 10.12: per-locale wording
 
     @Test
-    @DisplayName(
-            "POST mirrors every label - the platform triple and a language beyond it - into the translations table")
-    void createMirrorsEveryLabelIntoTheTranslationsTable() throws Exception {
-        // The tenant offers ru and kaa only. The contract keeps labelUz/labelEn required
-        // (a published required request field cannot be relaxed), so the console names
-        // the two platform languages it does not offer with the default wording.
+    @DisplayName("POST stores every label in the translations table, a language beyond the platform triple included")
+    void createStoresEveryLabelInTheTranslationsTable() throws Exception {
+        // The tenant offers ru and kaa only: since V0678 the preset simply has no Uzbek or English wording,
+        // and no column forces the default wording into them.
         MvcResult result = mvc.perform(post(path())
                         .with(tokenFor(AUTHOR))
                         .header("Idempotency-Key", "comment-preset-labels-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"code":"NO_ONION","labelRu":"Без лука","labelUz":"Без лука","labelEn":"Без лука",
-                                 "posModifierCode":null,"sortOrder":0,"labels":{"kaa":"Piyazsiz"}}
+                                {"code":"NO_ONION","labels":{"ru":"Без лука","kaa":"Piyazsiz"},
+                                 "posModifierCode":null,"sortOrder":0}
                                 """))
                 .andReturn();
 
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
         UUID presetId = presetIdByCode("NO_ONION");
-        assertThat(jdbc.sql(
-                                "SELECT label_ru || '|' || label_uz || '|' || label_en FROM catalog.comment_presets WHERE id = :id")
-                        .param("id", presetId)
-                        .query(String.class)
-                        .single())
-                .isEqualTo("Без лука|Без лука|Без лука");
         assertThat(translationRows(presetId))
-                .as("written alongside the columns: the triple, and the language only the table can hold")
-                .containsOnly(
-                        Map.entry("ru", "Без лука"),
-                        Map.entry("uz-Latn", "Без лука"),
-                        Map.entry("en", "Без лука"),
-                        Map.entry("kaa", "Piyazsiz"));
+                .as("exactly the wording supplied, and nothing invented for Uzbek or English")
+                .containsOnly(Map.entry("ru", "Без лука"), Map.entry("kaa", "Piyazsiz"));
     }
 
     @Test
@@ -409,8 +397,8 @@ class CommentPresetControllerTests {
                 .header("Idempotency-Key", "comment-preset-kaa-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"code":"NO_ONION","labelRu":"Без лука","labelUz":"Piyozsiz","labelEn":"No onion",
-                         "posModifierCode":null,"sortOrder":0,"labels":{"kaa":"Piyazsiz"}}
+                        {"code":"NO_ONION","labels":{"ru":"Без лука","uz-Latn":"Piyozsiz","en":"No onion","kaa":"Piyazsiz"},
+                         "posModifierCode":null,"sortOrder":0}
                         """));
 
         Map<String, Object> listed =
@@ -422,23 +410,26 @@ class CommentPresetControllerTests {
                         Map.entry("uz-Latn", "Piyozsiz"),
                         Map.entry("en", "No onion"),
                         Map.entry("kaa", "Piyazsiz"));
-        assertThat(listed).containsEntry("labelRu", "Без лука").doesNotContainKey("labelKaa");
+        assertThat(listed)
+                .as("the platform triple's three fields left the wire with V0678: the labels map is the only shape")
+                .doesNotContainKeys("labelRu", "labelUz", "labelEn", "labelKaa");
     }
 
     @Test
-    @DisplayName("a stale mirror row never shadows the column, and no locale is reported twice")
-    void aStaleMirrorNeverShadowsTheColumn() throws Exception {
+    @DisplayName("a case variant of a locale is reported under its canonical tag, and no locale is reported twice")
+    void aCaseVariantIsNotReportedAsASecondLanguage() throws Exception {
         UUID presetId = seedPreset("NO_ONION", "Без лука", "Piyozsiz", "No onion");
         jdbc.sql("""
                 INSERT INTO catalog.comment_preset_translations (tenant_id, preset_id, locale, label)
-                VALUES (:t, :p, 'ru', 'STALE MIRROR'), (:t, :p, 'kaa', 'Piyazsiz')
+                VALUES (:t, :p, 'uz-latn', 'Piyozsiz (variant)'), (:t, :p, 'kaa', 'Piyazsiz')
                 """).param("t", TENANT).param("p", presetId).update();
 
         Map<String, Object> listed =
                 onlyPresetOf(mvc.perform(get(path()).with(tokenFor(AUTHOR))).andReturn());
 
         assertThat(labelsOf(listed))
-                .as("the column is the source for a triple locale; kaa comes from the table; each once")
+                .as(
+                        "the canonical row wins over a case variant; the triple first in its order, kaa from the table, each language once")
                 .containsExactly(
                         Map.entry("ru", "Без лука"),
                         Map.entry("uz-Latn", "Piyozsiz"),
@@ -450,16 +441,15 @@ class CommentPresetControllerTests {
     @DisplayName("an edit never deletes or rewrites a language beyond the triple that it does not name")
     void anEditNeverDeletesAHiddenLocale() throws Exception {
         // The editor shows only the locales the tenant supports; the preset also carries
-        // kaa wording the editor does not show, and uz-Latn wording it round-trips
-        // unchanged (the contract keeps the platform triple required). Editing en must
-        // leave both exactly as they were.
+        // kaa wording the editor does not show. Editing en alone must leave the others exactly
+        // as they were: a locale the request does not name keeps its wording.
         mvc.perform(post(path())
                 .with(tokenFor(AUTHOR))
                 .header("Idempotency-Key", "comment-preset-hidden-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"code":"NO_ONION","labelRu":"Без лука","labelUz":"Piyozsiz","labelEn":"No onion",
-                         "posModifierCode":null,"sortOrder":0,"labels":{"kaa":"Piyazsiz"}}
+                        {"code":"NO_ONION","labels":{"ru":"Без лука","uz-Latn":"Piyozsiz","en":"No onion","kaa":"Piyazsiz"},
+                         "posModifierCode":null,"sortOrder":0}
                         """));
         UUID presetId = presetIdByCode("NO_ONION");
 
@@ -468,8 +458,7 @@ class CommentPresetControllerTests {
                         .header("Idempotency-Key", "comment-preset-hidden-2")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"labelRu":"Без лука","labelUz":"Piyozsiz","labelEn":"No onion",
-                                 "posModifierCode":null,"sortOrder":2,"status":"ACTIVE","expectedVersion":1,
+                                {"posModifierCode":null,"sortOrder":2,"status":"ACTIVE","expectedVersion":1,
                                  "labels":{"en":"Hold the onion"}}
                                 """))
                 .andReturn();
@@ -482,14 +471,13 @@ class CommentPresetControllerTests {
                         Map.entry("uz-Latn", "Piyozsiz"),
                         Map.entry("en", "Hold the onion"),
                         Map.entry("kaa", "Piyazsiz"));
-        assertThat(jdbc.sql(
-                                "SELECT label_ru || '|' || label_uz || '|' || label_en FROM catalog.comment_presets WHERE id = :id")
-                        .param("id", presetId)
-                        .query(String.class)
-                        .single())
-                .as("the columns of the locales the edit did not name are untouched, not blanked")
-                .isEqualTo("Без лука|Piyozsiz|Hold the onion");
-        assertThat(translationRows(presetId)).contains(Map.entry("kaa", "Piyazsiz"), Map.entry("uz-Latn", "Piyozsiz"));
+        assertThat(translationRows(presetId))
+                .as("the languages the edit did not name are untouched, not blanked")
+                .contains(
+                        Map.entry("kaa", "Piyazsiz"),
+                        Map.entry("uz-Latn", "Piyozsiz"),
+                        Map.entry("ru", "Без лука"),
+                        Map.entry("en", "Hold the onion"));
     }
 
     @Test
@@ -501,8 +489,8 @@ class CommentPresetControllerTests {
                             .header("Idempotency-Key", "comment-preset-badlocale-" + bad)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
-                                    {"code":"NO_ONION","labelRu":"Без лука","labelUz":"Piyozsiz","labelEn":"No onion",
-                                     "posModifierCode":null,"sortOrder":0,"labels":{"%s":"x"}}
+                                    {"code":"NO_ONION","labels":{"ru":"Без лука","uz-Latn":"Piyozsiz","en":"No onion","%s":"x"},
+                                     "posModifierCode":null,"sortOrder":0}
                                     """.formatted(bad)))
                     .andReturn();
 
@@ -551,8 +539,8 @@ class CommentPresetControllerTests {
                 .header("Idempotency-Key", "comment-preset-iso-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"code":"NO_ONION","labelRu":"Без лука","labelUz":"Без лука","labelEn":"Без лука",
-                         "posModifierCode":null,"sortOrder":0,"labels":{"kaa":"Piyazsiz"}}
+                        {"code":"NO_ONION","labels":{"ru":"Без лука","uz-Latn":"Без лука","en":"Без лука","kaa":"Piyazsiz"},
+                         "posModifierCode":null,"sortOrder":0}
                         """));
         UUID presetId = presetIdByCode("NO_ONION");
 
@@ -568,9 +556,8 @@ class CommentPresetControllerTests {
                         .header("Idempotency-Key", "comment-preset-iso-2")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"labelRu":"HIJACKED","labelUz":"HIJACKED","labelEn":"HIJACKED",
-                                 "posModifierCode":null,"sortOrder":0,"status":"ACTIVE","expectedVersion":1,
-                                 "labels":{"kaa":"HIJACKED"}}
+                                {"labels":{"ru":"HIJACKED","uz-Latn":"HIJACKED","en":"HIJACKED","kaa":"HIJACKED"},
+                                 "posModifierCode":null,"sortOrder":0,"status":"ACTIVE","expectedVersion":1}
                                 """))
                 .andReturn();
         assertThat(foreignWrite.getResponse().getStatus()).isEqualTo(404);
@@ -596,7 +583,7 @@ class CommentPresetControllerTests {
                 .header("Idempotency-Key", "comment-preset-upsert-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"code":"NO_ONION","labelRu":"Без лука","labelUz":"Без лука","labelEn":"Без лука",
+                        {"code":"NO_ONION","labels":{"ru":"Без лука","uz-Latn":"Без лука","en":"Без лука"},
                          "posModifierCode":null,"sortOrder":0}
                         """));
         UUID presetId = presetIdByCode("NO_ONION");
@@ -626,7 +613,7 @@ class CommentPresetControllerTests {
     private static String newPresetBody(String code, @Nullable String posModifierCode) {
         String pos = posModifierCode == null ? "null" : "\"" + posModifierCode + "\"";
         return """
-                {"code":"%s","labelRu":"Без лука","labelUz":"Piyozsiz","labelEn":"No onion",\
+                {"code":"%s","labels":{"ru":"Без лука","uz-Latn":"Piyozsiz","en":"No onion"},\
                 "posModifierCode":%s,"sortOrder":0}\
                 """.formatted(code, pos);
     }
@@ -641,25 +628,14 @@ class CommentPresetControllerTests {
             int expectedVersion) {
         String pos = posModifierCode == null ? "null" : "\"" + posModifierCode + "\"";
         return """
-                {"labelRu":"%s","labelUz":"%s","labelEn":"%s","posModifierCode":%s,\
+                {"labels":{"ru":"%s","uz-Latn":"%s","en":"%s"},"posModifierCode":%s,\
                 "sortOrder":%d,"status":"%s","expectedVersion":%d}\
                 """.formatted(labelRu, labelUz, labelEn, pos, sortOrder, status, expectedVersion);
     }
 
     private UUID seedPreset(String code, String labelRu, String labelUz, String labelEn) {
         UUID id = UUID.randomUUID();
-        jdbc.sql("""
-                        INSERT INTO catalog.comment_presets
-                            (id, tenant_id, code, label_ru, label_uz, label_en, sort_order, status, version)
-                        VALUES (:id, :tenantId, :code, :labelRu, :labelUz, :labelEn, 0, 'ACTIVE', 1)
-                        """)
-                .param("id", id)
-                .param("tenantId", TENANT)
-                .param("code", code)
-                .param("labelRu", labelRu)
-                .param("labelUz", labelUz)
-                .param("labelEn", labelEn)
-                .update();
+        CommentPresetRows.insertPreset(jdbc, id, TENANT, code, CommentPresetRows.triple(labelRu, labelUz, labelEn));
         return id;
     }
 
@@ -671,7 +647,7 @@ class CommentPresetControllerTests {
     }
 
     private String presetLabelEn(UUID presetId) {
-        return jdbc.sql("SELECT label_en FROM catalog.comment_presets WHERE id = :id")
+        return jdbc.sql("SELECT label FROM catalog.comment_preset_translations WHERE preset_id = :id AND locale = 'en'")
                 .param("id", presetId)
                 .query(String.class)
                 .single();

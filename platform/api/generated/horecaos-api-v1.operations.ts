@@ -1491,9 +1491,6 @@ export interface ComboSalesRowResponse {
 
 export interface CommentPresetChip {
   code?: string;
-  labelEn?: string;
-  labelRu?: string;
-  labelUz?: string;
   labels?: { [key: string]: string };
 }
 

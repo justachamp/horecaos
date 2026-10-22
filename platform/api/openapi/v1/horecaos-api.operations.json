@@ -4723,15 +4723,6 @@
           "code" : {
             "type" : "string"
           },
-          "labelEn" : {
-            "type" : "string"
-          },
-          "labelRu" : {
-            "type" : "string"
-          },
-          "labelUz" : {
-            "type" : "string"
-          },
           "labels" : {
             "additionalProperties" : {
               "type" : "string"

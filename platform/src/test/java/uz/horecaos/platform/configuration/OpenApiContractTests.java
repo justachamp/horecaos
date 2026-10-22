@@ -395,12 +395,18 @@ class OpenApiContractTests {
         // The one exception is a relaxation an Accepted ADR made on purpose (ADR 0150's optional
         // no-promise fallback), named and kept narrow in AcceptedContractWidenings.
         Set<String> mayBecomeOptional = AcceptedContractWidenings.mayBecomeOptional(context);
+        Set<String> mayBeRemoved = AcceptedContractWidenings.mayBeRemoved(context);
         assertThat(oldRequired.stream()
                         .filter(property -> !mayBecomeOptional.contains(property))
+                        .filter(property -> !mayBeRemoved.contains(property))
                         .collect(java.util.stream.Collectors.toSet()))
                 .as("schema for %s cannot make a published required field optional", context)
                 .isSubsetOf(newRequired);
         oldResolved.path("properties").fieldNames().forEachRemaining(property -> {
+            if (mayBeRemoved.contains(property)
+                    && newResolved.path("properties").path(property).isMissingNode()) {
+                return;
+            }
             JsonNode newProperty = newResolved.path("properties").path(property);
             assertThat(newProperty.isMissingNode())
                     .as("schema for %s cannot remove property %s", context, property)

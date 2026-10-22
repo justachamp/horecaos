@@ -83,7 +83,7 @@ describe('OrderDetailLines', () => {
 
   it('words the comment presets in the operator’s language', () => {
     const presets = [
-      { code: 'NO_SPICE', labelRu: 'Не остро', labelUz: 'Achchiq emas', labelEn: 'Not spicy' },
+      { code: 'NO_SPICE', labels: { ru: 'Не остро', 'uz-Latn': 'Achchiq emas', en: 'Not spicy' } },
     ];
     const en = render({ lines: [line({ commentPresets: presets })] });
     expect(en.row().querySelector('.pane__preset-chip')?.textContent?.trim()).toBe('Not spicy');

@@ -618,19 +618,10 @@ public class StorefrontCatalogQuery {
             List<String> preference) {
         return rows.stream()
                 .map(row -> {
-                    Map<String, String> labels = LocalizedLabels.merge(
-                            row.labelRu(),
-                            row.labelUz(),
-                            row.labelEn(),
-                            translations.getOrDefault(row.presetId(), Map.of()));
+                    Map<String, String> labels =
+                            LocalizedLabels.merge(translations.getOrDefault(row.presetId(), Map.of()));
                     String label = LocalizedLabels.pick(labels, preference);
-                    return new CommentPresetOption(
-                            row.code(),
-                            row.labelRu(),
-                            row.labelUz(),
-                            row.labelEn(),
-                            labels,
-                            label == null ? row.code() : label);
+                    return new CommentPresetOption(row.code(), labels, label == null ? row.code() : label);
                 })
                 .toList();
     }
@@ -1190,16 +1181,13 @@ public class StorefrontCatalogQuery {
     /**
      * One preset a product offers on a line, every locale so the storefront renders its own.
      *
-     * @param labelRu/labelUz/labelEn the platform triple's columns, kept for a client that
-     *     reads only them
-     * @param labels every wording the preset has, keyed by locale -- the triple plus any locale
-     *     a tenant's brands support beyond it (row 10.12, V0430)
+     * @param labels every wording the preset has, keyed by locale (row 10.12, V0430; the only
+     *     shape of it since V0678)
      * @param label the wording resolved for the locale the menu was requested in, then the
      *     brand's default, then whichever exists; the preset's code only if it has no wording
      *     at all, which the schema does not allow
      */
-    public record CommentPresetOption(
-            String code, String labelRu, String labelUz, String labelEn, Map<String, String> labels, String label) {}
+    public record CommentPresetOption(String code, Map<String, String> labels, String label) {}
 
     /**
      * One orderable size or form of a product.

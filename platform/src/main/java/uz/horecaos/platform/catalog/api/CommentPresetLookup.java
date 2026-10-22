@@ -42,11 +42,9 @@ public interface CommentPresetLookup {
     Map<String, ResolvedPreset> resolve(UUID tenantId, Set<String> codes);
 
     /**
-     * @param labelRu/labelUz/labelEn the platform triple's columns
-     * @param labels every wording the preset has at this moment, keyed by locale -- the triple
-     *               plus any locale beyond it (row 10.12, V0430). The order line copies it, so
-     *               a locale a tenant supports beyond the triple survives onto the receipt.
+     * @param labels every wording the preset has at this moment, keyed by locale (row 10.12, V0430;
+     *               the only shape of a preset's wording since V0678). The order line copies it, so
+     *               every language a tenant supports survives onto the receipt.
      */
-    record ResolvedPreset(
-            UUID presetId, String code, String labelRu, String labelUz, String labelEn, Map<String, String> labels) {}
+    record ResolvedPreset(UUID presetId, String code, Map<String, String> labels) {}
 }

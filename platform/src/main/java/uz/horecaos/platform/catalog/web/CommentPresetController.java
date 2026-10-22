@@ -84,19 +84,15 @@ public class CommentPresetController {
             description = "Refused (409) when the code is already registered for this tenant. "
                     + "pos_modifier_code is the coded value a POS export maps this preset to where "
                     + "it expects a modifier; left null, the preset still renders on the KDS and "
-                    + "exports nowhere. labelRu/labelUz/labelEn are the platform triple and stay "
-                    + "required; `labels` (row 10.12, optional) carries wording by locale for any "
-                    + "language beyond them and wins where both name a locale. The tenant's "
-                    + "default language must have wording, in one or the other.")
+                    + "exports nowhere. `labels` carries the wording by locale (row 10.12, "
+                    + "ADR 0149; the only shape a preset's wording has since V0678): the tenant's "
+                    + "default language must have wording, every other language is optional.")
     public ResponseEntity<PresetResponse> create(
             @PathVariable UUID tenantId, @Valid @RequestBody NewPresetRequest body) {
         CommentPresetService.PresetView created = presets.createWithLabels(
                 tenantId,
                 new CommentPresetService.NewPreset(
                         body.code(),
-                        body.labelRu(),
-                        body.labelUz(),
-                        body.labelEn(),
                         body.posModifierCode(),
                         body.sortOrder() == null ? 0 : body.sortOrder(),
                         body.labels() == null ? Map.of() : body.labels()),
@@ -111,20 +107,15 @@ public class CommentPresetController {
             description = "Whole-record PUT with an expected version, the same discipline every "
                     + "other versioned reference table in this platform uses. Archiving is "
                     + "status=ARCHIVED here, not a DELETE: a preset already selected on an open "
-                    + "order's line must stay resolvable. A language beyond the platform triple "
-                    + "that the request does not name in `labels` keeps its wording, so an editor "
-                    + "that shows only some languages never deletes the others; the triple is "
-                    + "always named (it is required), and an editor keeps a language it does not "
-                    + "show by sending the wording the preset already has.")
+                    + "order's line must stay resolvable. A language that the request does not name "
+                    + "in `labels` keeps its wording, so an editor that shows only some languages "
+                    + "never deletes the others.")
     public ResponseEntity<PresetResponse> update(
             @PathVariable UUID tenantId, @PathVariable UUID presetId, @Valid @RequestBody UpdatePresetRequest body) {
         CommentPresetService.PresetView updated = presets.updateWithLabels(
                 tenantId,
                 presetId,
                 new CommentPresetService.PresetEdit(
-                        body.labelRu(),
-                        body.labelUz(),
-                        body.labelEn(),
                         body.posModifierCode(),
                         body.sortOrder(),
                         body.status(),
@@ -135,32 +126,22 @@ public class CommentPresetController {
     }
 
     /**
-     * @param labelRu/labelUz/labelEn the platform triple's wording. <strong>Still required</strong>:
-     *        {@code OpenApiContractTests} refuses to make a published required request field
-     *        optional (a typed client built against the released contract would break), so
-     *        row 10.12 could not relax them. A caller whose tenant does not offer one of the
-     *        three languages therefore names it with the default language's wording -- what
-     *        the console does -- or, on an edit, with the wording the preset already has
-     * @param labels                  wording by locale, {@code {"ru": "...", "kaa": "..."}}
-     *        (optional, additive): the way to name a language outside the platform triple. It
-     *        overlays the three fields above where both name a locale
+     * @param labels wording by locale, {@code {"ru": "...", "kaa": "..."}}: the only shape a preset's
+     *        wording has (row 10.12, ADR 0149; the platform triple's three fields left the contract
+     *        with V0678). Optional in the schema because the released contract had it optional and a
+     *        field cannot become required; the service refuses a create that leaves the tenant's
+     *        default language without wording
      */
     record NewPresetRequest(
             @NotBlank @Size(max = 32) @Pattern(regexp = "^[A-Z0-9][A-Z0-9_-]{0,31}$")
             String code,
 
-            @NotBlank @Size(max = 120) String labelRu,
-            @NotBlank @Size(max = 120) String labelUz,
-            @NotBlank @Size(max = 120) String labelEn,
             @Size(max = 64) String posModifierCode,
             Integer sortOrder,
             @Nullable @Size(max = 32) Map<String, @Size(max = 120) String> labels) {}
 
-    /** @see NewPresetRequest for why the three platform fields stay required, and what {@code labels} adds */
+    /** @see NewPresetRequest for {@code labels}; a locale it does not name keeps its wording */
     record UpdatePresetRequest(
-            @NotBlank @Size(max = 120) String labelRu,
-            @NotBlank @Size(max = 120) String labelUz,
-            @NotBlank @Size(max = 120) String labelEn,
             @Size(max = 64) String posModifierCode,
             @Min(0) int sortOrder,
             @NotBlank @Pattern(regexp = "ACTIVE|ARCHIVED") String status,
@@ -168,16 +149,12 @@ public class CommentPresetController {
             @Nullable @Size(max = 32) Map<String, @Size(max = 120) String> labels) {}
 
     /**
-     * @param labelRu/labelUz/labelEn the platform triple's columns, unchanged
-     * @param labels                  every locale the preset has wording in, the triple
-     *                                first then any other by code, each once
+     * @param labels every locale the preset has wording in, the platform triple first then any
+     *               other by code, each once
      */
     record PresetResponse(
             UUID presetId,
             String code,
-            String labelRu,
-            String labelUz,
-            String labelEn,
             @Nullable String posModifierCode,
             int sortOrder,
             String status,
@@ -189,9 +166,6 @@ public class CommentPresetController {
             return new PresetResponse(
                     row.id(),
                     row.code(),
-                    row.labelRu(),
-                    row.labelUz(),
-                    row.labelEn(),
                     row.posModifierCode(),
                     row.sortOrder(),
                     row.status(),

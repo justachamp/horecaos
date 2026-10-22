@@ -142,6 +142,7 @@ import uz.horecaos.platform.pricing.application.QuoteService;
 import uz.horecaos.platform.pricing.infrastructure.catalog.JdbcCatalogPricingContext;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPricingStore;
 import uz.horecaos.platform.pricing.infrastructure.persistence.JdbcPromoCodeStore;
+import uz.horecaos.platform.support.CommentPresetRows;
 import uz.horecaos.platform.support.FakeConfigurationResolver;
 import uz.horecaos.platform.support.RecordingProviderActivityRecorder;
 import uz.horecaos.platform.support.TestDatabase;
@@ -3776,7 +3777,7 @@ class CartCheckoutAndOrderTests {
                         .extracting(
                                 JdbcOrderStore.OrderCommentPresetRow::sourcePresetId,
                                 JdbcOrderStore.OrderCommentPresetRow::code,
-                                JdbcOrderStore.OrderCommentPresetRow::labelRu)
+                                snapshot -> snapshot.labels().get("ru"))
                         .containsExactly(
                                 tuple(noOnions, "NO_ONIONS", "Без лука"),
                                 tuple(extraSpicy, "EXTRA_SPICY", "Поострее")));
@@ -3832,14 +3833,13 @@ class CartCheckoutAndOrderTests {
                                     .containsOnlyKeys("ru", "uz-Latn", "en", "kaa")
                                     .containsEntry("kaa", "Piyazsiz")
                                     .containsEntry("ru", "Без лука");
-                            assertThat(snapshot.labelRu()).isEqualTo("Без лука");
                         }));
         assertThat(jdbc.sql("""
                                 SELECT locale FROM ordering.order_line_comment_preset_labels
                                 WHERE tenant_id = :tenantId
                                 """).param("tenantId", TENANT).query(String.class).list())
-                .as("the triple stays in the snapshot's own columns, not stored twice")
-                .containsExactly("kaa");
+                .as("every wording the preset had is stored in the labels table, the triple included (V0678)")
+                .containsExactlyInAnyOrder("ru", "uz-Latn", "en", "kaa");
     }
 
     @Test
@@ -8576,18 +8576,8 @@ class CartCheckoutAndOrderTests {
      */
     private UUID seedCommentPresetForBurger(String code, String labelRu) {
         UUID presetId = UUID.randomUUID();
-        jdbc.sql("""
-                INSERT INTO catalog.comment_presets (
-                    id, tenant_id, code, label_ru, label_uz, label_en, sort_order, status, version)
-                VALUES (:id, :tenantId, :code, :labelRu, :labelUz, :labelEn, 0, 'ACTIVE', 1)
-                """)
-                .param("id", presetId)
-                .param("tenantId", TENANT)
-                .param("code", code)
-                .param("labelRu", labelRu)
-                .param("labelUz", labelRu + " (uz)")
-                .param("labelEn", labelRu + " (en)")
-                .update();
+        CommentPresetRows.insertPreset(
+                jdbc, presetId, TENANT, code, CommentPresetRows.triple(labelRu, labelRu + " (uz)", labelRu + " (en)"));
         jdbc.sql("""
                 INSERT INTO catalog.product_comment_presets (
                     id, tenant_id, brand_id, product_id, preset_id, sort_order, version)

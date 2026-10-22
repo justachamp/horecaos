@@ -398,9 +398,6 @@ function comboGroupsById(menu: PublishedMenu): ReadonlyMap<string, PublishedComb
 function toMenuItemCommentPreset(preset: PublishedCommentPreset): MenuItemCommentPreset {
   return {
     code: preset.code,
-    labelRu: preset.labelRu,
-    labelUz: preset.labelUz,
-    labelEn: preset.labelEn,
     ...(preset.labels ? { labels: preset.labels } : {}),
     ...(preset.label ? { label: preset.label } : {}),
   };
@@ -565,10 +562,7 @@ export interface PublishedIngredient {
 /** `StorefrontCatalogQuery.CommentPresetOption`, transcribed from the controller. */
 export interface PublishedCommentPreset {
   readonly code: string;
-  readonly labelRu: string;
-  readonly labelUz: string;
-  readonly labelEn: string;
-  /** Every wording the preset has, by locale: the triple plus any locale a brand offers beyond it. */
+  /** Every wording the preset has, by locale: the only shape of it since V0678. */
   readonly labels?: Readonly<Record<string, string>>;
   /** The wording resolved for the requested language, then the brand's default. */
   readonly label?: string;

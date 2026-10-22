@@ -44,9 +44,7 @@ public class CommentPresetLookupAdapter implements CommentPresetLookup {
         List<JdbcCommentPresetStore.PresetRow> active = presets.findByCodes(tenantId, codes).stream()
                 .filter(row -> ACTIVE.equals(row.status()))
                 .toList();
-        // One bulk read of the per-locale wording, merged with the columns the way every other
-        // read of a preset is: the column wins for the platform triple, the table is the only
-        // home of a locale beyond it (row 10.12).
+        // One bulk read of the per-locale wording: the table is the only home of it (row 10.12, V0678).
         Map<UUID, Map<String, String>> translations = presets.translationsForPresets(
                 tenantId,
                 active.stream().map(JdbcCommentPresetStore.PresetRow::id).collect(Collectors.toUnmodifiableSet()));
@@ -56,13 +54,6 @@ public class CommentPresetLookupAdapter implements CommentPresetLookup {
                         row -> new ResolvedPreset(
                                 row.id(),
                                 row.code(),
-                                row.labelRu(),
-                                row.labelUz(),
-                                row.labelEn(),
-                                LocalizedLabels.merge(
-                                        row.labelRu(),
-                                        row.labelUz(),
-                                        row.labelEn(),
-                                        translations.getOrDefault(row.id(), Map.of())))));
+                                LocalizedLabels.merge(translations.getOrDefault(row.id(), Map.of())))));
     }
 }

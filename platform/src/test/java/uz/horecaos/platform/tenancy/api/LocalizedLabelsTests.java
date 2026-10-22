@@ -131,4 +131,59 @@ class LocalizedLabelsTests {
         assertThat(LocalizedLabels.pick(onlyKaa, java.util.List.of("ru", "en"))).isEqualTo("Piyazsiz");
         assertThat(LocalizedLabels.pick(Map.of(), java.util.List.of("ru"))).isNull();
     }
+
+    // ---------------------------------------- since V0678: the map is the only home of the wording
+
+    @Test
+    @DisplayName("a map-only merge puts the platform triple first in its order and every other locale sorted after it")
+    void mapOnlyMergeOrdersTheTripleFirst() {
+        Map<String, String> rows = new java.util.LinkedHashMap<>();
+        rows.put("kaa", "Piyazsiz");
+        rows.put("en", "No onion");
+        rows.put("ka", "ყველა");
+        rows.put("uz-Latn", "Piyozsiz");
+        rows.put("ru", "Без лука");
+
+        assertThat(LocalizedLabels.merge(rows))
+                .containsExactly(
+                        Map.entry("ru", "Без лука"),
+                        Map.entry("uz-Latn", "Piyozsiz"),
+                        Map.entry("en", "No onion"),
+                        Map.entry("ka", "ყველა"),
+                        Map.entry("kaa", "Piyazsiz"));
+    }
+
+    @Test
+    @DisplayName(
+            "a case variant of a locale never shadows the row stored under the canonical tag, and a blank is dropped")
+    void mapOnlyMergeKeepsTheCanonicalRowAndDropsABlank() {
+        Map<String, String> rows = new java.util.LinkedHashMap<>();
+        rows.put("uz-latn", "variant");
+        rows.put("uz-Latn", "Piyozsiz");
+        rows.put("en", "  ");
+
+        assertThat(LocalizedLabels.merge(rows)).containsExactly(Map.entry("uz-Latn", "Piyozsiz"));
+    }
+
+    @Test
+    @DisplayName("a case variant with no canonical row is reported once, under the canonical tag")
+    void aLoneCaseVariantIsReportedUnderTheCanonicalTag() {
+        assertThat(LocalizedLabels.merge(Map.of("uz-LATN", "Piyozsiz")))
+                .containsExactly(Map.entry("uz-Latn", "Piyozsiz"));
+    }
+
+    @Test
+    @DisplayName("a map-only write refuses a bare uz and a malformed tag, trims, and drops a blank")
+    void mapOnlySuppliedAppliesTheSameRules() {
+        assertThat(LocalizedLabels.supplied(Map.of("ru", "  Без лука ", "en", " "), 120))
+                .containsExactly(Map.entry("ru", "Без лука"));
+        assertThatThrownBy(() -> LocalizedLabels.supplied(Map.of("uz", "x"), 120))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("uz-Latn");
+        assertThatThrownBy(() -> LocalizedLabels.supplied(Map.of("RU_ru", "x"), 120))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> LocalizedLabels.supplied(Map.of("ru", "x".repeat(121)), 120))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("121");
+    }
 }

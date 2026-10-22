@@ -72,10 +72,7 @@ export interface MenuItemModifierOption {
  */
 export interface MenuItemCommentPreset {
   code: string;
-  labelRu: string;
-  labelUz: string;
-  labelEn: string;
-  /** Every wording the preset has, by locale -- the triple plus any locale a brand offers beyond it. */
+  /** Every wording the preset has, by locale -- the only shape of it since V0678 (the platform triple's three fields are gone). */
   labels?: Readonly<Record<string, string>>;
   /** The wording the platform resolved for the requested language, then the brand's default. */
   label?: string;

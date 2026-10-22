@@ -226,9 +226,6 @@ export interface ComboPickResponse {
 export interface CommentPresetOption {
   code?: string;
   label?: string;
-  labelEn?: string;
-  labelRu?: string;
-  labelUz?: string;
   labels?: { [key: string]: string };
 }
 

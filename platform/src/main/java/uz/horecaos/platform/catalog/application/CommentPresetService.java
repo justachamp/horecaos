@@ -45,7 +45,7 @@ import uz.horecaos.platform.web.api.ErrorCode;
 @Service
 public class CommentPresetService {
 
-    /** {@code label_ru}/{@code label_uz}/{@code label_en} and a translation row all fit this. */
+    /** The width of a translation row's label ({@code catalog.comment_preset_translations.label}). */
     static final int MAX_LABEL_LENGTH = 120;
 
     private final JdbcCommentPresetStore presets;
@@ -83,22 +83,16 @@ public class CommentPresetService {
     /**
      * Registers a preset. The wording it needs is the tenant's <em>default</em>
      * language (row 10.12, {@link TenantLocaleSet}); every other supported locale is
-     * optional. The three platform columns are NOT NULL, so a triple locale the
-     * caller did not supply takes the default wording.
+     * optional. A language the caller did not supply is simply absent, and a reader
+     * falls back to the default (ADR 0149, Decision 4): since V0678 there is no column
+     * that would have to be filled with the default wording to satisfy NOT NULL.
      *
-     * <p>Through HTTP that fallback is never reached: {@code CommentPresetController}
-     * keeps the three platform fields required (the OpenAPI contract cannot relax a
-     * published required field), so the console fills a language the tenant does not
-     * offer with the default wording itself. It covers service callers, and a tenant
-     * whose default language is one the triple does not include.
-     *
-     * <p>Every supplied label is also written to the per-locale table
-     * ({@code V0430}), the triple included, for the release that drops the columns.
+     * <p>Every supplied label is written to the per-locale table ({@code V0430}), which
+     * is the only home of a preset's wording.
      */
     @Transactional
     public PresetView createWithLabels(UUID tenantId, NewPreset command, String actorSubject) {
-        Map<String, String> labels =
-                suppliedLabels(command.labelRu(), command.labelUz(), command.labelEn(), command.labels());
+        Map<String, String> labels = suppliedLabels(command.labels());
         String defaultLocale = brandLocales.tenantLocaleSet(tenantId).defaultLocale();
         String defaultLabel = labels.get(defaultLocale);
         if (defaultLabel == null) {
@@ -110,9 +104,6 @@ public class CommentPresetService {
                 Ids.newId(),
                 tenantId,
                 command.code(),
-                labels.getOrDefault(LocalizedLabels.RU, defaultLabel),
-                labels.getOrDefault(LocalizedLabels.UZ_LATN, defaultLabel),
-                labels.getOrDefault(LocalizedLabels.EN, defaultLabel),
                 command.posModifierCode(),
                 command.sortOrder(),
                 "ACTIVE",
@@ -128,15 +119,8 @@ public class CommentPresetService {
         presets.upsertTranslations(tenantId, row.id(), labels, row.createdAt());
         Map<String, Object> created = new java.util.LinkedHashMap<>();
         created.put("code", command.code());
-        created.put("labelRu", row.labelRu());
-        created.put("labelUz", row.labelUz());
-        created.put("labelEn", row.labelEn());
         created.put("sortOrder", command.sortOrder());
-        labels.forEach((locale, label) -> {
-            if (!LocalizedLabels.PLATFORM_TRIPLE.contains(locale)) {
-                created.put("label." + locale, label);
-            }
-        });
+        labels.forEach((locale, label) -> created.put("label." + locale, label));
         audit.record(AuditFact.of("catalog.comment-preset.created", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
                 .at(ResourceScope.tenant(tenantId))
@@ -148,7 +132,7 @@ public class CommentPresetService {
                 .correlatedBy(row.id().toString())
                 .occurredAt(row.createdAt())
                 .build());
-        return new PresetView(row, mergedLabels(row, labels));
+        return new PresetView(row, orderedLabels(labels));
     }
 
     /** {@link #createWithLabels} for callers that read only the stored row. */
@@ -161,11 +145,11 @@ public class CommentPresetService {
         return presets.list(tenantId);
     }
 
-    /** Every preset with its wording merged from the platform columns and the per-locale table. */
+    /** Every preset with its wording from the per-locale table, each locale once. */
     public List<PresetView> listWithLabels(UUID tenantId) {
         Map<UUID, Map<String, String>> translations = presets.translationsForTenant(tenantId);
         return presets.list(tenantId).stream()
-                .map(row -> new PresetView(row, mergedLabels(row, translations.getOrDefault(row.id(), Map.of()))))
+                .map(row -> new PresetView(row, orderedLabels(translations.getOrDefault(row.id(), Map.of()))))
                 .toList();
     }
 
@@ -186,16 +170,12 @@ public class CommentPresetService {
         if (existing.version() != command.expectedVersion()) {
             throw ApiException.staleVersion(command.expectedVersion(), existing.version());
         }
-        Map<String, String> labels =
-                suppliedLabels(command.labelRu(), command.labelUz(), command.labelEn(), command.labels());
+        Map<String, String> labels = suppliedLabels(command.labels());
         Map<String, String> existingTranslations = presets.translationsFor(tenantId, presetId);
         Instant now = clock.instant();
         int newVersion = presets.update(
                         tenantId,
                         presetId,
-                        labels.get(LocalizedLabels.RU),
-                        labels.get(LocalizedLabels.UZ_LATN),
-                        labels.get(LocalizedLabels.EN),
                         command.posModifierCode(),
                         command.sortOrder(),
                         command.status(),
@@ -209,9 +189,6 @@ public class CommentPresetService {
                 existing.id(),
                 existing.tenantId(),
                 existing.code(),
-                labels.getOrDefault(LocalizedLabels.RU, existing.labelRu()),
-                labels.getOrDefault(LocalizedLabels.UZ_LATN, existing.labelUz()),
-                labels.getOrDefault(LocalizedLabels.EN, existing.labelEn()),
                 command.posModifierCode(),
                 command.sortOrder(),
                 command.status(),
@@ -219,22 +196,14 @@ public class CommentPresetService {
                 existing.createdAt());
 
         Map<String, Object> before = new java.util.LinkedHashMap<>();
-        before.put("labelRu", existing.labelRu());
-        before.put("labelUz", existing.labelUz());
-        before.put("labelEn", existing.labelEn());
         before.put("sortOrder", existing.sortOrder());
         before.put("status", existing.status());
         Map<String, Object> after = new java.util.LinkedHashMap<>();
-        after.put("labelRu", updated.labelRu());
-        after.put("labelUz", updated.labelUz());
-        after.put("labelEn", updated.labelEn());
         after.put("sortOrder", command.sortOrder());
         after.put("status", command.status());
         labels.forEach((locale, label) -> {
-            if (!LocalizedLabels.PLATFORM_TRIPLE.contains(locale)) {
-                before.put("label." + locale, existingTranslations.get(locale));
-                after.put("label." + locale, label);
-            }
+            before.put("label." + locale, existingTranslations.get(locale));
+            after.put("label." + locale, label);
         });
         audit.record(AuditFact.of("catalog.comment-preset.updated", AuditClass.BUSINESS)
                 .by(ActorRef.user(actorSubject, null))
@@ -250,7 +219,7 @@ public class CommentPresetService {
                 .build());
         Map<String, String> translationsAfter = new java.util.LinkedHashMap<>(existingTranslations);
         translationsAfter.putAll(labels);
-        return new PresetView(updated, mergedLabels(updated, translationsAfter));
+        return new PresetView(updated, orderedLabels(translationsAfter));
     }
 
     /** {@link #updateWithLabels} for callers that read only the stored row. */
@@ -259,17 +228,16 @@ public class CommentPresetService {
         return updateWithLabels(tenantId, presetId, command, actorSubject).row();
     }
 
-    private static Map<String, String> suppliedLabels(
-            @Nullable String ru, @Nullable String uz, @Nullable String en, @Nullable Map<String, String> byLocale) {
+    private static Map<String, String> suppliedLabels(@Nullable Map<String, String> byLocale) {
         try {
-            return LocalizedLabels.supplied(ru, uz, en, byLocale, MAX_LABEL_LENGTH);
+            return LocalizedLabels.supplied(byLocale, MAX_LABEL_LENGTH);
         } catch (IllegalArgumentException invalid) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, invalid.getMessage());
         }
     }
 
-    private static Map<String, String> mergedLabels(PresetRow row, Map<String, String> translationRows) {
-        return LocalizedLabels.merge(row.labelRu(), row.labelUz(), row.labelEn(), translationRows);
+    private static Map<String, String> orderedLabels(Map<String, String> translationRows) {
+        return LocalizedLabels.merge(translationRows);
     }
 
     // ---------------------------------------------------- product attachment
@@ -350,62 +318,41 @@ public class CommentPresetService {
         return presets.listForProduct(tenantId, brandId, productId);
     }
 
+    /** {@link #listForProduct} with each preset's wording, one translations read for the whole list. */
+    public List<ProductPresetView> listForProductWithLabels(UUID tenantId, UUID brandId, UUID productId) {
+        List<ProductPresetRow> rows = presets.listForProduct(tenantId, brandId, productId);
+        Map<UUID, Map<String, String>> translations = presets.translationsForPresets(
+                tenantId, rows.stream().map(ProductPresetRow::presetId).collect(java.util.stream.Collectors.toSet()));
+        return rows.stream()
+                .map(row ->
+                        new ProductPresetView(row, orderedLabels(translations.getOrDefault(row.presetId(), Map.of()))))
+                .toList();
+    }
+
     // --------------------------------------------------------------- commands
 
     /**
-     * @param labelRu/labelUz/labelEn the platform triple's wording, kept for callers
-     *                                that predate the per-locale map; each optional
-     * @param labels                  wording by locale (row 10.12), overlaying the three
-     *                                fields above -- the map wins where both name a locale
+     * @param labels wording by locale (row 10.12, ADR 0149): the only shape a preset's wording has.
+     *               It must carry the tenant's default language; every other locale is optional
      */
-    public record NewPreset(
-            String code,
-            @Nullable String labelRu,
-            @Nullable String labelUz,
-            @Nullable String labelEn,
-            @Nullable String posModifierCode,
-            int sortOrder,
-            Map<String, String> labels) {
+    public record NewPreset(String code, @Nullable String posModifierCode, int sortOrder, Map<String, String> labels) {}
 
-        public NewPreset(
-                String code,
-                String labelRu,
-                String labelUz,
-                String labelEn,
-                @Nullable String posModifierCode,
-                int sortOrder) {
-            this(code, labelRu, labelUz, labelEn, posModifierCode, sortOrder, Map.of());
-        }
-    }
-
-    /** @see NewPreset for the label fields; a locale not named here is left as it was */
+    /** @param labels wording by locale; a locale not named here is left as it was */
     public record PresetEdit(
-            @Nullable String labelRu,
-            @Nullable String labelUz,
-            @Nullable String labelEn,
             @Nullable String posModifierCode,
             int sortOrder,
             String status,
             int expectedVersion,
-            Map<String, String> labels) {
-
-        public PresetEdit(
-                String labelRu,
-                String labelUz,
-                String labelEn,
-                @Nullable String posModifierCode,
-                int sortOrder,
-                String status,
-                int expectedVersion) {
-            this(labelRu, labelUz, labelEn, posModifierCode, sortOrder, status, expectedVersion, Map.of());
-        }
-    }
+            Map<String, String> labels) {}
 
     /**
-     * A preset as the console reads it: the stored row plus its wording merged from
-     * the platform columns and the per-locale table, each locale once.
+     * A preset as the console reads it: the stored row plus its wording from the
+     * per-locale table, each locale once.
      */
     public record PresetView(PresetRow row, Map<String, String> labels) {}
+
+    /** A preset attached to a product, with its wording. */
+    public record ProductPresetView(ProductPresetRow row, Map<String, String> labels) {}
 
     public static class UnknownProductException extends RuntimeException {
         public UnknownProductException(UUID productId) {

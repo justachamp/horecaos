@@ -92,6 +92,15 @@ public final class LocalizedLabels {
     }
 
     /**
+     * What a request supplies when the per-locale map is the only shape (a row whose legacy
+     * ru/uz/en columns are gone, V0678): the map's wording, blank values dropped, trimmed, under
+     * the canonical tags. The rules are {@link #supplied(String, String, String, Map, int)}'s.
+     */
+    public static Map<String, String> supplied(@Nullable Map<String, String> byLocale, int maxLength) {
+        return supplied(null, null, null, byLocale, maxLength);
+    }
+
+    /**
      * The tag a locale is stored and reported under: a triple locale's own spelling for
      * any case variant of it, every other tag as given. BCP 47 tags are case-insensitive,
      * the columns and the {@code ck_*_translation_locale} constraints are not.
@@ -130,6 +139,40 @@ public final class LocalizedLabels {
             putIfPresent(merged, locale, translationRows.get(locale));
         }
         return merged;
+    }
+
+    /**
+     * The single answer a read gives when the per-locale table is the only home of a row's wording:
+     * each locale once, the platform triple first in its canonical order and every other locale
+     * sorted, so the same set always answers the same way. A blank wording is skipped, and a case
+     * variant of a locale is reported under its canonical tag.
+     */
+    public static Map<String, String> merge(Map<String, String> translationRows) {
+        Map<String, String> byCanonicalTag = new LinkedHashMap<>();
+        // A row stored under the canonical tag wins; a case variant of it (written by hand, the services
+        // canonicalise on write) only fills a language that has no canonical row, so it can never shadow one.
+        translationRows.forEach((locale, label) -> {
+            if (locale.equals(canonical(locale))) {
+                putIfPresent(byCanonicalTag, locale, label);
+            }
+        });
+        translationRows.forEach((locale, label) -> {
+            String canonical = canonical(locale);
+            if (!locale.equals(canonical) && !byCanonicalTag.containsKey(canonical)) {
+                putIfPresent(byCanonicalTag, canonical, label);
+            }
+        });
+        Map<String, String> ordered = new LinkedHashMap<>();
+        for (String triple : PLATFORM_TRIPLE) {
+            if (byCanonicalTag.containsKey(triple)) {
+                ordered.put(triple, byCanonicalTag.get(triple));
+            }
+        }
+        byCanonicalTag.keySet().stream()
+                .filter(locale -> !PLATFORM_TRIPLE.contains(locale))
+                .sorted()
+                .forEach(locale -> ordered.put(locale, byCanonicalTag.get(locale)));
+        return ordered;
     }
 
     /**

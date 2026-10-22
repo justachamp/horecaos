@@ -2357,9 +2357,6 @@ export interface ComboSalesRowResponse {
 
 export interface CommentPresetChip {
   code?: string;
-  labelEn?: string;
-  labelRu?: string;
-  labelUz?: string;
   labels?: { [key: string]: string };
 }
 
@@ -2372,9 +2369,6 @@ export interface CommentPresetControllerLocaleSetResponse {
 export interface CommentPresetOption {
   code?: string;
   label?: string;
-  labelEn?: string;
-  labelRu?: string;
-  labelUz?: string;
   labels?: { [key: string]: string };
 }
 
@@ -6793,9 +6787,6 @@ export interface NewFeedbackTagRequest {
 
 export interface NewPresetRequest {
   code: string;
-  labelEn: string;
-  labelRu: string;
-  labelUz: string;
   labels?: { [key: string]: string };
   posModifierCode?: string;
   sortOrder?: number;
@@ -9027,9 +9018,6 @@ export interface PresentationRequest {
 
 export interface PresetResponse {
   code?: string;
-  labelEn?: string;
-  labelRu?: string;
-  labelUz?: string;
   labels?: { [key: string]: string };
   posModifierCode?: string;
   presetId?: string;
@@ -9325,9 +9313,7 @@ export interface ProductDetailResponse {
 
 export interface ProductPresetResponse {
   code?: string;
-  labelEn?: string;
-  labelRu?: string;
-  labelUz?: string;
+  labels?: { [key: string]: string };
   posModifierCode?: string;
   presetId?: string;
   sortOrder?: number;
@@ -13605,9 +13591,6 @@ export interface UpdatePaymentMethodRequest {
 
 export interface UpdatePresetRequest {
   expectedVersion: number;
-  labelEn: string;
-  labelRu: string;
-  labelUz: string;
   labels?: { [key: string]: string };
   posModifierCode?: string;
   sortOrder?: number;

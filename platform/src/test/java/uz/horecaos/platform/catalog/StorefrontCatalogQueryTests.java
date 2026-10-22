@@ -40,6 +40,7 @@ import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcCatalogStore;
 import uz.horecaos.platform.catalog.infrastructure.persistence.JdbcMenuStore;
 import uz.horecaos.platform.media.api.MediaAvailability;
 import uz.horecaos.platform.support.AuditTrail;
+import uz.horecaos.platform.support.CommentPresetRows;
 import uz.horecaos.platform.support.CommercialDefaults;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.BrandLocaleLookup;
@@ -927,9 +928,9 @@ class StorefrontCatalogQueryTests {
                 .containsOnlyKeys("ru", "uz-Latn", "en", "kaa")
                 .containsEntry("kaa", "Piyazsiz")
                 .containsEntry("uz-Latn", "Piyozsiz");
-        assertThat(uzbek.labelRu())
-                .as("the triple's columns are still on the wire")
-                .isEqualTo("Без лука");
+        assertThat(uzbek.labels())
+                .as("the triple's wording is in the labels map, the only shape it has since V0678")
+                .containsEntry("ru", "Без лука");
         assertThat(presetOf(storefront, "ru").label()).isEqualTo("Без лука");
         assertThat(presetOf(storefront, "en").label()).isEqualTo("No onion");
         assertThat(presetOf(storefront, "kaa").label()).isEqualTo("Piyazsiz");
@@ -977,11 +978,8 @@ class StorefrontCatalogQueryTests {
                 .param("tenantId", TENANT)
                 .update();
         UUID presetId = UUID.randomUUID();
-        jdbc.sql("""
-                INSERT INTO catalog.comment_presets (
-                    id, tenant_id, code, label_ru, label_uz, label_en, sort_order, status, version)
-                VALUES (:id, :tenantId, 'NO_ONION', 'Без лука', 'Piyozsiz', 'No onion', 0, 'ACTIVE', 1)
-                """).param("id", presetId).param("tenantId", TENANT).update();
+        CommentPresetRows.insertPreset(
+                jdbc, presetId, TENANT, "NO_ONION", CommentPresetRows.triple("Без лука", "Piyozsiz", "No onion"));
         jdbc.sql("""
                 INSERT INTO catalog.product_comment_presets (
                     id, tenant_id, brand_id, product_id, preset_id, sort_order, version)

@@ -47,16 +47,12 @@ const SHOTS_GROUP: MenuModifierGroup = {
 
 const NO_ONIONS_PRESET: CommentPresetOption = {
   code: 'NO_ONIONS',
-  labelRu: 'Без лука',
-  labelUz: 'Piyozsiz',
-  labelEn: 'No onions',
+  labels: { ru: 'Без лука', 'uz-Latn': 'Piyozsiz', en: 'No onions' },
 };
 
 const EXTRA_SPICY_PRESET: CommentPresetOption = {
   code: 'EXTRA_SPICY',
-  labelRu: 'Поострее',
-  labelUz: 'Achchiqroq',
-  labelEn: 'Extra spicy',
+  labels: { ru: 'Поострее', 'uz-Latn': 'Achchiqroq', en: 'Extra spicy' },
 };
 
 function render(
@@ -224,9 +220,6 @@ describe('ItemModifierDialog', () => {
       [
         {
           code: 'NO_ONIONS',
-          labelRu: '',
-          labelUz: '',
-          labelEn: '',
           labels: { kaa: 'Piyazsiz' },
           label: 'Piyazsiz',
         },
