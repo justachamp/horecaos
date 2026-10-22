@@ -143,7 +143,8 @@ class MarketingRetentionSweeperTests {
     }
 
     @Test
-    @DisplayName("a snapshot that records a customer under a legal hold is kept, and purged once the hold is lifted (ADR 0029)")
+    @DisplayName(
+            "a snapshot that records a customer under a legal hold is kept, and purged once the hold is lifted (ADR 0029)")
     void aHeldMemberSuspendsThePurge() {
         UUID tenant = UUID.randomUUID();
         UUID brand = UUID.randomUUID();
@@ -165,7 +166,9 @@ class MarketingRetentionSweeperTests {
         clock.advance(Duration.ofDays(31 * 25));
         var result = sweeper.runOnce();
 
-        assertThat(result.snapshotsDue()).as("only the snapshot without a held customer is due").isEqualTo(1);
+        assertThat(result.snapshotsDue())
+                .as("only the snapshot without a held customer is due")
+                .isEqualTo(1);
         assertThat(memberCount(freeSnapshot)).isZero();
         assertThat(memberCount(heldSnapshot))
                 .as("expiry is suspended for the snapshot that records a held customer")
@@ -175,9 +178,7 @@ class MarketingRetentionSweeperTests {
                 UPDATE customer.legal_holds
                    SET status = 'LIFTED', lifted_at = now(), lifted_by_actor_type = 'USER', lifted_by_actor_id = 'owner-2'
                  WHERE customer_account_id = :a
-                """)
-                .param("a", held)
-                .update();
+                """).param("a", held).update();
         assertThat(sweeper.runOnce().snapshotsDue()).isEqualTo(1);
         assertThat(memberCount(heldSnapshot)).isZero();
     }

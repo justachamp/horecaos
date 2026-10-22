@@ -291,11 +291,9 @@ class LegalHoldServiceTests {
             alone.sql("""
                     INSERT INTO customer.customer_accounts (id, tenant_id, status, display_name, identity_policy_version, version)
                     VALUES (:id, :t, 'ACTIVE', 'Customer', 1, 1)
-                    """)
-                    .param("id", ACCOUNT)
-                    .param("t", TENANT)
-                    .update();
-            alone.sql("DELETE FROM audit.approval_policies WHERE action_code IN ('customer.legal-hold.place', 'customer.legal-hold.lift')")
+                    """).param("id", ACCOUNT).param("t", TENANT).update();
+            alone.sql(
+                            "DELETE FROM audit.approval_policies WHERE action_code IN ('customer.legal-hold.place', 'customer.legal-hold.lift')")
                     .update();
             Clock clock = Clock.fixed(Instant.parse("2026-10-14T12:00:00Z"), ZoneOffset.UTC);
             JsonMapper mapper = JsonMapper.builder().build();
@@ -306,7 +304,8 @@ class LegalHoldServiceTests {
                     new JdbcApprovalService(alone, audit, clock, new SimpleMeterRegistry(), mapper),
                     audit,
                     clock);
-            TransactionTemplate inTransaction = new TransactionTemplate(new DataSourceTransactionManager(own.dataSource()));
+            TransactionTemplate inTransaction =
+                    new TransactionTemplate(new DataSourceTransactionManager(own.dataSource()));
 
             assertThatThrownBy(() -> inTransaction.execute(
                             status -> unguarded.place(TENANT, ACCOUNT, Reason.LITIGATION, "Claim", MAKER)))

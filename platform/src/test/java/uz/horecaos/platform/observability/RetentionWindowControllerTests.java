@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.AfterAll;
@@ -94,6 +95,10 @@ class RetentionWindowControllerTests {
                 List.of(carts, new TrackRetentionWindowProvider(jdbc, sweeper, PILOT_CALENDAR)), guard);
     }
 
+    private static RetentionWindowResponse window(Map<String, RetentionWindowResponse> windows, String code) {
+        return Objects.requireNonNull(windows.get(code), code);
+    }
+
     private static Map<String, RetentionWindowResponse> byCode(List<RetentionWindowResponse> windows) {
         return windows.stream().collect(Collectors.toMap(RetentionWindowResponse::code, window -> window));
     }
@@ -120,7 +125,7 @@ class RetentionWindowControllerTests {
                         OrderingConfigurationKeys.CART_RETENTION_DAYS_CODE,
                         TelemetryConfigurationKeys.TRACK_RETENTION_DAYS_CODE);
 
-        RetentionWindowResponse carts = windows.get(OrderingConfigurationKeys.CART_RETENTION_DAYS_CODE);
+        RetentionWindowResponse carts = window(windows, OrderingConfigurationKeys.CART_RETENTION_DAYS_CODE);
         assertThat(carts.unit()).isEqualTo("DAYS");
         assertThat(carts.configured()).isNull();
         assertThat(carts.effective()).isEqualTo(90);
@@ -128,7 +133,7 @@ class RetentionWindowControllerTests {
         assertThat(carts.appliesTo()).isEqualTo("PER_TENANT");
         assertThat(carts.enforcedBy()).isEqualTo("CartRetentionSweeper");
 
-        RetentionWindowResponse tracks = windows.get(TelemetryConfigurationKeys.TRACK_RETENTION_DAYS_CODE);
+        RetentionWindowResponse tracks = window(windows, TelemetryConfigurationKeys.TRACK_RETENTION_DAYS_CODE);
         assertThat(tracks.effective()).isEqualTo(30);
         assertThat(tracks.floor())
                 .as("the settlement period plus the statement dispute window")
@@ -140,18 +145,19 @@ class RetentionWindowControllerTests {
     }
 
     @Test
-    @DisplayName("a shorter cart value is the effective one; a shorter courier-track value is not, and the card says so")
+    @DisplayName(
+            "a shorter cart value is the effective one; a shorter courier-track value is not, and the card says so")
     void aShorterValueIsHonouredWhereItCanBe() {
         storeTenantValue(OrderingConfigurationKeys.CART_RETENTION_DAYS_CODE, 30);
         storeTenantValue(TelemetryConfigurationKeys.TRACK_RETENTION_DAYS_CODE, 14);
 
         Map<String, RetentionWindowResponse> windows = byCode(controller("", "").windows(TENANT));
 
-        RetentionWindowResponse carts = windows.get(OrderingConfigurationKeys.CART_RETENTION_DAYS_CODE);
+        RetentionWindowResponse carts = window(windows, OrderingConfigurationKeys.CART_RETENTION_DAYS_CODE);
         assertThat(carts.configured()).isEqualTo(30);
         assertThat(carts.effective()).isEqualTo(30);
 
-        RetentionWindowResponse tracks = windows.get(TelemetryConfigurationKeys.TRACK_RETENTION_DAYS_CODE);
+        RetentionWindowResponse tracks = window(windows, TelemetryConfigurationKeys.TRACK_RETENTION_DAYS_CODE);
         assertThat(tracks.configured()).isEqualTo(14);
         assertThat(tracks.effective())
                 .as("the partitions are dropped at the longest window anyone needs, not at this tenant's shorter one")
@@ -164,8 +170,8 @@ class RetentionWindowControllerTests {
     void aLongerTrackValueLengthensTheSharedWindow() {
         storeTenantValue(TelemetryConfigurationKeys.TRACK_RETENTION_DAYS_CODE, 60);
 
-        RetentionWindowResponse tracks =
-                byCode(controller("", "").windows(TENANT)).get(TelemetryConfigurationKeys.TRACK_RETENTION_DAYS_CODE);
+        RetentionWindowResponse tracks = window(
+                byCode(controller("", "").windows(TENANT)), TelemetryConfigurationKeys.TRACK_RETENTION_DAYS_CODE);
 
         assertThat(tracks.effective()).isEqualTo(60);
     }
@@ -181,10 +187,13 @@ class RetentionWindowControllerTests {
                 .allSatisfy(window -> assertThat(window.provisional()).isTrue());
 
         Map<String, RetentionWindowResponse> partial =
-                byCode(controller(OrderingConfigurationKeys.CART_RETENTION_DAYS_CODE, "LEGAL-2026-117").windows(TENANT));
-        assertThat(partial.get(OrderingConfigurationKeys.CART_RETENTION_DAYS_CODE).provisional())
+                byCode(controller(OrderingConfigurationKeys.CART_RETENTION_DAYS_CODE, "LEGAL-2026-117")
+                        .windows(TENANT));
+        assertThat(window(partial, OrderingConfigurationKeys.CART_RETENTION_DAYS_CODE)
+                        .provisional())
                 .isFalse();
-        assertThat(partial.get(TelemetryConfigurationKeys.TRACK_RETENTION_DAYS_CODE).provisional())
+        assertThat(window(partial, TelemetryConfigurationKeys.TRACK_RETENTION_DAYS_CODE)
+                        .provisional())
                 .isTrue();
 
         assertThat(controller("all", "LEGAL-2026-117").windows(TENANT))

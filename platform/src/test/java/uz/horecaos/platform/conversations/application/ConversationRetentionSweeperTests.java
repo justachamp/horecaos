@@ -151,16 +151,14 @@ class ConversationRetentionSweeperTests {
     }
 
     @Test
-    @DisplayName("a customer under a legal hold keeps her history past retention, and loses it once the hold is lifted (ADR 0029)")
+    @DisplayName(
+            "a customer under a legal hold keeps her history past retention, and loses it once the hold is lifted (ADR 0029)")
     void aLegalHoldSuspendsTheExpiry() {
         UUID account = UUID.randomUUID();
         jdbc.sql("""
                 INSERT INTO customer.customer_accounts (id, tenant_id, status, display_name, identity_policy_version, version)
                 VALUES (:id, :t, 'ACTIVE', 'Customer', 1, 1)
-                """)
-                .param("id", account)
-                .param("t", tenantId)
-                .update();
+                """).param("id", account).param("t", tenantId).update();
         UUID heldConversation = insertConversation("CLOSED", 1);
         jdbc.sql("UPDATE conversations.conversations SET customer_account_id = :a WHERE id = :id")
                 .param("a", account)
@@ -184,17 +182,19 @@ class ConversationRetentionSweeperTests {
         clock.advance(Duration.ofDays(40));
         sweeper.runOnce();
 
-        assertThat(messageExists(otherMessage)).as("an unheld customer's history ages out").isFalse();
-        assertThat(messageExists(heldMessage)).as("a held customer's history does not").isTrue();
+        assertThat(messageExists(otherMessage))
+                .as("an unheld customer's history ages out")
+                .isFalse();
+        assertThat(messageExists(heldMessage))
+                .as("a held customer's history does not")
+                .isTrue();
         assertThat(conversationExists(heldConversation)).isTrue();
 
         jdbc.sql("""
                 UPDATE customer.legal_holds
                    SET status = 'LIFTED', lifted_at = now(), lifted_by_actor_type = 'USER', lifted_by_actor_id = 'owner-2'
                  WHERE customer_account_id = :a
-                """)
-                .param("a", account)
-                .update();
+                """).param("a", account).update();
         sweeper.runOnce();
 
         assertThat(messageExists(heldMessage)).isFalse();
