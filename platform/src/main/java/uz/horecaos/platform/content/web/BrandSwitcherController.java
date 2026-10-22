@@ -19,8 +19,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.content.application.BrandSwitcherService;
-import uz.horecaos.platform.content.application.BrandSwitcherService.CandidateView;
-import uz.horecaos.platform.content.application.BrandSwitcherService.EntryView;
+import uz.horecaos.platform.content.application.BrandSwitcherService.SwitcherCandidateView;
+import uz.horecaos.platform.content.application.BrandSwitcherService.SwitcherEntryView;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
@@ -56,7 +56,7 @@ public class BrandSwitcherController {
             description =
                     "shown is false for a hidden entry, an entry whose target brand is inactive, and an entry whose "
                             + "website channel has no verified hostname.")
-    public List<EntryView> list(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+    public List<SwitcherEntryView> list(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
         return switcher.list(tenantId, brandId);
     }
 
@@ -66,7 +66,7 @@ public class BrandSwitcherController {
             summary = "The tenant's other brands and website channels an entry can name",
             description = "Other active brands that sell through an active website channel at one of their own active "
                     + "branches. hostname is null while the channel has no verified one.")
-    public List<CandidateView> candidates(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+    public List<SwitcherCandidateView> candidates(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
         return switcher.candidates(tenantId, brandId);
     }
 
@@ -77,7 +77,7 @@ public class BrandSwitcherController {
             description = "The entry names the target brand and one of the tenant's website channels; it links to that "
                     + "channel's verified hostname, checked on every read. A brand cannot offer itself, and the same brand "
                     + "and channel twice is a conflict.")
-    public ResponseEntity<EntryView> add(
+    public ResponseEntity<SwitcherEntryView> add(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody AddRequest body) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(switcher.add(
@@ -93,7 +93,7 @@ public class BrandSwitcherController {
     @Operation(
             summary = "Show or hide an entry",
             description = "Requires If-Match carrying the entry's version last read.")
-    public EntryView setState(
+    public SwitcherEntryView setState(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID entryId,
@@ -122,7 +122,7 @@ public class BrandSwitcherController {
     @Operation(
             summary = "Set the order of the entries",
             description = "Names every entry of the brand's switcher exactly once, first to last.")
-    public List<EntryView> reorder(
+    public List<SwitcherEntryView> reorder(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody OrderRequest body) {
         return switcher.reorder(
                 tenantId, brandId, body.ids(), currentActor.get().subject());

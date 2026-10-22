@@ -1,10 +1,13 @@
 package uz.horecaos.platform.tenancy.application;
 
 import java.time.Clock;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -80,12 +83,13 @@ public class StorefrontBranchOrderService {
         }
         store.replace(tenantId, brandId, orderedIds, clock.instant());
         List<Branch> after = store.list(tenantId, brandId);
+        Set<UUID> moved = branchesThatMoved(before, after);
         audit.record(AuditFact.of("brand.storefront_branch_order.changed", AuditClass.BUSINESS)
                 .by(ActorRef.user(currentActor.get().subject(), null))
                 .at(ResourceScope.brand(tenantId, brandId))
                 .target("tenancy.brand", brandId)
                 .because("Storefront branch order changed")
-                .changed(ChangeDocuments.diff(snapshot(before), snapshot(after)))
+                .changed(ChangeDocuments.diff(snapshot(before, moved), snapshot(after, moved)))
                 .correlatedBy(brandId.toString())
                 .occurredAt(clock.instant())
                 .build());
@@ -98,10 +102,29 @@ public class StorefrontBranchOrderService {
         }
     }
 
-    private static Map<String, Object> snapshot(List<Branch> branches) {
+    /**
+     * The branches whose position differs between the two lists. {@code ChangeDocuments.diff} keeps every field it is
+     * given, changed or not, so the audit document is built over these alone: a reader of the activity log sees what
+     * moved, not the whole brand with most of it unchanged.
+     */
+    private static Set<UUID> branchesThatMoved(List<Branch> before, List<Branch> after) {
+        Map<UUID, Integer> was = new HashMap<>();
+        before.forEach(branch -> was.put(branch.locationId(), branch.storefrontSortOrder()));
+        Set<UUID> moved = new LinkedHashSet<>();
+        for (Branch branch : after) {
+            if (!Objects.equals(was.get(branch.locationId()), branch.storefrontSortOrder())) {
+                moved.add(branch.locationId());
+            }
+        }
+        return moved;
+    }
+
+    private static Map<String, Object> snapshot(List<Branch> branches, Set<UUID> only) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
         for (Branch branch : branches) {
-            snapshot.put("branch." + branch.locationId(), branch.storefrontSortOrder());
+            if (only.contains(branch.locationId())) {
+                snapshot.put("branch." + branch.locationId(), branch.storefrontSortOrder());
+            }
         }
         return snapshot;
     }

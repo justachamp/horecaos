@@ -174,6 +174,9 @@ Beneath the four, the engineering decisions that make row `6.6a` and row `7.6c` 
   the DNS-TXT verification of batch 13.
 - **One more place a Bot API call can fail the screen.** Reading the menu button back is a live call; when Telegram is
   unreachable the step shows «could not check», not «not done».
+- **No customer-facing screen consumes the branch order yet.** Neither storefront has a branch chooser (each uses the
+  location its deployment is configured with and calls no pickup search), so the order is served by
+  `POST /api/v1/storefront/pickup-locations` and proved there; a customer sees it once a chooser is built on that endpoint.
 
 ### Accepted trade-offs
 

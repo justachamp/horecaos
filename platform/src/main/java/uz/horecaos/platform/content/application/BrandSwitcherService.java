@@ -74,7 +74,7 @@ public class BrandSwitcherService {
      * @param hostname the target channel's verified hostname, absent while it has none
      * @param shown whether a visitor would see this entry right now: active, the target brand active, a verified hostname
      */
-    public record EntryView(
+    public record SwitcherEntryView(
             UUID id,
             UUID targetBrandId,
             String targetBrandName,
@@ -87,7 +87,7 @@ public class BrandSwitcherService {
             int version) {}
 
     /** One sibling brand and website channel an entry can name; {@code hostname} is null while it has no verified one. */
-    public record CandidateView(
+    public record SwitcherCandidateView(
             UUID brandId,
             String brandName,
             UUID channelId,
@@ -100,10 +100,10 @@ public class BrandSwitcherService {
      * as the entries; it reveals names and verified hostnames, which the switcher would show a visitor anyway.
      */
     @Transactional(readOnly = true)
-    public List<CandidateView> candidates(UUID tenantId, UUID brandId) {
+    public List<SwitcherCandidateView> candidates(UUID tenantId, UUID brandId) {
         requireBrand(tenantId, brandId);
         return environment.brand().siblingStorefronts(tenantId, brandId).stream()
-                .map(sibling -> new CandidateView(
+                .map(sibling -> new SwitcherCandidateView(
                         sibling.brandId(),
                         sibling.brandName(),
                         sibling.channelId(),
@@ -113,9 +113,9 @@ public class BrandSwitcherService {
     }
 
     @Transactional(readOnly = true)
-    public List<EntryView> list(UUID tenantId, UUID brandId) {
+    public List<SwitcherEntryView> list(UUID tenantId, UUID brandId) {
         requireBrand(tenantId, brandId);
-        List<EntryView> views = new ArrayList<>();
+        List<SwitcherEntryView> views = new ArrayList<>();
         for (EntryRow row : store.list(tenantId, brandId)) {
             views.add(view(row));
         }
@@ -123,7 +123,7 @@ public class BrandSwitcherService {
     }
 
     @Transactional
-    public EntryView add(UUID tenantId, UUID brandId, UUID targetBrandId, UUID channelId, String actor) {
+    public SwitcherEntryView add(UUID tenantId, UUID brandId, UUID targetBrandId, UUID channelId, String actor) {
         requireBrand(tenantId, brandId);
         if (brandId.equals(targetBrandId)) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "A brand does not offer a way to itself");
@@ -156,7 +156,7 @@ public class BrandSwitcherService {
     }
 
     @Transactional
-    public EntryView setState(
+    public SwitcherEntryView setState(
             UUID tenantId, UUID brandId, UUID entryId, String state, int expectedVersion, String actor) {
         if (!Set.of("ACTIVE", "HIDDEN").contains(state)) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "state must be ACTIVE or HIDDEN");
@@ -201,7 +201,7 @@ public class BrandSwitcherService {
 
     /** Replaces the order with exactly the entries named, once each; anything missing or foreign is refused. */
     @Transactional
-    public List<EntryView> reorder(UUID tenantId, UUID brandId, List<UUID> orderedIds, String actor) {
+    public List<SwitcherEntryView> reorder(UUID tenantId, UUID brandId, List<UUID> orderedIds, String actor) {
         requireBrand(tenantId, brandId);
         Set<UUID> have = new HashSet<>();
         store.list(tenantId, brandId).forEach(row -> have.add(row.id()));
@@ -261,7 +261,7 @@ public class BrandSwitcherService {
         return entries;
     }
 
-    private EntryView view(EntryRow row) {
+    private SwitcherEntryView view(EntryRow row) {
         String name = environment
                 .brand()
                 .brandDisplayName(row.tenantId(), row.targetBrandId())
@@ -271,7 +271,7 @@ public class BrandSwitcherService {
         boolean shown = "ACTIVE".equals(row.state())
                 && hostname.isPresent()
                 && environment.brand().brandIsActive(row.tenantId(), row.targetBrandId());
-        return new EntryView(
+        return new SwitcherEntryView(
                 row.id(),
                 row.targetBrandId(),
                 name,

@@ -22,6 +22,11 @@ import java.util.Set;
  * optional" is lifted. Relaxing a request is safe for a client generated from the released document
  * (it can still send the number); the response gains no required field and loses none.
  *
+ * <p>ADR 0183 (D17) is the third. The public pickup search took the customer's {@code point} as required; a
+ * customer who shared no location is now answered in the brand's own branch order, so the field is optional.
+ * Relaxing a request is safe for a client generated from the released document (it can still send the point, and
+ * with one the order is still by distance); the response gains no required field and loses none.
+ *
  * <p>The allowance is deliberately narrow. It names the properties, it admits one direction
  * of one type change, and it needs the property to be the one being compared rather than a
  * path that merely ends in the same word. A new endpoint, a price, a count or any other
@@ -39,17 +44,24 @@ final class AcceptedContractWidenings {
 
     private static final Set<String> ADR_0150_MODES = Set.of("delivery", "pickup", "dineIn");
 
+    /** ADR 0183 D17: the public pickup search, where the customer's point may now be left out. */
+    private static final String ADR_0183_PICKUP_SEARCH_REQUEST = "/api/v1/storefront/pickup-locations post request";
+
     private AcceptedContractWidenings() {}
 
     /**
      * The properties of the schema at {@code context} that were required in the released contract and
      * may be optional now. Empty everywhere but the three per-mode objects of the lateness editor's
-     * request, where it is the one field ADR 0150 relaxed.
+     * request, where it is the one field ADR 0150 relaxed, and the public pickup search's request, where ADR 0183 relaxed
+     * the customer's point.
      */
     static Set<String> mayBecomeOptional(String context) {
         if (context.startsWith(ADR_0150_EDITOR_REQUEST)
                 && ADR_0150_MODES.contains(context.substring(ADR_0150_EDITOR_REQUEST.length()))) {
             return Set.of("noPromiseFallbackSeconds");
+        }
+        if (ADR_0183_PICKUP_SEARCH_REQUEST.equals(context)) {
+            return Set.of("point");
         }
         return Set.of();
     }

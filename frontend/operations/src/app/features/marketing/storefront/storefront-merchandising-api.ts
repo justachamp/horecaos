@@ -6,7 +6,7 @@ import { BrandScope } from '../../../core/api/catalog-paths';
 import { contentPaths } from '../../../core/api/content-paths';
 import { command } from '../../../core/api/idempotency';
 
-/** Mirrors `BrandSwitcherService.EntryView`. `version` is the ETag every change presents in If-Match. */
+/** Mirrors `BrandSwitcherService.SwitcherEntryView`. `version` is the ETag every change presents in If-Match. */
 export interface SwitcherEntry {
   readonly id: string;
   readonly targetBrandId: string;
@@ -22,7 +22,7 @@ export interface SwitcherEntry {
   readonly version: number;
 }
 
-/** Mirrors `BrandSwitcherController.CandidateView`: a sibling brand and one of its website channels. */
+/** Mirrors `BrandSwitcherService.SwitcherCandidateView`: a sibling brand and one of its website channels. */
 export interface SwitcherCandidate {
   readonly brandId: string;
   readonly brandName: string;
