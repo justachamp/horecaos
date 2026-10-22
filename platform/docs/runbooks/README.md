@@ -50,6 +50,7 @@ That shapes them more than any style guide would.
 | [staff-shifts.md](staff-shifts.md) | Before switching attendance on for a company, a shift left open, reading a staff-hours divergence, why the payroll export refuses, and the partition hazard for the next fact table (ADR 0156) |
 | [marking-scanner-setup.md](marking-scanner-setup.md) | A branch that sells marked goods: the imager settings that matter, the one-minute self-test, the three preconditions for turning `feature.marked_goods` on, and what to do when a real code is refused (ADR 0161) |
 | [print-agent-and-printers.md](print-agent-and-printers.md) | Paper: enrolling a print agent on a branch machine, registering and replacing a printer, routing documents, and reading a dead print job (ADR 0154) |
+| [refunds-fiscal-evidence-and-corrections.md](refunds-fiscal-evidence-and-corrections.md) | A customer or an inspector wants a receipt, a receipt is wrong or blocked, a customer wants money back (the cabinet to use first, and the refund-without-a-source rule), an order changed after its receipt was filed, a cash sale waits on its terminal, and how long evidence is kept (ADR 0166, ADR 0048, ADR 0165) |
 
 **A runbook that has never been executed is a draft.** Each file above carries a
 `Last executed` line in its header. Most read `never`; the few that have been run

@@ -94,6 +94,15 @@
   receipt must carry is an external input, and a branch prints a receipt only
   where a manager has routed one (Settings → Printing and receipts; automatic
   printing is off until switched on per route).
+  2026-10-23 (batch 21, ADR 0166): the open input «which party is the legal fiscal agent per
+  settlement path» is closed by [ADR 0166](0166-the-fiscal-agent-per-settlement-path-and-the-fiscal-evidence-surface.md)
+  (the tenant's own legal entity, on every path), which amends this record without editing it. Rollout stage 4 is now
+  driven for both providers end to end against fakes: Click from a document after capture, Payme from lines fixed with the
+  checkout; the line builder files every order as the lines it was sold as and the placeholder is deleted. Stage 5 (the
+  `TERMINAL` responsibility) is built against a fake: `FiscalTerminalPort`, and a cash sale at a branch with a capable
+  terminal is opened as `PENDING` / `AWAITING_TERMINAL` and issued by that terminal; the «snapshot `business_date` and
+  `tender_id`» item is done (V0685). No real provider sandbox, vendor terminal or tax-authority endpoint has been touched
+  (the external-connections runbook for wave `w11-fiscal-evidence` lists each fact).
 - Date proposed: 2026-08-21
 - Date decided: 2026-08-22
 - Deciders: Ayubkhon Abbosov (platform architecture; cash fiscalization, 2026-08-22), finance (VAT registration, tax treatment, evidence retention), legal (fiscal agency per settlement path)

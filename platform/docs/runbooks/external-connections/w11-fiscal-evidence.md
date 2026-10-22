@@ -1,9 +1,10 @@
 # External connections: the fiscal evidence (wave `w11-fiscal-evidence`, gap-map row `X.2`)
 
-**Last executed:** never. Nothing here has touched a real Click, Payme or tax-authority endpoint. Every
-receipt line the platform builds is proved against the fake Click provider (`FakeClickHttpProvider`,
-`tools/pay-fake-click`) and against hand-written golden receipts; the facts below are the ones only the owner,
-a provider or a tenant can supply. Per ADR 0023 a runbook that has never been executed is a draft.
+**Last executed:** never. Nothing here has touched a real Click, Payme, tax-authority or fiscal-terminal endpoint.
+Every receipt line the platform builds is proved against the fake Click provider (`FakeClickHttpProvider`,
+`tools/pay-fake-click`), the fake fiscal terminal (`FakeFiscalTerminalAdapter`) and hand-written golden receipts; the
+facts below are the ones only the owner, a provider, a vendor or a tenant can supply. Per ADR 0023 a runbook that
+has never been executed is a draft.
 
 **The way back, before the first step.** None of the facts below is a code change. Each is a value in a
 configuration row, a property or tenant data, and each is withdrawn by putting the previous value back. Nothing
@@ -43,20 +44,38 @@ answered, leave it at `1`: weighed lines then block as above and nothing wrong i
 
 ## 2. Payme: which surface reads the receipt detail, and whether `count` may be a decimal
 
-**The fact.** Which Payme surface reads the `detail` object (the checkout form's `detail` field, or the
-`CheckPerformTransaction` result member; open question U10), the `SetFiscalData` deadline and status codes, and
-whether `count` may be fractional.
+**The fact (Payme, in writing; question U10 of `docs/providers/payme-merchant-api.md`).** Which Payme surface reads
+the `detail` object of a fiscalised cashbox: the checkout form's `detail` field, or the `CheckPerformTransaction`
+result member. The docs mark `items` «required» on the one page and «optional» on the other, and `detail` is not
+documented as a GET parameter at all (U20), so a link or a QR cannot carry it. Also: the `SetFiscalData` deadline and
+status codes, and whether `count` may be fractional.
 
-**What exists.** `PaymeReceiptDetail` builds the documented shape, now with a decimal `count` (`1.04`, never an
-exponent; a whole count stays an integer) and `price` as the unit price, and checks that `price × count − discount`
-equals the amount charged to the tiyin. Both surfaces are **not yet wired** (row `X.2-5`, a later step of this wave):
-the detail is validated and discarded.
+**What exists.** Both surfaces are built and tested against a fake, behind one switch.
 
-**Where the value goes.** Nothing to set in this step. When the answer arrives it decides the default of the
-`FORM`/`CHECK`/`BOTH` switch that the Payme wiring step introduces.
+- The receipt lines are built **when the payment is first presented** (`ProtectedPresentedReceipts`), kept on the
+  payment attempt behind an ADR 0029 protected reference (V0687), and carried unchanged on every surface and every
+  re-presentation. A fiscalised cashbox is refused a presentation whose receipt cannot be built
+  (`RECEIPT_NOT_BUILDABLE`); nothing is presented with a placeholder.
+- `FORM`: `PaymentSession.form` (`StorefrontPaymentController.PaymentFormResponse`) hands the storefront a form
+  (`action`, hidden `fields`, `detail` among them) that both storefronts submit (`payment-form.ts`, `https` only).
+- `CHECK`: `CheckPerformTransaction` returns `detail` beside `allow`, and answers `-31008` for a fiscalised cashbox
+  that holds no lines or whose lines do not add up.
+- `PaymeReceiptDetail` writes a decimal `count` (`1.04`, never an exponent; a whole count stays an integer) and `price`
+  as the unit price, and checks `price × count − discount` equals the amount charged to the tiyin.
+- The filing sends exactly the lines the checkout carried and keeps them as the document's sent request.
 
-**How to prove it.** With a Payme test cashbox that has fiscalisation switched on: create a payment for a
-sandbox order, then read what Payme recorded. Not possible before the wiring step lands.
+**Where the value goes.** The property `horecaos.payments.payme.receipt-surface`
+(`HORECAOS_PAYMENTS_PAYME_RECEIPT_SURFACE` in `/etc/horecaos/production.env`), restart the platform. No migration.
+The default is **`BOTH`**, the provider note's own advice for U10 («always send items when the cashbox is fiscalised»),
+and it is correct under either answer. When Payme answers, narrow it: `FORM` if only the form is read **and** no
+operator sends payment links or QR codes (a link cannot carry `detail`, so `FORM` alone loses the receipt on every
+link), `CHECK` if only the pre-flight is read. This wave decides nothing about the default.
+
+**How to prove it.** With a Payme test cashbox that has fiscalisation switched on and a tenant whose dish is
+classified: place an order paid by Payme and open the checkout; Payme's cabinet must show the same lines and total as
+the order. Then read what Payme recorded through `SetFiscalData` (the document turns `ISSUED` with the sign and link).
+Repeat once through a payment link (not the form) to see which surface carried it, and once with a weighed line to
+see whether a fractional `count` is accepted. Record the answers in the provider note.
 
 ## 3. The tax rule of a sale: delivery and points
 
@@ -82,8 +101,22 @@ receipt against it.
 
 ## 3a. The retention period (`fiscal.evidence_retention_years`)
 
-Not touched by this step. It stays a provisional seven years (ADR 0166 open input, counsel and finance); the
-reader and the report-only sweep are a later step of this wave.
+**The fact (counsel and finance, ADR 0166 open input).** How many years a legal entity's fiscal evidence must be kept,
+and whether HorecaOS's arrangement with a restaurant is a commission agreement in the tax sense. Both are closed on
+defaults that are correct under either answer («blocks: nothing»; for retention only the *provisional* flag).
+
+**What exists.** The key is seven years and provisional. Its readers: the evidence screen, the platform's report
+(`GET /api/v1/control-plane/fiscal/retention`) and a daily report-only log line (`FiscalRetentionSweeper`), all
+through `FiscalEvidencePolicies.effectiveRetention`: the tenant's figure, **never below the platform's**. Nothing
+deletes anything; the application role has no `DELETE` on a fiscal table. `TenantOffboardingKeepsFiscalEvidenceTests`
+pins that offboarding cannot shorten it. **Not built:** the ADR 0029 startup guard that refuses a production profile
+while the key is provisional.
+
+**Where the value goes.** The policy `fiscal.evidence_retention_years` (ADR 0030) at `PLATFORM`, and optionally at
+`TENANT`, through the policy editor: `{"years": N, "provisional": false}` once counsel has confirmed N. A tenant's value
+below the platform's is ignored.
+
+**How to prove it.** Read the report: the tenant's `retentionYears` is the confirmed figure and `provisional` is `false`.
 
 ## 4. Click and Payme merchant credentials, one real round trip
 
@@ -118,7 +151,36 @@ import runbook.
 **How to prove it.** On a tenant with an unclassified dish: place an order, wait for the document to block, read the
 reason on the finance fiscal page, classify the dish, press **Unblock**, and watch the document file.
 
-## 6. A fiscal terminal, and counsel's confirmation of the retention period
+## 6. A fiscal terminal
 
-Both belong to later steps of this wave (the `FiscalTerminalPort` and its fake; the retention reader). Nothing was
-built against them here, and nothing in this step depends on them.
+**The fact (the owner, a tenant and a vendor).** A real fiscal-capable device: vendor and model, its API
+documentation, the device itself, and a tenant that owns one and registers it. Without it a cash sale stays what it
+always was.
+
+**What exists.** `FiscalTerminalPort` (`issue`, `lookup`), the contract every adapter satisfies
+(`FiscalTerminalPortContract`) and the note that states it ([`docs/providers/fiscal-terminal.md`](../../providers/fiscal-terminal.md)),
+a fake adapter under the `local` profile only, and the whole path against it: a cash sale at a branch with a registered,
+capable terminal is opened by the obligation opener when the order completes, sent to the terminal (lookup first, issue
+only if it holds nothing), and recorded (`ISSUED` / `TERMINAL_FISCALIZED`, the sign, number, terminal id and link, the
+lines kept as sent, the whole amount as cash, the terminal named). Where there is no terminal the decision stands: cash
+is `NOT_APPLICABLE`, an unevidenced tenant obligation, and a terminal registered under another company does not count.
+In a deployment with no adapter a cash sale at a terminal branch waits `PENDING` and says «not wired»; it is never given a
+receipt nobody issued.
+
+**Where the value goes.** A vendor adapter implementing `FiscalTerminalPort` and extending `FiscalTerminalPortContract`;
+the terminal registered in Settings → Fiscalization (the terminals tab) (`provider_binding_id` naming an installation whose approved
+provider environment holds the endpoint, ADR 0026, never a tenant-typed URL) with the capability `IssueFiscalReceipt`.
+
+**How to prove it.** Register the device, make a cash sale, complete the order, and watch the document go `ISSUED`;
+check the receipt number and sign on the device's own journal against the order's fiscal card. Then switch the device
+off and make another sale: the document must block `TERMINAL_OFFLINE` with **nothing** issued, and issue exactly once
+when the device is back.
+
+**Not built.** The recovery calls that attach a terminal receipt to a *provider* payment (Click `submit_qrcode`, Payme
+`receipts.set_fiscal_data`): they matter only when a card payment and a terminal receipt coexist for one sale, which no
+flow in this build produces, and Payme's `set_fiscal_data` belongs to the Subscribe API, which is not adopted. A marked
+good cannot be issued through the terminal port (it carries no code).
+
+## 7. Counsel's confirmation of the retention period
+
+See 3a: one fact, one place. It is listed separately only because it belongs to a person, not to a deployment.

@@ -26,6 +26,10 @@
   the decline. Not done: flipping the policy to `ENFORCE` (a platform write after one
   release of counter data, `AdjustmentReasonPolicyService.author`; no console edits it), and
   the refund-without-a-source rule in ADR 0048's runbook, which does not exist yet.
+  2026-10-23 (batch 21): the refund-without-a-source rule (Decision 5) is written in the refund runbook that ADR 0048
+  asked for, [refunds-fiscal-evidence-and-corrections.md](../../runbooks/refunds-fiscal-evidence-and-corrections.md),
+  section 5: the tenant pays out of band, the operator records exactly that with the reference, and there is no «credit the
+  account instead» remedy. The runbook has not been executed.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides

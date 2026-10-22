@@ -4,9 +4,8 @@
 - Implementation status: Partial — the evidence surface is built from the read to the screens
   (batch 20): the backend, the console's evidence card on the order detail and the payments page,
   the payments page's payment-types table, the fiscalization settings projection and the receipt
-  link on the storefront's order page; the real receipt line builder and the events are not, so
-  what the screens show of a filing is the Click path's lines, the INN and the identifiers, and
-  «not kept» elsewhere. Built: V0551 snapshots the
+  link on the storefront's order page; the receipt line builder and the events followed in batch 21 (below), so
+  what the screens show of a filing is its lines as filed, the INN and the identifiers. Built: V0551 snapshots the
   issuing INN and legal name onto each `fiscal.fiscal_documents` row at insert, by a trigger (so
   the cash decision written through the payments view has one too; rows that predate it are
   backfilled from the entity and marked `BACKFILL`; an UPDATE cannot rewrite a snapshot), widens
@@ -47,10 +46,26 @@
   that would move an order holding a marked line, or adding one in the same batch, to such a method. The paper receipt prints the lines as filed.
   The Click `Amount` for a weighed count goes through an injected `ClickQuantityScale`
   (`horecaos.payments.click.quantity-scale`, default 1, a fractional count refused until Click answers).
-  Not built: `openPartnerObligation` driven at capture, the Payme detail on either surface, the
-  `FiscalTerminalPort` and its fake adapter, the reader for `order_revisions.fiscal_correction_required`,
-  `FiscalCorrectionRequested.v1` and `FiscalCorrectionAttached.v1` on `fiscal.events`, the adapter from `OrderMarkCounts`
-  to ADR 0161's `OrderMarksPort` (until it exists the block reads «marks not built»).
+  Since batch 21, step 2 (2026-10-23): Payme takes the receipt with the checkout. The lines are built when the
+  attempt is first presented (`ProtectedPresentedReceipts`, V0687), kept as sent behind an ADR 0029 reference, and
+  carried on the checkout form (`ProviderInvoice.PaymentForm`, which both storefronts POST) and on
+  `CheckPerformTransaction`'s `detail`, behind `horecaos.payments.payme.receipt-surface` (`FORM`, `CHECK` or `BOTH`,
+  default `BOTH` until Payme answers question U10); a presentation whose receipt cannot be built is refused
+  (`RECEIPT_NOT_BUILDABLE`) and the filing sends exactly those lines. An amendment after the receipt opens a correction
+  request on its own: `order_revisions.fiscal_correction_required` is read by `FiscalAmendmentCorrections` through
+  `ordering.api.FiscalCorrectionRevisionFeed` (reason `AMENDED_AFTER_ISSUE`, no approver, `source_revision`, V0686), and
+  attaching the agent's reference still needs the second person. `FiscalCorrectionRequested.v1` and
+  `FiscalCorrectionAttached.v1` are on `fiscal.events` through the outbox. `FiscalTerminalPort` (`issue`, `lookup`) has a
+  fake adapter (local profile only) and the contract suite every adapter extends (`FiscalTerminalPortContract`); a cash
+  sale at a branch with a registered, capable terminal is a `TERMINAL` receipt, opened when the order completes and issued
+  by that terminal, lookup first and never twice (`TerminalFiscalizationBridge`, V0688). `fiscal.evidence_retention_years` is
+  read by a report-only retention report and sweeper (`GET /api/v1/control-plane/fiscal/retention`) through
+  `FiscalEvidencePolicies.effectiveRetention`, the tenant's figure and never below the platform's. The OrderMarksPort count
+  adapter exists (`OrderMarksOrderMarkCounts`). The operator runbook is
+  `runbooks/refunds-fiscal-evidence-and-corrections.md`, never executed. Not built: `openPartnerObligation` driven at
+  capture; a vendor adapter for `FiscalTerminalPort` (an external fact: no vendor is chosen); Click `submit_qrcode` and
+  Payme `set_fiscal_data` recovery calls; the ADR 0029 startup guard that refuses a production profile while the retention
+  key is provisional; a marked good through a terminal; the Click quantity scale for a weighed line (an external fact).
   The console (`q-fiscal-evidence`) draws the read on the order detail's fiscal panel, under the
   tenders of the payments page, where each tender links to its document, and beneath the order
   lookup of the finance fiscal page, which also lists the open correction requests, aged in days
@@ -548,8 +563,9 @@ that is audited.
       resolve; `fiscal.fiscal_correction_requests` with grants (the mark store is ADR
       0161's migration, not this one). Check every active worktree's `db/migration/` for the
       next free number first.
-- [ ] `fiscal.evidence.reveal` capability, `fiscal.evidence_retention_years` and
-      `fiscal.synthetic_lines_allowed` keys; `fiscal.events` topic and its catalogue entries.
+- [x] `fiscal.evidence.reveal` capability, `fiscal.evidence_retention_years` and
+      `fiscal.synthetic_lines_allowed` keys (the last deleted with the placeholder); `fiscal.events` topic and its
+      catalogue entries (batch 21).
 - [ ] `GET .../orders/{orderId}/fiscal-evidence` and `GET .../fiscal/payment-types`, with
       masking and the audited reveal.
 - [ ] `PartnerFiscalizationBridge.retry` refuses a non-sandbox synthetic submission.
@@ -558,12 +574,12 @@ that is audited.
       and `submit` driven at capture.
 - [x] `FiscalNodeFacts.requiresMarkingCapablePayment` called from `CartPaymentOptions` and
       `CheckoutEligibilityGuard` (batch 21).
-- [ ] The evidence block's marks count reads ADR 0161's `OrderMarksPort.markCounts`; until
-      that port exists the block says "marks not built" and shows no count.
-- [ ] Correction and void requests, attachments, the four states, and a reader for
-      `order_revisions.fiscal_correction_required`.
-- [ ] `FiscalTerminalPort`, a fake adapter and its contract tests (not required for the
-      surface; required for `TERMINAL` evidence to exist).
+- [x] The evidence block's marks count reads ADR 0161's `OrderMarksPort.markCounts`
+      (`OrderMarksOrderMarkCounts`); where no mark store is wired the block still says "marks not built".
+- [x] Correction and void requests, attachments, the four states, and a reader for
+      `order_revisions.fiscal_correction_required` (batch 21).
+- [x] `FiscalTerminalPort`, a fake adapter and its contract tests (not required for the
+      surface; required for `TERMINAL` evidence to exist). A vendor adapter is an external fact.
 - [ ] Console: the evidence block, the payment-types table, the strings in three languages.
 - [ ] ADR 0038's status line updated to say its open input is closed, and the gap-map row
       `X.2` re-audited (this record does not edit either).
