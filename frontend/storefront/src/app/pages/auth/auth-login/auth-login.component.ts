@@ -29,12 +29,6 @@ import packageJson from '../../../../../package.json';
 /** {@code ProfileTelegramComponent}'s own interval, matched here for the same reason: a customer just switched to Telegram and is actively waiting. */
 const TELEGRAM_POLL_INTERVAL_MS = 5_000;
 
-const LANGUAGES = [
-  { id: 'uz' as const, flag: '🇺🇿' },
-  { id: 'ru' as const, flag: '🇷🇺' },
-  { id: 'en' as const, flag: '🇬🇧' },
-];
-
 @Component({
   selector: 'app-auth-login',
   standalone: true,
@@ -46,7 +40,8 @@ export class AuthLoginComponent implements OnInit, OnDestroy {
   phone = '';
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
-  readonly languages = LANGUAGES;
+  /** The languages this brand serves that the platform has live and this build can draw (ADR 0149). */
+  readonly languages = inject(LangService).offered;
   readonly keyboardOpen = signal(false);
 
   /** The outstanding "Continue with Telegram" code, while its poll is running. */

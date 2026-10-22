@@ -20,18 +20,13 @@
     </header>
 
     <ul class="flex flex-col">
-      @for (lang of languages; track lang.id) {
+      @for (lang of languages(); track lang.id) {
         <li class="border-b border-border-default">
           <button
             type="button"
             (click)="selectLanguage(lang.id)"
             class="flex w-full items-center gap-4 py-4 text-left text-text-primary transition-opacity hover:opacity-90"
           >
-            <span
-              class="flex h-8 w-8 shrink-0 items-center justify-center text-2xl leading-none"
-              aria-hidden="true"
-              >{{ lang.flag }}</span
-            >
             <span class="flex-1 font-medium">{{ lang.label }}</span>
             @if (selectedId() === lang.id) {
               <span class="h-5 w-5 shrink-0 rounded-full bg-brand-accent" aria-hidden="true"></span>
