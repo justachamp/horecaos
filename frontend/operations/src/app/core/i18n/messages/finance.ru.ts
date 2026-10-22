@@ -825,6 +825,7 @@ export const financeRu: AreaMessages<typeof financeEn> = {
   'finance.fiscalEvidence.correction.reason.DUPLICATE_RECEIPT': 'Дубликат чека',
   'finance.fiscalEvidence.correction.reason.CUSTOMER_REFUND': 'Возврат клиенту',
   'finance.fiscalEvidence.correction.reason.OTHER': 'Другое',
+  'finance.fiscalEvidence.correction.reason.AMENDED_AFTER_ISSUE': 'Заказ изменён после пробития чека',
   'finance.fiscalEvidence.correction.note.label': 'Что не так (до 255 символов)',
   'finance.fiscalEvidence.correction.submit': 'Отправить запрос',
   'finance.fiscalEvidence.correction.submitting': 'Отправляем…',

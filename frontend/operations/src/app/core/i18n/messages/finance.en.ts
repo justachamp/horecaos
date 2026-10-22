@@ -824,6 +824,7 @@ export const financeEn = {
   'finance.fiscalEvidence.correction.reason.DUPLICATE_RECEIPT': 'Duplicate receipt',
   'finance.fiscalEvidence.correction.reason.CUSTOMER_REFUND': 'Customer refund',
   'finance.fiscalEvidence.correction.reason.OTHER': 'Other',
+  'finance.fiscalEvidence.correction.reason.AMENDED_AFTER_ISSUE': 'Order amended after the receipt was filed',
   'finance.fiscalEvidence.correction.note.label': 'What is wrong (up to 255 characters)',
   'finance.fiscalEvidence.correction.submit': 'Send the request',
   'finance.fiscalEvidence.correction.submitting': 'Sending…',

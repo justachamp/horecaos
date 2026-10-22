@@ -830,6 +830,7 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
   'finance.fiscalEvidence.correction.reason.DUPLICATE_RECEIPT': 'Chek takrorlangan',
   'finance.fiscalEvidence.correction.reason.CUSTOMER_REFUND': 'Mijozga qaytarish',
   'finance.fiscalEvidence.correction.reason.OTHER': 'Boshqa',
+  'finance.fiscalEvidence.correction.reason.AMENDED_AFTER_ISSUE': 'Chek kiritilgandan keyin buyurtma oʻzgartirildi',
   'finance.fiscalEvidence.correction.note.label': 'Nima notoʻgʻri (255 belgigacha)',
   'finance.fiscalEvidence.correction.submit': 'Soʻrovni yuborish',
   'finance.fiscalEvidence.correction.submitting': 'Yuborilmoqda…',

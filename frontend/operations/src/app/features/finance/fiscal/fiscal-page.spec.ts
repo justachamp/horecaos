@@ -404,6 +404,21 @@ describe('FiscalPage', () => {
       expect(byTestId('fiscal-request-row')?.textContent).toContain('SOMETHING_NEW');
     });
 
+    it('names a request the platform opened itself, because an order was amended after its receipt, in words', async () => {
+      evidenceApi.openCorrections.mockResolvedValue([
+        request({
+          reasonCode: 'AMENDED_AFTER_ISSUE',
+          requestedBy: 'fiscal-amendment-watch',
+          approvalId: null,
+        }),
+      ]);
+      await reload();
+
+      const row = byTestId('fiscal-request-row');
+      expect(row?.textContent).toContain('Order amended after the receipt was filed');
+      expect(row?.textContent).not.toContain('AMENDED_AFTER_ISSUE');
+    });
+
     it('opens that order’s documents and evidence, where the agent’s reference is attached', async () => {
       evidenceApi.openCorrections.mockResolvedValue([request()]);
       api.forOrder.mockResolvedValue([{ ...BLOCKED_DOCUMENT, orderId: 'order-42' }]);
