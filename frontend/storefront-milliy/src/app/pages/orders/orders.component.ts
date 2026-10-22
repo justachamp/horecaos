@@ -10,7 +10,7 @@ import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import { IconComponent } from '../../shared/icon/icon.component';
-import { LangService } from '../../services/lang.service';
+import { LangService, platformTag } from '../../services/lang.service';
 import {
   OrdersService,
   type ApiOrder,
@@ -203,7 +203,7 @@ export class OrdersComponent implements OnInit {
     if (Number.isNaN(date.getTime())) {
       return '';
     }
-    return date.toLocaleDateString(this.lang.langId() === 'uz' ? 'uz-UZ' : this.lang.langId(), {
+    return date.toLocaleDateString(platformTag(this.lang.langId()), {
       day: 'numeric',
       month: 'long',
     });

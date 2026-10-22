@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, type OnInit, inject, signal } from 
 
 import { HorecaOSApiError } from '../../core/api/problem-details';
 import { IconComponent } from '../../shared/icon/icon.component';
-import { LangService } from '../../services/lang.service';
+import { LangService, platformTag } from '../../services/lang.service';
 import { type RedemptionResponse, ReferralService } from '../../services/referral.service';
 import { TranslatePipe } from '../../shared/translate/translate.pipe';
 import { TranslateService } from '../../services/translate.service';
@@ -138,7 +138,7 @@ export class ReferralComponent implements OnInit {
     if (Number.isNaN(date.getTime())) {
       return '';
     }
-    return date.toLocaleDateString(this.lang.langId() === 'uz' ? 'uz-UZ' : this.lang.langId(), {
+    return date.toLocaleDateString(platformTag(this.lang.langId()), {
       day: 'numeric',
       month: 'long',
       year: 'numeric',

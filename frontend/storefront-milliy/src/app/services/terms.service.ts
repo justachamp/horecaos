@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { ApiClient } from '../core/api/api-client';
 import { APP_CONFIG } from '../core/config/app-config';
 import { Session } from '../core/auth/session';
-import { LangService } from './lang.service';
+import { LangService, platformTag } from './lang.service';
 
 /** What the storefront actually renders for terms of service (ADR 0067). */
 export interface TermsDocument {
@@ -123,26 +123,11 @@ export class TermsService {
 }
 
 /**
- * Maps this app's own language selector (`uz`/`ru`/`en`, see `LangService`)
- * onto the platform's `ru`/`uz-Latn`/`en` legal-content locale tags.
- *
- * A plain lookup rather than a shared enum: the two vocabularies serve
- * different purposes (one is this app's own UI chrome language, the other is
- * a content locale several backend modules already key by), and the
- * `notifications`/`marketing`/`ordering` modules each declare their own copy
- * of the three-tag set rather than sharing one type, which this mirrors.
+ * This app's own language id (see `LangService`) as the platform's legal-content locale tag: the
+ * registry's tag for it (ADR 0149), the same one every other platform-facing locale in this app uses.
  */
 function toDocumentLocale(langId: string): string {
-  switch (langId) {
-    case 'uz':
-      return 'uz-Latn';
-    case 'ru':
-      return 'ru';
-    case 'en':
-      return 'en';
-    default:
-      return 'en';
-  }
+  return platformTag(langId);
 }
 
 interface TermsResponse {
