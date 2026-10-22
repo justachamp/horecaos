@@ -36196,6 +36196,9 @@
           "roleCode" : {
             "type" : "string"
           },
+          "roleName" : {
+            "type" : "string"
+          },
           "scope" : {
             "$ref" : "#/components/schemas/ResourceScope"
           }
