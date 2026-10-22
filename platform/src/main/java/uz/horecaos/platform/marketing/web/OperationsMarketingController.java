@@ -112,8 +112,15 @@ public class OperationsMarketingController {
                 .map(channel -> {
                     CampaignMessagePort.Wiring wiring =
                             messages.wiring(tenantId, brandId, channel.name(), CampaignMessagePort.PURPOSE_MARKETING);
+                    CampaignMessagePort.ChannelReporting reporting =
+                            messages.reporting(tenantId, brandId, channel.name());
                     return new ChannelResponse(
-                            channel.name(), channel.carriesMarginalCost(), wiring.isWired(), wiring.reason());
+                            channel.name(),
+                            channel.carriesMarginalCost(),
+                            wiring.isWired(),
+                            wiring.reason(),
+                            reporting.reportsDelivery(),
+                            reporting.reportsRead());
                 })
                 .toList());
     }
@@ -225,6 +232,30 @@ public class OperationsMarketingController {
 
         return ResponseEntity.ok(campaigns.list(tenantId, brandId).stream()
                 .map(row -> CampaignResponse.of(row, wiringOf(row)))
+                .toList());
+    }
+
+    @GetMapping("/campaigns/delivery-counts")
+    @RequiresCapability(value = Capability.CAMPAIGN_AUTHOR, scope = ScopeType.BRAND)
+    @Operation(
+            summary = "What became of the messages of each of the brand's recent campaigns, side by side",
+            description = "The list a marketer compares campaigns by (row 7.9b, ADR 0182): for each of the "
+                    + "brand's hundred newest campaigns, the same `delivery` object `recipients/counts` "
+                    + "answers for one, derived when asked from the messages' own evidence. One read so a "
+                    + "screen does not ask a hundred times; a campaign that created no messages counts zero.")
+    public ResponseEntity<List<CampaignDeliveryResponse>> campaignDeliveryCounts(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId) {
+
+        Map<String, CampaignMessagePort.ChannelReporting> reportingByChannel = new java.util.HashMap<>();
+        return ResponseEntity.ok(campaigns.list(tenantId, brandId).stream()
+                .limit(100)
+                .map(row -> new CampaignDeliveryResponse(
+                        row.id(),
+                        row.channel(),
+                        DeliveryCountsResponse.of(
+                                messages.deliveryCounts(tenantId, row.id()),
+                                reportingByChannel.computeIfAbsent(
+                                        row.channel(), channel -> messages.reporting(tenantId, brandId, channel)))))
                 .toList());
     }
 
@@ -501,7 +532,8 @@ public class OperationsMarketingController {
                             row.terminalStatus(),
                             delivery == null ? null : delivery.state(),
                             delivery == null ? null : delivery.receiptState(),
-                            delivery == null ? null : delivery.segmentsBilled());
+                            delivery == null ? null : delivery.segmentsBilled(),
+                            delivery == null ? null : delivery.reason());
                 })
                 .toList());
     }
@@ -509,18 +541,19 @@ public class OperationsMarketingController {
     @GetMapping("/campaigns/{campaignId}/recipients/counts")
     @RequiresCapability(value = Capability.CAMPAIGN_AUTHOR, scope = ScopeType.BRAND)
     @Operation(
-            summary = "How many recipients ended each way (rows 7.9b/6.4) — the campaign history/statistics view",
-            description = "The aggregate `recipients` itself makes a caller build by paging: "
-                    + "pending, queued (handed to ADR 0020 for delivery), deferred (held past a "
-                    + "quiet-hours boundary) and refused, plus the total attempted. Grouped by "
-                    + "the same status `recipients` returns per row, not by the ADR 0020 terminal "
-                    + "outcome — `terminal_status` is written by a projection this wave does not "
-                    + "add, so 'delivered' vs 'failed' is not answerable from here yet. Read "
-                    + "receipts have no data source at all: NotificationStatus has no READ and "
-                    + "V0043 has no read_at, so the campaign tab that reads this says so rather "
-                    + "than rendering a zero. Row 6.4 adds refusedByReason: the same REFUSED "
-                    + "total, broken down by marketing.campaign_recipients.refusal_reason, so a "
-                    + "'suppressed' count is nameable (SUPPRESSED) without a reporting fact.")
+            summary = "How many recipients ended each way, and what happened to their messages (rows 7.9b/6.4)",
+            description = "Two answers about one campaign. The send pipeline's own: pending, queued "
+                    + "(handed to ADR 0020 for delivery), deferred (held past a quiet-hours boundary) and "
+                    + "refused, plus the total attempted, with refusedByReason breaking the refused total "
+                    + "down by reason. And, in `delivery`, what became of the messages that were created "
+                    + "(ADR 0182): delivered, read, failed, rejected, handed to the operator, no receipt, "
+                    + "pending, and withheld by reason, with the segments the gateway billed. The delivery "
+                    + "figures are derived when asked from the same per-recipient evidence the recipients "
+                    + "list shows, never copied onto the campaign, so a receipt that arrives a second later "
+                    + "is in the next answer. `reportsDelivery` and `reportsRead` say what this campaign's "
+                    + "channel can report for its brand: when one is false the figure it governs is not "
+                    + "zero but unknown, and a caller must say so (delivered and read for a channel that "
+                    + "reports neither are \"not reported by this channel\").")
     public ResponseEntity<RecipientCountsResponse> recipientCounts(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID campaignId) {
 
@@ -536,8 +569,15 @@ public class OperationsMarketingController {
         int deferred = counts.getOrDefault("DEFERRED", 0);
         int refused = counts.getOrDefault("REFUSED", 0);
         Map<String, Integer> refusedByReason = campaignStore.refusalBreakdown(tenantId, campaignId);
+        CampaignMessagePort.ChannelReporting reporting = messages.reporting(tenantId, brandId, campaign.channel());
         return ResponseEntity.ok(new RecipientCountsResponse(
-                pending, queued, deferred, refused, pending + queued + deferred + refused, refusedByReason));
+                pending,
+                queued,
+                deferred,
+                refused,
+                pending + queued + deferred + refused,
+                refusedByReason,
+                DeliveryCountsResponse.of(messages.deliveryCounts(tenantId, campaignId), reporting)));
     }
 
     @PostMapping("/suppressions")
@@ -719,7 +759,9 @@ public class OperationsMarketingController {
             String channel,
             boolean carriesMarginalCost,
             boolean isWired,
-            @Nullable String notWiredReason) {}
+            @Nullable String notWiredReason,
+            boolean reportsDelivery,
+            boolean reportsRead) {}
 
     public record ExportRequest(@NotBlank @Size(max = 512) String purpose, Integer limit) {}
 
@@ -749,16 +791,77 @@ public class OperationsMarketingController {
             String terminalStatus,
             @Nullable String deliveryState,
             @Nullable String receiptState,
-            @Nullable Integer segmentsBilled) {}
+            @Nullable Integer segmentsBilled,
+            @Nullable String deliveryReason) {}
 
     /**
      * Row 7.9b. {@code campaignRecipients.status} (V0043) has exactly these four
      * values; {@code total} sums them and is never a fifth independent count
      * that could disagree with its own parts.
      */
-    /** @param refusedByReason row 6.4: {@code refused}'s own breakdown by {@code RefusalReason} name, e.g. {@code SUPPRESSED}. */
+    /**
+     * @param refusedByReason row 6.4: {@code refused}'s own breakdown by {@code RefusalReason} name, e.g. {@code SUPPRESSED}.
+     * @param delivery what became of the messages the campaign created (ADR 0182)
+     */
     public record RecipientCountsResponse(
-            int pending, int queued, int deferred, int refused, int total, Map<String, Integer> refusedByReason) {}
+            int pending,
+            int queued,
+            int deferred,
+            int refused,
+            int total,
+            Map<String, Integer> refusedByReason,
+            DeliveryCountsResponse delivery) {}
+
+    /** One campaign's delivery counts, for comparing campaigns (ADR 0182). */
+    public record CampaignDeliveryResponse(UUID campaignId, String channel, DeliveryCountsResponse delivery) {}
+
+    /**
+     * The delivery half of a campaign's statistics (ADR 0182), counted from the messages' own evidence.
+     *
+     * @param delivered messages the channel confirmed delivered; includes {@code read}
+     * @param read delivered messages the channel also reported opened or clicked
+     * @param handedToOperator accepted by the gateway or relay and not reported on since
+     * @param noReceipt accepted, a receipt was expected, and none came in the window
+     * @param withheld never sent; {@code withheldByReason} says why (consent withdrawn since expansion, a wording
+     *     the gateway has not approved, an expiry)
+     * @param segmentsBilled what the gateway says it billed across the campaign
+     * @param reportsDelivery whether this campaign's channel reports a delivery after the hand-over. False
+     *     means {@code delivered} is unknown, not zero
+     * @param reportsRead whether it reports an open or a click. False means {@code read} is unknown, not zero
+     */
+    public record DeliveryCountsResponse(
+            int total,
+            int delivered,
+            int read,
+            int failed,
+            int rejected,
+            int handedToOperator,
+            int noReceipt,
+            int pending,
+            int withheld,
+            Map<String, Integer> withheldByReason,
+            long segmentsBilled,
+            boolean reportsDelivery,
+            boolean reportsRead) {
+
+        static DeliveryCountsResponse of(
+                CampaignMessagePort.DeliveryCounts counts, CampaignMessagePort.ChannelReporting reporting) {
+            return new DeliveryCountsResponse(
+                    counts.total(),
+                    counts.delivered(),
+                    counts.read(),
+                    counts.failed(),
+                    counts.rejected(),
+                    counts.handedToOperator(),
+                    counts.noReceipt(),
+                    counts.pending(),
+                    counts.withheld(),
+                    counts.withheldByReason(),
+                    counts.segmentsBilled(),
+                    reporting.reportsDelivery(),
+                    reporting.reportsRead());
+        }
+    }
 
     public record SuppressionRequest(
             @NotNull UUID customerAccountId,

@@ -12,13 +12,20 @@ package uz.horecaos.platform.marketing.domain;
  *
  * <p>{@link #carriesMarginalCost} is the distinction that decides whether a cost
  * ceiling is optional. SMS costs money per segment and the mistake is
- * unrecoverable; push and messaging carry no marginal money, so their ceiling may
- * be null. The recipient cap never is: a runaway push campaign costs nothing in
+ * unrecoverable; email, push and messaging carry no marginal money to the tenant, so their
+ * ceiling may be null. The recipient cap never is: a runaway push campaign costs nothing in
  * cash and everything in uninstalls.
  */
 public enum MarketingChannel {
     SMS(true),
-    EMAIL(true),
+
+    /**
+     * Costs the tenant nothing per message (ADR 0182, D13): the platform's one mail relay carries it,
+     * and the exposure is bounded by a per-tenant daily cap and not by a money ceiling. So its
+     * ceiling is optional, as push's and Telegram's are, and the cost estimator does not price it
+     * in SMS segments.
+     */
+    EMAIL(false),
     PUSH(false),
 
     /**

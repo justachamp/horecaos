@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import uz.horecaos.platform.customers.api.RecipientContactDirectory;
+import uz.horecaos.platform.marketing.api.CourierContactSource;
 import uz.horecaos.platform.marketing.api.DeliverabilityFeedbackPort;
 import uz.horecaos.platform.marketing.api.SmsSegments;
 import uz.horecaos.platform.notifications.api.DispatchOutcome;
@@ -66,6 +67,9 @@ public class NotificationDispatchService {
     /** Recorded on every reveal, so a delivery sweep is distinguishable from an export. */
     private static final String REVEAL_PURPOSE = "NOTIFICATION_DELIVERY";
 
+    /** Recorded on every read of a courier's number from the identity provider (ADR 0182, D15). */
+    static final String COURIER_REVEAL_PURPOSE = "COURIER_BROADCAST_DELIVERY";
+
     private final JdbcNotificationStore notifications;
     private final JdbcTemplateStore templates;
     private final RecipientContactDirectory contacts;
@@ -73,6 +77,8 @@ public class NotificationDispatchService {
     private final CampaignBlockRateMonitor campaignBlockRate;
     private final DeliverabilityFeedbackPort deliverability;
     private final MeterRegistry meters;
+    private final EmailEnvelopes emailEnvelopes;
+    private final CourierContactSource couriers;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final int maximumAttempts;
@@ -107,6 +113,69 @@ public class NotificationDispatchService {
                 retryBackoff);
     }
 
+    /**
+     * The shape every caller used before ADR 0182: no email envelope, because nothing sends email.
+     */
+    public NotificationDispatchService(
+            JdbcNotificationStore notifications,
+            JdbcTemplateStore templates,
+            RecipientContactDirectory contacts,
+            NotificationTransport transport,
+            CampaignBlockRateMonitor campaignBlockRate,
+            DeliverabilityFeedbackPort deliverability,
+            MeterRegistry meters,
+            ObjectMapper objectMapper,
+            Clock clock,
+            int maximumAttempts,
+            Duration retryBackoff) {
+        this(
+                notifications,
+                templates,
+                contacts,
+                transport,
+                campaignBlockRate,
+                deliverability,
+                meters,
+                EmailEnvelopes.NONE,
+                objectMapper,
+                clock,
+                maximumAttempts,
+                retryBackoff);
+    }
+
+    /**
+     * Email, and no courier broadcast: the shape a caller that sends campaign email and nothing to
+     * couriers uses (ADR 0182).
+     */
+    public NotificationDispatchService(
+            JdbcNotificationStore notifications,
+            JdbcTemplateStore templates,
+            RecipientContactDirectory contacts,
+            NotificationTransport transport,
+            CampaignBlockRateMonitor campaignBlockRate,
+            DeliverabilityFeedbackPort deliverability,
+            MeterRegistry meters,
+            EmailEnvelopes emailEnvelopes,
+            ObjectMapper objectMapper,
+            Clock clock,
+            int maximumAttempts,
+            Duration retryBackoff) {
+        this(
+                notifications,
+                templates,
+                contacts,
+                transport,
+                campaignBlockRate,
+                deliverability,
+                meters,
+                emailEnvelopes,
+                () -> false,
+                objectMapper,
+                clock,
+                maximumAttempts,
+                retryBackoff);
+    }
+
     @Autowired
     public NotificationDispatchService(
             JdbcNotificationStore notifications,
@@ -116,6 +185,8 @@ public class NotificationDispatchService {
             CampaignBlockRateMonitor campaignBlockRate,
             DeliverabilityFeedbackPort deliverability,
             MeterRegistry meters,
+            EmailEnvelopes emailEnvelopes,
+            CourierContactSource couriers,
             ObjectMapper objectMapper,
             Clock clock,
             @Value("${horecaos.notifications.max-attempts:8}") int maximumAttempts,
@@ -127,6 +198,8 @@ public class NotificationDispatchService {
         this.campaignBlockRate = campaignBlockRate;
         this.deliverability = deliverability;
         this.meters = meters;
+        this.emailEnvelopes = emailEnvelopes;
+        this.couriers = couriers;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.maximumAttempts = maximumAttempts;
@@ -196,7 +269,26 @@ public class NotificationDispatchService {
         AttemptRow attempt = open.orElseGet(() -> openNewAttempt(row, now));
         Rendered rendered = render(row);
 
-        String recipientValue = resolveRecipientValue(row);
+        String recipientValue;
+        try {
+            recipientValue = resolveRecipientValue(row);
+        } catch (CourierContactSource.UnavailableException unavailable) {
+            // The identity provider could not be asked for a courier's number (ADR 0182). Nothing was
+            // sent and nothing is known about the courier, so this is a fault to retry later, never
+            // a reason to conclude the courier has no number.
+            notifications.settleAttempt(
+                    row.tenantId(),
+                    attempt.id(),
+                    "RETRYABLE_FAILURE",
+                    null,
+                    "IDENTITY_PROVIDER_UNAVAILABLE",
+                    null,
+                    null,
+                    null,
+                    now);
+            escalateOrRetry(row, attempt, "IDENTITY_PROVIDER_UNAVAILABLE", now.plus(retryBackoff));
+            return;
+        }
         if (recipientValue == null) {
             // The customer removed the number between eligibility and now. Not a
             // suppression — the message was eligible when it was decided — and not
@@ -216,6 +308,12 @@ public class NotificationDispatchService {
 
         notifications.markSending(row.tenantId(), row.id(), row.claimToken(), ContentHashes.of(rendered.body()), now);
 
+        // ADR 0182: an email is sent in the brand's name and carries a way out. Minted here, after
+        // the attempt is written and before the call, so a message that is never sent leaves a token
+        // for nobody and a message that is sent always has one.
+        NotificationDispatch.EmailEnvelope email =
+                emailEnvelopes.forMessage(row).orElse(null);
+
         DispatchOutcome outcome = transport.dispatch(new NotificationDispatch(
                 row.id(),
                 attempt.id(),
@@ -231,7 +329,8 @@ public class NotificationDispatchService {
                 row.subjectType(),
                 row.subjectId(),
                 row.templateKey(),
-                purposeOf(row)));
+                purposeOf(row),
+                email));
 
         record(row, attempt, outcome, clock.instant());
         compareSegments(row, outcome, rendered.body());
@@ -255,8 +354,15 @@ public class NotificationDispatchService {
         // destination is resolved for this call only and its reveal is recorded
         // (ADR 0029), which is why it is not looked up when an id already names the
         // message, and not at all for a channel whose recipient is not a number.
-        String destination =
-                attempt.externalMessageId() == null && "SMS".equals(row.channel()) ? resolveRecipientValue(row) : null;
+        String destination;
+        try {
+            destination = attempt.externalMessageId() == null && "SMS".equals(row.channel())
+                    ? resolveRecipientValue(row)
+                    : null;
+        } catch (CourierContactSource.UnavailableException unavailable) {
+            escalateOrRetry(row, attempt, "IDENTITY_PROVIDER_UNAVAILABLE", now.plus(retryBackoff));
+            return;
+        }
         DispatchOutcome outcome = transport.reconcile(new ReconcileRequest(
                 row.tenantId(),
                 row.brandId(),
@@ -313,7 +419,13 @@ public class NotificationDispatchService {
         }
         // A gateway that can only be searched by number needs it even when an id
         // already names the message, so it is resolved here for this call only.
-        String destination = resolveRecipientValue(row.get());
+        String destination;
+        try {
+            destination = resolveRecipientValue(row.get());
+        } catch (CourierContactSource.UnavailableException unavailable) {
+            // The identity provider is down: a pull is best effort, and asking again later is free.
+            return Optional.empty();
+        }
         DispatchOutcome outcome = transport.reconcile(new ReconcileRequest(
                 attempt.tenantId(),
                 attempt.brandId(),
@@ -424,6 +536,17 @@ public class NotificationDispatchService {
                         now,
                         outcome.errorCode(),
                         now);
+                if (outcome.hardBounce() && row.recipientAccountId() != null && row.brandId() != null) {
+                    // A relay that refuses an address for good (ADR 0182): the same deliverability
+                    // fact a gateway's blacklist receipt is (ADR 0146 Decision 6), raised by a send
+                    // of ours and written through the same narrow path.
+                    deliverability.recordHardBounce(
+                            row.tenantId(),
+                            row.brandId(),
+                            row.recipientAccountId(),
+                            row.channel(),
+                            attempt.id().toString());
+                }
                 // ADR 0059 stage 4: a no-op for anything that is not a campaign
                 // message whose Telegram binding just retired. Called after the
                 // row is settled, not before, so the guard's own read of "how
@@ -587,6 +710,13 @@ public class NotificationDispatchService {
         if (endpoint.operationsEndpointReference() != null) {
             return endpoint.operationsEndpointReference();
         }
+        if (endpoint.courierId() != null) {
+            // ADR 0182, D15: a courier is a destination by id, and the number is read from the
+            // identity provider for the length of this call and kept nowhere. The read is audited by
+            // the source, with its purpose.
+            return couriers.number(row.tenantId(), endpoint.courierId(), COURIER_REVEAL_PURPOSE)
+                    .orElse(null);
+        }
         // ck_endpoint_destination (V0100) requires exactly one of the three
         // columns to be set; neither of the other two is, so this one is.
         UUID contactPointId = Objects.requireNonNull(endpoint.contactPointId());
@@ -608,6 +738,11 @@ public class NotificationDispatchService {
 
     /** ADR 0146 Decision 1: what a message is for decides whether the gateway account may carry it. */
     private static String purposeOf(NotificationRow row) {
+        if ("COURIER_DISPATCH".equals(row.notificationClass())) {
+            // ADR 0182: a dispatcher's message to a courier is cleared per gateway account, apart from
+            // both marketing and transactional traffic.
+            return NotificationDispatch.PURPOSE_COURIER;
+        }
         return "MARKETING".equals(row.notificationClass())
                 ? NotificationDispatch.PURPOSE_MARKETING
                 : NotificationDispatch.PURPOSE_TRANSACTIONAL;

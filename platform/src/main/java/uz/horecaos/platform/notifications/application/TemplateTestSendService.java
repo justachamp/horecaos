@@ -86,8 +86,7 @@ public class TemplateTestSendService {
         if (channel != NotificationChannel.SMS) {
             throw new ApiException(
                     ErrorCode.VALIDATION_FAILED,
-                    "A test send is only available for an SMS template today; %s is not wired for one"
-                            .formatted(channel));
+                    "A test send is only available for an SMS template today; %s has none yet".formatted(channel));
         }
 
         MessageLocale locale = MessageLocale.parse(localeTag)

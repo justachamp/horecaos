@@ -409,6 +409,17 @@ public class SecurityConfiguration {
                         // meet anyRequest().authenticated() and a bodyless 401.
                         .requestMatchers(HttpMethod.POST, "/providers/sms/*/receipts")
                         .permitAll()
+                        // ADR 0182, D13: the way out of a campaign email (RFC 8058). A customer's mail
+                        // client posts here with no session, and a person opening the link in a mail
+                        // reads the page with a GET that changes nothing. Authorised inside
+                        // EmailUnsubscribeController by possession of an opaque token, and every
+                        // unknown or expired token answers the same 404. Without these lines the
+                        // mail client's button would meet a bodyless 401, and the same click would
+                        // file a spam complaint against the one sender every tenant shares.
+                        .requestMatchers(HttpMethod.GET, "/providers/mail/unsubscribe/*")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.POST, "/providers/mail/unsubscribe/*")
+                        .permitAll()
                         // ADR 0062: staff sign in on a first-party page instead of a
                         // Keycloak redirect, and the backend takes the credentials to
                         // Keycloak on the caller's behalf. Sign-in is unavoidably

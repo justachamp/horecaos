@@ -44,7 +44,7 @@ public class ConsentTypeService {
                     "Маркетинговые рассылки",
                     "Marketing xabarnomalari",
                     "Marketing messages",
-                    "Promotional messages and campaigns sent by SMS, Telegram, or push.",
+                    "Promotional messages and campaigns sent by SMS, email, Telegram, or push.",
                     true),
             new DefaultConsentType(
                     "TERMS_OF_SERVICE",

@@ -41,6 +41,7 @@ public class DeliverabilityFeedbackService implements DeliverabilityFeedbackPort
         if (engagement.hasActiveSuppression(tenantId, brandId, customerAccountId, channel, clock.instant())) {
             return false;
         }
+        boolean email = marketingChannel == MarketingChannel.EMAIL;
         suppressions.suppress(
                 tenantId,
                 null,
@@ -49,8 +50,10 @@ public class DeliverabilityFeedbackService implements DeliverabilityFeedbackPort
                 SuppressionReason.HARD_BOUNCE,
                 MarketingSuppressionService.ACTOR_PROVIDER,
                 null,
-                ActorRef.systemJob("sms-delivery-receipt"),
-                "The gateway reported the receiver unreachable (blacklisted or unroutable)",
+                ActorRef.systemJob(email ? "email-delivery" : "sms-delivery-receipt"),
+                email
+                        ? "The mail relay refused the address for good (ADR 0182)"
+                        : "The gateway reported the receiver unreachable (blacklisted or unroutable)",
                 correlationId);
         return true;
     }

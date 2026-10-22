@@ -511,3 +511,10 @@ and which classes *should* respect one, if the answer ever needs to differ from
 - Message retention: nothing expires a notification row today. The row holds no
   contact value and no rendered body, which is what makes that survivable until a
   retention decision lands.
+
+## Status addition (2026-10-14)
+
+[ADR 0182](../partial/0182-campaign-channels-email-push-couriers-and-delivery-statistics.md) wires the `EMAIL` channel for campaign email only (D13), through a platform-owned adapter with no
+installation or binding, and adds the notification class `COURIER_DISPATCH` and a courier as a recipient
+endpoint (D15). `NotificationChannel.EMAIL` is no longer declared-and-unwired; `PUSH` still is. The channel
+model, the consent gate and the delivery ladder this record states are unchanged.

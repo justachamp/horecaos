@@ -303,6 +303,23 @@ public class JdbcNotificationStore {
                 == 1;
     }
 
+    /**
+     * How many attempts this tenant has made on one channel since {@code since}: the daily cap's
+     * count (ADR 0182). Attempts rather than notifications, because an attempt is written just
+     * before the provider is called and is what actually used the shared sender.
+     */
+    public int attemptsSince(UUID tenantId, String channel, Instant since) {
+        return jdbc.sql("""
+                SELECT COUNT(*) FROM notifications.delivery_attempts
+                 WHERE tenant_id = :tenantId AND channel = :channel AND requested_at >= :since
+                """)
+                .param("tenantId", tenantId)
+                .param("channel", channel)
+                .param("since", utc(since))
+                .query(Integer.class)
+                .single();
+    }
+
     public boolean markSending(
             UUID tenantId, UUID notificationId, @Nullable UUID claimToken, String renderedContentHash, Instant now) {
         return jdbc.sql("""
@@ -460,7 +477,7 @@ public class JdbcNotificationStore {
     public Optional<EndpointRow> endpoint(UUID tenantId, UUID endpointId) {
         return jdbc.sql("""
                 SELECT id, customer_account_id, endpoint_type, contact_point_id,
-                       operations_endpoint_reference, provider_binding_id, normalized_hash,
+                       operations_endpoint_reference, provider_binding_id, courier_id, normalized_hash,
                        verification_status, status
                 FROM notifications.recipient_endpoints
                 WHERE tenant_id = :tenantId AND id = :id
@@ -494,6 +511,31 @@ public class JdbcNotificationStore {
                 .param("id", UUID.randomUUID())
                 .param("tenantId", tenantId)
                 .param("bindingId", providerBindingId)
+                .param("now", utc(now))
+                .query(UUID.class)
+                .single();
+    }
+
+    /**
+     * The endpoint standing for one courier, created on first use (ADR 0182, D15).
+     *
+     * <p>An upsert for the reason {@link #ensureProviderBindingEndpoint} is: two broadcasts reaching
+     * one courier at once must not both insert and have one fail the unique index doing the other half
+     * of the same work. The endpoint is the courier's id and nothing else; the number is read from the
+     * identity provider for the length of one send.
+     */
+    public UUID ensureCourierEndpoint(UUID tenantId, UUID courierId, Instant now) {
+        return jdbc.sql("""
+                INSERT INTO notifications.recipient_endpoints (
+                    id, tenant_id, endpoint_type, courier_id, status, created_at, updated_at)
+                VALUES (:id, :tenantId, 'COURIER', :courierId, 'ACTIVE', :now, :now)
+                ON CONFLICT (tenant_id, courier_id) WHERE courier_id IS NOT NULL
+                DO UPDATE SET updated_at = excluded.updated_at
+                RETURNING id
+                """)
+                .param("id", UUID.randomUUID())
+                .param("tenantId", tenantId)
+                .param("courierId", courierId)
                 .param("now", utc(now))
                 .query(UUID.class)
                 .single();
@@ -539,7 +581,7 @@ public class JdbcNotificationStore {
     public Optional<EndpointRow> findByProviderBinding(UUID tenantId, UUID providerBindingId) {
         return jdbc.sql("""
                 SELECT id, customer_account_id, endpoint_type, contact_point_id,
-                       operations_endpoint_reference, provider_binding_id, normalized_hash,
+                       operations_endpoint_reference, provider_binding_id, courier_id, normalized_hash,
                        verification_status, status
                 FROM notifications.recipient_endpoints
                 WHERE tenant_id = :tenantId AND provider_binding_id = :bindingId
@@ -1229,6 +1271,7 @@ public class JdbcNotificationStore {
             @Nullable UUID contactPointId,
             @Nullable String operationsEndpointReference,
             @Nullable UUID providerBindingId,
+            @Nullable UUID courierId,
             String normalizedHash,
             String verificationStatus,
             String status) {}
@@ -1241,6 +1284,7 @@ public class JdbcNotificationStore {
                 row.getObject("contact_point_id", UUID.class),
                 row.getString("operations_endpoint_reference"),
                 row.getObject("provider_binding_id", UUID.class),
+                row.getObject("courier_id", UUID.class),
                 row.getString("normalized_hash"),
                 row.getString("verification_status"),
                 row.getString("status"));

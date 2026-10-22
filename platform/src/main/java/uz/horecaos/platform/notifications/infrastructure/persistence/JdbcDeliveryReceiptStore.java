@@ -200,33 +200,81 @@ public class JdbcDeliveryReceiptStore {
     }
 
     /**
-     * The latest attempt of each notification, for a campaign's recipient list
-     * (ADR 0146): what a gateway has said about a message and what it billed.
-     * Notifications with no attempt yet are simply absent from the answer.
+     * What each of these notifications has come to, for a campaign's recipient list
+     * (ADR 0146, ADR 0182): the notification's own status, why it was withheld if it
+     * was, and its latest attempt with what a gateway has said about it and billed.
+     *
+     * <p>A notification with no attempt yet is present, with {@code attempt} null: a
+     * message that was suppressed or has not been tried is evidence too, and a
+     * recipient row that said nothing about it left a marketer asking why.
      */
-    public java.util.Map<UUID, AttemptEvidence> latestAttempts(UUID tenantId, Collection<UUID> notificationIds) {
+    public java.util.Map<UUID, MessageEvidence> evidenceFor(UUID tenantId, Collection<UUID> notificationIds) {
         if (notificationIds.isEmpty()) {
             return java.util.Map.of();
         }
-        java.util.Map<UUID, AttemptEvidence> latest = new java.util.LinkedHashMap<>();
-        jdbc.sql("""
-                SELECT DISTINCT ON (a.notification_id)
-                       a.notification_id, a.status, a.receipt_state, a.provider_segments
-                  FROM notifications.delivery_attempts a
-                 WHERE a.tenant_id = :tenantId AND a.notification_id IN (:ids)
-                 ORDER BY a.notification_id, a.attempt_number DESC
-                """)
+        java.util.Map<UUID, MessageEvidence> latest = new java.util.LinkedHashMap<>();
+        jdbc.sql("SELECT n.id AS notification_id, " + EVIDENCE_COLUMNS + " " + EVIDENCE_FROM
+                        + " WHERE n.tenant_id = :tenantId AND n.id IN (:ids)")
                 .param("tenantId", tenantId)
                 .param("ids", notificationIds)
-                .query((row, number) -> java.util.Map.entry(
-                        row.getObject("notification_id", UUID.class),
-                        new AttemptEvidence(
-                                row.getString("status"),
-                                row.getString("receipt_state"),
-                                row.getObject("provider_segments", Integer.class))))
+                .query((row, number) ->
+                        java.util.Map.entry(row.getObject("notification_id", UUID.class), evidence(row)))
                 .list()
                 .forEach(entry -> latest.put(entry.getKey(), entry.getValue()));
         return latest;
+    }
+
+    /**
+     * The same evidence for every message of one subject, grouped (ADR 0182): how many
+     * notifications of a campaign stand in each combination of notification status,
+     * suppression reason, latest-attempt status, receipt state and read mark, and how
+     * many segments the gateway says it billed across them.
+     *
+     * <p>A join read at the moment it is asked, so a receipt that arrives a second
+     * later is in the next answer. Nothing is copied onto a campaign or a recipient
+     * row, which is the rule ADR 0146 states for {@code terminal_status}.
+     */
+    public List<EvidenceGroup> evidenceGroups(UUID tenantId, String subjectType, UUID subjectId) {
+        return jdbc.sql("SELECT " + EVIDENCE_COLUMNS + ", COUNT(*) AS total,"
+                        + " COALESCE(SUM(a.provider_segments), 0) AS segments " + EVIDENCE_FROM
+                        + " WHERE n.tenant_id = :tenantId AND n.subject_type = :subjectType"
+                        + " AND n.subject_id = :subjectId"
+                        + " GROUP BY n.status, n.suppression_reason, a.status, a.receipt_state,"
+                        + " a.provider_segments, a.failure_code, a.read_seen")
+                .param("tenantId", tenantId)
+                .param("subjectType", subjectType)
+                .param("subjectId", subjectId)
+                .query((row, number) -> new EvidenceGroup(evidence(row), row.getInt("total"), row.getLong("segments")))
+                .list();
+    }
+
+    private static final String EVIDENCE_COLUMNS = """
+            n.status AS notification_status, n.suppression_reason,
+            a.status AS attempt_status, a.receipt_state, a.provider_segments, a.failure_code, a.read_seen""";
+
+    private static final String EVIDENCE_FROM = """
+            FROM notifications.notifications n
+            LEFT JOIN LATERAL (
+                SELECT att.status, att.receipt_state, att.provider_segments, att.failure_code,
+                       EXISTS (SELECT 1 FROM notifications.delivery_status_events e
+                                WHERE e.tenant_id = att.tenant_id AND e.attempt_id = att.id
+                                  AND e.normalized_status = 'READ') AS read_seen
+                  FROM notifications.delivery_attempts att
+                 WHERE att.tenant_id = n.tenant_id AND att.notification_id = n.id
+                 ORDER BY att.attempt_number DESC
+                 LIMIT 1) a ON true""";
+
+    private static MessageEvidence evidence(ResultSet row) throws SQLException {
+        String attemptStatus = row.getString("attempt_status");
+        AttemptEvidence attempt = attemptStatus == null
+                ? null
+                : new AttemptEvidence(
+                        attemptStatus,
+                        row.getString("receipt_state"),
+                        row.getObject("provider_segments", Integer.class),
+                        row.getBoolean("read_seen"),
+                        row.getString("failure_code"));
+        return new MessageEvidence(row.getString("notification_status"), row.getString("suppression_reason"), attempt);
     }
 
     private static ReceiptAttempt attempt(ResultSet row, int number) throws SQLException {
@@ -254,10 +302,28 @@ public class JdbcDeliveryReceiptStore {
             @Nullable UUID recipientAccountId,
             @Nullable UUID brandId) {}
 
+    /**
+     * The latest attempt of one notification.
+     *
+     * @param read whether a {@code READ} status event is on record for it: a channel that reports
+     *             opens or clicks writes one, and the attempt's own status stays {@code DELIVERED}
+     * @param failureCode the bounded reason code the attempt closed with, never a provider's text
+     */
     public record AttemptEvidence(
             String status,
             @Nullable String receiptState,
-            @Nullable Integer segmentsBilled) {}
+            @Nullable Integer segmentsBilled,
+            boolean read,
+            @Nullable String failureCode) {}
+
+    /** What one notification has come to: its status, why it was withheld, and its latest attempt. */
+    public record MessageEvidence(
+            String notificationStatus,
+            @Nullable String suppressionReason,
+            @Nullable AttemptEvidence attempt) {}
+
+    /** How many notifications stand in one {@link MessageEvidence}, and the segments billed across them. */
+    public record EvidenceGroup(MessageEvidence evidence, int count, long segmentsBilled) {}
 
     public record ReceiptCandidate(UUID attemptId, UUID tenantId, Instant requestedAt) {}
 

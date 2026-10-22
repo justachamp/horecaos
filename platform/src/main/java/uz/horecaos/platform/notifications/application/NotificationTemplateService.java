@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -22,6 +23,7 @@ import uz.horecaos.platform.audit.api.AuditRecorder;
 import uz.horecaos.platform.audit.api.ChangeDocuments;
 import uz.horecaos.platform.iam.api.CurrentActor;
 import uz.horecaos.platform.iam.api.ResourceScope;
+import uz.horecaos.platform.marketing.api.CampaignMessagePort;
 import uz.horecaos.platform.notifications.domain.ContentHashes;
 import uz.horecaos.platform.notifications.domain.MessageLocale;
 import uz.horecaos.platform.notifications.domain.NotificationChannel;
@@ -167,6 +169,13 @@ public class NotificationTemplateService {
             @Nullable FulfillmentMode fulfillmentMode,
             @Nullable SalesChannelSystemType channelSource) {
 
+        if (channel == NotificationChannel.EMAIL && notificationClass != NotificationClass.MARKETING) {
+            // ADR 0182, D13: the platform's relay carries campaign email and nothing else. Refused when
+            // the template is authored, so a tenant is not told only when a customer is waiting.
+            throw new IllegalArgumentException(
+                    "An EMAIL template is a MARKETING template: the platform sends campaign email only, " + "and not "
+                            + notificationClass);
+        }
         if (notificationClass.requiresConsent() && (consentPurpose == null || consentPurpose.isBlank())) {
             throw new IllegalArgumentException(notificationClass + " needs a consent purpose to check against");
         }
@@ -247,6 +256,19 @@ public class NotificationTemplateService {
         if (!missing.isEmpty()) {
             throw new IncompleteTranslationException(
                     "A version needs every locale this brand serves before it can be saved; missing " + missing);
+        }
+
+        if (NotificationChannel.EMAIL.name().equals(owned.channel())) {
+            // An email without a subject is a message every inbox files under «no subject»; its
+            // absence is as much a missing translation as a missing body.
+            for (Map.Entry<MessageLocale, Wording> entry : wordings.entrySet()) {
+                String subject = entry.getValue().subject();
+                if (subject == null || subject.isBlank()) {
+                    throw new IllegalArgumentException(
+                            "An EMAIL wording needs a subject in every language; missing for "
+                                    + entry.getKey().tag());
+                }
+            }
         }
 
         Set<String> declared = variablesSchema.keySet();
@@ -391,6 +413,54 @@ public class NotificationTemplateService {
         snapshot.put("channel", template.channel());
         snapshot.put("activeVersion", activeVersion);
         return snapshot;
+    }
+
+    // ---------------------------------------------------- the wordings a dispatcher may broadcast
+
+    /**
+     * The SMS wordings of the class {@code COURIER_DISPATCH} that are in force for this brand (ADR 0182,
+     * D15): the only wordings a courier broadcast may name.
+     *
+     * <p>A brand's own template with a key replaces the tenant-wide one with the same key, as everywhere
+     * else. A wording is listed once it has an active version, whether or not the gateway has approved
+     * it: the dispatcher is told which are still waiting, so the refusal at send time is no surprise.
+     * Narrowed variants (a fulfilment mode, an inbound channel) are not offered, because a broadcast
+     * has neither.
+     */
+    @Transactional(readOnly = true)
+    public List<CampaignMessagePort.CourierTemplate> courierTemplates(UUID tenantId, UUID brandId) {
+        Map<String, TemplateRow> byKey = new LinkedHashMap<>();
+        for (TemplateRow template : templates.templatesForBrand(tenantId, brandId)) {
+            boolean courierWording = NotificationClass.COURIER_DISPATCH.name().equals(template.notificationClass())
+                    && NotificationChannel.SMS.name().equals(template.channel())
+                    && "ACTIVE".equals(template.status())
+                    && template.activeVersion() != null
+                    && template.fulfillmentMode() == null
+                    && template.channelSource() == null;
+            if (!courierWording) {
+                continue;
+            }
+            TemplateRow already = byKey.get(template.templateKey());
+            if (already == null || (already.brandId() == null && template.brandId() != null)) {
+                byKey.put(template.templateKey(), template);
+            }
+        }
+
+        List<CampaignMessagePort.CourierTemplate> offered = new ArrayList<>();
+        for (TemplateRow template : byKey.values()) {
+            Map<String, String> bodies = new LinkedHashMap<>();
+            java.util.TreeSet<String> variables = new java.util.TreeSet<>();
+            boolean awaiting = false;
+            for (VersionRow version :
+                    templates.versions(tenantId, template.id(), Objects.requireNonNull(template.activeVersion()))) {
+                bodies.put(version.locale(), version.bodyTemplate());
+                variables.addAll(TemplateRenderer.variablesUsedIn(version.bodyTemplate()));
+                awaiting |= TemplateProviderReviewService.withheld(version.providerReview());
+            }
+            offered.add(new CampaignMessagePort.CourierTemplate(
+                    template.templateKey(), List.copyOf(variables), bodies, awaiting));
+        }
+        return offered;
     }
 
     // -------------------------------------------------------------- resolution

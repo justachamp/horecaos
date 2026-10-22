@@ -34,6 +34,9 @@ final class FakeCampaignMessagePort implements CampaignMessagePort {
     private final List<String> wiringAsked = new ArrayList<>();
     private OptionalDouble ratePerSecond = OptionalDouble.empty();
     private int suppressedForNotSending;
+    private final Map<String, CourierTemplate> courierTemplates = new LinkedHashMap<>();
+    private final Map<String, UUID> courierMessagesByKey = new LinkedHashMap<>();
+    private final List<CourierMessage> courierSent = new ArrayList<>();
 
     FakeCampaignMessagePort withBody(String locale, String body) {
         bodies.put(locale, body);
@@ -61,6 +64,55 @@ final class FakeCampaignMessagePort implements CampaignMessagePort {
     FakeCampaignMessagePort withRatePerSecond(double rate) {
         ratePerSecond = OptionalDouble.of(rate);
         return this;
+    }
+
+    /** A wording a dispatcher may broadcast (ADR 0182): its variables, and whether the gateway has approved it. */
+    FakeCampaignMessagePort withCourierTemplate(String key, List<String> variables, boolean awaitingGateway) {
+        courierTemplates.put(key, new CourierTemplate(key, variables, Map.of("ru", "wording"), awaitingGateway));
+        return this;
+    }
+
+    FakeCampaignMessagePort withoutCourierTemplates() {
+        courierTemplates.clear();
+        return this;
+    }
+
+    @Override
+    public UUID enqueueCourierMessage(CourierMessage message) {
+        courierSent.add(message);
+        return courierMessagesByKey.computeIfAbsent(message.idempotencyKey(), key -> UUID.randomUUID());
+    }
+
+    @Override
+    public List<CourierTemplate> courierTemplates(UUID tenantId, UUID brandId) {
+        return List.copyOf(courierTemplates.values());
+    }
+
+    List<CourierMessage> courierSent() {
+        return List.copyOf(courierSent);
+    }
+
+    private final Map<UUID, DeliveryEvidence> evidence = new LinkedHashMap<>();
+
+    /** What the delivery path says became of one message, for a test of the screen that reads it. */
+    FakeCampaignMessagePort withEvidence(UUID notificationId, DeliveryEvidence delivery) {
+        evidence.put(notificationId, delivery);
+        return this;
+    }
+
+    @Override
+    public Map<UUID, DeliveryEvidence> deliveryEvidence(UUID tenantId, java.util.Collection<UUID> notificationIds) {
+        Map<UUID, DeliveryEvidence> found = new LinkedHashMap<>();
+        notificationIds.forEach(id -> {
+            if (evidence.containsKey(id)) {
+                found.put(id, evidence.get(id));
+            }
+        });
+        return found;
+    }
+
+    UUID courierNotificationFor(String idempotencyKey) {
+        return java.util.Objects.requireNonNull(courierMessagesByKey.get(idempotencyKey));
     }
 
     @Override

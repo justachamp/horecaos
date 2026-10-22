@@ -12,6 +12,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -251,12 +252,168 @@ class OperationsMarketingRecipientCountsEndpointTests {
         assertThat(java.util.Objects.requireNonNull(byName.get("EMAIL"))
                         .get("notWiredReason")
                         .asString())
+                .as("email has a delivery since ADR 0182, and no relay is configured in this deployment")
+                .isEqualTo("EMAIL_NOT_CONFIGURED");
+        assertThat(java.util.Objects.requireNonNull(byName.get("EMAIL"))
+                        .get("carriesMarginalCost")
+                        .asBoolean())
+                .as("the platform's relay costs the tenant nothing per message; the daily cap bounds it")
+                .isFalse();
+        assertThat(java.util.Objects.requireNonNull(byName.get("PUSH"))
+                        .get("notWiredReason")
+                        .asString())
                 .isEqualTo("NO_DELIVERY_ADAPTER");
+        for (String silent : List.of("SMS", "EMAIL", "PUSH", "MESSAGING_APP")) {
+            var node = java.util.Objects.requireNonNull(byName.get(silent));
+            assertThat(node.get("reportsDelivery").asBoolean())
+                    .as(silent + " has no enabled receipt source here")
+                    .isFalse();
+            assertThat(node.get("reportsRead").asBoolean())
+                    .as("no wired channel can report a read")
+                    .isFalse();
+        }
         assertThat(java.util.Objects.requireNonNull(byName.get("MESSAGING_APP"))
                         .get("isWired")
                         .asBoolean())
                 .as("Telegram's link is the customer's own, so it is wired for every brand as before")
                 .isTrue();
+    }
+
+    /**
+     * ADR 0182: the report's delivery half, derived from the messages' own evidence and not copied
+     * anywhere. One message in every state a message can reach, so a mapping that lumped two of them
+     * together, or counted a read as only a delivery, could not pass.
+     */
+    @Test
+    void deliveryCountsAreDerivedFromTheEvidenceOfEveryMessage() throws Exception {
+        UUID campaignId = insertCampaign(BRAND);
+        message(campaignId, "DELIVERED", null, "DELIVERED", null, 1, false, null);
+        message(campaignId, "DELIVERED", null, "DELIVERED", null, 2, true, null);
+        message(campaignId, "FAILED_TERMINAL", null, "FAILED", null, 1, false, "RECEIVER_UNREACHABLE");
+        message(campaignId, "FAILED_TERMINAL", null, "REJECTED", null, null, false, "SMS_PURPOSE_NOT_PERMITTED");
+        message(campaignId, "DELIVERED", null, "ACCEPTED", null, 1, false, null);
+        message(campaignId, "DELIVERED", null, "ACCEPTED", "NO_RECEIPT", 1, false, null);
+        message(campaignId, "CREATED", null, null, null, null, false, null);
+        message(campaignId, "RETRY_PENDING", null, "RETRYABLE_FAILURE", null, null, false, "SMTP_UNAVAILABLE");
+        message(campaignId, "SUPPRESSED", "TEMPLATE_AWAITING_PROVIDER", null, null, null, false, null);
+        message(campaignId, "SUPPRESSED", "CONSENT_WITHHELD", null, null, null, false, null);
+        message(campaignId, "EXPIRED", null, null, null, null, false, null);
+        // A retry loop that ended: the notification gave up, the last attempt was only a retryable failure.
+        message(campaignId, "FAILED_TERMINAL", null, "RETRYABLE_FAILURE", null, null, false, "SMTP_UNAVAILABLE");
+
+        var delivery = deliveryOf(campaignId);
+
+        assertThat(delivery.get("total").asInt()).isEqualTo(12);
+        assertThat(delivery.get("delivered").asInt())
+                .as("a read message was delivered too")
+                .isEqualTo(2);
+        assertThat(delivery.get("read").asInt()).isEqualTo(1);
+        assertThat(delivery.get("failed").asInt())
+                .as("one the gateway failed, one whose retries ran out")
+                .isEqualTo(2);
+        assertThat(delivery.get("rejected").asInt()).isEqualTo(1);
+        assertThat(delivery.get("handedToOperator").asInt()).isEqualTo(1);
+        assertThat(delivery.get("noReceipt").asInt()).isEqualTo(1);
+        assertThat(delivery.get("pending").asInt())
+                .as("never tried, and still being retried")
+                .isEqualTo(2);
+        assertThat(delivery.get("withheld").asInt()).isEqualTo(3);
+        assertThat(delivery.get("withheldByReason")
+                        .get("TEMPLATE_AWAITING_PROVIDER")
+                        .asInt())
+                .isEqualTo(1);
+        assertThat(delivery.get("withheldByReason").get("CONSENT_WITHHELD").asInt())
+                .isEqualTo(1);
+        assertThat(delivery.get("withheldByReason").get("EXPIRED").asInt())
+                .as("a message that lapsed before it was sent was withheld by its expiry")
+                .isEqualTo(1);
+        assertThat(delivery.get("segmentsBilled").asInt())
+                .as(
+                        "the delivered one (1) and the read one (2), the failed (1), the two accepted (1 each); a rejection billed nothing")
+                .isEqualTo(1 + 2 + 1 + 1 + 1);
+    }
+
+    @Test
+    void aCampaignWithNoMessagesCountsZeroNotMissing() throws Exception {
+        UUID campaignId = insertCampaign(BRAND);
+
+        var delivery = deliveryOf(campaignId);
+
+        assertThat(delivery.get("total").asInt()).isZero();
+        assertThat(delivery.get("delivered").asInt()).isZero();
+        assertThat(delivery.get("withheldByReason").size()).isZero();
+        assertThat(delivery.get("reportsDelivery").asBoolean())
+                .as("and says that this channel cannot confirm a delivery, which is not the same as zero")
+                .isFalse();
+        assertThat(delivery.get("reportsRead").asBoolean()).isFalse();
+    }
+
+    /** ADR 0182: the list a marketer compares campaigns by is the same evidence, one read for all of them. */
+    @Test
+    void deliveryCountsCompareCampaigns() throws Exception {
+        UUID small = insertCampaign(BRAND);
+        UUID large = insertCampaign(BRAND);
+        UUID elsewhere = insertCampaign(OTHER_BRAND);
+        message(small, "DELIVERED", null, "ACCEPTED", null, 1, false, null);
+        message(large, "DELIVERED", null, "ACCEPTED", null, 1, false, null);
+        message(large, "DELIVERED", null, "ACCEPTED", null, 1, false, null);
+        message(large, "SUPPRESSED", "CONSENT_WITHHELD", null, null, null, false, null);
+        message(elsewhere, "DELIVERED", null, "ACCEPTED", null, 1, false, null);
+
+        MvcResult result = mvc.perform(
+                        get("/api/v1/tenants/" + TENANT + "/brands/" + BRAND + "/marketing/campaigns/delivery-counts")
+                                .with(tokenFor(ADMINISTRATOR)))
+                .andReturn();
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        var rows = tools.jackson.databind.json.JsonMapper.builder()
+                .build()
+                .readTree(result.getResponse().getContentAsString());
+        java.util.Map<String, tools.jackson.databind.JsonNode> byCampaign = new java.util.LinkedHashMap<>();
+        rows.forEach(row -> byCampaign.put(row.get("campaignId").asString(), row.get("delivery")));
+        assertThat(byCampaign).containsOnlyKeys(small.toString(), large.toString());
+        var smallCounts = java.util.Objects.requireNonNull(byCampaign.get(small.toString()));
+        var largeCounts = java.util.Objects.requireNonNull(byCampaign.get(large.toString()));
+        assertThat(smallCounts.get("handedToOperator").asInt()).isEqualTo(1);
+        assertThat(largeCounts.get("handedToOperator").asInt()).isEqualTo(2);
+        assertThat(largeCounts.get("withheld").asInt()).isEqualTo(1);
+        assertThat(largeCounts.get("reportsDelivery").asBoolean()).isFalse();
+    }
+
+    @Test
+    void anotherCampaignsMessagesAreNotCounted() throws Exception {
+        UUID campaignId = insertCampaign(BRAND);
+        UUID other = insertCampaign(BRAND);
+        message(campaignId, "DELIVERED", null, "DELIVERED", null, 1, false, null);
+        message(other, "DELIVERED", null, "DELIVERED", null, 1, false, null);
+        message(other, "DELIVERED", null, "DELIVERED", null, 1, false, null);
+
+        assertThat(deliveryOf(campaignId).get("delivered").asInt()).isEqualTo(1);
+    }
+
+    /** ADR 0182: a recipient row says the same word the count does, and why, including a message never sent. */
+    @Test
+    void recipientsCarryReadWithheldAndTheReason() throws Exception {
+        UUID campaignId = insertCampaign(BRAND);
+        UUID read = message(campaignId, "DELIVERED", null, "DELIVERED", null, 1, true, null);
+        UUID withheld = message(campaignId, "SUPPRESSED", "TEMPLATE_AWAITING_PROVIDER", null, null, null, false, null);
+        UUID failed = message(campaignId, "FAILED_TERMINAL", null, "FAILED", null, 1, false, "RECEIVER_UNREACHABLE");
+        linkRecipient(campaignId, read, 0);
+        linkRecipient(campaignId, withheld, 1);
+        linkRecipient(campaignId, failed, 2);
+
+        var rows = tools.jackson.databind.json.JsonMapper.builder().build().readTree(recipientsOf(campaignId));
+        java.util.Map<String, tools.jackson.databind.JsonNode> byNotification = new java.util.LinkedHashMap<>();
+        rows.forEach(row -> byNotification.put(row.get("notificationId").asString(), row));
+
+        var readRow = java.util.Objects.requireNonNull(byNotification.get(read.toString()));
+        assertThat(readRow.get("deliveryState").asString()).isEqualTo("READ");
+        var withheldRow = java.util.Objects.requireNonNull(byNotification.get(withheld.toString()));
+        assertThat(withheldRow.get("deliveryState").asString()).isEqualTo("WITHHELD");
+        assertThat(withheldRow.get("deliveryReason").asString()).isEqualTo("TEMPLATE_AWAITING_PROVIDER");
+        var failedRow = java.util.Objects.requireNonNull(byNotification.get(failed.toString()));
+        assertThat(failedRow.get("deliveryState").asString()).isEqualTo("FAILED");
+        assertThat(failedRow.get("deliveryReason").asString()).isEqualTo("RECEIVER_UNREACHABLE");
     }
 
     @Test
@@ -279,6 +436,102 @@ class OperationsMarketingRecipientCountsEndpointTests {
                 .andReturn();
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
         return result.getResponse().getContentAsString();
+    }
+
+    private tools.jackson.databind.JsonNode deliveryOf(UUID campaignId) throws Exception {
+        MvcResult result = mvc.perform(get(countsPath(BRAND, campaignId)).with(tokenFor(ADMINISTRATOR)))
+                .andReturn();
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        return tools.jackson.databind.json.JsonMapper.builder()
+                .build()
+                .readTree(result.getResponse().getContentAsString())
+                .get("delivery");
+    }
+
+    /**
+     * One campaign message in a chosen state: the notification, its latest attempt if it has one, and a
+     * {@code READ} status event when asked. Inserted directly, because what is read is the evidence and
+     * not how a message came to have it.
+     */
+    private UUID message(
+            UUID campaignId,
+            String notificationStatus,
+            @Nullable String suppressionReason,
+            @Nullable String attemptStatus,
+            @Nullable String receiptState,
+            @Nullable Integer segments,
+            boolean read,
+            @Nullable String failureCode) {
+        UUID notificationId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO notifications.notifications (
+                    id, tenant_id, brand_id, notification_class, channel, template_key, subject_type,
+                    subject_id, recipient_account_id, idempotency_key, status, suppression_reason)
+                VALUES (:id, :tenantId, :brandId, 'MARKETING', 'SMS', 'PROMO', 'MarketingCampaign',
+                        :campaignId, :account, :key, :status, :reason)
+                """)
+                .param("id", notificationId)
+                .param("tenantId", TENANT)
+                .param("brandId", BRAND)
+                .param("campaignId", campaignId)
+                .param("account", seedCustomer())
+                .param("key", "counts-fixture:" + notificationId)
+                .param("status", notificationStatus)
+                .param("reason", suppressionReason)
+                .update();
+        if (attemptStatus == null) {
+            return notificationId;
+        }
+        UUID attemptId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO notifications.delivery_attempts (
+                    id, tenant_id, notification_id, channel, attempt_number, provider_idempotency_key, status,
+                    receipt_state, provider_segments, failure_code, requested_at, acknowledged_at)
+                VALUES (:id, :tenantId, :notificationId, 'SMS', 1, :key, :status,
+                        :receiptState, :segments, :failureCode, now(),
+                        CASE WHEN :status = 'DELIVERED' THEN now() END)
+                """)
+                .param("id", attemptId)
+                .param("tenantId", TENANT)
+                .param("notificationId", notificationId)
+                .param("key", attemptId.toString())
+                .param("status", attemptStatus)
+                .param("receiptState", receiptState)
+                .param("segments", segments)
+                .param("failureCode", failureCode)
+                .update();
+        if (read) {
+            jdbc.sql("""
+                    INSERT INTO notifications.delivery_status_events (
+                        id, tenant_id, attempt_id, provider_event_id, normalized_status, occurred_at)
+                    VALUES (:id, :tenantId, :attemptId, :eventId, 'READ', now())
+                    """)
+                    .param("id", UUID.randomUUID())
+                    .param("tenantId", TENANT)
+                    .param("attemptId", attemptId)
+                    .param("eventId", "read-" + attemptId)
+                    .update();
+        }
+        return notificationId;
+    }
+
+    private void linkRecipient(UUID campaignId, UUID notificationId, int sequence) {
+        UUID account = jdbc.sql("SELECT recipient_account_id FROM notifications.notifications WHERE id = :id")
+                .param("id", notificationId)
+                .query(UUID.class)
+                .single();
+        jdbc.sql("""
+                INSERT INTO marketing.campaign_recipients (
+                    campaign_id, tenant_id, customer_account_id, sequence, status,
+                    notification_id, created_at, updated_at)
+                VALUES (:campaignId, :tenantId, :accountId, :sequence, 'QUEUED', :notificationId, now(), now())
+                """)
+                .param("campaignId", campaignId)
+                .param("tenantId", TENANT)
+                .param("accountId", account)
+                .param("sequence", sequence)
+                .param("notificationId", notificationId)
+                .update();
     }
 
     private static String countsPath(UUID brandId, UUID campaignId) {

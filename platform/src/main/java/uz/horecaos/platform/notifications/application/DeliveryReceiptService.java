@@ -135,7 +135,7 @@ public class DeliveryReceiptService implements DeliveryReceiptPort {
                 now);
 
         switch (receipt.normalizedStatus()) {
-            case "DELIVERED", "READ" ->
+            case "DELIVERED" ->
                 receipts.advance(
                         receipt.tenantId(),
                         attempt.id(),
@@ -143,6 +143,21 @@ public class DeliveryReceiptService implements DeliveryReceiptPort {
                         null,
                         receipt.occurredAt() == null ? now : receipt.occurredAt(),
                         now);
+            case "READ" -> {
+                // A read is a delivery that was also seen. The attempt's own status stays DELIVERED
+                // (V0026 has no READ attempt status, and the ladder's evidence is the status event just
+                // recorded above), and a read that follows a delivery must not move the time it was
+                // delivered at. A read with no delivery before it is a delivery as well.
+                if (!"DELIVERED".equals(attempt.status())) {
+                    receipts.advance(
+                            receipt.tenantId(),
+                            attempt.id(),
+                            "DELIVERED",
+                            null,
+                            receipt.occurredAt() == null ? now : receipt.occurredAt(),
+                            now);
+                }
+            }
             case "FAILED" ->
                 receipts.advance(
                         receipt.tenantId(),
@@ -177,29 +192,39 @@ public class DeliveryReceiptService implements DeliveryReceiptPort {
      * highest of "the provider accepted it" and every status event on record.
      */
     static int currentRank(ReceiptAttempt attempt, List<StatusEventRow> events) {
-        if (Set.of("DELIVERED", "FAILED").contains(attempt.status())) {
+        if ("FAILED".equals(attempt.status())) {
             return FINAL;
         }
         int rank = "ACCEPTED".equals(attempt.status()) ? 1 : 0;
+        if ("DELIVERED".equals(attempt.status())) {
+            rank = rank("DELIVERED");
+        }
         for (StatusEventRow event : events) {
             rank = Math.max(rank, rank(event.normalizedStatus()));
         }
         return rank;
     }
 
-    private static final int FINAL = 4;
+    /** Past a failure nothing advances, not even a read. */
+    private static final int FINAL = 6;
 
     /**
      * The ladder. {@code UNKNOWN} is the provider's terminal-and-unresolved word, so
      * it outranks "handed over" and yields to a later definite answer: a message the
      * operator could not report on at first may still turn out delivered.
+     *
+     * <p>{@code DELIVERED} and {@code FAILED} share a rung: whichever came first is final, and
+     * the other is a regression. {@code READ} is above them, because a channel that reports both
+     * reports a read <em>after</em> a delivery (ADR 0182), and an attempt that was delivered must
+     * still be able to become one that was read. A failed attempt is final to everything.
      */
     static int rank(String normalizedStatus) {
         return switch (normalizedStatus) {
             case "ACCEPTED" -> 1;
             case "DISPATCHED" -> 2;
             case "UNKNOWN" -> 3;
-            case "DELIVERED", "READ", "FAILED" -> FINAL;
+            case "DELIVERED", "FAILED" -> 4;
+            case "READ" -> 5;
             default -> 0;
         };
     }

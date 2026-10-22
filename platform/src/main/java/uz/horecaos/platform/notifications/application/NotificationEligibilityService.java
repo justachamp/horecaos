@@ -73,10 +73,14 @@ public class NotificationEligibilityService {
     private final OrderDirectory orders;
     private final NotificationTransport transport;
     private final CampaignFeedbackPort campaignFeedback;
+    private final EmailDailyCap emailCap;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final MessageLocale operationsGroupLocale;
 
+    /**
+     * The shape every caller used before ADR 0182: no email cap, because nothing sends email.
+     */
     public NotificationEligibilityService(
             JdbcNotificationStore notifications,
             NotificationTemplateService templates,
@@ -85,6 +89,33 @@ public class NotificationEligibilityService {
             OrderDirectory orders,
             NotificationTransport transport,
             CampaignFeedbackPort campaignFeedback,
+            ObjectMapper objectMapper,
+            Clock clock,
+            String operationsGroupLocale) {
+        this(
+                notifications,
+                templates,
+                consent,
+                contacts,
+                orders,
+                transport,
+                campaignFeedback,
+                new EmailDailyCap(notifications, clock, Integer.MAX_VALUE),
+                objectMapper,
+                clock,
+                operationsGroupLocale);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public NotificationEligibilityService(
+            JdbcNotificationStore notifications,
+            NotificationTemplateService templates,
+            ConsentDirectory consent,
+            RecipientContactDirectory contacts,
+            OrderDirectory orders,
+            NotificationTransport transport,
+            CampaignFeedbackPort campaignFeedback,
+            EmailDailyCap emailCap,
             ObjectMapper objectMapper,
             Clock clock,
             // ADR 0058: "a group's language follows tenant configuration". No
@@ -100,6 +131,7 @@ public class NotificationEligibilityService {
         this.orders = orders;
         this.transport = transport;
         this.campaignFeedback = campaignFeedback;
+        this.emailCap = emailCap;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.operationsGroupLocale = MessageLocale.of(operationsGroupLocale);
@@ -133,6 +165,12 @@ public class NotificationEligibilityService {
             // watching messages be created, resolved, rendered, and then fail.
             return suppress(row, SuppressionReason.CHANNEL_NOT_AVAILABLE, now);
         }
+        if (channel == NotificationChannel.EMAIL && notificationClass != NotificationClass.MARKETING) {
+            // ADR 0182, D13: the platform's email relay is wired for campaign email and for nothing
+            // else. A receipt or a code by email is a later decision with its own footing, and the
+            // unsubscribe, the cap and the consent rules here were decided for promotions.
+            return suppress(row, SuppressionReason.CHANNEL_NOT_AVAILABLE, now);
+        }
 
         // ADR 0059 stage 4: checked before anything else about this row, so an
         // operator's pause (or the block-rate guard's own) reaches every campaign
@@ -150,6 +188,14 @@ public class NotificationEligibilityService {
         // about a customer's own contact; an operations-audience message has
         // neither and must not go near either directory.
         boolean operationsAudience = notificationClass == NotificationClass.OPERATIONS_ALERT;
+        // ADR 0182, D15: a dispatcher's message to a courier. Like an operations alert it has no data
+        // subject, no consent to read and no preference to honour, and its recipient was resolved when
+        // the intent was created (the endpoint is the courier's id); unlike one it is an SMS to a
+        // person, so the gateway's purpose gate and the wording's approval still apply below.
+        boolean courierAudience = notificationClass == NotificationClass.COURIER_DISPATCH;
+        if (courierAudience && channel != NotificationChannel.SMS) {
+            return suppress(row, SuppressionReason.CHANNEL_NOT_AVAILABLE, now);
+        }
         // A campaign message (or any future caller shaped like one) already
         // resolved its own account at creation — CampaignTelegramDeliveryService
         // sets recipient_account_id from the audience snapshot, because there is
@@ -166,7 +212,7 @@ public class NotificationEligibilityService {
         // genuinely do name a real order and still want orderNumber/amount
         // rendered, so this simply finds nothing for the subjects that never were
         // one rather than skipping the read outright.
-        boolean requiresOrder = !operationsAudience && !accountPreResolved;
+        boolean requiresOrder = !operationsAudience && !courierAudience && !accountPreResolved;
         Optional<OrderSummary> order = orders.summary(row.tenantId(), row.subjectId());
         if (order.isEmpty() && requiresOrder) {
             // The order that caused this message is not visible to this tenant.
@@ -179,7 +225,7 @@ public class NotificationEligibilityService {
 
         UUID accountId = null;
         MessageLocale locale;
-        if (operationsAudience) {
+        if (operationsAudience || courierAudience) {
             locale = operationsGroupLocale;
         } else if (accountPreResolved) {
             accountId = Objects.requireNonNull(row.recipientAccountId(), "accountPreResolved guarantees this");
@@ -325,8 +371,25 @@ public class NotificationEligibilityService {
             }
         }
 
+        if (channel == NotificationChannel.EMAIL) {
+            // ADR 0182: the tenant's day on the shared sender. Held, with the claim released, until the
+            // next UTC day; it comes back through this same method and is counted again then.
+            Optional<Instant> held = emailCap.heldUntil(row.tenantId(), now);
+            if (held.isPresent()) {
+                notifications.deferForQuietHours(row.tenantId(), row.id(), claimToken, held.get(), now);
+                log.debug("Notification {} held by the email daily cap until {}", row.id(), held.get());
+                return false;
+            }
+        }
+
         UUID endpointId;
-        if (operationsAudience) {
+        if (courierAudience) {
+            endpointId = row.recipientEndpointId();
+            if (endpointId == null) {
+                throw new IllegalStateException(
+                        "Courier message %s was created without a resolved endpoint".formatted(row.id()));
+            }
+        } else if (operationsAudience) {
             // Already resolved when this intent was created: the fan-out trigger
             // (OperationsTelegramFanoutService) knows exactly which bound chat it
             // is writing for and sets recipient_endpoint_id at insert time, unlike

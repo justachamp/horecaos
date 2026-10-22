@@ -126,6 +126,10 @@ public class NotificationGateway {
         if (!supports(channel)) {
             return Readiness.notReady("NO_ADAPTER");
         }
+        Optional<NotificationChannelAdapter> owned = platformOwned(channel);
+        if (owned.isPresent()) {
+            return platformOwnedReadiness(owned.get(), purpose);
+        }
         Optional<BindingRef> binding = installations.primaryBinding(tenantId, brandId, null, capabilityFor(channel));
         if (binding.isEmpty()) {
             return Readiness.notReady("NO_PROVIDER_BINDING");
@@ -151,6 +155,74 @@ public class NotificationGateway {
             return Readiness.notReady(SmsPurposes.REFUSAL_CODE);
         }
         return Readiness.ok();
+    }
+
+    /**
+     * The provider type that carries {@code channel} for this brand, found without calling out
+     * (ADR 0182): the platform's own relay for a platform-owned channel, otherwise the type of
+     * the brand's primary binding.
+     */
+    public Optional<String> boundProviderType(UUID tenantId, UUID brandId, String channel) {
+        Optional<NotificationChannelAdapter> owned = platformOwned(channel);
+        if (owned.isPresent()) {
+            return Optional.of(owned.get().providerType());
+        }
+        if (!supports(channel)) {
+            return Optional.empty();
+        }
+        return installations
+                .primaryBinding(tenantId, brandId, null, capabilityFor(channel))
+                .map(BindingRef::providerType);
+    }
+
+    private Optional<NotificationChannelAdapter> platformOwned(String channel) {
+        return adapters.entrySet().stream()
+                .filter(entry -> entry.getKey().channel().equals(channel))
+                .map(Map.Entry::getValue)
+                .filter(NotificationChannelAdapter::platformOwned)
+                .findFirst();
+    }
+
+    private Readiness platformOwnedReadiness(NotificationChannelAdapter adapter, String purpose) {
+        if (!adapter.describeAccount(AccountContext.EMPTY).complete()) {
+            return Readiness.notReady(accountCode(adapter.channel()));
+        }
+        if (!adapter.permits(purpose, AccountContext.EMPTY)) {
+            return Readiness.notReady(purposeCode(adapter.channel()));
+        }
+        return Readiness.ok();
+    }
+
+    /**
+     * A call to an adapter that speaks for the platform (ADR 0182): no binding, installation or
+     * secret to find, because the relay's account is the deployment's own. Refused with a stable
+     * code before anything leaves when the relay is not configured or the purpose is not one it
+     * carries.
+     */
+    private ProviderOutcome invokePlatformOwned(
+            NotificationChannelAdapter adapter, String idempotencyKey, @Nullable String purpose, Operation operation) {
+        AccountReadiness readiness = adapter.describeAccount(AccountContext.EMPTY);
+        if (!readiness.complete()) {
+            return ProviderOutcome.rejected(
+                    accountCode(adapter.channel()),
+                    "The platform's %s relay is not configured here".formatted(adapter.channel()));
+        }
+        if (purpose != null && !adapter.permits(purpose, AccountContext.EMPTY)) {
+            return ProviderOutcome.rejected(
+                    purposeCode(adapter.channel()),
+                    "The platform's %s relay does not carry %s messages".formatted(adapter.channel(), purpose));
+        }
+        ProviderOutcome outcome = operation.apply(
+                adapter, new ProviderCall("", "", idempotencyKey, DEFAULT_TIMEOUT), AccountContext.EMPTY);
+        Map<String, Object> normalized = new LinkedHashMap<>(outcome.normalized());
+        normalized.put(PROVIDER_TYPE_KEY, adapter.providerType());
+        return new ProviderOutcome(
+                outcome.status(),
+                Map.copyOf(normalized),
+                outcome.externalReference(),
+                outcome.errorCode(),
+                outcome.detail(),
+                outcome.retryAfter());
     }
 
     public ProviderOutcome send(NotificationDispatch dispatch) {
@@ -236,6 +308,11 @@ public class NotificationGateway {
 
         if (!supports(channel)) {
             return ProviderOutcome.rejected("NO_ADAPTER", "No notification adapter is registered for " + channel);
+        }
+
+        Optional<NotificationChannelAdapter> owned = platformOwned(channel);
+        if (owned.isPresent()) {
+            return invokePlatformOwned(owned.get(), idempotencyKey, purpose, operation);
         }
 
         Optional<BindingRef> binding = explicitBindingId != null
@@ -381,7 +458,15 @@ public class NotificationGateway {
     }
 
     private static String accountCode(String channel) {
-        return "SMS".equals(channel) ? "SMS_ACCOUNT_MISCONFIGURED" : "ACCOUNT_MISCONFIGURED";
+        return switch (channel) {
+            case "SMS" -> "SMS_ACCOUNT_MISCONFIGURED";
+            case "EMAIL" -> "EMAIL_NOT_CONFIGURED";
+            default -> "ACCOUNT_MISCONFIGURED";
+        };
+    }
+
+    private static String purposeCode(String channel) {
+        return "EMAIL".equals(channel) ? "EMAIL_PURPOSE_NOT_PERMITTED" : SmsPurposes.REFUSAL_CODE;
     }
 
     /** One call to one adapter, with everything it needs for the length of that call. */

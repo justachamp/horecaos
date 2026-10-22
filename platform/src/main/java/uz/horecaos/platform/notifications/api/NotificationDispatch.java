@@ -30,12 +30,14 @@ import org.jspecify.annotations.Nullable;
  * @param templateKey the semantic message key, which distinguishes two different
  *                     concerns about the same subject (a warning from a
  *                     confirmation) from two updates of the same one
- * @param purpose what the message is for ({@link #PURPOSE_TRANSACTIONAL} or
- *                {@link #PURPOSE_MARKETING}). ADR 0146: a gateway account may be
- *                allowed to carry sign-in codes and order messages and not
- *                promotions, and the adapter must be able to refuse a purpose
- *                its account has not been cleared for without guessing from the
+ * @param purpose what the message is for ({@link #PURPOSE_TRANSACTIONAL},
+ *                {@link #PURPOSE_MARKETING} or {@link #PURPOSE_COURIER}). ADR 0146: a
+ *                gateway account may be allowed to carry sign-in codes and order
+ *                messages and not promotions, and the adapter must be able to refuse a
+ *                purpose its account has not been cleared for without guessing from the
  *                template key
+ * @param email what an email adds to a message and no other channel has (ADR 0182): the
+ *              name it is sent in and its way out. Null on every other channel
  */
 public record NotificationDispatch(
         UUID notificationId,
@@ -52,13 +54,74 @@ public record NotificationDispatch(
         String subjectType,
         UUID subjectId,
         String templateKey,
-        String purpose) {
+        String purpose,
+        @Nullable EmailEnvelope email) {
 
     /** An order message, a code, a receipt: anything the customer did not opt into receiving. */
     public static final String PURPOSE_TRANSACTIONAL = "TRANSACTIONAL";
 
     /** A campaign or an automation: anything that needs a marketing consent decision. */
     public static final String PURPOSE_MARKETING = "MARKETING";
+
+    /** A dispatcher's operational message to a courier: not a customer and not a marketing audience (ADR 0182). */
+    public static final String PURPOSE_COURIER = "COURIER";
+
+    /**
+     * The sender's name and the recipient's way out, for an email (ADR 0182).
+     *
+     * @param senderName the brand's display name, shown beside the platform's one address
+     * @param unsubscribeUrl the absolute URL a POST of {@code List-Unsubscribe=One-Click}
+     *                       unsubscribes the recipient from. Carries an opaque token
+     * @param footer the localised sentence appended to the body that points at the same URL,
+     *               already rendered, because only the notification side knows the language
+     */
+    public record EmailEnvelope(String senderName, String unsubscribeUrl, String footer) {
+
+        /** The URL carries a token that unsubscribes a person; nothing here is printed. */
+        @Override
+        public String toString() {
+            return "EmailEnvelope[<redacted>]";
+        }
+    }
+
+    /**
+     * The shape every caller used before ADR 0182: a message with a purpose and no email
+     * envelope.
+     */
+    public NotificationDispatch(
+            UUID notificationId,
+            UUID attemptId,
+            UUID tenantId,
+            UUID brandId,
+            @Nullable UUID locationId,
+            String channel,
+            String recipientValue,
+            @Nullable String subject,
+            String body,
+            String providerIdempotencyKey,
+            String correlationId,
+            String subjectType,
+            UUID subjectId,
+            String templateKey,
+            String purpose) {
+        this(
+                notificationId,
+                attemptId,
+                tenantId,
+                brandId,
+                locationId,
+                channel,
+                recipientValue,
+                subject,
+                body,
+                providerIdempotencyKey,
+                correlationId,
+                subjectType,
+                subjectId,
+                templateKey,
+                purpose,
+                null);
+    }
 
     /**
      * The shape every caller used before ADR 0146 named a purpose. A message that
@@ -95,7 +158,8 @@ public record NotificationDispatch(
                 subjectType,
                 subjectId,
                 templateKey,
-                PURPOSE_TRANSACTIONAL);
+                PURPOSE_TRANSACTIONAL,
+                null);
     }
 
     public NotificationDispatch {

@@ -32,7 +32,8 @@ public class JdbcCourierBroadcastStore {
             UUID brandId,
             String targetKind,
             @Nullable UUID targetGroupId,
-            String message,
+            String templateKey,
+            String variablesJson,
             UUID createdBy,
             Instant now) {
         Map<String, Object> params = new HashMap<>();
@@ -41,22 +42,24 @@ public class JdbcCourierBroadcastStore {
         params.put("brandId", brandId);
         params.put("targetKind", targetKind);
         params.put("targetGroupId", targetGroupId);
-        params.put("message", message);
+        params.put("templateKey", templateKey);
+        params.put("variables", variablesJson);
         params.put("createdBy", createdBy);
         params.put("now", utc(now));
 
         jdbc.sql("""
                 INSERT INTO marketing.courier_broadcasts (
-                    id, tenant_id, brand_id, target_kind, target_group_id, message,
+                    id, tenant_id, brand_id, target_kind, target_group_id, template_key, variables,
                     created_by, created_at, updated_at)
-                VALUES (:id, :tenantId, :brandId, :targetKind, :targetGroupId, :message,
-                    :createdBy, :now, :now)
+                VALUES (:id, :tenantId, :brandId, :targetKind, :targetGroupId, :templateKey,
+                    CAST(:variables AS jsonb), :createdBy, :now, :now)
                 """).params(params).update();
     }
 
     private static final String COLUMNS = """
-            id, tenant_id, brand_id, channel, target_kind, target_group_id, message,
-            status, recipient_count, refusal_reason, created_by, created_at, updated_at, sent_at, version
+            id, tenant_id, brand_id, channel, target_kind, target_group_id, message, template_key,
+            variables::text AS variables, status, recipient_count, refusal_reason, created_by, created_at,
+            updated_at, sent_at, version
             """;
 
     public Optional<CourierBroadcastRow> find(UUID tenantId, UUID id) {
@@ -130,6 +133,108 @@ public class JdbcCourierBroadcastStore {
                 == 1;
     }
 
+    /** The couriers a target resolves to right now, active ones only, with their non-personal reference. */
+    public List<CourierTarget> targetCouriers(UUID tenantId, String targetKind, @Nullable UUID targetGroupId) {
+        if ("GROUP".equals(targetKind)) {
+            return jdbc.sql("""
+                    SELECT c.id, c.display_reference FROM fulfillment.couriers c
+                     JOIN fulfillment.courier_group_members m
+                       ON m.tenant_id = c.tenant_id AND m.courier_id = c.id
+                     WHERE c.tenant_id = :tenantId AND c.status = 'ACTIVE' AND m.group_id = :groupId
+                     ORDER BY c.display_reference
+                    """)
+                    .param("tenantId", tenantId)
+                    .param("groupId", targetGroupId)
+                    .query((row, number) ->
+                            new CourierTarget(row.getObject("id", UUID.class), row.getString("display_reference")))
+                    .list();
+        }
+        return jdbc.sql("""
+                SELECT id, display_reference FROM fulfillment.couriers
+                 WHERE tenant_id = :tenantId AND status = 'ACTIVE'
+                 ORDER BY display_reference
+                """)
+                .param("tenantId", tenantId)
+                .query((row, number) ->
+                        new CourierTarget(row.getObject("id", UUID.class), row.getString("display_reference")))
+                .list();
+    }
+
+    /** The identity-provider subject each of these couriers signs in as (V0040), found by id within the tenant. */
+    public Map<UUID, String> principalSubjects(UUID tenantId, java.util.Collection<UUID> courierIds) {
+        if (courierIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> subjects = new HashMap<>();
+        jdbc.sql("""
+                SELECT id, principal_subject FROM fulfillment.couriers
+                 WHERE tenant_id = :tenantId AND id IN (:ids)
+                """)
+                .param("tenantId", tenantId)
+                .param("ids", courierIds)
+                .query((row, number) -> Map.entry(row.getObject("id", UUID.class), row.getString("principal_subject")))
+                .list()
+                .forEach(entry -> subjects.put(entry.getKey(), entry.getValue()));
+        return subjects;
+    }
+
+    /**
+     * One ledger row. A second send of the same broadcast finds the first's row and adds nothing, so a
+     * replay cannot show a courier twice.
+     */
+    public void insertRecipient(
+            UUID tenantId,
+            UUID broadcastId,
+            UUID courierId,
+            String courierReference,
+            String state,
+            @Nullable UUID notificationId,
+            Instant now) {
+        jdbc.sql("""
+                INSERT INTO marketing.courier_broadcast_recipients (
+                    id, tenant_id, broadcast_id, courier_id, courier_reference, state, notification_id, created_at)
+                VALUES (:id, :tenantId, :broadcastId, :courierId, :reference, :state, :notificationId, :now)
+                ON CONFLICT (tenant_id, broadcast_id, courier_id) DO NOTHING
+                """)
+                .param("id", uz.horecaos.platform.configuration.Ids.newId())
+                .param("tenantId", tenantId)
+                .param("broadcastId", broadcastId)
+                .param("courierId", courierId)
+                .param("reference", courierReference)
+                .param("state", state)
+                .param("notificationId", notificationId)
+                .param("now", utc(now))
+                .update();
+    }
+
+    /** Who a broadcast addressed and who had nothing to be addressed on, by the couriers' reference. */
+    public List<RecipientRow> recipients(UUID tenantId, UUID broadcastId) {
+        return jdbc.sql("""
+                SELECT courier_id, courier_reference, state, notification_id
+                  FROM marketing.courier_broadcast_recipients
+                 WHERE tenant_id = :tenantId AND broadcast_id = :broadcastId
+                 ORDER BY courier_reference
+                """)
+                .param("tenantId", tenantId)
+                .param("broadcastId", broadcastId)
+                .query((row, number) -> new RecipientRow(
+                        row.getObject("courier_id", UUID.class),
+                        row.getString("courier_reference"),
+                        row.getString("state"),
+                        row.getObject("notification_id", UUID.class)))
+                .list();
+    }
+
+    private static final tools.jackson.databind.ObjectMapper JSON =
+            tools.jackson.databind.json.JsonMapper.builder().build();
+
+    private static Map<String, String> variables(@Nullable String json) {
+        if (json == null || json.isBlank()) {
+            return Map.of();
+        }
+        return JSON.readValue(json, new tools.jackson.core.type.TypeReference<Map<String, String>>() {});
+    }
+
     private static CourierBroadcastRow toRow(ResultSet row, int number) throws java.sql.SQLException {
         return new CourierBroadcastRow(
                 row.getObject("id", UUID.class),
@@ -139,6 +244,8 @@ public class JdbcCourierBroadcastStore {
                 row.getString("target_kind"),
                 row.getObject("target_group_id", UUID.class),
                 row.getString("message"),
+                row.getString("template_key"),
+                variables(row.getString("variables")),
                 row.getString("status"),
                 row.getInt("recipient_count"),
                 row.getString("refusal_reason"),
@@ -164,7 +271,9 @@ public class JdbcCourierBroadcastStore {
             String channel,
             String targetKind,
             @Nullable UUID targetGroupId,
-            String message,
+            @Nullable String message,
+            @Nullable String templateKey,
+            Map<String, String> variables,
             String status,
             int recipientCount,
             @Nullable String refusalReason,
@@ -173,4 +282,14 @@ public class JdbcCourierBroadcastStore {
             Instant updatedAt,
             @Nullable Instant sentAt,
             int version) {}
+
+    /** A courier a target resolves to: the id and the reference a screen may show. */
+    public record CourierTarget(UUID courierId, String reference) {}
+
+    /** One courier a broadcast addressed, or could not: the id, the reference, QUEUED or NO_CONTACT, and the intent. */
+    public record RecipientRow(
+            UUID courierId,
+            String courierReference,
+            String state,
+            @Nullable UUID notificationId) {}
 }
