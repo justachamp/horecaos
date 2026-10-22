@@ -7615,18 +7615,24 @@ class CartCheckoutAndOrderTests {
     }
 
     @Test
-    @DisplayName("a replay of the same operator order takes no second hold and writes no second attestation")
-    void aReplayedOperatorRedemptionIsNotTakenTwice() {
+    @DisplayName("a second placement under the same Idempotency-Key takes no second hold and writes no second "
+            + "attestation: the key was spent by the order that exists")
+    void aSecondPlacementUnderTheSameKeyTakesNoSecondHold() {
         onlyTheOrderingBranchIsActive();
         seedRedemptionPolicy();
         seedBalance(30_000L);
         var command = operatorOrder("idem-op-redeem-replay", 10_000L, true, null);
 
         var first = tx(() -> operatorOrdering.place(command));
+        // A client that retried would be answered from the stored response by the HTTP idempotency layer. This is
+        // the service under a key somebody reused for a basket it has priced afresh: the attempt ledger refuses it
+        // by name, and the refusal must not have held points or recorded a second consent.
         var again = tx(() -> operatorOrdering.place(command));
 
-        assertThat(again.outcome()).isEqualTo(CheckoutService.CheckoutResult.Outcome.REPLAYED);
-        assertThat(orderIdOf(again)).isEqualTo(orderIdOf(first));
+        assertThat(first.outcome()).isEqualTo(CheckoutService.CheckoutResult.Outcome.CREATED);
+        assertThat(again.outcome()).isEqualTo(CheckoutService.CheckoutResult.Outcome.REJECTED);
+        assertThat(again.rejectionCode()).isEqualTo("IDEMPOTENCY_KEY_REUSED");
+        assertThat(countOrders()).isEqualTo(1L);
         UUID account =
                 loyaltyStore.findAccount(TENANT, BRAND, CUSTOMER).orElseThrow().id();
         assertThat(loyaltyBalances.balance(TENANT, account).balanceMinor()).isEqualTo(20_000L);

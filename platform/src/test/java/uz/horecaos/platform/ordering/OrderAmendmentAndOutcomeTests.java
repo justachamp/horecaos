@@ -147,6 +147,7 @@ class OrderAmendmentAndOutcomeTests {
     private CheckoutService checkout;
     private OrderStateService orderState;
     private uz.horecaos.platform.payments.settlement.CheckoutSettlementPlanner settlementPlanner;
+    private uz.horecaos.platform.payments.settlement.OrderSettlementService settlementService;
     private OrderQueryService orderQuery;
     private OrderAmendmentService amendments;
     /** ADR 0169: the same service with {@code ordering.amendment_line_removal_enabled} on. */
@@ -340,9 +341,11 @@ class OrderAmendmentAndOutcomeTests {
                         reasonPolicies, reasonPolicies, new SimpleMeterRegistry()),
                 100_000L);
         var settlementStore = new uz.horecaos.platform.payments.settlement.JdbcSettlementStore(jdbc);
+        settlementService =
+                new uz.horecaos.platform.payments.settlement.OrderSettlementService(settlementStore, redemption, clock);
         settlementPlanner = new uz.horecaos.platform.payments.settlement.CheckoutSettlementPlanner(
                 settlementStore,
-                new uz.horecaos.platform.payments.settlement.OrderSettlementService(settlementStore, redemption, clock),
+                settlementService,
                 clock,
                 new uz.horecaos.platform.fiscal.infrastructure.persistence.JdbcFiscalTerminalStore(jdbc, objectMapper));
 
@@ -1465,6 +1468,37 @@ class OrderAmendmentAndOutcomeTests {
         assertThat(tenderRows(orderId))
                 .extracting(row -> row.get("code"), row -> row.get("amount_minor"))
                 .containsExactly(org.assertj.core.api.Assertions.tuple("CLICK", 100_000L));
+    }
+
+    @Test
+    @DisplayName("an order whose settlement has begun to settle cannot be moved to a provider: the amendment is "
+            + "refused whole, the provider is never asked and payment[] is unchanged")
+    void aSettlementThatHasBegunToSettleRefusesAMethodChange() {
+        seedRedemptionPolicy();
+        seedBalance(30_000L);
+        UUID orderId = orderIdOf(placeOrderRedeeming("idem-split-refused", 10_000L));
+        UUID pointsTender = jdbc.sql("""
+                        SELECT t.id FROM payments.tenders t
+                          JOIN payments.order_settlements s ON s.id = t.settlement_id AND s.tenant_id = t.tenant_id
+                         WHERE s.order_id = :id AND t.settles_from_balance
+                        """).param("id", orderId).query(UUID.class).single();
+        tx(() -> settlementService.recordTenderSettled(TENANT, orderId, pointsTender, "test"));
+
+        assertThatThrownBy(() ->
+                        amend("k-split-refused", OrderAmendmentService.AmendmentCommand.changePaymentMethod("CLICK")))
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class)
+                .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
+                        .isEqualTo("SETTLEMENT_NOT_REPLANNABLE"));
+
+        assertThat(recordingPayments.intents())
+                .as("a settlement that cannot be moved is refused before the provider is asked for anything")
+                .isEmpty();
+        assertThat(tenderRows(orderId))
+                .as("the rollback leaves payment[] exactly as it was")
+                .extracting(row -> row.get("code"), row -> row.get("amount_minor"))
+                .containsExactly(
+                        org.assertj.core.api.Assertions.tuple("LOYALTY_POINTS", 10_000L),
+                        org.assertj.core.api.Assertions.tuple("CASH", 90_000L));
     }
 
     @Test

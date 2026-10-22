@@ -433,6 +433,24 @@
         },
         "type" : "object"
       },
+      "CartRedemptionOfferResponse" : {
+        "properties" : {
+          "cartId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "offer" : {
+            "$ref" : "#/components/schemas/RedemptionOfferView"
+          },
+          "orderTotal" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "priced" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "CartResponse" : {
         "properties" : {
           "appliedPromoCode" : {
@@ -680,6 +698,35 @@
           }
         },
         "required" : [ "channel", "fulfillmentMode", "locationId" ],
+        "type" : "object"
+      },
+      "CustomerBalanceResponse" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "balance" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "held" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "nextExpiryAmount" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "nextExpiryAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "spendable" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          }
+        },
         "type" : "object"
       },
       "CustomerCallbackRequest" : {
@@ -2189,6 +2236,41 @@
         },
         "type" : "object"
       },
+      "PaymentSplitResponse" : {
+        "properties" : {
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenders" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PaymentSplitTenderResponse"
+            },
+            "type" : "array"
+          },
+          "total" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          }
+        },
+        "type" : "object"
+      },
+      "PaymentSplitTenderResponse" : {
+        "properties" : {
+          "amount" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "methodCode" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PendingReviewResponse" : {
         "properties" : {
           "locationId" : {
@@ -2734,6 +2816,27 @@
           }
         },
         "required" : [ "code" ],
+        "type" : "object"
+      },
+      "RedemptionOfferView" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "available" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "maximum" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "redeemable" : {
+            "type" : "boolean"
+          },
+          "refusal" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "ReferralStorefrontControllerRedemptionResponse" : {
@@ -4561,6 +4664,52 @@
         "x-horecaos-surface" : "published"
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/redemption-offer" : {
+      "get" : {
+        "description" : "Read from the quote the cart is bound to, so the maximum is the figure checkout will accept. A cart that has not been priced, or whose quote has expired, offers nothing and says so in refusal (CART_NOT_PRICED, QUOTE_EXPIRED). Spend the points by sending redeemFromBalanceMinor with the checkout; it is taken inside that transaction and never after the order exists (ADR 0185). refusal is a code: NO_ACCOUNT, REDEMPTION_NOT_ENABLED, CHANNEL_NOT_ELIGIBLE, ACCOUNT_NOT_ACTIVE, ORDER_NOT_ELIGIBLE, INSUFFICIENT_BALANCE or REDEMPTION_BLOCKED_BY_PROMOTION. Nothing is held.",
+        "operationId" : "cartRedemptionOffer",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cartId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CartRedemptionOfferResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What this cart's customer may spend of their points on it",
+        "tags" : [ "Storefront redemption" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/table" : {
       "put" : {
         "description" : "ADR 0047's cart-to-table binding. The table is read from the guest's dine-in token (X-Dine-In-Token), never from the request: a body that named its own table would be a claim a client could edit to reach the next table's bill. Checkout then asks for the same token again (the binding is remembered state, so the guest is re-proved), refuses the order if nobody is seated and otherwise puts it on the table's bill in the same transaction that creates it, so the round cannot be lost between two requests. Clears any attached quote, because a bound cart is another cart; re-price before checkout.",
@@ -5867,6 +6016,44 @@
         "x-horecaos-surface" : "published"
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/loyalty/balance" : {
+      "get" : {
+        "description" : "The balance, what is spendable today, what an unfinished checkout is holding, and the next lot to expire. A customer who has earned nothing at this brand reads accountId null and no amounts, not a 404. Points are not money: they cannot be withdrawn, cannot be transferred and have no value outside the platform.",
+        "operationId" : "ownBalance",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CustomerBalanceResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The caller's own points balance at this brand",
+        "tags" : [ "Loyalty" ],
+        "x-horecaos-surface" : "internal"
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me" : {
       "get" : {
         "description" : "Includes the account id, which is otherwise unlearnable from the storefront, and the scope the profile is shared at. Contact points are listed by type and verification state and never by value.",
@@ -6669,6 +6856,52 @@
         "summary" : "Open a payment attempt and get its checkout surface",
         "tags" : [ "Storefront payments" ],
         "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/payment-split" : {
+      "get" : {
+        "description" : "The tenders of the order's settlement in the order they settle: POINTS (what the customer spent of their points) and MONEY (what a provider or the courier collects, with its method code). Status is the tender's: PLANNED, RESERVED, SETTLED, RELEASED (the points went back), REVERSED (refunded) or FAILED. Another customer's order and a missing one are both 404; an order with no settlement is 404 NO_PAYMENT_SPLIT.",
+        "operationId" : "orderPaymentSplit",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentSplitResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "How one of the caller's own orders is being paid",
+        "tags" : [ "Storefront payments" ],
+        "x-horecaos-surface" : "internal"
       }
     },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/receipts" : {
@@ -7958,6 +8191,9 @@
     "description" : "What delivery costs here, and the evidence for it",
     "name" : "Delivery fee"
   }, {
+    "description" : "How a customer's own order is being paid",
+    "name" : "Storefront payments"
+  }, {
     "description" : "Scanning a table code, and the bill it leads to",
     "name" : "QR dine-in"
   }, {
@@ -7969,6 +8205,9 @@
   }, {
     "description" : "The tenant's own document, or the platform default (ADR 0068)",
     "name" : "Storefront terms of service"
+  }, {
+    "description" : "What a customer may spend of their points on a basket",
+    "name" : "Storefront redemption"
   }, {
     "description" : "A customer's points balance and its movements",
     "name" : "Loyalty"

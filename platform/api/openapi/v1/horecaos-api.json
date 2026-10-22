@@ -5642,6 +5642,24 @@
         },
         "type" : "object"
       },
+      "CartRedemptionOfferResponse" : {
+        "properties" : {
+          "cartId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "offer" : {
+            "$ref" : "#/components/schemas/RedemptionOfferView"
+          },
+          "orderTotal" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "priced" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
       "CartResponse" : {
         "properties" : {
           "appliedPromoCode" : {
@@ -8246,6 +8264,10 @@
       },
       "ConfirmCardRequest" : {
         "properties" : {
+          "cardExpiry" : {
+            "pattern" : "^(0[1-9]|1[0-2])[0-9]{2}$",
+            "type" : "string"
+          },
           "providerToken" : {
             "maxLength" : 512,
             "minLength" : 0,
@@ -11233,6 +11255,35 @@
           }
         },
         "required" : [ "hostname" ],
+        "type" : "object"
+      },
+      "CustomerBalanceResponse" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "balance" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "brandId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "held" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "nextExpiryAmount" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "nextExpiryAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "spendable" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          }
+        },
         "type" : "object"
       },
       "CustomerCallbackRequest" : {
@@ -23215,6 +23266,33 @@
         },
         "type" : "object"
       },
+      "OperatorRedemptionOfferResponse" : {
+        "properties" : {
+          "cashToCollect" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "customerAccountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "deliveryFee" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "offer" : {
+            "$ref" : "#/components/schemas/RedemptionOfferView"
+          },
+          "orderTotal" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "requested" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "requestedRefusal" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "OperatorTodayCountsResponse" : {
         "properties" : {
           "acceptedCount" : {
@@ -26389,6 +26467,41 @@
         },
         "type" : "object"
       },
+      "PaymentSplitResponse" : {
+        "properties" : {
+          "orderId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenders" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PaymentSplitTenderResponse"
+            },
+            "type" : "array"
+          },
+          "total" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          }
+        },
+        "type" : "object"
+      },
+      "PaymentSplitTenderResponse" : {
+        "properties" : {
+          "amount" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "methodCode" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PaymentTypeResponse" : {
         "properties" : {
           "code" : {
@@ -26975,6 +27088,9 @@
             "minItems" : 0,
             "type" : "array"
           },
+          "operatorAttestsCustomerAgreement" : {
+            "type" : "boolean"
+          },
           "overrideNote" : {
             "maxLength" : 500,
             "minLength" : 0,
@@ -27001,6 +27117,11 @@
           "proposedLocationId" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "redeemFromBalanceMinor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
           },
           "requestedFor" : {
             "format" : "date-time",
@@ -32115,6 +32236,27 @@
             "type" : "string"
           },
           "sourceKind" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "RedemptionOfferView" : {
+        "properties" : {
+          "accountId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "available" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "maximum" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          },
+          "redeemable" : {
+            "type" : "boolean"
+          },
+          "refusal" : {
             "type" : "string"
           }
         },
@@ -38226,6 +38368,48 @@
           }
         },
         "required" : [ "reasonId", "targetStatus" ],
+        "type" : "object"
+      },
+      "StatementEInvoiceView" : {
+        "properties" : {
+          "awaitingYourSignature" : {
+            "type" : "boolean"
+          },
+          "current" : {
+            "type" : "boolean"
+          },
+          "documentDate" : {
+            "type" : "string"
+          },
+          "documentNumber" : {
+            "type" : "string"
+          },
+          "operatorStatus" : {
+            "type" : "string"
+          },
+          "provider" : {
+            "type" : "string"
+          },
+          "sentAt" : {
+            "type" : "string"
+          },
+          "state" : {
+            "type" : "string"
+          },
+          "stateChangedAt" : {
+            "type" : "string"
+          },
+          "stateCheckedAt" : {
+            "type" : "string"
+          },
+          "statementId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "total" : {
+            "$ref" : "#/components/schemas/ApiMoney"
+          }
+        },
         "type" : "object"
       },
       "StatementIssueRequest" : {
@@ -84085,6 +84269,51 @@
         "tags" : [ "Storefront ordering" ]
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/redemption-offer" : {
+      "get" : {
+        "description" : "Read from the quote the cart is bound to, so the maximum is the figure checkout will accept. A cart that has not been priced, or whose quote has expired, offers nothing and says so in refusal (CART_NOT_PRICED, QUOTE_EXPIRED). Spend the points by sending redeemFromBalanceMinor with the checkout; it is taken inside that transaction and never after the order exists (ADR 0185). refusal is a code: NO_ACCOUNT, REDEMPTION_NOT_ENABLED, CHANNEL_NOT_ELIGIBLE, ACCOUNT_NOT_ACTIVE, ORDER_NOT_ELIGIBLE, INSUFFICIENT_BALANCE or REDEMPTION_BLOCKED_BY_PROMOTION. Nothing is held.",
+        "operationId" : "cartRedemptionOffer",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cartId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CartRedemptionOfferResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What this cart's customer may spend of their points on it",
+        "tags" : [ "Storefront redemption" ]
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/carts/{cartId}/table" : {
       "put" : {
         "description" : "ADR 0047's cart-to-table binding. The table is read from the guest's dine-in token (X-Dine-In-Token), never from the request: a body that named its own table would be a claim a client could edit to reach the next table's bill. Checkout then asks for the same token again (the binding is remembered state, so the guest is re-proved), refuses the order if nobody is seated and otherwise puts it on the table's bill in the same transaction that creates it, so the round cannot be lost between two requests. Clears any attached quote, because a bound cart is another cart; re-price before checkout.",
@@ -85367,6 +85596,43 @@
         "tags" : [ "Serviceability" ]
       }
     },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/loyalty/balance" : {
+      "get" : {
+        "description" : "The balance, what is spendable today, what an unfinished checkout is holding, and the next lot to expire. A customer who has earned nothing at this brand reads accountId null and no amounts, not a 404. Points are not money: they cannot be withdrawn, cannot be transferred and have no value outside the platform.",
+        "operationId" : "ownBalance",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CustomerBalanceResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The caller's own points balance at this brand",
+        "tags" : [ "Loyalty" ]
+      }
+    },
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me" : {
       "get" : {
         "description" : "Includes the account id, which is otherwise unlearnable from the storefront, and the scope the profile is shared at. Contact points are listed by type and verification state and never by value.",
@@ -86150,6 +86416,51 @@
           }
         },
         "summary" : "Open a payment attempt and get its checkout surface",
+        "tags" : [ "Storefront payments" ]
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/payment-split" : {
+      "get" : {
+        "description" : "The tenders of the order's settlement in the order they settle: POINTS (what the customer spent of their points) and MONEY (what a provider or the courier collects, with its method code). Status is the tender's: PLANNED, RESERVED, SETTLED, RELEASED (the points went back), REVERSED (refunded) or FAILED. Another customer's order and a missing one are both 404; an order with no settlement is 404 NO_PAYMENT_SPLIT.",
+        "operationId" : "orderPaymentSplit",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "orderId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentSplitResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "How one of the caller's own orders is being paid",
         "tags" : [ "Storefront payments" ]
       }
     },
@@ -95201,6 +95512,69 @@
         "tags" : [ "Operations orders" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/redemption-offer" : {
+      "post" : {
+        "description" : "The same body as `POST .../orders` and `POST .../orders/quote`, priced by the same path and then undone, and the answer is what the identified customer could redeem against the figure the order would be booked at: their spendable points, the largest redemption the brand's rules permit, why it is zero when it is, and the cash the customer would still owe for the redemption in redeemFromBalanceMinor (null when that is not an amount the offer permits, with requestedRefusal saying so). Nothing is written and nothing is held. The points are spent by sending redeemFromBalanceMinor and operatorAttestsCustomerAgreement: true with `POST .../orders`, inside its transaction, and never after the order exists (ADR 0185). A POST because the basket is a body; `ORDER_PLACE` because the answer is a figure for a customer's would-be order. Needs an `Idempotency-Key`, which the screen mints fresh on every call.",
+        "operationId" : "orderRedemptionOffer",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "locationId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : true,
+          "schema" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlaceOrderRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OperatorRedemptionOfferResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What the customer may spend of their points on the order being taken",
+        "tags" : [ "Operations orders" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/brands/{brandId}/locations/{locationId}/orders/reject-reasons" : {
       "get" : {
         "description" : "Platform-owned reference data (V0119), not a tenant registry: the same eight reasons for every tenant, read with ORDER_READ because the reject dialog has to populate its picker for every operator who can reject an order. `labels` carries every locale at once so the client renders whichever one the operator is using without a second round trip.",
@@ -102711,6 +103085,38 @@
         "tags" : [ "Arrears" ]
       }
     },
+    "/api/v1/tenants/{tenantId}/commercial/einvoices" : {
+      "get" : {
+        "description" : "Newest first. state is the operator's word: DRAFT (handed over, not yet signed and sent by HorecaOS), SENT (signed by HorecaOS, waiting for you to sign or refuse it), SIGNED (you signed it: this is the invoice), REFUSED, CANCELLED, UNKNOWN (a status this platform does not recognise, shown as the operator wrote it in operatorStatus) or UNCONFIRMED (sent, and the operator has not said what it holds yet). current marks the one standing as the statement's invoice; an older refused or cancelled one stays for history. Nothing here is signature material.",
+        "operationId" : "einvoices",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/StatementEInvoiceView"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Where the e-invoice of each issued statement stands",
+        "tags" : [ "Commercial" ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/commercial/entitlements" : {
       "get" : {
         "description" : "The locked-by-plan half of IA 9.1's locked-vs-denied distinction: a module absent here is not a permission gap, it is a plan that does not include it.",
@@ -108852,6 +109258,9 @@
     "description" : "Legacy rows held back, and how they were settled",
     "name" : "Migration quarantine"
   }, {
+    "description" : "What a customer may spend of their points on a basket",
+    "name" : "Storefront redemption"
+  }, {
     "description" : "Unreported receipts, blocked work, and receipt coverage",
     "name" : "Fiscal documents"
   }, {
@@ -108884,6 +109293,9 @@
   }, {
     "description" : "Why orders are cancelled and how they are completed, per tenant",
     "name" : "Order outcome reasons"
+  }, {
+    "description" : "The operator's view of a location's orders",
+    "name" : "Operations orders"
   }, {
     "description" : "Deterministic cart pricing and checkout acceptance",
     "name" : "Quotes"
@@ -108986,6 +109398,9 @@
   }, {
     "description" : "How many orders one operator has taken today (Staff 9.2d)",
     "name" : "Operator order counts"
+  }, {
+    "description" : "How a customer's own order is being paid",
+    "name" : "Storefront payments"
   }, {
     "description" : "Which delivery installation serves an order, in what order, and when sourcing starts (ADR 0142)",
     "name" : "Dispatch rules"

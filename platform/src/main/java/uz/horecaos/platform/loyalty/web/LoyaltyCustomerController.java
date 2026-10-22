@@ -56,7 +56,7 @@ public class LoyaltyCustomerController {
                     + "next lot to expire. A customer who has earned nothing at this brand reads accountId null "
                     + "and no amounts, not a 404. Points are not money: they cannot be withdrawn, cannot be transferred and have "
                     + "no value outside the platform.")
-    public ResponseEntity<CustomerBalanceResponse> balance(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+    public ResponseEntity<CustomerBalanceResponse> ownBalance(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
         UUID customerAccountId = currentCustomer
                 .account(tenantId, brandId)
                 .map(CustomerAccountRef::accountId)

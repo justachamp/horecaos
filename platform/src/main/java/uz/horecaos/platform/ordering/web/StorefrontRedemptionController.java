@@ -54,7 +54,7 @@ public class StorefrontRedemptionController {
                     + "after the order exists (ADR 0185). refusal is a code: NO_ACCOUNT, REDEMPTION_NOT_ENABLED, "
                     + "CHANNEL_NOT_ELIGIBLE, ACCOUNT_NOT_ACTIVE, ORDER_NOT_ELIGIBLE, INSUFFICIENT_BALANCE or "
                     + "REDEMPTION_BLOCKED_BY_PROMOTION. Nothing is held.")
-    public ResponseEntity<CartRedemptionOfferResponse> offer(
+    public ResponseEntity<CartRedemptionOfferResponse> cartRedemptionOffer(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID cartId) {
         UUID accountId = currentCustomer
                 .account(tenantId, brandId)

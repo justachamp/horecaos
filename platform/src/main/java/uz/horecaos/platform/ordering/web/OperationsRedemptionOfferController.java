@@ -65,7 +65,7 @@ public class OperationsRedemptionOfferController {
                     + "never after the order exists (ADR 0185). A POST because the basket is a body; "
                     + "`ORDER_PLACE` because the answer is a figure for a customer's would-be order. Needs an "
                     + "`Idempotency-Key`, which the screen mints fresh on every call.")
-    public ResponseEntity<OperatorRedemptionOfferResponse> offer(
+    public ResponseEntity<OperatorRedemptionOfferResponse> orderRedemptionOffer(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID locationId,

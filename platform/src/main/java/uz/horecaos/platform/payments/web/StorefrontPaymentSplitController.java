@@ -64,7 +64,7 @@ public class StorefrontPaymentSplitController {
                     + "its method code). Status is the tender's: PLANNED, RESERVED, SETTLED, RELEASED (the points "
                     + "went back), REVERSED (refunded) or FAILED. Another customer's order and a missing one are "
                     + "both 404; an order with no settlement is 404 NO_PAYMENT_SPLIT.")
-    public ResponseEntity<PaymentSplitResponse> split(
+    public ResponseEntity<PaymentSplitResponse> orderPaymentSplit(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID orderId) {
         UUID accountId = currentCustomer
                 .account(tenantId, brandId)
