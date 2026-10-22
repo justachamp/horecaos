@@ -81,6 +81,7 @@ export const coreRu: AreaMessages<typeof coreEn> = {
   'orders.action.amend': 'Изменить',
   'orders.action.assignCourier': 'Назначить курьера',
   'orders.action.issueInvoice': 'Выставить счёт',
+  'orders.action.reprint': 'Печать',
   'orders.action.advance.PREPARING': 'На кухню',
   'orders.action.advance.READY': 'Готов',
   'orders.action.advance.FULFILLING': 'На доставку',

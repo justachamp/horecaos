@@ -152,7 +152,9 @@ public class OperationsOrderController {
             // Gap map row 1.1e: OrderActionsPolicy's ASSIGN_COURIER branch reads
             // this the same way — the exact capability DispatchController.assign
             // itself declares.
-            Capability.DELIVERY_MANUAL_ASSIGN);
+            Capability.DELIVERY_MANUAL_ASSIGN,
+            // ADR 0154: OrderActionsPolicy's REPRINT branch reads the capability POST .../print-jobs declares.
+            Capability.PRINT_REPRINT);
 
     private final @Nullable OrderMarkService marks;
 
@@ -932,6 +934,7 @@ public class OperationsOrderController {
         UUID courierId = orderQuery.courierIdFor(tenantId, orderId);
         boolean amendmentAwaitingOperator = orderQuery.amendmentAwaitingOperatorFor(tenantId, orderId);
         boolean presentablePayment = orderQuery.presentablePaymentFor(tenantId, detail.order());
+        boolean reprintAvailable = orderQuery.reprintAvailableFor(tenantId, brandId, locationId);
         // ADR 0137: the step a line may be amended in, asked only of an order that can still be
         // amended -- a finished order has no use for it and the read costs a query on the menu.
         Map<UUID, BigDecimal> portionSteps = detail.order().status().terminal()
@@ -961,6 +964,7 @@ public class OperationsOrderController {
                         courierId,
                         amendmentAwaitingOperator,
                         presentablePayment,
+                        reprintAvailable,
                         table,
                         staffDirectory,
                         portionSteps,
@@ -3249,6 +3253,9 @@ public class OperationsOrderController {
          *                   OrderQueryService#presentablePaymentFor}), the
          *                   {@code ISSUE_INVOICE} counterpart to {@code courierId}
          *                   above (gap map row 1.1e)
+         * @param reprintAvailable resolved separately by the caller ({@link
+         *                   OrderQueryService#reprintAvailableFor}), the {@code REPRINT}
+         *                   counterpart: the order's branch has printing on and a printer
          * @param table      resolved separately by the caller ({@link
          *                   OrderQueryService#tableFor}), the single-order
          *                   counterpart to the board's batched lookup
@@ -3262,19 +3269,21 @@ public class OperationsOrderController {
                 @Nullable UUID courierId,
                 boolean amendmentAwaitingOperator,
                 boolean presentablePayment,
+                boolean reprintAvailable,
                 OrderTablesPort.@Nullable OrderTable table,
                 @Nullable String createdByDisplayName,
                 @Nullable String acceptedByDisplayName) {
             return of(
                     new JdbcOrderStore.OrderBoardRow(
-                            order,
-                            null,
-                            courierId,
-                            amendmentAwaitingOperator,
-                            presentablePayment,
-                            table,
-                            createdByDisplayName,
-                            acceptedByDisplayName),
+                                    order,
+                                    null,
+                                    courierId,
+                                    amendmentAwaitingOperator,
+                                    presentablePayment,
+                                    table,
+                                    createdByDisplayName,
+                                    acceptedByDisplayName)
+                            .withFacts(JdbcOrderStore.OrderBoardFacts.NONE.withReprintAvailable(reprintAvailable)),
                     grantedCapabilities);
         }
 
@@ -3299,7 +3308,8 @@ public class OperationsOrderController {
                             row.courierId(),
                             row.amendmentAwaitingOperator(),
                             order.paymentStatusProjection(),
-                            row.presentablePayment()),
+                            row.presentablePayment(),
+                            row.facts().reprintAvailable()),
                     order.promise().promisedAt(),
                     order.promise().basis().name(),
                     order.paymentStatusProjection(),
@@ -3350,14 +3360,16 @@ public class OperationsOrderController {
                 @Nullable UUID courierId,
                 boolean amendmentAwaitingOperator,
                 String paymentStatusProjection,
-                boolean presentablePayment) {
+                boolean presentablePayment,
+                boolean reprintAvailable) {
             return OrderActionsPolicy.availableFor(
                             status,
                             mode,
                             grantedCapabilities,
                             courierId == null,
                             amendmentAwaitingOperator,
-                            OrderActionsPolicy.awaitsOnlinePayment(paymentStatusProjection, presentablePayment))
+                            OrderActionsPolicy.awaitsOnlinePayment(paymentStatusProjection, presentablePayment),
+                            reprintAvailable)
                     .stream()
                     .map(OrderActionResponse::of)
                     .toList();
@@ -3433,6 +3445,7 @@ public class OperationsOrderController {
                 @Nullable UUID courierId,
                 boolean amendmentAwaitingOperator,
                 boolean presentablePayment,
+                boolean reprintAvailable,
                 OrderTablesPort.@Nullable OrderTable table,
                 StaffDirectory staffDirectory,
                 Map<UUID, BigDecimal> portionSteps,
@@ -3450,6 +3463,7 @@ public class OperationsOrderController {
                             courierId,
                             amendmentAwaitingOperator,
                             presentablePayment,
+                            reprintAvailable,
                             table,
                             createdByName,
                             acceptedByName),

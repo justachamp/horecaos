@@ -69,6 +69,21 @@ describe('actionLabel', () => {
     );
   });
 
+  it('labels REPRINT (orders.md §2.12’s p, ADR 0154) in all three languages, never falling to the raw code', () => {
+    expect(actionLabel(action({ action: 'REPRINT' }), null, t, statusLabel)).toBe('Print');
+    const ru = new I18n();
+    ru.setLocale('ru');
+    expect(actionLabel(action({ action: 'REPRINT' }), null, ru.t.bind(ru), statusLabel)).toBe(
+      'Печать',
+    );
+    const uz = new I18n();
+    uz.setLocale('uz-Latn');
+    expect(actionLabel(action({ action: 'REPRINT' }), null, uz.t.bind(uz), statusLabel)).toBe(
+      'Chop etish',
+    );
+    expect(ORDER_ACTION_CODES).toContain('REPRINT');
+  });
+
   it('names ISSUE_INVOICE among the codes the server can emit', () => {
     expect(ORDER_ACTION_CODES).toContain('ISSUE_INVOICE');
   });

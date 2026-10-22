@@ -3732,6 +3732,8 @@ public class JdbcOrderStore {
      * @param fiscalStatus   {@code fiscal.fiscal_documents.status} of the sale document
      * @param distanceMeters the delivery plan's route distance
      * @param externalNumber the number the partner or the POS knows the order by
+     * @param reprintAvailable the order's branch has printing switched on and a printer to send to (ADR 0154),
+     *                       which is what lets {@code actions[]} carry {@code REPRINT}; read for every row
      */
     public record OrderBoardFacts(
             @Nullable Instant courierEtaAt,
@@ -3743,11 +3745,12 @@ public class JdbcOrderStore {
             @Nullable String firstItemName,
             @Nullable String fiscalStatus,
             @Nullable Integer distanceMeters,
-            @Nullable String externalNumber) {
+            @Nullable String externalNumber,
+            boolean reprintAvailable) {
 
         /** No fact read yet -- how every row leaves the store and how a single-order summary carries it. */
         public static final OrderBoardFacts NONE =
-                new OrderBoardFacts(null, null, null, null, null, null, null, null, null, null);
+                new OrderBoardFacts(null, null, null, null, null, null, null, null, null, null, false);
 
         public OrderBoardFacts withCourierEta(@Nullable Instant value) {
             return new OrderBoardFacts(
@@ -3760,7 +3763,8 @@ public class JdbcOrderStore {
                     firstItemName,
                     fiscalStatus,
                     distanceMeters,
-                    externalNumber);
+                    externalNumber,
+                    reprintAvailable);
         }
 
         public OrderBoardFacts withChannel(
@@ -3775,7 +3779,8 @@ public class JdbcOrderStore {
                     firstItemName,
                     fiscalStatus,
                     distanceMeters,
-                    externalNumber);
+                    externalNumber,
+                    reprintAvailable);
         }
 
         public OrderBoardFacts withPaymentMethod(@Nullable String value) {
@@ -3789,7 +3794,8 @@ public class JdbcOrderStore {
                     firstItemName,
                     fiscalStatus,
                     distanceMeters,
-                    externalNumber);
+                    externalNumber,
+                    reprintAvailable);
         }
 
         public OrderBoardFacts withItems(@Nullable Integer count, @Nullable String firstName) {
@@ -3803,7 +3809,8 @@ public class JdbcOrderStore {
                     firstName,
                     fiscalStatus,
                     distanceMeters,
-                    externalNumber);
+                    externalNumber,
+                    reprintAvailable);
         }
 
         public OrderBoardFacts withFiscalStatus(@Nullable String value) {
@@ -3817,7 +3824,8 @@ public class JdbcOrderStore {
                     firstItemName,
                     value,
                     distanceMeters,
-                    externalNumber);
+                    externalNumber,
+                    reprintAvailable);
         }
 
         public OrderBoardFacts withDistance(@Nullable Integer value) {
@@ -3831,7 +3839,8 @@ public class JdbcOrderStore {
                     firstItemName,
                     fiscalStatus,
                     value,
-                    externalNumber);
+                    externalNumber,
+                    reprintAvailable);
         }
 
         public OrderBoardFacts withExternalNumber(@Nullable String value) {
@@ -3845,6 +3854,22 @@ public class JdbcOrderStore {
                     firstItemName,
                     fiscalStatus,
                     distanceMeters,
+                    value,
+                    reprintAvailable);
+        }
+
+        public OrderBoardFacts withReprintAvailable(boolean value) {
+            return new OrderBoardFacts(
+                    courierEtaAt,
+                    channelSystemType,
+                    channelIcon,
+                    channelDisplayName,
+                    paymentMethodCode,
+                    itemCount,
+                    firstItemName,
+                    fiscalStatus,
+                    distanceMeters,
+                    externalNumber,
                     value);
         }
     }

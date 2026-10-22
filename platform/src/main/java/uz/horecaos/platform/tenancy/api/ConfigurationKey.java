@@ -17,6 +17,14 @@ import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
  *                      explicitNullTerminates()} and no default — an explicit
  *                      null at a scope then resolves to null rather than to a
  *                      value nobody chose
+ * @param entitledBy   the code of the ADR 0021 plan feature that must be in force for this
+ *                      key to be set at all (settings.md §1.2's fifth state, «Locked by
+ *                      plan»), or absent for a key no plan gates. A string and not a
+ *                      {@code commercial} type: {@code tenancy} must not depend on {@code
+ *                      commercial}, and the operations surface asks the {@code iam}
+ *                      {@code EntitlementGate} about the code. {@code
+ *                      ConfigurationKeyEntitlementTests} holds every code named here to a
+ *                      feature key {@code EntitlementKeys} declares
  */
 public record ConfigurationKey<T>(
         String code,
@@ -26,7 +34,30 @@ public record ConfigurationKey<T>(
         String owningModule,
         boolean tenantVisible,
         boolean explicitNullTerminates,
-        String description) {
+        String description,
+        @Nullable String entitledBy) {
+
+    /** A key no plan feature gates: how every declaration was written before {@code entitledBy} existed. */
+    public ConfigurationKey(
+            String code,
+            Class<T> valueType,
+            @Nullable T defaultValue,
+            Set<ScopeType> settableScopes,
+            String owningModule,
+            boolean tenantVisible,
+            boolean explicitNullTerminates,
+            String description) {
+        this(
+                code,
+                valueType,
+                defaultValue,
+                settableScopes,
+                owningModule,
+                tenantVisible,
+                explicitNullTerminates,
+                description,
+                null);
+    }
 
     public ConfigurationKey {
         Objects.requireNonNull(code, "Key code is required");
@@ -42,6 +73,10 @@ public record ConfigurationKey<T>(
         if (!SUPPORTED_TYPES.contains(valueType)) {
             throw new IllegalArgumentException(
                     "Unsupported configuration value type %s for %s".formatted(valueType.getName(), code));
+        }
+        if (entitledBy != null && !entitledBy.matches("^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$")) {
+            throw new IllegalArgumentException(
+                    "entitledBy must be an entitlement key code (dotted lower case): " + entitledBy);
         }
     }
 
@@ -66,6 +101,7 @@ public record ConfigurationKey<T>(
         private boolean tenantVisible;
         private boolean explicitNullTerminates;
         private String description = "";
+        private @Nullable String entitledBy;
 
         private Builder(String code, Class<T> valueType) {
             this.code = code;
@@ -97,6 +133,15 @@ public record ConfigurationKey<T>(
             return this;
         }
 
+        /**
+         * Gates this key behind an ADR 0021 plan feature: a tenant whose plan does not include {@code
+         * entitlementKeyCode} sees the key locked (settings.md §1.2) and may not set it.
+         */
+        public Builder<T> entitledBy(String entitlementKeyCode) {
+            this.entitledBy = entitlementKeyCode;
+            return this;
+        }
+
         public Builder<T> describedAs(String text) {
             this.description = text;
             return this;
@@ -111,7 +156,8 @@ public record ConfigurationKey<T>(
                     owningModule,
                     tenantVisible,
                     explicitNullTerminates,
-                    description);
+                    description,
+                    entitledBy);
         }
     }
 }

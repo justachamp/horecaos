@@ -2,8 +2,13 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ConfigurationKeyView } from '../../../core/api/configuration';
+import {
+  ConfigurationKeyView,
+  ConfigurationPlacementView,
+  ConfigurationPlacementsView,
+} from '../../../core/api/configuration';
 import { ApiError } from '../../../core/api/problem-details';
+import { CurrentLocation } from '../../../core/auth/current-location';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { I18n } from '../../../core/i18n/i18n';
@@ -40,9 +45,15 @@ const UNROUTED_KEY: ConfigurationKeyView = {
   description: 'The strongest enforcement mode entitlement checks may apply for this tenant.',
 };
 
+const NO_PLACEMENTS: ConfigurationPlacementsView = { keys: [], policies: [] };
+
+/** Where the operator works: branch `l1` of brand `b1`. */
+const WORKING_SCOPE = { tenantId: TENANT_ID, brandId: 'b1', locationId: 'l1' };
+
 async function render(
   readiness: Partial<ReadinessApi>,
   configurationKeys: readonly ConfigurationKeyView[] = [VAT_RATE_KEY, UNROUTED_KEY],
+  placements: ConfigurationPlacementsView | 'unreadable' = NO_PLACEMENTS,
 ): Promise<ComponentFixture<SettingsHomePage>> {
   await TestBed.configureTestingModule({
     imports: [SettingsHomePage],
@@ -57,10 +68,17 @@ async function render(
         },
       },
       { provide: SessionCapabilities, useValue: { has: () => true } },
+      { provide: CurrentLocation, useValue: { scope: () => WORKING_SCOPE } },
       { provide: ReadinessApi, useValue: readiness },
       {
         provide: ConfigurationApi,
-        useValue: { keys: vi.fn().mockResolvedValue(configurationKeys) },
+        useValue: {
+          keys: vi.fn().mockResolvedValue(configurationKeys),
+          placements:
+            placements === 'unreadable'
+              ? vi.fn().mockRejectedValue(new ApiError('INSUFFICIENT_CAPABILITY', 403, null, null))
+              : vi.fn().mockResolvedValue(placements),
+        },
       },
     ],
   }).compileComponents();
@@ -870,38 +888,245 @@ describe('SettingsHomePage', () => {
 
   // -------------------------------------------------- 10.0: the combobox half
 
-  it('offers a matching configuration key in the combobox, but not one CONFIGURATION_KEY_ROUTES names no screen for', async () => {
-    const fixture = await render({ validate: () => Promise.resolve(PASSING) });
-
+  function type(fixture: ComponentFixture<SettingsHomePage>, text: string): void {
     const input = searchInput(fixture);
-    input.value = 'vat';
+    input.value = text;
     input.dispatchEvent(new Event('input'));
     fixture.detectChanges();
+  }
 
-    const options = [
-      ...fixture.nativeElement.querySelectorAll('[data-testid="q-combobox-option"]'),
-    ];
-    expect(options.map((option: Element) => option.textContent)).toEqual([
-      expect.stringContaining('ordering.vat_rate_percent'),
+  function options(fixture: ComponentFixture<SettingsHomePage>): HTMLElement[] {
+    return [...fixture.nativeElement.querySelectorAll('[data-testid="q-combobox-option"]')];
+  }
+
+  function column(option: HTMLElement): string[] {
+    return [...option.querySelectorAll('span')].map((span) => span.textContent?.trim() ?? '');
+  }
+
+  const LATE_KEY: ConfigurationKeyView = {
+    code: 'ordering.late_order_threshold_minutes',
+    valueType: 'Integer',
+    defaultValue: 10,
+    settableScopes: ['PLATFORM', 'TENANT', 'BRAND', 'LOCATION'],
+    owningModule: 'ordering',
+    explicitNullTerminates: false,
+    description: 'Minutes past the promise at which an order shows as late.',
+  };
+
+  function stored(overrides: Partial<ConfigurationPlacementView>): ConfigurationPlacementView {
+    return {
+      scopeType: 'TENANT',
+      brandId: null,
+      brandName: null,
+      locationId: null,
+      locationName: null,
+      explicitNull: false,
+      displayValue: '15',
+      displayTruncated: false,
+      version: 1,
+      changedByName: null,
+      changedAt: null,
+      ...overrides,
+    };
+  }
+
+  it('offers a matching configuration key in the combobox, but not one no screen sets', async () => {
+    const fixture = await render({ validate: () => Promise.resolve(PASSING) });
+
+    type(fixture, 'vat');
+
+    expect(options(fixture).map(column)).toEqual([
+      ['VAT rate', 'Selling → Order policy', 'not set · default 12% · brand and above only'],
+    ]);
+    type(fixture, 'enforcement');
+    expect(options(fixture)).toEqual([]);
+  });
+
+  it('finds a key by its code too, for an operator who has read it in a ticket', async () => {
+    const fixture = await render({ validate: () => Promise.resolve(PASSING) });
+
+    type(fixture, 'ordering.vat_rate');
+
+    expect(options(fixture)).toHaveLength(1);
+  });
+
+  it('says where the value is set: the stored value nearest the operator’s own branch', async () => {
+    const fixture = await render({ validate: () => Promise.resolve(PASSING) }, [LATE_KEY], {
+      keys: [
+        {
+          keyCode: LATE_KEY.code,
+          placements: [
+            stored({ scopeType: 'TENANT', displayValue: '20' }),
+            stored({
+              scopeType: 'BRAND',
+              brandId: 'b2',
+              brandName: 'Osh Markazi',
+              displayValue: '30',
+            }),
+            stored({ scopeType: 'BRAND', brandId: 'b1', brandName: 'Rayhon', displayValue: '15' }),
+          ],
+        },
+      ],
+      policies: [],
+    });
+
+    type(fixture, 'late-order');
+
+    expect(options(fixture).map(column)).toEqual([
+      ['Late-order threshold', 'Selling → Order policy', 'set: brand “Rayhon” (15 min) · 2 more'],
     ]);
   });
 
-  it('navigates to the owning screen when a configuration-key result is chosen', async () => {
+  it('still finds the key, and says what it can, when where it is set could not be read', async () => {
+    const fixture = await render(
+      { validate: () => Promise.resolve(PASSING) },
+      [LATE_KEY],
+      'unreadable',
+    );
+
+    type(fixture, 'late-order');
+
+    expect(options(fixture).map(column)).toEqual([
+      ['Late-order threshold', 'Selling → Order policy', 'not set · default 10 min'],
+    ]);
+  });
+
+  it('opens the screen with the scope bar already at the level the value was found at', async () => {
+    const placements = (...of: ConfigurationPlacementView[]): ConfigurationPlacementsView => ({
+      keys: [{ keyCode: LATE_KEY.code, placements: of }],
+      policies: [],
+    });
+    const cases: [ConfigurationPlacementView, Record<string, string>][] = [
+      [stored({ scopeType: 'TENANT' }), { level: 'tenant' }],
+      [stored({ scopeType: 'BRAND', brandId: 'b1', brandName: 'Rayhon' }), { brand: 'b1' }],
+      [
+        stored({
+          scopeType: 'LOCATION',
+          brandId: 'b1',
+          brandName: 'Rayhon',
+          locationId: 'l1',
+          locationName: 'Chilonzor',
+        }),
+        { brand: 'b1', location: 'l1' },
+      ],
+    ];
+    for (const [at, query] of cases) {
+      TestBed.resetTestingModule();
+      const fixture = await render(
+        { validate: () => Promise.resolve(PASSING) },
+        [LATE_KEY],
+        placements(at),
+      );
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      type(fixture, 'late-order');
+      options(fixture)[0].click();
+
+      expect(navigate, at.scopeType).toHaveBeenCalledWith(['/settings', 'order-policy'], {
+        queryParams: query,
+      });
+    }
+  });
+
+  it('opens a key set from the company only at the company level, since no other bar could edit it', async () => {
+    const companyOnly: ConfigurationKeyView = {
+      ...LATE_KEY,
+      settableScopes: ['PLATFORM', 'TENANT'],
+    };
+    const fixture = await render({ validate: () => Promise.resolve(PASSING) }, [companyOnly]);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+    type(fixture, 'late-order');
+    options(fixture)[0].click();
+
+    expect(navigate).toHaveBeenCalledWith(['/settings', 'order-policy'], {
+      queryParams: { level: 'tenant' },
+    });
+  });
+
+  it('navigates to the owning screen, with no bar to set, when the key is stored nowhere', async () => {
     const fixture = await render({ validate: () => Promise.resolve(PASSING) });
-    const router = TestBed.inject(Router);
-    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
 
-    const input = searchInput(fixture);
-    input.value = 'vat';
-    input.dispatchEvent(new Event('input'));
+    type(fixture, 'vat');
+    options(fixture)[0].click();
     fixture.detectChanges();
 
-    (
-      fixture.nativeElement.querySelector('[data-testid="q-combobox-option"]') as HTMLElement
-    ).click();
+    expect(navigate).toHaveBeenCalledWith(['/settings', 'order-policy']);
+  });
+
+  it('opens a screen outside Settings by its own path', async () => {
+    const outOfZone: ConfigurationKeyView = {
+      code: 'delivery.out_of_zone_policy',
+      valueType: 'String',
+      defaultValue: 'REJECT',
+      settableScopes: ['PLATFORM', 'TENANT', 'BRAND', 'LOCATION'],
+      owningModule: 'delivery',
+      explicitNullTerminates: false,
+      description: 'What happens to an address outside every delivery zone.',
+    };
+    const fixture = await render({ validate: () => Promise.resolve(PASSING) }, [outOfZone]);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+    type(fixture, 'out-of-zone');
+    expect(column(options(fixture)[0])[1]).toBe('Selling → Delivery policy');
+    options(fixture)[0].click();
+
+    expect(navigate).toHaveBeenCalledWith(['/delivery/courier-policy']);
+  });
+
+  it('lists a versioned policy beside the settings, with its version and who published it', async () => {
+    const fixture = await render({ validate: () => Promise.resolve(PASSING) }, [], {
+      keys: [],
+      policies: [
+        {
+          policyCode: 'ordering.lateness',
+          placements: [
+            {
+              scopeType: 'TENANT',
+              brandId: null,
+              brandName: null,
+              locationId: null,
+              locationName: null,
+              version: 2,
+              changedByName: 'Aziza Karimova',
+              effectiveFrom: '2026-10-01T08:00:00Z',
+            },
+          ],
+        },
+      ],
+    });
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+    type(fixture, 'lateness');
+
+    expect(options(fixture).map(column)).toEqual([
+      ['Order lateness', 'Selling → Order policy', 'version 2: company, Aziza Karimova'],
+    ]);
+    options(fixture)[0].click();
+    expect(navigate).toHaveBeenCalledWith(['/settings', 'order-policy'], {
+      queryParams: { level: 'tenant' },
+    });
+  });
+
+  it('writes the result in the operator’s language', async () => {
+    const fixture = await render({ validate: () => Promise.resolve(PASSING) }, [LATE_KEY], {
+      keys: [
+        {
+          keyCode: LATE_KEY.code,
+          placements: [stored({ scopeType: 'BRAND', brandId: 'b1', brandName: 'Rayhon' })],
+        },
+      ],
+      policies: [],
+    });
+    TestBed.inject(I18n).setLocale('ru');
     fixture.detectChanges();
 
-    expect(navigateSpy).toHaveBeenCalledWith(['/settings', 'order-policy']);
+    type(fixture, 'опоздания');
+
+    expect(options(fixture).map(column)).toEqual([
+      ['Порог опоздания заказа', expect.stringContaining('→'), 'задано: бренд «Rayhon» (15 мин)'],
+    ]);
   });
 
   it('offers and deep-links a reference list by its own section heading', async () => {

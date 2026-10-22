@@ -1,5 +1,11 @@
 <a class="q-skip-link q-body-sm" href="#main">{{ 'shell.skipToContent' | t }}</a>
 
+@if (paletteOpen()) {
+  @defer (on immediate) {
+    <q-command-palette (closed)="paletteOpen.set(false)" />
+  }
+}
+
 <div class="shell">
   <nav class="rail" [attr.aria-label]="'shell.nav.orders' | t">
     <div class="rail__brand q-emphasis">

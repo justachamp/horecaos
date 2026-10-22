@@ -370,6 +370,84 @@ describe('Shell', () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
+  describe('the quick jump (settings.md §1.6)', () => {
+    const PALETTE = '[data-testid="command-palette"]';
+    const palette = (): Element | null =>
+      (fixture.nativeElement as HTMLElement).querySelector(PALETTE);
+
+    function chord(target: EventTarget = document, init: KeyboardEventInit = {}): KeyboardEvent {
+      const event = new KeyboardEvent('keydown', {
+        key: 'k',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+        ...init,
+      });
+      target.dispatchEvent(event);
+      return event;
+    }
+
+    async function opened(): Promise<void> {
+      await vi.waitFor(
+        () => {
+          fixture.detectChanges();
+          expect(palette()).not.toBeNull();
+        },
+        { timeout: 5000 },
+      );
+    }
+
+    it('opens on Ctrl+K, and the browser’s own Ctrl+K does not happen', async () => {
+      expect(palette()).toBeNull();
+
+      const event = chord();
+      await opened();
+
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('opens from inside a text field: a person typing an address should not have to leave it first', async () => {
+      const field = document.createElement('input');
+      document.body.appendChild(field);
+      field.focus();
+
+      chord(field);
+      await opened();
+
+      field.remove();
+    });
+
+    it('is on the cheat-sheet with its chord', () => {
+      const scope = TestBed.inject(ShortcutRegistry)
+        .scopes()
+        .find((candidate) => candidate.id === 'shell')!;
+
+      const entry = scope.shortcuts.find((shortcut) => shortcut.keys.includes('k'));
+      expect(entry?.caps[0]).toMatch(/^(Ctrl|⌘)\+K$/);
+      expect(entry?.label()).toContain('Quick jump');
+    });
+
+    it('closes when the person dismisses it, and stays shut until asked for again', async () => {
+      chord();
+      await opened();
+
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+      fixture.detectChanges();
+
+      expect(palette()).toBeNull();
+    });
+
+    it('leaves a plain k, and Ctrl+Shift+K, to the browser', () => {
+      chord(document, { ctrlKey: false });
+      chord(document, { shiftKey: true });
+      fixture.detectChanges();
+
+      expect(palette()).toBeNull();
+    });
+  });
+
   describe('the branch open/closed control (brands-and-locations.md §6.2)', () => {
     const CONTROL = '[data-testid="branch-state-control"]';
     const here: LocationScope = { tenantId: 't1', brandId: 'b1', locationId: 'l1' };

@@ -463,6 +463,7 @@ public final class ConfigurationKeys {
             .defaultValue(false)
             .ownedBy("assistant")
             .tenantVisible()
+            .entitledBy("assistant.answering.enabled")
             .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
             .describedAs("Whether the grounded assistant answers customers' questions in this scope's "
                     + "conversations (ADR 0069). Off until switched on; the plan entitlement "

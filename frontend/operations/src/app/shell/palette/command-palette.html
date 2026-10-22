@@ -1,0 +1,46 @@
+<q-modal [title]="text('title')" (dismiss)="dismiss()" data-testid="command-palette">
+  <div class="palette" (keydown)="onKeydown($event)">
+    <input
+      type="text"
+      class="palette__input q-body"
+      role="combobox"
+      aria-autocomplete="list"
+      aria-expanded="true"
+      [attr.aria-controls]="listId"
+      [attr.aria-activedescendant]="activeId() ? 'palette-item-' + activeId() : null"
+      [attr.aria-label]="text('label')"
+      [placeholder]="text('placeholder')"
+      [value]="query()"
+      (input)="onInput($any($event.target).value)"
+      data-testid="command-palette-input"
+    />
+
+    <ul class="palette__list" role="listbox" [id]="listId" data-testid="command-palette-list">
+      @for (item of items(); track item.id; let index = $index) {
+        <li
+          role="option"
+          class="palette__item"
+          [id]="'palette-item-' + item.id"
+          [class.palette__item--active]="index === activeIndex()"
+          [attr.aria-selected]="index === activeIndex()"
+          (mousedown)="$event.preventDefault()"
+          (click)="choose(item)"
+          data-testid="command-palette-item"
+        >
+          <span class="palette__group q-caption">{{ groupLabel(item.group) }}</span>
+          <span class="palette__label q-body-sm">{{ item.label }}</span>
+          <span class="palette__hint q-caption">{{ item.hint }}</span>
+        </li>
+      }
+    </ul>
+
+    @if (query().trim() !== '' && items().length === 0) {
+      <p class="palette__empty q-body-sm" role="status" data-testid="command-palette-empty">
+        {{ text('empty') }}
+      </p>
+    }
+    <p class="q-visually-hidden" role="status" aria-live="polite">
+      {{ query().trim() === '' ? '' : text('results', { count: items().length }) }}
+    </p>
+  </div>
+</q-modal>

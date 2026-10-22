@@ -1161,7 +1161,7 @@ export class OrderQueue implements OnInit {
    * the shell's picker makes), and only then navigates. Without it the pane
    * would ask the wrong branch for the order and answer "not found".
    */
-  protected openOrder(orderId: string, locationId?: string | null): void {
+  protected openOrder(orderId: string, locationId?: string | null, fragment?: string): void {
     const current = this.location.scope();
     if (locationId && current && locationId !== current.locationId) {
       this.location.selectLocation(locationId);
@@ -1169,6 +1169,7 @@ export class OrderQueue implements OnInit {
     void this.router.navigate([orderId], {
       relativeTo: this.route,
       queryParamsHandling: 'preserve',
+      fragment,
     });
   }
 
@@ -2542,6 +2543,12 @@ export class OrderQueue implements OnInit {
         // amendment history and opens it, so this row action's job is
         // exactly the same as those two: get the operator to the order.
         this.openOrder(order.orderId, order.locationId);
+        return;
+      case 'REPRINT':
+        // orders.md §2.12's `p`, ADR 0154: a reprint asks which document and why, and writes the fact that a
+        // person did it. That form is the order detail's print panel, so this takes the operator to the order
+        // at its print section (`#print`) rather than carrying a second form on the row.
+        this.openOrder(order.orderId, order.locationId, 'print');
         return;
       case 'ISSUE_INVOICE':
         // Gap map row 1.1e, «Выставить счёт» (orders.md §4.9): the re-issue

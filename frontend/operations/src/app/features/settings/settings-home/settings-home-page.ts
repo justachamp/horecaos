@@ -11,8 +11,9 @@ import {
 import { Router, RouterLink } from '@angular/router';
 
 import { ApiClient } from '../../../core/api/api-client';
-import { ConfigurationKeyView } from '../../../core/api/configuration';
+import { ConfigurationKeyView, ConfigurationPlacementsView } from '../../../core/api/configuration';
 import { ApiError } from '../../../core/api/problem-details';
+import { CurrentLocation } from '../../../core/auth/current-location';
 import { CurrentTenant } from '../../../core/auth/current-tenant';
 import { SessionCapabilities } from '../../../core/auth/session-capabilities';
 import { FeatureFlags } from '../../../core/feature-flags';
@@ -26,11 +27,13 @@ import { ConfigurationApi } from '../configuration-api';
 import { ReadinessApi, ValidationResult } from './readiness-api';
 import { ReadinessMessageKey, readinessMessages } from './readiness-messages';
 import { TierCounts, countByTier, orderFindings, tierOf } from './readiness-order';
-import { SettingsNavGroup, visibleSettings } from '../settings-nav';
-import { CONFIGURATION_KEY_ROUTES, REFERENCE_LISTS } from '../settings-search-index';
+import { FindScope, FoundSetting, findSettings } from '../settings-find';
+import { SETTINGS_NAVIGATION, SettingsNavGroup, visibleSettings } from '../settings-nav';
+import { REFERENCE_LISTS } from '../settings-search-index';
+import { settingsSearchText } from '../settings-search-text';
 
 /** Where `q-combobox`'s flat `options` list sends the operator once one is chosen. */
-type SearchResultKind = 'configurationKey' | 'referenceList';
+type SearchResultKind = 'configurationKey' | 'policy' | 'referenceList';
 
 const MAX_SEARCH_RESULTS = 8;
 
@@ -220,17 +223,20 @@ function tilePathOf(link: readonly string[] | null): string | null {
  * the list the panel shows so the two cannot disagree. The empty state ("Всё настроено") is the same one
  * settings.md asks for.
  *
- * **Find a setting**, added in wave P31 and widened this wave into a real
- * `q-combobox`: `/` still filters the six-group nav grid by label and
- * description text (unchanged — a browsable tile grid loses nothing by
- * staying a plain filter), and the same input now also drives a combobox
- * dropdown of two further sources the spec's own `Combobox` asks for —
- * `ConfigurationKeys.all()` (ADR 0030, over `ConfigurationApi.keys`,
- * narrowed to the keys `CONFIGURATION_KEY_ROUTES` can actually send
- * somewhere) and `reference-data-page.ts`'s five named lists — choosing a
- * result navigates straight there. Policy keys are not a separate source:
- * order policy's eleven fields (10.3b) are themselves `ConfigurationKey`
- * rows, already covered by the first source.
+ * **Find a setting** (settings.md §10.0), added in wave P31 and widened since into a real `q-combobox`: `/`
+ * still filters the six-group nav grid by label and description text (unchanged -- a browsable tile grid
+ * loses nothing by staying a plain filter), and the same input drives a combobox dropdown of three further
+ * sources: the configuration keys a console screen sets (`SETTING_ENTRIES`, over `ConfigurationApi.keys`),
+ * the versioned policies (`POLICY_ROUTES`) and `reference-data-page.ts`'s five named lists.
+ *
+ * Each result has three columns: the setting's own name, the Group -> Screen it lives on, and the fact that
+ * says which one it is -- where the value is set (`GET .../configuration/placements`: «задано: бренд «Rayhon»
+ * (15 мин)»), or that it is not set and which levels may set it. Enter opens the screen with the scope bar
+ * already at the level the value was found at; where several brands or branches hold it, the one nearest the
+ * operator's own branch is chosen and the count of the others is in the line.
+ *
+ * Order policy's scalar fields are `ConfigurationKey` rows and so arrive through the keys; its acceptance
+ * and lateness rules are policies and arrive through the second source (ADR 0030: two mechanisms).
  */
 @Component({
   selector: 'q-settings-home-page',
@@ -277,33 +283,53 @@ export class SettingsHomePage {
 
   // ----------------------------------------------------- 10.0: the combobox half
 
+  private readonly location = inject(CurrentLocation);
+
   protected readonly configurationKeys = signal<readonly ConfigurationKeyView[]>([]);
 
+  /** Where each key and each listed policy is set (best-effort: a result is still found without it). */
+  protected readonly placements = signal<ConfigurationPlacementsView | null>(null);
+
+  /** Where the operator is working: the stored value nearest to this is the one a result names. */
+  private readonly findScope = computed<FindScope>(() => {
+    const scope = this.location.scope();
+    return { brandId: scope?.brandId ?? null, locationId: scope?.locationId ?? null };
+  });
+
   /**
-   * The combobox's own `options` — configuration keys and reference lists
-   * matching the same {@link query} the tile grid filters by, each `id`
-   * carrying which source it came from (`configurationKey:<code>` /
-   * `referenceList:<fragment>`) for {@link onResultSelected} to route on.
-   * Capped at {@link MAX_SEARCH_RESULTS}: a combobox dropdown is for picking
-   * one thing, not for browsing the whole registry — the tile grid above it
-   * already does that job for nav routes.
+   * The configuration keys and policies that match what was typed (settings.md §10.0): the setting's own
+   * name, the Group -> Screen it lives on and where it is set, with the scope bar to open at. Only keys a
+   * console screen sets are results (`SETTING_ENTRIES`); the rest are on `NO_CONSOLE_SCREEN`.
+   */
+  protected readonly found = computed<readonly FoundSetting[]>(() =>
+    findSettings({
+      locale: this.i18n.locale(),
+      query: this.query(),
+      keys: this.configurationKeys(),
+      placements: this.placements(),
+      scope: this.findScope(),
+      breadcrumbOf: (route) => this.breadcrumbOf(route),
+    }),
+  );
+
+  /**
+   * The combobox's own `options` -- settings and policies first, then the reference lists, each `id` carrying
+   * which source it came from (`configurationKey:<code>` / `policy:<code>` / `referenceList:<fragment>`) for
+   * {@link onResultSelected} to route on. Capped at {@link MAX_SEARCH_RESULTS}: a combobox dropdown is for
+   * picking one thing, not for browsing the whole registry -- the tile grid above it already does that job
+   * for nav routes.
    */
   protected readonly searchResults = computed<readonly ComboboxOption[]>(() => {
     const needle = this.query().trim().toLowerCase();
     if (!needle) {
       return [];
     }
-    const keyResults: ComboboxOption[] = this.configurationKeys()
-      .filter((key) => CONFIGURATION_KEY_ROUTES[key.code] !== undefined)
-      .filter(
-        (key) =>
-          key.code.toLowerCase().includes(needle) || key.description.toLowerCase().includes(needle),
-      )
-      .map((key) => ({
-        id: `configurationKey:${key.code}`,
-        label: key.code,
-        sublabel: key.description,
-      }));
+    const settingResults: ComboboxOption[] = this.found().map((entry) => ({
+      id: entry.id,
+      label: entry.label,
+      sublabel: entry.breadcrumb,
+      detail: entry.detail,
+    }));
     const referenceResults: ComboboxOption[] = REFERENCE_LISTS.filter((entry) =>
       this.i18n.t(entry.labelKey).toLowerCase().includes(needle),
     ).map((entry) => ({
@@ -311,8 +337,23 @@ export class SettingsHomePage {
       label: this.i18n.t(entry.labelKey),
       sublabel: this.i18n.t('settings.nav.referenceData'),
     }));
-    return [...keyResults, ...referenceResults].slice(0, MAX_SEARCH_RESULTS);
+    return [...settingResults, ...referenceResults].slice(0, MAX_SEARCH_RESULTS);
   });
+
+  /** «Group → Screen» for a route: the Settings rail's own labels, or the screen's section outside Settings. */
+  private breadcrumbOf(route: string): string {
+    const arrow = settingsSearchText.text(this.i18n.locale(), 'breadcrumb.arrow');
+    for (const group of SETTINGS_NAVIGATION) {
+      const item = group.items.find((candidate) => candidate.path === route);
+      if (item !== undefined) {
+        return `${this.i18n.t(group.label)}${arrow}${this.i18n.t(item.label)}`;
+      }
+    }
+    return settingsSearchText.text(
+      this.i18n.locale(),
+      `dest.${route}` as Parameters<typeof settingsSearchText.text>[1],
+    );
+  }
 
   protected readonly readinessState = signal<ReadinessState>('loading');
   protected readonly readinessErrorText = signal<string | null>(null);
@@ -357,10 +398,10 @@ export class SettingsHomePage {
   protected onResultSelected(option: ComboboxOption): void {
     const [kind, ...rest] = option.id.split(':');
     const value = rest.join(':');
-    if ((kind as SearchResultKind) === 'configurationKey') {
-      const path = CONFIGURATION_KEY_ROUTES[value];
-      if (path) {
-        void this.navigateToSettingsPath(path);
+    if (kind === ('configurationKey' satisfies SearchResultKind) || kind === 'policy') {
+      const entry = this.found().find((candidate) => candidate.id === option.id);
+      if (entry !== undefined) {
+        void this.navigateTo(entry.route, entry.queryParams);
       }
     } else if ((kind as SearchResultKind) === 'referenceList') {
       void this.router.navigate(['/settings/reference-data'], { fragment: value });
@@ -368,11 +409,20 @@ export class SettingsHomePage {
     this.query.set('');
   }
 
-  private async navigateToSettingsPath(path: string): Promise<void> {
-    if (path.startsWith('/')) {
-      await this.router.navigateByUrl(path);
+  /**
+   * Opens the screen with the scope bar already at the level the value was found at (settings.md §10.0:
+   * «Enter navigates to the screen with the scope bar already set»). A screen outside Settings does not read
+   * the bar's query; the result line has already said where the value is set.
+   */
+  private async navigateTo(
+    route: string,
+    queryParams: Readonly<Record<string, string>>,
+  ): Promise<void> {
+    const commands = route.startsWith('/') ? [route] : ['/settings', route];
+    if (Object.keys(queryParams).length === 0) {
+      await this.router.navigate(commands);
     } else {
-      await this.router.navigate(['/settings', path]);
+      await this.router.navigate(commands, { queryParams });
     }
   }
 
@@ -382,12 +432,18 @@ export class SettingsHomePage {
     if (!tenantId) {
       return;
     }
-    try {
-      this.configurationKeys.set(await this.configurationApi.keys(tenantId));
-    } catch {
-      // Best-effort, the same posture brand-profile.ts's own tenant-market
-      // read takes: the tile grid above still works with an empty second
-      // source, and a failed search-index load must not fail the page.
+    // Two best-effort reads, independent of each other: the tile grid above still works with an empty second
+    // source, and neither a failed key list nor a failed placements read may fail the page. Without
+    // placements a result still finds its screen; it just cannot say where the value is set.
+    const [keys, placements] = await Promise.allSettled([
+      this.configurationApi.keys(tenantId),
+      this.configurationApi.placements(tenantId),
+    ]);
+    if (keys.status === 'fulfilled') {
+      this.configurationKeys.set(keys.value);
+    }
+    if (placements.status === 'fulfilled') {
+      this.placements.set(placements.value);
     }
   }
 

@@ -281,6 +281,10 @@ undo for it does not exist.
 for any destructive action — this screen is not a queue, and a muscle-memory
 keystroke that removes someone's access is a hazard with no compensating speed.
 
+**Since then (batch 21):** `/`, `j`/`k`, `Enter` and `Esc` (clears the search, then leaves it) are built
+(`staff-keys.ts`) and no key suspends, restores or removes anyone. **Not bound:** `x` (the list has no
+row selection to toggle) and `Esc … then back` (Back is the browser's own); `Shift+?` is the shell's `?`.
+
 ---
 
 ## 3. Карточка сотрудника — the person record (9.2)
@@ -711,6 +715,10 @@ each one.
 
 This screen is used standing. `1`/`2` switch view, `t` jumps to today, arrow keys
 move the grid cursor, `Enter` opens the cell editor, `Esc` closes it.
+
+**Since then (batch 21):** `1`, `2` and `3` switch between the week plan, today and the timesheet (the screen
+has three views, not two) and `t` jumps to today; the grid's own cursor keys are the grid's and are not
+registered twice.
 
 ---
 

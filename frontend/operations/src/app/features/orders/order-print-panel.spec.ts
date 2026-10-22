@@ -52,6 +52,29 @@ describe('OrderPrintPanel', () => {
     expect(el(fixture, '[data-testid="order-detail-print"]')).toBeNull();
   });
 
+  it('reveals itself on request: scrolled to, with the cursor on the first control (the row’s «Печать»)', async () => {
+    const fixture = await render({});
+    const host = fixture.nativeElement as HTMLElement;
+    const scrolled = vi.fn();
+    host.scrollIntoView = scrolled;
+
+    fixture.componentInstance.reveal();
+
+    expect(scrolled).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(host.querySelector('[data-testid="order-print-document"]'));
+  });
+
+  it('does not reveal anything while printing is off: a stale click scrolls to nothing', async () => {
+    const fixture = await render({}, { flagsOn: false });
+    const host = fixture.nativeElement as HTMLElement;
+    const scrolled = vi.fn();
+    host.scrollIntoView = scrolled;
+
+    fixture.componentInstance.reveal();
+
+    expect(scrolled).not.toHaveBeenCalled();
+  });
+
   it('says it is not the POS export, so nobody presses one believing it is the other', async () => {
     const fixture = await render({});
     expect(el(fixture, '[data-testid="order-detail-print"]').textContent).toContain(

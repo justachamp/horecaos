@@ -21,7 +21,7 @@ import { I18n, LOCALES, Locale, isLocale } from '../core/i18n/i18n';
 import { PlatformLocales } from '../core/i18n/platform-locales';
 import { TPipe } from '../core/i18n/t.pipe';
 import { RealtimeClient } from '../core/realtime/realtime-client';
-import { ShortcutRegistry } from '../shared/keyboard/shortcut-registry';
+import { ShortcutRegistry, modifierCap } from '../shared/keyboard/shortcut-registry';
 import { ConnectionStateBanner } from '../shared/ui/connection-state-banner';
 import { LiveBadge } from '../shared/ui/live-badge';
 import { RefreshIndicator } from '../shared/ui/refresh-indicator';
@@ -36,6 +36,7 @@ import { ServiceStatus } from './service-status';
 import { SupportBanner } from './support-banner';
 import { VoicePresence } from './voice-presence';
 import { BranchStateControl } from './branch-state/branch-state-control';
+import { CommandPalette } from './palette/command-palette';
 
 /** The longest sign-out waits for the person's last preference change to reach the platform. */
 const SIGN_OUT_FLUSH_MS = 1500;
@@ -96,6 +97,7 @@ const SIGN_OUT_FLUSH_MS = 1500;
     ShortcutSheet,
     LocaleScopeOffer,
     BranchStateControl,
+    CommandPalette,
   ],
   templateUrl: './shell.html',
   styleUrl: './shell.css',
@@ -200,6 +202,9 @@ export class Shell {
    */
   protected readonly localeOffer = signal<Locale | null>(null);
 
+  /** Whether the quick jump (`⌘K`) is open. The palette itself loads the first time it is. */
+  protected readonly paletteOpen = signal(false);
+
   /** Every location the picker may offer — see this class's own doc comment. */
   protected readonly locationOptions = this.currentLocation.options;
 
@@ -299,6 +304,17 @@ export class Shell {
             caps: ['?'],
             label: () => text('keys.open'),
             run: () => this.shortcuts.openSheet(),
+          },
+          {
+            // settings.md §1.6: the quick jump over the sections, the settings and the order board's number
+            // search. It fires from a text field -- a person who is typing an address and wants the order
+            // board should not have to leave the field first -- but not over a dialog.
+            keys: ['k'],
+            modifier: 'ctrlOrCmd',
+            caps: [`${modifierCap()}+K`],
+            label: () => text('keys.palette'),
+            inField: true,
+            run: () => this.paletteOpen.set(true),
           },
           {
             // brands-and-locations.md §1.8: the branch list from anywhere. Offered to whoever has the

@@ -236,6 +236,11 @@ The transparent left border on normal rows keeps them aligned with flagged ones.
 Rows are real focusable elements with `role="row"` and Enter handling — the legacy prototype's
 `<tr onClick>` with no keyboard path is a gap to fill, not a pattern to copy.
 
+**Since then (batch 21):** `j`/`k`, `Enter`, `Space`/`x`, `c` (opens the row's own close form; it closes
+nothing by itself), `o` and `Esc` are built (`locations-keys.ts`), and `g l` is the shell's, so it works
+from every screen. **Not bound:** `/` and `1`…`6` — the list has no search box and no tabs (the seven tabs
+belong to the branch record, whose `1`…`7` are bound there); `Shift+click` is the browser's.
+
 ---
 
 ## 2. View — Филиал → Профиль (location record, identity tab)
@@ -493,6 +498,12 @@ Denied: read-only, save bar absent.
 `Alt+↓` copies the focused day's windows to the next day — the single fastest way to build a
 week and worth the shortcut.
 
+**Since then (batch 21):** built, in the shared schedule grid and time field where the widget is used:
+`Alt+↓` replaces the next day's windows with the focused day's (a day with none copies «closed»; Sunday
+has no next day, the week does not wrap), and digits typed without a colon complete — `1000` is
+`10:00` at once, `930` and `9` on leaving the field. `Cmd/Ctrl+S` presses the primary button of the
+form that holds the cursor. `1`…`7` switch the record's tabs.
+
 ---
 
 ## 5. View — Исключения (non-working-day exceptions)
@@ -651,6 +662,21 @@ network. The shell control lists only the branches the actor may act on.
 `c` from anywhere in the operations shell opens the dialog on the operator's default branch.
 `1`/`2`/`3` pick a reason from the top three. `Enter` submits. `Esc` cancels. The whole
 interaction is four keystrokes because it happens while someone is holding a pan.
+
+**Since then (batch 21, `w1-board-shell`):** the header control, the dialog and the strip are built
+(`shell/branch-state/`). The control is omitted, not disabled, for anyone without
+`location.service-state.change` and while the branch's state has not been read. The dialog offers the
+closed vocabulary (and the four force-open reasons), the presets 30 minutes, an hour, two hours, **end of
+day** (today's last window in the branch's own time zone, shown as the clock time it resolves to, and not
+offered once service is over) and **until cancelled**, last and drawn as the dangerous one; its button
+restates the effect («Закрыть до 21:30»); a branch already closed opens on «Следовать графику», and one
+the schedule has shut opens on «Открыть принудительно» and says so. `FOLLOW_SCHEDULE` sends no reason and
+no expiry. The strip is on the live board (Сегодня) and the branch list, reads the one batched
+`GET .../locations/service-states`, shares its copy with the list (a branch reopened from a row is gone
+from the strip at once) and has no way to dismiss it. **Not built:** the in-flight count is the
+summary's open-order count, so it is only as fresh as that read; the capacity lever («Поднять лимит») is
+not in the dialog; and there is no 409 path, because the service-state write carries no version —
+a second writer wins, and the strip shows what is true after the next read (every 30 seconds).
 
 ---
 

@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import uz.horecaos.platform.fulfillment.api.CourierEtaPort;
 import uz.horecaos.platform.fulfillment.api.DeliveryDistancePort;
 import uz.horecaos.platform.ordering.api.OrderFiscalStatusPort;
+import uz.horecaos.platform.ordering.api.OrderReprintPort;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcOrderStore.OrderBoardFacts;
@@ -85,6 +86,7 @@ public class OrderBoardEnrichment {
     private final SalesChannelLookup channels;
     private final OrderFiscalStatusPort fiscalStatuses;
     private final DeliveryDistancePort distances;
+    private final OrderReprintPort reprints;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderBoardEnrichment(
@@ -93,13 +95,15 @@ public class OrderBoardEnrichment {
             CourierEtaPort courierEtas,
             SalesChannelLookup channels,
             OrderFiscalStatusPort fiscalStatuses,
-            DeliveryDistancePort distances) {
+            DeliveryDistancePort distances,
+            OrderReprintPort reprints) {
         this.orders = orders;
         this.payments = payments;
         this.courierEtas = courierEtas;
         this.channels = channels;
         this.fiscalStatuses = fiscalStatuses;
         this.distances = distances;
+        this.reprints = reprints;
     }
 
     /** The facts a caller names by their column keys; a key that is not an optional fact is ignored. */
@@ -123,6 +127,9 @@ public class OrderBoardEnrichment {
         }
         Set<UUID> allOrders = rows.stream().map(row -> row.order().orderId()).collect(Collectors.toSet());
 
+        // Which branches of the page can print: one read per brand on the page (the brand board has one), so
+        // REPRINT is in actions[] only where it can work.
+        Set<UUID> printingBranches = printingBranchesOf(tenantId, rows);
         Map<UUID, String> methods = payments.paymentMethodsByOrders(tenantId, allOrders);
         Map<UUID, OrderItemSummary> items = orders.itemSummariesByOrders(tenantId, allOrders);
 
@@ -156,7 +163,9 @@ public class OrderBoardEnrichment {
         List<OrderBoardRow> out = new ArrayList<>(rows.size());
         for (OrderBoardRow row : rows) {
             UUID orderId = row.order().orderId();
-            OrderBoardFacts facts = row.facts().withPaymentMethod(methods.get(orderId));
+            OrderBoardFacts facts = row.facts()
+                    .withPaymentMethod(methods.get(orderId))
+                    .withReprintAvailable(printingBranches.contains(row.order().locationId()));
             OrderItemSummary summary = items.get(orderId);
             if (summary != null) {
                 facts = facts.withItems(summary.itemCount(), summary.firstItemName());
@@ -182,6 +191,25 @@ public class OrderBoardEnrichment {
             out.add(row.withFacts(facts));
         }
         return out;
+    }
+
+    /** Whether one branch can print its orders' documents; the detail screen's single-order counterpart. */
+    public boolean reprintAvailable(UUID tenantId, UUID brandId, UUID locationId) {
+        return reprints.branchesThatCanPrint(tenantId, brandId, Set.of(locationId))
+                .contains(locationId);
+    }
+
+    private Set<UUID> printingBranchesOf(UUID tenantId, List<OrderBoardRow> rows) {
+        Map<UUID, Set<UUID>> branchesByBrand = new java.util.LinkedHashMap<>();
+        for (OrderBoardRow row : rows) {
+            branchesByBrand
+                    .computeIfAbsent(row.order().brandId(), brand -> new LinkedHashSet<>())
+                    .add(row.order().locationId());
+        }
+        Set<UUID> printing = new java.util.HashSet<>();
+        branchesByBrand.forEach(
+                (brandId, branches) -> printing.addAll(reprints.branchesThatCanPrint(tenantId, brandId, branches)));
+        return printing;
     }
 
     /** The channels of a page, resolved with one lookup over its distinct codes. */

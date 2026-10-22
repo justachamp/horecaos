@@ -454,6 +454,9 @@ export class OrderDetailPane {
 
   /** The payment section's panel, for «Выставить счёт» to open its re-issue form (gap map row 1.1e). */
   private readonly paymentPanel = viewChild(OrderPaymentPanel);
+
+  /** The print section, for «Печать» (orders.md §2.12's `p`, ADR 0154) to bring into view. */
+  private readonly printPanel = viewChild(OrderPrintPanel);
   protected readonly amendmentHistoryLoading = signal(false);
   protected readonly amendmentHistoryError = signal(false);
 
@@ -586,6 +589,7 @@ export class OrderDetailPane {
       void this.loadDelivery(orderId);
       void this.loadKitchenEvents(orderId);
       void this.loadPosExport(orderId);
+      this.revealPrintWhenAsked();
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.code === ApiErrorCode.RESOURCE_NOT_FOUND) {
@@ -599,6 +603,17 @@ export class OrderDetailPane {
       }
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  /**
+   * The board's «Печать» opens the order at `#print`: once the page has drawn, bring the print section into
+   * view. A link with the fragment pasted to a colleague does the same, and costs nothing where printing is off.
+   */
+  private revealPrintWhenAsked(): void {
+    // Read as text: the fragment is all that is wanted, and a router double in a spec need not parse a URL.
+    if ((this.router.url ?? '').split('#')[1] === 'print') {
+      setTimeout(() => this.printPanel()?.reveal());
     }
   }
 
@@ -1049,6 +1064,11 @@ export class OrderDetailPane {
         // it already calls. This opens that form and brings it into view rather
         // than carrying a second one in the header.
         this.paymentPanel()?.openReissue();
+        return;
+      case 'REPRINT':
+        // ADR 0154: the print section is the panel's own form (document, printer, reason) -- this brings it
+        // into view and puts the cursor on it, the same arrangement as «Выставить счёт» above.
+        this.printPanel()?.reveal();
         return;
       case 'RESOLVE':
         // Gap map row 1.1e: the order-level action does not carry the

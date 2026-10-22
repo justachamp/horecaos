@@ -567,7 +567,8 @@ class CartCheckoutAndOrderTests {
                         org.mockito.Mockito.mock(uz.horecaos.platform.fulfillment.api.CourierEtaPort.class),
                         org.mockito.Mockito.mock(uz.horecaos.platform.tenancy.api.SalesChannelLookup.class),
                         org.mockito.Mockito.mock(uz.horecaos.platform.ordering.api.OrderFiscalStatusPort.class),
-                        org.mockito.Mockito.mock(uz.horecaos.platform.fulfillment.api.DeliveryDistancePort.class)));
+                        org.mockito.Mockito.mock(uz.horecaos.platform.fulfillment.api.DeliveryDistancePort.class),
+                        org.mockito.Mockito.mock(uz.horecaos.platform.ordering.api.OrderReprintPort.class)));
         // ADR 0074, production classes end to end: the real publication reader,
         // the real price lookup pricing implements, and the real InventoryService
         // behind InventoryReservationPort. A stub for any of the three would let

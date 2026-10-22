@@ -65,7 +65,7 @@ const ORDERS: readonly OrderSummaryResponse[] = [
     publicOrderNumber: '0002',
     status: 'RECEIVED',
     createdAt: new Date(FIXTURE_NOW - 1_000).toISOString(),
-    actions: [{ action: 'CANCEL' }, { action: 'ASSIGN_COURIER' }],
+    actions: [{ action: 'CANCEL' }, { action: 'ASSIGN_COURIER' }, { action: 'REPRINT' }],
   }),
   order({
     orderId: 'order-c',
@@ -323,6 +323,39 @@ describe('OrderQueue: the board’s keys (orders.md §2.12)', () => {
       expect(TestBed.inject(Location).path()).toContain('/orders/order-b');
     });
 
+    it('p takes the operator to the order at its print section, where a reprint asks which document and why', async () => {
+      configure();
+      const host = await open();
+      focusRow(host, 1);
+
+      expect(press('p')).toBe(true);
+      await flush();
+
+      const path = TestBed.inject(Location).path(true);
+      expect(path).toContain('/orders/order-b');
+      expect(path).toContain('#print');
+    });
+
+    it('p does nothing on an order that does not offer REPRINT -- printing dark, no printer, or no right to reprint -- and nothing is sent', async () => {
+      const getOrders = configure();
+      const host = await open();
+      focusRow(host, 0);
+      const before = getOrders.mock.calls.length;
+
+      expect(press('p')).toBe(false);
+      await flush();
+
+      expect(TestBed.inject(Location).path(true)).not.toContain('#print');
+      expect(getOrders.mock.calls.length).toBe(before);
+    });
+
+    it('p does nothing with no row focused: there is no "the order" to print', async () => {
+      configure();
+      await open();
+
+      expect(press('p', document.body)).toBe(false);
+    });
+
     it('does not act on the board behind a hand-written reject dialog: r, n and the tab digits are not "refresh", "new order" and "switch tab" while a reason is being chosen', async () => {
       const rejectReasons = vi.fn().mockResolvedValue([
         {
@@ -477,7 +510,7 @@ describe('OrderQueue: the board’s keys (orders.md §2.12)', () => {
   });
 
   describe('the cheat-sheet entry', () => {
-    it('is registered while the board is on screen, lists the documented keys, and not a key nothing handles', async () => {
+    it('is registered while the board is on screen and lists the documented keys', async () => {
       configure();
       await open();
 
@@ -499,13 +532,12 @@ describe('OrderQueue: the board’s keys (orders.md §2.12)', () => {
           'a',
           'x',
           'c',
+          'p',
           'n',
           'r',
           'Esc',
         ]),
       );
-      // «print to POS» has no row action to bind to; listing it would promise a key that does nothing.
-      expect(caps).not.toContain('p');
       expect(scope.title()).toBe('Order board');
     });
 

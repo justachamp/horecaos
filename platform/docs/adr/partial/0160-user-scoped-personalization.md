@@ -1,31 +1,27 @@
 # ADR 0160: User-scoped personalization
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Not started — the console remembers a few of a person's choices
-  and the platform remembers one of them. The platform's one is the interface language:
-  `iam.staff_members.ui_locale` (V0453, `ru`, `uz` or `en`), edited through
-  `PUT .../staff/me` in «Мой профиль» and applied by `OwnProfile` once, on a browser where
-  nobody has chosen a language (`hasStoredLocale`). Every other choice lives in the
-  browser and follows neither the person nor the device they next sit at: the language
-  switcher's own choice (`horecaos.operations.locale`), the branch (`CurrentLocation`,
-  `horecaos.operations.locationId`), the brand (`BrandChoice`,
-  `horecaos.operations.brandId`), the order board's filters per tab
-  (`horecaos.operations.orderQueue.filters.<tab>`, `order-queue-filter-state.ts`), named
-  saved views (`SavedViewsStore`, `q-data-table.views.<viewId>`), the data table's hidden
-  columns (`TableFilterStore`, `<key>.hiddenColumns`) and split-pane widths. The order
-  board does not use the data table and has no column picker; it draws none of
-  created-by, accepted-by, courier type, source icon or courier ETA. What
-  `OrderSummaryResponse` carries for them is uneven: `createdBy*` and `acceptedBy*` are an
-  actor type and a subject, not a name (the order detail resolves names server-side,
-  row `9.2d`), `discountMinor` and `courierId` are carried (the board already resolves
-  the courier against a roster that names its type), and there is no courier ETA and no
-  source (`origin` is a column of `ordering.orders` that the response does not select).
-  «Моя работа» renders a `q-locked-state` band that says interface personalization is not
-  built (`my-work-page`). ADR 0030 has no user level: `ResourceScope.ScopeType` is
-  `PLATFORM`, `TENANT`, `BRAND`, `LOCATION`, `tenant.configuration_values` and
-  `tenant.policies` carry the same four in `ck_*_scope_type` (V0005), and a
-  `ConfigurationKey` resolves a scalar (`Boolean`, `Integer`, `Long`, `String` or
-  `BigDecimal`). There is no staff preferences table.
+- Implementation status: Partial — built in operations batch 20 (`w4-personalization`)
+  and carried on in batch 21 (`w1-board-shell`). The store is `iam.staff_preferences`
+  (V0531, V0532): one protected document per tenant, person and surface, written only
+  by the person it belongs to over `GET .../staff/me/preferences` and
+  `PUT`/`DELETE .../staff/me/preferences/{surface}` (`If-Match`, no manager read, no
+  audit fact), deleted by a retention sweep when the person's record is anonymised.
+  Two surfaces have a home. `SHELL` holds the default branch and the language rule.
+  `ORDER_BOARD` holds the board's columns, written as a change from the default so a
+  column added in a later release is not hidden by an old choice, and saved views of its
+  filters. The picker offers fifteen columns: batch 21 adds `courierEta`, `source`,
+  `items`, `fiscal`, `distance` and `externalNumber` (the board read now carries each,
+  on request, one batched read per page) under one `document_schema` 1 → 2 bump whose
+  upgrade step is the identity, so an older document keeps its meaning and a new column
+  is shown or hidden by its own default. The record proposed `courierEta` and `source`
+  one bump each; they went together with the rest because nothing in a document depends
+  on the order. Not built: the one-time offer to move a browser's saved views and column
+  choice into the account (open input 4: «Сохранить мои настройки в учётной записи»), a
+  notification sound, a theme or density, a tenant-set default column set (an ordinary
+  ADR 0030 `TENANT` key if anyone asks), and the choices the console still holds on the
+  device alone: live filters per tab, pane widths, the data table's saved views and
+  hidden columns, and the brand last chosen on this machine.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides

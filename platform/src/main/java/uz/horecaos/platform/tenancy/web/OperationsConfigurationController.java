@@ -9,11 +9,14 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 import uz.horecaos.platform.audit.api.ActorRef;
 import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.CurrentActor;
+import uz.horecaos.platform.iam.api.EntitlementGate;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.iam.api.staff.StaffDirectory;
@@ -34,7 +38,10 @@ import uz.horecaos.platform.tenancy.api.ConfigurationResolver;
 import uz.horecaos.platform.tenancy.api.ConfigurationValueAuthor;
 import uz.horecaos.platform.tenancy.api.ResolutionTrace;
 import uz.horecaos.platform.tenancy.api.Resolved;
+import uz.horecaos.platform.tenancy.application.ConfigurationPlacementService;
 import uz.horecaos.platform.tenancy.domain.configuration.ConfigurationKeys;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcConfigurationPlacementStore.StoredPolicy;
+import uz.horecaos.platform.tenancy.infrastructure.persistence.JdbcConfigurationPlacementStore.StoredValue;
 import uz.horecaos.platform.web.api.ApiException;
 import uz.horecaos.platform.web.api.ErrorCode;
 import uz.horecaos.platform.web.authorization.RequiresCapability;
@@ -74,6 +81,20 @@ import uz.horecaos.platform.web.authorization.RequiresCapability;
  * ErrorCode#VALIDATION_FAILED}): the scope bar offers TENANT, BRAND and
  * LOCATION — the levels a tenant may actually edit — and a platform default
  * is something this surface only ever inherits from, never writes.
+ *
+ * <p><strong>Locked by plan (settings.md §1.2's fifth state, ADR 0021).</strong> A key may name the plan
+ * feature that gates it ({@link ConfigurationKey#entitledBy()}). The key list and the resolution report
+ * {@code lockedByPlan} while the tenant's plan does not include that feature, as the platform currently
+ * enforces it ({@link EntitlementGate#checkFeature}: under ADR 0021's meter-only default a feature nobody
+ * granted still answers yes, so nothing is locked until enforcement is raised, and the screen never claims
+ * a refusal the platform would not make). A write to a locked key is refused with {@link
+ * ErrorCode#ENTITLEMENT_REQUIRED} and not {@code INSUFFICIENT_CAPABILITY}: the person holds the right to
+ * edit, the plan lacks the feature, and the remedy is a purchase and not a grant.
+ *
+ * <p><strong>Where each value is set (settings.md §10.0).</strong> {@code GET .../placements} answers
+ * «Find a setting»: for every key this tenant may see, the rows stored for it at tenant, brand and branch
+ * level, with the brand and branch named and the value shortened for a line of text; and for each listed
+ * policy family the newest version at every scope that holds one, who published it and when.
  */
 @RestController
 @RequestMapping("/api/v1/operations/tenants/{tenantId}/configuration")
@@ -86,16 +107,25 @@ public class OperationsConfigurationController {
     private final ConfigurationValueAuthor values;
     private final CurrentActor currentActor;
     private final StaffDirectory staff;
+    private final ConfigurationPlacementService placements;
+    private final ObjectProvider<EntitlementGate> entitlementGates;
+
+    /** The longest value a placement line prints; a longer string is cut and says so. */
+    static final int DISPLAY_VALUE_MAX_CHARACTERS = 80;
 
     public OperationsConfigurationController(
             ConfigurationResolver resolver,
             ConfigurationValueAuthor values,
             CurrentActor currentActor,
-            StaffDirectory staff) {
+            StaffDirectory staff,
+            ConfigurationPlacementService placements,
+            ObjectProvider<EntitlementGate> entitlementGates) {
         this.resolver = resolver;
         this.values = values;
         this.currentActor = currentActor;
         this.staff = staff;
+        this.placements = placements;
+        this.entitlementGates = entitlementGates;
     }
 
     @GetMapping("/keys")
@@ -106,12 +136,67 @@ public class OperationsConfigurationController {
                     + "\"find a setting\" registry and the scope bar's own key picker. A platform-only "
                     + "default is absent here even though ConfigurationController's PLATFORM_ADMIN "
                     + "surface still lists it.")
-    List<OperationsConfigurationKeyResponse> keys() {
+    List<OperationsConfigurationKeyResponse> keys(@PathVariable UUID tenantId) {
         return ConfigurationKeys.all().stream()
                 .filter(ConfigurationKey::tenantVisible)
-                .map(OperationsConfigurationKeyResponse::of)
+                .map(key -> OperationsConfigurationKeyResponse.of(key, lockOf(tenantId, key)))
                 .sorted((left, right) -> left.code().compareTo(right.code()))
                 .toList();
+    }
+
+    @GetMapping("/placements")
+    @RequiresCapability(Capability.TENANT_CONFIGURATION_READ)
+    @Operation(
+            summary = "Where each setting and policy of this tenant is set",
+            description = "settings.md §10.0 «Find a setting»: for every key this tenant may see, the "
+                    + "values stored for it at TENANT, BRAND and LOCATION scope (brand and branch named, "
+                    + "the value shortened to a line of text, who set it and when), and for each listed "
+                    + "policy family the newest published version at every scope that holds one. A key "
+                    + "nobody has set has an empty list: the code default applies. Secrets are not "
+                    + "configuration (ADR 0030), so values are shown; a long string is cut at "
+                    + "80 characters and flagged.")
+    OperationsConfigurationPlacementsResponse placements(@PathVariable UUID tenantId) {
+        List<StoredValue> stored = placements.values(tenantId);
+        List<StoredPolicy> policies = placements.policies(tenantId);
+        List<String> principals = new ArrayList<>();
+        stored.stream().map(StoredValue::setBy).filter(Objects::nonNull).forEach(principals::add);
+        policies.stream().map(StoredPolicy::principal).filter(Objects::nonNull).forEach(principals::add);
+        Map<String, String> names = principals.isEmpty()
+                ? Map.of()
+                : staff.namesOf(tenantId, principals.stream().distinct().toList());
+
+        Map<String, List<OperationsConfigurationPlacement>> byKey = new LinkedHashMap<>();
+        for (ConfigurationKey<?> key : ConfigurationKeys.all()) {
+            if (key.tenantVisible()) {
+                byKey.put(key.code(), new ArrayList<>());
+            }
+        }
+        for (StoredValue value : stored) {
+            // A row for a key this tenant may not see (or that no longer exists) is not shown, whatever it holds.
+            List<OperationsConfigurationPlacement> bucket = byKey.get(value.keyCode());
+            if (bucket != null) {
+                bucket.add(OperationsConfigurationPlacement.of(value, names));
+            }
+        }
+        List<OperationsConfigurationKeyPlacements> keys = byKey.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> new OperationsConfigurationKeyPlacements(entry.getKey(), entry.getValue()))
+                .toList();
+
+        Map<String, List<OperationsPolicyPlacement>> byPolicy = new LinkedHashMap<>();
+        for (String code : uz.horecaos.platform.tenancy.application.TenantPolicyFamilies.LISTED) {
+            byPolicy.put(code, new ArrayList<>());
+        }
+        for (StoredPolicy policy : policies) {
+            List<OperationsPolicyPlacement> bucket = byPolicy.get(policy.keyCode());
+            if (bucket != null) {
+                bucket.add(OperationsPolicyPlacement.of(policy, names));
+            }
+        }
+        List<OperationsPolicyPlacements> policyFamilies = byPolicy.entrySet().stream()
+                .map(entry -> new OperationsPolicyPlacements(entry.getKey(), entry.getValue()))
+                .toList();
+        return new OperationsConfigurationPlacementsResponse(keys, policyFamilies);
     }
 
     @GetMapping("/keys/{code}/resolution")
@@ -132,7 +217,7 @@ public class OperationsConfigurationController {
 
         ConfigurationKey<?> key = tenantVisibleKey(code);
         ResourceScope scope = scopeOf(tenantId, scopeType, brandId, locationId);
-        return resolveAndExplain(tenantId, key, scope);
+        return resolveAndExplain(tenantId, key, scope, lockOf(tenantId, key));
     }
 
     @PostMapping("/keys/{code}/values")
@@ -153,7 +238,33 @@ public class OperationsConfigurationController {
 
         ConfigurationKey<?> key = tenantVisibleKey(code);
         ResourceScope scope = scopeOf(tenantId, request.scopeType(), request.brandId(), request.locationId());
+        // Before the value is looked at: a key the plan does not include has no valid value to send. The
+        // person holds the capability, so this is the plan's refusal (ENTITLEMENT_REQUIRED), not a grant's.
+        LockedByPlan locked = lockOf(tenantId, key);
+        if (locked != null) {
+            throw ApiException.entitlementRequired(locked.entitlementKey());
+        }
         return ResponseEntity.ok(setErased(key, scope, request));
+    }
+
+    /**
+     * Whether the plan locks {@code key} for this tenant right now: the key names a gating feature, the gate
+     * knows the feature, and the platform currently enforces its absence. Empty for a key no plan gates, and
+     * for a gate that does not know the code (a code drifting from {@code EntitlementKeys} is a test failure,
+     * {@code ConfigurationKeyEntitlementTests}, and not a tenant locked out of a setting).
+     */
+    private @Nullable LockedByPlan lockOf(UUID tenantId, ConfigurationKey<?> key) {
+        String entitlement = key.entitledBy();
+        if (entitlement == null) {
+            return null;
+        }
+        for (EntitlementGate gate : entitlementGates.orderedStream().toList()) {
+            Optional<EntitlementGate.Answer> answer = gate.checkFeature(tenantId, entitlement);
+            if (answer.isPresent() && !answer.get().entitled()) {
+                return new LockedByPlan(entitlement, answer.get().description());
+            }
+        }
+        return null;
     }
 
     /** {@link ConfigurationKeys#find}, refusing a key this surface does not show at all. */
@@ -252,12 +363,12 @@ public class OperationsConfigurationController {
 
     /** Captures the wildcard from {@link ConfigurationKey#find} so the resolver's generic methods apply. */
     private <T> OperationsConfigurationResolutionResponse resolveAndExplain(
-            UUID tenantId, ConfigurationKey<T> key, ResourceScope scope) {
+            UUID tenantId, ConfigurationKey<T> key, ResourceScope scope, @Nullable LockedByPlan lockedByPlan) {
         Resolved<T> resolved = resolver.resolve(key, scope);
         ResolutionTrace trace = resolver.explain(key, scope);
         Long currentVersionAtScope = values.currentVersion(key, scope).orElse(null);
         return OperationsConfigurationResolutionResponse.of(
-                key, resolved, trace, currentVersionAtScope, namesOfChangers(tenantId, trace));
+                key, resolved, trace, currentVersionAtScope, namesOfChangers(tenantId, trace), lockedByPlan);
     }
 
     /**
@@ -313,9 +424,11 @@ public class OperationsConfigurationController {
             List<ScopeType> settableScopes,
             String owningModule,
             boolean explicitNullTerminates,
-            String description) {
+            String description,
+            @Nullable String entitledBy,
+            @Nullable LockedByPlan lockedByPlan) {
 
-        static OperationsConfigurationKeyResponse of(ConfigurationKey<?> key) {
+        static OperationsConfigurationKeyResponse of(ConfigurationKey<?> key, @Nullable LockedByPlan lockedByPlan) {
             return new OperationsConfigurationKeyResponse(
                     key.code(),
                     key.valueType().getSimpleName(),
@@ -327,9 +440,18 @@ public class OperationsConfigurationController {
                     key.settableScopes().stream().sorted().toList(),
                     key.owningModule(),
                     key.explicitNullTerminates(),
-                    key.description());
+                    key.description(),
+                    key.entitledBy(),
+                    lockedByPlan);
         }
     }
+
+    /**
+     * A key the tenant's plan does not include (settings.md §1.2, ADR 0021): the entitlement it needs and what that
+     * entitlement means, in the catalogue's words. Never an upgrade link: where a merchant buys is the console's own
+     * Finance screen, and the platform's plan path is an API path.
+     */
+    public record LockedByPlan(String entitlementKey, String description) {}
 
     /** What a key resolved to at one scope, and the trace that explains it. */
     public record OperationsConfigurationResolutionResponse(
@@ -340,7 +462,8 @@ public class OperationsConfigurationController {
             @Nullable ScopeType winningScope,
             List<OperationsTraceLevel> inspectedLevels,
             String describe,
-            @Nullable Long currentVersionAtScope) {
+            @Nullable Long currentVersionAtScope,
+            @Nullable LockedByPlan lockedByPlan) {
 
         /**
          * @param currentVersionAtScope the version of the row stored at exactly
@@ -358,7 +481,8 @@ public class OperationsConfigurationController {
                 Resolved<T> resolved,
                 ResolutionTrace trace,
                 @Nullable Long currentVersionAtScope,
-                Map<String, String> names) {
+                Map<String, String> names,
+                @Nullable LockedByPlan lockedByPlan) {
             return new OperationsConfigurationResolutionResponse(
                     key.code(),
                     resolved.value(),
@@ -369,7 +493,8 @@ public class OperationsConfigurationController {
                             .map(level -> OperationsTraceLevel.of(level, names))
                             .toList(),
                     trace.describe(),
-                    currentVersionAtScope);
+                    currentVersionAtScope,
+                    lockedByPlan);
         }
     }
 
@@ -439,6 +564,105 @@ public class OperationsConfigurationController {
                     authored.value(),
                     authored.explicitNull(),
                     authored.version());
+        }
+    }
+
+    /** Everything {@code GET .../placements} answers: a line per visible key, and a line per listed policy family. */
+    public record OperationsConfigurationPlacementsResponse(
+            List<OperationsConfigurationKeyPlacements> keys, List<OperationsPolicyPlacements> policies) {}
+
+    /** One key and every place its value is stored; empty when only the code default applies. */
+    public record OperationsConfigurationKeyPlacements(
+            String keyCode, List<OperationsConfigurationPlacement> placements) {}
+
+    /**
+     * One stored value, ready to print as a line of text.
+     *
+     * @param brandName     the brand's display name, for a brand or branch row
+     * @param locationName  the branch's display name, for a branch row
+     * @param displayValue  the value as text; null for a deliberate «unset here» (an explicit null)
+     * @param displayTruncated whether {@code displayValue} was cut at {@value #MAX} characters
+     * @param changedByName who set it, by the name this tenant knows them by; absent when they have no member
+     *                      record here (the subject is never sent)
+     */
+    public record OperationsConfigurationPlacement(
+            ScopeType scopeType,
+            @Nullable UUID brandId,
+            @Nullable String brandName,
+            @Nullable UUID locationId,
+            @Nullable String locationName,
+            boolean explicitNull,
+            @Nullable String displayValue,
+            boolean displayTruncated,
+            long version,
+            @Nullable String changedByName,
+            @Nullable Instant changedAt) {
+
+        static final int MAX = DISPLAY_VALUE_MAX_CHARACTERS;
+
+        static OperationsConfigurationPlacement of(StoredValue value, Map<String, String> names) {
+            String text = value.explicitNull() ? null : displayText(value);
+            boolean cut = false;
+            if (text != null && text.codePointCount(0, text.length()) > MAX) {
+                text = text.substring(0, text.offsetByCodePoints(0, MAX));
+                cut = true;
+            }
+            return new OperationsConfigurationPlacement(
+                    value.scopeType(),
+                    value.brandId(),
+                    value.brandName(),
+                    value.locationId(),
+                    value.locationName(),
+                    value.explicitNull(),
+                    text,
+                    cut,
+                    value.version(),
+                    value.setBy() == null ? null : names.get(value.setBy()),
+                    value.updatedAt());
+        }
+
+        private static @Nullable String displayText(StoredValue value) {
+            return switch (value.valueType()) {
+                case "BOOLEAN" ->
+                    value.booleanValue() == null ? null : value.booleanValue().toString();
+                case "INTEGER" ->
+                    value.integerValue() == null ? null : value.integerValue().toString();
+                case "DECIMAL" ->
+                    value.decimalValue() == null
+                            ? null
+                            : value.decimalValue().stripTrailingZeros().toPlainString();
+                default -> value.stringValue();
+            };
+        }
+    }
+
+    /** One listed policy family and the scopes that hold a version of it. */
+    public record OperationsPolicyPlacements(String policyCode, List<OperationsPolicyPlacement> placements) {}
+
+    /**
+     * The newest published version of a policy at one scope: which version, who approved it and when it took
+     * effect (the same facts a resolution trace shows, ADR 0030).
+     */
+    public record OperationsPolicyPlacement(
+            ScopeType scopeType,
+            @Nullable UUID brandId,
+            @Nullable String brandName,
+            @Nullable UUID locationId,
+            @Nullable String locationName,
+            int version,
+            @Nullable String changedByName,
+            @Nullable Instant effectiveFrom) {
+
+        static OperationsPolicyPlacement of(StoredPolicy policy, Map<String, String> names) {
+            return new OperationsPolicyPlacement(
+                    policy.scopeType(),
+                    policy.brandId(),
+                    policy.brandName(),
+                    policy.locationId(),
+                    policy.locationName(),
+                    policy.version(),
+                    policy.principal() == null ? null : names.get(policy.principal()),
+                    policy.validFrom());
         }
     }
 }

@@ -332,6 +332,14 @@ x          toggle row selection     Shift+X    extend selection
 m          switch to the map (§4)   Esc        clear selection, then close, then clear filters
 ```
 
+**Since then (batch 21):** built on the board as it is drawn: `j`/`k` between cards, `x` and `Shift+X`
+select, `a` and `r` take the card to the courier picker, `e` calls an external courier, `u` unassigns after
+asking, `m` shows or hides the map, `Esc` clears the selection. Each key presses the control the card
+already shows, so a plan that cannot be selected has no checkbox to press. **Not bound, because the
+control does not exist:** `/` (the board has no search box), `1`..`6` (no status tabs) and `g f` (no
+fleet rail) — a key that names a control nobody drew only promises something. `Enter` and `Space`
+(open, peek) are the card's own click.
+
 Rows are focusable (`tabIndex=0`, Enter opens) with a visible focus outline. Escape closes
 modals; focus is trapped in a modal and restored on close.
 
@@ -639,6 +647,10 @@ silently becomes payroll.
 
 ### Keyboard
 `j/k` rows, `Enter` open the courier, `p` approve, `c` close, `1..5` tabs.
+
+**Since then (batch 21):** `j`/`k`, `p` and `c` are built; `p` presses the row's «Подтвердить» and `c` its
+«Закрыть» (which asks first: closing a shift ends a courier's paid time). `Enter` and `1..5` name a
+courier page and tabs this screen does not have, so they are not bound.
 
 ### 7.1 Roster editor — `/delivery/shifts/roster`
 A week grid: rows = couriers, columns = seven days, each cell one or more planned

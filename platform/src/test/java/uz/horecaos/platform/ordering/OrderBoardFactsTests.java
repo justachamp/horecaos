@@ -28,6 +28,7 @@ import uz.horecaos.platform.fulfillment.api.CourierEtaPort;
 import uz.horecaos.platform.fulfillment.application.CourierEtaPortAdapter;
 import uz.horecaos.platform.fulfillment.application.DeliveryDistancePortAdapter;
 import uz.horecaos.platform.fulfillment.infrastructure.persistence.JdbcDeliveryPlanStore;
+import uz.horecaos.platform.ordering.api.OrderReprintPort;
 import uz.horecaos.platform.ordering.api.PaymentIntentPort;
 import uz.horecaos.platform.ordering.application.OrderBoardEnrichment;
 import uz.horecaos.platform.ordering.application.OrderBoardEnrichment.Fact;
@@ -68,6 +69,7 @@ class OrderBoardFactsTests {
     private OrderBoardFixtures fixtures;
     private RecordingEtaPort etaPort;
     private RecordingChannelLookup channels;
+    private RecordingReprintPort printing;
 
     @BeforeAll
     static void startDatabase() {
@@ -94,6 +96,7 @@ class OrderBoardFactsTests {
         fixtures.tenant(OTHER_TENANT, "facts-other", OTHER_BRAND, OTHER_BRANCH);
         etaPort = new RecordingEtaPort(new CourierEtaPortAdapter(new JdbcDeliveryPlanStore(jdbc)));
         channels = new RecordingChannelLookup(new JdbcSalesChannelStore(jdbc));
+        printing = new RecordingReprintPort();
     }
 
     // ------------------------------------------------------------------ items
@@ -409,6 +412,40 @@ class OrderBoardFactsTests {
         assertThat(store.externalNumbersByOrders(TENANT, List.of(mine, theirs))).isEmpty();
     }
 
+    // ----------------------------------------------------------------- reprint
+
+    @Test
+    @DisplayName("a row carries «can print» for its own branch, from one question per brand on the page")
+    void reprintIsAskedOncePerBrandAndAnsweredPerBranch() {
+        UUID other = UUID.fromString("018f6f4e-7000-7000-8000-0000000000a9");
+        fixtures.location(TENANT, BRAND, other, "YUN", "Yunusobod");
+        printing.canPrint = Set.of(BRANCH);
+        UUID here = insert("R-1");
+        UUID there = fixtures.insertOrder(order("R-2").at(TENANT, BRAND, other));
+
+        List<OrderBoardRow> rows = enrich(Set.of(), here, there);
+
+        assertThat(printing.calls)
+                .as("one question for the page, over its two branches")
+                .hasSize(1);
+        assertThat(printing.calls.getFirst()).containsExactlyInAnyOrder(BRANCH, other);
+        assertThat(rowOf(rows, here).facts().reprintAvailable()).isTrue();
+        assertThat(rowOf(rows, there).facts().reprintAvailable())
+                .as("the other branch has no printer, and its orders are not offered a print")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("with printing dark everywhere no row can print, and the detail screen asks the same port")
+    void reprintIsAbsentWhilePrintingIsDark() {
+        UUID order = insert("R-3");
+
+        assertThat(factsOf(order, Set.of()).reprintAvailable()).isFalse();
+        assertThat(enrichment().reprintAvailable(TENANT, BRAND, BRANCH)).isFalse();
+        printing.canPrint = Set.of(BRANCH);
+        assertThat(enrichment().reprintAvailable(TENANT, BRAND, BRANCH)).isTrue();
+    }
+
     // ------------------------------------------------------------------- shape
 
     @Test
@@ -474,9 +511,11 @@ class OrderBoardFactsTests {
         return orderId;
     }
 
+    /** The brand board's query: every branch of the brand, so a page can span two. */
     private JdbcOrderStore.OrderListQuery listQuery() {
         return new JdbcOrderStore.OrderListQuery(
-                TENANT, BRAND, BRANCH, List.of(), null, null, null, null, null, null, null, null, null, null);
+                TENANT, BRAND, List.of(), List.of(), null, null, null, null, null, null, null, null, null, null, null,
+                false, false, false, List.of(), null);
     }
 
     /** The page the board would read, with the facts enriched, in the order the ids were given. */
@@ -529,7 +568,8 @@ class OrderBoardFactsTests {
                 etaPort,
                 channels,
                 new OrderFiscalStatusAdapter(new JdbcFiscalLifecycleStore(jdbc)),
-                new DeliveryDistancePortAdapter(new JdbcDeliveryPlanStore(jdbc)));
+                new DeliveryDistancePortAdapter(new JdbcDeliveryPlanStore(jdbc)),
+                printing);
     }
 
     /** The real ETA read, remembering every call it was asked. */
@@ -545,6 +585,18 @@ class OrderBoardFactsTests {
         public Map<UUID, Instant> etaByOrders(UUID tenantId, Collection<UUID> orderIds) {
             calls.add(Set.copyOf(orderIds));
             return delegate.etaByOrders(tenantId, orderIds);
+        }
+    }
+
+    /** Says printing is on at the branches it is told about, and remembers every question. */
+    private static final class RecordingReprintPort implements OrderReprintPort {
+        final List<Set<UUID>> calls = new ArrayList<>();
+        Set<UUID> canPrint = Set.of();
+
+        @Override
+        public Set<UUID> branchesThatCanPrint(UUID tenantId, UUID brandId, Collection<UUID> locationIds) {
+            calls.add(Set.copyOf(locationIds));
+            return locationIds.stream().filter(canPrint::contains).collect(java.util.stream.Collectors.toSet());
         }
     }
 

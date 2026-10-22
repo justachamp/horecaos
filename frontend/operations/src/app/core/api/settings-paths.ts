@@ -843,6 +843,14 @@ export const settingsPaths = {
     return `${this.configurationKeys(tenantId)}/${enc(code)}/resolution`;
   },
 
+  /**
+   * `OperationsConfigurationController.placements` -- where every tenant-visible key and every listed policy is
+   * set, in one read (settings.md §10.0 «Find a setting»).
+   */
+  configurationPlacements(tenantId: string): string {
+    return `${OPERATIONS}/tenants/${enc(tenantId)}/configuration/placements`;
+  },
+
   /** `OperationsConfigurationController.setValue`. */
   configurationValues(tenantId: string, code: string): string {
     return `${this.configurationKeys(tenantId)}/${enc(code)}/values`;

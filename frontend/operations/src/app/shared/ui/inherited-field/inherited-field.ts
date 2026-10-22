@@ -7,25 +7,38 @@ import {
   output,
   signal,
 } from '@angular/core';
+import { Router } from '@angular/router';
 
 import {
   ConfigurationResolutionView,
   ConfigurationScopeType,
   EditableScopeType,
+  LockedByPlanView,
   ResolutionTraceLevel,
 } from '../../../core/api/configuration';
 import { I18n } from '../../../core/i18n/i18n';
 import { formatDateTime } from '../../../core/format/datetime';
 import { MessageKey } from '../../../core/i18n/messages.en';
 import { TPipe } from '../../../core/i18n/t.pipe';
+import { LockedState } from '../locked-state';
 import { traceMessages } from './trace-messages';
 
 /** Same stand-in every other screen uses until the tenant's own zone reaches the console. */
 const PLACEHOLDER_TIME_ZONE = 'Asia/Tashkent';
 
-/** The five states settings.md §1.2 names — "Locked by plan" is not wired yet; no entitlement data reaches this wave. */
+/**
+ * The five states settings.md §1.2 names, and the one before any of them while the answer is on its way.
+ * `LOCKED_BY_PLAN` is the fifth: the tenant's plan lacks the feature the key needs (ADR 0021), so the field is
+ * greyed, says which feature, and offers nothing but the way to read about it.
+ */
 export type InheritedFieldState =
-  'LOADING' | 'SET_HERE' | 'INHERITED' | 'EXPLICIT_UNSET' | 'NOT_SETTABLE';
+  'LOADING' | 'SET_HERE' | 'INHERITED' | 'EXPLICIT_UNSET' | 'NOT_SETTABLE' | 'LOCKED_BY_PLAN';
+
+/**
+ * Where a plan is read about and changed: Finance 8.6, the console's own subscription screen. The platform's
+ * `upgradePath` is an API path, so it is never what a link points at.
+ */
+const SUBSCRIPTION_PATH = '/finance/subscription';
 
 /**
  * settings.md §1.2's `q-inherited-field` — the control every settings row
@@ -51,16 +64,22 @@ export type InheritedFieldState =
  */
 @Component({
   selector: 'q-inherited-field',
-  imports: [TPipe],
+  imports: [TPipe, LockedState],
   templateUrl: './inherited-field.html',
   styleUrl: './inherited-field.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class InheritedField {
   private readonly i18n = inject(I18n);
+  private readonly router = inject(Router);
 
   readonly label = input.required<string>();
   readonly resolution = input<ConfigurationResolutionView | null>(null);
+  /**
+   * The plan lock, for a row that learns it from the key list before it has a resolution. A resolution that
+   * carries its own `lockedByPlan` says the same thing; either one locks the field.
+   */
+  readonly lockedByPlan = input<LockedByPlanView | null>(null);
   readonly loading = input(false);
   readonly currentScopeType = input.required<EditableScopeType>();
   /** Empty means "not yet known" — rendered as NOT_SETTABLE is skipped until the key list has loaded. */
@@ -81,7 +100,16 @@ export class InheritedField {
 
   protected readonly popoverOpen = signal(false);
 
+  /** The lock, from the row or from the resolution; null for a field every plan has. */
+  protected readonly lock = computed<LockedByPlanView | null>(
+    () => this.lockedByPlan() ?? this.resolution()?.lockedByPlan ?? null,
+  );
+
   protected readonly state = computed<InheritedFieldState>(() => {
+    // A lock decides before anything is resolved: what the field would say is not what it may do.
+    if (this.lock() !== null) {
+      return 'LOCKED_BY_PLAN';
+    }
     if (this.loading() || !this.resolution()) {
       return 'LOADING';
     }
@@ -117,6 +145,8 @@ export class InheritedField {
       case 'INHERITED':
         return 'inheritedField.state.inherited';
       case 'LOADING':
+      case 'LOCKED_BY_PLAN':
+        // A locked field's chip is the lock's own sentence (see `lockedChip`), not a catalogue key.
         return 'inheritedField.state.loading';
     }
   });
@@ -162,6 +192,31 @@ export class InheritedField {
       ? 'inheritedField.notSettable.brand'
       : 'inheritedField.notSettable.tenant';
   });
+
+  protected lockedChip(): string {
+    return traceMessages.text(this.i18n.locale(), 'lockedChip');
+  }
+
+  protected lockedMore(): string {
+    return traceMessages.text(this.i18n.locale(), 'lockedMore');
+  }
+
+  protected lockedMoreAria(): string {
+    return traceMessages.text(this.i18n.locale(), 'lockedMoreAria', {
+      feature: this.lock()?.description ?? '',
+    });
+  }
+
+  protected readonly subscriptionPath = SUBSCRIPTION_PATH;
+
+  /** A plain click goes to the subscription screen within the console; a modified click keeps its browser meaning. */
+  protected openSubscription(event: MouseEvent): void {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return;
+    }
+    event.preventDefault();
+    void this.router.navigateByUrl(SUBSCRIPTION_PATH);
+  }
 
   protected togglePopover(): void {
     this.popoverOpen.update((open) => !open);

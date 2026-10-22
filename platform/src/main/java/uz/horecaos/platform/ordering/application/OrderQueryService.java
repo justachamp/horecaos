@@ -641,6 +641,16 @@ public class OrderQueryService implements OrderCountsQuery {
     }
 
     /**
+     * Whether this order's branch can print its documents -- the detail-screen counterpart to the board's
+     * batched {@link JdbcOrderStore.OrderBoardFacts#reprintAvailable()}, so the two screens never disagree
+     * about whether {@code REPRINT} is offered.
+     */
+    @Transactional(readOnly = true)
+    public boolean reprintAvailableFor(UUID tenantId, UUID brandId, UUID locationId) {
+        return boardEnrichment.reprintAvailable(tenantId, brandId, locationId);
+    }
+
+    /**
      * Whether this order has a payment an operator can hand a checkout surface
      * for right now -- the detail-screen counterpart to {@link #forLocation}'s
      * batched {@link JdbcOrderStore.OrderBoardRow#presentablePayment()}, so the
