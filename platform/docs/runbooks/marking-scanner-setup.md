@@ -67,9 +67,9 @@ The platform turns it on; a tenant cannot. Do it only when **all three** hold:
 
 | | Precondition | Where it is built |
 |---|---|---|
-| **P1** | Payments reads `FiscalNodeFacts.requiresMarkingCapablePayment`, and a `supports_marking` flag removes Payme from a cart that holds a marked good | ADR 0166, Decision 7 (under ADR 0038's stages 4 to 6 if that record is not accepted) |
-| **P2** | The order-line to receipt-line projection replaces the synthetic aggregate line | For a marked order, `MarkedOrderReceiptProjection`; for every other order, ADR 0166's Decision 6 |
-| **P3** | The Click sandbox has accepted a receipt with `Labels`, and the answer to *one item with N labels, or N items of quantity one* is known | See [connect-click-payme-sandbox.md](connect-click-payme-sandbox.md); if Click refuses N labels on one item, the split goes in the projection and nothing else changes |
+| **P1** | A cart that holds a marked good is not offered a payment method whose receipt cannot carry a code (Payme) | Built (batch 21): `CartPaymentOptions` and `CheckoutEligibilityGuard` ask `FiscalNodeFacts.requiresMarkingCapablePayment` through `MarkedCartLines`, and `PaymentIntentPort.carriesMarkingCodes` is answered from the method's receipt port; ADR 0166, Decision 7 |
+| **P2** | The order-line to receipt-line projection replaces the synthetic aggregate line | Built (batch 21): `ReceiptLineBuilder` builds the lines of every order, marked or not, and the aggregate line and `MarkedOrderReceiptProjection` are deleted; ADR 0166, Decisions 6 and 9 |
+| **P3** | The Click sandbox has accepted a receipt with `Labels`, and the answer to *one item with N labels, or N items of quantity one* is known | See [connect-click-payme-sandbox.md](connect-click-payme-sandbox.md); if Click refuses N labels on one item, the split goes in `ReceiptLineBuilder` and nothing else changes |
 
 Then, in this order:
 

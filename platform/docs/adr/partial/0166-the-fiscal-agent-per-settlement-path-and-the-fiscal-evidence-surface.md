@@ -56,7 +56,7 @@
   and not alarmed; it masks identifiers until
   a role holding `fiscal.evidence.reveal` chooses a purpose, holds an opened read for two minutes at
   most, draws a link only for an `https` URL, names a delivery-fee line as its own row with its ИКПУ
-  and package code (nothing writes one until the line builder does), shows marking as a count, and raises correction and void requests and attaches
+  and package code (the line builder writes one whenever the order charged a fee, from the fee node's classification), shows marking as a count, and raises correction and void requests and attaches
   the agent's reference. The payments page's payment-types table and the fiscalization settings
   tab's responsibility projection read `GET .../fiscal/payment-types`. `GET
   /api/v1/storefront/tenants/{tenantId}/brands/{brandId}/orders/{orderId}/receipts`
@@ -68,8 +68,8 @@
   `PartnerFiscalizationBridge` reads `seller_tin` through `payments.fiscal_documents` (V0640 appends
   the column to the compatibility view) and never resolves the order's location a second time, so a
   branch that has changed hands or an entity re-registered since the sale does not move the INN a
-  receipt is filed under; a marked order whose document holds no snapshot is not sent at all (nothing
-  is filed under a TIN of zeros), and only a sandbox placeholder may carry the visibly synthetic zero.
+  receipt is filed under; an order whose document holds no snapshot is not sent at all (nothing
+  is filed under a TIN of zeros, and the sandbox placeholder that once carried a visibly synthetic zero is deleted).
   Each line of the evidence read carries the INN it was filed under (`commissionTin`, as sent), and the
   console states it beside the INN the document was opened under and says so when the two differ.
   A correction or void request has an exit that files nothing: `POST
