@@ -38,7 +38,8 @@ class TenantJobRulesTests {
     @DisplayName("nothing in platform.* or iam.* is composable, whoever holds it")
     void thePowerToGivePowerIsNeverComposable() {
         for (Capability capability : Capability.values()) {
-            if (capability.resourceType().equals("platform") || capability.resourceType().equals("iam")) {
+            if (capability.resourceType().equals("platform")
+                    || capability.resourceType().equals("iam")) {
                 assertThat(TenantJobRules.isComposable(capability))
                         .as(capability.code())
                         .isFalse();
