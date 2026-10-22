@@ -823,7 +823,7 @@ are unchanged.
 ## Status addition (2026-10-14)
 
 The customer milestones in «What the customer sees» are built on the ADR 0020 path by
-[ADR 0184](0184-order-messages-platform-wording-milestones-and-personal-values.md). `OrderPreparing`,
+[ADR 0184](../partial/0184-order-messages-platform-wording-milestones-and-personal-values.md). `OrderPreparing`,
 `OrderReady` and `OrderFulfilling` are published when a forward transition enters those statuses, and
 `OrderNotificationTrigger` turns each into a `TRANSACTIONAL_OPTIONAL` intent, consent-gated under the
 purpose `ORDER_PROGRESS_UPDATES`. Two readings of this record are fixed there: **ready** is told to a pickup

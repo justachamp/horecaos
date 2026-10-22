@@ -514,7 +514,7 @@ and which classes *should* respect one, if the answer ever needs to differ from
 
 ## Status addition (2026-10-14)
 
-[ADR 0184](0184-order-messages-platform-wording-milestones-and-personal-values.md) builds the last
+[ADR 0184](../partial/0184-order-messages-platform-wording-milestones-and-personal-values.md) builds the last
 step of this record's resolution order and amends three rules, and this record's Decision,
 Alternatives and Consequences are unchanged.
 
