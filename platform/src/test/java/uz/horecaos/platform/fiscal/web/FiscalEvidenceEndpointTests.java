@@ -888,6 +888,89 @@ class FiscalEvidenceEndpointTests {
         assertThat(documentStatus(documentId)).isEqualTo("CORRECTED");
     }
 
+    @Test
+    @DisplayName(
+            "the whole loop (ADR 0166 exit criteria): an amendment asks, the sweep repeats harmlessly, a second person approves, the agent's reference is attached, and the original reads CORRECTED beside its linked correction")
+    void theWholeLoopFromAnAmendmentToAnAttachedReference() throws Exception {
+        UUID orderId = seedOrder("E-807");
+        UUID documentId = issuedClickDocument(orderId, ENTITY_A, line("Lavash", 2, 25_000L, List.of()));
+        amendedAt(orderId, 2, NOW.plus(Duration.ofHours(1)), true);
+
+        // 1. The amended order asks, once, however often the pass runs.
+        assertThat(amendmentCorrections.openRequests(100)).isEqualTo(1);
+        assertThat(amendmentCorrections.openRequests(100)).isZero();
+        assertThat(amendmentCorrections.openRequests(100)).isZero();
+
+        // 2. What the operator sees on the order: the original, in the state the platform put it in, and the
+        //    request with nobody as its approver.
+        JsonNode asked = evidence(FINANCE, orderId, null).path("documents").path(0);
+        assertThat(asked.path("status").asText()).isEqualTo("CORRECTION_REQUESTED");
+        assertThat(asked.path("correction").path("status").asText()).isEqualTo("REQUESTED");
+        UUID requestId = jdbc.sql("SELECT id FROM fiscal.fiscal_correction_requests WHERE document_id = :d")
+                .param("d", documentId)
+                .query(UUID.class)
+                .single();
+
+        // 3. The first person cannot file the reference alone: the call is recorded as waiting for a checker,
+        //    and a person cannot be their own.
+        MvcResult waiting = attach(requestId, 2, "loop-attach-1", "SIGN-LOOP", "R-8070001", "TERM-0042");
+        assertThat(waiting.getResponse().getStatus()).isEqualTo(422);
+        JsonNode problem = json.readTree(waiting.getResponse().getContentAsString());
+        assertThat(problem.path("code").asText()).isEqualTo("SECOND_APPROVER_REQUIRED");
+        UUID approvalRequestId =
+                UUID.fromString(problem.path("approvalRequestId").asText());
+        assertThatThrownBy(() -> approvals.decide(
+                        approvalRequestId, ApprovalService.Decision.APPROVE, ActorRef.user(FINANCE, null), "self"))
+                .isInstanceOf(ApprovalService.SelfApprovalException.class);
+        assertThat(documentStatus(documentId)).isEqualTo("CORRECTION_REQUESTED");
+
+        // 4. The second person signs what was typed; the same call, repeated, files it.
+        approvals.decide(approvalRequestId, ApprovalService.Decision.APPROVE, ActorRef.user(CHECKER, null), "matches");
+        MvcResult attached = attach(requestId, 2, "loop-attach-2", "SIGN-LOOP", "R-8070001", "TERM-0042");
+        assertThat(attached.getResponse().getStatus())
+                .as(attached.getResponse().getContentAsString())
+                .isEqualTo(200);
+        UUID linkedId = UUID.fromString(json.readTree(attached.getResponse().getContentAsString())
+                .path("linkedDocumentId")
+                .asText());
+
+        // 5. The original reads CORRECTED and its evidence is the evidence it always was; the correction is a
+        //    document of its own that says what it corrects.
+        assertThat(documentStatus(documentId)).isEqualTo("CORRECTED");
+        JsonNode after = evidence(FINANCE, orderId, null);
+        List<String> statuses = new ArrayList<>();
+        after.path("documents")
+                .forEach(document -> statuses.add(document.path("status").asText()));
+        assertThat(statuses).containsExactlyInAnyOrder("CORRECTED", "ISSUED");
+        JsonNode correctionDocument = java.util.stream.StreamSupport.stream(
+                        after.path("documents").spliterator(), false)
+                .filter(document -> document.path("documentId").asText().equals(linkedId.toString()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(correctionDocument.path("documentType").asText()).isEqualTo("CORRECTION");
+        assertThat(correctionDocument.path("correctsDocumentId").asText()).isEqualTo(documentId.toString());
+
+        // 6. The pass has nothing left to say about an order whose receipt was corrected.
+        assertThat(amendmentCorrections.openRequests(100)).isZero();
+
+        // 7. The facts, in order, on the topic; and the audit trail names the platform and then the people.
+        assertThat(outboxFacts("FiscalCorrectionRequested", documentId))
+                .singleElement()
+                .satisfies(fact ->
+                        assertThat(payloadOf(fact).path("source").asText()).isEqualTo("AMENDMENT"));
+        assertThat(outboxFacts("FiscalCorrectionAttached", documentId))
+                .singleElement()
+                .satisfies(fact -> assertThat(
+                                payloadOf(fact).path("linkedDocumentId").asText())
+                        .isEqualTo(linkedId.toString()));
+        assertThat(auditFacts("fiscal.correction.requested", documentId))
+                .singleElement()
+                .satisfies(fact -> assertThat(fact.get("actor_subject")).isEqualTo("fiscal-amendment-watch"));
+        assertThat(auditFacts("fiscal.correction.attached", documentId))
+                .singleElement()
+                .satisfies(fact -> assertThat(fact.get("approval_request_id")).isEqualTo(approvalRequestId));
+    }
+
     /** An amendment's revision of the order, with or without the fiscal consequence ADR 0039 declares. */
     private void amendedAt(UUID orderId, int revision, Instant createdAt, boolean fiscalCorrectionRequired) {
         jdbc.sql("""
