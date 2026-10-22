@@ -1,3 +1,11 @@
+// This app's tsconfig carries no "node" types; these run only under Vitest's Node test runner and are
+// never shipped to a browser (the same exception activity-log-action-codes-coverage.spec.ts carries).
+// @ts-expect-error node:fs is available at Vitest's Node runtime
+import { readdirSync } from 'node:fs';
+// @ts-expect-error node:path is available at Vitest's Node runtime
+import { dirname } from 'node:path';
+// @ts-expect-error node:url is available at Vitest's Node runtime
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import controlPlaneBaseline from '../../../../../../platform/api/openapi/v1/horecaos-api.control-plane.json';
@@ -392,6 +400,21 @@ describe('path builders against the operations OpenAPI baseline (ADR 0057)', () 
       );
     }
     expect(Object.keys(KNOWN_MISMATCHES).length - fixed.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it('lists every *-paths.ts file of this folder, so a new family cannot be left unchecked', () => {
+    // PATH_FAMILIES is explicit (a bundler cannot glob a directory), which means a wave that adds a
+    // `foo-paths.ts` would otherwise add builders this gate never calls. This reads the folder.
+    const onDisk: string[] = (readdirSync(dirname(fileURLToPath(import.meta.url))) as string[])
+      .filter((name) => /-paths\.ts$/.test(name))
+      .map((name) => name.replace(/\.ts$/, ''));
+    expect(onDisk.length).toBeGreaterThan(10);
+    expect(onDisk.filter((name) => !(name in PATH_FAMILIES)).sort()).toEqual([]);
+    expect(
+      Object.keys(PATH_FAMILIES)
+        .filter((name) => !onDisk.includes(name))
+        .sort(),
+    ).toEqual([]);
   });
 
   it('every listed file exports at least one Paths object and none is an empty shell', () => {
