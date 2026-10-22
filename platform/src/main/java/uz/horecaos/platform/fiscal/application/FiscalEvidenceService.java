@@ -2,6 +2,7 @@ package uz.horecaos.platform.fiscal.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -231,6 +232,7 @@ public class FiscalEvidenceService {
             Seller seller,
             @Nullable MerchantAccount merchantAccount,
             @Nullable UUID tenderId,
+            @Nullable LocalDate businessDate,
             @Nullable UUID paymentIntentId,
             boolean hasEvidence,
             Identifiers identifiers,
@@ -329,6 +331,7 @@ public class FiscalEvidenceService {
                         ? null
                         : new MerchantAccount(row.merchantBindingId(), mask(row.merchantAccountReference())),
                 row.tenderId(),
+                row.businessDate(),
                 row.paymentIntentId(),
                 row.hasEvidence(),
                 identifiersOf(row, reveal),

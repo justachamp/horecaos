@@ -9569,6 +9569,10 @@
             "format" : "date-time",
             "type" : "string"
           },
+          "businessDate" : {
+            "format" : "date",
+            "type" : "string"
+          },
           "correction" : {
             "$ref" : "#/components/schemas/CorrectionSummaryResponse"
           },

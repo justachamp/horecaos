@@ -10,6 +10,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -495,6 +496,7 @@ public class OperationsFiscalEvidenceController {
             SellerResponse seller,
             @Nullable MerchantAccountResponse merchantAccount,
             @Nullable UUID tenderId,
+            @Nullable LocalDate businessDate,
             @Nullable UUID paymentIntentId,
             boolean hasEvidence,
             IdentifiersResponse identifiers,
@@ -531,6 +533,7 @@ public class OperationsFiscalEvidenceController {
                                     document.merchantAccount().bindingId(),
                                     document.merchantAccount().accountReferenceMasked()),
                     document.tenderId(),
+                    document.businessDate(),
                     document.paymentIntentId(),
                     document.hasEvidence(),
                     new IdentifiersResponse(

@@ -268,6 +268,38 @@ class FiscalEvidenceEndpointTests {
 
     @Test
     @DisplayName(
+            "the evidence states the tender the document covers and the business day its seller was resolved on, as stored (ADR 0038, ADR 0166 Decision 2)")
+    void theEvidenceStatesTheTenderAndTheBusinessDayAsStored() throws Exception {
+        UUID orderId = seedOrder("E-102");
+        UUID documentId = issuedClickDocument(orderId, ENTITY_A, line("Lavash classic", 1, 25_000L, List.of()));
+
+        JsonNode before = evidence(FINANCE, orderId, null).path("documents").path(0);
+        assertThat(before.path("tenderId").isNull() || before.path("tenderId").isMissingNode())
+                .as("a document written before the snapshots were taken says nothing, rather than a guess")
+                .isTrue();
+        assertThat(before.path("businessDate").isNull()
+                        || before.path("businessDate").isMissingNode())
+                .isTrue();
+
+        UUID tender = UUID.randomUUID();
+        jdbc.sql("""
+                UPDATE fiscal.fiscal_documents
+                   SET tender_id = :tender, business_date = DATE '2026-10-14'
+                 WHERE id = :id
+                """).param("tender", tender).param("id", documentId).update();
+
+        JsonNode document = evidence(FINANCE, orderId, null).path("documents").path(0);
+
+        assertThat(document.path("tenderId").asText())
+                .as("which money tender the document covers: stored, not inferred")
+                .isEqualTo(tender.toString());
+        assertThat(document.path("businessDate").asText())
+                .as("the local day, in the branch's calendar, on which the order closed")
+                .isEqualTo("2026-10-14");
+    }
+
+    @Test
+    @DisplayName(
             "every request that left is shown: the latest as the lines, the ones it replaced beside them, oldest first")
     void everyRequestThatLeftIsShown() throws Exception {
         UUID orderId = seedOrder("E-103");
