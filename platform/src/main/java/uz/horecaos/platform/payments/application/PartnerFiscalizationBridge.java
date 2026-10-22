@@ -138,13 +138,13 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
 
         FiscalDocument submittable = document;
         Optional<List<FiscalReceiptLine>> carried =
-                providerType == PaymentProviderType.PAYME && document.paymentIntentId() != null
+                presented.carriedBy(providerType) && document.paymentIntentId() != null
                         ? presented.linesOfIntent(tenantId, document.paymentIntentId())
                         : Optional.empty();
         if (carried.isPresent()) {
-            // ADR 0166 Decision 6, "stored as sent": Payme took these lines WITH THE CHECKOUT, before the
+            // ADR 0166 Decision 6, "stored as sent": this provider took these lines WITH THE CHECKOUT, before the
             // customer paid, so they are the receipt. Building them again from the order as it stands now
-            // would file a different document from the one Payme holds, or block a payment that has already
+            // would file a different document from the one the provider holds, or block a payment already
             // been taken because the catalogue moved in between.
             submittable = copyWithLines(document, carried.get());
         } else if (document.lines().isEmpty()) {

@@ -155,6 +155,15 @@ public class PaymentFiscalService {
     }
 
     /**
+     * Whether this provider takes the receipt lines with the checkout (ADR 0166 Decision 9); false for a provider
+     * with no port.
+     */
+    public boolean linesTravelWithTheCheckout(@Nullable PaymentProviderType providerType) {
+        FiscalReceiptPort port = providerType == null ? null : receiptPorts.get(providerType);
+        return port != null && port.takesLinesWithTheCheckout();
+    }
+
+    /**
      * Asks the provider for a receipt and records whatever comes back.
      *
      * <p>An uncertain submission is not resubmitted. Whether Click's

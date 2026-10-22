@@ -45,4 +45,17 @@ public interface FiscalReceiptPort {
     default boolean carriesMarkingCodes() {
         return false;
     }
+
+    /**
+     * Whether this provider takes the receipt lines <em>with the checkout</em>, fixed before the customer pays
+     * (ADR 0166 Decision 9), instead of after capture from a document.
+     *
+     * <p>Payme does: the lines travel in the checkout form and the {@code CheckPerformTransaction} result, so they
+     * are built when the payment is first presented and kept on the attempt. Click does not: it fiscalizes from a
+     * {@code payment_id} that exists only after capture. A capability on the port, for the reason {@link
+     * #carriesMarkingCodes} is: no core class learns a provider's name.
+     */
+    default boolean takesLinesWithTheCheckout() {
+        return false;
+    }
 }

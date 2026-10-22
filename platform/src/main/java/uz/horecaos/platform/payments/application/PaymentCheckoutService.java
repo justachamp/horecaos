@@ -165,9 +165,9 @@ public class PaymentCheckoutService {
 
         boolean rePresented = existing.isPresent();
 
-        if (binding.providerType() == PaymentProviderType.PAYME && binding.supportsPartnerFiscalization()) {
-            // ADR 0166 Decision 9: Payme takes the receipt lines WITH THE CHECKOUT, fixed before the customer
-            // pays, so a fiscalised cashbox is not presented a payment whose receipt cannot be built. No
+        if (receipts.carriedBy(binding.providerType()) && binding.supportsPartnerFiscalization()) {
+            // ADR 0166 Decision 9: a provider that takes the receipt lines WITH THE CHECKOUT (Payme), fixed
+            // before the customer pays, is not presented a payment whose receipt cannot be built. No
             // placeholder, no guess: the customer is told the order cannot be paid this way yet and an
             // operator sees the named obstacle. A re-presentation carries the lines the first one fixed.
             if (receipts.prepare(attempt, orderId) instanceof PresentedReceipts.Prepared.Refused refused) {

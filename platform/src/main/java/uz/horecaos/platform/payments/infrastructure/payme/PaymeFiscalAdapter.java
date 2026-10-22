@@ -87,6 +87,12 @@ public class PaymeFiscalAdapter implements FiscalReceiptPort {
         return PaymentProviderType.PAYME;
     }
 
+    /** Payme's {@code detail} object is fixed before the customer pays (ADR 0166 Decision 9). */
+    @Override
+    public boolean takesLinesWithTheCheckout() {
+        return true;
+    }
+
     @Override
     public FiscalSubmission submit(FiscalDocument document, ProviderBinding binding) {
         Instant now = clock.instant();

@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 import uz.horecaos.platform.payments.domain.FiscalReceiptLine;
 import uz.horecaos.platform.payments.domain.PaymentAttempt;
+import uz.horecaos.platform.payments.domain.PaymentProviderType;
 
 /**
  * The receipt lines a Payme checkout carries, fixed before the customer pays and kept as sent (ADR 0166
@@ -18,6 +19,14 @@ import uz.horecaos.platform.payments.domain.PaymentAttempt;
  * evidence shows what the checkout carried and not what the catalogue says by the time the order completes.
  */
 public interface PresentedReceipts {
+
+    /**
+     * Whether this provider's lines go with the checkout, so they must be built before it is presented. The
+     * provider's own receipt port says, as {@code carriesMarkingCodes} does: no caller tests a provider's name.
+     */
+    default boolean carriedBy(PaymentProviderType provider) {
+        return false;
+    }
 
     /**
      * Builds the lines of the order and keeps them on the attempt, unless the attempt already carries some, in

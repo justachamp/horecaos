@@ -1231,6 +1231,7 @@ class PartnerFiscalizationBridgeTests {
     private ProtectedPresentedReceipts presented(PaymentFiscalService service) {
         return new ProtectedPresentedReceipts(
                 world.builder(service),
+                service,
                 protection,
                 new JdbcPaymentAttemptStore(jdbc),
                 tools.jackson.databind.json.JsonMapper.builder().build(),

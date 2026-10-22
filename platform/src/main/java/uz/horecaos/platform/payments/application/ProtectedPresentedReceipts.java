@@ -16,6 +16,7 @@ import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
 import uz.horecaos.platform.payments.domain.FiscalReceiptLine;
 import uz.horecaos.platform.payments.domain.PaymentAttempt;
+import uz.horecaos.platform.payments.domain.PaymentProviderType;
 import uz.horecaos.platform.payments.domain.SomAmount;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentAttemptStore;
 import uz.horecaos.platform.payments.infrastructure.persistence.JdbcPaymentAttemptStore.PresentedReceiptRow;
@@ -40,6 +41,7 @@ public class ProtectedPresentedReceipts implements PresentedReceipts {
     static final String PURPOSE = "payme-checkout-receipt";
 
     private final ReceiptLineBuilder builder;
+    private final PaymentFiscalService fiscal;
     private final FieldProtection protection;
     private final JdbcPaymentAttemptStore attempts;
     private final ObjectMapper json;
@@ -47,11 +49,13 @@ public class ProtectedPresentedReceipts implements PresentedReceipts {
 
     public ProtectedPresentedReceipts(
             ReceiptLineBuilder builder,
+            PaymentFiscalService fiscal,
             FieldProtection protection,
             JdbcPaymentAttemptStore attempts,
             ObjectMapper json,
             java.time.Clock clock) {
         this.builder = builder;
+        this.fiscal = fiscal;
         this.protection = protection;
         this.attempts = attempts;
         this.json = json;
@@ -61,6 +65,11 @@ public class ProtectedPresentedReceipts implements PresentedReceipts {
     /** Where the protected lines sit, which is also part of what the ciphertext is bound to. */
     public static RecordRef recordOf(UUID attemptId) {
         return new RecordRef("payments.payment_attempts", "presented_receipt_reference", attemptId);
+    }
+
+    @Override
+    public boolean carriedBy(PaymentProviderType provider) {
+        return fiscal.linesTravelWithTheCheckout(provider);
     }
 
     @Override

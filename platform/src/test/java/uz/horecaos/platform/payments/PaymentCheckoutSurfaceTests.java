@@ -669,6 +669,11 @@ class PaymentCheckoutSurfaceTests {
         }
 
         @Override
+        public boolean carriedBy(PaymentProviderType provider) {
+            return provider == PaymentProviderType.PAYME;
+        }
+
+        @Override
         public Prepared prepare(PaymentAttempt attempt, UUID orderId) {
             prepared++;
             return unbuildable
