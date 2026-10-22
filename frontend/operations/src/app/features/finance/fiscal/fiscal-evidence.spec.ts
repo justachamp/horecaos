@@ -215,6 +215,20 @@ describe('FiscalEvidence: the fiscal evidence of one order (row X.2, ADR 0166)',
       );
     });
 
+    it('states the business day the seller was resolved on when the document kept it, and nothing when it did not', async () => {
+      configure({
+        masked: view([
+          document_({ businessDate: '2026-10-14' }),
+          document_({ documentId: 'doc-2', businessDate: null }),
+        ]),
+      });
+      const fixture = await render();
+
+      const days = allByTestId(fixture, 'fiscal-evidence-business-date');
+      expect(days, 'only the document that kept a day draws one').toHaveLength(1);
+      expect(days[0].textContent).toContain('2026-10-14');
+    });
+
     it('says a backfilled INN was resolved from the entity afterwards and not from the filing', async () => {
       configure({
         masked: view([

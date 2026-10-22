@@ -775,6 +775,7 @@ export const financeUzLatn: AreaMessages<typeof financeEn> = {
   'finance.fiscalEvidence.seller.source.UNRESOLVED':
     'Hujjatda yuridik shaxs koʻrsatilmagan, shuning uchun STIRni aytib boʻlmaydi.',
   'finance.fiscalEvidence.field.merchantAccount': 'Merchant hisobi',
+  'finance.fiscalEvidence.field.businessDate': 'Sotuvchi aniqlangan operatsion kun',
   'finance.fiscalEvidence.field.fiscalSign': 'Fiskal belgi',
   'finance.fiscalEvidence.field.receiptNumber': 'Chek raqami',
   'finance.fiscalEvidence.field.terminalId': 'Terminal',

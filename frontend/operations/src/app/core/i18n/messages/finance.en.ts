@@ -768,6 +768,7 @@ export const financeEn = {
   'finance.fiscalEvidence.seller.source.UNRESOLVED':
     'No legal entity is named on this document, so no TIN can be stated.',
   'finance.fiscalEvidence.field.merchantAccount': 'Merchant account',
+  'finance.fiscalEvidence.field.businessDate': 'Business day the seller was resolved on',
   'finance.fiscalEvidence.field.fiscalSign': 'Fiscal sign',
   'finance.fiscalEvidence.field.receiptNumber': 'Receipt number',
   'finance.fiscalEvidence.field.terminalId': 'Terminal',

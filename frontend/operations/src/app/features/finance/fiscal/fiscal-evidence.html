@@ -158,6 +158,13 @@
             >
           </dd>
 
+          @if (document.businessDate; as businessDay) {
+            <dt class="q-caption">{{ 'finance.fiscalEvidence.field.businessDate' | t }}</dt>
+            <dd class="q-body-sm q-mono" data-testid="fiscal-evidence-business-date">
+              {{ businessDay }}
+            </dd>
+          }
+
           @if (document.merchantAccount; as account) {
             <dt class="q-caption">{{ 'finance.fiscalEvidence.field.merchantAccount' | t }}</dt>
             <dd class="q-body-sm q-mono" data-testid="fiscal-evidence-account">

@@ -770,6 +770,7 @@ export const financeRu: AreaMessages<typeof financeEn> = {
   'finance.fiscalEvidence.seller.source.UNRESOLVED':
     'В документе не указано юрлицо, поэтому ИНН назвать нельзя.',
   'finance.fiscalEvidence.field.merchantAccount': 'Мерчант-аккаунт',
+  'finance.fiscalEvidence.field.businessDate': 'Операционный день, по которому определён продавец',
   'finance.fiscalEvidence.field.fiscalSign': 'Фискальный признак',
   'finance.fiscalEvidence.field.receiptNumber': 'Номер чека',
   'finance.fiscalEvidence.field.terminalId': 'Терминал',
