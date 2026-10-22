@@ -34,7 +34,7 @@ export const coreRu = {
   'duty.indicator.denied': 'На линии · доступ к геолокации закрыт',
   'duty.indicator.break': 'Перерыв · местоположение не передаётся',
   'duty.indicator.unreachable': 'На линии · нет связи с сервером',
-  'shell.nav.offers': 'Предложения',
+  'shell.nav.offers': 'Заказы',
   'shell.nav.deliveries': 'Доставки',
   'shell.nav.waiting': 'ожидают: {count}',
 } as const satisfies Record<keyof typeof coreEn, string>;

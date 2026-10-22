@@ -25,7 +25,7 @@ const SENTENCES: Readonly<Record<Exclude<DutyIndicator, 'off'>, MessageKey>> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (sentence(); as key) {
-      <div class="bar" role="status">
+      <div role="status">
         <a routerLink="/shift" class="indicator" [class.ok]="healthy()" [class.warn]="!healthy()">
           <span class="dot" aria-hidden="true"></span>
           {{ key | t }}

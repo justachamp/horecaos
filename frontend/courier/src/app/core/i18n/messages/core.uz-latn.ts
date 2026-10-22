@@ -36,6 +36,6 @@ export const coreUzLatn = {
   'duty.indicator.break': 'Tanaffus · joylashuv yuborilmaydi',
   'duty.indicator.unreachable': 'Liniyada · serverga ulanib boʻlmadi',
   'shell.nav.offers': 'Takliflar',
-  'shell.nav.deliveries': 'Yetkazmalar',
+  'shell.nav.deliveries': 'Yetkazish',
   'shell.nav.waiting': '{count} ta kutmoqda',
 } as const satisfies Record<keyof typeof coreEn, string>;

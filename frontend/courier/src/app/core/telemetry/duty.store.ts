@@ -70,8 +70,12 @@ export class DutyStore {
   readonly busy = this.working.asReadonly();
   readonly error = this.failure.asReadonly();
   readonly wakeLock = this.lockState.asReadonly();
-  /** A session is open on the platform but this phone cannot collect for it until the notice is acknowledged here. */
-  readonly awaitingNotice = this.needsNotice.asReadonly();
+  /**
+   * A session is open on the platform but this phone cannot collect for it until the notice is
+   * acknowledged here. It ends the moment it is: going on duty then returns the session already
+   * open and attaches to it.
+   */
+  readonly awaitingNotice = computed(() => this.needsNotice() && !this.notice.acknowledged());
   /** The platform ended the session under the courier (a close elsewhere, the sweeper). */
   readonly endedByPlatform = this.platformClosed.asReadonly();
 

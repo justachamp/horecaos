@@ -82,9 +82,12 @@
   box-shadow: inset 0 3px 0 var(--q-primary);
 }
 
+/* Five tabs share a phone's width: the smallest type on the closed scale, and nothing that can push the bar wider than the screen. */
 .tabs a {
   gap: 4px;
-  font-size: var(--q-type-caption);
+  min-width: 0;
+  padding-inline: 2px;
+  font-size: var(--q-type-caption-sm);
   text-align: center;
 }
 

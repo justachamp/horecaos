@@ -1,7 +1,7 @@
 import type { offersEn } from './offers.en';
 
 export const offersRu = {
-  'offers.title': 'Предложения',
+  'offers.title': 'Новые заказы',
   'offers.empty': 'Сейчас предложений нет. Новые появятся здесь сами.',
   'offers.noShift.title': 'Смена не открыта',
   'offers.noShift.body': 'Откройте смену, чтобы получать предложения.',

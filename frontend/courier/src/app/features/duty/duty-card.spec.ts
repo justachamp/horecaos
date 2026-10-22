@@ -12,6 +12,7 @@ import { ApiError } from '../../core/api/problem-details';
 import type { CourierProfile } from '../../core/courier/courier-profile';
 import type { DutySession } from '../../core/courier/courier-duty';
 import { CourierProfileStore } from '../../core/courier/courier-profile.store';
+import { NoticeStore } from '../../core/notice/notice.store';
 import { DutyStore } from '../../core/telemetry/duty.store';
 import { TestBed } from '@angular/core/testing';
 import { DutyCard } from './duty-card';
@@ -166,6 +167,28 @@ describe('DutyCard', () => {
 
     expect(textOf(card)).toContain('Read the notice on this phone to continue');
     expect(buttonLabelled(card.nativeElement, 'Go on duty')).toBeNull();
+  });
+
+  it('lets the courier carry on once they have read the notice on this phone', async () => {
+    work = configureWork(OPEN);
+    work.api.currentDuty.mockResolvedValue({ session: session() });
+    work.api.openDuty.mockResolvedValue(session());
+    await TestBed.inject(CourierProfileStore).load();
+    await TestBed.inject(DutyStore).restore();
+    const card = await renderPage(DutyCard, ['shift', 'notice']);
+    expect(buttonLabelled(card.nativeElement, 'Go on duty')).toBeNull();
+
+    // The courier follows the link, reads the notice and accepts it; the card is still on screen.
+    await TestBed.inject(NoticeStore).acknowledge();
+    await card.whenStable();
+    card.detectChanges();
+
+    expect(textOf(card)).not.toContain('Read the notice on this phone to continue');
+    await tap(card, 'Go on duty');
+    await vi.waitFor(() => {
+      card.detectChanges();
+      expect(textOf(card)).toContain('You are on duty.');
+    });
   });
 
   it('says so when the platform ended the session under the courier', async () => {

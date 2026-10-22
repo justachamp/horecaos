@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
 import { FakeGeolocation, FakeWakeLock, fix } from '../../../testing/fake-device';
@@ -42,7 +43,7 @@ describe('DutyStore', () => {
     closeDuty: ReturnType<typeof vi.fn>;
     postObservations: ReturnType<typeof vi.fn>;
   };
-  let acknowledged: boolean;
+  let acknowledged: ReturnType<typeof signal<boolean>>;
 
   async function create(profile = courierProfile()) {
     api.me.mockResolvedValue(profile);
@@ -54,7 +55,7 @@ describe('DutyStore', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-10-14T05:00:00Z'));
     localStorage.clear();
-    acknowledged = true;
+    acknowledged = signal(true);
     geo = new FakeGeolocation();
     lock = new FakeWakeLock();
     api = {
@@ -80,7 +81,7 @@ describe('DutyStore', () => {
         { provide: BATTERY, useValue: async () => null },
         {
           provide: NoticeStore,
-          useValue: { acknowledged: () => acknowledged },
+          useValue: { acknowledged },
         },
       ],
     });
@@ -95,7 +96,7 @@ describe('DutyStore', () => {
 
   describe('going on duty', () => {
     it('is refused before the courier has acknowledged the notice: no call, no lock, no watch', async () => {
-      acknowledged = false;
+      acknowledged.set(false);
       const duty = await create();
 
       await duty.goOnDuty();
@@ -205,7 +206,7 @@ describe('DutyStore', () => {
     });
 
     it('is not collected on this phone until the notice is acknowledged here, and says so', async () => {
-      acknowledged = false;
+      acknowledged.set(false);
       api.currentDuty.mockResolvedValue({ session: session() });
       const duty = await create();
 
@@ -215,6 +216,24 @@ describe('DutyStore', () => {
       expect(duty.onDuty()).toBe(false);
       expect(geo.watching).toBe(0);
       expect(lock.requests).toBe(0);
+    });
+
+    it('stops waiting for the notice the moment it is acknowledged, and goes on duty on the session already open', async () => {
+      acknowledged.set(false);
+      api.currentDuty.mockResolvedValue({ session: session() });
+      api.openDuty.mockResolvedValue(session());
+      const duty = await create();
+      await duty.restore();
+      expect(duty.awaitingNotice()).toBe(true);
+
+      acknowledged.set(true);
+
+      expect(duty.awaitingNotice()).toBe(false);
+      await duty.goOnDuty();
+      // The platform answers an open with the session already open, so this attaches rather than duplicates.
+      expect(api.openDuty).toHaveBeenCalledOnce();
+      expect(duty.onDuty()).toBe(true);
+      expect(duty.session()?.sessionId).toBe('session-1');
     });
 
     it('asks nothing when there is no shift', async () => {

@@ -1,8 +1,6 @@
 :host {
   display: block;
-}
-
-.bar {
+  /* The host is what sticks: a sticky child would stick only within its own parent, which is as tall as the bar. */
   position: sticky;
   top: calc(56px + env(safe-area-inset-top));
   z-index: 9;
