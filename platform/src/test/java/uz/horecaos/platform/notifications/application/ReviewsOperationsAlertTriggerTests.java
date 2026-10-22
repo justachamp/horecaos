@@ -64,7 +64,12 @@ class ReviewsOperationsAlertTriggerTests {
                 return onBreach && TENANT.equals(tenantId) && BRAND.equals(brandId);
             }
         };
-        trigger = new ReviewsOperationsAlertTrigger(alerts, settings, Duration.ofDays(3), Duration.ofDays(1));
+        trigger = new ReviewsOperationsAlertTrigger(
+                alerts,
+                settings,
+                Duration.ofDays(3),
+                Duration.ofDays(1),
+                AfterCommitAlertTransaction.withoutTransaction());
     }
 
     private RecoveryCaseOpened opened() {

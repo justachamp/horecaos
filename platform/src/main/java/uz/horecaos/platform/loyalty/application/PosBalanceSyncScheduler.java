@@ -112,9 +112,8 @@ public class PosBalanceSyncScheduler {
             sync.run(tenantBinding.tenantId(), tenantBinding.brandId(), binding.bindingId(), RunKind.PULL, JOB);
             started++;
         }
-        // After the pull, so the first number sent to a till already includes what the till just reported; and on its
-        // own
-        // cadence from then on (pushTick), which is why this is a call and not a step of the pull.
+        // After the pull, so the first number sent to a till already includes what the till just reported; from then on
+        // the push keeps its own cadence (pushTick), which is why this is a call and not a step of the pull.
         started += pushOne(tenantBinding);
         if (reconcileDue(tenantBinding, now)) {
             sync.run(tenantBinding.tenantId(), tenantBinding.brandId(), binding.bindingId(), RunKind.RECONCILE, JOB);

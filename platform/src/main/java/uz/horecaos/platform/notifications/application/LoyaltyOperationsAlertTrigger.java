@@ -29,8 +29,10 @@ import uz.horecaos.platform.notifications.api.OperationsAlertPort;
  * binding, per kind, per UTC day, whatever number of differences a pass found: the report in the console lists them all.
  * The message carries ids and a kind and nothing else (ADR 0029): no customer, no phone, no balance.
  *
- * <p>The sync runs outside any transaction, so the listener runs where it is published when none is open ({@code
- * fallbackExecution}) and after the commit when one is: an alert about a difference never rolls the difference back.
+ * <p>Most of a pass runs outside any transaction, so the listener runs where it is published when none is open ({@code
+ * fallbackExecution}); a held credit is found inside the importer's transaction, and then it runs after that commits. Either
+ * way the alert is written in a transaction of its own ({@link AfterCommitAlertTransaction}) and an alert about a difference
+ * never rolls the difference back.
  */
 @Component
 public class LoyaltyOperationsAlertTrigger {
@@ -56,16 +58,19 @@ public class LoyaltyOperationsAlertTrigger {
     private final OperationsAlertPort operationsAlerts;
     private final Duration expiry;
     private final Clock clock;
+    private final AfterCommitAlertTransaction afterCommit;
 
     public LoyaltyOperationsAlertTrigger(
             OperationsAlertPort operationsAlerts,
             // A difference waits for a finance person, not for a cook mid-service: it stays worth a chat's attention
             // for a day.
             @Value("${horecaos.notifications.telegram.loyalty-sync-alert-expiry:P1D}") Duration expiry,
-            Clock clock) {
+            Clock clock,
+            AfterCommitAlertTransaction afterCommit) {
         this.operationsAlerts = operationsAlerts;
         this.expiry = expiry;
         this.clock = clock;
+        this.afterCommit = afterCommit;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
@@ -78,7 +83,7 @@ public class LoyaltyOperationsAlertTrigger {
         variables.put("discrepancyId", event.discrepancyId().toString());
         variables.put("discrepancyKind", event.kind());
         try {
-            operationsAlerts.fanOut(
+            afterCommit.run(() -> operationsAlerts.fanOut(
                     event.tenantId(),
                     event.brandId(),
                     // A binding belongs to the brand: the chats bound to the brand as a whole hear it.
@@ -96,11 +101,12 @@ public class LoyaltyOperationsAlertTrigger {
                                     event.kind(),
                                     clock.instant().atZone(ZoneOffset.UTC).toLocalDate()),
                     variables,
-                    expiry);
+                    expiry));
         } catch (RuntimeException failure) {
-            // The sync pass published this from outside any transaction, so a fault here would otherwise fail the pass
-            // that found the difference. The difference is written and listed; only the telling is lost, and the next
-            // pass that finds a new one tells again. Identifiers only (ADR 0029).
+            // A fault here would otherwise fail the pass that found the difference. The difference is written and
+            // listed;
+            // only the telling is lost, and the next pass that finds a new one tells again. Identifiers only (ADR
+            // 0029).
             log.warn(
                     "A till-sync alert could not be raised for binding {} ({}): {}",
                     event.bindingId(),

@@ -62,7 +62,8 @@ class LoyaltyOperationsAlertTriggerTests {
                 return now;
             }
         };
-        trigger = new LoyaltyOperationsAlertTrigger(alerts, Duration.ofDays(1), clock);
+        trigger = new LoyaltyOperationsAlertTrigger(
+                alerts, Duration.ofDays(1), clock, AfterCommitAlertTransaction.withoutTransaction());
     }
 
     private static LoyaltySyncDiscrepancyOpened opened(UUID binding, String kind) {
@@ -184,7 +185,8 @@ class LoyaltyOperationsAlertTriggerTests {
                         any(),
                         any());
 
-        org.assertj.core.api.Assertions.assertThatCode(() -> trigger.onDiscrepancyOpened(opened(BINDING, "TILL_HIGHER")))
+        org.assertj.core.api.Assertions.assertThatCode(
+                        () -> trigger.onDiscrepancyOpened(opened(BINDING, "TILL_HIGHER")))
                 .doesNotThrowAnyException();
     }
 

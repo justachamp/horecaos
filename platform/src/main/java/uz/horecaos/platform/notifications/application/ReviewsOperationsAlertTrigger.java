@@ -55,6 +55,7 @@ public class ReviewsOperationsAlertTrigger {
     private final RecoveryAlertSettings settings;
     private final Duration expiry;
     private final Duration reviewExpiry;
+    private final AfterCommitAlertTransaction afterCommit;
 
     public ReviewsOperationsAlertTrigger(
             OperationsAlertPort operationsAlerts,
@@ -63,11 +64,13 @@ public class ReviewsOperationsAlertTrigger {
             // expire the way an approval deadline is.
             @Value("${horecaos.notifications.telegram.recovery-alert-expiry:P3D}") Duration expiry,
             // A review alert is news: a day later it is not worth a chat's attention.
-            @Value("${horecaos.notifications.telegram.review-alert-expiry:P1D}") Duration reviewExpiry) {
+            @Value("${horecaos.notifications.telegram.review-alert-expiry:P1D}") Duration reviewExpiry,
+            AfterCommitAlertTransaction afterCommit) {
         this.operationsAlerts = operationsAlerts;
         this.settings = settings;
         this.expiry = expiry;
         this.reviewExpiry = reviewExpiry;
+        this.afterCommit = afterCommit;
     }
 
     /**
@@ -78,7 +81,9 @@ public class ReviewsOperationsAlertTrigger {
      *
      * <p>{@code AFTER_COMMIT}, unlike the recovery alerts above, which start clocks and so commit with the case: this one is
      * news. A fault in telling a chat must never fail the customer's submission, so it runs once the review is committed and
-     * a failure is logged by identifier and goes no further; a review whose alert was lost is still on the reviews screen.
+     * a failure is logged by identifier and goes no further; a review whose alert was lost is still on the reviews screen. The
+     * alert is written in a transaction of its own ({@link AfterCommitAlertTransaction}): the review's is finished, and a write
+     * that joined it would never commit.
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onReviewSubmitted(ReviewSubmitted event) {
@@ -87,7 +92,7 @@ public class ReviewsOperationsAlertTrigger {
         variables.put("reviewId", event.reviewId().toString());
         variables.put("rating", Integer.toString(event.rating()));
         try {
-            operationsAlerts.fanOut(
+            afterCommit.run(() -> operationsAlerts.fanOut(
                     event.tenantId(),
                     event.brandId(),
                     event.locationId(),
@@ -98,7 +103,7 @@ public class ReviewsOperationsAlertTrigger {
                     event.eventId(),
                     "%s:%s:%s".formatted(eventClass, REVIEW_SUBJECT_TYPE, event.reviewId()),
                     variables,
-                    reviewExpiry);
+                    reviewExpiry));
         } catch (RuntimeException failure) {
             log.warn(
                     "A review alert could not be raised for review {}: {}",
