@@ -82,8 +82,6 @@ class FakeCardProviderTests extends CardProviderContract {
         return fake.successfulCharges().size();
     }
 
-    // ------------------------------------------------------------ what only this double promises
-
     // ------------------------------------------------------------ the shared contract, one test per rule
 
     @Test
@@ -159,6 +157,8 @@ class FakeCardProviderTests extends CardProviderContract {
     void aChargeStaysAnswerableAndReplayableAfterItsCardIsRevoked() {
         assertAChargeStaysAnswerableAndReplayableAfterItsCardIsRevoked();
     }
+
+    // ------------------------------------------------------------ what only this double promises
 
     @Test
     void aTestDoubleSaysSoAndNeedsNoCredential() {

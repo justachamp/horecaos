@@ -227,8 +227,6 @@ class ClickCardProviderAdapterTests extends CardProviderContract {
         }
     }
 
-    // ------------------------------------------------------------------ the wire
-
     // ------------------------------------------------------------ the shared contract, one test per rule
 
     @Test
@@ -304,6 +302,8 @@ class ClickCardProviderAdapterTests extends CardProviderContract {
     void aChargeStaysAnswerableAndReplayableAfterItsCardIsRevoked() {
         assertAChargeStaysAnswerableAndReplayableAfterItsCardIsRevoked();
     }
+
+    // ------------------------------------------------------------------ the wire
 
     @Test
     @DisplayName("Auth is sha1(timestamp + secret) behind the merchant user id, exactly as Click documents it")
