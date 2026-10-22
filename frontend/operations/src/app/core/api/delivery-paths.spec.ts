@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { dispatchRulesPaths } from './delivery-paths';
+import { deliveryListPaths, dispatchRulesPaths } from './delivery-paths';
 
 /**
  * The literal path each builder produces, not that the builder equals itself: a self-comparison
@@ -29,5 +29,12 @@ describe('dispatchRulesPaths (ADR 0142)', () => {
 
   it('encodes an identifier rather than trusting it', () => {
     expect(dispatchRulesPaths.rules('a/b')).toBe('/api/v1/operations/tenants/a%2Fb/dispatch-rules');
+  });
+});
+
+describe('deliveryListPaths (ADR 0164 slice two)', () => {
+  it('builds the list under the tenant, encoded', () => {
+    expect(deliveryListPaths.deliveries('t1')).toBe('/api/v1/operations/tenants/t1/deliveries');
+    expect(deliveryListPaths.deliveries('a/b')).toBe('/api/v1/operations/tenants/a%2Fb/deliveries');
   });
 });

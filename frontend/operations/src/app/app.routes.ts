@@ -81,6 +81,15 @@ export const routes: Routes = [
       import('./features/auth/reset-password-page').then((m) => m.ResetPasswordPage),
   },
   {
+    // ADR 0178: a courier choosing their own password from the link they were texted. Outside the guard for
+    // the reason /invite and /reset-password are: somebody with no password has no session to present. The
+    // token rides in the fragment. This moves to the courier client with a change of the link's origin.
+    path: 'courier-access',
+    canActivate: [messagesGuard('auth')],
+    loadComponent: () =>
+      import('./features/auth/courier-access-page').then((m) => m.CourierAccessPage),
+  },
+  {
     // Row `X/X.2` (ADR 0079, ADR 0119, wave P17) — the KDS fullscreen shell.
     // Outside `authGuard` and declared *before* the console `Shell` route
     // below, on purpose, the same placement as `/login`/`/invite` above and
@@ -109,13 +118,17 @@ export const routes: Routes = [
       // that bought the deliveries-console module. An unreadable profile is `/today`, as it always was.
       { path: '', pathMatch: 'full', canActivate: [landingGuard], children: [] },
       {
-        // ADR 0164, slice one: `/deliveries` is the landing route of the deliveries profile and is the
-        // dispatch board, which already shows a delivery (a plan with its courier, its non-PII
-        // destination, its promise and its state) as the record. Not a rail entry and not a second
-        // screen: slice two, the history list, waits for the first courier-service tenant.
+        // ADR 0164, slice two: `/deliveries` is the landing route of the deliveries profile and is the
+        // list of every delivery the tenant has had (a plan with its courier, its non-PII destination, its
+        // promise, its state, its cost at a basis and the cash to collect), filterable and paged. A row opens
+        // the order's own detail pane; there is no second detail screen. The dispatch board stays where it
+        // was, at `/delivery/dispatch`: it is the open work, and this is the record behind it. Not a rail
+        // entry: the profile lands here, and the Delivery section links to it.
         path: 'deliveries',
         pathMatch: 'full',
-        redirectTo: 'delivery/dispatch',
+        canActivate: [messagesGuard('delivery', 'couriers')],
+        loadComponent: () =>
+          import('./features/delivery/deliveries-page').then((m) => m.DeliveriesPage),
       },
       {
         // operations IA §9.1c: where `capabilityGuard` sends a direct URL
