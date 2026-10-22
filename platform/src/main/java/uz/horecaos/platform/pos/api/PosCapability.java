@@ -104,7 +104,22 @@ public enum PosCapability {
      * (the trigger refuses it). That includes Clopos, whose notes record no balance field, iiko and
      * R-Keeper, about which nothing in this repository says what either exposes for a wallet.
      */
-    LOYALTY_BALANCE_SYNC;
+    LOYALTY_BALANCE_SYNC,
+
+    /**
+     * Tell the provider that an order it already holds is now worth a different total (ADR 0137, row 4.2c).
+     *
+     * <p>A weight captured at the pass corrects a catchweight line's amount; if the order was exported
+     * first, the till holds the nominal total. This is what lets an adapter whose vendor can revise an order
+     * be sent the weighed amount, under a key built from the notice, so a repeat is the same send. Where it
+     * is not enabled the platform does not pretend: it raises a notice and a person corrects the till.
+     *
+     * <p>Every vendor starts unassessed, and an unassessed capability cannot be enabled on a binding (the
+     * trigger refuses it). Clopos is recorded as unsupported with its reason (a line count is an integer
+     * and {@code PUT /orders/{id}} accepts only {@code IGNORE}); iiko and R-Keeper stay unassessed. No real
+     * vendor is claimed.
+     */
+    ORDER_REVISION;
 
     /** The string stored in the database. Identical to the constant name by design. */
     public String code() {

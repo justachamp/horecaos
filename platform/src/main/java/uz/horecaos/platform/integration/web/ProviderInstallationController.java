@@ -808,7 +808,8 @@ public class ProviderInstallationController {
     @Operation(summary = "List an installation's bindings")
     List<BindingView> bindings(@PathVariable UUID tenantId, @PathVariable UUID installationId) {
         return jdbc.sql("""
-                SELECT b.id, b.brand_id, b.location_id, b.status, b.priority, b.effective_from, b.effective_until
+                SELECT b.id, b.brand_id, b.location_id, b.status, b.priority, b.effective_from, b.effective_until,
+                       b.version, b.marketplace_ruleset_code
                   FROM integration.bindings b
                  WHERE b.tenant_id = :tenantId AND b.installation_id = :installationId
                  ORDER BY b.created_at DESC
@@ -822,7 +823,9 @@ public class ProviderInstallationController {
                         rs.getString("status"),
                         rs.getInt("priority"),
                         rs.getObject("effective_from", OffsetDateTime.class),
-                        rs.getObject("effective_until", OffsetDateTime.class)))
+                        rs.getObject("effective_until", OffsetDateTime.class),
+                        rs.getLong("version"),
+                        rs.getString("marketplace_ruleset_code")))
                 .list();
     }
 
@@ -1307,7 +1310,12 @@ public class ProviderInstallationController {
             String status,
             int priority,
             OffsetDateTime effectiveFrom,
-            @Nullable OffsetDateTime effectiveUntil) {}
+            @Nullable OffsetDateTime effectiveUntil,
+            // The binding's version, which a writer of the binding quotes in If-Match (ADR 0031).
+            long version,
+            // ADR 0138: the marketplace ruleset a MARKETPLACE binding names, or null (the universal rules
+            // alone); always null for any other category.
+            @Nullable String marketplaceRulesetCode) {}
 
     /**
      * One branch, one capability, one resolved winner (gap-map row 10.8a).

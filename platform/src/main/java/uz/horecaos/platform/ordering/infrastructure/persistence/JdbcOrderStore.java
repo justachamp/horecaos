@@ -2497,6 +2497,43 @@ public class JdbcOrderStore {
                 .list();
     }
 
+    /**
+     * The lines of an order that arrived flagged (ADR 0040, ADR 0141): {@code UNMAPPED} -- the catalogue
+     * does not carry the item -- or {@code STOPPED} -- it could not be sold on this channel at this branch
+     * when the order came in. Keyed by line id; a line that was never flagged has no entry, so a native
+     * order costs one query that returns nothing. Always the live set: a flag describes the order as it
+     * arrived, and an amendment that closes the line takes the flag with it.
+     */
+    public Map<UUID, LineIntakeFlag> intakeFlags(UUID tenantId, UUID orderId) {
+        Map<UUID, LineIntakeFlag> flags = new HashMap<>();
+        jdbc.sql("""
+                SELECT id, external_mapping_status, external_item_reference
+                FROM ordering.order_lines
+                WHERE tenant_id = :tenantId AND order_id = :orderId
+                  AND revision_to IS NULL
+                  AND external_mapping_status <> 'MAPPED'
+                """)
+                .param("tenantId", tenantId)
+                .param("orderId", orderId)
+                .query((row, number) -> new LineIntakeFlag(
+                        row.getObject("id", UUID.class),
+                        row.getString("external_mapping_status"),
+                        row.getString("external_item_reference")))
+                .list()
+                .forEach(flag -> flags.put(flag.lineId(), flag));
+        return flags;
+    }
+
+    /**
+     * Why an aggregator line needs a person before the food is cooked.
+     *
+     * @param status {@code UNMAPPED} or {@code STOPPED}
+     * @param externalItemReference the partner's own identifier for the item, so the branch can name the
+     *     SKU to fix or to stop on the aggregator's side; null for a line entered without one
+     */
+    public record LineIntakeFlag(
+            UUID lineId, String status, @Nullable String externalItemReference) {}
+
     /** The stored ciphertext of one line's note, for the one endpoint that may reveal it. */
     public Optional<String> lineNote(UUID tenantId, UUID orderId, UUID lineId) {
         return jdbc.sql("""

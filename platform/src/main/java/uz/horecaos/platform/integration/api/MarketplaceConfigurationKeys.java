@@ -16,6 +16,7 @@ public final class MarketplaceConfigurationKeys {
     public static final String RECONCILE_ENABLED_CODE = "marketplace.availability.reconcile_enabled";
     public static final String RESYNC_INTERVAL_SECONDS_CODE = "marketplace.availability.resync_interval_seconds";
     public static final String STALE_AFTER_SECONDS_CODE = "marketplace.availability.stale_after_seconds";
+    public static final String DRY_RUN_CODE = "marketplace.availability.dry_run";
 
     /**
      * ADR 0141, rollback switch two: <em>suspend the reconciler</em>. Off, no call reaches any
@@ -60,6 +61,24 @@ public final class MarketplaceConfigurationKeys {
             .settableAt(ScopeType.PLATFORM, ScopeType.TENANT)
             .describedAs("Seconds a marketplace binding may go without a confirmed availability push "
                     + "before it is treated as stale.")
+            .build();
+
+    /**
+     * ADR 0141 Phase 3: <em>rehearse</em> the reconciler for one branch's binding. On, the reconciler still
+     * recomputes what each mapped dish should read, but calls no partner and believes nothing about one:
+     * it records, per dish, what it would have pushed, and the propagation read says {@code DRY_RUN}. The
+     * operator compares that list with the partner's own portal for a week, then turns this off. Resolved at
+     * the binding's location (a binding lives at one), so "dry run for one aggregator at one branch" is a
+     * location-scoped value and a tenant-wide one is a deliberate choice. Off by default; leaving it
+     * resends everything once, as a resumption does.
+     */
+    public static final ConfigurationKey<Boolean> DRY_RUN = ConfigurationKey.of(DRY_RUN_CODE, Boolean.class)
+            .defaultValue(false)
+            .ownedBy("integration")
+            .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND, ScopeType.LOCATION)
+            .describedAs("Whether a marketplace binding rehearses its stop-list pushes without calling the "
+                    + "partner. On, the platform records what it would have sent; off, it sends. Switching it "
+                    + "off resends every item once.")
             .build();
 
     private MarketplaceConfigurationKeys() {}

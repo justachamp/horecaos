@@ -1513,6 +1513,208 @@ class MarketplaceAvailabilityReconcilerTests {
                 .isNotEqualTo(alerts.calls().get(1).idempotencyKeyBase());
     }
 
+    // -----------------------------------------------------------------------
+    // ADR 0141 Phase 3: the dry run (batch 21, ADR 0180 Decision 3)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+            "a binding in dry run calls no partner, believes nothing, and records for each dish what it would have sent")
+    void aDryRunCallsNobodyAndRecordsWhatItWouldSend() {
+        World w = world();
+        configuration.put("marketplace.availability.dry_run", true);
+
+        MarketplaceAvailabilityReconciler.BindingReport report = reconciler.reconcile(binding(w));
+
+        assertThat(report.dryRun()).isTrue();
+        assertThat(report.pushed()).isZero();
+        assertThat(report.wouldPush())
+                .as("both mapped dishes differ from the unknown the partner is")
+                .isEqualTo(2);
+        assertThat(partner.calls).as("no request left the platform").isEmpty();
+        assertThat(rowStates(w)).containsOnly("PENDING");
+        assertThat(jdbc.sql("""
+                                SELECT count(*) FROM integration.marketplace_item_availability
+                                WHERE confirmed_available IS NOT NULL OR last_attempt_at IS NOT NULL
+                                """).query(Long.class).single())
+                .as("a rehearsal confirms nothing and attempts nothing")
+                .isZero();
+        assertThat(jdbc.sql("""
+                                SELECT string_agg(external_entity_id || '=' || would_push_available, ',' ORDER BY external_entity_id)
+                                FROM integration.marketplace_item_availability
+                                """).query(String.class).single()).isEqualTo("ext-A=true,ext-B=true");
+        assertThat(outbox(MarketplaceOutbox.AVAILABILITY_PUSHED))
+                .as("MarketplaceAvailabilityPushed says a partner confirmed something; none did")
+                .isEmpty();
+        assertThat(meters.get("horecaos.marketplace.availability.dry_run_would_push")
+                        .counter()
+                        .count())
+                .isEqualTo(2.0);
+    }
+
+    @Test
+    @DisplayName("the propagation read says DRY_RUN with the count and each dish's recorded decision, never AUTOMATIC")
+    void thePropagationReadShowsTheDryRun() {
+        World w = world();
+        configuration.put("marketplace.availability.dry_run", true);
+        reconcile(w);
+
+        MarketplacePropagationQuery.Binding view =
+                propagation.at(w.tenant, w.location).get(0);
+
+        assertThat(view.mode()).isEqualTo(Mode.DRY_RUN);
+        assertThat(view.wouldPush()).isEqualTo(2);
+        assertThat(view.inSync()).isZero();
+        assertThat(view.unconfirmedItems())
+                .extracting(MarketplacePropagationQuery.Item::wouldPushAvailable)
+                .containsOnly(true);
+        assertThat(view.unconfirmedItems())
+                .extracting(MarketplacePropagationQuery.Item::wouldPushAt)
+                .containsOnly(clock.instant());
+        assertThat(view.incidentOpenSince()).isNull();
+    }
+
+    @Test
+    @DisplayName(
+            "a dry run records a decision once: a quiet binding adds nothing, a stop adds exactly the dish it moved")
+    void aDryRunRecordsOnlyWhatMoved() {
+        World w = world();
+        configuration.put("marketplace.availability.dry_run", true);
+        reconcile(w);
+        clock.advance(Duration.ofMinutes(10));
+
+        assertThat(reconciler.reconcile(binding(w)).wouldPush())
+                .as("nothing moved since the last pass")
+                .isZero();
+
+        stop(w, w.variantA, StopScopeType.BRAND, null, null, null);
+        markDirty(w);
+        MarketplaceAvailabilityReconciler.BindingReport after = reconciler.reconcile(binding(w));
+
+        assertThat(after.wouldPush()).as("the stopped dish alone").isEqualTo(1);
+        assertThat(jdbc.sql("""
+                                SELECT would_push_available FROM integration.marketplace_item_availability
+                                WHERE external_entity_id = 'ext-A'
+                                """).query(Boolean.class).single())
+                .as("the recorded decision for the stopped dish is the stop")
+                .isFalse();
+        assertThat(partner.calls).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a dry run reports no stale channel however long it runs, because nothing is attempted")
+    void aDryRunIsNeverStale() {
+        World w = world();
+        configuration.put("marketplace.availability.stale_after_seconds", 600);
+        configuration.put("marketplace.availability.dry_run", true);
+        build();
+
+        reconciler.tick();
+        clock.advance(Duration.ofDays(2));
+        reconciler.tick();
+
+        assertThat(outbox(MarketplaceOutbox.CHANNEL_WENT_STALE)).isEmpty();
+        assertThat(alerts.calls()).isEmpty();
+        assertThat(staleChannelsGauge()).isZero();
+        assertThat(propagation.at(w.tenant, w.location).get(0).incidentOpenSince())
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("leaving the dry run withdraws every belief and sends everything once, in stop-first order")
+    void leavingTheDryRunSendsEverythingOnce() {
+        World w = world();
+        configuration.put("marketplace.availability.dry_run", true);
+        stop(w, w.variantA, StopScopeType.BRAND, null, null, null);
+        reconcile(w);
+        assertThat(partner.calls).isEmpty();
+
+        configuration.put("marketplace.availability.dry_run", false);
+        clock.advance(Duration.ofMinutes(1));
+        reconcile(w);
+
+        assertThat(partner.held(w))
+                .as("the partner is told the current truth for every dish")
+                .containsEntry("ext-A", false)
+                .containsEntry("ext-B", true);
+        assertThat(partner.calls.get(0)).as("a stop goes before a restore").isEqualTo(new Call("ext-A", false));
+        assertThat(rowStates(w)).containsOnly("IN_SYNC");
+        assertThat(propagation.at(w.tenant, w.location).get(0).mode()).isEqualTo(Mode.AUTOMATIC);
+    }
+
+    @Test
+    @DisplayName(
+            "the dry-run switch can be set where a binding lives, at its location, and is off until someone sets it")
+    void theDryRunSwitchIsSettableAtTheBindingsLocationAndOffByDefault() {
+        assertThat(uz.horecaos.platform.integration.api.MarketplaceConfigurationKeys.DRY_RUN.settableScopes())
+                .contains(uz.horecaos.platform.iam.api.ResourceScope.ScopeType.LOCATION);
+        assertThat(uz.horecaos.platform.integration.api.MarketplaceConfigurationKeys.DRY_RUN.defaultValue())
+                .as("a binding that was never rehearsed pushes")
+                .isFalse();
+        assertThat(uz.horecaos.platform.tenancy.domain.configuration.ConfigurationKeys.require(
+                        uz.horecaos.platform.integration.api.MarketplaceConfigurationKeys.DRY_RUN_CODE))
+                .isEqualTo(uz.horecaos.platform.integration.api.MarketplaceConfigurationKeys.DRY_RUN);
+    }
+
+    // -----------------------------------------------------------------------
+    // ADR 0180 Decision 1: the stale channel is a tenant-queue incident that closes itself
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+            "an open stale incident is in the propagation read with the instant it was reported, and closes by itself on recovery")
+    void theStaleIncidentIsOpenInThePropagationReadAndClosesOnRecovery() {
+        World w = world();
+        goStale(w);
+
+        MarketplacePropagationQuery.Binding open =
+                propagation.at(w.tenant, w.location).get(0);
+        assertThat(open.mode()).isEqualTo(Mode.AUTOMATIC);
+        assertThat(open.incidentOpenSince())
+                .as("the incident is the alert's episode: open since the instant it was reported")
+                .isNotNull()
+                .isEqualTo(java.util.Objects.requireNonNull(staleMark(w)).toInstant());
+        assertThat(alerts.calls()).hasSize(1);
+
+        // The partner comes back: nobody resolves anything, and the incident is gone.
+        partner.script();
+        clock.advance(Duration.ofMinutes(15));
+        reconciler.tick();
+
+        assertThat(propagation.at(w.tenant, w.location).get(0).incidentOpenSince())
+                .isNull();
+        assertThat(staleMark(w)).isNull();
+        assertThat(alerts.calls()).as("closing sends nothing new").hasSize(1);
+    }
+
+    @Test
+    @DisplayName("an incident also closes when the binding stops being worked, and a new outage opens a new one")
+    void theIncidentClosesWhenTheBindingStopsBeingWorkedAndReopensAsANewOne() {
+        World w = world();
+        goStale(w);
+        assertThat(propagation.at(w.tenant, w.location).get(0).incidentOpenSince())
+                .isNotNull();
+
+        configuration.put("marketplace.availability.reconcile_enabled", false);
+        clock.advance(Duration.ofMinutes(1));
+        reconciler.tick();
+        assertThat(propagation.at(w.tenant, w.location).get(0).incidentOpenSince())
+                .as("suspended: the platform is not failing to push any more")
+                .isNull();
+
+        configuration.put("marketplace.availability.reconcile_enabled", true);
+        partner.script(refused(400));
+        clock.advance(Duration.ofMinutes(1));
+        reconciler.tick();
+        clock.advance(Duration.ofMinutes(15));
+        reconciler.tick();
+
+        assertThat(propagation.at(w.tenant, w.location).get(0).incidentOpenSince())
+                .as("a binding switched back into a partner that still refuses is a new incident")
+                .isNotNull();
+        assertThat(alerts.calls()).hasSize(2);
+    }
+
     @Test
     @DisplayName("a dish the partner refused as unknown is a mapping to fix, not a channel gone quiet")
     void anUnmappedItemIsNotAStaleChannel() {
@@ -1674,11 +1876,11 @@ class MarketplaceAvailabilityReconcilerTests {
         reconciler.tick();
     }
 
-    private @Nullable Object staleMark(World w) {
+    private java.time.@Nullable OffsetDateTime staleMark(World w) {
         return jdbc.sql("SELECT stale_alerted_at FROM integration.marketplace_availability_sync_state "
                         + "WHERE binding_id = :b")
                 .param("b", w.binding())
-                .query((row, number) -> row.getObject(1))
+                .query((row, number) -> row.getObject(1, java.time.OffsetDateTime.class))
                 .list()
                 .get(0);
     }

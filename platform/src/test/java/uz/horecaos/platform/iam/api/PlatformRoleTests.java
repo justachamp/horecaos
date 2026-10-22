@@ -82,6 +82,9 @@ class PlatformRoleTests {
             // Batch 18 (row 2.5a, ADR 0141 Phase 4): the aggregator polls a branch's
             // availability on the same partner-bound principal (PartnerAvailabilityController).
             Capability.MARKETPLACE_AVAILABILITY_PULL,
+            // Batch 21 (row 4.6a, ADR 0040): the aggregator pulls the menu its channel serves on the same
+            // partner-bound principal (PartnerMenuController).
+            Capability.MARKETPLACE_MENU_READ,
             Capability.COURIER_SHIFT_OPEN,
             Capability.COURIER_SHIFT_BREAK,
             // Courier policy 3.9: the courier app's own answers to an offer and moves along a delivery,

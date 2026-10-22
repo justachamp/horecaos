@@ -1,8 +1,22 @@
 # ADR 0180: A stale channel is a self-closing incident, a weighed basket settles at handover, and the marketplace menu is pulled from one projection
 
 - Decision status: Accepted
-- Implementation status: Partial — in progress in operations batch 21 (wave `w5-catalog-stops-fiscal`);
-  this line is rewritten with what exists when the wave closes.
+- Implementation status: Partial — built in operations batch 21 (wave `w5-catalog-stops-fiscal`): a
+  stop materialisation panel on the stop list with the read-switch decommission runbook; the Phase 3
+  dry run (`marketplace.availability.dry_run`, V0663) with `DRY_RUN` and the open stale incident on the
+  propagation read and banner; a local-profile fake aggregator (`FakeAggregatorHttpProvider`, seeded by
+  `tools/seed-marketplace`); the `STOPPED` line flag for an inbound aggregator order (V0664), drawn on
+  the order detail, the ticket queue and the pass; the revised-total notice for a weighed total the till
+  does not hold (V0665) with `ORDER_REVISION`, its ceiling rows, an operator-initiated send, a banner and
+  the `TILL_REVISION_NEEDED` chat alert; decimal add-lines; the КБЖУ accuracy line switch
+  (`catalog.nutrition_accuracy_line_enabled`, off); the shared IKPU picker, bulk assign and the missing
+  unit/name list; the marketplace ruleset writer, `CatalogDraftChanged` on `catalog.events`, the partner
+  menu pull and the channel photo layer. Not built, all external (see
+  `docs/runbooks/external-connections/w5-catalog-stops-fiscal.md`): any real aggregator adapter or menu
+  push and the comparison week against a partner portal; any per-marketplace ruleset; a vendor that can
+  revise an order; the wording of the accuracy line; the provider encoding of a fractional receipt
+  quantity (wave `w11`); the Committee's official IKPU/MXIK file. Nothing here has been run against a
+  real aggregator, till or provider, and the local seed script has been syntax-checked but not walked.
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: proposed by Claude (batch 21, wave `w5-catalog-stops-fiscal`); Ayubkhon Abbosov
@@ -96,40 +110,57 @@ analogy).
    attempted), and shows `DRY_RUN` in the propagation read and banner. Off again, the first live
    tick resends everything once, as a resumption does.
 4. **A local-only fake aggregator walks a stop from the console to a "partner".** Under the
-   `local` profile an adapter for the provider type `fake-aggregator` and a loopback partner
-   endpoint that holds the availability it was told; nothing is registered in any other profile,
-   so every real binding still reads `MANUAL`. The local seed creates the installation, the
-   binding and the mappings.
+   `local` profile an adapter for the provider type `FAKE_AGGREGATOR` and a loopback partner
+   endpoint (`FakeAggregatorHttpProvider`, port 18090) that holds the availability it was told,
+   with an outage switch and a state read for the developer; nothing is registered in any other
+   profile, so every real binding still reads `MANUAL`. `tools/seed-marketplace` (`make
+   seed-marketplace`) creates the installation, the binding, the channel and the mappings. Its
+   wire format is its own invention: it proves the platform's side, not any vendor's.
 5. **An inbound aggregator order that holds a stopped dish is accepted and flagged per line.**
    (ADR 0141 Decision 6, which already decided accept-and-flag.) The flag is a third value,
    `STOPPED`, of `ordering.order_lines.external_mapping_status` beside `MAPPED` and `UNMAPPED`:
-   the same column the unmapped flag lives in, read and drawn by the same surfaces. A stopped
-   line keeps its variant; an unmapped line has none; the two cannot coincide.
+   the same column the unmapped flag lives in, read and drawn by the same surfaces (the
+   operations order read carries it as `intake` on the line; the order detail, the ticket queue
+   and the pass draw it). Both intake paths ask the availability resolver the storefront menu and
+   the partner pull use, at the order's own instant: a variant it says cannot be sold on that
+   channel at that branch (a stop, sold out, not offered, not stocked) is flagged, and the reason
+   is not copied onto the line because it changes by the minute. A stopped line keeps its
+   variant; an unmapped line has none; the two cannot coincide.
 6. **A revised total the till does not hold is an operator notice, and a vendor that can revise
-   is asked to.** A new capability `ORDER_REVISION` ("revise an exported order at the till")
+   can be sent it.** A new capability `ORDER_REVISION` ("revise an exported order at the till")
    with a ceiling row per assessed vendor: `fake-pos` SUPPORTED, `clopos` UNSUPPORTED with its
    rationale (update-order accepts only status `IGNORE`; `count` is an integer; Q10 is
    unanswered), every other vendor unassessed, and an unassessed capability cannot be enabled
-   on a binding. When a revision whose source is `AMENDMENT` or `CATCHWEIGHT` changes the total
-   of an order the till already holds, the platform asks a vendor that supports the capability
-   to revise it, and otherwise opens a revised-total notice that the weighing panel and the
-   order detail show as a banner, with an ADR 0058 alert, until the operator confirms the till
-   was corrected or a later revision brings the two totals back into agreement.
+   on a binding. When a captured weight changes the total of an order the till already holds
+   (its export is past `PENDING` and not settled absent), the weighing's own transaction opens a
+   revised-total notice (`ordering.order_till_revision_notices`, V0665), one open per order at a
+   time, which the order detail and the pass show as a banner, with one ADR 0058 alert
+   (`TILL_REVISION_NEEDED`). It ends when the platform has sent the revised total to a binding
+   that has the capability enabled and usable (an operator's button; a repeat is the same send,
+   under a key built from the notice), when a person confirms the till was changed by hand, or
+   when a later weighing brings the two totals back into agreement. Only a captured weight can
+   move the total of an order the till holds: an amendment is refused while the till holds the
+   order, so there is no amendment source.
 7. **The KBZhU accuracy line is a code-owned string behind a switch that is off.** ADR 0030 key
-   `catalog.nutrition.accuracy_note_enabled` (default off); when on, both storefronts and the
-   editor preview show one code-owned ru/uz/en line under the nutrition block. Its wording is
-   an external fact; the shipped text is a placeholder the owner replaces, and the switch is not
-   turned on by this record.
+   `catalog.nutrition_accuracy_line_enabled` (default off; settable at platform, tenant and
+   brand; not tenant-visible, because the wording is legal's). The platform resolves it when the
+   menu is read, and the storefront menu and the physical-attributes read carry the answer
+   (`nutritionAccuracyNotice`); when on, both storefronts show one code-owned ru/uz/en line
+   under the nutrition table and the editor previews it. Its wording is an external fact; the
+   shipped text is a placeholder the owner replaces, and the switch is not turned on by this
+   record.
 8. **The IKPU/MXIK picker is one component.** The product editor's fiscal tab and the backfill
    editor both use `q-mxik-picker`; a chosen reference row offers its default package codes and
    its default unit codes, and a withdrawn code is treated the same in both places. The fiscal
    backfill gains bulk assignment across a filtered selection, and lists the nodes that hold both
    codes and lack a fiscal unit code or a fiscal name, because the coverage headline already
    counts them.
-9. **A marketplace binding can carry a ruleset code, and only a known one.** The writer accepts
-   `MarketplaceRulesets.knownCodes()` (empty in production by ADR 0138), is audited and sits
-   behind `integration.installation.manage`; the installation panel says "no ruleset authored"
-   while the set is empty.
+9. **A marketplace binding can carry a ruleset code, and only a known one.** `PUT
+   /api/v1/operations/tenants/{t}/integrations/{installationId}/bindings/{bindingId}/marketplace-ruleset`
+   accepts `MarketplaceRulesets.knownCodes()` (empty in production by ADR 0138; an unknown code
+   is a 400), is audited, versioned under `If-Match` and sits behind
+   `integration.installation.manage`; the installation panel says "no ruleset authored" while
+   the set is empty.
 10. **Catalog writes publish `CatalogDraftChanged` on a new `catalog.events` topic**, through the
     outbox (ADR 0032), for an override write and for authoring writes (ADR 0138 "Events"; ADR
     0137).
@@ -202,7 +233,57 @@ analogy).
 
 ## Specification
 
-Filled in at the close of the wave; see the implementation status line and the checklist.
+**Schema.** V0663: `would_push_available`, `would_push_seq`, `would_push_at` on
+`integration.marketplace_item_availability` (all three or none) and `was_dry_run` on the sync state.
+V0664: `ck_order_line_mapping_status` admits `STOPPED`. V0665: `ordering.order_till_revision_notices`
+(one `OPEN` row per order at a time; `source` is `CATCHWEIGHT` only; closed as `TOLD` or `ACKNOWLEDGED`;
+money and codes, no text a person typed; no delete grant), the `ORDER_REVISION` rows of
+`integration.pos_provider_capabilities`, and `TILL_REVISION_NEEDED` added to the full list restated in
+`ck_telegram_binding_event_class`.
+
+**Configuration keys (ADR 0030).** `marketplace.availability.dry_run` (boolean, off; platform, tenant,
+brand, location; declared in `MarketplaceConfigurationKeys` and the tenancy registry).
+`catalog.nutrition_accuracy_line_enabled` (boolean, off; platform, tenant, brand; not tenant-visible; declared
+in `CatalogConfigurationKeys` and the tenancy registry). `inventory.stops.read_enabled` and its guard are
+unchanged.
+
+**Routes.**
+
+| Route | Capability | Notes |
+|---|---|---|
+| `GET /api/v1/operations/tenants/{t}/orders/{o}/till-revision` | `pos.export.read` | the open notice or the latest closed one; `canTell` |
+| `POST .../till-revision/send` | `pos.export.resolve` | `200` always with an outcome (`TOLD`, `NO_OPEN_NOTICE`, `NOT_AVAILABLE`, `REJECTED`, `RETRYABLE`, `UNCERTAIN`); idempotency key built from the notice |
+| `POST .../till-revision/acknowledge` | `pos.export.resolve` | `409 NO_OPEN_NOTICE` when none is open |
+| `GET .../integrations/marketplace-rulesets`, `PUT .../integrations/{i}/bindings/{b}/marketplace-ruleset` | `integration.installation.manage` | `If-Match` the binding version; unknown code `400` |
+| `GET /api/v1/partner/tenants/{t}/restaurants`, `.../restaurants/{locationId}/menu` | `marketplace.menu.read` (`@PartnerBound`) | `ETag` over the serialised projection; `304` on a match |
+
+Existing reads gain fields: the operations order line gains `intake` (`UNMAPPED` or `STOPPED`, and the
+partner's item reference), the propagation read gains `mode: DRY_RUN`, `wouldPush` and `incidentOpenSince`,
+the stop materialisation report resolves dish and branch names when read, the storefront menu and the
+physical-attributes read gain `nutritionAccuracyNotice`, and the storefront menu's variants and categories gain
+the channel's image ids.
+
+**Events.** `CatalogDraftChanged` (`catalog.events`, three partitions, schema and baseline copy, outbox through
+a `BEFORE_COMMIT` listener, one per transaction however many writes it holds). `TillRevisionNoticeOpened` is an
+in-process signal between `ordering` and `notifications`, not an event others consume.
+
+**Behaviour that is easy to get wrong.** A dry-run binding still sweeps, claims nothing, calls nothing and
+reports no staleness; leaving dry run resends everything once. A stale incident is the alert plus the mark, and
+the mark is cleared by recovery, by the reconciler being switched off, or by the binding ceasing to be active.
+A `STOPPED` line is flagged from the resolver's answer at the order's own instant and keeps its variant. A
+second weighing before anyone has acted updates the open notice (the till still holds what it held) and raises
+no second alert; a weight corrected back to what the till holds closes the notice. Sending the revised total
+outside a transaction, under a key built from the notice, and never storing the vendor's words.
+
+**Tests.** `MarketplaceAvailabilityReconcilerTests` (dry run, incident), `StopMaterialisationControllerEndpointTests`,
+`MarketplaceChannelTests` and `AggregatorOrderIntakeServiceTests` (the stopped flag on both intake paths and the
+status check), `FakeAggregatorHttpProviderTests` (the fake through the production HTTP client and the push
+conclusion), `ChannelPreviewEndpointTests` (ruleset writer, partner menu, photo layer, event),
+`CatchweightReconciliationServiceTests`, `TillRevisionNoticeServiceTests`, `PosOrderRevisionServiceTests`,
+`OrderPosRevisionControllerTests`, `TillRevisionAlertTriggerTests`, `PosSchemaTests` (ceilings and the trigger),
+`StorefrontCatalogQueryTests` and `ConfiguredNutritionNoticeSwitchTests`; and in the console the specs of the
+materialisation panel, the propagation banner, the installation panel, the order lines, the pass, the queue, the
+add-lines dialog, the till-revision banner, the editor and both storefronts.
 
 ## Rollout and rollback
 
@@ -213,15 +294,18 @@ turning the switches off; no migration needs reverting.
 
 ## Implementation checklist
 
-- [ ] The two decisions recorded and the three amended records pointed here (ADR 0040, 0141,
+- [x] The two decisions recorded and the three amended records pointed here (ADR 0040, 0141,
       0153); information architecture rows 2.5, 4.2c, 4.6 and PART 5 section 3 amended
-- [ ] Stop materialisation console, the decommission runbook, the dry run, the local fake
+- [x] Stop materialisation console, the decommission runbook, the dry run, the local fake
       aggregator, the stopped-line flag
-- [ ] Revised-total notice, `ORDER_REVISION` and its ceiling rows, decimal add-lines, the
+- [x] Revised-total notice, `ORDER_REVISION` and its ceiling rows, decimal add-lines, the
       accuracy-line switch
-- [ ] The shared picker, bulk assign, missing unit and name
-- [ ] Ruleset code writer, `CatalogDraftChanged`, the partner menu pull, the photo layer
-- [ ] `docs/runbooks/external-connections/w5-catalog-stops-fiscal.md`
+- [x] The shared picker, bulk assign, missing unit and name
+- [x] Ruleset code writer, `CatalogDraftChanged`, the partner menu pull, the photo layer
+- [x] `docs/runbooks/external-connections/w5-catalog-stops-fiscal.md`
+- [ ] A real aggregator adapter and the Phase 3 comparison week (external)
+- [ ] A vendor adapter implementing `ORDER_REVISION` (external)
+- [ ] The accuracy line's wording from legal (external)
 
 ## Exit criteria
 

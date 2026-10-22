@@ -42,8 +42,11 @@ public class MarketplacePropagationController {
                     + "many items it has not been able to confirm), MANUAL (the platform is not "
                     + "pushing to this marketplace: update the partner portal by hand; reason is "
                     + "NO_ADAPTER, INSTALLATION_INACTIVE, CHANNEL_UNRESOLVED or NO_ITEMS_TRACKED) "
-                    + "or SUSPENDED (the reconcile switch is off). No item names and no provider "
-                    + "response bodies: identifiers, counts, timestamps and stable codes.")
+                    + "or SUSPENDED (the reconcile switch is off) or DRY_RUN (ADR 0141 Phase 3: the binding "
+                    + "rehearses, wouldPush counts the dishes the platform has recorded as would-be pushes and "
+                    + "nothing has been sent). incidentOpenSince is set while a stale-channel incident is open "
+                    + "on an automatic binding and clears by itself on recovery (ADR 0180). No item names and no "
+                    + "provider response bodies: identifiers, counts, timestamps and stable codes.")
     public ResponseEntity<PropagationResponse> propagation(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID locationId) {
         return ResponseEntity.ok(new PropagationResponse(propagation.at(tenantId, locationId).stream()
@@ -68,7 +71,9 @@ public class MarketplacePropagationController {
             @Nullable Instant lastSuccessAt,
             @Nullable Instant lastFailureAt,
             @Nullable String lastFailureCode,
-            List<ItemResponse> unconfirmedItems) {
+            List<ItemResponse> unconfirmedItems,
+            int wouldPush,
+            @Nullable Instant incidentOpenSince) {
 
         static BindingResponse of(Binding binding) {
             return new BindingResponse(
@@ -86,7 +91,9 @@ public class MarketplacePropagationController {
                     binding.lastSuccessAt(),
                     binding.lastFailureAt(),
                     binding.lastFailureCode(),
-                    binding.unconfirmedItems().stream().map(ItemResponse::of).toList());
+                    binding.unconfirmedItems().stream().map(ItemResponse::of).toList(),
+                    binding.wouldPush(),
+                    binding.incidentOpenSince());
         }
     }
 
@@ -96,7 +103,9 @@ public class MarketplacePropagationController {
             @Nullable Boolean confirmedAvailable,
             String state,
             @Nullable Instant since,
-            @Nullable String lastFailureCode) {
+            @Nullable String lastFailureCode,
+            @Nullable Boolean wouldPushAvailable,
+            @Nullable Instant wouldPushAt) {
 
         static ItemResponse of(Item item) {
             return new ItemResponse(
@@ -105,7 +114,9 @@ public class MarketplacePropagationController {
                     item.confirmedAvailable(),
                     item.state(),
                     item.since(),
-                    item.lastFailureCode());
+                    item.lastFailureCode(),
+                    item.wouldPushAvailable(),
+                    item.wouldPushAt());
         }
     }
 }

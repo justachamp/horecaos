@@ -44,6 +44,14 @@
   (the add-lines dialog still adds whole units); and the price-book matrix, the
   resolved-prices read and the bulk price change mark the price of a weighed
   variant as per its quantum.
+  Addition, 2026-10-14 ([ADR 0180](0180-stale-marketplace-channels-weighed-baskets-and-the-marketplace-menu-pull.md)): the add-lines dialog adds a splittable dish by its portion
+  (the step is read off the order's channel menu; a typed decimal must be a whole number of
+  steps, as the platform already refuses otherwise); a weight that moves the total of an order
+  the till already holds opens a revised-total notice (banner on the order and at the pass, one
+  chat alert) and a vendor with the `ORDER_REVISION` capability can be sent the weighed amount;
+  and the КБЖУ accuracy line exists behind `catalog.nutrition_accuracy_line_enabled`, off, drawn
+  by both storefronts and previewed in the editor, its wording a placeholder that legal replaces.
+  The decision that a weighed basket is paid at handover is final (ADR 0153's Decision 2).
 - Date proposed: 2026-09-25
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 12, w2-catalog-adrs) from

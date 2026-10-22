@@ -50,6 +50,7 @@ That shapes them more than any style guide would.
 | [staff-shifts.md](staff-shifts.md) | Before switching attendance on for a company, a shift left open, reading a staff-hours divergence, why the payroll export refuses, and the partition hazard for the next fact table (ADR 0156) |
 | [marking-scanner-setup.md](marking-scanner-setup.md) | A branch that sells marked goods: the imager settings that matter, the one-minute self-test, the three preconditions for turning `feature.marked_goods` on, and what to do when a real code is refused (ADR 0161) |
 | [print-agent-and-printers.md](print-agent-and-printers.md) | Paper: enrolling a print agent on a branch machine, registering and replacing a printer, routing documents, and reading a dead print job (ADR 0154) |
+| [stop-read-switch-decommission.md](stop-read-switch-decommission.md) | Switching stops off for good: run the materialisation, read the report (the one place a stop can vanish), accept it, have a platform administrator write `inventory.stops.read_enabled`, what `MATERIALISATION_REQUIRED` means, and how to turn reads back on (ADR 0141) |
 
 **A runbook that has never been executed is a draft.** Each file above carries a
 `Last executed` line in its header. Most read `never`; the few that have been run

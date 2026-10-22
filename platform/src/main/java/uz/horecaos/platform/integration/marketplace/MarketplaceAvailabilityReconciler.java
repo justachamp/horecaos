@@ -96,6 +96,16 @@ import uz.horecaos.platform.tenancy.api.SalesChannelLookup;
  * ADR 0058 operations alert, so the manager who stopped the plov hears that the aggregator
  * still sells it.
  *
+ * <h2>Dry run (ADR 0141 Phase 3)</h2>
+ *
+ * <p>With {@code marketplace.availability.dry_run} on for the binding's branch the pass still sweeps, so the
+ * desired values stay current, and then records for each dish whose desired value differs from what the
+ * partner is known to hold the value it <em>would</em> have pushed ({@link
+ * JdbcMarketplaceAvailabilityStore#recordWouldPush}), instead of pushing it. No adapter is asked for a call,
+ * no confirmation is written or withdrawn, and no stale episode is opened. The propagation read says
+ * {@code DRY_RUN}; the operator compares the recorded list with the partner's portal for a week and turns
+ * the switch off, whereupon the first live pass withdraws every belief and resends everything once.
+ *
  * <h2>Honest about what it cannot do</h2>
  *
  * <p>A binding whose provider has no registered adapter is never touched: no rows are kept, no
@@ -235,8 +245,19 @@ public class MarketplaceAvailabilityReconciler {
     /** What one pass over every binding did. */
     public record TickReport(int bindings, int sweeps, int pushes) {}
 
-    /** What one pass over one binding did. */
-    public record BindingReport(boolean swept, int pushed, boolean suspended, boolean manual) {}
+    /**
+     * What one pass over one binding did.
+     *
+     * @param dryRun the binding ran in dry run (ADR 0141 Phase 3): nothing was sent
+     * @param wouldPush how many dishes the dry run newly recorded as "would push" on this pass
+     */
+    public record BindingReport(
+            boolean swept, int pushed, boolean suspended, boolean manual, boolean dryRun, int wouldPush) {
+
+        public BindingReport(boolean swept, int pushed, boolean suspended, boolean manual) {
+            this(swept, pushed, suspended, manual, false, 0);
+        }
+    }
 
     /** One pass over every active marketplace binding: recompute if due, then send what differs. */
     public TickReport tick() {
@@ -286,22 +307,30 @@ public class MarketplaceAvailabilityReconciler {
             return new BindingReport(false, 0, false, true);
         }
 
-        boolean stale = isStale(binding, now);
+        boolean dryRun = dryRun(binding);
+        boolean wasDryRun = sync.map(SyncState::wasDryRun).orElse(false);
+        // A rehearsal attempts nothing, so nothing can be late: staleness belongs to a binding that is pushing.
+        boolean stale = !dryRun && isStale(binding, now);
         boolean resumed = sync.isPresent() && !sync.get().reconcileWasEnabled();
         boolean recovered = sync.isPresent() && sync.get().wasStale() && !stale;
-        if (resumed || recovered) {
-            // The partner portal may have been edited by hand while we could not reach it, so
-            // withdraw every belief about what it holds and resend everything once.
+        boolean leftDryRun = wasDryRun && !dryRun;
+        if (resumed || recovered || leftDryRun) {
+            // The partner portal may have been edited by hand while we could not reach it (or while we only
+            // rehearsed), so withdraw every belief about what it holds and resend everything once.
             int withdrawn = store.forgetConfirmations(binding.tenantId(), binding.bindingId(), now);
             log.info(
                     "Marketplace availability {} for a {} binding: {} item confirmations withdrawn",
-                    resumed ? "resumed" : "recovered from a stale watermark",
+                    resumed ? "resumed" : leftDryRun ? "left its dry run" : "recovered from a stale watermark",
                     binding.providerType(),
                     withdrawn);
+        }
+        if (dryRun != wasDryRun) {
+            store.recordDryRun(binding.tenantId(), binding.bindingId(), dryRun, now);
         }
 
         boolean due = resumed
                 || recovered
+                || leftDryRun
                 || sync.isEmpty()
                 || sync.get().sweepRequestedAt() != null
                 || sync.get().nextSweepAt() == null
@@ -311,6 +340,24 @@ public class MarketplaceAvailabilityReconciler {
             swept = sweep(binding, now, stale, sync.map(SyncState::rowVersion).orElse(null));
         } else if (stale != sync.map(SyncState::wasStale).orElse(false)) {
             store.recordSweepState(binding.tenantId(), binding.bindingId(), true, stale, now);
+        }
+
+        if (dryRun) {
+            // ADR 0141 Phase 3. The desired values are current (the sweep above touched only our own database);
+            // what a live binding would now do is send the rows that differ, and a dry run writes that down
+            // instead. No adapter is built, no call is made, confirmed_available is not touched, and there is
+            // no stale episode to report or to keep open.
+            int recorded = store.recordWouldPush(binding.tenantId(), binding.bindingId(), clock.instant());
+            store.clearStaleReported(binding.tenantId(), binding.bindingId(), clock.instant());
+            if (recorded > 0) {
+                meters.counter("horecaos.marketplace.availability.dry_run_would_push")
+                        .increment(recorded);
+                log.info(
+                        "Marketplace availability dry run for a {} binding: {} items newly recorded as would-push",
+                        binding.providerType(),
+                        recorded);
+            }
+            return new BindingReport(swept, 0, false, false, true, recorded);
         }
 
         int pushed = push(binding, adapter.get());
@@ -595,6 +642,13 @@ public class MarketplaceAvailabilityReconciler {
     }
 
     // ------------------------------------------------------------------ switches and health
+
+    /** The Phase 3 rehearsal switch, resolved at the binding's own location (a binding lives at one). */
+    private boolean dryRun(BindingRow binding) {
+        return Boolean.TRUE.equals(configuration.value(
+                MarketplaceConfigurationKeys.DRY_RUN,
+                ResourceScope.location(binding.tenantId(), binding.brandId(), binding.locationId())));
+    }
 
     private boolean reconcileEnabled(BindingRow binding) {
         Boolean enabled = configuration.value(

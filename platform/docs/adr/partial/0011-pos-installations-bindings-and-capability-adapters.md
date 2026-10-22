@@ -79,6 +79,12 @@
   `UNKEYED_CREATE` classification and `PosOrderExportService`'s refusal to
   reconstruct and resend a stored request are unchanged, because Clopos's own
   dedupe is keyed on request bytes this platform does not store.
+  Addition, 2026-10-14 ([ADR 0180](0180-stale-marketplace-channels-weighed-baskets-and-the-marketplace-menu-pull.md)): a capability `ORDER_REVISION` (tell a vendor the order it
+  holds is now worth a different total) joins the model, with `PosAdapter#reviseExportedOrder`
+  defaulting to not-supported, a ceiling row per assessed vendor (`fake-pos` SUPPORTED, `clopos`
+  UNSUPPORTED with its reason, every other vendor unassessed so the trigger refuses it) and an
+  operator-initiated send. No real vendor can take a revision; a weighed total the till does not
+  hold is an operator notice until one can.
 - Date proposed: 2026-08-19
 - Date decided: 2026-08-20
 - Date revised: 2026-08-23 (Clopos contract read; capability model and export

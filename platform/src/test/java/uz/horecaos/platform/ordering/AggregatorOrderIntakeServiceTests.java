@@ -88,6 +88,31 @@ class AggregatorOrderIntakeServiceTests {
     private UUID bindingId;
     private UUID variantId;
 
+    /**
+     * What the availability resolver says is stopped here (ADR 0141). The resolver's own composition is
+     * proven where it lives; this class proves what the manual entry does with an answer, and what it asked.
+     */
+    private final java.util.Set<UUID> stoppedHere = new java.util.HashSet<>();
+
+    private final java.util.List<List<Object>> availabilityQuestions = new java.util.ArrayList<>();
+
+    private final uz.horecaos.platform.inventory.api.ChannelAvailabilityPort availability =
+            (tenantId, brandId, locationId, channel, variantIds, at) -> {
+                availabilityQuestions.add(List.of(brandId, locationId, channel, at));
+                var answers = new java.util.HashMap<
+                        UUID, uz.horecaos.platform.inventory.api.ChannelAvailabilityPort.ChannelAvailability>();
+                for (UUID asked : variantIds) {
+                    answers.put(
+                            asked,
+                            stoppedHere.contains(asked)
+                                    ? uz.horecaos.platform.inventory.api.ChannelAvailabilityPort.ChannelAvailability
+                                            .blocked(List.of("ON_STOP"))
+                                    : uz.horecaos.platform.inventory.api.ChannelAvailabilityPort.ChannelAvailability
+                                            .ok());
+                }
+                return answers;
+            };
+
     @BeforeAll
     static void startDatabase() {
         Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(), "Docker is required for this test");
@@ -115,6 +140,8 @@ class AggregatorOrderIntakeServiceTests {
         SalesChannelLookupAndBindings seeded = seedTenancyChannelAndBinding();
         bindingId = seeded.bindingId();
         variantId = UUID.randomUUID();
+        stoppedHere.clear();
+        availabilityQuestions.clear();
 
         var channels = new JdbcSalesChannelStore(jdbc);
         var providerInstallations =
@@ -158,6 +185,7 @@ class AggregatorOrderIntakeServiceTests {
                 orderStore,
                 aggregatorStore,
                 addresses,
+                availability,
                 protection,
                 objectMapper,
                 deliveryPlanner,
@@ -250,6 +278,86 @@ class AggregatorOrderIntakeServiceTests {
                 .query(String.class)
                 .single();
         assertThat(referenceValue).isEqualTo("YE-2291-04");
+    }
+
+    @Test
+    @DisplayName("ADR 0141 Decision 6: a dish stopped on this channel and branch is entered, and its line is "
+            + "flagged STOPPED; a line for a sellable dish is not")
+    void aLineForAStoppedDishIsEnteredAndFlagged() {
+        UUID sellable = UUID.randomUUID();
+        stoppedHere.add(variantId);
+        var command = new AggregatorOrderIntakeService.Command(
+                TENANT,
+                BRAND,
+                LOCATION,
+                "UZUM-TEZKOR",
+                "YE-STOP-1",
+                List.of(
+                        new AggregatorOrderIntakeService.Line(variantId, "Osh", 2, 25_000, "sku-osh"),
+                        new AggregatorOrderIntakeService.Line(sellable, "Salad", 1, 10_000, "sku-salad"),
+                        new AggregatorOrderIntakeService.Line(null, "Mystery", 1, 5_000, "sku-mystery")),
+                "UZS",
+                65_000,
+                0,
+                0,
+                65_000,
+                "idem-aggregator-stopped-1",
+                "operator-subject-7",
+                null,
+                null,
+                null);
+
+        var result = service.create(command);
+
+        assertThat(result.replayed())
+                .as("the aggregator has the customer's money; the entry is made all the same")
+                .isFalse();
+        var rows = jdbc.sql("""
+                        SELECT external_item_reference, external_mapping_status
+                          FROM ordering.order_lines WHERE order_id = :id ORDER BY line_number
+                        """)
+                .param("id", result.orderId())
+                .query((rs, n) -> rs.getString(1) + "=" + rs.getString(2))
+                .list();
+        assertThat(rows).containsExactly("sku-osh=STOPPED", "sku-salad=MAPPED", "sku-mystery=UNMAPPED");
+
+        assertThat(availabilityQuestions).hasSize(1);
+        var asked = availabilityQuestions.get(0);
+        assertThat(asked.get(0)).isEqualTo(BRAND);
+        assertThat(asked.get(1)).as("the entry's own branch").isEqualTo(LOCATION);
+        assertThat(asked.get(2)).as("the channel the operator chose").isNotNull();
+        assertThat(asked.get(3)).as("the moment of entry").isEqualTo(NOW);
+    }
+
+    @Test
+    @DisplayName("an entry of unmapped items alone asks the resolver nothing, and a replay asks nothing either")
+    void anEntryWithNothingMappedAsksNothing() {
+        var command = new AggregatorOrderIntakeService.Command(
+                TENANT,
+                BRAND,
+                LOCATION,
+                "UZUM-TEZKOR",
+                "YE-STOP-2",
+                List.of(new AggregatorOrderIntakeService.Line(null, "Mystery", 1, 5_000, "sku-mystery")),
+                "UZS",
+                5_000,
+                0,
+                0,
+                5_000,
+                "idem-aggregator-stopped-2",
+                "operator-subject-7",
+                null,
+                null,
+                null);
+
+        service.create(command);
+        assertThat(availabilityQuestions).isEmpty();
+
+        var replay = service.create(command);
+        assertThat(replay.replayed()).isTrue();
+        assertThat(availabilityQuestions)
+                .as("a replay answers from the stored order")
+                .isEmpty();
     }
 
     @Test

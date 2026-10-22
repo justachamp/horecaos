@@ -4,9 +4,12 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +21,8 @@ import uz.horecaos.platform.fulfillment.api.DeliveryPlanner;
 import uz.horecaos.platform.iam.api.protection.DataClass;
 import uz.horecaos.platform.iam.api.protection.FieldProtection;
 import uz.horecaos.platform.iam.api.protection.FieldProtection.RecordRef;
+import uz.horecaos.platform.inventory.api.ChannelAvailabilityPort;
+import uz.horecaos.platform.inventory.api.ChannelAvailabilityPort.ChannelAvailability;
 import uz.horecaos.platform.ordering.api.MarketplaceBindingLookup;
 import uz.horecaos.platform.ordering.domain.DeliveryDestination;
 import uz.horecaos.platform.ordering.infrastructure.persistence.JdbcAggregatorOrderStore;
@@ -109,6 +114,7 @@ public class AggregatorOrderIntakeService {
     private final JdbcOrderStore orders;
     private final JdbcAggregatorOrderStore store;
     private final CustomerAddressBook addresses;
+    private final ChannelAvailabilityPort availability;
     private final FieldProtection protection;
     private final ObjectMapper objectMapper;
     private final DeliveryPlanner deliveryPlanner;
@@ -121,6 +127,7 @@ public class AggregatorOrderIntakeService {
             JdbcOrderStore orders,
             JdbcAggregatorOrderStore store,
             CustomerAddressBook addresses,
+            ChannelAvailabilityPort availability,
             FieldProtection protection,
             ObjectMapper objectMapper,
             DeliveryPlanner deliveryPlanner,
@@ -131,6 +138,7 @@ public class AggregatorOrderIntakeService {
         this.orders = orders;
         this.store = store;
         this.addresses = addresses;
+        this.availability = availability;
         this.protection = protection;
         this.objectMapper = objectMapper;
         this.deliveryPlanner = deliveryPlanner;
@@ -331,6 +339,10 @@ public class AggregatorOrderIntakeService {
                         Objects.requireNonNull(command.destination(), "delivery already refused a null destination"))
                 : null;
 
+        // ADR 0141 Decision 6: a dish stopped on this channel at this branch is entered all the same -- the
+        // aggregator has the customer's money -- and its line is flagged for the pass.
+        Set<UUID> stopped = stoppedVariants(command, channel.id());
+
         JdbcAggregatorOrderStore.Created created = store.create(new JdbcAggregatorOrderStore.Command(
                 Ids.newId(),
                 command.tenantId(),
@@ -346,7 +358,8 @@ public class AggregatorOrderIntakeService {
                                 line.nameSnapshot(),
                                 line.quantity(),
                                 line.unitAmountMinor(),
-                                line.externalItemReference()))
+                                line.externalItemReference(),
+                                line.variantId() != null && stopped.contains(line.variantId())))
                         .toList(),
                 command.currency(),
                 command.subtotalMinor(),
@@ -364,6 +377,28 @@ public class AggregatorOrderIntakeService {
         }
 
         return new Result(created.orderId(), created.publicOrderNumber(), false);
+    }
+
+    /**
+     * The variants among the typed lines that cannot be sold on this channel at this branch now. A variant
+     * the resolver does not answer for is treated as sellable: an unknown is not a stop.
+     */
+    private Set<UUID> stoppedVariants(Command command, UUID channelId) {
+        Set<UUID> mapped = command.lines().stream()
+                .map(Line::variantId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toUnmodifiableSet());
+        if (mapped.isEmpty()) {
+            return Set.of();
+        }
+        Map<UUID, ChannelAvailability> answers = availability.resolve(
+                command.tenantId(), command.brandId(), command.locationId(), channelId, mapped, clock.instant());
+        return mapped.stream()
+                .filter(variantId -> {
+                    ChannelAvailability answer = answers.get(variantId);
+                    return answer != null && !answer.sellable();
+                })
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     /**

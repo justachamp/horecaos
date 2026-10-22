@@ -101,6 +101,31 @@ Turning it back on resumes the ignored stops and is never refused.
 the binding is withdrawn first and everything is resent once, because the partner
 portal may have been edited by hand in the meantime.
 
+## The local fake and the Phase 3 dry run (ADR 0180)
+
+**Rehearsing without an aggregator.** Under the `local` profile only, `FakeAggregatorAvailabilityAdapter`
+(provider type `FAKE_AGGREGATOR`) is registered and `FakeAggregatorHttpProvider` listens on `:18090`.
+`make seed-marketplace` creates the installation, an active binding at the fixture branch, an `AGGREGATOR`
+channel and three mapped dishes. A stop lifted or made in the console then runs the real reconciler, route,
+gateway and secret resolution and ends on that socket; `curl http://localhost:18090/_fake/state` reads what
+the "partner" holds and `POST /_fake/outage?on=true|false` is "the partner is down". The fake's path, body
+and answers are its own invention. Nothing is registered in any other profile, so every real binding still
+reads `MANUAL`.
+
+**The dry run (`marketplace.availability.dry_run`, ADR 0030, off).** Resolved at the binding's location. On,
+the reconciler still sweeps (it touches only our database) and keeps `desired_available` current, claims no
+row, calls no adapter, believes nothing about the partner, reports no staleness (nothing is attempted) and
+records on each row whose desired value differs from what the partner is known to hold the value, the
+sequence and the instant it **would** have pushed (`would_push_*`, V0663). The propagation read and the stop
+list banner say `DRY_RUN`. Compare that list with the partner's portal for a week. Turning it off is a
+resumption: the first live tick withdraws every confirmation and resends everything once, because the portal
+may have been edited by hand meanwhile.
+
+**A stale channel is an incident that closes itself.** The ADR 0058 alert (`MARKETPLACE_CHANNEL_STALE`) is
+raised once per episode into the tenant's queue; the `stale_alerted_at` mark names the episode and is
+exposed as `incidentOpenSince`. Recovery, or the binding ceasing to be worked, clears the mark; there is no
+ADR 0006 record and nothing to resolve by hand.
+
 ## Rollout
 
 Per ADR 0007: ships with its bindings disabled and no adapter registered, so it does

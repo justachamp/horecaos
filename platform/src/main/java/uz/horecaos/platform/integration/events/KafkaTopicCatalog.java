@@ -46,6 +46,12 @@ public final class KafkaTopicCatalog {
      */
     public static final String CONTENT_EVENTS = "content.events";
 
+    /**
+     * ADR 0016 and ADR 0138: a brand's draft menu changed -- a product, a variant, a category, a classification,
+     * a channel's images. Ids, entity kinds and change codes only: never a name, a price or a URL.
+     */
+    public static final String CATALOG_EVENTS = "catalog.events";
+
     /** ADR 0111 lead facts: a lead was registered, moved, handed to a branch or converted. */
     public static final String CUSTOMERS_EVENTS = "customers.events";
 
@@ -95,6 +101,10 @@ public final class KafkaTopicCatalog {
             // business-fact topic there is and shares tenancy's partition count; keyed by item, so
             // one item's facts stay in order. Nothing on it is text.
             new TopicSpecification(CONTENT_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
+            // ADR 0016. One record per draft write, keyed by brand so one brand's changes stay in order,
+            // and an import is suppressed rather than announced row by row; an operator editing a menu
+            // produces a handful a minute, so this shares tenancy's partition count.
+            new TopicSpecification(CATALOG_EVENTS, 3, (short) 1, BUSINESS_FACT_RETENTION),
             // ADR 0040. A confirmed availability push is one record per dish per binding and
             // a brand-wide stop across a pilot's bound venues is hundreds, not thousands a
             // minute, so this shares tenancy's partition count: keyed by binding, so one

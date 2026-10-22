@@ -97,6 +97,13 @@ public final class EventCatalog {
     public static final String INTEGRATION_EVENTS_TOPIC = KafkaTopicCatalog.INTEGRATION_EVENTS;
 
     /**
+     * ADR 0016 catalog facts. Its own topic: a consumer that must re-project a channel's menu when the draft
+     * moves should not read ordering's volume to find that out, and nothing on it carries a name, a price or a
+     * URL.
+     */
+    public static final String CATALOG_EVENTS_TOPIC = KafkaTopicCatalog.CATALOG_EVENTS;
+
+    /**
      * ADR 0111 lead facts. Its own topic: a consumer of "a catering enquiry arrived" should not
      * read ordering's volume to find it, and the producer is the customers module.
      */
@@ -795,6 +802,19 @@ public final class EventCatalog {
                     "An offer version was put in front of campaigns (ADR 0112). The offer, its brand "
                             + "and its version number; never the promotion or rule it references, which a "
                             + "consumer reads through the authorized offers API."),
+            new EventContract(
+                    "CatalogDraftChanged",
+                    1,
+                    "catalog",
+                    CATALOG_EVENTS_TOPIC,
+                    "brandId",
+                    "events/catalog.events/CatalogDraftChanged.v1.schema.json",
+                    Retention.BUSINESS_FACT,
+                    Classification.INTERNAL,
+                    "A brand's draft menu changed (ADR 0016, ADR 0137, ADR 0138): a product, variant, category, "
+                            + "modifier, classification, physical attribute, combo or a channel's images or "
+                            + "offering. Says which entity and how, never what it became -- no name, price or URL. "
+                            + "The draft moved; nothing a customer is served did until it is published."),
             new EventContract(
                     "ContentItemPublished",
                     1,

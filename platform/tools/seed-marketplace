@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+#
+# Seeds a local FAKE aggregator for the local-fixtures demo tenant (docs/local-fixtures.md), so a stop
+# can be walked from the console to a "partner", and the stale alert and the Phase 3 dry run exercised
+# (ADR 0141, ADR 0007), without a real aggregator.
+#
+# Deliberately dev-only, and structurally so rather than by convention: every write below targets the
+# fixed local addresses `make up` starts (`http://localhost:8200` for OpenBao, the `platform-db` compose
+# service for Postgres) with no environment variable that could repoint it at a real deployment. It
+# imitates tools/seed-payments, which is the model for why.
+#
+# What it does, honestly:
+#   1. Writes a fake FAKE_AGGREGATOR secret into the local OpenBao at the ADR 0028 reference the gateway
+#      resolves. The value is FakeAggregatorConfiguration's own default
+#      (horecaos.fake-providers.aggregator.secret), so the fake and the resolver agree without either
+#      reading the other's configuration.
+#   2. Seeds the platform-owned MARKETPLACE/FAKE_AGGREGATOR provider environment (no endpoint writes this
+#      table by design, V0013), with base_url pointed at FakeAggregatorHttpProvider, which `make run`
+#      starts under the local profile on the port below.
+#   3. Seeds an ACTIVE installation, an ACTIVE binding at the fixture location, an AGGREGATOR sales
+#      channel backed by that installation, and a MENU_ITEM mapping for each of the fixture's three dishes
+#      (osh, somsa, shashlik) onto `fake-item-*` ids. Seeded directly because the console's integrations
+#      screen needs a signed-in operator's token and a script minting its own is the thing ADR 0025 exists
+#      to prevent; it is the same direct-SQL shape the test suite uses.
+#
+# Idempotent: safe to run again. Run it after `make up` and after `make run` has applied the
+# local-fixtures migration at least once (the fixture tenant/brand/location/variants must already exist).
+#
+# Once this has run and `make run` is up, the dev loop is:
+#   1. console > Kitchen > Stop list: stop a dish (or lift it) -- the binding reads AUTOMATIC
+#   2. within one tick the reconciler PUTs the dish to the fake; read what it holds with
+#        curl -s http://localhost:18090/_fake/state
+#   3. the partner is down:   curl -sX POST 'http://localhost:18090/_fake/outage?on=true'
+#      the banner shows the channel stale after the stale threshold, and one alert goes to the tenant
+#      queue; end it with   curl -sX POST 'http://localhost:18090/_fake/outage?on=false'  and the
+#      incident closes itself
+#   4. dry run: set marketplace.availability.dry_run to true for the location (console > Settings >
+#      Integrations > the installation) and stop a dish -- the fake receives nothing, and the propagation
+#      read lists what the reconciler would have sent
+#   5. walk the scenarios by renaming a mapping's external id to fake-scenario-timeout, -http-500,
+#      -unknown-item or -accepted-then-lost (FakeAggregatorHttpProvider's own constants)
+
+set -euo pipefail
+
+BAO_URL="http://localhost:8200"
+BAO_TOKEN="horecaos-local-root"
+COMPOSE_DB_SERVICE="platform-db"
+# horecaos_migrator, not horecaos_app: integration.provider_environments is platform-owned reference data
+# (V0013) and horecaos_app is granted no write on it. This script stands in for the migration that would
+# seed it for a provider a real deployment actually integrates.
+DB_USER="horecaos_migrator"
+DB_PASSWORD="horecaos_migrator"
+DB_NAME="horecaos"
+
+TENANT="10000000-0000-0000-0000-000000000001"
+BRAND="10000000-0000-0000-0000-000000000002"
+LOCATION="10000000-0000-0000-0000-000000000003"
+PLOV="10000000-0000-0000-0000-000000000015"
+SOMSA="10000000-0000-0000-0000-000000000016"
+SHASHLIK="10000000-0000-0000-0000-000000000017"
+
+PROVIDER_TYPE="FAKE_AGGREGATOR"
+ENVIRONMENT_CODE="fake-aggregator-local"
+SECRET_REFERENCE="horecaos:local:provider_marketplace:tenant:fake-aggregator"
+# FakeAggregatorConfiguration's own default (horecaos.fake-providers.aggregator.port).
+FAKE_AGGREGATOR_PORT="18090"
+
+INSTALLATION="30000000-0000-0000-0000-000000000001"
+BINDING="30000000-0000-0000-0000-000000000002"
+CHANNEL="30000000-0000-0000-0000-000000000003"
+
+echo "==> Seeding a local fake aggregator for the fixture tenant (${TENANT})"
+
+echo "==> Writing the fake FAKE_AGGREGATOR secret to OpenBao at ${SECRET_REFERENCE}"
+if ! curl -sf -o /dev/null "${BAO_URL}/v1/sys/health"; then
+  echo "!! OpenBao is not answering at ${BAO_URL}. Run 'make up' first." >&2
+  exit 1
+fi
+curl -sf -X POST \
+  -H "X-Vault-Token: ${BAO_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"data":{"value":"local-fixture-aggregator-secret-not-a-real-credential"}}' \
+  "${BAO_URL}/v1/horecaos/data/local/provider_marketplace/tenant/fake-aggregator" \
+  > /dev/null
+echo "    done"
+
+echo "==> Seeding provider environment, installation, binding, channel and menu mappings in Postgres"
+docker compose exec -T -e PGPASSWORD="${DB_PASSWORD}" "${COMPOSE_DB_SERVICE}" \
+  psql -v ON_ERROR_STOP=1 -U "${DB_USER}" -d "${DB_NAME}" <<SQL
+INSERT INTO integration.provider_environments
+    (code, provider_category, provider_type, base_url, is_production, egress_allowlist, notes)
+VALUES ('${ENVIRONMENT_CODE}', 'MARKETPLACE', '${PROVIDER_TYPE}',
+        'http://localhost:${FAKE_AGGREGATOR_PORT}', false, 'localhost',
+        'tools/seed-marketplace: local dev only, points at FakeAggregatorHttpProvider')
+ON CONFLICT (code) DO UPDATE SET
+    base_url = EXCLUDED.base_url,
+    egress_allowlist = EXCLUDED.egress_allowlist,
+    notes = EXCLUDED.notes;
+
+INSERT INTO integration.installations
+    (id, tenant_id, provider_category, provider_type, environment_code,
+     display_name, status, secret_reference, last_connection_status)
+SELECT '${INSTALLATION}'::uuid, '${TENANT}'::uuid, 'MARKETPLACE', '${PROVIDER_TYPE}',
+       '${ENVIRONMENT_CODE}', 'Fake aggregator (local fixture)', 'ACTIVE', '${SECRET_REFERENCE}', 'SUCCEEDED'
+WHERE NOT EXISTS (SELECT 1 FROM integration.installations WHERE id = '${INSTALLATION}'::uuid);
+
+INSERT INTO integration.bindings (id, tenant_id, installation_id, brand_id, location_id, status, effective_from)
+SELECT '${BINDING}'::uuid, '${TENANT}'::uuid, '${INSTALLATION}'::uuid, '${BRAND}'::uuid,
+       '${LOCATION}'::uuid, 'ACTIVE', DATE '2020-01-01'
+WHERE NOT EXISTS (SELECT 1 FROM integration.bindings WHERE id = '${BINDING}'::uuid);
+
+INSERT INTO tenant.sales_channels
+    (id, tenant_id, code, system_type, display_name, status, externally_priced, provider_installation_id)
+SELECT '${CHANNEL}'::uuid, '${TENANT}'::uuid, 'FAKE-AGGREGATOR', 'AGGREGATOR', 'Fake aggregator', 'ACTIVE', true,
+       '${INSTALLATION}'::uuid
+WHERE NOT EXISTS (SELECT 1 FROM tenant.sales_channels WHERE id = '${CHANNEL}'::uuid);
+
+INSERT INTO integration.provider_entity_mappings
+    (id, tenant_id, installation_id, binding_id, entity_type, horecaos_entity_id,
+     external_entity_id, status, mapping_source)
+SELECT m.id::uuid, '${TENANT}'::uuid, '${INSTALLATION}'::uuid, '${BINDING}'::uuid, 'MENU_ITEM',
+       m.variant::uuid, m.external_id, 'ACTIVE', 'OPERATOR'
+  FROM (VALUES
+        ('30000000-0000-0000-0000-000000000011', '${PLOV}', 'fake-item-plov'),
+        ('30000000-0000-0000-0000-000000000012', '${SOMSA}', 'fake-item-somsa'),
+        ('30000000-0000-0000-0000-000000000013', '${SHASHLIK}', 'fake-item-shashlik')
+       ) AS m(id, variant, external_id)
+ WHERE EXISTS (SELECT 1 FROM catalog.variants v WHERE v.id = m.variant::uuid)
+   AND NOT EXISTS (SELECT 1 FROM integration.provider_entity_mappings x WHERE x.id = m.id::uuid);
+SQL
+echo "    done"
+
+echo
+echo "==> The fake aggregator is seeded: an ACTIVE ${PROVIDER_TYPE} binding at location ${LOCATION}, an"
+echo "    AGGREGATOR channel FAKE-AGGREGATOR, and fake-item-plov / -somsa / -shashlik mapped to the fixture dishes."
+echo "    'make run' starts FakeAggregatorHttpProvider on :${FAKE_AGGREGATOR_PORT} under the local profile"
+echo "    (see FakeAggregatorConfiguration). Read what it holds:  curl -s http://localhost:${FAKE_AGGREGATOR_PORT}/_fake/state"
+echo "    Start 'the partner is down':                            curl -sX POST 'http://localhost:${FAKE_AGGREGATOR_PORT}/_fake/outage?on=true'"

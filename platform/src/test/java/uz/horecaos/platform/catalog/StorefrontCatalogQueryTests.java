@@ -155,6 +155,46 @@ class StorefrontCatalogQueryTests {
             (tenantId, brandId, locationId, channel, variantIds) -> Map.of();
 
     @Test
+    @DisplayName("ADR 0137 row 4.2c: the menu says whether the КБЖУ accuracy line is on, asked of the menu's own "
+            + "brand, and a reader nobody configured says it is off")
+    void theMenuCarriesTheAccuracyLineSwitch() {
+        UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);
+        var burger = authoring.createProduct(
+                TENANT, BRAND, catalogId, "BURGER", "Burger", null, LOCALE, "SKU-B", "PIECE", UNCLASSIFIED, ACTOR);
+        authoring.setOffering(
+                TENANT, BRAND, LOCATION, burger.defaultVariantId(), OfferingStatus.AVAILABLE, List.of("DELIVERY"));
+        publication.publish(TENANT, BRAND, catalogId, "STOREFRONT", null);
+        List<UUID> asked = new java.util.ArrayList<>();
+
+        StorefrontCatalogQuery on = new StorefrontCatalogQuery(
+                store,
+                (tenantId, brandId, locationId, channel, variantIds, optionIds) -> Optional.empty(),
+                alwaysAvailable,
+                menuStore,
+                tenantContext,
+                Clock.systemUTC(),
+                commentPresetStore,
+                BrandLocaleLookup.platformFallback(),
+                (tenantId, brandId) -> {
+                    asked.add(brandId);
+                    return true;
+                },
+                LOCALE);
+
+        assertThat(on.menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT")
+                        .orElseThrow()
+                        .nutritionAccuracyNotice())
+                .isTrue();
+        assertThat(asked).containsExactly(BRAND);
+        assertThat(storefront
+                        .menuFor(TENANT, BRAND, LOCATION, LOCALE, "STOREFRONT")
+                        .orElseThrow()
+                        .nutritionAccuracyNotice())
+                .as("a reader built without the switch never shows the line")
+                .isFalse();
+    }
+
+    @Test
     @DisplayName("a channel is served only its own publication, never another channel's")
     void menuForServesTheCallersOwnChannelNotAnother() {
         UUID catalogId = authoring.createCatalog(TENANT, BRAND, "MAIN", "Main menu", LOCALE);

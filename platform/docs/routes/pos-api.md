@@ -66,6 +66,17 @@ phone call rather than a button.
 secret cache. The credential is wrong or revoked at the vendor. Rotate it there,
 update the secret, then re-enable the binding.
 
+## Revising an exported order (`ORDER_REVISION`, ADR 0137 and ADR 0180)
+
+`PosAdapter#reviseExportedOrder(context, externalOrderId, revision)` tells a vendor that an order it holds is
+now worth a different total. It is **not** part of an export's retry or reconcile logic: it runs when a person
+presses «Send the new total to the till» on a revised-total notice (`POST .../orders/{id}/till-revision/send`),
+under the key `till-revision:{noticeId}:{revision}`, outside any transaction, and only when the binding the
+order was exported through has `ORDER_REVISION` enabled and usable. The default is not-supported, every vendor
+starts unassessed (the binding trigger refuses an unassessed capability), and Clopos is recorded unsupported:
+`PUT /orders/{id}` accepts only `IGNORE` and a line count is an integer (Q10). A refusal, an unreachable till
+and an unknown outcome leave the notice open with a stable code and never the vendor's words.
+
 ## Rollout
 
 Per ADR 0007: ships with its bindings disabled, enabled for one test tenant and

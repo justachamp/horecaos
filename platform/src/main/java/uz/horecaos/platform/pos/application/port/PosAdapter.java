@@ -177,6 +177,34 @@ public interface PosAdapter {
         return notSupported("writeBalance");
     }
 
+    // ------------------------------------------------------------------
+    // Order revision (ADR 0137, PosCapability#ORDER_REVISION)
+    // ------------------------------------------------------------------
+
+    /**
+     * Tells the vendor that the order it holds as {@code externalOrderId} is now worth
+     * {@code revision.revisedTotalMinor()}, under {@code revision.idempotencyKey()}. The key is built from the
+     * notice, so a repeat of the same send is the same send; an {@code UNCERTAIN} outcome is resolved by
+     * sending again, never by assuming either way.
+     *
+     * <p>Defaulted to "not supported", so an adapter whose vendor cannot revise an order -- Clopos today --
+     * compiles and behaves as it did. A default that answered a success would be the failure this capability
+     * exists to prevent: a till reported as corrected when it was never asked.
+     */
+    default ProviderOutcome reviseExportedOrder(PosContext context, String externalOrderId, TillRevision revision) {
+        return notSupported("reviseExportedOrder");
+    }
+
+    /**
+     * What the vendor is told about an order it already holds.
+     *
+     * @param tillTotalMinor the total the vendor holds now
+     * @param revisedTotalMinor what the order is worth
+     * @param reasonCode a stable code for why, e.g. {@code CATCHWEIGHT}; never free text
+     */
+    record TillRevision(
+            long tillTotalMinor, long revisedTotalMinor, String currency, String reasonCode, String idempotencyKey) {}
+
     private static ProviderOutcome notSupported(String operation) {
         return ProviderOutcome.rejected("NOT_SUPPORTED", "This point of sale does not support " + operation);
     }

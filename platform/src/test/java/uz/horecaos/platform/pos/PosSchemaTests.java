@@ -281,6 +281,75 @@ class PosSchemaTests {
         assertThat(row).contains("PATCH");
     }
 
+    @Test
+    @DisplayName("ORDER_REVISION is recorded as unsupported for Clopos with its reason, so it cannot be enabled there")
+    void orderRevisionIsRefusedOnClopos() {
+        assertThatThrownBy(() -> enable("ORDER_REVISION", true))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("does not support");
+
+        String row = jdbc.sql("""
+                SELECT support_level || '|' || rationale FROM integration.pos_provider_capabilities
+                 WHERE provider_type = 'clopos' AND capability_code = 'ORDER_REVISION'
+                """).query(String.class).single();
+        assertThat(row).startsWith("UNSUPPORTED|").contains("IGNORE").contains("integer");
+    }
+
+    @Test
+    @DisplayName("ORDER_REVISION on a vendor nobody has assessed is refused rather than assumed; the fake has it")
+    void orderRevisionIsRefusedOnAnUnassessedVendorAndAllowedOnTheFake() {
+        UUID iikoInstallation = UUID.randomUUID();
+        UUID iikoBinding = UUID.randomUUID();
+        UUID fakeInstallation = UUID.randomUUID();
+        UUID fakeBinding = UUID.randomUUID();
+        for (String[] vendor : new String[][] {
+            {"iiko", iikoInstallation.toString(), iikoBinding.toString()},
+            {"fake-pos", fakeInstallation.toString(), fakeBinding.toString()}
+        }) {
+            jdbc.sql("""
+                    INSERT INTO integration.installations
+                        (id, tenant_id, provider_category, provider_type, environment_code,
+                         display_name, status)
+                    VALUES (:id, :tenantId, 'POS', :provider, 'clopos-open-api-v2', 'Another till', 'ACTIVE')
+                    """)
+                    .param("id", UUID.fromString(vendor[1]))
+                    .param("tenantId", TENANT)
+                    .param("provider", vendor[0])
+                    .update();
+            jdbc.sql("""
+                    INSERT INTO integration.bindings (id, tenant_id, installation_id, brand_id, status)
+                    VALUES (:id, :tenantId, :installationId, :brandId, 'SUSPENDED')
+                    """)
+                    .param("id", UUID.fromString(vendor[2]))
+                    .param("tenantId", TENANT)
+                    .param("installationId", UUID.fromString(vendor[1]))
+                    .param("brandId", BRAND)
+                    .update();
+        }
+
+        assertThatThrownBy(() -> enableOn(iikoBinding, "ORDER_REVISION"))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("no assessed support");
+        enableOn(fakeBinding, "ORDER_REVISION");
+        assertThat(jdbc.sql("""
+                        SELECT count(*) FROM integration.binding_capabilities
+                         WHERE binding_id = :id AND capability_code = 'ORDER_REVISION'
+                        """).param("id", fakeBinding).query(Integer.class).single())
+                .isEqualTo(1);
+    }
+
+    private void enableOn(UUID bindingId, String capabilityCode) {
+        jdbc.sql("""
+                INSERT INTO integration.binding_capabilities
+                    (binding_id, tenant_id, capability_code, enabled, is_primary)
+                VALUES (:bindingId, :tenantId, :capability, true, false)
+                """)
+                .param("bindingId", bindingId)
+                .param("tenantId", TENANT)
+                .param("capability", capabilityCode)
+                .update();
+    }
+
     private void enable(String capabilityCode, boolean enabled) {
         try {
             jdbc.sql("""

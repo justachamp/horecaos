@@ -44,6 +44,11 @@ import uz.horecaos.platform.tenancy.api.SalesChannel;
  * <p>An entity with nothing channel-specific is left exactly as the snapshot
  * published it — the same list in the same order — so a brand that never used
  * either layer publishes the content, and so the content hash, it always did.
+ *
+ * <p>All three kinds reach the menu a customer or a partner is served: a product's list replaces the
+ * draft's, and a variant's (inside its product's item) and a category's (its own item) are written
+ * as {@code mediaAssetIds} when they are not empty, so an override row stored for a variant or a
+ * category is served and not only stored and drawn by the preview.
  */
 final class ChannelMediaLayers {
 
@@ -134,22 +139,75 @@ final class ChannelMediaLayers {
         }
 
         List<PublicationItem> items = drafted.stream()
-                .map(item -> {
-                    if (item.entityType() != EntityType.PRODUCT) {
-                        return item;
-                    }
-                    ResolvedMedia productMedia = resolved.get(item.entityId());
-                    if (productMedia == null
-                            || productMedia.mediaAssetIds().equals(draftedProductMedia.get(item.entityId()))) {
-                        return item;
-                    }
-                    Map<String, Object> content = new LinkedHashMap<>(item.content());
-                    content.put("mediaAssetIds", productMedia.mediaAssetIds());
-                    return new PublicationItem(item.entityType(), item.entityId(), item.entityVersion(), content);
+                .map(item -> switch (item.entityType()) {
+                    case PRODUCT -> withProductAndVariantMedia(item, resolved, draftedProductMedia);
+                    case CATEGORY -> withCategoryMedia(item, resolved);
+                    default -> item;
                 })
                 .toList();
 
         return new Plan(items, resolved, overridesByEntity);
+    }
+
+    /**
+     * A product item with the images this channel shows for it and for each of its variants. The
+     * product's list replaces the draft's, as it always has; a variant's is written only when it has
+     * any, so a variant nobody gave a picture publishes the content it always did and the content hash
+     * does not move for a brand that never used the layer.
+     */
+    @SuppressWarnings("unchecked")
+    private static PublicationItem withProductAndVariantMedia(
+            PublicationItem item, Map<UUID, ResolvedMedia> resolved, Map<UUID, List<String>> draftedProductMedia) {
+        ResolvedMedia productMedia = resolved.get(item.entityId());
+        boolean productChanged =
+                productMedia != null && !productMedia.mediaAssetIds().equals(draftedProductMedia.get(item.entityId()));
+
+        List<Map<String, Object>> variants = null;
+        if (item.content().get("variants") instanceof List<?> listed) {
+            for (int index = 0; index < listed.size(); index++) {
+                if (!(listed.get(index) instanceof Map<?, ?> raw)
+                        || !(raw.get("variantId") instanceof String variantId)) {
+                    continue;
+                }
+                ResolvedMedia variantMedia = resolved.get(UUID.fromString(variantId));
+                if (variantMedia == null || variantMedia.mediaAssetIds().isEmpty()) {
+                    continue;
+                }
+                if (variants == null) {
+                    variants = new ArrayList<>();
+                    for (Object element : listed) {
+                        variants.add(
+                                element instanceof Map<?, ?> map
+                                        ? new LinkedHashMap<>((Map<String, Object>) map)
+                                        : new LinkedHashMap<>());
+                    }
+                }
+                variants.get(index).put("mediaAssetIds", variantMedia.mediaAssetIds());
+            }
+        }
+
+        if (!productChanged && variants == null) {
+            return item;
+        }
+        Map<String, Object> content = new LinkedHashMap<>(item.content());
+        if (productChanged && productMedia != null) {
+            content.put("mediaAssetIds", productMedia.mediaAssetIds());
+        }
+        if (variants != null) {
+            content.put("variants", variants);
+        }
+        return new PublicationItem(item.entityType(), item.entityId(), item.entityVersion(), content);
+    }
+
+    /** A category item with the images this channel shows for it; untouched when it has none. */
+    private static PublicationItem withCategoryMedia(PublicationItem item, Map<UUID, ResolvedMedia> resolved) {
+        ResolvedMedia categoryMedia = resolved.get(item.entityId());
+        if (categoryMedia == null || categoryMedia.mediaAssetIds().isEmpty()) {
+            return item;
+        }
+        Map<String, Object> content = new LinkedHashMap<>(item.content());
+        content.put("mediaAssetIds", categoryMedia.mediaAssetIds());
+        return new PublicationItem(item.entityType(), item.entityId(), item.entityVersion(), content);
     }
 
     private static ResolvedMedia resolve(

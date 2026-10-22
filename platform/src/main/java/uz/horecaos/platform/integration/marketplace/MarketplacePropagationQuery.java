@@ -61,7 +61,12 @@ public class MarketplacePropagationQuery {
     public enum Mode {
         AUTOMATIC,
         MANUAL,
-        SUSPENDED
+        SUSPENDED,
+        /**
+         * The binding rehearses (ADR 0141 Phase 3, {@code marketplace.availability.dry_run}): the platform has
+         * computed what it would send and recorded it, and has sent nothing. {@code wouldPush} counts the dishes.
+         */
+        DRY_RUN
     }
 
     /** Why a binding is {@link Mode#MANUAL}: stable codes, never a provider's words (ADR 0029). */
@@ -82,7 +87,10 @@ public class MarketplacePropagationQuery {
             @Nullable Boolean confirmedAvailable,
             String state,
             @Nullable Instant since,
-            @Nullable String lastFailureCode) {}
+            @Nullable String lastFailureCode,
+            // Dry run: what the rehearsal would have sent for this dish, and when it decided; null otherwise.
+            @Nullable Boolean wouldPushAvailable,
+            @Nullable Instant wouldPushAt) {}
 
     public record Binding(
             UUID bindingId,
@@ -98,18 +106,23 @@ public class MarketplacePropagationQuery {
             @Nullable Instant lastSuccessAt,
             @Nullable Instant lastFailureAt,
             @Nullable String lastFailureCode,
-            List<Item> unconfirmedItems) {}
+            List<Item> unconfirmedItems,
+            // Dry run: how many dishes the rehearsal has recorded as "would push" and not yet sent.
+            int wouldPush,
+            // ADR 0180 Decision 1: since when a stale-channel incident is open on this binding, or null. It closes
+            // by itself when the binding recovers or stops being worked, so a value here is an incident that is open.
+            @Nullable Instant incidentOpenSince) {}
 
     @Transactional(readOnly = true)
     public List<Binding> at(UUID tenantId, UUID locationId) {
         boolean enabled = !Boolean.FALSE.equals(
                 configuration.value(MarketplaceConfigurationKeys.RECONCILE_ENABLED, ResourceScope.tenant(tenantId)));
         return store.summariesAtLocation(tenantId, locationId).stream()
-                .map(summary -> toBinding(tenantId, summary, enabled))
+                .map(summary -> toBinding(tenantId, locationId, summary, enabled))
                 .toList();
     }
 
-    private Binding toBinding(UUID tenantId, BindingSummary summary, boolean enabled) {
+    private Binding toBinding(UUID tenantId, UUID locationId, BindingSummary summary, boolean enabled) {
         Reason reason = null;
         Mode mode;
         if (!adapters.propagates(summary.providerType())) {
@@ -119,7 +132,7 @@ public class MarketplacePropagationQuery {
             mode = Mode.SUSPENDED;
         } else {
             reason = reconcilerCannotAct(tenantId, summary);
-            mode = reason == null ? Mode.AUTOMATIC : Mode.MANUAL;
+            mode = reason == null ? (dryRun(tenantId, locationId) ? Mode.DRY_RUN : Mode.AUTOMATIC) : Mode.MANUAL;
         }
         // Rows exist only for a binding the reconciler maintains. A MANUAL binding has none (or
         // none it still looks after), so its counts are zero by construction rather than by a
@@ -143,7 +156,19 @@ public class MarketplacePropagationQuery {
                 summary.lastSuccessAt(),
                 summary.lastFailureAt(),
                 summary.lastFailureCode(),
-                unconfirmed);
+                unconfirmed,
+                mode == Mode.DRY_RUN ? summary.wouldPush() : 0,
+                // The incident is open only while the platform is actually pushing to this binding and failing to be
+                // believed; a binding that is manual, suspended or rehearsing has none (the mark is cleared there).
+                mode == Mode.AUTOMATIC ? summary.staleAlertedAt() : null);
+    }
+
+    /** Whether the binding at this branch rehearses. The branch's brand is not needed: a location value outranks. */
+    private boolean dryRun(UUID tenantId, UUID locationId) {
+        return store.brandOfLocation(tenantId, locationId)
+                .map(brandId -> Boolean.TRUE.equals(configuration.value(
+                        MarketplaceConfigurationKeys.DRY_RUN, ResourceScope.location(tenantId, brandId, locationId))))
+                .orElse(false);
     }
 
     /**
@@ -173,6 +198,8 @@ public class MarketplacePropagationQuery {
                 row.confirmedAvailable(),
                 row.state(),
                 row.pendingSince(),
-                row.lastFailureCode());
+                row.lastFailureCode(),
+                row.wouldPushAvailable(),
+                row.wouldPushAt());
     }
 }

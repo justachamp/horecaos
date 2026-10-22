@@ -126,6 +126,15 @@ horecaos:
       enabled: ${HORECAOS_FAKE_PROVIDERS_CLICK_ENABLED:true}
       port: ${HORECAOS_FAKE_PROVIDERS_CLICK_PORT:18089}
       secret: ${HORECAOS_FAKE_PROVIDERS_CLICK_SECRET:local-fixture-click-secret-key-not-a-real-credential}
+    aggregator:
+      # FakeAggregatorConfiguration (ADR 0007, ADR 0141) -- a local stand-in for an aggregator's
+      # availability API, so a stop can be walked from the console to a "partner" and the stale alert
+      # and the Phase 3 dry run exercised without a real aggregator. Exists only under this profile;
+      # tools/seed-marketplace points integration.provider_environments.base_url at this same port,
+      # and the secret below is the value it writes into local OpenBao.
+      enabled: ${HORECAOS_FAKE_PROVIDERS_AGGREGATOR_ENABLED:true}
+      port: ${HORECAOS_FAKE_PROVIDERS_AGGREGATOR_PORT:18090}
+      secret: ${HORECAOS_FAKE_PROVIDERS_AGGREGATOR_SECRET:local-fixture-aggregator-secret-not-a-real-credential}
   commercial:
     card:
       # ADR 0095: lets the in-process card provider (FakeCardProvider) be activated as HorecaOS's own
