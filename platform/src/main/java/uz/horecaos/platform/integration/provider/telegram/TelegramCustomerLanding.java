@@ -100,7 +100,8 @@ public class TelegramCustomerLanding {
         String origin = channel.brandId() == null ? null : storefrontOrigin(installation.tenantId(), channel.brandId());
         boolean miniApp = channel.miniAppEnabled() && origin != null;
 
-        StringBuilder message = new StringBuilder(channel.welcomeText(locale, brandDefault, "ru")
+        StringBuilder message = new StringBuilder(channel.welcomeText(
+                        locale, brandDefault, PlatformLocales.fallback().tag())
                 .orElseGet(() -> TelegramBotMessages.welcomeDefault(locale, miniApp)));
         if (channel.publicOfferLink() && origin != null) {
             message.append("\n\n")
@@ -129,7 +130,8 @@ public class TelegramCustomerLanding {
             String locale,
             String brandDefault,
             String url) {
-        Optional<String> label = channel.menuButtonLabel(locale, brandDefault, "ru");
+        Optional<String> label = channel.menuButtonLabel(
+                locale, brandDefault, PlatformLocales.fallback().tag());
         if (label.isEmpty()) {
             return;
         }

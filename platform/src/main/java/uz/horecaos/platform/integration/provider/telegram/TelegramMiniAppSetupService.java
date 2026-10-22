@@ -339,7 +339,9 @@ public class TelegramMiniAppSetupService {
             TelegramChannelSettings current = channel;
             return current == null
                     ? TelegramBotMessages.menuButtonDefault(resolved)
-                    : current.menuButtonLabel(resolved, "ru", "en", "uz-Latn")
+                    : current.menuButtonLabel(
+                                    resolved,
+                                    PlatformLocales.activeTags(Tier.MESSAGES).toArray(String[]::new))
                             .orElseGet(() -> TelegramBotMessages.menuButtonDefault(resolved));
         }
 

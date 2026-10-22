@@ -303,16 +303,27 @@ funnel retention job. A layout set to `STANDARD` is today's storefront.
 ## Implementation checklist
 
 - [x] Owner accepts the record (batch 21).
-- [ ] V0674, V0675, V0676 with grants for the application role (and the reporting role for the new reporting table).
-- [ ] Telegram per-channel settings, `setChatMenuButton`/`getChatMenuButton`, welcome texts, the public-offer link.
-- [ ] Server-computed link URLs; `MOBILE_APP` no longer offered; bot landing; Mini App landing in both storefronts.
-- [ ] The guided Mini-App/BotFather setup flow and the console wizard.
-- [ ] The funnel alert rule, the provisional flag and its startup check, the page-load counter (dark), the housekeeping
-      ADR 0167's checklist still owes (`statistics.md` Band D, ADR 0043's status line, the notice as a default clause).
-- [ ] Brand switcher entries, branch order, marketplace layout; the console editor.
-- [ ] `docs/runbooks/external-connections/w8-acquisition-merchandising.md`; `docs/runbooks/connect-telegram-bot.md`
+- [x] `V0674`, `V0675`, `V0676` with grants for the application role. `reporting.page_load_counts_day` needs no grant of
+      its own for the reporting read role: `V0031` gives it `SELECT` on every present and future table of the schema.
+- [x] Telegram per-channel settings, `setChatMenuButton`/`getChatMenuButton`, welcome texts, the public-offer link
+      (`TelegramChannelSetupEndpointTests`, `TelegramBotLandingTests`, `telegram-card.spec.ts`).
+- [x] Server-computed link URLs; `MOBILE_APP` no longer offered; bot landing; Mini App landing in both storefronts
+      (`MiniAppAndLinksEndpointTests`, `TelegramBotLandingTests`, `attribution-landing.spec.ts` in each storefront).
+- [x] The guided Mini-App/BotFather setup flow and the console wizard (`mini-app-setup-card.spec.ts`).
+- [x] The funnel alert rule (`promtool test rules`), the provisional flag and its startup check, the page-load counter (dark),
+      the housekeeping ADR 0167's checklist still owed (`statistics.md` Band D, ADR 0043's status line, the notice as a default
+      clause).
+- [x] Brand switcher entries, branch order, marketplace layout; the console editor (`BrandSwitcherEndpointTests`,
+      `StorefrontBranchOrderEndpointTests`, `storefront-switcher.spec.ts`, `storefront-branch-order.spec.ts`).
+- [x] `docs/runbooks/external-connections/w8-acquisition-merchandising.md`; `docs/runbooks/connect-telegram-bot.md`
       points at the guided flow.
-- [ ] Dated status additions on ADR 0167, 0157, 0075, 0044; `tools/file-adrs`.
+- [x] The OpenAPI baselines (five documents) and the one allowance the gate needed: the pickup search's `point`
+      may become optional (`AcceptedContractWidenings`, this record's D17). The new request and view records and handlers take
+      names no other record or handler has, so no released schema or `operationId` is renamed.
+- [x] Dated status additions on ADR 0167, 0157, 0075, 0044; `tools/file-adrs`.
+- [ ] Outside the platform, so not ticked by a build: the BotFather round trip, counsel's answers (per-person attribution, the
+      page-load count, the 400-day retention) and a signed tenant that runs two brands. They are listed, with where each value goes
+      and how to prove it, in `docs/runbooks/external-connections/w8-acquisition-merchandising.md`.
 
 ## Exit criteria
 

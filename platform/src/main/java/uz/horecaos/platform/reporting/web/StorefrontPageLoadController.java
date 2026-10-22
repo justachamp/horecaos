@@ -51,7 +51,8 @@ public class StorefrontPageLoadController {
             summary = "Whether the platform counts page loads",
             description = "False until the platform owner switches it on after counsel answers. A storefront sends the "
                     + "ping only when this is true.")
-    public ResponseEntity<EnabledView> enabled(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+    public ResponseEntity<EnabledView> pageLoadCountingEnabled(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId) {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.maxAge(CACHE_FOR).cachePublic())
                 .body(new EnabledView(pageLoads.enabled()));
@@ -62,7 +63,7 @@ public class StorefrontPageLoadController {
             summary = "Count one page load (one per browser tab session)",
             description = "Public. Answers 202 whether or not anything was counted. Reads no cookie and stores no "
                     + "address, user agent, session or path; a page load is not a person. Limited per visitor.")
-    public ResponseEntity<Void> count(
+    public ResponseEntity<Void> countPageLoad(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @Valid @RequestBody PingRequest body,

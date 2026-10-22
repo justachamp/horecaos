@@ -66,7 +66,7 @@ public class BrandSwitcherController {
             summary = "The tenant's other brands and website channels an entry can name",
             description = "Other active brands that sell through an active website channel at one of their own active "
                     + "branches. hostname is null while the channel has no verified one.")
-    public List<SwitcherCandidateView> candidates(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+    public List<SwitcherCandidateView> listSwitcherCandidates(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
         return switcher.candidates(tenantId, brandId);
     }
 
@@ -77,7 +77,7 @@ public class BrandSwitcherController {
             description = "The entry names the target brand and one of the tenant's website channels; it links to that "
                     + "channel's verified hostname, checked on every read. A brand cannot offer itself, and the same brand "
                     + "and channel twice is a conflict.")
-    public ResponseEntity<SwitcherEntryView> add(
+    public ResponseEntity<SwitcherEntryView> addSwitcherEntry(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody SwitcherAddRequest body) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(switcher.add(
@@ -93,7 +93,7 @@ public class BrandSwitcherController {
     @Operation(
             summary = "Show or hide an entry",
             description = "Requires If-Match carrying the entry's version last read.")
-    public SwitcherEntryView setState(
+    public SwitcherEntryView setSwitcherEntryState(
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID entryId,
@@ -111,7 +111,7 @@ public class BrandSwitcherController {
     @DeleteMapping("/entries/{entryId}")
     @RequiresCapability(value = Capability.CONTENT_MANAGE, scope = ScopeType.BRAND, mutating = true)
     @Operation(summary = "Remove an entry")
-    public ResponseEntity<Void> remove(
+    public ResponseEntity<Void> removeSwitcherEntry(
             @PathVariable UUID tenantId, @PathVariable UUID brandId, @PathVariable UUID entryId) {
         switcher.remove(tenantId, brandId, entryId, currentActor.get().subject());
         return ResponseEntity.noContent().build();
