@@ -3,6 +3,7 @@ import type { deliveriesEn } from './deliveries.en';
 export const deliveriesRu = {
   'deliveries.title': 'Доставки',
   'deliveries.empty': 'Сейчас у вас нет заказов в работе.',
+  'deliveries.finished': 'Завершённые',
   'deliveries.refresh': 'Обновить',
   'deliveries.back': 'Все доставки',
   'deliveries.notFound': 'Эта доставка не ваша или её больше нет.',

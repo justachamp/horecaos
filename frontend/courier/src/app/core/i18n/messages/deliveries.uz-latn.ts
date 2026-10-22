@@ -3,6 +3,7 @@ import type { deliveriesEn } from './deliveries.en';
 export const deliveriesUzLatn = {
   'deliveries.title': 'Yetkazmalar',
   'deliveries.empty': 'Hozir sizda ishdagi buyurtma yoʻq.',
+  'deliveries.finished': 'Yakunlangan',
   'deliveries.refresh': 'Yangilash',
   'deliveries.back': 'Barcha yetkazmalar',
   'deliveries.notFound': 'Bu yetkazma sizniki emas yoki endi mavjud emas.',

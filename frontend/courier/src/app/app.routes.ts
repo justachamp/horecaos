@@ -37,6 +37,25 @@ export const routes: Routes = [
         loadComponent: () => import('./features/home/home').then((m) => m.HomePage),
       },
       {
+        path: 'offers',
+        title: 'offers.title',
+        canActivate: [messagesGuard('offers', 'work')],
+        loadComponent: () => import('./features/offers/offers').then((m) => m.OffersPage),
+      },
+      {
+        path: 'deliveries',
+        title: 'deliveries.title',
+        canActivate: [messagesGuard('deliveries', 'work')],
+        loadComponent: () =>
+          import('./features/deliveries/deliveries').then((m) => m.DeliveriesPage),
+      },
+      {
+        path: 'deliveries/:id',
+        title: 'deliveries.title',
+        canActivate: [messagesGuard('deliveries', 'work')],
+        loadComponent: () => import('./features/deliveries/delivery').then((m) => m.DeliveryPage),
+      },
+      {
         path: 'shift',
         title: 'shift.title',
         canActivate: [messagesGuard('shift', 'home')],

@@ -59,6 +59,12 @@ describe('the route table', () => {
     expect(home).toBeInstanceOf(HomePage);
     await vi.waitFor(() => expect(document.title).toBe('Today · HorecaOS Courier'));
 
+    await router.navigateByUrl('/offers');
+    await vi.waitFor(() => expect(document.title).toBe('Offers · HorecaOS Courier'));
+
+    await router.navigateByUrl('/deliveries');
+    await vi.waitFor(() => expect(document.title).toBe('Deliveries · HorecaOS Courier'));
+
     await router.navigateByUrl('/shift');
     await vi.waitFor(() => expect(document.title).toBe('Shift · HorecaOS Courier'));
 

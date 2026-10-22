@@ -136,11 +136,15 @@ export async function renderPage<T>(
   type: Type<T>,
   areas: readonly MessageArea[],
   locale: LocaleCode = 'en',
+  inputs: Readonly<Record<string, unknown>> = {},
 ): Promise<ComponentFixture<T>> {
   const i18n = TestBed.inject(I18n);
   await i18n.require(areas);
   await i18n.use(locale);
   const fixture = TestBed.createComponent(type);
+  for (const [name, value] of Object.entries(inputs)) {
+    fixture.componentRef.setInput(name, value);
+  }
   fixture.detectChanges();
   await fixture.whenStable();
   fixture.detectChanges();

@@ -1,0 +1,51 @@
+<section class="page">
+  <h1 class="q-title">{{ 'deliveries.title' | t }}</h1>
+
+  <button type="button" class="btn secondary" (click)="refresh()">
+    {{ 'deliveries.refresh' | t }}
+  </button>
+
+  @if (errorText(); as text) {
+    <p class="notice warning" role="status">{{ text }}</p>
+  }
+
+  <div class="carried">
+    @for (delivery of store.active(); track delivery.shipmentId) {
+      <a class="delivery card" [routerLink]="['/deliveries', delivery.shipmentId]">
+        <span class="q-emphasis">{{
+          'work.order' | t: { reference: delivery.orderReference }
+        }}</span>
+        <span class="q-subhead">{{ statusKeys[delivery.status] | t }}</span>
+        @if (delivery.destinationLabel; as label) {
+          <span class="q-body-sm">{{ 'work.destination' | t: { label: label } }}</span>
+        }
+        <span class="q-body-sm muted">
+          @if (cashDue(delivery); as due) {
+            {{ 'work.cash.collect' | t: { amount: due } }}
+          } @else {
+            {{ 'work.cash.prepaid' | t }}
+          }
+        </span>
+        @if (delivery.promisedDeliveryEnd; as promised) {
+          <span class="q-body-sm muted">{{ 'work.promised' | t: { time: time(promised) } }}</span>
+        }
+      </a>
+    } @empty {
+      <p class="q-body">{{ 'deliveries.empty' | t }}</p>
+    }
+  </div>
+
+  @if (store.finished().length > 0) {
+    <div class="finished">
+      <h2 class="q-emphasis muted">{{ 'deliveries.finished' | t }}</h2>
+      @for (delivery of store.finished(); track delivery.shipmentId) {
+        <a class="delivery card" [routerLink]="['/deliveries', delivery.shipmentId]">
+          <span class="q-emphasis">{{
+            'work.order' | t: { reference: delivery.orderReference }
+          }}</span>
+          <span class="q-body-sm">{{ statusKeys[delivery.status] | t }}</span>
+        </a>
+      }
+    </div>
+  }
+</section>

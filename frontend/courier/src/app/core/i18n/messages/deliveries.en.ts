@@ -1,6 +1,7 @@
 export const deliveriesEn = {
   'deliveries.title': 'Deliveries',
   'deliveries.empty': 'You are not carrying anything right now.',
+  'deliveries.finished': 'Finished',
   'deliveries.refresh': 'Refresh',
   'deliveries.back': 'All deliveries',
   'deliveries.notFound': 'This delivery is not yours, or it no longer exists.',

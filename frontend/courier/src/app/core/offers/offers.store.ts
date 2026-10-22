@@ -148,6 +148,11 @@ export class OffersStore {
     });
   }
 
+  /** The courier hid an address they had opened; nothing of it stays in memory. */
+  hideRevealed(offerId: string): void {
+    this.doors.update(({ [offerId]: _door, ...rest }) => rest);
+  }
+
   private async decide(
     offer: CourierOffer,
     action: (where: BranchRef) => Promise<OfferOutcome>,

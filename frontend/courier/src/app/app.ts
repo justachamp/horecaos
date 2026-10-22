@@ -7,6 +7,7 @@ import { AppUpdates } from './core/app-updates';
 import { I18n } from './core/i18n/i18n';
 import { LOCALES, parseLocale } from './core/i18n/locales';
 import { TPipe } from './core/i18n/t.pipe';
+import { OffersStore } from './core/offers/offers.store';
 import { WorkSession } from './core/work/work-session';
 import { DutyIndicatorBar } from './features/duty/duty-indicator';
 
@@ -27,6 +28,7 @@ export class App {
   protected readonly updates = inject(AppUpdates);
   private readonly router = inject(Router);
   private readonly work = inject(WorkSession);
+  protected readonly offers = inject(OffersStore);
 
   protected readonly locales = LOCALES;
 

@@ -1,0 +1,25 @@
+<div class="card" role="region" [attr.aria-label]="'work.customer.title' | t">
+  <h3 class="q-emphasis">{{ 'work.customer.title' | t }}</h3>
+  <p class="q-body">{{ location().addressLine }}</p>
+  @if (location().entrance; as entrance) {
+    <p class="q-body-sm">{{ 'work.customer.entrance' | t: { value: entrance } }}</p>
+  }
+  @if (location().floor; as floor) {
+    <p class="q-body-sm">{{ 'work.customer.floor' | t: { value: floor } }}</p>
+  }
+  @if (location().apartment; as apartment) {
+    <p class="q-body-sm">{{ 'work.customer.apartment' | t: { value: apartment } }}</p>
+  }
+  @if (location().instructions; as instructions) {
+    <p class="q-body-sm">{{ 'work.customer.instructions' | t: { value: instructions } }}</p>
+  }
+  <div class="actions">
+    @if (link(); as href) {
+      <a class="btn" [href]="href">{{ 'work.customer.navigate' | t }}</a>
+    }
+    <button type="button" class="btn secondary" (click)="hidden.emit()">
+      {{ 'work.customer.hide' | t }}
+    </button>
+  </div>
+  <p class="q-caption muted">{{ 'work.customer.audited' | t }}</p>
+</div>

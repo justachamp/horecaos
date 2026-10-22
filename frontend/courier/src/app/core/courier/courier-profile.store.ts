@@ -52,9 +52,14 @@ export class CourierProfileStore {
     return main ? { brandId: main.brandId, locationId: main.locationId } : null;
   });
 
-  /** For a screen that only needs the record to be there: loads it the first time and then leaves it. */
+  /**
+   * For a screen that only needs the record to be there: loads it the first time, waits for a load
+   * already in the air, and otherwise leaves it.
+   */
   async ensureLoaded(): Promise<void> {
-    if (this.status() === 'idle') {
+    if (this.inFlight !== null) {
+      await this.inFlight;
+    } else if (this.status() === 'idle') {
       await this.load();
     }
   }

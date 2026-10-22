@@ -1,0 +1,19 @@
+.muted {
+  color: var(--q-ink-muted);
+}
+
+.carried,
+.finished {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+a.delivery {
+  color: inherit;
+  text-decoration: none;
+}
+
+a.delivery:active {
+  background: var(--q-surface-1);
+}

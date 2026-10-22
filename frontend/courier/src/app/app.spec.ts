@@ -6,6 +6,7 @@ import { App } from './app';
 import { AppUpdates } from './core/app-updates';
 import { AuthService } from './core/auth/auth.service';
 import { I18n } from './core/i18n/i18n';
+import { OffersStore } from './core/offers/offers.store';
 import { DutyStore, type DutyIndicator } from './core/telemetry/duty.store';
 import { WorkSession } from './core/work/work-session';
 
@@ -14,6 +15,7 @@ describe('App shell', () => {
   const ready = signal(false);
   const apply = vi.fn();
   const indicator = signal<DutyIndicator>('off');
+  const waiting = signal(0);
   const begin = vi.fn();
   const end = vi.fn();
 
@@ -24,6 +26,7 @@ describe('App shell', () => {
     begin.mockReset();
     end.mockReset();
     indicator.set('off');
+    waiting.set(0);
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
@@ -31,6 +34,7 @@ describe('App shell', () => {
         { provide: AppUpdates, useValue: { ready, apply } },
         { provide: WorkSession, useValue: { begin, end } },
         { provide: DutyStore, useValue: { indicator } },
+        { provide: OffersStore, useValue: { count: waiting } },
       ],
     });
     await TestBed.inject(I18n).use('en');
@@ -60,9 +64,25 @@ describe('App shell', () => {
     const tabs = [...root(fixture).querySelectorAll('nav.tabs a')].map((a) =>
       a.textContent!.trim(),
     );
-    expect(tabs).toEqual(['Today', 'Shift', 'Profile']);
+    expect(tabs).toEqual(['Today', 'Offers', 'Deliveries', 'Shift', 'Profile']);
     expect(root(fixture).querySelector('nav.tabs')?.getAttribute('aria-label')).toBe(
       'Main navigation',
+    );
+  });
+
+  it('shows how many offers are waiting on the Offers tab, to a screen reader as words', async () => {
+    const fixture = await render();
+    signedIn.set(true);
+    fixture.detectChanges();
+    expect(root(fixture).querySelector('nav.tabs .count')).toBeNull();
+
+    waiting.set(2);
+    fixture.detectChanges();
+
+    const count = root(fixture).querySelector('nav.tabs a[href="/offers"] .count')!;
+    expect(count.textContent).toContain('2');
+    expect(root(fixture).querySelector('nav.tabs a[href="/offers"]')?.textContent).toContain(
+      '2 waiting',
     );
   });
 

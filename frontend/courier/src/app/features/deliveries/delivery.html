@@ -1,0 +1,134 @@
+<section class="page">
+  <a class="back q-body-sm" routerLink="/deliveries">{{ 'deliveries.back' | t }}</a>
+
+  @if (delivery(); as d) {
+    <h1 class="q-title">{{ 'work.order' | t: { reference: d.orderReference } }}</h1>
+    <p class="q-subhead">{{ statusKeys[d.status] | t }}</p>
+
+    <div class="card">
+      <h2 class="q-emphasis">{{ 'work.pickup.title' | t }}</h2>
+      <p class="q-body">{{ d.pickup.name }}</p>
+      <p class="q-body-sm">{{ d.pickup.addressLine }}</p>
+      @if (d.pickup.landmark; as landmark) {
+        <p class="q-body-sm">{{ 'work.landmark' | t: { value: landmark } }}</p>
+      }
+      @if (pickupLink(); as href) {
+        <a class="textlink q-body-sm" [href]="href">{{ 'work.customer.navigate' | t }}</a>
+      }
+      <p class="q-body-sm">
+        {{ (d.kitchenReady ? 'work.kitchen.ready' : 'work.kitchen.preparing') | t }}
+      </p>
+      <p class="q-body-sm muted">
+        {{ 'work.window' | t: { start: time(d.pickupWindowStart), end: time(d.pickupWindowEnd) } }}
+      </p>
+      @if (d.destinationLabel; as label) {
+        <p class="q-body-sm">{{ 'work.destination' | t: { label: label } }}</p>
+      }
+      @if (d.distanceMeters !== null) {
+        <p class="q-body-sm">{{ 'work.route' | t: { distance: distance(d.distanceMeters) } }}</p>
+      }
+      @if (d.promisedDeliveryEnd; as promised) {
+        <p class="q-body-sm muted">{{ 'work.promised' | t: { time: time(promised) } }}</p>
+      }
+    </div>
+
+    @if (carrying()) {
+      @if (door(); as location) {
+        <app-customer-location [location]="location" (hidden)="hide()" />
+      } @else {
+        <button type="button" class="btn secondary" [disabled]="busy()" (click)="reveal()">
+          {{ 'work.customer.show' | t }}
+        </button>
+      }
+    }
+
+    <div class="card">
+      <h2 class="q-emphasis">{{ 'deliveries.cash.title' | t }}</h2>
+      @if (d.prepaid || d.cashDueMinor <= 0) {
+        <p class="q-body">{{ 'work.cash.prepaid' | t }}</p>
+      } @else {
+        <p class="q-body">
+          {{ 'work.cash.collect' | t: { amount: money(d.cashDueMinor, d.currency) } }}
+        </p>
+      }
+      @if (d.paymentConfirmedAt !== null && d.paymentConfirmedMinor !== null) {
+        <p class="notice" role="status">
+          {{
+            'deliveries.cash.confirmed' | t: { amount: money(d.paymentConfirmedMinor, d.currency) }
+          }}
+        </p>
+      } @else if (d.status === 'PICKED_UP' && !d.prepaid && d.cashDueMinor > 0) {
+        <div class="field">
+          <label class="q-caption" for="cash">
+            {{ 'deliveries.cash.label' | t: { currency: d.currency } }}
+          </label>
+          <input
+            id="cash"
+            type="text"
+            inputmode="decimal"
+            autocomplete="off"
+            [value]="cashText()"
+            (input)="typeCash($event)"
+            [attr.aria-invalid]="cashInvalid()"
+          />
+        </div>
+        @if (cashInvalid()) {
+          <p class="notice error" role="alert">{{ 'deliveries.cash.invalid' | t }}</p>
+        }
+        <button type="button" class="btn secondary" [disabled]="busy()" (click)="confirmCash()">
+          {{ 'deliveries.cash.confirm' | t }}
+        </button>
+      }
+    </div>
+
+    @if (doneKey(); as key) {
+      <p class="notice" role="status">{{ key | t }}</p>
+    }
+    <app-step-notice [message]="message()" />
+
+    @switch (d.status) {
+      @case ('ASSIGNED') {
+        <div class="actions">
+          <button type="button" class="btn secondary" [disabled]="busy()" (click)="arrive()">
+            {{ 'deliveries.step.arrive' | t }}
+          </button>
+          <button type="button" class="btn" [disabled]="busy()" (click)="pickUp()">
+            {{ 'deliveries.step.pickup' | t }}
+          </button>
+        </div>
+      }
+      @case ('PICKUP_PENDING') {
+        <button type="button" class="btn" [disabled]="busy()" (click)="pickUp()">
+          {{ 'deliveries.step.pickup' | t }}
+        </button>
+      }
+      @case ('PICKED_UP') {
+        @if (awaitingCash()) {
+          <p class="q-body-sm muted">{{ 'deliveries.cash.first' | t }}</p>
+        }
+        <button
+          type="button"
+          class="btn"
+          [disabled]="busy() || awaitingCash()"
+          (click)="handOver()"
+        >
+          {{ 'deliveries.step.handover' | t }}
+        </button>
+      }
+      @case ('DELIVERED') {
+        @if (d.deliveredAt; as at) {
+          <p class="q-body">{{ 'deliveries.delivered' | t: { time: time(at) } }}</p>
+        }
+      }
+      @case ('CANCELLED') {
+        <p class="notice warning" role="status">{{ 'deliveries.cancelled' | t }}</p>
+      }
+    }
+  } @else if (missing()) {
+    <div class="card">
+      <p class="q-body">{{ 'deliveries.notFound' | t }}</p>
+    </div>
+  } @else {
+    <p class="q-body muted" role="status">{{ 'common.loading' | t }}</p>
+  }
+</section>

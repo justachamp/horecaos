@@ -34,6 +34,16 @@
     <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
       {{ 'shell.nav.home' | t }}
     </a>
+    <a routerLink="/offers" routerLinkActive="active">
+      {{ 'shell.nav.offers' | t }}
+      @if (offers.count() > 0) {
+        <span class="count" aria-hidden="true">{{ offers.count() }}</span>
+        <span class="visually-hidden">{{
+          'shell.nav.waiting' | t: { count: offers.count() }
+        }}</span>
+      }
+    </a>
+    <a routerLink="/deliveries" routerLinkActive="active">{{ 'shell.nav.deliveries' | t }}</a>
     <a routerLink="/shift" routerLinkActive="active">{{ 'shell.nav.shift' | t }}</a>
     <a routerLink="/profile" routerLinkActive="active">{{ 'shell.nav.profile' | t }}</a>
   </nav>

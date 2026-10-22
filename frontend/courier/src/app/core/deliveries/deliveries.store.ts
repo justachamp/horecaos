@@ -49,6 +49,8 @@ export class DeliveriesStore {
     [...this.held()].sort((a, b) => a.assignedAt.localeCompare(b.assignedAt)),
   );
   readonly active = computed(() => this.deliveries().filter((d) => CARRIED.has(d.status)));
+  /** Delivered or cancelled: kept in view so a finished delivery can still be looked at. */
+  readonly finished = computed(() => this.deliveries().filter((d) => !CARRIED.has(d.status)));
   /** The shipment a step is in the air for, or null. */
   readonly busy = this.working.asReadonly();
   /** Why the last list read failed; the list itself is left as it was. */

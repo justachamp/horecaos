@@ -174,4 +174,20 @@ describe('CourierProfileStore', () => {
     expect(me).toHaveBeenCalledTimes(2);
     expect(store.profile()?.displayReference).toBe('AFTER-THE-CHANGE');
   });
+  it('lets a screen that only needs the record wait for a load already in the air', async () => {
+    let release: (value: ReturnType<typeof courierProfile>) => void = () => undefined;
+    me.mockReturnValue(new Promise((resolve) => (release = resolve)));
+    void store.load();
+    await vi.waitFor(() => expect(store.state()).toBe('loading'));
+
+    let waited = false;
+    const waiting = store.ensureLoaded().then(() => (waited = true));
+    await Promise.resolve();
+    expect(waited).toBe(false);
+
+    release(courierProfile());
+    await waiting;
+    expect(store.profile()).not.toBeNull();
+    expect(me).toHaveBeenCalledOnce();
+  });
 });
