@@ -6,21 +6,31 @@ import { App } from './app';
 import { AppUpdates } from './core/app-updates';
 import { AuthService } from './core/auth/auth.service';
 import { I18n } from './core/i18n/i18n';
+import { DutyStore, type DutyIndicator } from './core/telemetry/duty.store';
+import { WorkSession } from './core/work/work-session';
 
 describe('App shell', () => {
   const signedIn = signal(false);
   const ready = signal(false);
   const apply = vi.fn();
+  const indicator = signal<DutyIndicator>('off');
+  const begin = vi.fn();
+  const end = vi.fn();
 
   async function render() {
     signedIn.set(false);
     ready.set(false);
     apply.mockReset();
+    begin.mockReset();
+    end.mockReset();
+    indicator.set('off');
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
         { provide: AuthService, useValue: { signedIn } },
         { provide: AppUpdates, useValue: { ready, apply } },
+        { provide: WorkSession, useValue: { begin, end } },
+        { provide: DutyStore, useValue: { indicator } },
       ],
     });
     await TestBed.inject(I18n).use('en');
@@ -50,9 +60,36 @@ describe('App shell', () => {
     const tabs = [...root(fixture).querySelectorAll('nav.tabs a')].map((a) =>
       a.textContent!.trim(),
     );
-    expect(tabs).toEqual(['Today', 'Profile']);
+    expect(tabs).toEqual(['Today', 'Shift', 'Profile']);
     expect(root(fixture).querySelector('nav.tabs')?.getAttribute('aria-label')).toBe(
       'Main navigation',
+    );
+  });
+
+  it('starts the courier’s working state when they sign in, and stops it when they leave', async () => {
+    const fixture = await render();
+    expect(begin).not.toHaveBeenCalled();
+
+    signedIn.set(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(begin).toHaveBeenCalledOnce();
+
+    signedIn.set(false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(end).toHaveBeenCalledOnce();
+  });
+
+  it('shows the on-duty indicator on every screen while the courier is on duty, and not otherwise', async () => {
+    const fixture = await render();
+    expect(root(fixture).querySelector('app-duty-indicator a')).toBeNull();
+
+    indicator.set('tracking');
+    fixture.detectChanges();
+
+    expect(root(fixture).querySelector('app-duty-indicator a')?.textContent).toContain(
+      'On duty · sharing location',
     );
   });
 

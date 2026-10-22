@@ -27,4 +27,11 @@ export const coreRu = {
   'auth.error.default': 'Вход не завершён. Повторите попытку.',
   'auth.signedOut.title': 'Вы вышли из приложения',
   'auth.signedOut.body': 'Войдите снова, чтобы продолжить работу.',
+  'shell.nav.shift': 'Смена',
+  'duty.indicator.label': 'Статус на линии',
+  'duty.indicator.tracking': 'На линии · местоположение передаётся',
+  'duty.indicator.searching': 'На линии · позиции пока нет, держите экран включённым',
+  'duty.indicator.denied': 'На линии · доступ к геолокации закрыт',
+  'duty.indicator.break': 'Перерыв · местоположение не передаётся',
+  'duty.indicator.unreachable': 'На линии · нет связи с сервером',
 } as const satisfies Record<keyof typeof coreEn, string>;

@@ -22,6 +22,7 @@ export const homeRu = {
   'home.branches.none': 'За вами пока не закреплена ни одна точка. Обратитесь к диспетчеру.',
   'home.branches.primary': 'основная',
   'home.shift.title': 'Смена',
+  'home.shift.manage': 'Управление сменой',
   'home.shift.none': 'Смена не открыта.',
   'home.shift.since': 'Открыта с {time}',
   'home.shift.at': 'Точка: {branch}',

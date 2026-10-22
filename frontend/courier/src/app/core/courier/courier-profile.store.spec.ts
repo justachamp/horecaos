@@ -149,4 +149,29 @@ describe('CourierProfileStore', () => {
 
     expect(me).toHaveBeenCalledOnce();
   });
+  it('asks the platform once when two screens ask at the same moment', async () => {
+    let release: (value: ReturnType<typeof courierProfile>) => void = () => undefined;
+    me.mockReturnValue(new Promise((resolve) => (release = resolve)));
+
+    const first = store.load();
+    const second = store.load();
+    release(courierProfile());
+    await Promise.all([first, second]);
+
+    expect(me).toHaveBeenCalledOnce();
+    expect(store.state()).toBe('ready');
+  });
+  it('asks again after a request already in the air when the caller has just changed the record', async () => {
+    let release: (value: ReturnType<typeof courierProfile>) => void = () => undefined;
+    me.mockReturnValueOnce(new Promise((resolve) => (release = resolve)));
+    me.mockResolvedValueOnce(courierProfile({ displayReference: 'AFTER-THE-CHANGE' }));
+
+    const stale = store.load();
+    const fresh = store.load(true);
+    release(courierProfile({ displayReference: 'BEFORE-THE-CHANGE' }));
+    await Promise.all([stale, fresh]);
+
+    expect(me).toHaveBeenCalledTimes(2);
+    expect(store.profile()?.displayReference).toBe('AFTER-THE-CHANGE');
+  });
 });

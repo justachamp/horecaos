@@ -23,6 +23,8 @@
   </div>
 }
 
+<app-duty-indicator />
+
 <main id="main" tabindex="-1">
   <router-outlet />
 </main>
@@ -32,6 +34,7 @@
     <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
       {{ 'shell.nav.home' | t }}
     </a>
+    <a routerLink="/shift" routerLinkActive="active">{{ 'shell.nav.shift' | t }}</a>
     <a routerLink="/profile" routerLinkActive="active">{{ 'shell.nav.profile' | t }}</a>
   </nav>
 }

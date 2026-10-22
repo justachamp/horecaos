@@ -37,6 +37,18 @@ export const routes: Routes = [
         loadComponent: () => import('./features/home/home').then((m) => m.HomePage),
       },
       {
+        path: 'shift',
+        title: 'shift.title',
+        canActivate: [messagesGuard('shift', 'home')],
+        loadComponent: () => import('./features/shift/shift').then((m) => m.ShiftPage),
+      },
+      {
+        path: 'notice',
+        title: 'notice.title',
+        canActivate: [messagesGuard('notice')],
+        loadComponent: () => import('./features/notice/notice').then((m) => m.NoticePage),
+      },
+      {
         path: 'profile',
         title: 'profile.title',
         canActivate: [messagesGuard('profile')],

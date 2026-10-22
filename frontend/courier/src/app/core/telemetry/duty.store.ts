@@ -75,6 +75,9 @@ export class DutyStore {
   /** The platform ended the session under the courier (a close elsewhere, the sweeper). */
   readonly endedByPlatform = this.platformClosed.asReadonly();
 
+  /** Why the handset is not giving a position, when it is not: shown beside the switch that fixes it. */
+  readonly locationProblem = computed(() => this.sender.locationProblem());
+
   readonly onDuty = computed(() => this.open() !== null && this.sender.running());
 
   readonly indicator = computed<DutyIndicator>(() => {

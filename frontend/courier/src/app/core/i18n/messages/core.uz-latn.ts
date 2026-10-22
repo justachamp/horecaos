@@ -28,4 +28,11 @@ export const coreUzLatn = {
   'auth.error.default': 'Kirish yakunlanmadi. Qayta urinib koʻring.',
   'auth.signedOut.title': 'Siz ilovadan chiqdingiz',
   'auth.signedOut.body': 'Ishni davom ettirish uchun qaytadan kiring.',
+  'shell.nav.shift': 'Smena',
+  'duty.indicator.label': 'Liniya holati',
+  'duty.indicator.tracking': 'Liniyada · joylashuv yuborilmoqda',
+  'duty.indicator.searching': 'Liniyada · joylashuv hali yoʻq, ekranni yoqilgan holda saqlang',
+  'duty.indicator.denied': 'Liniyada · joylashuvga ruxsat yopiq',
+  'duty.indicator.break': 'Tanaffus · joylashuv yuborilmaydi',
+  'duty.indicator.unreachable': 'Liniyada · serverga ulanib boʻlmadi',
 } as const satisfies Record<keyof typeof coreEn, string>;

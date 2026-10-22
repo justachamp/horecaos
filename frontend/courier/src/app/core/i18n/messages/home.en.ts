@@ -20,6 +20,7 @@ export const homeEn = {
   'home.branches.none': 'No branch is assigned to you yet. Ask your dispatcher.',
   'home.branches.primary': 'main',
   'home.shift.title': 'Shift',
+  'home.shift.manage': 'Manage your shift',
   'home.shift.none': 'No shift is open.',
   'home.shift.since': 'Open since {time}',
   'home.shift.at': 'Branch: {branch}',

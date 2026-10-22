@@ -7,6 +7,8 @@ import { AppUpdates } from './core/app-updates';
 import { I18n } from './core/i18n/i18n';
 import { LOCALES, parseLocale } from './core/i18n/locales';
 import { TPipe } from './core/i18n/t.pipe';
+import { WorkSession } from './core/work/work-session';
+import { DutyIndicatorBar } from './features/duty/duty-indicator';
 
 /**
  * The shell: a top bar with the app's name and the language switch, the screen, and -- once
@@ -14,7 +16,7 @@ import { TPipe } from './core/i18n/t.pipe';
  */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, TPipe],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, TPipe, DutyIndicatorBar],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './app.html',
   styleUrl: './app.css',
@@ -24,12 +26,26 @@ export class App {
   protected readonly auth = inject(AuthService);
   protected readonly updates = inject(AppUpdates);
   private readonly router = inject(Router);
+  private readonly work = inject(WorkSession);
 
   protected readonly locales = LOCALES;
 
   constructor() {
     effect(() => {
       document.documentElement.lang = this.i18n.htmlLang();
+    });
+
+    // Signing in starts the courier's working state (the record, a duty session still open);
+    // signing out ends it, so nothing keeps collecting for somebody who has left.
+    let wasSignedIn = false;
+    effect(() => {
+      const signedIn = this.auth.signedIn();
+      if (signedIn) {
+        void this.work.begin();
+      } else if (wasSignedIn) {
+        this.work.end();
+      }
+      wasSignedIn = signedIn;
     });
 
     // After every navigation but the first, put focus on the new screen so a screen reader reads

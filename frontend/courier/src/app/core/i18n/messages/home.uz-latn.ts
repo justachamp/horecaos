@@ -23,6 +23,7 @@ export const homeUzLatn = {
   'home.branches.none': 'Sizga hali filial biriktirilmagan. Dispetcherga murojaat qiling.',
   'home.branches.primary': 'asosiy',
   'home.shift.title': 'Smena',
+  'home.shift.manage': 'Smenani boshqarish',
   'home.shift.none': 'Smena ochilmagan.',
   'home.shift.since': '{time} dan beri ochiq',
   'home.shift.at': 'Filial: {branch}',

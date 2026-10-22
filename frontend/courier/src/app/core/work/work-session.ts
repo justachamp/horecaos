@@ -26,12 +26,13 @@ export class WorkSession {
       return;
     }
     this.started = true;
-    await this.refresh();
+    await this.profile.load();
+    await this.reconcile();
   }
 
-  /** Re-reads the record, then reconciles. */
+  /** Re-reads the record after something changed it, then reconciles. */
   async refresh(): Promise<void> {
-    await this.profile.load();
+    await this.profile.load(true);
     await this.reconcile();
   }
 

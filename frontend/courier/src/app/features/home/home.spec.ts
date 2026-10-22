@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
+import { provideRouter } from '@angular/router';
 
 import { TEST_CONFIG, courierProfile } from '../../../testing/fixtures';
 import { ApiError } from '../../core/api/problem-details';
@@ -25,6 +26,7 @@ describe('HomePage', () => {
     }
     TestBed.configureTestingModule({
       providers: [
+        provideRouter([]),
         { provide: APP_CONFIG, useValue: TEST_CONFIG },
         { provide: CourierApi, useValue: { me } },
         {
@@ -56,6 +58,15 @@ describe('HomePage', () => {
     // 04:30 UTC is 09:30 in Tashkent, whatever zone the phone is set to.
     expect(text(page)).toContain('Open since 09:30');
     expect(text(page)).toContain('Branch: Chilonzor');
+  });
+
+  it('leads from the shift card to the shift screen, whether or not a shift is open', async () => {
+    const open = await render(courierProfile());
+    expect(open.querySelector('a[href="/shift"]')?.textContent).toContain('Manage your shift');
+    TestBed.resetTestingModule();
+
+    const closed = await render(courierProfile({ openShift: null }));
+    expect(closed.querySelector('a[href="/shift"]')?.textContent).toContain('Manage your shift');
   });
 
   it('lists the branches the courier is bound to and marks the main one', async () => {

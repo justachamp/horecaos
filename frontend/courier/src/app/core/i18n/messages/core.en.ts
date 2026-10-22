@@ -25,4 +25,11 @@ export const coreEn = {
   'auth.error.default': 'Sign-in did not complete. Try again.',
   'auth.signedOut.title': 'You are signed out',
   'auth.signedOut.body': 'Sign in again to carry on working.',
+  'shell.nav.shift': 'Shift',
+  'duty.indicator.label': 'Duty status',
+  'duty.indicator.tracking': 'On duty · sharing location',
+  'duty.indicator.searching': 'On duty · no position yet, keep the screen on',
+  'duty.indicator.denied': 'On duty · location is blocked',
+  'duty.indicator.break': 'On break · location not shared',
+  'duty.indicator.unreachable': 'On duty · cannot reach the server',
 } as const;

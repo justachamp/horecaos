@@ -7,6 +7,12 @@ import { homeUzLatn } from './messages/home.uz-latn';
 import { profileEn } from './messages/profile.en';
 import { profileRu } from './messages/profile.ru';
 import { profileUzLatn } from './messages/profile.uz-latn';
+import { shiftEn } from './messages/shift.en';
+import { shiftRu } from './messages/shift.ru';
+import { shiftUzLatn } from './messages/shift.uz-latn';
+import { noticeEn } from './messages/notice.en';
+import { noticeRu } from './messages/notice.ru';
+import { noticeUzLatn } from './messages/notice.uz-latn';
 import { CATALOGUE_LOADERS } from './catalogue-loaders';
 import { MESSAGE_AREAS } from './message-areas';
 
@@ -14,6 +20,8 @@ const AREAS: Record<string, Record<'en' | 'ru' | 'uz-Latn', Record<string, strin
   core: { en: coreEn, ru: coreRu, 'uz-Latn': coreUzLatn },
   home: { en: homeEn, ru: homeRu, 'uz-Latn': homeUzLatn },
   profile: { en: profileEn, ru: profileRu, 'uz-Latn': profileUzLatn },
+  shift: { en: shiftEn, ru: shiftRu, 'uz-Latn': shiftUzLatn },
+  notice: { en: noticeEn, ru: noticeRu, 'uz-Latn': noticeUzLatn },
 };
 
 const placeholders = (text: string) =>

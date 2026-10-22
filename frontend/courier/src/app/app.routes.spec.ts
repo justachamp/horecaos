@@ -23,7 +23,13 @@ describe('the route table', () => {
         provideRouter(routes, withComponentInputBinding()),
         { provide: TitleStrategy, useClass: AppTitleStrategy },
         { provide: APP_CONFIG, useValue: TEST_CONFIG },
-        { provide: CourierApi, useValue: { me: async () => courierProfile() } },
+        {
+          provide: CourierApi,
+          useValue: {
+            me: async () => courierProfile(),
+            currentDuty: async () => ({ session: null }),
+          },
+        },
       ],
     });
     await TestBed.inject(I18n).use('en');
@@ -52,6 +58,12 @@ describe('the route table', () => {
     const home = await (await RouterTestingHarness.create()).navigateByUrl('/');
     expect(home).toBeInstanceOf(HomePage);
     await vi.waitFor(() => expect(document.title).toBe('Today · HorecaOS Courier'));
+
+    await router.navigateByUrl('/shift');
+    await vi.waitFor(() => expect(document.title).toBe('Shift · HorecaOS Courier'));
+
+    await router.navigateByUrl('/notice');
+    await vi.waitFor(() => expect(document.title).toBe('Location notice · HorecaOS Courier'));
 
     await router.navigateByUrl('/profile');
     await vi.waitFor(() => expect(document.title).toBe('Profile · HorecaOS Courier'));

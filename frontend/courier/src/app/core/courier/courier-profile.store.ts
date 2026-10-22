@@ -59,8 +59,32 @@ export class CourierProfileStore {
     }
   }
 
-  /** Loads (or reloads) the record. A reload keeps showing the old one until the new one arrives. */
-  async load(): Promise<void> {
+  private inFlight: Promise<void> | null = null;
+
+  /**
+   * Loads (or reloads) the record. A reload keeps showing the old one until the new one arrives,
+   * and two screens asking at the same moment share one request.
+   *
+   * `afterChange` is for a caller that has just changed the record itself (a shift opened): a
+   * request already in the air may have been answered before the change, so this one waits for it
+   * and asks again.
+   */
+  load(afterChange = false): Promise<void> {
+    if (this.inFlight !== null && !afterChange) {
+      return this.inFlight;
+    }
+    const next: Promise<void> = (this.inFlight ?? Promise.resolve())
+      .then(() => this.fetch())
+      .finally(() => {
+        if (this.inFlight === next) {
+          this.inFlight = null;
+        }
+      });
+    this.inFlight = next;
+    return next;
+  }
+
+  private async fetch(): Promise<void> {
     if (this.current() === null) {
       this.status.set('loading');
     }

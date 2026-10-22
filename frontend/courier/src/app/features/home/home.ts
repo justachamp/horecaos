@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import { AuthService } from '../../core/auth/auth.service';
 import { APP_CONFIG } from '../../core/config/app-config';
@@ -34,7 +35,7 @@ const ENGAGEMENT_KEYS: Readonly<Record<EngagementStatus, MessageKey>> = {
  */
 @Component({
   selector: 'app-home',
-  imports: [TPipe],
+  imports: [TPipe, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './home.html',
   styleUrl: './home.css',
