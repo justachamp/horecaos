@@ -182,6 +182,8 @@ describe('CustomerDetailPane', () => {
       revealBlacklistHistory: vi.fn().mockResolvedValue([]),
       discountHistory: vi.fn().mockResolvedValue({ redemptions: [], totalsRedeemed: [] }),
       erasureRequests: vi.fn().mockResolvedValue([]),
+      exportRequests: vi.fn().mockResolvedValue([]),
+      corrections: vi.fn().mockResolvedValue([]),
       erasureBlocks: vi.fn().mockResolvedValue([]),
       erasureProof: vi.fn(),
       legalHolds: vi.fn().mockResolvedValue([]),
@@ -900,6 +902,27 @@ describe('CustomerDetailPane', () => {
   });
 
   // ------------------------------------ ADR 0029: blocks, proof and legal hold on the erasure tab
+
+  describe('the copy-and-corrections tab (ADR 0029)', () => {
+    it('opens the customer’s requests for a copy of her data and her corrections, in her own scope', async () => {
+      const host = fixture.nativeElement as HTMLElement;
+      (host.querySelector('[data-testid="tab-data"]') as HTMLElement).click();
+      fixture.detectChanges();
+
+      await vi.waitFor(() => {
+        expect(api['exportRequests']).toHaveBeenCalledWith(SCOPE, 'customer-1');
+        expect(api['corrections']).toHaveBeenCalledWith(SCOPE, 'customer-1');
+      });
+      fixture.detectChanges();
+      expect(host.querySelector('q-customer-data-requests')).not.toBeNull();
+      expect(host.querySelector('[data-testid="export-raise"]')).not.toBeNull();
+    });
+
+    it('reads nothing of the sort until the tab is opened', async () => {
+      expect(api['exportRequests']).not.toHaveBeenCalled();
+      expect(api['corrections']).not.toHaveBeenCalled();
+    });
+  });
 
   describe('the erasure tab’s blocks, proof and legal hold', () => {
     const PENDING = {

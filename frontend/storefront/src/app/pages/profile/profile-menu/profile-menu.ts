@@ -60,6 +60,12 @@ export class ProfileMenuComponent implements OnInit {
       route: '/profile/telegram',
       authorizedOnly: true,
     },
+    {
+      id: 'privacy',
+      labelKey: 'profile.privacy',
+      route: '/profile/privacy',
+      authorizedOnly: true,
+    },
     { id: 'support', labelKey: 'profile.support', route: '/profile/support' },
     { id: 'logout', labelKey: 'profile.logout', isLogout: true },
   ];

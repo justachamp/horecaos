@@ -28,6 +28,7 @@ import { BrandProfileApi, BrandView } from '../settings/brand-profile/brand-prof
 import { CustomerAddressDraft, CustomerAddressEditor } from './customer-address-editor';
 import { customerStatusLabel } from './customer-status';
 import { CustomerCardHistory } from './customer-card-history';
+import { CustomerDataRequests } from './customer-data-requests';
 import { CustomerCard, HistoryEntry, LeadsApi, RecordContactAttemptRequest } from './leads-api';
 import { ReviewRow, ReviewsApi } from './reviews/reviews-api';
 import {
@@ -79,7 +80,8 @@ type Tab =
   | 'blacklist'
   | 'promos'
   | 'reviews'
-  | 'erasure';
+  | 'erasure'
+  | 'data';
 
 const PLACEHOLDER_TIME_ZONE = 'Asia/Tashkent';
 
@@ -166,7 +168,14 @@ const REVEAL_PURPOSE = {
  */
 @Component({
   selector: 'q-customer-detail-pane',
-  imports: [TPipe, ActorChip, MoneyInput, CustomerAddressEditor, CustomerCardHistory],
+  imports: [
+    TPipe,
+    ActorChip,
+    MoneyInput,
+    CustomerAddressEditor,
+    CustomerCardHistory,
+    CustomerDataRequests,
+  ],
   templateUrl: './customer-detail-pane.html',
   styleUrl: './customer-detail-pane.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -229,6 +238,19 @@ export class CustomerDetailPane {
   protected selectTab(tab: Tab): void {
     this.activeTab.set(tab);
     this.loadTabData(tab);
+  }
+
+  /** A correction was applied in the data tab: the profile this pane shows is now behind it. */
+  protected async onCorrected(): Promise<void> {
+    const scope = this.scope();
+    if (!scope) {
+      return;
+    }
+    try {
+      this.profile.set(await this.api.profile(scope, this.accountId()));
+    } catch (error) {
+      this.noticeFrom(error);
+    }
   }
 
   protected statusLabel(status: string): string {
@@ -328,6 +350,7 @@ export class CustomerDetailPane {
       case 'erasure':
         void this.loadErasureRequests();
         return;
+      case 'data':
       case 'history':
       case 'profile':
         return;

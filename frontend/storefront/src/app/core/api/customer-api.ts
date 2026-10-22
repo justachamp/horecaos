@@ -147,6 +147,41 @@ export class CustomerApi {
       idempotencyKey: input.idempotencyKey,
     });
   }
+
+  // ---------------------------------------------------------------- a copy of my data
+
+  private get exportPath(): string {
+    return `${this.mePath}/export-request`;
+  }
+
+  /**
+   * My current request for a copy of my data: the waiting one if there is one, else the most recent of any status.
+   * `null` when I have never asked (the platform answers 204).
+   */
+  async exportRequest(): Promise<ExportRequestStatus | null> {
+    return (await this.api.get<ExportRequestStatus | null>(this.exportPath)) ?? null;
+  }
+
+  /**
+   * Asks for a copy of my data. It records the request and the day the business owes me an answer by; it gathers nothing
+   * by itself (ADR 0029), a person on the business's side does that. Asking again while one waits returns the same request.
+   */
+  requestExport(idempotencyKey?: string): Promise<ExportRequestStatus> {
+    return this.api.mutate<ExportRequestStatus>('POST', this.exportPath, { idempotencyKey });
+  }
+
+  /** Withdraws my waiting request. Refused (422) once the file has been produced. */
+  cancelExport(idempotencyKey?: string): Promise<ExportRequestStatus> {
+    return this.api.mutate<ExportRequestStatus>('POST', `${this.exportPath}/cancel`, { idempotencyKey });
+  }
+
+  /**
+   * A link to my data once the business has produced it. It works for a few minutes and is recorded against me as the
+   * reader; 404 until the file exists and after it has expired. Nothing here may put the link in a log or an analytics event.
+   */
+  exportBundleLink(): Promise<ExportBundleLink> {
+    return this.api.get<ExportBundleLink>(`${this.exportPath}/bundle`);
+  }
 }
 
 /**
@@ -249,4 +284,29 @@ export interface CustomerProfile {
   readonly contactPoints: readonly ContactPointSummary[];
   readonly version: number;
   readonly createdAt: string;
+}
+
+/**
+ * `StorefrontCustomerExportController.ExportRequestStatus`: where my request stands. Nothing about who handled it and
+ * nothing about what is in the file.
+ *
+ * @param responseDueAt the day the business owes me my data, fixed when I asked
+ * @param bundleAvailable whether a link can be had right now: produced, not expired
+ */
+export interface ExportRequestStatus {
+  readonly id: string;
+  /** PENDING, COMPLETED or CANCELLED. */
+  readonly status: 'PENDING' | 'COMPLETED' | 'CANCELLED' | (string & {});
+  readonly requestedAt: string;
+  readonly responseDueAt: string;
+  readonly producedAt: string | null;
+  readonly bundleExpiresAt: string | null;
+  readonly bundleAvailable: boolean;
+  readonly cancelledAt: string | null;
+}
+
+/** `StorefrontCustomerExportController.BundleLink`. */
+export interface ExportBundleLink {
+  readonly url: string;
+  readonly expiresAt: string;
 }

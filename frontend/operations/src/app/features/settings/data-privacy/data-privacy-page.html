@@ -159,25 +159,48 @@
   }
 </section>
 
-<section class="card">
-  <h2 class="q-subhead">{{ 'settings.dataPrivacy.erasure.title' | t }}</h2>
-  <p class="q-body-sm">{{ 'settings.dataPrivacy.erasure.lead' | t }}</p>
+<section class="card" data-testid="requests-card">
+  <h2 class="q-subhead">{{ 'settings.dataPrivacy.requests.title' | t }}</h2>
+  <p class="q-body-sm">{{ 'settings.dataPrivacy.requests.lead' | t }}</p>
 
-  <label class="filter">
-    <span class="q-caption">{{ 'settings.dataPrivacy.erasure.filter.label' | t }}</span>
-    <select
-      class="select"
-      [value]="erasureStatusFilter()"
-      (change)="setErasureStatusFilter($any($event.target).value)"
-    >
-      <option value="ALL">{{ 'settings.dataPrivacy.erasure.filter.all' | t }}</option>
-      <option value="PENDING">{{ 'settings.dataPrivacy.erasure.status.pending' | t }}</option>
-      <option value="COMPLETED">{{ 'settings.dataPrivacy.erasure.status.completed' | t }}</option>
-      <option value="CANCELLED">{{ 'settings.dataPrivacy.erasure.status.cancelled' | t }}</option>
-    </select>
-  </label>
+  <div class="filters">
+    <label class="filter">
+      <span class="q-caption">{{ 'settings.dataPrivacy.requests.filter.kind' | t }}</span>
+      <select
+        class="select"
+        data-testid="requests-kind-filter"
+        [value]="kindFilter()"
+        (change)="setKindFilter($any($event.target).value)"
+      >
+        <option value="ALL">{{ 'settings.dataPrivacy.requests.filter.all' | t }}</option>
+        <option value="ERASURE">{{ 'settings.dataPrivacy.requests.kind.erasure' | t }}</option>
+        <option value="EXPORT">{{ 'settings.dataPrivacy.requests.kind.export' | t }}</option>
+        <option value="CORRECTION">
+          {{ 'settings.dataPrivacy.requests.kind.correction' | t }}
+        </option>
+      </select>
+    </label>
+    <label class="filter">
+      <span class="q-caption">{{ 'settings.dataPrivacy.requests.filter.status' | t }}</span>
+      <select
+        class="select"
+        data-testid="requests-status-filter"
+        [value]="statusFilter()"
+        (change)="setStatusFilter($any($event.target).value)"
+      >
+        <option value="ALL">{{ 'settings.dataPrivacy.requests.filter.all' | t }}</option>
+        <option value="PENDING">{{ 'settings.dataPrivacy.requests.status.pending' | t }}</option>
+        <option value="COMPLETED">
+          {{ 'settings.dataPrivacy.requests.status.completed' | t }}
+        </option>
+        <option value="CANCELLED">
+          {{ 'settings.dataPrivacy.requests.status.cancelled' | t }}
+        </option>
+      </select>
+    </label>
+  </div>
 
-  @switch (erasureState()) {
+  @switch (requestsState()) {
     @case ('loading') {
       <p class="q-body-sm">{{ 'customers.loading' | t }}</p>
     }
@@ -186,8 +209,8 @@
     }
     @case ('error') {
       <div class="error-band" role="alert">
-        <span class="q-body-sm">{{ erasureErrorText() }}</span>
-        <button type="button" class="secondary" (click)="retryErasureWorklist()">
+        <span class="q-body-sm">{{ requestsErrorText() }}</span>
+        <button type="button" class="secondary" (click)="retryRequests()">
           {{ 'reports.error.retry' | t }}
         </button>
       </div>
@@ -196,32 +219,36 @@
       <table class="table">
         <thead>
           <tr>
-            <th class="q-caption">{{ 'settings.dataPrivacy.erasure.column.status' | t }}</th>
-            <th class="q-caption">{{ 'settings.dataPrivacy.erasure.column.customer' | t }}</th>
-            <th class="q-caption">{{ 'settings.dataPrivacy.erasure.column.requestedVia' | t }}</th>
-            <th class="q-caption">{{ 'settings.dataPrivacy.erasure.column.requestedAt' | t }}</th>
-            <th class="q-caption">{{ 'settings.dataPrivacy.erasure.column.resolvedAt' | t }}</th>
+            <th class="q-caption">{{ 'settings.dataPrivacy.requests.column.kind' | t }}</th>
+            <th class="q-caption">{{ 'settings.dataPrivacy.requests.column.status' | t }}</th>
+            <th class="q-caption">{{ 'settings.dataPrivacy.requests.column.customer' | t }}</th>
+            <th class="q-caption">{{ 'settings.dataPrivacy.requests.column.requestedVia' | t }}</th>
+            <th class="q-caption">{{ 'settings.dataPrivacy.requests.column.requestedAt' | t }}</th>
+            <th class="q-caption">{{ 'settings.dataPrivacy.requests.column.resolvedAt' | t }}</th>
+            <th class="q-caption">{{ 'settings.dataPrivacy.requests.column.detail' | t }}</th>
           </tr>
         </thead>
         <tbody>
-          @for (request of erasureRequests(); track request.id) {
-            <tr>
+          @for (request of requests(); track request.kind + request.id) {
+            <tr data-testid="request-row">
+              <td class="q-body-sm" data-testid="request-kind">
+                {{ requestKindLabelKey(request.kind) | t }}
+              </td>
               <td class="q-body-sm">
                 <span [class]="'status-pill status-pill--' + request.status.toLowerCase()">{{
-                  erasureStatusLabelKey(request.status) | t
+                  requestStatusLabelKey(request.status) | t
                 }}</span>
               </td>
               <td class="q-body-sm q-mono">{{ request.customerAccountId }}</td>
-              <td class="q-body-sm">{{ request.requestedVia }}</td>
+              <td class="q-body-sm">{{ requestViaLabelKey(request.requestedVia) | t }}</td>
               <td class="q-body-sm q-mono">{{ request.requestedAt }}</td>
-              <td class="q-body-sm q-mono">
-                {{ request.completedAt ?? request.cancelledAt ?? '—' }}
-              </td>
+              <td class="q-body-sm q-mono">{{ request.settledAt ?? '—' }}</td>
+              <td class="q-body-sm" data-testid="request-detail">{{ requestDetail(request) }}</td>
             </tr>
           } @empty {
             <tr>
-              <td class="q-body-sm empty" colspan="5">
-                {{ 'settings.dataPrivacy.erasure.empty' | t }}
+              <td class="q-body-sm empty" colspan="7">
+                {{ 'settings.dataPrivacy.requests.empty' | t }}
               </td>
             </tr>
           }
@@ -229,19 +256,6 @@
       </table>
     }
   }
-</section>
-
-<section class="card">
-  <h2 class="q-subhead">{{ 'settings.dataPrivacy.requests.title' | t }}</h2>
-  <p class="q-body-sm">
-    {{
-      'notBuilt.body'
-        | t
-          : {
-              spec: 'ADR 0029 (PII protection) — a data subject’s export and the correction of their data remain the part of the privacy-operations surface not built; erasure, its proof, legal hold and retention are built',
-            }
-    }}
-  </p>
 </section>
 
 <section class="card">

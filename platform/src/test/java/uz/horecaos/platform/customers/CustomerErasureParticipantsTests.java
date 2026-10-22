@@ -42,6 +42,7 @@ import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerEra
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerSessionStore;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcCustomerStore.ErasureRequestRow;
+import uz.horecaos.platform.customers.infrastructure.persistence.JdbcExportRequestStore;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcLeadStore;
 import uz.horecaos.platform.customers.infrastructure.persistence.JdbcLegalHoldStore;
 import uz.horecaos.platform.customers.spi.CustomerErasureGuard;
@@ -73,6 +74,7 @@ import uz.horecaos.platform.referral.application.ReferralErasureParticipant;
 import uz.horecaos.platform.referral.infrastructure.persistence.JdbcReferralStore;
 import uz.horecaos.platform.reviews.application.ReviewsErasureGuard;
 import uz.horecaos.platform.reviews.infrastructure.persistence.JdbcRecoveryCaseStore;
+import uz.horecaos.platform.support.InMemoryObjectStorage;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.support.TestProtection;
 import uz.horecaos.platform.voice.application.VoiceErasureParticipant;
@@ -101,32 +103,39 @@ import uz.horecaos.platform.voice.infrastructure.persistence.JdbcVoiceStore;
  */
 class CustomerErasureParticipantsTests {
 
-    private static final UUID TENANT = UUID.fromString("018f9f10-6000-7000-8000-0000000000a1");
+    static final UUID TENANT = UUID.fromString("018f9f10-6000-7000-8000-0000000000a1");
     private static final UUID BRAND = UUID.fromString("018f9f10-6000-7000-8000-0000000000b1");
     private static final UUID LOCATION = UUID.fromString("018f9f10-6000-7000-8000-0000000000c1");
-    private static final UUID BYSTANDER = UUID.fromString("018f9f10-6000-7000-8000-0000000000d2");
+    static final UUID BYSTANDER = UUID.fromString("018f9f10-6000-7000-8000-0000000000d2");
     private static final String APP_ROLE = "erasure_probe_app";
     private static final String APP_PASSWORD = "erasure-probe-app";
-    private static final Instant NOW = Instant.parse("2026-10-14T12:00:00Z");
+    static final Instant NOW = Instant.parse("2026-10-14T12:00:00Z");
     private static final ActorRef STAFF = ActorRef.user("owner-1", null);
     private static final ActorRef SELF = ActorRef.service("storefront-erasure-request");
 
-    private static TestDatabase.Handle db;
+    static TestDatabase.Handle db;
     private static DataSource asApplication;
-    private static JdbcClient owner;
+    static JdbcClient owner;
+
+    /** For the export twin of this suite, which reuses this suite's database and seed. */
+    JdbcClient owner() {
+        return owner;
+    }
+
     private static JdbcClient seed;
     private static SingleConnectionDataSource seedConnection;
 
-    private final FieldProtection protection = TestProtection.envelope();
-    private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
-    private final ObjectMapper objectMapper = JsonMapper.builder().build();
+    final FieldProtection protection = TestProtection.envelope();
+    final InMemoryObjectStorage storage = new InMemoryObjectStorage();
+    final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+    final ObjectMapper objectMapper = JsonMapper.builder().build();
 
-    private JdbcClient app;
-    private TransactionTemplate appTx;
+    JdbcClient app;
+    TransactionTemplate appTx;
     private CustomerErasureService erasure;
     private List<CustomerErasureParticipant> wired;
-    private UUID customer;
-    private OrderBoardFixtures fixtures;
+    UUID customer;
+    OrderBoardFixtures fixtures;
 
     @BeforeAll
     static void startDatabase() {
@@ -177,6 +186,8 @@ class CustomerErasureParticipantsTests {
                         "customer.customer_sessions",
                         "customer.legal_holds",
                         "customer.erasure_requests",
+                        "customer.export_requests",
+                        "customer.profile_corrections",
                         "marketing.audience_snapshots",
                         "marketing.audience_snapshot_members",
                         "marketing.customer_metrics",
@@ -236,7 +247,12 @@ class CustomerErasureParticipantsTests {
         return List.of(
                 new LeadErasureParticipant(new JdbcLeadStore(app), protection, clock),
                 new CustomerRecordsErasureParticipant(
-                        new JdbcCustomerErasureStore(app), new JdbcCustomerSessionStore(app), protection, clock),
+                        new JdbcCustomerErasureStore(app),
+                        new JdbcCustomerSessionStore(app),
+                        new JdbcExportRequestStore(app),
+                        storage,
+                        protection,
+                        clock),
                 new MarketingErasureParticipant(
                         new CustomerMetricProjectionService(new JdbcCustomerMetricStore(app), clock),
                         new JdbcAudienceStore(app, objectMapper)),
@@ -292,6 +308,24 @@ class CustomerErasureParticipantsTests {
         assertThat(count("customer.customer_sessions", "customer_account_id", customer, "revoked_at IS NULL"))
                 .as("her live session is revoked, not left to the sweeper's grace")
                 .isZero();
+        assertThat(count("customer.profile_corrections", "customer_account_id", customer))
+                .as("the value a correction replaced is her old personal data and goes with her")
+                .isZero();
+        assertThat(storage.exists("test-bucket", hers.bundleKey))
+                .as(
+                        "a bundle is her data gathered into one file; an erasure that left it would leave what it exists to remove")
+                .isFalse();
+        assertThat(owner.sql("SELECT bundle_removed_at::text FROM customer.export_requests WHERE bundle_key = :k")
+                        .param("k", hers.bundleKey)
+                        .query(String.class)
+                        .optional())
+                .as("the request says the object is gone")
+                .isPresent();
+        assertThat(storage.exists("test-bucket", theirs.bundleKey))
+                .as("the bystander's bundle is not hers to remove")
+                .isTrue();
+        assertThat(count("customer.profile_corrections", "customer_account_id", BYSTANDER))
+                .isEqualTo(1);
         // marketing
         assertThat(count("marketing.customer_metrics", "customer_account_id", customer))
                 .isZero();
@@ -538,7 +572,7 @@ class CustomerErasureParticipantsTests {
     // ------------------------------------------------------------------------------------------ seeding
 
     /** The ids a footprint is read back by. */
-    private record Footprint(
+    record Footprint(
             UUID account,
             String tag,
             String phoneHash,
@@ -553,9 +587,11 @@ class CustomerErasureParticipantsTests {
             UUID conversation,
             UUID call,
             UUID turn,
-            UUID importRow) {}
+            UUID importRow,
+            String bundleKey,
+            UUID correction) {}
 
-    private Footprint seedFootprint(UUID account, String tag) {
+    Footprint seedFootprint(UUID account, String tag) {
         String phoneHash = "phone-hash-" + tag;
         UUID contactPoint = UUID.randomUUID();
         insert(
@@ -1126,6 +1162,74 @@ class CustomerErasureParticipantsTests {
                 "customer_account_id",
                 account);
 
+        // a data-subject export that was produced, and a correction with the value it replaced (V0684)
+        UUID exportRequest = UUID.randomUUID();
+        String bundleKey = "tenants/" + TENANT + "/dsar-exports/" + exportRequest + ".json";
+        storage.put("test-bucket", bundleKey, "application/json", ("{\"bundle\":\"" + tag + "\"}").getBytes());
+        insert(
+                "customer.export_requests",
+                "id",
+                exportRequest,
+                "tenant_id",
+                TENANT,
+                "customer_account_id",
+                account,
+                "status",
+                "COMPLETED",
+                "requested_via",
+                "OPERATIONS",
+                "requested_by_actor_type",
+                "USER",
+                "requested_by_actor_id",
+                "owner-1",
+                "requested_at",
+                NOW.minusSeconds(3600),
+                "response_due_at",
+                NOW.plusSeconds(86_400),
+                "produced_at",
+                NOW.minusSeconds(60),
+                "produced_by_actor_type",
+                "USER",
+                "produced_by_actor_id",
+                "owner-1",
+                "bundle_bucket",
+                "test-bucket",
+                "bundle_key",
+                bundleKey,
+                "bundle_sha256",
+                "e".repeat(64),
+                "bundle_bytes",
+                20L,
+                "manifest",
+                new Json("{\"sections\":[],\"withheld\":[]}"),
+                "bundle_expires_at",
+                NOW.plusSeconds(86_400));
+        UUID correction = UUID.randomUUID();
+        insert(
+                "customer.profile_corrections",
+                "id",
+                correction,
+                "tenant_id",
+                TENANT,
+                "customer_account_id",
+                account,
+                "subject",
+                "DISPLAY_NAME",
+                "evidence_reference",
+                "TICKET-" + tag,
+                "prior_value_protected",
+                protect(
+                        "customer.profile_corrections",
+                        "prior_value_protected",
+                        correction,
+                        "{\"displayName\":\"Old " + tag + "\"}"),
+                "corrected_by_actor_type",
+                "USER",
+                "corrected_by_actor_id",
+                "owner-1",
+                "corrected_at",
+                NOW.minusSeconds(120));
+
         return new Footprint(
                 account,
                 tag,
@@ -1141,7 +1245,9 @@ class CustomerErasureParticipantsTests {
                 conversation,
                 call,
                 turn,
-                importRow);
+                importRow,
+                bundleKey,
+                correction);
     }
 
     private void insertReservation(UUID id, @Nullable UUID account, String phoneHash, String guestName) {
@@ -1213,7 +1319,7 @@ class CustomerErasureParticipantsTests {
     // ------------------------------------------------------------------------------------------ reading back
 
     /** Everything about the bystander's rows that an erasure could change, as comparable text. */
-    private Map<String, String> snapshotOf(Footprint f) {
+    Map<String, String> snapshotOf(Footprint f) {
         Map<String, String> rows = new java.util.TreeMap<>();
         String account = f.account.toString();
         String[][] probes = {
@@ -1300,7 +1406,7 @@ class CustomerErasureParticipantsTests {
         return rows;
     }
 
-    private String reveal(String table, String column, UUID rowId) {
+    String reveal(String table, String column, UUID rowId) {
         String ciphertext = owner.sql("SELECT " + column + " FROM " + table + " WHERE "
                         + (table.equals("ordering.cart_fulfillment") ? "cart_id" : "id") + " = :id")
                 .param("id", rowId)
@@ -1310,13 +1416,13 @@ class CustomerErasureParticipantsTests {
                 TENANT, ProtectedValue.deserialize(ciphertext), new RecordRef(table, column, rowId), "erasure test");
     }
 
-    private String protect(String table, String column, UUID rowId, String plaintext) {
+    String protect(String table, String column, UUID rowId, String plaintext) {
         return protection
                 .protect(TENANT, DataClass.PERSONAL, new RecordRef(table, column, rowId), plaintext)
                 .serialize();
     }
 
-    private long count(String table, String column, UUID value) {
+    long count(String table, String column, UUID value) {
         return count(table, column, value, "true");
     }
 
@@ -1334,7 +1440,7 @@ class CustomerErasureParticipantsTests {
     /** A jsonb literal for {@link #insert}. */
     private record Json(String value) {}
 
-    private void insert(String table, @Nullable Object... columnsAndValues) {
+    void insert(String table, @Nullable Object... columnsAndValues) {
         List<String> columns = new ArrayList<>();
         List<String> placeholders = new ArrayList<>();
         for (int i = 0; i < columnsAndValues.length; i += 2) {

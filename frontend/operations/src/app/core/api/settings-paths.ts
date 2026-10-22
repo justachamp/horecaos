@@ -906,18 +906,16 @@ export const settingsPaths = {
   // ---------------------------------------------------------- 10.11 Data & privacy (ADR 0109)
 
   /**
-   * `CustomerController.tenantErasureRequests` — the tenant-wide DSAR
-   * worklist. Reuses `CustomerErasureService`'s existing per-account
-   * lifecycle (`V0178`); this is the only new read the worklist needed.
+   * `CustomerPrivacyController.privacyRequests` — every data-subject request across the tenant: erasure, a copy of her
+   * data and corrections, in one list (ADR 0029).
    *
-   * `CustomerController`'s class-level `@RequestMapping` is `/customers`, so
-   * the real route is `/api/v1/tenants/{tenantId}/customers/erasure-requests`
-   * — every other customer-nested path in this frontend already includes
-   * that segment (see `operationsPaths.customers`); this one previously
-   * didn't, and 404'd on every load.
+   * `CustomerController`'s class-level `@RequestMapping` is `/customers`, so the real route is
+   * `/api/v1/tenants/{tenantId}/customers/privacy-requests` — every other customer-nested path in this frontend already
+   * includes that segment (see `operationsPaths.customers`); the erasure-only worklist this replaces once 404'd on every
+   * load for leaving it out.
    */
-  erasureRequests(tenantId: string): string {
-    return `${TENANT}/${enc(tenantId)}/customers/erasure-requests`;
+  privacyRequests(tenantId: string): string {
+    return `${TENANT}/${enc(tenantId)}/customers/privacy-requests`;
   },
 
   /** `ConsentTypeController.list` — the tenant's own consent-purpose registry. */

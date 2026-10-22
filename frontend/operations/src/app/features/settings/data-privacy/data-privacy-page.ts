@@ -15,14 +15,17 @@ import { SettingsSaved } from '../settings-saved';
 import {
   ConsentType,
   DataPrivacyApi,
+  PrivacyRequest,
+  PrivacyRequestKind,
+  PrivacyRequestStatus,
   RetentionWindow,
-  TenantErasureRequest,
 } from './data-privacy-api';
 import { piiEgressLabelKey } from './pii-audit-labels';
 
 type LoadState = 'loading' | 'ready' | 'denied' | 'error';
 type SectionState = 'loading' | 'ready' | 'denied' | 'error';
-type ErasureStatusFilter = 'ALL' | 'PENDING' | 'COMPLETED' | 'CANCELLED';
+type StatusFilter = 'ALL' | PrivacyRequestStatus;
+type KindFilter = 'ALL' | PrivacyRequestKind;
 
 const EGRESS_LOOKBACK_DAYS = 90;
 
@@ -87,9 +90,11 @@ function retentionRow(
  *
  * **What this screen reads, and from where.**
  *
- * - **DSAR erasure: built, and shown here as the tenant-wide worklist.** Raising, executing, withdrawing a request, the
- *   proof of what an execution changed and the legal hold that suspends it are per-customer acts on the customer's own
- *   record (the customers pane); this card is the list that says what is outstanding.
+ * - **Data-subject requests: built, and listed here as the tenant-wide worklist.** Erasure, a copy of her data and
+ *   corrections to it are three kinds of request on the customer's own record (the customers pane): raising,
+ *   producing the file under a stated purpose and a second person's approval, correcting against an evidence reference,
+ *   executing an erasure with its proof and the legal hold that suspends it. This card is the one list that says what is
+ *   outstanding, whichever kind (`CustomerPrivacyController.privacyRequests`), with the day an export is owed by.
  * - **Retention: read and written through ADR 0030, explained by the jobs themselves.** The three retention periods are
  *   `tenantVisible()` keys set through `ConfigurationApi`. Beside each field the card shows what the platform does with
  *   the value (`RetentionWindowController`, asked of the same sweepers that delete): the effective window, the platform
@@ -102,11 +107,10 @@ function retentionRow(
  *   locale (a map, not three fixed columns) and read in the console's language, then the tenant's default, then any.
  *   It is a reference catalogue; `ConsentService` can report, behind a flag that defaults off, a decision recorded
  *   under a purpose that is not in it.
- * - **Data-subject export & correction: still not built.** ADR 0029 lists them as the part of the privacy-operations
- *   surface that remains.
  * - **Personal-data export & reveal log.** Built on `AuditController.operationsSearch` with `piiEgress=true`: the
  *   backend registers which action codes are personal data leaving (`PiiEgressActions`, held to the code by a build
- *   test), and this card asks for exactly those and shows what comes back. `pii-audit-labels.ts` is a table of words,
+ *   test; it includes a data-subject export and every link to one), and this card asks for exactly those and shows what
+ *   comes back. `pii-audit-labels.ts` is a table of words,
  *   not a filter.
  */
 @Component({
@@ -149,10 +153,11 @@ export class DataPrivacyPage {
     ),
   ];
 
-  protected readonly erasureState = signal<SectionState>('loading');
-  protected readonly erasureErrorText = signal<string | null>(null);
-  protected readonly erasureRequests = signal<readonly TenantErasureRequest[]>([]);
-  protected readonly erasureStatusFilter = signal<ErasureStatusFilter>('ALL');
+  protected readonly requestsState = signal<SectionState>('loading');
+  protected readonly requestsErrorText = signal<string | null>(null);
+  protected readonly requests = signal<readonly PrivacyRequest[]>([]);
+  protected readonly statusFilter = signal<StatusFilter>('ALL');
+  protected readonly kindFilter = signal<KindFilter>('ALL');
 
   protected readonly consentState = signal<SectionState>('loading');
   protected readonly consentErrorText = signal<string | null>(null);
@@ -195,7 +200,7 @@ export class DataPrivacyPage {
       }
     }
     void this.loadRetention(tenantId);
-    void this.loadErasureWorklist(tenantId);
+    void this.loadRequests(tenantId);
     void this.loadConsentTypes(tenantId);
   }
 
@@ -290,49 +295,102 @@ export class DataPrivacyPage {
     }
   }
 
-  // -------------------------------------------------------- DSAR / erasure
+  // -------------------------------------------------------- data-subject requests
 
-  private async loadErasureWorklist(tenantId: string): Promise<void> {
-    this.erasureState.set('loading');
+  private async loadRequests(tenantId: string): Promise<void> {
+    this.requestsState.set('loading');
     try {
-      const status = this.erasureStatusFilter();
-      this.erasureRequests.set(
-        await this.dataPrivacyApi.erasureWorklist(tenantId, status === 'ALL' ? undefined : status),
+      const status = this.statusFilter();
+      const kind = this.kindFilter();
+      this.requests.set(
+        await this.dataPrivacyApi.privacyWorklist(tenantId, {
+          kind: kind === 'ALL' ? undefined : kind,
+          status: status === 'ALL' ? undefined : status,
+        }),
       );
-      this.erasureState.set('ready');
+      this.requestsState.set('ready');
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
-        this.erasureState.set('denied');
+        this.requestsState.set('denied');
       } else {
-        this.erasureErrorText.set(this.describe(error));
-        this.erasureState.set('error');
+        this.requestsErrorText.set(this.describe(error));
+        this.requestsState.set('error');
       }
     }
   }
 
-  protected setErasureStatusFilter(value: string): void {
-    this.erasureStatusFilter.set(value as ErasureStatusFilter);
+  protected setStatusFilter(value: string): void {
+    this.statusFilter.set(value as StatusFilter);
+    this.reloadRequests();
+  }
+
+  protected setKindFilter(value: string): void {
+    this.kindFilter.set(value as KindFilter);
+    this.reloadRequests();
+  }
+
+  protected retryRequests(): void {
+    this.reloadRequests();
+  }
+
+  private reloadRequests(): void {
     const tenantId = this.tenant.tenantId();
     if (tenantId) {
-      void this.loadErasureWorklist(tenantId);
+      void this.loadRequests(tenantId);
     }
   }
 
-  protected retryErasureWorklist(): void {
-    const tenantId = this.tenant.tenantId();
-    if (tenantId) {
-      void this.loadErasureWorklist(tenantId);
-    }
-  }
-
-  protected erasureStatusLabelKey(status: TenantErasureRequest['status']): MessageKey {
+  protected requestStatusLabelKey(status: PrivacyRequestStatus): MessageKey {
     switch (status) {
       case 'PENDING':
-        return 'settings.dataPrivacy.erasure.status.pending';
+        return 'settings.dataPrivacy.requests.status.pending';
       case 'COMPLETED':
-        return 'settings.dataPrivacy.erasure.status.completed';
+        return 'settings.dataPrivacy.requests.status.completed';
       case 'CANCELLED':
-        return 'settings.dataPrivacy.erasure.status.cancelled';
+        return 'settings.dataPrivacy.requests.status.cancelled';
+    }
+  }
+
+  protected requestKindLabelKey(kind: PrivacyRequestKind): MessageKey {
+    switch (kind) {
+      case 'ERASURE':
+        return 'settings.dataPrivacy.requests.kind.erasure';
+      case 'EXPORT':
+        return 'settings.dataPrivacy.requests.kind.export';
+      case 'CORRECTION':
+        return 'settings.dataPrivacy.requests.kind.correction';
+    }
+  }
+
+  protected requestViaLabelKey(via: PrivacyRequest['requestedVia']): MessageKey {
+    return via === 'STOREFRONT'
+      ? 'settings.dataPrivacy.requests.via.storefront'
+      : 'settings.dataPrivacy.requests.via.operations';
+  }
+
+  /** What a line adds to its kind: the day an export is owed by, or what a correction amended. */
+  protected requestDetail(request: PrivacyRequest): string {
+    if (request.kind === 'CORRECTION' && request.subject) {
+      return this.i18n.t(this.correctionSubjectKey(request.subject));
+    }
+    if (request.kind === 'EXPORT' && request.dueAt) {
+      return this.i18n.t('settings.dataPrivacy.requests.dueBy', {
+        date: request.dueAt.slice(0, 10),
+      });
+    }
+    return '—';
+  }
+
+  private correctionSubjectKey(subject: string): MessageKey {
+    switch (subject) {
+      case 'DISPLAY_NAME':
+        return 'customers.data.correct.subject.DISPLAY_NAME';
+      case 'DATE_OF_BIRTH':
+        return 'customers.data.correct.subject.DATE_OF_BIRTH';
+      case 'CONTACT_POINT':
+        return 'customers.data.correct.subject.CONTACT_POINT';
+      default:
+        return 'customers.data.correct.subject.ADDRESS';
     }
   }
 

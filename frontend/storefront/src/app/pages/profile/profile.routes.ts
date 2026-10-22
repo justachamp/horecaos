@@ -7,6 +7,7 @@ import { ProfileSupportComponent } from './profile-support/profile-support';
 import { ProfileInviteComponent } from './profile-invite/profile-invite';
 import { ProfileDetailsComponent } from './profile-details/profile-details';
 import { ProfileTelegramComponent } from './profile-telegram/profile-telegram';
+import { ProfilePrivacyComponent } from './profile-privacy/profile-privacy';
 import { favouritesEnabledGuard } from '../../guards/features.guard';
 import { authGuard } from '../../guards/auth.guard';
 
@@ -53,6 +54,12 @@ export const PROFILE_ROUTES: Routes = [
   {
     path: 'telegram',
     component: ProfileTelegramComponent,
+  },
+  // Account-only for the same reason as 'details': a copy of my data is read from /me, which has no guest state.
+  {
+    path: 'privacy',
+    component: ProfilePrivacyComponent,
+    canActivate: [authGuard],
   },
   {
     path: 'invite',

@@ -17,6 +17,8 @@ const PII_ACTION_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
   'customer.blacklist.revealed': 'settings.dataPrivacy.egress.action.blacklistRevealed',
   'customer.lead.revealed': 'settings.dataPrivacy.egress.action.leadRevealed',
   'customer.list.exported': 'settings.dataPrivacy.egress.action.listExported',
+  'customer.dsar.exported': 'settings.dataPrivacy.egress.action.dsarExported',
+  'customer.dsar.bundle_revealed': 'settings.dataPrivacy.egress.action.dsarBundleRevealed',
   MARKETING_AUDIENCE_EXPORTED: 'settings.dataPrivacy.egress.action.audienceExported',
   'order.line_note.revealed': 'settings.dataPrivacy.egress.action.lineNoteRevealed',
   'order.customer_phone.revealed': 'settings.dataPrivacy.egress.action.orderPhoneRevealed',

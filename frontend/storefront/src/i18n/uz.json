@@ -322,7 +322,21 @@
     "errors": {
       "avatarUnavailable": "Profil rasmi hozircha mavjud emas.",
       "avatarFailed": "Rasm saqlanmadi. Boshqasini tanlang."
-    }
+    },
+    "privacy": "Mening ma'lumotlarim",
+    "privacyTitle": "Mening ma'lumotlarim",
+    "privacySignInRequired": "Ma'lumotlaringiz nusxasini so'rash uchun tizimga kiring.",
+    "privacyCopyTitle": "Ma'lumotlaringiz nusxasi",
+    "privacyCopyBenefit": "Biz siz haqingizda saqlayotgan shaxsiy ma'lumotlar nusxasini so'rashingiz mumkin. Uni jamoamiz xodimi tayyorlaydi, tayyor bo'lganda shu yerda xabar beramiz.",
+    "privacyAsk": "Ma'lumotlarim nusxasini so'rash",
+    "privacyPreparing": "Ma'lumotlaringizni tayyorlayapmiz.",
+    "privacyDueBy": "Eng kechi bilan tayyor bo'ladi:",
+    "privacyWithdraw": "So'rovni qaytarib olish",
+    "privacyReady": "Ma'lumotlaringiz tayyor.",
+    "privacyGetFile": "Ma'lumotlarimni olish",
+    "privacyOpenFile": "Ma'lumotlarimni ochish",
+    "privacyLinkShort": "Havola bir necha daqiqa ishlaydi. Ishlamay qolsa, shu yerda yana so'rang.",
+    "privacyExpired": "Faylning saqlash muddati tugagan. Yangi nusxani so'rashingiz mumkin."
   },
   "product": {
     "variants": "Variantlar",

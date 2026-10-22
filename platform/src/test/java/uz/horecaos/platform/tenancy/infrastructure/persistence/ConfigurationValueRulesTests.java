@@ -55,6 +55,42 @@ class ConfigurationValueRulesTests {
     }
 
     @Test
+    @DisplayName("the longest cover note on a data-subject export is the number the customers module declares")
+    void theCoverNoteLimitIsOneNumber() {
+        assertThat(ConfigurationValueRules.DSAR_COVER_NOTE_MAXIMUM_CHARACTERS)
+                .isEqualTo(
+                        uz.horecaos.platform.customers.api.CustomerConfigurationKeys
+                                .DSAR_COVER_NOTE_MAXIMUM_CHARACTERS);
+    }
+
+    @Test
+    @DisplayName("a cover note is plain bounded text, and the deadline and the retention of a bundle are bounded days")
+    void theDataSubjectExportKeysAreBounded() {
+        for (String code : new String[] {
+            "customers.dsar_cover_note_ru", "customers.dsar_cover_note_uz_latn", "customers.dsar_cover_note_en"
+        }) {
+            assertThatCode(() -> validate(code, "")).doesNotThrowAnyException();
+            assertThatCode(() -> validate(code, "x".repeat(2_000))).doesNotThrowAnyException();
+            assertThatThrownBy(() -> validate(code, "x".repeat(2_001))).isInstanceOf(ApiException.class);
+            assertThatThrownBy(() -> validate(code, "bell\u0007")).isInstanceOf(ApiException.class);
+        }
+        assertThatCode(() -> validate("customers.dsar_response_deadline_days", 1))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> validate("customers.dsar_response_deadline_days", 90))
+                .doesNotThrowAnyException();
+        assertThatThrownBy(() -> validate("customers.dsar_response_deadline_days", 0))
+                .isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> validate("customers.dsar_response_deadline_days", 91))
+                .isInstanceOf(ApiException.class);
+        assertThatCode(() -> validate("customers.dsar_bundle_retention_days", 30))
+                .doesNotThrowAnyException();
+        assertThatThrownBy(() -> validate("customers.dsar_bundle_retention_days", 31))
+                .isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> validate("customers.dsar_bundle_retention_days", 0))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
     @DisplayName("a key with no rule is unchanged: the assistant's ordinary keys accept what their type accepts")
     void aKeyWithNoRuleIsUnchanged() {
         assertThatCode(() -> validate("assistant.enabled", true)).doesNotThrowAnyException();

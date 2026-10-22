@@ -89,11 +89,11 @@ class ErasureInventoryTests {
     @DisplayName(
             "every table with a customer key or a PERSONAL column is erased by a participant or exempt, with a reason")
     void everyTableHasAnAnswer() {
-        Set<String> unanswered = new TreeSet<>(inventory().keySet());
+        Set<String> unanswered = new TreeSet<>(inventory(jdbc).keySet());
         unanswered.removeAll(declaredTables().keySet());
         unanswered.removeAll(ErasureInventoryExemptions.REASONS.keySet());
 
-        Map<String, Set<String>> inventory = inventory();
+        Map<String, Set<String>> inventory = inventory(jdbc);
         List<String> report = unanswered.stream()
                 .map(table -> table + "  (" + String.join(", ", inventory.get(table)) + ")")
                 .toList();
@@ -107,7 +107,7 @@ class ErasureInventoryTests {
     @Test
     @DisplayName("a declared table and an exemption never name the same table, and neither names a table that is gone")
     void declarationsAreNotStale() {
-        Set<String> real = allTables();
+        Set<String> real = allTables(jdbc);
         Map<String, String> declared = declaredTables();
 
         List<String> staleDeclarations = declared.keySet().stream()
@@ -132,7 +132,7 @@ class ErasureInventoryTests {
                 .isEmpty();
 
         Set<String> exemptButUnneeded = new TreeSet<>(ErasureInventoryExemptions.REASONS.keySet());
-        exemptButUnneeded.removeAll(inventory().keySet());
+        exemptButUnneeded.removeAll(inventory(jdbc).keySet());
         assertThat(exemptButUnneeded)
                 .as("exempted tables that no longer carry a customer key or a PERSONAL column: drop the exemption")
                 .isEmpty();
@@ -175,7 +175,7 @@ class ErasureInventoryTests {
         jdbc.sql("CREATE TABLE customer.zz_guard_probe_secret (id uuid PRIMARY KEY, note_encrypted text)")
                 .update();
         try {
-            Set<String> found = inventory().keySet();
+            Set<String> found = inventory(jdbc).keySet();
             assertThat(found).contains("customer.zz_guard_probe", "customer.zz_guard_probe_secret");
 
             Set<String> unanswered = new TreeSet<>(found);
@@ -191,7 +191,7 @@ class ErasureInventoryTests {
     // ------------------------------------------------------------------------------ what the database says
 
     /** Every ordinary, non-partition table, as {@code schema.table}. */
-    private static Set<String> allTables() {
+    static Set<String> allTables(JdbcClient jdbc) {
         return new TreeSet<>(jdbc.sql("""
                         SELECT n.nspname || '.' || c.relname
                           FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -202,7 +202,7 @@ class ErasureInventoryTests {
     }
 
     /** Table to the columns that put it in the inventory. */
-    private static Map<String, Set<String>> inventory() {
+    static Map<String, Set<String>> inventory(JdbcClient jdbc) {
         Map<String, Set<String>> found = new TreeMap<>();
         jdbc.sql("""
                         SELECT n.nspname || '.' || c.relname AS tbl, a.attname AS col, format_type(a.atttypid, NULL) AS typ
@@ -248,7 +248,7 @@ class ErasureInventoryTests {
     // --------------------------------------------------------------------- what the code declares
 
     /** Declared table to the participant that declares it. */
-    private static Map<String, String> declaredTables() {
+    static Map<String, String> declaredTables() {
         Map<String, String> declared = new TreeMap<>();
         for (Class<?> participant : participantClasses()) {
             ErasesCustomerData declaration = participant.getAnnotation(ErasesCustomerData.class);

@@ -1,0 +1,367 @@
+@if (notice(); as message) {
+  <p class="q-callout" role="alert" data-testid="data-notice">{{ message }}</p>
+}
+
+<!-- ------------------------------------------------------------- a copy of her data -->
+<h3 class="q-emphasis">{{ 'customers.data.export.title' | t }}</h3>
+<p class="q-body-sm">{{ 'customers.data.export.lead' | t }}</p>
+
+@if (canAsk() && !hasPending()) {
+  <button
+    type="button"
+    class="q-btn-secondary"
+    data-testid="export-raise"
+    (click)="raise()"
+    [disabled]="raising()"
+  >
+    {{ raising() ? ('customers.saving' | t) : ('customers.data.export.raise' | t) }}
+  </button>
+}
+
+<table class="grid">
+  <thead>
+    <tr>
+      <th class="q-caption">{{ 'customers.data.export.status' | t }}</th>
+      <th class="q-caption">{{ 'customers.data.export.requestedVia' | t }}</th>
+      <th class="q-caption">{{ 'customers.data.export.requestedAt' | t }}</th>
+      <th class="q-caption">{{ 'customers.data.export.dueAt' | t }}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    @for (request of exportRequests(); track request.id) {
+      <tr data-testid="export-request-row">
+        <td class="q-body-sm">{{ statusLabel(request.status) }}</td>
+        <td class="q-body-sm">{{ viaLabel(request.requestedVia) }}</td>
+        <td class="q-body-sm">{{ formatAt(request.requestedAt) }}</td>
+        <td class="q-body-sm" data-testid="export-due">{{ formatDay(request.responseDueAt) }}</td>
+        <td class="q-body-sm">
+          @if (request.status === 'PENDING') {
+            @if (canAsk()) {
+              <button
+                type="button"
+                class="link"
+                data-testid="export-withdraw"
+                [disabled]="actionPendingId() === request.id"
+                (click)="withdraw(request.id)"
+              >
+                {{ 'customers.data.export.withdraw' | t }}
+              </button>
+            }
+            @if (canProduce()) {
+              <button
+                type="button"
+                class="link"
+                data-testid="export-produce"
+                (click)="openPurpose(request.id, 'produce')"
+              >
+                {{ 'customers.data.export.produce' | t }}
+              </button>
+            }
+          }
+          @if (request.status === 'COMPLETED') {
+            @if (request.bundleAvailable && canProduce()) {
+              <button
+                type="button"
+                class="link"
+                data-testid="export-link"
+                (click)="openPurpose(request.id, 'link')"
+              >
+                {{ 'customers.data.export.link' | t }}
+              </button>
+            }
+            @if (!request.bundleAvailable) {
+              <span class="q-caption" data-testid="export-expired">{{
+                'customers.data.export.expired' | t
+              }}</span>
+            }
+            @if (request.manifest) {
+              <button
+                type="button"
+                class="link"
+                data-testid="export-manifest-toggle"
+                (click)="toggleManifest(request.id)"
+              >
+                {{
+                  manifestOpenId() === request.id
+                    ? ('customers.data.export.manifest.hide' | t)
+                    : ('customers.data.export.manifest.show' | t)
+                }}
+              </button>
+            }
+          }
+        </td>
+      </tr>
+      @if (request.status === 'COMPLETED' && request.bundleExpiresAt && request.bundleAvailable) {
+        <tr>
+          <td class="q-caption" colspan="5">
+            {{ 'customers.data.export.expiresAt' | t }}: {{ formatAt(request.bundleExpiresAt) }}
+          </td>
+        </tr>
+      }
+      @if (manifestOpenId() === request.id && request.manifest; as manifest) {
+        <tr data-testid="export-manifest-row">
+          <td colspan="5">
+            <p class="q-caption">{{ 'customers.data.export.manifest.lead' | t }}</p>
+            <table class="grid">
+              <thead>
+                <tr>
+                  <th class="q-caption">{{ 'customers.erasure.proof.module' | t }}</th>
+                  <th class="q-caption">{{ 'customers.erasure.proof.table' | t }}</th>
+                  <th class="q-caption">{{ 'customers.erasure.proof.rows' | t }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (section of manifest.sections; track section.name) {
+                  @for (table of section.tables; track table.table) {
+                    <tr data-testid="export-manifest-line">
+                      <td class="q-body-sm">{{ section.name }}</td>
+                      <td class="q-body-sm q-mono">{{ table.table }}</td>
+                      <td class="q-body-sm q-tnum">
+                        {{ table.rows
+                        }}{{
+                          table.truncated
+                            ? ' (' + ('customers.data.export.manifest.truncated' | t) + ')'
+                            : ''
+                        }}
+                      </td>
+                    </tr>
+                  }
+                }
+              </tbody>
+            </table>
+            @if (manifest.withheld.length > 0) {
+              <p class="q-caption" data-testid="export-withheld">
+                {{ 'customers.data.export.manifest.withheld' | t }}:
+                {{ manifest.withheld.join(', ') }}
+              </p>
+            }
+          </td>
+        </tr>
+      }
+    } @empty {
+      <tr>
+        <td class="q-body-sm empty" colspan="5">
+          {{ loadingExports() ? ('customers.loading' | t) : ('customers.data.export.empty' | t) }}
+        </td>
+      </tr>
+    }
+  </tbody>
+</table>
+
+@if (purposeFor(); as target) {
+  <div class="q-form" data-testid="export-purpose-form">
+    <label class="q-field">
+      <span class="q-caption">{{ 'customers.data.export.purpose' | t }}</span>
+      <textarea
+        class="q-textarea"
+        rows="2"
+        maxlength="200"
+        data-testid="export-purpose"
+        [value]="purpose()"
+        (input)="purpose.set($any($event.target).value)"
+      ></textarea>
+    </label>
+    @if (waiting(); as sentence) {
+      <p class="q-body-sm" role="status" data-testid="export-waiting">{{ sentence }}</p>
+    }
+    <button
+      type="button"
+      class="q-btn-secondary"
+      data-testid="export-purpose-submit"
+      [disabled]="!purposeValid() || actionPendingId() !== null"
+      (click)="submitPurpose()"
+    >
+      {{
+        target.action === 'produce'
+          ? ('customers.data.export.produce' | t)
+          : ('customers.data.export.link' | t)
+      }}
+    </button>
+    <button type="button" class="link" (click)="closePurpose()">
+      {{ 'customers.cancel' | t }}
+    </button>
+  </div>
+}
+
+@if (link(); as ready) {
+  <p class="q-body-sm" data-testid="export-link-ready">
+    <a [href]="ready.value.url" rel="noopener noreferrer" target="_blank">{{
+      'customers.data.export.link.open' | t
+    }}</a>
+    <span class="q-caption">
+      {{ 'customers.data.export.link.expires' | t }} {{ formatAt(ready.value.expiresAt) }}</span
+    >
+  </p>
+}
+
+<!-- ------------------------------------------------------------- corrections -->
+<h3 class="q-emphasis">{{ 'customers.data.correct.title' | t }}</h3>
+<p class="q-body-sm">{{ 'customers.data.correct.lead' | t }}</p>
+
+@if (canAsk()) {
+  <div class="q-form" data-testid="correct-form">
+    <label class="q-field">
+      <span class="q-caption">{{ 'customers.data.correct.subject' | t }}</span>
+      <select
+        class="q-select"
+        data-testid="correct-subject"
+        [value]="subject()"
+        (change)="selectSubject($any($event.target).value)"
+      >
+        @for (candidate of subjects; track candidate) {
+          <option [value]="candidate">{{ subjectLabel(candidate) }}</option>
+        }
+      </select>
+    </label>
+
+    @switch (subject()) {
+      @case ('DISPLAY_NAME') {
+        <label class="q-field">
+          <span class="q-caption">{{ 'customers.data.correct.value.name' | t }}</span>
+          <input
+            class="q-input"
+            maxlength="200"
+            data-testid="correct-value"
+            [value]="value()"
+            (input)="value.set($any($event.target).value)"
+          />
+        </label>
+      }
+      @case ('DATE_OF_BIRTH') {
+        <label class="q-field">
+          <span class="q-caption">{{ 'customers.data.correct.value.dateOfBirth' | t }}</span>
+          <input
+            class="q-input"
+            type="date"
+            data-testid="correct-value"
+            [value]="value()"
+            (input)="value.set($any($event.target).value)"
+          />
+        </label>
+      }
+      @case ('CONTACT_POINT') {
+        <label class="q-field">
+          <span class="q-caption">{{ 'customers.data.correct.contact' | t }}</span>
+          <select
+            class="q-select"
+            data-testid="correct-contact"
+            [value]="contactId()"
+            (change)="contactId.set($any($event.target).value)"
+          >
+            <option value="">—</option>
+            @for (contact of contacts(); track contact.id) {
+              <option [value]="contact.id">{{ contactLabel(contact) }}</option>
+            }
+          </select>
+        </label>
+        <label class="q-field">
+          <span class="q-caption">{{ 'customers.data.correct.value.contact' | t }}</span>
+          <input
+            class="q-input"
+            maxlength="200"
+            data-testid="correct-value"
+            [value]="value()"
+            (input)="value.set($any($event.target).value)"
+          />
+        </label>
+      }
+      @case ('ADDRESS') {
+        <label class="q-field">
+          <span class="q-caption">{{ 'customers.data.correct.address' | t }}</span>
+          <select
+            class="q-select"
+            data-testid="correct-address"
+            [value]="addressId()"
+            (change)="selectAddress($any($event.target).value)"
+          >
+            <option value="">—</option>
+            @for (address of addresses(); track address.id) {
+              <option [value]="address.id">{{ address.label }}</option>
+            }
+          </select>
+        </label>
+        @if (selectedAddress(); as original) {
+          @if (scope(); as editorScope) {
+            <q-customer-address-editor
+              [scope]="editorScope"
+              [initial]="original"
+              [extended]="true"
+              (draftChange)="onAddressDraft($event)"
+            />
+          }
+          <label class="q-field">
+            <span class="q-caption">{{ 'customers.address.instructions' | t }}</span>
+            <textarea
+              class="q-textarea"
+              rows="2"
+              [value]="addressInstructions()"
+              (input)="addressInstructions.set($any($event.target).value)"
+            ></textarea>
+          </label>
+        }
+      }
+    }
+
+    <label class="q-field">
+      <span class="q-caption">{{ 'customers.data.correct.evidence' | t }}</span>
+      <input
+        class="q-input"
+        maxlength="80"
+        data-testid="correct-evidence"
+        [value]="evidence()"
+        (input)="evidence.set($any($event.target).value)"
+      />
+      <span class="q-caption" [class.q-error-text]="evidenceInvalidShown()">{{
+        'customers.data.correct.evidence.hint' | t
+      }}</span>
+    </label>
+
+    <button
+      type="button"
+      class="q-btn-secondary"
+      data-testid="correct-submit"
+      [disabled]="!canSubmitCorrection()"
+      (click)="submitCorrection()"
+    >
+      {{ correcting() ? ('customers.saving' | t) : ('customers.data.correct.submit' | t) }}
+    </button>
+    @if (outcome() === 'applied') {
+      <p class="q-body-sm" role="status" data-testid="correct-applied">
+        {{ 'customers.data.correct.applied' | t }}
+      </p>
+    }
+    @if (outcome() === 'unchanged') {
+      <p class="q-body-sm" role="status" data-testid="correct-unchanged">
+        {{ 'customers.data.correct.unchanged' | t }}
+      </p>
+    }
+  </div>
+}
+
+<table class="grid">
+  <thead>
+    <tr>
+      <th class="q-caption">{{ 'customers.data.correct.history.subject' | t }}</th>
+      <th class="q-caption">{{ 'customers.data.correct.history.evidence' | t }}</th>
+      <th class="q-caption">{{ 'customers.data.correct.history.by' | t }}</th>
+      <th class="q-caption">{{ 'customers.data.correct.history.at' | t }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    @for (correction of corrections(); track correction.id) {
+      <tr data-testid="correction-row">
+        <td class="q-body-sm">{{ subjectLabel(correction.subject) }}</td>
+        <td class="q-body-sm q-mono">{{ correction.evidenceReference }}</td>
+        <td class="q-body-sm">{{ correction.correctedByActorId }}</td>
+        <td class="q-body-sm">{{ formatAt(correction.correctedAt) }}</td>
+      </tr>
+    } @empty {
+      <tr>
+        <td class="q-body-sm empty" colspan="4">
+          {{ 'customers.data.correct.history.empty' | t }}
+        </td>
+      </tr>
+    }
+  </tbody>
+</table>

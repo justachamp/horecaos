@@ -10,12 +10,7 @@ import { I18n } from '../../../core/i18n/i18n';
 import { Toasts } from '../../../shared/ui/toast';
 import { AuditEventPage, AuditEventView, ActivityLogApi } from '../../staff/activity-log-api';
 import { ConfigurationApi } from '../configuration-api';
-import {
-  ConsentType,
-  DataPrivacyApi,
-  RetentionWindow,
-  TenantErasureRequest,
-} from './data-privacy-api';
+import { ConsentType, DataPrivacyApi, RetentionWindow, PrivacyRequest } from './data-privacy-api';
 import { LocaleSetView } from '../../../core/i18n/locale-labels';
 import { LABELLED_EGRESS_CODES } from './pii-audit-labels';
 import { DataPrivacyPage } from './data-privacy-page';
@@ -44,19 +39,17 @@ function event(overrides: Partial<AuditEventView> = {}): AuditEventView {
   };
 }
 
-function erasureRequest(overrides: Partial<TenantErasureRequest> = {}): TenantErasureRequest {
+function privacyRequest(overrides: Partial<PrivacyRequest> = {}): PrivacyRequest {
   return {
+    kind: 'ERASURE',
     id: 'req-1',
     customerAccountId: 'cust-9',
     status: 'PENDING',
     requestedVia: 'OPERATIONS',
-    requestedByActorType: 'USER',
-    requestedByActorId: 'operator-1',
     requestedAt: '2026-09-01T10:00:00Z',
-    completedAt: null,
-    completedByActorId: null,
-    cancelledAt: null,
-    cancelledByActorId: null,
+    settledAt: null,
+    dueAt: null,
+    subject: null,
     ...overrides,
   };
 }
@@ -122,6 +115,13 @@ class FakeCurrentTenant {
   ensureLoaded = vi.fn().mockResolvedValue(undefined);
 }
 
+function rows(fixture: { nativeElement: HTMLElement; detectChanges(): void }): string[] {
+  fixture.detectChanges();
+  return Array.from(
+    (fixture.nativeElement as HTMLElement).querySelectorAll('[data-testid="request-row"]'),
+  ).map((row) => row.textContent ?? '');
+}
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -130,7 +130,7 @@ async function flushMicrotasks(): Promise<void> {
 
 interface SetUpOptions {
   readonly search?: (...args: never[]) => Promise<AuditEventPage>;
-  readonly erasureWorklist?: (...args: never[]) => Promise<readonly TenantErasureRequest[]>;
+  readonly privacyWorklist?: (...args: never[]) => Promise<readonly PrivacyRequest[]>;
   readonly consentTypes?: (...args: never[]) => Promise<readonly ConsentType[]>;
   readonly consentLocaleSet?: (...args: never[]) => Promise<LocaleSetView>;
   readonly retentionWindows?: (...args: never[]) => Promise<readonly RetentionWindow[]>;
@@ -142,7 +142,7 @@ async function setUp(options: SetUpOptions = {}, locale: 'en' | 'ru' | 'uz-Latn'
     search: vi.fn(options.search ?? (async () => ({ items: [], nextCursor: null }))),
   };
   const dataPrivacyApi = {
-    erasureWorklist: vi.fn(options.erasureWorklist ?? (async () => [])),
+    privacyWorklist: vi.fn(options.privacyWorklist ?? (async () => [])),
     consentTypes: vi.fn(options.consentTypes ?? (async () => [consentType()])),
     consentLocaleSet: vi.fn(options.consentLocaleSet ?? (async () => LOCALE_SET)),
     retentionWindows: vi.fn(options.retentionWindows ?? (async () => [retentionWindow()])),
@@ -221,24 +221,102 @@ describe('DataPrivacyPage', () => {
     expect(text).toContain('Revealed a caller’s name or number from the call desk');
   });
 
-  it('states honestly that only a data subject’s export and correction remain unbuilt', async () => {
+  it('no longer says a data subject’s export and correction are unbuilt', async () => {
     const { fixture } = await setUp();
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
-    expect(text).toContain('ADR 0029');
-    expect(text).toContain('export and the correction of their data remain');
-    // The stale claims: legal hold, proof and retention are built now.
-    expect(text).not.toContain('retention-expiry enforcement, legal hold and proof remain');
-    expect(text).not.toContain('no data-subject export, correction, anonymisation');
+    expect(text).not.toContain('remain the part of the privacy-operations surface not built');
+    expect(text).not.toContain('not built');
   });
 
-  it('shows the tenant-wide DSAR worklist with a pending request', async () => {
+  it('lists erasure requests, copies of her data and corrections in one worklist, each named for what it is', async () => {
     const { fixture, dataPrivacyApi } = await setUp({
-      erasureWorklist: async () => [erasureRequest()],
+      privacyWorklist: async () => [
+        privacyRequest({ kind: 'ERASURE', id: 'e-1', customerAccountId: 'cust-erase' }),
+        privacyRequest({
+          kind: 'EXPORT',
+          id: 'x-1',
+          customerAccountId: 'cust-export',
+          requestedVia: 'STOREFRONT',
+          dueAt: '2026-10-15T10:00:00Z',
+        }),
+        privacyRequest({
+          kind: 'CORRECTION',
+          id: 'c-1',
+          customerAccountId: 'cust-correct',
+          status: 'COMPLETED',
+          settledAt: '2026-09-02T10:00:00Z',
+          subject: 'DATE_OF_BIRTH',
+        }),
+      ],
     });
-    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
-    expect(text).toContain('cust-9');
-    expect(text).toContain('Pending');
-    expect(dataPrivacyApi.erasureWorklist).toHaveBeenCalledWith('t1', undefined);
+    await vi.waitFor(() => expect(rows(fixture)).toHaveLength(3));
+
+    const [erasure, copy, correction] = rows(fixture);
+    expect(erasure).toContain('Erasure');
+    expect(erasure).toContain('cust-erase');
+    expect(copy).toContain('Copy of her data');
+    expect(copy).toContain('By the customer');
+    expect(copy).toContain('Owed by 2026-10-15');
+    expect(correction).toContain('Correction');
+    expect(correction).toContain('Date of birth');
+    expect(correction).toContain('Done');
+    expect(dataPrivacyApi.privacyWorklist).toHaveBeenCalledWith('t1', {
+      kind: undefined,
+      status: undefined,
+    });
+  });
+
+  it('asks the platform for one kind or one status when the filters are used', async () => {
+    const { fixture, dataPrivacyApi } = await setUp();
+    const kind = fixture.nativeElement.querySelector(
+      '[data-testid="requests-kind-filter"]',
+    ) as HTMLSelectElement;
+    kind.value = 'EXPORT';
+    kind.dispatchEvent(new Event('change'));
+    await vi.waitFor(() =>
+      expect(dataPrivacyApi.privacyWorklist).toHaveBeenLastCalledWith('t1', {
+        kind: 'EXPORT',
+        status: undefined,
+      }),
+    );
+
+    const status = fixture.nativeElement.querySelector(
+      '[data-testid="requests-status-filter"]',
+    ) as HTMLSelectElement;
+    status.value = 'PENDING';
+    status.dispatchEvent(new Event('change'));
+    await vi.waitFor(() =>
+      expect(dataPrivacyApi.privacyWorklist).toHaveBeenLastCalledWith('t1', {
+        kind: 'EXPORT',
+        status: 'PENDING',
+      }),
+    );
+  });
+
+  it('says so when no request has been raised', async () => {
+    const { fixture } = await setUp();
+    await vi.waitFor(() =>
+      expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+        'No data-subject request has been raised in this tenant.',
+      ),
+    );
+  });
+
+  it('has words for the two egress codes a data-subject copy writes', async () => {
+    expect(LABELLED_EGRESS_CODES).toEqual(
+      expect.arrayContaining(['customer.dsar.exported', 'customer.dsar.bundle_revealed']),
+    );
+    const { fixture } = await setUp({
+      search: async () => ({
+        items: [event({ id: 'evt-dsar', actionCode: 'customer.dsar.exported' })],
+        nextCursor: null,
+      }),
+    });
+    await vi.waitFor(() =>
+      expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+        'Gathered a customer’s data into a copy for her',
+      ),
+    );
   });
 
   it('shows the consent-type registry', async () => {

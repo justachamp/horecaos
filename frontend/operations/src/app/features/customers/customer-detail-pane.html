@@ -99,6 +99,15 @@
       <button
         type="button"
         class="tab"
+        [class.tab--on]="activeTab() === 'data'"
+        (click)="selectTab('data')"
+        data-testid="tab-data"
+      >
+        {{ 'customers.tab.data' | t }}
+      </button>
+      <button
+        type="button"
+        class="tab"
         [class.tab--on]="activeTab() === 'history'"
         (click)="selectTab('history')"
         data-testid="tab-history"
@@ -1132,6 +1141,18 @@
           }
         </tbody>
       </table>
+    }
+
+    <!-- ------------------------------------------------- a copy of her data, corrections -->
+    @if (activeTab() === 'data') {
+      @if (locationScope(); as dataScope) {
+        <q-customer-data-requests
+          [scope]="dataScope"
+          [accountId]="accountId()"
+          [contacts]="profile()?.value?.contactSummaries ?? []"
+          (corrected)="onCorrected()"
+        />
+      }
     }
 
     <!-- ----------------------------------------------------------------- erasure -->

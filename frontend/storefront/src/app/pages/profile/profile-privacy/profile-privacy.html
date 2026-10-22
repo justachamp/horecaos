@@ -1,0 +1,118 @@
+<div class="min-h-screen bg-surface-base pb-24 text-text-primary">
+  <div class="mx-auto max-w-[420px] px-4 py-6">
+    <header class="flex shrink-0 flex-col gap-2 pb-3">
+      <button
+        type="button"
+        appBack="/profile"
+        class="app-back flex items-center gap-2 text-sm transition-opacity hover:opacity-90"
+      >
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M15 19l-7-7 7-7"
+          />
+        </svg>
+        {{ 'common.back' | t }}
+      </button>
+      <h1 class="text-center text-xl font-bold text-text-primary">
+        {{ 'profile.privacyTitle' | t }}
+      </h1>
+    </header>
+
+    @if (loading()) {
+      <div class="flex items-center justify-center gap-2 py-12">
+        <span
+          class="h-6 w-6 animate-spin rounded-full border-2 border-brand-accent border-t-transparent"
+        ></span>
+        <span class="text-sm text-zinc-400">{{ 'common.loading' | t }}</span>
+      </div>
+    } @else if (needsSignIn()) {
+      <div class="rounded-xl border border-zinc-700/80 px-4 py-6 text-center" data-testid="privacy-sign-in">
+        <p class="mb-4 text-sm text-zinc-400">{{ 'profile.privacySignInRequired' | t }}</p>
+        <a
+          routerLink="/auth/login"
+          class="inline-block rounded-xl bg-brand-accent px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+        >
+          {{ 'auth.login' | t }}
+        </a>
+      </div>
+    } @else if (error()) {
+      <p class="rounded-xl bg-red-500/20 px-4 py-3 text-center text-sm text-red-400">
+        {{ error() }}
+      </p>
+    } @else {
+      <div class="rounded-xl border border-zinc-700/80 px-4 py-5">
+        <p class="text-sm font-medium text-text-primary">{{ 'profile.privacyCopyTitle' | t }}</p>
+        <p class="mt-1 text-sm text-zinc-400">{{ 'profile.privacyCopyBenefit' | t }}</p>
+
+        @if (isWaiting()) {
+          <div class="mt-4 rounded-xl bg-zinc-700/30 px-4 py-3" data-testid="privacy-waiting">
+            <p class="text-sm text-text-primary">{{ 'profile.privacyPreparing' | t }}</p>
+            <p class="mt-1 text-xs text-zinc-400" data-testid="privacy-due">
+              {{ 'profile.privacyDueBy' | t }} {{ dueDay() }}
+            </p>
+          </div>
+          <button
+            type="button"
+            (click)="withdraw()"
+            [disabled]="withdrawing()"
+            data-testid="privacy-withdraw"
+            class="mt-4 w-full rounded-xl border border-zinc-600 py-2.5 text-sm font-medium text-zinc-300 transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {{ withdrawing() ? ('common.loading' | t) : ('profile.privacyWithdraw' | t) }}
+          </button>
+        } @else if (hasFile()) {
+          <div class="mt-4 rounded-xl bg-emerald-500/10 px-4 py-3" data-testid="privacy-ready">
+            <p class="text-sm text-emerald-300">{{ 'profile.privacyReady' | t }}</p>
+          </div>
+          @if (link(); as ready) {
+            <a
+              [href]="ready.url"
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="privacy-open"
+              class="mt-4 flex items-center justify-center gap-2 rounded-xl bg-brand-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-95"
+            >
+              {{ 'profile.privacyOpenFile' | t }}
+            </a>
+            <p class="mt-2 text-center text-xs text-zinc-400">{{ 'profile.privacyLinkShort' | t }}</p>
+          } @else {
+            <button
+              type="button"
+              (click)="openFile()"
+              [disabled]="gettingLink()"
+              data-testid="privacy-get-link"
+              class="mt-4 w-full rounded-xl bg-brand-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-95 disabled:opacity-50"
+            >
+              {{ gettingLink() ? ('common.loading' | t) : ('profile.privacyGetFile' | t) }}
+            </button>
+          }
+          @if (linkError()) {
+            <p class="mt-2 text-center text-xs text-red-400">{{ linkError() }}</p>
+          }
+        } @else if (mayAskAgain()) {
+          @if (request()?.status === 'COMPLETED') {
+            <p class="mt-4 text-sm text-zinc-400" data-testid="privacy-expired">
+              {{ 'profile.privacyExpired' | t }}
+            </p>
+          }
+          <button
+            type="button"
+            (click)="ask()"
+            [disabled]="asking()"
+            data-testid="privacy-ask"
+            class="mt-4 w-full rounded-xl bg-brand-accent py-3.5 text-base font-semibold text-white transition-opacity hover:opacity-95 disabled:opacity-50"
+          >
+            {{ asking() ? ('common.loading' | t) : ('profile.privacyAsk' | t) }}
+          </button>
+        }
+
+        @if (askError()) {
+          <p class="mt-2 text-center text-xs text-red-400">{{ askError() }}</p>
+        }
+      </div>
+    }
+  </div>
+</div>
