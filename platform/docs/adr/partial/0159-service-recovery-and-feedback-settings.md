@@ -13,8 +13,11 @@
   `pricing.promotion.manage` ([ADR 0181](../built/0181-compensation-from-a-case-promotion-targeting-requote-and-discretionary-discounts.md),
   D10); both storefronts show the tag chips, the consent box and the public block. **Declined by
   the record (not gaps):** a courier dimension or filter and a rating of a courier (open input 8; ADR 0042),
-  the four scored dimensions (answered by tags, counted by category in the quality tab), and any
-  compensation a case pays by itself (Decision 9). **Not built or not proved:** legal's answers to inputs 1,
+  the four scored dimensions (answered by tags, counted by category in the quality tab), a «bonus»
+  compensation (loyalty adjustments are not linked to a case at launch), and any compensation a case
+  pays by itself (Decision 9); `recovery.remedy_money` stays registered and unbuilt as a company-level
+  metric (it has no legal entity, ADR 0038) and the recovery report returns the remedy money per currency
+  as attached. **Not built or not proved:** legal's answers to inputs 1,
   2 and 8 before `feature.feedback_settings` is turned on for a real tenant (external), an SMS prompt
   against a real gateway (ADR 0146 binds no provider yet, so the SMS half is proved against
   `FakeSmsGateway` only), and the `Superseded by` pointers on ADR 0071, 0044, 0013 and 0048 that
