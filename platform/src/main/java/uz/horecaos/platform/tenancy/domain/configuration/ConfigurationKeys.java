@@ -513,6 +513,7 @@ public final class ConfigurationKeys {
                 .defaultValue("")
                 .ownedBy("assistant")
                 .tenantVisible()
+                .entitledBy("assistant.answering.enabled")
                 .settableAt(ScopeType.PLATFORM, ScopeType.TENANT, ScopeType.BRAND)
                 .describedAs("The " + language + " sentence the assistant says ahead of its first answer in a "
                         + "conversation, telling the customer it is automated and that the question is "

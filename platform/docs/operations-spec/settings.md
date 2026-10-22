@@ -122,7 +122,7 @@ locked and no key shows the state.** A write to a locked key is refused with `EN
 `INSUFFICIENT_CAPABILITY`) and stores nothing. `q-inherited-field` greys, names the feature, and links
 «Подробнее» to the console's own Finance → Subscription screen; the platform's upgrade path is an API path
 and is never shown. One family is annotated today: `assistant.enabled` and the three disclosure texts against
-`assistant.answering.enabled`; the other `feature.*` flags have not been audited against ADR 0087's modules.
+`assistant.answering.enabled`; the rest were audited against the entitlement catalogue on 2026-10-23 and none names a feature the platform itself reads to apply the setting (the six tenant-visible `feature.*` flags are not plan features; the POS loyalty-sync keys sit beside `pos.integrations.enabled`, which nothing reads, so locking them would claim a refusal the platform does not make). A key joins the family by one `entitledBy(...)` line, and `ConfigurationKeyEntitlementTests` lists the family so that a change to it is deliberate.
 
 Clicking any chip opens the **resolution trace popover** — the four levels as a ladder, most
 specific at the top, each row carrying the value or `не задано` / `снято явно`, who set it
@@ -261,7 +261,7 @@ resolve to the one nearest the operator's own branch and say how many more; a ke
 so they open without it and the result line is what says the level. Policies are a source of their own
 (`POLICY_ROUTES`, held to `TenantPolicyFamilies` by a platform test), with their version and publisher.
 **The coverage guard:** every tenant-visible key either has a screen (`SETTING_ENTRIES`) or is on
-`NO_CONSOLE_SCREEN` naming the gap-map row that owes it one — 19 keys today, settable through the API
+`NO_CONSOLE_SCREEN` naming the gap-map row that owes it one — 17 keys today, settable through the API
 alone — and `ConfigurationKeyConsoleCoverageTests` fails the build for a key that is neither.
 
 **Actions:** none destructive. **States:** the readiness panel's empty state is the good one —

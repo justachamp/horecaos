@@ -29,9 +29,14 @@ class ConfigurationKeyEntitlementTests {
                 .toList();
 
         assertThat(gated)
-                .as("the audit of 2026-10-14: assistant.enabled is the one tenant-visible key a plan feature gates")
+                .as("the audit of 2026-10-14: the assistant's switch and its three disclosure wordings are the "
+                        + "tenant-visible keys a plan feature gates (nothing else in the registry names one)")
                 .extracting(ConfigurationKey::code)
-                .containsExactly("assistant.enabled");
+                .containsExactlyInAnyOrder(
+                        "assistant.enabled",
+                        "assistant.disclosure_text_en",
+                        "assistant.disclosure_text_ru",
+                        "assistant.disclosure_text_uz");
         for (ConfigurationKey<?> key : gated) {
             EntitlementKey<?> entitlement = EntitlementKeys.find(java.util.Objects.requireNonNull(key.entitledBy()))
                     .orElseThrow(
@@ -55,6 +60,12 @@ class ConfigurationKeyEntitlementTests {
     void theAssistantMirrorsAgree() {
         assertThat(AssistantConfigurationKeys.ENABLED.entitledBy()).isEqualTo("assistant.answering.enabled");
         assertThat(ConfigurationKeys.ASSISTANT_ENABLED).isEqualTo(AssistantConfigurationKeys.ENABLED);
+        assertThat(ConfigurationKeys.ASSISTANT_DISCLOSURE_TEXT_EN)
+                .isEqualTo(AssistantConfigurationKeys.DISCLOSURE_TEXT_EN);
+        assertThat(ConfigurationKeys.ASSISTANT_DISCLOSURE_TEXT_RU)
+                .isEqualTo(AssistantConfigurationKeys.DISCLOSURE_TEXT_RU);
+        assertThat(ConfigurationKeys.ASSISTANT_DISCLOSURE_TEXT_UZ)
+                .isEqualTo(AssistantConfigurationKeys.DISCLOSURE_TEXT_UZ);
     }
 
     @Test

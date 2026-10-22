@@ -464,7 +464,13 @@ class OperationsConfigurationControllerTests {
         assertThat(lock.entitlementKey()).isEqualTo(ASSISTANT_ENTITLEMENT);
         assertThat(lock.description()).isNotBlank();
         assertThat(keys)
-                .filteredOn(key -> !key.code().equals("assistant.enabled"))
+                .filteredOn(key -> key.code().startsWith("assistant.disclosure_text_"))
+                .as("the assistant's wording is locked with its switch: there is no assistant to word")
+                .hasSize(3)
+                .allSatisfy(key -> assertThat(key.lockedByPlan()).isNotNull());
+        assertThat(keys)
+                .filteredOn(key ->
+                        !key.code().equals("assistant.enabled") && !key.code().startsWith("assistant.disclosure_text_"))
                 .as("a key no plan feature gates is never locked")
                 .allSatisfy(key -> {
                     assertThat(key.entitledBy()).isNull();

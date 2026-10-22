@@ -107,14 +107,15 @@ against, and what to do the day the real thing is connected.
 - **Built against.** `ConfigurationKey#entitledBy` and the platform's
   `EntitlementGate`, which is **enforcement-aware**: under the default meter-only
   mode (ADR 0021) nothing is locked and no key shows the state. Today one family is
-  annotated: `assistant.enabled` against `assistant.answering.enabled`.
+  annotated: `assistant.enabled` and the three `assistant.disclosure_text_*` wordings,
+  all against `assistant.answering.enabled`.
 - **Connect later.** The lock appears when the platform's commercial enforcement is
   raised above meter-only for a tenant and that tenant's plan lacks the feature
   (`connect-assistant-provider.md` covers the assistant's own entitlement). The
   «Подробнее» link goes to the console's own Finance → Subscription screen; the
   platform's upgrade path is an API path and is never shown. **Check:** with the
   pilot tenant on a plan without the assistant and enforcement on, the Assistant
-  screen's four fields are greyed with the lock, and a write to `assistant.enabled`
+  screen's four fields are greyed with the lock, and a write to any of the four
   returns `ENTITLEMENT_REQUIRED` and stores nothing.
 
 ## Branch open/closed control («c»)
