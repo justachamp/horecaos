@@ -23,6 +23,10 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.testcontainers.DockerClientFactory;
 import uz.horecaos.platform.catalog.api.FiscalClassificationLookup;
 import uz.horecaos.platform.catalog.api.FiscalClassificationLookup.FiscalClassificationFacts;
+import uz.horecaos.platform.fiscal.ControlledFiscalTerminal;
+import uz.horecaos.platform.fiscal.FiscalTerminalPortContract;
+import uz.horecaos.platform.fiscal.api.FiscalTerminalDirectory;
+import uz.horecaos.platform.fiscal.api.FiscalTerminalPort;
 import uz.horecaos.platform.fiscal.api.PartnerFiscalizationPort.Outcome;
 import uz.horecaos.platform.fiscal.api.SentReceiptEvidence;
 import uz.horecaos.platform.iam.api.protection.ProtectedValue;
@@ -40,6 +44,7 @@ import uz.horecaos.platform.payments.application.PresentedReceipts;
 import uz.horecaos.platform.payments.application.ProtectedPresentedReceipts;
 import uz.horecaos.platform.payments.application.ProtectedSentEvidenceRecorder;
 import uz.horecaos.platform.payments.application.ReceiptLineBuilder;
+import uz.horecaos.platform.payments.application.TerminalFiscalizationBridge;
 import uz.horecaos.platform.payments.domain.CaptureTiming;
 import uz.horecaos.platform.payments.domain.FiscalDocument;
 import uz.horecaos.platform.payments.domain.FiscalReceiptLine;
@@ -118,6 +123,7 @@ class PartnerFiscalizationBridgeTests {
     @BeforeEach
     void wire() {
         jdbc.sql("DELETE FROM fiscal.fiscal_documents").update();
+        jdbc.sql("DELETE FROM fiscal.fiscal_terminals").update();
         jdbc.sql("DELETE FROM payments.payment_attempts").update();
         jdbc.sql("DELETE FROM payments.merchant_bindings").update();
         jdbc.sql("DELETE FROM tenant.location_fiscal_assignments").update();
@@ -1258,6 +1264,293 @@ class PartnerFiscalizationBridgeTests {
                 null);
         new JdbcPaymentAttemptStore(jdbc).insert(attempt);
         return attempt;
+    }
+
+    // -----------------------------------------------------------------------
+    // TERMINAL: a cash sale's receipt, asked of the tenant's own equipment (ADR 0166 «Providers», ADR 0007)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName(
+            "a cash document is issued by the tenant's terminal: its receipt is the evidence, the lines are kept as sent, and the whole amount is cash")
+    void aCashDocumentIsIssuedByTheTenantsTerminal() throws Exception {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+
+        Outcome outcome = terminalBridge(terminal, true).retry(TENANT, documentId, "idem-cash");
+
+        assertThat(outcome).isEqualTo(Outcome.ISSUED);
+        FiscalDocument document = fiscalService.find(TENANT, documentId).orElseThrow();
+        assertThat(document.status()).isEqualTo(FiscalStatus.ISSUED);
+        assertThat(document.reasonCode()).isEqualTo("TERMINAL_FISCALIZED");
+        Map<String, Object> row = jdbc.sql("""
+                        SELECT fiscal_sign, external_receipt_id, terminal_id, receipt_url, merchant_binding_id,
+                               provider_type
+                          FROM fiscal.fiscal_documents WHERE id = :id
+                        """).param("id", documentId).query().singleRow();
+        assertThat(row.get("fiscal_sign")).isNotNull();
+        assertThat(row.get("external_receipt_id")).isNotNull();
+        assertThat(row.get("terminal_id")).isEqualTo("FAKE-Kassa 2");
+        assertThat(row.get("merchant_binding_id"))
+                .as("no merchant account issued this")
+                .isNull();
+        assertThat(row.get("provider_type")).isNull();
+
+        // What went to the terminal: one request, keyed by the document, for what was paid in cash.
+        assertThat(terminal.requests()).singleElement().satisfies(request -> {
+            assertThat(request.idempotencyKey()).isEqualTo("terminal-issue:" + documentId);
+            assertThat(request.terminalReference()).isEqualTo("Kassa 2");
+            assertThat(request.paidMinor()).isEqualTo(15_000L);
+            assertThat(request.lines()).singleElement().satisfies(line -> {
+                assertThat(line.name()).isEqualTo("Plov");
+                assertThat(line.ikpu()).isEqualTo("10901001001000000");
+            });
+        });
+
+        // And what was kept: the lines as sent, and a split that says cash, not card.
+        List<Map<String, Object>> sent = sentRequestsOf(documentId);
+        assertThat(sent).hasSize(1);
+        assertThat(sentLineNames(documentId, sent.get(0))).containsExactly("Plov");
+        String split = protection.reveal(
+                TENANT,
+                ProtectedValue.deserialize(java.util.Objects.requireNonNull(
+                        (String) sentEvidenceOf(documentId).get("sent_tender_split_reference"))),
+                SentReceiptEvidence.splitRecord(documentId),
+                "bridge-test");
+        SentReceiptEvidence.TenderSplit tender = tools.jackson.databind.json.JsonMapper.builder()
+                .build()
+                .readValue(split, SentReceiptEvidence.TenderSplit.class);
+        assertThat(tender.receivedCashMinor()).isEqualTo(15_000L);
+        assertThat(tender.receivedCardMinor()).isZero();
+    }
+
+    @Test
+    @DisplayName(
+            "an accepted-then-lost reply is uncertain, nothing is issued again, and the next ask finds the receipt by looking")
+    void aLostReplyIsResolvedByLookingAndNeverByIssuingTwice() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+        PartnerFiscalizationBridge bridge = terminalBridge(terminal, true);
+        terminal.next(FiscalTerminalPortContract.Scenario.ACCEPT_THEN_LOSE_THE_REPLY);
+
+        assertThat(bridge.retry(TENANT, documentId, "idem-1")).isEqualTo(Outcome.UNCERTAIN);
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .as("a request that left is never returned to the queue")
+                .isEqualTo(FiscalStatus.SUBMITTED);
+        assertThat(sentRequestsOf(documentId))
+                .as("the request that left is kept")
+                .hasSize(1);
+
+        assertThat(bridge.retry(TENANT, documentId, "idem-2")).isEqualTo(Outcome.ALREADY_ISSUED);
+
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .isEqualTo(FiscalStatus.ISSUED);
+        assertThat(terminal.issueCalls())
+                .as("issuing was asked once, however many times the document was asked about")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a timeout after the request left is uncertain: kept SUBMITTED, never refused")
+    void aTimeoutIsUncertain() {
+        assertUncertain(FiscalTerminalPortContract.Scenario.TIME_OUT_AFTER_SENDING);
+    }
+
+    @Test
+    @DisplayName("a malformed body after the request left is uncertain too, because the terminal may have issued")
+    void aMalformedBodyIsUncertain() {
+        assertUncertain(FiscalTerminalPortContract.Scenario.MALFORMED_BODY);
+    }
+
+    private void assertUncertain(FiscalTerminalPortContract.Scenario scenario) {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+        terminal.next(scenario);
+
+        assertThat(terminalBridge(terminal, true).retry(TENANT, documentId, "idem-" + scenario))
+                .isEqualTo(Outcome.UNCERTAIN);
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .isEqualTo(FiscalStatus.SUBMITTED);
+        assertThat(terminal.issueCalls()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("an offline terminal leaves nothing recorded as sent, and the same document is issued when it is back")
+    void anOfflineTerminalIsAskedAgainLater() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+        PartnerFiscalizationBridge bridge = terminalBridge(terminal, true);
+        terminal.next(FiscalTerminalPortContract.Scenario.OFFLINE);
+
+        assertThat(bridge.retry(TENANT, documentId, "idem-1")).isEqualTo(Outcome.TERMINAL_UNREACHABLE);
+        assertThat(sentRequestsOf(documentId))
+                .as("nothing left, so nothing is evidence of a request")
+                .isEmpty();
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .isEqualTo(FiscalStatus.PENDING);
+
+        assertThat(bridge.retry(TENANT, documentId, "idem-2")).isEqualTo(Outcome.ISSUED);
+        assertThat(terminal.issueCalls()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("a terminal that cannot be read from is not issued to blind")
+    void aTerminalThatCannotBeLookedUpIsNotIssuedToBlind() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+        terminal.lookupsFail(true);
+
+        assertThat(terminalBridge(terminal, true).retry(TENANT, documentId, "idem-1"))
+                .isEqualTo(Outcome.TERMINAL_UNREACHABLE);
+        assertThat(terminal.issueCalls())
+                .as("read before write: a receipt may already exist and the read could not say")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("a refusal from the terminal fails the document with the refusal recorded")
+    void aRefusalFailsTheDocument() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+        terminal.next(FiscalTerminalPortContract.Scenario.REFUSE);
+
+        assertThat(terminalBridge(terminal, true).retry(TENANT, documentId, "idem-1"))
+                .isEqualTo(Outcome.REJECTED);
+
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .isEqualTo(FiscalStatus.FAILED);
+    }
+
+    @Test
+    @DisplayName("no capable terminal of the seller at the location, or no adapter wired, issues nothing")
+    void noTerminalOrNoAdapterIssuesNothing() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+
+        assertThat(terminalBridge(terminal, false).retry(TENANT, documentId, "idem-1"))
+                .as("a terminal registered under another company, or none, is not an answer")
+                .isEqualTo(Outcome.NO_TERMINAL);
+        assertThat(terminalBridgeWithoutAdapter().retry(TENANT, documentId, "idem-2"))
+                .isEqualTo(Outcome.NOT_WIRED);
+        assertThat(terminal.issueCalls()).isZero();
+        assertThat(fiscalService.find(TENANT, documentId).orElseThrow().status())
+                .isEqualTo(FiscalStatus.PENDING);
+    }
+
+    @Test
+    @DisplayName(
+            "an unclassified node blocks the terminal receipt too: nothing is issued and no placeholder is invented")
+    void anUnclassifiedNodeNeverReachesTheTerminal() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+        world.classes.clear();
+        ControlledFiscalTerminal terminal = new ControlledFiscalTerminal(CLOCK);
+
+        assertThat(terminalBridge(terminal, true).retry(TENANT, documentId, "idem-1"))
+                .isEqualTo(Outcome.BLOCKED_CLASSIFICATION);
+        assertThat(terminal.issueCalls()).isZero();
+    }
+
+    @Test
+    @DisplayName("a document with no provider and no terminal issuer is still NO_PROVIDER_PATH, as before terminals")
+    void withoutAnIssuerAProviderlessDocumentHasNoPath() {
+        seedLegalEntity(CLICK_ENTITY, "CASHENT");
+        UUID documentId = cashDocument(CLICK_ENTITY);
+
+        assertThat(bridge().retry(TENANT, documentId, "idem-1")).isEqualTo(Outcome.NO_PROVIDER_PATH);
+    }
+
+    /** A cash sale awaiting its receipt: the cash intent is never captured by anyone, and the document is pending. */
+    private UUID cashDocument(UUID legalEntityId) {
+        UUID intentId = UUID.randomUUID();
+        intents.insert(new PaymentIntent(
+                intentId,
+                TENANT,
+                ORDER,
+                BRAND,
+                LOCATION,
+                null,
+                legalEntityId,
+                PaymentTender.CASH,
+                PaymentMethod.CASH,
+                null,
+                new SomAmount(15_000L, "UZS"),
+                PaymentIntentStatus.PENDING,
+                CaptureTiming.ON_HANDOVER,
+                UUID.randomUUID().toString(),
+                1,
+                CLOCK.instant(),
+                null));
+        return seedPendingDocument(intentId);
+    }
+
+    /** The bridge as production wires it, over a terminal that is bound to the seller at the location (or is not). */
+    private PartnerFiscalizationBridge terminalBridge(ControlledFiscalTerminal terminal, boolean bound) {
+        org.springframework.beans.factory.support.StaticListableBeanFactory beans =
+                new org.springframework.beans.factory.support.StaticListableBeanFactory();
+        beans.addBean("terminal", terminal);
+        return terminalBridge(beans.getBeanProvider(FiscalTerminalPort.class), bound);
+    }
+
+    private PartnerFiscalizationBridge terminalBridgeWithoutAdapter() {
+        return terminalBridge(
+                new org.springframework.beans.factory.support.StaticListableBeanFactory()
+                        .getBeanProvider(FiscalTerminalPort.class),
+                true);
+    }
+
+    private PartnerFiscalizationBridge terminalBridge(
+            org.springframework.beans.factory.ObjectProvider<FiscalTerminalPort> port, boolean bound) {
+        PaymentFiscalService service = new PaymentFiscalService(
+                documents,
+                List.of(),
+                event -> {},
+                new RecordingProviderActivityRecorder(),
+                new ProtectedSentEvidenceRecorder(
+                        TestProtection.envelope(),
+                        documents,
+                        tools.jackson.databind.json.JsonMapper.builder().build()));
+        fiscalService = service;
+        // The registry row the document will name as the terminal it was asked of (V0688). Not capable on its own
+        // (no binding), which is all a foreign key needs; the directory below is what says it can issue.
+        UUID terminalId = UUID.randomUUID();
+        jdbc.sql("""
+                INSERT INTO fiscal.fiscal_terminals (id, tenant_id, brand_id, location_id, legal_entity_id,
+                    terminal_kind, terminal_reference, capability_snapshot, status)
+                VALUES (:id, :t, :b, :l, :e, 'POS', :ref, '{}'::jsonb, 'ACTIVE')
+                ON CONFLICT DO NOTHING
+                """)
+                .param("id", terminalId)
+                .param("t", TENANT)
+                .param("b", BRAND)
+                .param("l", LOCATION)
+                .param("e", CLICK_ENTITY)
+                .param("ref", "Kassa 2 " + terminalId)
+                .update();
+        FiscalTerminalDirectory directory = new FiscalTerminalDirectory() {
+            @Override
+            public boolean hasCapableTerminal(UUID tenantId, UUID locationId) {
+                return bound;
+            }
+
+            @Override
+            public Optional<CapableTerminal> capableTerminal(UUID tenantId, UUID locationId, UUID legalEntityId) {
+                return bound && LOCATION.equals(locationId) && CLICK_ENTITY.equals(legalEntityId)
+                        ? Optional.of(new CapableTerminal(terminalId, "Kassa 2", legalEntityId, null))
+                        : Optional.empty();
+            }
+        };
+        TerminalFiscalizationBridge terminal =
+                new TerminalFiscalizationBridge(service, intents, world.builder(service), directory, port, CLOCK);
+        return new PartnerFiscalizationBridge(
+                service, bindings, world.builder(service), PresentedReceipts.NONE, terminal, CLOCK);
     }
 
     // ------------------------------------------------------------------- helpers

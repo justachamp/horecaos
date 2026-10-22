@@ -268,12 +268,13 @@ public class FiscalDocumentService {
 
         String blockReason = blockReasonOf(outcome);
         if (blockReason != null) {
-            // ADR 0166, Decision 6. The receipt could not be built, so nothing was sent and the document
-            // says why in the one reason that names the obstacle. A document still waiting is blocked; one
-            // that was already blocked for another reason (including the historical LINES_NOT_BUILT) is
-            // restated, so the worklist shows what is true now and not what was true when it was claimed.
+            // ADR 0166, Decision 6. The receipt could not be built (or, for a terminal receipt, issued), so
+            // nothing was sent and the document says why in the one reason that names the obstacle. A document
+            // still waiting is blocked; one that was already blocked for another reason (including the
+            // historical LINES_NOT_BUILT) is restated, so the worklist shows what is true now and not what was
+            // true when it was claimed.
             Instant now = clock.instant();
-            String note = "the receipt could not be built on retry; nothing was sent";
+            String note = noteOf(outcome);
             if (!documents.blockUnsent(tenantId, documentId, blockReason, note, now)) {
                 documents.restateBlock(tenantId, documentId, blockReason, note, now);
             }
@@ -309,7 +310,18 @@ public class FiscalDocumentService {
             case BLOCKED_CLASSIFICATION -> FiscalReasonCode.CLASSIFICATION_MISSING;
             case BLOCKED_TAX -> FiscalReasonCode.VAT_NOT_EXPRESSIBLE;
             case BLOCKED_RECONCILIATION -> FiscalReasonCode.RECEIPT_DOES_NOT_RECONCILE;
+            case NO_TERMINAL -> FiscalReasonCode.NO_FISCAL_PATH;
+            case TERMINAL_UNREACHABLE -> FiscalReasonCode.TERMINAL_OFFLINE;
             default -> null;
+        };
+    }
+
+    /** The sentence the block carries: nothing was sent, and what stopped it. */
+    private static String noteOf(PartnerFiscalizationPort.Outcome outcome) {
+        return switch (outcome) {
+            case NO_TERMINAL -> "no active fiscal terminal of the selling legal entity is bound to this location";
+            case TERMINAL_UNREACHABLE -> "the tenant's fiscal terminal could not be reached; nothing was issued";
+            default -> "the receipt could not be built on retry; nothing was sent";
         };
     }
 

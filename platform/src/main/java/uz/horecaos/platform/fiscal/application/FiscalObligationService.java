@@ -14,9 +14,11 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.horecaos.platform.fiscal.api.FiscalTerminalDirectory;
 import uz.horecaos.platform.fiscal.api.PartnerFiscalizationPort;
 import uz.horecaos.platform.fiscal.domain.BusinessZone;
 import uz.horecaos.platform.fiscal.domain.FiscalDocumentState;
@@ -78,23 +80,38 @@ public class FiscalObligationService {
     private final JdbcFiscalLifecycleStore documents;
     private final LegalEntityDirectory sellers;
     private final FiscalReportingPolicyService policies;
+    private final FiscalTerminalDirectory terminals;
     private final Clock clock;
     private final ZoneId fallbackZone;
     private final Duration lookback;
 
+    @Autowired
     public FiscalObligationService(
             JdbcFiscalLifecycleStore documents,
             LegalEntityDirectory sellers,
             FiscalReportingPolicyService policies,
+            FiscalTerminalDirectory terminals,
             Clock clock,
             @Value("${horecaos.fiscal.business-timezone:Asia/Tashkent}") String fallbackZone,
             @Value("${horecaos.fiscal.obligation-opener.lookback:P7D}") Duration lookback) {
         this.documents = documents;
         this.sellers = sellers;
         this.policies = policies;
+        this.terminals = terminals;
         this.clock = clock;
         this.fallbackZone = ZoneId.of(fallbackZone);
         this.lookback = lookback;
+    }
+
+    /** With no terminals anywhere: every cash sale is the tenant's unevidenced obligation, as before ADR 0166. */
+    public FiscalObligationService(
+            JdbcFiscalLifecycleStore documents,
+            LegalEntityDirectory sellers,
+            FiscalReportingPolicyService policies,
+            Clock clock,
+            String fallbackZone,
+            Duration lookback) {
+        this(documents, sellers, policies, (tenantId, locationId) -> false, clock, fallbackZone, lookback);
     }
 
     // ------------------------------------------------- opening the obligation
@@ -164,7 +181,8 @@ public class FiscalObligationService {
                             + "terminal can be identified");
         }
 
-        if (order.cash()) {
+        boolean terminalReceipt = order.cash() && terminals.hasCapableTerminal(order.tenantId(), order.locationId());
+        if (order.cash() && !terminalReceipt) {
             // The cash NOT_APPLICABLE row is written by the payments seam in the
             // same transaction as the intent, so reaching here means that row is
             // missing rather than that this is an ordinary cash order. ADR 0038 is
@@ -173,6 +191,10 @@ public class FiscalObligationService {
             // decision record here instead would be this module inventing the
             // 2026-08-22 decision on payments' behalf for a row whose absence is
             // itself the anomaly worth seeing.
+            //
+            // A cash sale at a location with a capable terminal (ADR 0166 «Providers») is the other
+            // reason that row is absent: payments wrote none, because the receipt is owed by the
+            // tenant's own equipment and this module opens it, below, for the sweeper to send to it.
             return blocked(
                     id,
                     order,
@@ -219,10 +241,12 @@ public class FiscalObligationService {
                 order.paymentIntentId(),
                 order.providerType(),
                 FiscalDocumentState.PENDING,
-                FiscalReasonCode.AWAITING_CAPTURE,
-                order.captured()
-                        ? "captured; awaiting submission to " + order.providerType()
-                        : "awaiting capture before " + order.providerType() + " can be asked",
+                terminalReceipt ? FiscalReasonCode.AWAITING_TERMINAL : FiscalReasonCode.AWAITING_CAPTURE,
+                terminalReceipt
+                        ? "cash collected; awaiting the tenant's fiscal terminal"
+                        : order.captured()
+                                ? "captured; awaiting submission to " + order.providerType()
+                                : "awaiting capture before " + order.providerType() + " can be asked",
                 now,
                 order.tenderId(),
                 businessDate);
@@ -378,6 +402,35 @@ public class FiscalObligationService {
                         claim.orderId(),
                         claim.legalEntityId(),
                         claim.providerType());
+            }
+            case NO_TERMINAL -> {
+                documents.blockUnsent(
+                        claim.tenantId(),
+                        claim.documentId(),
+                        FiscalReasonCode.NO_FISCAL_PATH,
+                        "no active fiscal terminal of the selling legal entity is bound to this location",
+                        now);
+                log.warn(
+                        "Fiscal document {} for order {} is BLOCKED: no capable terminal of legal entity {} at the location.",
+                        claim.documentId(),
+                        claim.orderId(),
+                        claim.legalEntityId());
+            }
+            case TERMINAL_UNREACHABLE -> {
+                // Nothing left the building, so the claim describes a request that does not exist; the
+                // document is blocked for the one reason that names a device, and an operator (or the
+                // retry button once the terminal is back) sends it. Releasing it to be tried again every
+                // minute would hide a terminal that has been down since morning.
+                documents.blockUnsent(
+                        claim.tenantId(),
+                        claim.documentId(),
+                        FiscalReasonCode.TERMINAL_OFFLINE,
+                        "the tenant's fiscal terminal could not be reached; nothing was issued",
+                        now);
+                log.warn(
+                        "Fiscal document {} for order {} is BLOCKED: the fiscal terminal could not be reached.",
+                        claim.documentId(),
+                        claim.orderId());
             }
             case BLOCKED_CLASSIFICATION ->
                 blockForLines(

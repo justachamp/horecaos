@@ -3,7 +3,9 @@ package uz.horecaos.platform.fiscal;
 import java.time.Clock;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import uz.horecaos.platform.fiscal.api.FiscalTerminalPort;
 import uz.horecaos.platform.fiscal.infrastructure.FakeFiscalTerminalAdapter;
@@ -26,6 +28,7 @@ public final class ControlledFiscalTerminal implements FiscalTerminalPort {
     private final Deque<FiscalTerminalPortContract.Scenario> scripted = new ArrayDeque<>();
     private final AtomicInteger asked = new AtomicInteger();
     private final AtomicInteger lookups = new AtomicInteger();
+    private final List<IssueRequest> requests = new CopyOnWriteArrayList<>();
     private volatile boolean lookupsFail;
 
     public ControlledFiscalTerminal(Clock clock) {
@@ -51,9 +54,15 @@ public final class ControlledFiscalTerminal implements FiscalTerminalPort {
         return lookups.get();
     }
 
+    /** Every request issuing was asked, in order: what the caller put on the wire. */
+    public List<IssueRequest> requests() {
+        return List.copyOf(requests);
+    }
+
     @Override
     public IssueOutcome issue(IssueRequest request) {
         asked.incrementAndGet();
+        requests.add(request);
         FiscalTerminalPortContract.Scenario scenario = scripted.pollFirst();
         if (scenario == null) {
             return terminal.issue(request);

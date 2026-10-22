@@ -40,6 +40,12 @@ public final class FiscalReasonCode {
     /** Nothing can be sent yet, because Click cannot fiscalize before a capture. */
     public static final String AWAITING_CAPTURE = "AWAITING_CAPTURE";
 
+    /**
+     * A cash sale at a location whose own terminal is to issue its receipt, and nothing has been asked of the
+     * terminal yet (ADR 0166 «Providers», ADR 0038 stage 5). Not a block: the sweeper sends it.
+     */
+    public static final String AWAITING_TERMINAL = "AWAITING_TERMINAL";
+
     /** Sent, and the provider has not reported an outcome. */
     public static final String AWAITING_PROVIDER = "AWAITING_PROVIDER";
 

@@ -266,7 +266,7 @@ public class JdbcFiscalDocumentStore {
     public boolean recordSentEvidence(
             UUID tenantId,
             UUID documentId,
-            UUID merchantBindingId,
+            @Nullable UUID merchantBindingId,
             String protectedRequestReference,
             String sentTenderSplitReference,
             Instant sentAt) {
@@ -275,7 +275,7 @@ public class JdbcFiscalDocumentStore {
                 SET protected_request_reference = :request,
                     sent_tender_split_reference = :split,
                     lines_synthetic = false,
-                    merchant_binding_id = :binding
+                    merchant_binding_id = CAST(:binding AS uuid)
                 WHERE tenant_id = :tenantId AND id = :id
                   AND status NOT IN ('ISSUED', 'CORRECTION_REQUESTED', 'VOID_REQUESTED',
                                      'CORRECTED', 'VOIDED')
@@ -296,7 +296,7 @@ public class JdbcFiscalDocumentStore {
                         id, tenant_id, document_id, attempt, sent_at, protected_request_reference,
                         sent_tender_split_reference, lines_synthetic, merchant_binding_id)
                     SELECT :newId, :tenantId, :id, COALESCE(MAX(attempt), 0) + 1, :sentAt, :request, :split,
-                           false, :binding
+                           false, CAST(:binding AS uuid)
                       FROM payments.fiscal_sent_requests
                      WHERE tenant_id = :tenantId AND document_id = :id
                     ON CONFLICT DO NOTHING
@@ -311,6 +311,29 @@ public class JdbcFiscalDocumentStore {
                     .update();
         }
         return recorded;
+    }
+
+    /**
+     * Names the registered terminal the document was asked of (V0688), so a TERMINAL receipt is issued by
+     * something: the checks that an issued document carries a provider now accept a terminal instead. Written
+     * before the status moves, because the check is evaluated on that move. Refused once the document holds a
+     * receipt, like the evidence is.
+     *
+     * @return true when this call wrote it
+     */
+    public boolean recordTerminal(UUID tenantId, UUID documentId, UUID terminalId) {
+        return jdbc.sql("""
+                        UPDATE payments.fiscal_documents
+                           SET fiscal_terminal_id = :terminal
+                         WHERE tenant_id = :tenantId AND id = :id
+                           AND status NOT IN ('ISSUED', 'CORRECTION_REQUESTED', 'VOID_REQUESTED',
+                                              'CORRECTED', 'VOIDED')
+                        """)
+                        .param("tenantId", tenantId)
+                        .param("id", documentId)
+                        .param("terminal", terminalId)
+                        .update()
+                == 1;
     }
 
     /**

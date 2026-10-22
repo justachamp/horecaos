@@ -93,6 +93,21 @@ public interface PartnerFiscalizationPort {
         BLOCKED_RECONCILIATION,
 
         /**
+         * The document is a {@code TERMINAL} receipt (a cash sale) and no active, capable terminal belongs to the
+         * legal entity that sold, at the location it was sold in (ADR 0166 Decision 1, ADR 0038 stage 5). Nothing
+         * was sent. Blocked with {@code NO_FISCAL_PATH}: the receipt is the tenant's to issue on equipment that is
+         * not bound, and the document says so instead of being given one nobody issued.
+         */
+        NO_TERMINAL,
+
+        /**
+         * The tenant's terminal could not be reached, so nothing was asked of it and nothing was issued. Safe to
+         * ask again once it is back. Blocked with {@code TERMINAL_OFFLINE} so the worklist shows which sales are
+         * waiting on a device.
+         */
+        TERMINAL_UNREACHABLE,
+
+        /**
          * The order holds a marked line with fewer scanned units than it has (ADR 0161). Nothing was built
          * and nothing was sent: a marked order never takes the synthetic aggregate line, because a receipt
          * for a marked good without its codes is the breach this exists to prevent.

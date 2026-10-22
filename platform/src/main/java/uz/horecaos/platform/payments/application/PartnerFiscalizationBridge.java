@@ -58,6 +58,7 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
     private final PaymentBindingResolver bindings;
     private final ReceiptLineBuilder lines;
     private final PresentedReceipts presented;
+    private final TerminalReceiptIssuer terminal;
     private final Clock clock;
 
     @Autowired
@@ -66,12 +67,24 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
             PaymentBindingResolver bindings,
             ReceiptLineBuilder lines,
             PresentedReceipts presented,
+            TerminalReceiptIssuer terminal,
             Clock clock) {
         this.fiscalDocuments = fiscalDocuments;
         this.bindings = bindings;
         this.lines = lines;
         this.presented = presented;
+        this.terminal = terminal;
         this.clock = clock;
+    }
+
+    /** With no terminal behind it: a document with no provider has no path, as before a terminal could be asked. */
+    public PartnerFiscalizationBridge(
+            PaymentFiscalService fiscalDocuments,
+            PaymentBindingResolver bindings,
+            ReceiptLineBuilder lines,
+            PresentedReceipts presented,
+            Clock clock) {
+        this(fiscalDocuments, bindings, lines, presented, TerminalReceiptIssuer.NONE, clock);
     }
 
     /** For callers whose providers never carry the lines on the checkout (Click only). */
@@ -80,7 +93,7 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
             PaymentBindingResolver bindings,
             ReceiptLineBuilder lines,
             Clock clock) {
-        this(fiscalDocuments, bindings, lines, PresentedReceipts.NONE, clock);
+        this(fiscalDocuments, bindings, lines, PresentedReceipts.NONE, TerminalReceiptIssuer.NONE, clock);
     }
 
     @Override
@@ -108,6 +121,11 @@ public class PartnerFiscalizationBridge implements PartnerFiscalizationPort {
         }
         UUID legalEntityId = document.legalEntityId();
         PaymentProviderType providerType = document.providerType();
+        if (legalEntityId != null && providerType == null) {
+            // No provider: the receipt is owed by the tenant's own fiscal equipment (ADR 0166 «Providers»).
+            // The terminal path asks it, reading before writing, and records what it returns.
+            return terminal.issue(document);
+        }
         if (legalEntityId == null || providerType == null) {
             return Outcome.NO_PROVIDER_PATH;
         }

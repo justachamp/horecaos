@@ -659,6 +659,109 @@ class FiscalObligationTests {
         }
     }
 
+    // ------------------------------------------------ the TERMINAL path (ADR 0166 «Providers», ADR 0038 stage 5)
+
+    /** The service as production wires it for a branch that has fiscal equipment of its own. */
+    private FiscalObligationService withATerminal() {
+        return new FiscalObligationService(
+                store,
+                entities,
+                new FiscalReportingPolicyService(
+                        new JdbcPolicyResolver(jdbc, JsonMapper.builder().build())),
+                (tenantId, locationId) -> LOCATION.equals(locationId),
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                "Asia/Tashkent",
+                Duration.ofDays(365));
+    }
+
+    /** Cash is collected at handover and the intent of a cash sale is not captured by anyone. */
+    private UUID cashSaleAwaitingNothing(String seed) {
+        UUID order = completedOrder(seed, null, null, NOW.minusSeconds(3600));
+        insertIntent("cash-" + order, order, "CASH", "CASH", null, "PENDING", NOW);
+        return order;
+    }
+
+    @Test
+    @DisplayName(
+            "a completed cash sale at a branch with a capable terminal opens a receipt for the terminal, not a block")
+    void aCashSaleAtATerminalBranchOpensAReceiptForTheTerminal() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        UUID order = cashSaleAwaitingNothing("T-1");
+
+        assertThat(withATerminal().openObligations(50)).isEqualTo(1);
+
+        FiscalDocumentRow document = onlyDocument(order);
+        assertThat(document.state()).isEqualTo(FiscalDocumentState.PENDING);
+        assertThat(document.reasonCode()).isEqualTo(FiscalReasonCode.AWAITING_TERMINAL);
+        assertThat(document.responsibility())
+                .as("no provider: the tenant's own equipment issues")
+                .isEqualTo("TERMINAL");
+        assertThat(document.legalEntityId())
+                .as("under the company that sold, resolved the same way a provider receipt resolves it")
+                .isEqualTo(firstCompany);
+    }
+
+    @Test
+    @DisplayName("a cash sale with no capable terminal and no recorded decision is still blocked NO_FISCAL_PATH")
+    void aCashSaleWithNoTerminalStaysBlocked() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        UUID order = cashSaleAwaitingNothing("T-2");
+
+        assertThat(obligations.openObligations(50)).isEqualTo(1);
+
+        FiscalDocumentRow document = onlyDocument(order);
+        assertThat(document.state()).isEqualTo(FiscalDocumentState.BLOCKED);
+        assertThat(document.reasonCode()).isEqualTo(FiscalReasonCode.NO_FISCAL_PATH);
+    }
+
+    @Test
+    @DisplayName("a terminal receipt is sent without waiting for a capture, which a cash sale never has")
+    void aTerminalReceiptIsSentWithoutACapture() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        UUID order = cashSaleAwaitingNothing("T-3");
+        FiscalObligationService service = withATerminal();
+        service.openObligations(50);
+
+        FiscalObligationSweeper terminalSweeper = new FiscalObligationSweeper(service, partner, 50);
+        terminalSweeper.submitCapturedObligations();
+        terminalSweeper.submitCapturedObligations();
+
+        assertThat(partner.asks)
+                .as("claimed first, so the terminal is asked once however often the sweep runs")
+                .containsExactly(onlyDocument(order).id());
+        assertThat(onlyDocument(order).state()).isEqualTo(FiscalDocumentState.SUBMITTED);
+    }
+
+    @Test
+    @DisplayName(
+            "no terminal bound to the seller blocks the claim NO_FISCAL_PATH, and an unreachable one TERMINAL_OFFLINE")
+    void theTerminalOutcomesBlockWithTheirOwnReasons() {
+        assign(firstCompany, LocalDate.of(2026, 1, 1));
+        FiscalObligationService service = withATerminal();
+
+        UUID none = cashSaleAwaitingNothing("T-4");
+        UUID offline = cashSaleAwaitingNothing("T-5");
+        service.openObligations(50);
+        for (ClaimedSubmission claim : service.claimSubmissions(50)) {
+            service.settle(
+                    claim,
+                    claim.orderId().equals(none)
+                            ? PartnerFiscalizationPort.Outcome.NO_TERMINAL
+                            : PartnerFiscalizationPort.Outcome.TERMINAL_UNREACHABLE);
+        }
+
+        FiscalDocumentRow noTerminal = onlyDocument(none);
+        assertThat(noTerminal.state()).isEqualTo(FiscalDocumentState.BLOCKED);
+        assertThat(noTerminal.reasonCode()).isEqualTo(FiscalReasonCode.NO_FISCAL_PATH);
+        assertThat(noTerminal.reasonNote()).contains("terminal");
+
+        FiscalDocumentRow unreachable = onlyDocument(offline);
+        assertThat(unreachable.state()).isEqualTo(FiscalDocumentState.BLOCKED);
+        assertThat(unreachable.reasonCode())
+                .as("nothing left the building; the reason names a device, not a provider that never answered")
+                .isEqualTo(FiscalReasonCode.TERMINAL_OFFLINE);
+    }
+
     // -------------------------------------------------------------- fixtures
 
     private FiscalDocumentRow onlyDocument(UUID orderId) {

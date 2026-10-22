@@ -382,8 +382,12 @@ public class JdbcFiscalLifecycleStore {
                        ON l.tenant_id = d.tenant_id AND l.id = i.location_id
                 WHERE d.status = 'PENDING'
                   AND d.document_type = 'SALE'
-                  AND d.provider_type IS NOT NULL
-                  AND i.status = 'PAID'
+                  AND (
+                       -- A provider receipt waits for the capture it fiscalizes after.
+                       (d.provider_type IS NOT NULL AND i.status = 'PAID')
+                       -- A terminal receipt (a cash sale; ADR 0166 "Providers") has no capture to wait for:
+                       -- the opener wrote it when the order completed, which is when the cash was handed over.
+                       OR d.provider_type IS NULL)
                 ORDER BY d.created_at
                 LIMIT :limit
                 FOR UPDATE OF d SKIP LOCKED
