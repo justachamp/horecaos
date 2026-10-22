@@ -463,6 +463,53 @@ class PartnerFiscalizationBridgeTests {
 
     @Test
     @DisplayName(
+            "the paper receipt prints the lines as filed, with their VAT, and the one aggregate line only when nothing was kept")
+    void thePaperReceiptPrintsTheLinesAsFiled() {
+        seedClickBinding();
+        UUID documentId = seedPendingDocument(seedIntent(PaymentProviderType.CLICK, CLICK_ENTITY));
+        world.dishWithCheeseAndDeliveryFee();
+        ScriptedClick click = new ScriptedClick();
+        realBridge(click).retry(TENANT, documentId, "idem-paper");
+        fiscalService.attachEvidence(
+                TENANT,
+                documentId,
+                new FiscalDocument.FiscalEvidence(
+                        "R-P", "SIGN-P", "TERM-P", "R-P", CLOCK.instant(), "https://ofd.soliq.uz/epi?r=p", null, null),
+                "protected-response-p",
+                CLOCK.instant());
+        uz.horecaos.platform.payments.api.FiscalReceiptSource paper =
+                uz.horecaos.platform.payments.application.FiscalReceiptReaderFactory.create(
+                        fiscalService,
+                        documents,
+                        intents,
+                        orders,
+                        TestProtection.envelope(),
+                        tools.jackson.databind.json.JsonMapper.builder().build());
+
+        var printed = paper.find(TENANT, documentId).orElseThrow();
+
+        assertThat(printed.lines())
+                .extracting(uz.horecaos.platform.payments.api.FiscalReceiptSource.Line::name)
+                .containsExactly("Plov", "Extra cheese", "Delivery");
+        assertThat(printed.totalMinor()).as("the paper equals the payment").isEqualTo(15_000);
+        assertThat(printed.vatMinor())
+                .as("and states the VAT the receipt was filed with, which the stand-in line never did")
+                .isEqualTo(1_393);
+
+        // Nothing kept of what was sent (a request that left and could not be recorded): the paper says less,
+        // one line for the payment, and states no tax because none was kept to state.
+        jdbc.sql("UPDATE fiscal.fiscal_documents SET protected_request_reference = NULL WHERE id = :id")
+                .param("id", documentId)
+                .update();
+        var fallback = paper.find(TENANT, documentId).orElseThrow();
+        assertThat(fallback.lines())
+                .singleElement()
+                .satisfies(line -> assertThat(line.name()).isEqualTo("Order BR-1"));
+        assertThat(fallback.vatMinor()).isZero();
+    }
+
+    @Test
+    @DisplayName(
             "a node with no complete classification files nothing: BLOCKED_CLASSIFICATION, never a placeholder code")
     void anUnclassifiedNodeBlocksTheDocumentAndSendsNothing() {
         seedClickBinding();

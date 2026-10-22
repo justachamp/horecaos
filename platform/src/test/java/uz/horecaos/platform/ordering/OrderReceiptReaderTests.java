@@ -145,9 +145,11 @@ class OrderReceiptReaderTests {
                     channel_id, channel_code_snapshot, guest_reference_hash, fulfillment_mode,
                     acceptance_mode_snapshot, approval_channel_snapshot, status, currency, subtotal_minor,
                     tax_minor, discount_minor, fee_minor, total_minor, pricing_quote_id,
-                    pricing_context_hash, catalog_publication_id, cart_id, idempotency_key)
+                    pricing_context_hash, catalog_publication_id, cart_id, idempotency_key, confirmed_at,
+                    closed_at)
                 VALUES (:id, 'R-1', :t, :b, :l, :ch, 'WEB', 'guest', 'DELIVERY', 'AUTO_CONFIRM', 'NONE',
-                    'COMPLETED', 'UZS', 44643, 5357, 3000, 8000, 55000, :q, 'hash', :p, :cart, :key)
+                    'COMPLETED', 'UZS', 44643, 5357, 3000, 8000, 55000, :q, 'hash', :p, :cart, :key, now(),
+                    now())
                 """)
                 .param("id", orderId)
                 .param("t", TENANT)
