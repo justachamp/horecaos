@@ -9,7 +9,7 @@ import { settingsPaths } from '../../../core/api/settings-paths';
 export type MiniAppUnavailable =
   'BRAND_NOT_CHOSEN' | 'HOSTNAME_NOT_CLAIMED' | 'HOSTNAME_NOT_VERIFIED' | 'HOSTNAME_AMBIGUOUS';
 
-/** Mirrors `TelegramChannelSetupController.SettingsView` (ADR 0183 D27). */
+/** Mirrors `TelegramChannelSetupController.TelegramSettingsView` (ADR 0183 D27). */
 export interface TelegramSettingsView {
   readonly brandId: string | null;
   readonly miniAppEnabled: boolean;
@@ -27,7 +27,7 @@ export interface TelegramSettingsView {
   readonly channelVersion: number;
 }
 
-/** Mirrors `TelegramChannelSetupController.SettingsRequest`. A full replace. */
+/** Mirrors `TelegramChannelSetupController.TelegramSettingsRequest`. A full replace. */
 export interface TelegramSettingsRequest {
   readonly brandId: string | null;
   readonly miniAppEnabled: boolean;

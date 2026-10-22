@@ -31,7 +31,7 @@ export interface SwitcherCandidate {
   readonly hostname: string | null;
 }
 
-/** Mirrors `StorefrontBranchOrderController.BranchView`. */
+/** Mirrors `StorefrontBranchOrderController.StorefrontBranchView`. */
 export interface OrderedBranch {
   readonly locationId: string;
   readonly displayName: string;

@@ -50,8 +50,8 @@ public class TelegramChannelSetupController {
                     + "miniAppUnavailable names why there is none (BRAND_NOT_CHOSEN, HOSTNAME_NOT_CLAIMED, "
                     + "HOSTNAME_NOT_VERIFIED, HOSTNAME_AMBIGUOUS). A channel nobody has configured reads as "
                     + "everything off. 400 for a channel that is not a TELEGRAM channel.")
-    public SettingsView read(@PathVariable UUID tenantId, @PathVariable UUID channelId) {
-        return SettingsView.of(settings.view(tenantId, channelId));
+    public TelegramSettingsView read(@PathVariable UUID tenantId, @PathVariable UUID channelId) {
+        return TelegramSettingsView.of(settings.view(tenantId, channelId));
     }
 
     @PutMapping
@@ -60,12 +60,12 @@ public class TelegramChannelSetupController {
             summary = "Replace this Telegram channel's settings",
             description = "A full replace: an omitted language drops its text and an omitted flag is false. "
                     + "Gated on the channel's version, like every facet of Channel setup. Never calls Telegram.")
-    public SettingsView replace(
+    public TelegramSettingsView replace(
             @PathVariable UUID tenantId,
             @PathVariable UUID channelId,
-            @Valid @RequestBody SettingsRequest body,
+            @Valid @RequestBody TelegramSettingsRequest body,
             @RequestParam int expectedVersion) {
-        return SettingsView.of(settings.update(
+        return TelegramSettingsView.of(settings.update(
                 tenantId,
                 channelId,
                 new TelegramChannelSettingsService.Command(
@@ -82,7 +82,7 @@ public class TelegramChannelSetupController {
      * @param miniAppEnabled boxed, with a stated default of false, because a missing primitive in a request body is a
      *                       400 under Jackson 3
      */
-    record SettingsRequest(
+    record TelegramSettingsRequest(
             @Nullable UUID brandId,
             @Nullable Boolean miniAppEnabled,
             @Nullable @Size(max = 64) String miniAppShortName,
@@ -95,7 +95,7 @@ public class TelegramChannelSetupController {
      * @param miniAppUrl derived from the brand's verified storefront hostname; null with {@code miniAppUnavailable} set
      * @param publicOfferUrl the tenant's terms page on the same hostname, when the offer link is on and the hostname resolves
      */
-    record SettingsView(
+    record TelegramSettingsView(
             @Nullable UUID brandId,
             boolean miniAppEnabled,
             @Nullable String miniAppShortName,
@@ -107,9 +107,9 @@ public class TelegramChannelSetupController {
             @Nullable String publicOfferUrl,
             int channelVersion) {
 
-        static SettingsView of(TelegramChannelSettingsService.View view) {
+        static TelegramSettingsView of(TelegramChannelSettingsService.View view) {
             TelegramChannelSettings s = view.settings();
-            return new SettingsView(
+            return new TelegramSettingsView(
                     s.brandId(),
                     s.miniAppEnabled(),
                     s.miniAppShortName(),

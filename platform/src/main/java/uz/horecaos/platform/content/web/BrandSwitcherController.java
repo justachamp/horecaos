@@ -78,7 +78,7 @@ public class BrandSwitcherController {
                     + "channel's verified hostname, checked on every read. A brand cannot offer itself, and the same brand "
                     + "and channel twice is a conflict.")
     public ResponseEntity<SwitcherEntryView> add(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody AddRequest body) {
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody SwitcherAddRequest body) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(switcher.add(
                         tenantId,
@@ -97,7 +97,7 @@ public class BrandSwitcherController {
             @PathVariable UUID tenantId,
             @PathVariable UUID brandId,
             @PathVariable UUID entryId,
-            @Valid @RequestBody StateRequest body,
+            @Valid @RequestBody SwitcherStateRequest body,
             HttpServletRequest request) {
         return switcher.setState(
                 tenantId,
@@ -123,16 +123,16 @@ public class BrandSwitcherController {
             summary = "Set the order of the entries",
             description = "Names every entry of the brand's switcher exactly once, first to last.")
     public List<SwitcherEntryView> reorder(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody OrderRequest body) {
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody SwitcherOrderRequest body) {
         return switcher.reorder(
                 tenantId, brandId, body.ids(), currentActor.get().subject());
     }
 
-    public record AddRequest(
+    public record SwitcherAddRequest(
             @NotNull UUID targetBrandId, @NotNull UUID channelId) {}
 
     /** @param state {@code ACTIVE} or {@code HIDDEN} */
-    public record StateRequest(@NotNull String state) {}
+    public record SwitcherStateRequest(@NotNull String state) {}
 
-    public record OrderRequest(@NotEmpty List<@NotNull UUID> ids) {}
+    public record SwitcherOrderRequest(@NotEmpty List<@NotNull UUID> ids) {}
 }

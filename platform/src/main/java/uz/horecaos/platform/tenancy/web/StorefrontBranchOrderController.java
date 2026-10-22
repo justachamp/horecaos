@@ -41,8 +41,8 @@ public class StorefrontBranchOrderController {
     @Operation(
             summary = "The brand's branches in the order the storefront lists them with no customer point",
             description = "storefrontSortOrder is null for a branch nobody has placed; those sort last, by name.")
-    public List<BranchView> read(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
-        return order.list(tenantId, brandId).stream().map(BranchView::of).toList();
+    public List<StorefrontBranchView> read(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        return order.list(tenantId, brandId).stream().map(StorefrontBranchView::of).toList();
     }
 
     @PutMapping
@@ -52,22 +52,22 @@ public class StorefrontBranchOrderController {
             description =
                     "Names the branches first to last. A branch of the brand that is left out goes back to unset and "
                             + "sorts last. 400 for a branch that is not this brand's or is named twice.")
-    public List<BranchView> replace(
-            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody OrderRequest body) {
+    public List<StorefrontBranchView> replace(
+            @PathVariable UUID tenantId, @PathVariable UUID brandId, @Valid @RequestBody BranchOrderRequest body) {
         return order.replace(tenantId, brandId, body.locationIds()).stream()
-                .map(BranchView::of)
+                .map(StorefrontBranchView::of)
                 .toList();
     }
 
-    public record OrderRequest(@NotNull List<@NotNull UUID> locationIds) {}
+    public record BranchOrderRequest(@NotNull List<@NotNull UUID> locationIds) {}
 
-    public record BranchView(
+    public record StorefrontBranchView(
             UUID locationId,
             String displayName,
             String status,
             @Nullable Integer storefrontSortOrder) {
-        static BranchView of(Branch branch) {
-            return new BranchView(
+        static StorefrontBranchView of(Branch branch) {
+            return new StorefrontBranchView(
                     branch.locationId(), branch.displayName(), branch.status(), branch.storefrontSortOrder());
         }
     }

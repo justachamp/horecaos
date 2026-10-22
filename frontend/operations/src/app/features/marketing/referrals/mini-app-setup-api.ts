@@ -19,7 +19,7 @@ export type MiniAppSetupStepCode =
 /** `UNKNOWN`: a fact that lives at Telegram could not be read just now -- neither done nor known to be undone. */
 export type MiniAppSetupState = 'DONE' | 'TODO' | 'UNKNOWN';
 
-/** Mirrors `TelegramMiniAppSetupController.StepView`. */
+/** Mirrors `TelegramMiniAppSetupController.MiniAppStepView`. */
 export interface MiniAppSetupStep {
   readonly code: MiniAppSetupStepCode;
   readonly state: MiniAppSetupState;
@@ -27,7 +27,7 @@ export interface MiniAppSetupStep {
   readonly detail: string | null;
 }
 
-/** Mirrors `TelegramMiniAppSetupController.StatusView`. Derived from facts on every read; nothing is stored. */
+/** Mirrors `TelegramMiniAppSetupController.MiniAppStatusView`. Derived from facts on every read; nothing is stored. */
 export interface MiniAppSetupView {
   readonly steps: readonly MiniAppSetupStep[];
   readonly botUsername: string | null;

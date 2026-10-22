@@ -48,8 +48,8 @@ public class TelegramMiniAppSetupController {
             description = "Steps: CONNECT_BOT, REGISTER_WEBHOOK, TELEGRAM_CHANNEL, STOREFRONT_ADDRESS, BOTFATHER_APP, "
                     + "MENU_BUTTON, TEST_LINK; each DONE, TODO or UNKNOWN. BOTFATHER_APP is «recorded», never "
                     + "verified: Telegram has no API for /newapp. MENU_BUTTON is read back from Telegram.")
-    public StatusView status(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
-        return StatusView.of(setup.status(tenantId, brandId));
+    public MiniAppStatusView status(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        return MiniAppStatusView.of(setup.status(tenantId, brandId));
     }
 
     @PostMapping("/menu-button")
@@ -61,15 +61,15 @@ public class TelegramMiniAppSetupController {
                             + "the brand's verified storefront address, then getChatMenuButton. 422 naming what is missing "
                             + "when the bot, the Telegram channel, the Mini App switch or the address is not there, or when "
                             + "Telegram refuses. A Telegram that accepts and then shows something else leaves MENU_BUTTON TODO.")
-    public StatusView applyMenuButton(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
-        return StatusView.of(setup.applyMenuButton(
+    public MiniAppStatusView applyMenuButton(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+        return MiniAppStatusView.of(setup.applyMenuButton(
                 tenantId, brandId, ActorRef.user(currentActor.get().subject(), null)));
     }
 
-    record StepView(String code, String state, @Nullable String detail) {}
+    record MiniAppStepView(String code, String state, @Nullable String detail) {}
 
-    record StatusView(
-            List<StepView> steps,
+    record MiniAppStatusView(
+            List<MiniAppStepView> steps,
             @Nullable String botUsername,
             @Nullable String miniAppUrl,
             @Nullable String miniAppShortName,
@@ -79,10 +79,10 @@ public class TelegramMiniAppSetupController {
             @Nullable String menuButtonUrl,
             @Nullable String testLink) {
 
-        static StatusView of(TelegramMiniAppSetupService.Status status) {
-            return new StatusView(
+        static MiniAppStatusView of(TelegramMiniAppSetupService.Status status) {
+            return new MiniAppStatusView(
                     status.steps().stream()
-                            .map(step -> new StepView(step.code(), step.state().name(), step.detail()))
+                            .map(step -> new MiniAppStepView(step.code(), step.state().name(), step.detail()))
                             .toList(),
                     status.botUsername(),
                     status.miniAppUrl(),
