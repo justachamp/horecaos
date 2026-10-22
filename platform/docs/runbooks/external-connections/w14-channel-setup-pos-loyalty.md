@@ -2,7 +2,7 @@
 
 - Last executed: never (every section below is a draft until the person it names has done it once; ADR 0023)
 - Reader: the platform owner, who holds the vendor contacts, the pilot branch and the BotFather identity
-- Records: [ADR 0187](../../adr/not-started/0187-kiosk-idle-media-and-the-channel-forms-the-console-does-not-owe.md) (kiosk idle media, the channel forms the console does not owe),
+- Records: [ADR 0187](../../adr/built/0187-kiosk-idle-media-and-the-channel-forms-the-console-does-not-owe.md) (kiosk idle media, the channel forms the console does not owe),
   [ADR 0162](../../adr/partial/0162-kiosk-device-pairing.md) (kiosk pairing), [ADR 0171](../../adr/partial/0171-who-owns-a-loyalty-balance-when-the-till-also-keeps-one.md)
   (who owns a loyalty balance), [ADR 0058](../../adr/partial/0058-telegram-notification-channels.md) (Telegram chats)
 

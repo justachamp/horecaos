@@ -67,7 +67,7 @@
   decides to warn before the sweep destroys a lot and `LoggingLoyaltyExpiryWarningPort`
   logs it, but no customer is told, because the template and channel ADR 0020 would
   send it through do not exist; and a till's own bonus balance is now handled by
-  [ADR 0171](0171-who-owns-a-loyalty-balance-when-the-till-also-keeps-one.md) (the
+  [ADR 0171](../partial/0171-who-owns-a-loyalty-balance-when-the-till-also-keeps-one.md) (the
   ledger stays the one authority, a till's number is a mirror, a movement at the till
   is an order-free `ADJUSTMENT` with reason `POS_SYNC_EARN` or `POS_SYNC_SPEND`), built
   against a fake till.

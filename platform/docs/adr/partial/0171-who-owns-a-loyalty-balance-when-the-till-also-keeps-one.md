@@ -25,7 +25,7 @@
   counted as an operator typing an unlisted code; the manual `adjust` still applies the list
   to every code, the sync's three included, so typing one there is no way round it. The
   loyalty page has a till-sync tab and the liability report shows the spend
-  the till absorbed beyond a balance; the old "not built" card is gone. Batch 21 (`w14-channel-setup-pos-loyalty`, 2026-10-14, [ADR 0187](../not-started/0187-kiosk-idle-media-and-the-channel-forms-the-console-does-not-owe.md) lists none of these as a new decision): a binding's mode is staged from the console
+  the till absorbed beyond a balance; the old "not built" card is gone. Batch 21 (`w14-channel-setup-pos-loyalty`, 2026-10-14, [ADR 0187](../built/0187-kiosk-idle-media-and-the-channel-forms-the-console-does-not-owe.md) lists none of these as a new decision): a binding's mode is staged from the console
   (`PUT .../loyalty/pos-sync/bindings/{id}/mode`: one stage up at a time, any stage down at once, `loyalty.sync.manage`, `If-Match`, an ADR 0027 fact with the
   reason) and so is `loyalty.pos.till_keeps_balance` (`PUT .../till-keeps-balance`); the push is a sweep of its own every 30 seconds
   (`loyalty.pos_sync.push_interval_seconds`, asked every 10), which meets the accepted 60-second window and so leaves the outbox command

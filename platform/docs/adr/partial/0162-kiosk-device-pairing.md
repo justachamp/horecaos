@@ -14,7 +14,7 @@
   `DeviceEnrolmentServiceTests` and the frontend specs. Not done, so not `Built`: no kiosk application exists beyond the
   shell's status screen (the kiosk cannot yet place an order, which this record does not claim), no unit has been paired at a
   pilot branch, and the OS lockdown the record relies on is a procedure in the runbook that has not been exercised.
-  Batch 21 (`w14-channel-setup-pos-loyalty`, [ADR 0187](../not-started/0187-kiosk-idle-media-and-the-channel-forms-the-console-does-not-owe.md)): the KIOSK form's idle media is built (V0695: `media.assets.purpose`,
+  Batch 21 (`w14-channel-setup-pos-loyalty`, [ADR 0187](../built/0187-kiosk-idle-media-and-the-channel-forms-the-console-does-not-owe.md)): the KIOSK form's idle media is built (V0695: `media.assets.purpose`,
   `tenant.kiosk_idle_media`; up to eight 9:16 pictures of at most 1 MB per KIOSK channel, managed under `kiosk.device.manage`, listed in
   the kiosk's configuration read and played by the shell on its status screen), the printer, terminal and marking block is drawn as a
   `LockedState`, and the kiosk ordering application and the booking-profile field are no longer this row's (ADR 0187 D26).
@@ -116,7 +116,7 @@ Every open input above is then closed on its proposed default.
 
 **Decision record, 2026-10-07.** Accepted by Ayubkhon Abbosov (platform owner) under the standing instruction "lets finish all" given the same day, which accepts every record proposed in batch 19 (ADRs 0154–0176) on the default each open input proposes. An input that names a person other than the owner, or an external fact (a device model, a legal wording, a provider capability, a dataset publication), stays with that owner as written and implementation proceeds without it, marking what waits. Implementation starts in operations batch 20 (2026-10-07).
 
-**Status addition, 2026-10-14 ([ADR 0187](../not-started/0187-kiosk-idle-media-and-the-channel-forms-the-console-does-not-owe.md)).** This record's argument is unchanged. The open input «Idle media, the 9:16 content type and its 1 MB
+**Status addition, 2026-10-14 ([ADR 0187](../built/0187-kiosk-idle-media-and-the-channel-forms-the-console-does-not-owe.md)).** This record's argument is unchanged. The open input «Idle media, the 9:16 content type and its 1 MB
 cap», proposed as deferred, is answered by ADR 0187 D25: images only, 9:16, at most 1 MB each, at most 8 per KIOSK channel, no video; the purpose
 column ADR 0010 lacked is added. Decision 8's two rows «Customer profile orders are booked under» («Deferred with ordering») and «Idle media, content
 type» («Deferred») are now «Struck: it belongs to the kiosk ordering application's own record» (ADR 0187 D26) and «Built» (D25). The first open
