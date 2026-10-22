@@ -244,6 +244,20 @@ of the list, move up and down, remove. The printer, terminal and marking block i
 `AGGREGATOR`, `CALL_CENTRE`, `IOS`/`ANDROID` and `POS` as above, and a FAILED-installation banner for a channel whose installation
 failed its last connection check.
 
+### The kiosk ordering application's gap-map row (D26; the text the re-audit adds, because a builder does not edit the gap map)
+
+PART A, after `10.5b`:
+
+```text
+| `10.5c` | Kiosk ordering application (a self-service kiosk places an order and takes payment) | 3 | NOT BUILT | Split out of `10.5` by ADR 0187 D26. Nothing exists beyond the device shell's status screen, which now plays the channel's idle pictures. A separate deployable, not the console: the device mints a short-lived kiosk order session on its channel (never `order.place`, ADR 0162 open input 1), carries a cart to a payment and to a fiscal receipt, and returns to the idle loop. Needs a payment path and a fiscal path no record decides, a decision on whether it needs a customer at all (the guest-cart path ADR 0019 records as supported by the schema and refused by the controller), and a pilot tenant that names physical units. The «customer profile orders are booked under» field struck from `10.5` belongs to its record. |
+```
+
+PART B:
+
+```text
+| `10.5c` | Kiosk ordering application | 3 | XL | No record decides how a kiosk orders or pays, or its fiscal path (ADR 0162 open input 1); no pilot tenant has named kiosk units. | ADR 0187 D26 gives it a row of its own; its record is the next step, with the platform owner and the pilot tenant. |
+```
+
 ### The till's loyalty balance: what this wave adds to ADR 0171 (row `6.3b`; no new decision)
 
 ADR 0171 is Accepted and none of its decisions changes. The wave builds the parts its status line listed as undone, and says where it chose
