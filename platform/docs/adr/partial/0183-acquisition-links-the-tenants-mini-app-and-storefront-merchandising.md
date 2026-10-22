@@ -226,9 +226,12 @@ tenant.telegram_channel_texts                      -- V0674
   `WEB_HOSTNAME_NOT_VERIFIED`, `WEB_HOSTNAME_AMBIGUOUS`, `TELEGRAM_BOT_NOT_CONNECTED`,
   `TELEGRAM_MINI_APP_NOT_SET_UP`, `MOBILE_APP_ON_HOLD`.
 - The setup flow, under `/api/v1/operations/tenants/{t}/brands/{b}/telegram/mini-app-setup`:
-  `GET` the derived steps; `POST …/menu-button` applies the channel's menu button through the Bot API and reads it back.
-  `integration.installation.manage`. The short name is entered in the per-channel settings above, through the same
-  endpoint Channel setup uses.
+  `GET` the derived steps (`CONNECT_BOT`, `REGISTER_WEBHOOK`, `TELEGRAM_CHANNEL`, `STOREFRONT_ADDRESS`, `BOTFATHER_APP`,
+  `MENU_BUTTON`, `TEST_LINK`); `POST …/menu-button` sets the bot's default menu button through `setChatMenuButton`, reads it
+  back with `getChatMenuButton`, and audits `integration.telegram_menu_button_applied` only when the read-back agrees.
+  `integration.installation.manage`. The short name is recorded through the per-channel settings endpoint above, which is the one
+  Channel setup uses. Telegram keeps one default button per bot, so its label is the channel's label in the brand's default
+  language; a customer who starts the bot also gets a menu button for that chat in their own language.
 
 ### Funnel (7.6c) — reporting
 
@@ -236,11 +239,15 @@ tenant.telegram_channel_texts                      -- V0674
   counts only, the structural no-subject test extended to it.
 - `POST /api/v1/storefront/tenants/{t}/brands/{b}/page-loads`: public, 202 always, rate limited per visitor-handle before
   anything else; counts only when `reporting.page_load_count_enabled` is true for the platform.
-- The funnel read returns `visits: {measured:false, reason:"NOT_COLLECTED"}` while the flag is off; with it on,
-  `visits: {measured:true, kind:"PAGE_LOADS", count}` and the console labels it «page loads, not people» and draws no ratio
-  against it.
-- Prometheus: `HorecaosFunnelDayWithoutRow` (a closed day with orders and no funnel row; morning tier, with a runbook)
-  and `HorecaosFunnelUnrecordedDays` (rows past the first week still carrying a «not recorded» count), with `promtool` tests.
+- The funnel read's `VISITS` stage stays `measured=false, reason=NOT_COLLECTED` while the flag is off. With it on the stage is
+  `measured=true` with a `count` and `basis=PAGE_LOADS`, and `unrecordedDays` counts the business dates in the range before the
+  counter wrote its first row (a range reaching back past the day it was switched on says its total is partial rather than
+  summing the gap as zero). The console draws the figure beside the funnel, labelled «page loads, not people», and not as one of
+  its bars or as a ratio against any stage. `GET` on the same storefront path says whether the counter is on, and a storefront
+  sends the ping only when it is.
+- Prometheus (`adr-0167-alerts.yml`, morning tier, with `promtool` tests and `customer-funnel-gap.md`):
+  `HorecaosFunnelDayWithoutRow` (a closed day with orders and no funnel row) and `HorecaosFunnelUnrecordedDaysGrowing` (days
+  past the first week still carrying a «not recorded» count, growing).
 - `ConfigurationKey` gains `provisional(governsPersonalData, awaitingConfirmationFrom)`. `ProvisionalRetentionStartupCheck`
   reports every provisional key on a non-local profile and refuses to start for one that governs personal data.
   `reporting.funnel_retention_days` is flagged and governs none.
@@ -257,12 +264,29 @@ content.brand_switcher_entries                     -- V0676
 tenant.locations + storefront_sort_order integer null   -- V0676
 ```
 
-- The home document gains `brandSwitcher` (entries: target brand name, its `LOGO` URL, the verified hostname; omitted when
-  empty and re-checked on every read) and `layout` (`STANDARD` | `MARKETPLACE`, from policy `storefront.layout`).
-- The storefront branch list orders by `storefront_sort_order` (nulls last) then distance then id when a point is known,
-  and by `storefront_sort_order` then name then id when none is.
-- The console editor replaces the "not built" tab: entries are added, ordered and hidden under capability
-  `content.manage` with audit; the layout choice sits on the same tab with its consequence stated.
+- The home document gains `brandSwitcher` (entries: target brand id and name, its logo as a servable image when it has one,
+  and `https://<verified hostname>/`; omitted when empty, served on a WEB channel only, and re-checked on every read) and
+  `layout` (`MARKETPLACE`, from policy `storefront.layout`; omitted for `STANDARD`, so a brand that uses neither is served the
+  document it always was).
+- Switcher editor, `/api/v1/tenants/{t}/brands/{b}/content/brand-switcher`: `GET /entries` and `GET /candidates` (the tenant's
+  other active brands that sell through an active website channel at one of their own branches, with each hostname or none)
+  under `content.read`; `POST /entries`, `PUT /entries/{id}` (show or hide, `If-Match`), `DELETE /entries/{id}` and `PUT /order`
+  under `content.manage`; every change audited as `content.switcher_entry.*`. An entry names a brand and a WEB channel of the
+  same tenant, never itself, never the same pair twice.
+- Layout: `PUT /api/v1/tenants/{t}/brands/{b}/content/policies/layout` (`content.manage`, `If-Match`), `STANDARD` or
+  `MARKETPLACE`, anything else refused; the policy read returns `layout` and `layoutVersion`.
+- Branch order: `GET` and `PUT /api/v1/operations/tenants/{t}/brands/{b}/storefront-branch-order` (`location.read` and
+  `location.write` at the brand). `PUT` names the branches first to last and replaces the order in one statement: the named
+  branches take 10, 20, 30... and every other branch of the brand returns to unset. Audited as
+  `brand.storefront_branch_order.changed`.
+- The public pickup search `POST /api/v1/storefront/pickup-locations` takes `point` as optional. With a point it orders by
+  distance, then `storefront_sort_order` (unset last), then id; with none it orders by `storefront_sort_order` (unset last),
+  then name, then id, reports `distanceKnown=false` and a distance of 0 that is not a claim. A branch with no coordinate is
+  offered only when there is no point.
+- The console (Marketing → Storefront) replaces the «not built» tab with «Brand switcher and layout» and adds «Branch order»,
+  both lazy. Both storefronts read the two new document fields, check each address again, and draw nothing when neither is
+  present; with `MARKETPLACE` the category rail is the first five categories and an «All categories» button that opens a modal
+  dialog listing all of them.
 
 ## Rollout and rollback
 

@@ -110,6 +110,9 @@ class StorefrontBranchOrderEndpointTests {
     void reset() {
         jdbc.sql("TRUNCATE TABLE platform.idempotency_records").update();
         jdbc.sql("TRUNCATE TABLE audit.audit_events CASCADE").update();
+        // The menu sits in another module's tables, which a tenant truncate does not reach.
+        jdbc.sql("TRUNCATE TABLE catalog.publication_items, catalog.publications, catalog.catalogs CASCADE")
+                .update();
         jdbc.sql("TRUNCATE TABLE tenant.tenants CASCADE").update();
         roleRegistry.synchronize();
         insertTenant(TENANT, "branch-order");
