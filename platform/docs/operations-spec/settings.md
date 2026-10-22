@@ -1175,6 +1175,14 @@ would rewrite the meaning of every chart already drawn and is exactly what ADR 0
 ADR 0107 for the contradiction this correction resolves and why configurability is declined rather
 than deferred.
 
+**The card is the whole affordance (pinned, wave 21).** It carries the version it was read at and one
+row per bucket, and **no input, no select and no button**: `reference-data-page.spec.ts` fails if any
+control appears inside `#sla-boundaries`. The route behind it,
+`GET /api/v1/tenants/{tenantId}/reporting/sla-bucket-set`, is refused without `REPORTING_READ` and answers
+the version with the six buckets with it (`ReportingControllerCapabilityHttpTests`). Where an order counts
+as *late on the boards* is a different setting, the order-policy lateness card; the reports' buckets do not
+follow it.
+
 ### Теги филиалов
 
 **Built (wave P37).** A tenant registers its own tags (`tenant.branch_tags`) and assigns any
