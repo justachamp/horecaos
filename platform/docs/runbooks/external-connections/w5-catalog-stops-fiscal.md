@@ -27,6 +27,7 @@ system is stated as unconnected, never reported as working (ADR 0011). Nothing b
   the fake; a note under `docs/providers/<aggregator>.md`; then the Phase 3 week: set
   `marketplace.availability.dry_run` for one branch, compare the propagation read's would-push list with the
   partner portal for a week, turn it off. The adapter registers itself; nothing else changes.
+- **Prove the connection.** With the adapter registered, the same binding that read `MANUAL` reads `AUTOMATIC`. Set `marketplace.availability.dry_run` for one branch (a platform administrator, location scope) and stop a dish: the partner's sandbox receives nothing and the propagation read's would-push list names the dish. After the week, switch the key off and stop the dish again: the partner's own portal shows it stopped within one reconciler tick, the binding's item reads `IN_SYNC`, and `FakeAggregatorHttpProviderTests`' shape is repeated against a recorded sandbox exchange in the new adapter's contract test (ADR 0007).
 
 ## 2. How a payment provider or a fiscal terminal writes a fractional quantity (row 4.2c, ADR 0137)
 
@@ -38,6 +39,7 @@ system is stated as unconnected, never reported as working (ADR 0011). Nothing b
   off-step quantity (`DecimalAmendmentHttpTests`).
 - **Connect on the day.** One constant and a test where the fiscal builder serialises a quantity
   (`ClickFiscalAdapter`, `PaymeReceiptDetail`, and the terminal adapter when one exists).
+- **Prove the connection.** A serialiser test that renders a 0.35 kg line in the chosen encoding, and the provider's sandbox accepting that exact request and returning the same quantity on read-back (Click and Payme sandboxes; the terminal's OFD simulator when one exists). Until the sandbox has accepted it, no weighed line is sent to a provider.
 
 ## 3. A till that can revise an exported order (row 4.2c, ADR 0137, ADR 0011)
 
@@ -54,6 +56,7 @@ system is stated as unconnected, never reported as working (ADR 0011). Nothing b
 - **Connect on the day.** Implement `reviseExportedOrder` in the vendor's adapter; add the vendor's
   `ORDER_REVISION` row to `integration.pos_provider_capabilities` with its evidence in a new migration; enable
   the capability on the binding. The "Send the new total to the till" button appears by itself.
+- **Prove the connection.** On a sandbox binding with `ORDER_REVISION` enabled: export an order, weigh a catchweight line so the total moves, open the order (the banner offers *Send the new total to the till*), press it, and see the vendor's own order carry the revised total and the notice close as *told*. A repeat press is the same request (same idempotency key) and changes nothing at the vendor.
 
 ## 4. The wording of the КБЖУ accuracy line, and whether one is required (row 4.2c, ADR 0137)
 
@@ -64,6 +67,7 @@ system is stated as unconnected, never reported as working (ADR 0011). Nothing b
   never shown while the switch is off.
 - **Connect on the day.** Replace the three strings in each of the two storefronts' `i18n/*.json` and the
   console's `catalog.*.ts`, then have a platform administrator write the key at the tenant or brand.
+- **Prove the connection.** With the key written for a test brand, both storefronts show the line under a nutrition table in ru, uz and en, the product editor's preview shows the same three sentences once a figure is entered, and with the key off none of them does (`physical-facts.component.spec.ts` in each storefront and `variant-physical-attributes.spec.ts` assert both).
 
 ## 5. The Committee's official ИКПУ/MXIK file (row 4.2e, ADR 0173)
 
@@ -74,6 +78,7 @@ system is stated as unconnected, never reported as working (ADR 0011). Nothing b
 - **Connect on the day.** `docs/runbooks/mxik-reference-import.md`: put the real headers in `MxikMappingProfile`
   (an unknown header stops the import by design), add a trimmed copy of the file beside the fixture, run the
   pre-production load, have finance check fifty codes, then load production.
+- **Prove the connection.** The pre-production run reports `COMPLETED` with the counts finance expects, finance checks fifty codes against the Committee's portal, the product editor's picker finds a code by name and offers its default package and unit codes, and the production run repeats the same counts.
 
 ## 6. Per-marketplace content rules (row 4.6a, ADR 0138)
 
@@ -85,6 +90,7 @@ system is stated as unconnected, never reported as working (ADR 0011). Nothing b
   (ADR 0138: «building the machinery without the actual rules is deliberate»), so a binding can name none.
 - **Connect on the day.** One class per marketplace implementing `MarketplaceRuleset`, with `MarketplaceRulesetTests`
   beside it; the console's ruleset picker lists it.
+- **Prove the connection.** `MarketplaceRulesetTests` gains the marketplace's rules and passes; `PUT .../marketplace-ruleset` with the new code answers 200 and the preview's findings for that binding name the rule that fires on a deliberately short description.
 
 ## 7. An outbound menu push to a push-only partner (row 4.6a, ADR 0040)
 
@@ -95,3 +101,5 @@ system is stated as unconnected, never reported as working (ADR 0011). Nothing b
   consumer the menu moved.
 - **Connect on the day.** An adapter declaring `marketplace.menu.push` reading the same projection, with the
   vendor's note under `docs/providers/`.
+- **Prove the connection.** The partner's sandbox shows the menu the push sent, item for item against `GET .../menu`; changing a price in the console moves the `ETag` of the pull and produces one push; the push adapter's contract test replays a recorded sandbox exchange (ADR 0007).
+
