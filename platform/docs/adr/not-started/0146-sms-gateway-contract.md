@@ -473,3 +473,9 @@ Alternatives or Consequences is rewritten.
   `CampaignMessagePort`, `CampaignTelegramDeliveryService`,
   `CourierBroadcastService`, `SmsSegments`; `V0026`, `V0061`, `V0204`, `V0208`,
   `V0307`; `SecurityConfiguration` (the Click and Telegram `permitAll` pattern)
+
+## Status addition (2026-10-23)
+
+Push, which the 2026-10-14 addition above records as decided and not built, is built: Web Push is a campaign
+channel through its own platform-owned adapter ([ADR 0182](../partial/0182-campaign-channels-email-push-couriers-and-delivery-statistics.md), D14). It reports no delivery and a read by the customer's tap.
+Nothing in this record's Decision, Alternatives or Consequences is rewritten.

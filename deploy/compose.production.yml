@@ -401,6 +401,16 @@ services:
       # The platform owner's answer to give; false until it is recorded, and a courier
       # broadcast is refused (COURIER_CONTACTS_NOT_WIRED) while it is.
       HORECAOS_COURIERS_BROADCAST_CONTACT_USE_CLEARED: ${HORECAOS_COURIERS_BROADCAST_CONTACT_USE_CLEARED:-false}
+      # ADR 0182, D14: Web Push from the storefronts, signed as the platform (VAPID). All three empty
+      # means push is off and the console says PUSH_NOT_CONFIGURED. The private key is never a value
+      # here: the reference names it in OpenBao, for example
+      # horecaos:production:provider_notification:platform:vapid, stored with
+      #   bao kv put horecaos/production/provider_notification/platform/vapid value=<base64url private key>
+      # The public key is not a secret. The subject is a mailto: or https: contact for the push services.
+      # See platform/docs/runbooks/external-connections/w7-campaign-channels.md, section 9.
+      HORECAOS_PUSH_VAPID_PUBLIC_KEY: ${HORECAOS_PUSH_VAPID_PUBLIC_KEY:-}
+      HORECAOS_PUSH_VAPID_PRIVATE_KEY_REF: ${HORECAOS_PUSH_VAPID_PRIVATE_KEY_REF:-}
+      HORECAOS_PUSH_VAPID_SUBJECT: ${HORECAOS_PUSH_VAPID_SUBJECT:-}
       # ADR 0069: the grounded assistant's model provider. Empty means the
       # assistant takes no turns. The key is never a value here: the reference
       # names it in OpenBao, for example

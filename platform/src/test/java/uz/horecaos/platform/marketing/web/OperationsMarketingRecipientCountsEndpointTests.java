@@ -262,15 +262,16 @@ class OperationsMarketingRecipientCountsEndpointTests {
         assertThat(java.util.Objects.requireNonNull(byName.get("PUSH"))
                         .get("notWiredReason")
                         .asString())
-                .isEqualTo("NO_DELIVERY_ADAPTER");
+                .as("push has a delivery since ADR 0182, and no VAPID identity is configured in this deployment")
+                .isEqualTo("PUSH_NOT_CONFIGURED");
         for (String silent : List.of("SMS", "EMAIL", "PUSH", "MESSAGING_APP")) {
             var node = java.util.Objects.requireNonNull(byName.get(silent));
             assertThat(node.get("reportsDelivery").asBoolean())
                     .as(silent + " has no enabled receipt source here")
                     .isFalse();
             assertThat(node.get("reportsRead").asBoolean())
-                    .as("no wired channel can report a read")
-                    .isFalse();
+                    .as(silent + ": only a push can report a read, by the customer's tap (ADR 0182, D14)")
+                    .isEqualTo("PUSH".equals(silent));
         }
         assertThat(java.util.Objects.requireNonNull(byName.get("MESSAGING_APP"))
                         .get("isWired")

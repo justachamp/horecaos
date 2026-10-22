@@ -863,3 +863,10 @@ no longer requires a money ceiling, and the exposure on the platform's one sende
 per-tenant daily cap instead. The `MARKETING_PROMOTIONS` consent purpose is described as covering email.
 Delivery statistics gain the states `READ` and `WITHHELD` and per-channel flags for what a channel can
 report. The five subtractions and the rest of this record are unchanged.
+
+## Status addition (2026-10-23)
+
+[ADR 0182](../partial/0182-campaign-channels-email-push-couriers-and-delivery-statistics.md) (D14) makes push a campaign channel (Web Push from the two storefronts, after an explicit opt-in)
+and adds to a push wording a 3:1 cover and a storefront path, which this record's «push cover» named. The
+cover is an ADR 0010 media asset the notifications module checks at authoring; marketing still holds no
+rendered body and no push token. A tap on the notification is the channel's read.

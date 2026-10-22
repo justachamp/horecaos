@@ -568,6 +568,28 @@ class CampaignPushDeliveryTests {
     }
 
     @Test
+    @DisplayName("a click token that can no longer be tapped is removed, and one that still can is kept")
+    void expiredClickTokensAreSwept() throws Exception {
+        subscribe(accountId, browser, "/wpush/a");
+        enqueue("m1", accountId);
+        worker.drain();
+        String live = tokenOf(JSON.readTree(
+                browser.read(push.receivedAt("/wpush/a").getFirst().body())));
+        assertThat(everythingIn("notifications.push_click_tokens")).isNotEmpty();
+        var sweeper = new uz.horecaos.platform.notifications.application.PushClickTokenSweeper(clicks);
+
+        assertThat(sweeper.purgeExpired()).as("nothing has expired yet").isZero();
+        assertThat(clicks.click(live)).isTrue();
+
+        clock.advance(Duration.ofDays(30));
+        assertThat(sweeper.purgeExpired()).isEqualTo(1);
+        assertThat(everythingIn("notifications.push_click_tokens")).isEmpty();
+        assertThat(sweeper.purgeExpired())
+                .as("and a second pass has nothing left to do")
+                .isZero();
+    }
+
+    @Test
     @DisplayName("a push of any class but marketing is not sent, and cannot be authored")
     void onlyMarketingPushIsWired() {
         subscribe(accountId, browser, "/wpush/a");

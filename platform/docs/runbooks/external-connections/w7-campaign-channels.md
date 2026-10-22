@@ -3,8 +3,8 @@
 **Last executed:** never. Everything below was built against a fake and is dark in every environment
 until the owner completes the step.
 
-Wave `w7-campaign-channels` (ADR 0182) built three things whose last mile is not code: campaign email,
-the courier broadcast, and the delivery statistics. Each external fact is one section: what exists in
+Wave `w7-campaign-channels` (ADR 0182) built four things whose last mile is not code: campaign email,
+campaign push, the courier broadcast, and the delivery statistics. Each external fact is one section: what exists in
 the repository, where the value goes, and how to prove the connection. Nothing here is a secret value;
 a secret is an ADR 0028 reference stored with `bao kv put` and never pasted into a chat, a ticket or a file.
 
@@ -19,7 +19,7 @@ a secret is an ADR 0028 reference stored with `bao kv put` and never pasted into
 | A gateway account cleared for `MARKETING` traffic | platform owner, gateway | the `MARKETING` purpose gate, refusing | 6 |
 | One real VAS delivery-receipt callback | integration, provider | the receipt endpoint, disabled; statistics say «not reported» | 7 |
 | A provider that reports reads or opens | platform owner | `reportsRead`, false for every wired channel | 8 |
-| Web Push (VAPID keys, the browsers' push services) | platform owner | **not built**; decided in ADR 0182 D14 | 9 |
+| Web Push (a VAPID key pair, the opt-in wording) | platform owner; counsel | `WebPushChannelAdapter` against a fake push service; the storefront opt-in, dark | 9 |
 
 ## 1. Email: a provider and the sending domain
 
@@ -183,15 +183,97 @@ for the provider's callback, and the delivery service's two flags.
 **How to prove it.** The first campaign on that channel shows a number, and no longer «not reported», for
 **read**.
 
-## 9. Web Push (not built)
+## 9. Web Push: a VAPID key pair, the opt-in wording, and one line in each storefront
 
-ADR 0182 D14 decides Web Push (VAPID) from the two storefronts after an explicit opt-in prompt, with no FCM
-or APNs until a customer app exists. The service worker, the subscribe prompt, the subscription endpoint,
-the VAPID handling, the adapter, `CampaignPushDeliveryService`, the click callback and the console fields
-are the next step of this wave. When they land, the owner supplies:
+**The fact.** Web Push needs the platform to sign its requests to the browser vendors' push services
+(VAPID, RFC 8292) with a key pair of its own. Nothing is bought and no third-party account exists: the
+vendors' push services are free to every site. The owner generates the pair once and stores the private half.
+Counsel confirms the wording the customer sees when asked (section "Opt-in wording" below).
 
-- a VAPID key pair, stored as an ADR 0028 reference in a platform-owned provider category (the path is named
-  when the adapter lands), and the contact address the push services may write to;
-- counsel's confirmation of the opt-in wording shown to the customer.
+**What exists.**
 
-Until then `PUSH` answers `NO_DELIVERY_ADAPTER` and the console says so.
+- `WebPushChannelAdapter` (provider type `WEB_PUSH`, channel `PUSH`) is the platform's own sender: one
+  identity for every tenant, no ADR 0026 installation or binding. It encrypts each payload to the customer's
+  browser (RFC 8291, checked against the RFC's worked example) and signs the request. It carries campaign
+  push (`MARKETING`) and nothing else.
+- `StorefrontPushSubscriptionController` (`/api/v1/storefront/tenants/{t}/brands/{b}/push`) takes the
+  browser's own `PushSubscription` after the customer taps a prompt, and records the customer's
+  `MARKETING_PROMOTIONS` consent on the `PUSH` channel in the same step. The push service address and the
+  browser's keys are one ADR 0029 ciphertext and are in no log, event or URL. A subscription may name only a
+  browser vendor's push service (`PushEndpointPolicy`: https, port 443, FCM, Mozilla, Apple, Windows), so a
+  customer's browser cannot make the platform call an address of its choosing.
+- `public/push-sw.js` and `PushSubscribeComponent` in `frontend/storefront` and `frontend/storefront-milliy`.
+  The worker shows the message and reports the customer's tap to `POST /providers/push/clicks/{token}` on
+  the API origin (`HORECAOS_API_ORIGIN`); that tap is the only read signal Web Push offers, so a read is
+  reported as «tapped». A push service reports no delivery, so `reportsDelivery` is false and an accepted
+  push is «accepted by the push service».
+- Dark until configured: all three settings below empty means the console says `PUSH_NOT_CONFIGURED` for
+  every brand, `GET .../push` answers `available: false`, and the storefront renders nothing.
+
+**Generate the key pair.** On a machine you trust, with OpenSSL 3:
+
+```
+openssl ecparam -name prime256v1 -genkey -noout -out vapid.pem
+# the private scalar: 32 bytes, base64url without padding (43 characters)
+openssl ec -in vapid.pem -outform DER 2>/dev/null | tail -c +8 | head -c 32 | base64 | tr '+/' '-_' | tr -d '=\n'
+# the public key: the 65-byte uncompressed point, base64url without padding (87 characters)
+openssl ec -in vapid.pem -pubout -outform DER 2>/dev/null | tail -c 65 | base64 | tr '+/' '-_' | tr -d '=\n'
+```
+
+Then delete `vapid.pem`; nothing keeps it.
+
+**Where the value goes.**
+
+1. The private scalar: `bao kv put horecaos/production/provider_notification/platform/vapid value=<the 43 characters>`.
+   Never paste it into a chat, a ticket or a file.
+2. `/etc/horecaos/production.env` (see `deploy/env.template`):
+   `HORECAOS_PUSH_VAPID_PUBLIC_KEY=<the 87 characters>`,
+   `HORECAOS_PUSH_VAPID_PRIVATE_KEY_REF=horecaos:production:provider_notification:platform:vapid`,
+   `HORECAOS_PUSH_VAPID_SUBJECT=mailto:<an address that is read>` (RFC 8292 wants a `mailto:` or `https:`
+   contact the push services may write to if the platform misbehaves).
+3. Restart `platform-app`.
+4. **One line in each storefront**, which this wave did not add because the profile page is another wave's
+   file: mount `<app-push-subscribe />` (and add `PushSubscribeComponent` to the page's `imports`) where a
+   signed-in customer should find it, for example under `<app-profile-menu>` in
+   `frontend/storefront/src/app/pages/profile/profile.component.html` and in the profile page of
+   `frontend/storefront-milliy`. On a home-screen banner pass `[dismissible]="true"`. Until it is mounted no
+   customer can opt in, so no campaign has a push recipient.
+
+**How to prove the connection.**
+
+1. Marketing → Campaigns → new campaign: `PUSH` is selectable with no sentence under it
+   (`GET /api/v1/tenants/{t}/brands/{b}/marketing/channels` answers `PUSH` with `isWired: true`).
+2. In Chrome on a phone or laptop, signed in to the storefront, tap «Turn on notifications» and allow the
+   browser's question. Customers → the customer → Consent shows `MARKETING_PROMOTIONS` on `PUSH` granted.
+3. Settings → Notifications → New template: channel `PUSH`, class `MARKETING` (fixed), consent purpose
+   `MARKETING_PROMOTIONS`, a title and text in every language, optionally a 3:1 cover and a path such as
+   `/menu`. Activate it, and launch a one-person campaign on that customer.
+4. The notification appears on the device within seconds with the title, text and cover. Tapping it opens the
+   storefront at the path.
+5. Reports → Marketing → Campaigns shows the message as «accepted by the push service», and after the tap
+   **tapped: 1** (delivered counts the tap too, because a tap proves arrival). Delivery is stated as not
+   reported by this channel while nothing has been tapped.
+6. Turn push off in the storefront: the next campaign refuses that customer with `CONSENT_WITHHELD`.
+
+**What to know when it misbehaves.**
+
+- `PUSH_VAPID_REJECTED` on a recipient: the push service did not accept the platform's key for that
+  subscription. After a key **rotation** every earlier subscription answers this until its customer turns
+  push on again, because a subscription is bound to the key it was made under. Rotate only if the private key
+  leaked. A mismatched pair (public key from one generation, private from another) fails every send the same
+  way; generate once and store both together.
+- `PUSH_SUBSCRIPTION_GONE`: the browser dropped the subscription (the customer cleared site data or the
+  browser retired it). The subscription is ended, the customer is skipped with `NO_RECIPIENT_ENDPOINT` from
+  then on, and turning push on in the storefront again restores them. Nothing is suppressed: a dead device
+  is not a withdrawn consent.
+- One live subscription per customer per brand: the customer's newest browser receives the push, and an
+  older one stops (ADR 0182 records this as an accepted trade-off).
+- Browsers: iOS Safari delivers Web Push only to a storefront added to the home screen; a Telegram mini app's
+  webview and many in-app browsers have no Web Push, and the storefront renders nothing there.
+- The worker does not re-subscribe when a browser rotates a subscription (`pushsubscriptionchange`): it has
+  no session. The customer is offered «turn on» again on their next visit.
+
+**Opt-in wording (counsel).** The prompt says what the customer gets and what turning it on means
+(`push.title`, `push.text` and `push.consentNote` in the storefront's three catalogues). Counsel confirms the
+wording of `push.consentNote` before the first campaign; the consent record carries the policy version
+`PUSH_OPT_IN_V1`, so a change of wording is a new version, not an edit.
