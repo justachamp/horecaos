@@ -167,6 +167,10 @@ public class TemplateTestSendService {
         defaults.put("currency", "UZS");
         defaults.put("reasonCode", "OUT_OF_STOCK");
         defaults.put("code", "482913");
+        // LOYALTY_POINTS_EXPIRING (ADR 0046, ADR 0181): the three typed values the loyalty adapter sends.
+        defaults.put("loyaltyPoints", "12 000");
+        defaults.put("loyaltyExpiresOn", "28.10.2026");
+        defaults.put("loyaltyDaysRemaining", "14");
         return defaults;
     }
 

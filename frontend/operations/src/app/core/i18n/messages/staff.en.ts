@@ -423,6 +423,12 @@ export const staffEn = {
   'staff.approvals.action.fiscalCorrectionRequest': 'Fiscal receipt correction or void',
   'staff.approvals.action.fiscalCorrectionAttach':
     'Attaching a fiscal agent’s reference to a receipt',
+  'staff.approvals.action.orderingAmendmentDecrease': 'Reducing a placed order’s lines or total',
+  'staff.approvals.action.courierRunPayChange':
+    'Changing how courier pay for a multi-order run is calculated',
+  'staff.approvals.action.reportingBusinessDayBoundaryChange':
+    'Moving the business day’s start time',
+  'staff.approvals.action.iamPlatformGrantManage': 'Granting or revoking a platform-level role',
   // end: Fiscal receipt correction approval (ADR 0166)
   'staff.approvals.tab.pending': 'Waiting',
   'staff.approvals.tab.decided': 'Decided',

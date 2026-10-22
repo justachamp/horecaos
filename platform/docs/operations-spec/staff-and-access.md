@@ -81,10 +81,23 @@ designed for standing use with large targets, and everything else in this
 section is designed for a desk.
 
 Approvals (IA 9.4) is deliberately **not** in this spec. A maker-checker queue
-over refunds, discretionary discounts and PII exports is a finance and support
-workflow that happens to be backed by `audit.approval_requests`; putting it
-under Staff because both involve people is a filing error. Section 9.8 links to
-it from any audit event carrying an `approval_request_id`.
+over refunds, future discounts, order decreases, courier penalties, promotion
+activations and PII exports is a finance and support workflow that happens to be
+backed by `audit.approval_requests`; putting it under Staff because both involve
+people is a filing error. Section 9.8 links to it from any audit event carrying
+an `approval_request_id`.
+
+*Status, 2026-10-14 ([ADR 0181](../adr/built/0181-compensation-from-a-case-promotion-targeting-requote-and-discretionary-discounts.md)).*
+The IA's "discretionary discounts" are **declined for v1** (D23): there is no
+operator-typed discount on an order line. A manager who wants to give a customer a
+lower price uses a refund or delivery-fee reimbursement, a future discount, or a
+decrease to the placed order, each of which already waits for a second signature
+above its limit; building a discretionary discount would be a new ADR 0039 command
+with reason codes, a cap and a new `ApprovalAction`. The worklist labels every
+action a tenant's approvers can be asked to decide (`approval-action-labels.ts`,
+checked against `ApprovalAction` by `ApprovalActionLabelMirrorTests`), and who signs
+each is published by the account owner on Settings, Approvals, "Who signs", over the
+operations twin of the policy endpoints.
 
 ---
 

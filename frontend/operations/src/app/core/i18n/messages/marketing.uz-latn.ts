@@ -400,7 +400,7 @@ export const marketingUzLatn: AreaMessages<typeof marketingEn> = {
   'marketing.loyalty.accrual.form.lotLifetime': 'Ballar necha kunda kuchini yoʻqotadi',
   'marketing.loyalty.accrual.form.expiryWarning': 'Muddatidan necha kun oldin ogohlantirish',
   'marketing.loyalty.accrual.form.expiryWarning.hint':
-    'Ball partiyasi necha kun qolganda "tez orada tugaydi" deb hisoblanadi — bu haqidagi xabarnoma hali qurilmagan (ADR 0046).',
+    'Ball partiyasi necha kun qolganda "tez orada tugaydi" deb hisoblanadi. Mijozga kuniga bir marta, shu oynadagi barcha partiyalarni qamrab olgan bitta xabar yuboriladi, LOYALTY_POINTS_EXPIRING matni bilan. Bu matn "Bildirishnomalar" boʻlimida yozilib yoqilmaguncha hech narsa yuborilmaydi (ADR 0046).',
 
   'marketing.loyalty.redemption.title': 'Sarflash',
   'marketing.loyalty.redemption.hint':

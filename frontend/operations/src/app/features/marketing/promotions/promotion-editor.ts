@@ -182,13 +182,19 @@ export class PromotionEditor {
     this.draft.update((current) => ({ ...current, ...change }));
   }
 
-  /** A markup is item-scope and never exclusive; its actions follow. The stacking group follows only while it is still the default of the old choice. */
+  /**
+   * A markup is never exclusive; its actions follow. Choosing "markup" starts on the product scope, the one the
+   * pilot can use: the order-wide service charge is a deliberate second choice (it is off for every company until
+   * finance and counsel answer, ADR 0140). The stacking group follows only while it is still the default of the
+   * old choice.
+   */
   protected setKind(kind: PromotionKind): void {
     const current = this.draft();
     if (kind === current.kind) {
       return;
     }
-    const scope = scopesFor(kind).includes(current.scope) ? current.scope : 'ITEM';
+    const scope =
+      kind !== 'MARKUP' && scopesFor(kind).includes(current.scope) ? current.scope : 'ITEM';
     this.apply(kind, scope);
   }
 

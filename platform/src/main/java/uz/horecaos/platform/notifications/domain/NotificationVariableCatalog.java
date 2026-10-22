@@ -45,6 +45,21 @@ public final class NotificationVariableCatalog {
             new Variable("amount", "The order's total, formatted with its currency, e.g. \"85 000 UZS\"."),
             new Variable("currency", "The order's ISO currency code, e.g. \"UZS\"."));
 
+    /**
+     * {@code LOYALTY_POINTS_EXPIRING} (ADR 0046, ADR 0181): the message is about a customer's points and not an
+     * order, so it carries these three typed values and no order variable. {@code LoyaltyExpiryWarningNotifier}
+     * is the only writer, and renders with exactly these.
+     */
+    private static final List<Variable> LOYALTY_EXPIRY_VARIABLES = List.of(
+            new Variable(
+                    "loyaltyPoints",
+                    "The points about to lapse, added together over the lots now inside their warning window, "
+                            + "e.g. \"12 000\"."),
+            new Variable(
+                    "loyaltyExpiresOn",
+                    "The date the earliest of those lots lapses, written day.month.year, e.g. \"28.10.2026\"."),
+            new Variable("loyaltyDaysRemaining", "Whole days left until that earliest date, e.g. \"14\"."));
+
     private static final Map<NotificationClass, List<Variable>> BY_CLASS = buildCatalog();
 
     private static Map<NotificationClass, List<Variable>> buildCatalog() {
@@ -58,12 +73,14 @@ public final class NotificationVariableCatalog {
         catalog.put(
                 NotificationClass.TRANSACTIONAL_REQUIRED,
                 concat(
-                        ORDER_MONEY_VARIABLES,
-                        new Variable(
-                                "reasonCode",
-                                "The stable rejection reason code (ORDER_REJECTED only), "
-                                        + "e.g. \"OUT_OF_STOCK\".")));
-        catalog.put(NotificationClass.TRANSACTIONAL_OPTIONAL, ORDER_MONEY_VARIABLES);
+                        concat(
+                                ORDER_MONEY_VARIABLES,
+                                new Variable(
+                                        "reasonCode",
+                                        "The stable rejection reason code (ORDER_REJECTED only), "
+                                                + "e.g. \"OUT_OF_STOCK\".")),
+                        LOYALTY_EXPIRY_VARIABLES));
+        catalog.put(NotificationClass.TRANSACTIONAL_OPTIONAL, concat(ORDER_MONEY_VARIABLES, LOYALTY_EXPIRY_VARIABLES));
 
         // No fixed contract: a marketing message's variables are whatever the
         // campaign's own audience segment supplies (ADR 0044), which is
@@ -116,6 +133,10 @@ public final class NotificationVariableCatalog {
     private static List<Variable> concat(List<Variable> base, Variable... extra) {
         return java.util.stream.Stream.concat(base.stream(), java.util.Arrays.stream(extra))
                 .toList();
+    }
+
+    private static List<Variable> concat(List<Variable> base, List<Variable> extra) {
+        return java.util.stream.Stream.concat(base.stream(), extra.stream()).toList();
     }
 
     /** Every variable an author may declare for this class, in a stable order. */

@@ -36,6 +36,10 @@ const SAMPLE_VALUES: Readonly<Record<string, string>> = {
   currency: 'UZS',
   reasonCode: 'OUT_OF_STOCK',
   code: '482913',
+  // LOYALTY_POINTS_EXPIRING (ADR 0046, ADR 0181): the same three values the platform's own test send uses.
+  loyaltyPoints: '12 000',
+  loyaltyExpiresOn: '28.10.2026',
+  loyaltyDaysRemaining: '14',
 };
 
 /** Every placeholder a piece of text names, in first-appearance order. */

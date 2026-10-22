@@ -275,6 +275,8 @@ export const routes: Routes = [
               },
               {
                 path: 'report',
+                // The provenance banner reads the `reports` messages; the section's own area is `customers`.
+                canActivate: [messagesGuard('reports')],
                 loadComponent: () =>
                   import('./features/customers/reviews/review-report-page').then(
                     (m) => m.ReviewReportPage,

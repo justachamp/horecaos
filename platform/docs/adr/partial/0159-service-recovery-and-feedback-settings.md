@@ -1,36 +1,25 @@
 # ADR 0159: Service recovery and feedback settings
 
 - Decision status: Accepted — proposed by Claude (batch 19); accepted by the platform owner 2026-10-07
-- Implementation status: Not started — what exists is ADR 0071's order review and none
-  of what this record adds. `reviews.order_reviews` (V0168) holds one immutable row per
-  order, a 1–5 rating and an envelope-encrypted `comment_protected`, granted
-  `SELECT, INSERT` only. Built on it: `ReviewSubmissionService`, `ReviewQueryService`,
-  `StorefrontReviewController` (submit, the caller's own list), `OperationsReviewController`
-  (list, summary, and the `customerAccountId` filter row 5.2h added) and
-  `CustomerReviewPortAdapter` (ADR 0075's five star buttons in Telegram, rating only,
-  no comment). `Capability.REVIEW_READ` is held by `tenant-owner`, `tenant-admin` and
-  `brand-manager`. The console's 5.4 page is a read-only filtered list and
-  `customers/feedback-settings` still routes to `NotBuiltPage` (`app.routes.ts`).
-  **Nothing exists for any of the following**, checked by grep on 2026-10-07: a tag
-  table or a tag on a review; a publication state or any way to hide a comment;
-  a case, an owner, an SLA or an outcome; a review event (`EventCatalog` has none and
-  `reviews.api` carries only `CustomerReviewPort`); a reporting fact or metric for
-  reviews (no `fact_review`, no `average_rating`); a prompt policy.
-  *The prompt today:* `OrderNotificationTrigger` creates the `ORDER_COMPLETED` intent the
-  moment `OrderCompleted` is published, classed `TRANSACTIONAL_REQUIRED`
-  (which `notifications.notification_preferences` says it ignores), sent at once,
-  expiring after `horecaos.notifications.order-expiry` (default PT6H, which its own
-  comment calls "a stated default, not a considered answer") on whatever channel
-  `CustomerTelegramChannelRouter` picks (default `SMS`); the only off switch is not
-  activating the template. *The seams that wait for this record:*
-  `Capability.RECOVERY_CASE_MANAGE` and `RECOVERY_REMEDY_APPROVE` are constants that no
-  endpoint declares (the first is held by `tenant-owner`, `tenant-admin`, `tenant-finance`,
-  `location-manager`, `support-session-assist` and `support-agent`, the second by
-  `tenant-owner` and `tenant-finance`); `pricing.benefit_grants.source_type` accepts
-  `RECOVERY_CASE` (V0265) and no caller sets it; `payments.order_remedies` (V0052, ADR 0048)
-  is keyed by order and carries no case reference; `customers.spi.CustomerErasureParticipant`
-  has one registered participant (`dinein`) and none for `reviews`, so a customer's erasure
-  does not touch their review comment today.
+- Implementation status: Partial — built across operations batches 19 to 21 and checked against the code on
+  2026-10-14: the `reviews` tables, tags and the starter pack, publication and comment moderation
+  (`V0543`), the case machine with its two SLA clocks, owner, timeline and notes, the compensation links
+  (`reviews.spi.CompensationDirectory` implemented by `payments`, `pricing.api.BenefitGrantDirectory`),
+  the prompt policy, the public endpoints and their cache, the erasure participant, the events and the
+  reporting facts (`V0544`) with `GET .../reporting/reviews/summary` and `/recovery`. The console has the
+  worklist (board and table, now filterable by rating), the moderation tab, the feedback settings, and
+  since batch 21 the quality tab over the two report endpoints and the case drawer's compensation
+  picker, hand-off to the order-remedy console and apology-code mint for whoever holds
+  `pricing.promotion.manage` ([ADR 0181](../built/0181-compensation-from-a-case-promotion-targeting-requote-and-discretionary-discounts.md),
+  D10); both storefronts show the tag chips, the consent box and the public block. **Declined by
+  the record (not gaps):** a courier dimension or filter and a rating of a courier (open input 8; ADR 0042),
+  the four scored dimensions (answered by tags, counted by category in the quality tab), and any
+  compensation a case pays by itself (Decision 9). **Not built or not proved:** legal's answers to inputs 1,
+  2 and 8 before `feature.feedback_settings` is turned on for a real tenant (external), an SMS prompt
+  against a real gateway (ADR 0146 binds no provider yet, so the SMS half is proved against
+  `FakeSmsGateway` only), and the `Superseded by` pointers on ADR 0071, 0044, 0013 and 0048 that
+  the owner adds on acceptance. The list above is what an auditor can reach; the gap map decides whether
+  row 5.4 reads BUILT.
 - Date proposed: 2026-10-07
 - Date decided: 2026-10-07
 - Deciders: proposed by Claude (batch 19); Ayubkhon Abbosov (platform owner) decides

@@ -39,6 +39,7 @@ import uz.horecaos.platform.iam.api.Capability;
 import uz.horecaos.platform.iam.api.PlatformRole;
 import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.infrastructure.authorization.RoleRegistrySynchronizer;
+import uz.horecaos.platform.support.ApprovalWorklistProof;
 import uz.horecaos.platform.support.TestDatabase;
 import uz.horecaos.platform.tenancy.api.ConfigurationValueAuthor;
 import uz.horecaos.platform.tenancy.application.port.ConfigurationValueCache;
@@ -84,6 +85,9 @@ class CustomerControllerEndpointTests {
 
     /** {@code TENANT_FINANCE}: neither {@code CUSTOMER_READ} nor {@code CUSTOMER_MANAGE}. */
     private static final String NO_CUSTOMER_CAPABILITY = "customer-endpoint-finance";
+
+    /** {@code TENANT_OWNER}: publishes the policy, and holds {@code customer.pii.export} to sign it (row 9.4). */
+    private static final String OWNER = "customer-endpoint-owner";
 
     private static final String CUSTOMERS = "/api/v1/tenants/" + TENANT + "/customers";
 
@@ -349,6 +353,50 @@ class CustomerControllerEndpointTests {
         assertThat(result.getResponse().getHeader("X-Export-Approval-Request-Id"))
                 .isNotNull();
         assertThat(result.getResponse().getContentAsString()).isEqualTo("[]");
+    }
+
+    /**
+     * Row 9.4, ADR 0027, ADR 0181: the export reaches the worklist under a policy the tenant published through the
+     * console's own route, and a second person's decision releases it. The sibling above seeds its policy by SQL;
+     * this one publishes it the way the owner now can, so a change to the route or the action code breaks here.
+     */
+    @Test
+    void anExportWaitsOnTheWorklistUnderThePolicyTheOwnerPublishedAndIsReleasedByASecondPerson() throws Exception {
+        seedAccounts(3);
+        grant(OWNER, PlatformRole.TENANT_OWNER);
+        ApprovalWorklistProof.publishPolicy(
+                mvc, TENANT, tokenFor(OWNER), "customer.pii.export", "customer.pii.export", "policy-export-1");
+
+        MvcResult pending = mvc.perform(get(CUSTOMERS + "/export")
+                        .with(tokenFor(SUPPORT_AGENT))
+                        .queryParam("purpose", "MARKETING_EXPORT"))
+                .andReturn();
+        assertThat(pending.getResponse().getHeader("X-Export-Approval-Status")).isEqualTo("PENDING");
+        assertThat(pending.getResponse().getContentAsString())
+                .as("nothing was decrypted while the request waits")
+                .isEqualTo("[]");
+
+        tools.jackson.databind.JsonNode entry =
+                ApprovalWorklistProof.listed(mvc, TENANT, tokenFor(OWNER), "customer.pii.export");
+        assertThat(entry.get("requiredApproverCapability").asString()).isEqualTo("customer.pii.export");
+        assertThat(entry.get("id").asString())
+                .isEqualTo(pending.getResponse().getHeader("X-Export-Approval-Request-Id"));
+        assertThat(ApprovalWorklistProof.approve(
+                        mvc,
+                        TENANT,
+                        tokenFor(OWNER),
+                        UUID.fromString(entry.get("id").asString()),
+                        "decide-export-1"))
+                .isEqualTo("APPROVED");
+
+        MvcResult released = mvc.perform(get(CUSTOMERS + "/export")
+                        .with(tokenFor(SUPPORT_AGENT))
+                        .queryParam("purpose", "MARKETING_EXPORT"))
+                .andReturn();
+        assertThat(released.getResponse().getHeader("X-Export-Approval-Status")).isEqualTo("APPROVED");
+        assertThat(countOccurrences(released.getResponse().getContentAsString(), "\"accountId\""))
+                .as("the same export, restated, now returns its rows")
+                .isEqualTo(3);
     }
 
     /**

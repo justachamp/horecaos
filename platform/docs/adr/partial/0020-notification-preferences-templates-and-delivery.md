@@ -39,6 +39,16 @@
 - Supersedes / Superseded by: —
 - Open inputs: Consent legal basis, quiet hours, and message retention (legal, product)
 
+**Status addition, 2026-10-14 ([ADR 0181](../built/0181-compensation-from-a-case-promotion-targeting-requote-and-discretionary-discounts.md), row 6.3).**
+A customer message that is about the customer and not about an order has a path: `CustomerAccountAlertPort`
+(`notifications.api`) creates an intent with `recipient_account_id` named at creation, the column
+`NotificationEligibilityService` already reads as "recipient resolved" for a campaign message, so eligibility
+skips the order lookup and goes straight to the template, the provider review, consent for a class that needs it,
+preference, quiet hours and the endpoint. The channel is the one `CustomerTelegramChannelRouter` chooses. Its first
+caller is the loyalty pre-expiry warning (`LOYALTY_POINTS_EXPIRING`, three typed variables, created
+`TRANSACTIONAL_REQUIRED` until counsel rules on the class, which stays this record's open legal input). The
+Decision is not edited.
+
 ## Context
 
 Ordering, restaurant approval, payment, delivery, onboarding, and service

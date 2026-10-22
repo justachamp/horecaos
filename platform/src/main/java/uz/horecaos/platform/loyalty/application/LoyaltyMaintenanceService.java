@@ -1,9 +1,11 @@
 package uz.horecaos.platform.loyalty.application;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import uz.horecaos.platform.loyalty.api.HeldTenderPort;
 import uz.horecaos.platform.loyalty.api.LoyaltyExpiryWarningPort;
+import uz.horecaos.platform.loyalty.api.LoyaltyExpiryWarningPort.ExpiringLot;
 import uz.horecaos.platform.loyalty.domain.EntryType;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore;
 import uz.horecaos.platform.loyalty.infrastructure.persistence.JdbcLoyaltyStore.AccountRow;
@@ -191,45 +194,64 @@ public class LoyaltyMaintenanceService {
     }
 
     /**
-     * Warns an account before a lot's value is destroyed — the message row
-     * {@link #expireLots} has run silently in front of since V0042:
-     * {@code expiryWarningDays} has been authorable, validated, and persisted
-     * on the accrual rule the whole time, and until this pass existed nothing
-     * ever read it.
+     * Warns a customer before their points are destroyed -- the message {@link #expireLots} has run silently in
+     * front of since V0042: {@code expiryWarningDays} has been authorable, validated, and persisted on the
+     * accrual rule the whole time.
      *
-     * <p>One warning per lot, ever, enforced by {@code
-     * JdbcLoyaltyStore#markExpiryWarningSent} rather than by this loop: a lot
-     * inside its window on two consecutive passes must produce one message,
-     * not one per tick. A zero {@code expiryWarningDays} — the column's own
-     * default for a lot granted before it existed, or under a rule authored
-     * with no warning — never reaches this loop at all: {@code
-     * JdbcLoyaltyStore#lotsNeedingExpiryWarning} excludes it, so zero reads
-     * as "no warning configured" and never as "warn immediately".
+     * <p><strong>One message per customer, not per lot</strong> (ADR 0046's default, "at most one message per
+     * customer per day"; ADR 0181). The lots inside their window are grouped by account and each account gets one
+     * call to {@link LoyaltyExpiryWarningPort}, carrying all its due lots; three lots expiring in the same week
+     * are one message, not three. The per-day half is the worklist's: {@code
+     * JdbcLoyaltyStore#lotsNeedingExpiryWarning} leaves an account alone for 24 hours after any of its lots was
+     * warned, so a lot that comes due in the afternoon waits for tomorrow's message.
      *
-     * <p><strong>Not {@code @Transactional}.</strong> {@code expiryWarnings} is
-     * the seam onto a real ADR 0020 adapter (SMS/push/Telegram) — an external
-     * call, forbidden inside a database transaction. A single transaction
-     * wrapping the whole batch would hold {@code markExpiryWarningSent}'s row
-     * lock open across every lot's send, and a failure partway through would
-     * roll back the marks already committed for the lots warned earlier in
-     * this same pass — which sends the same warning to the same customer a
-     * second time on the next sweep. Each lot's mark is instead its own short
-     * transaction, committed the instant its warning is sent: a failure on lot
-     * N never touches lots 1..N-1, and only lot N itself is retried later.
+     * <p>A lot is warned about once, ever, enforced by {@code JdbcLoyaltyStore#markExpiryWarningSent} rather than
+     * by this loop: a lot inside its window on two consecutive passes must produce one message, not one per tick.
+     * A zero {@code expiryWarningDays} -- the column's own default for a lot granted before it existed, or under a
+     * rule authored with no warning -- never reaches this loop at all: the worklist excludes it, so zero reads as
+     * "no warning configured" and never as "warn immediately".
      *
-     * @return how many warnings were sent, which is what the sweeper logs
+     * <p><strong>Not {@code @Transactional}.</strong> {@code expiryWarnings} is the seam onto a real ADR 0020
+     * adapter -- a write to another module's tables that must not share this one's locks. A single transaction
+     * wrapping the whole batch would hold {@code markExpiryWarningSent}'s row lock open across every account's
+     * send, and a failure partway through would roll back the marks already committed for the accounts warned
+     * earlier in this same pass, which sends the same warning to the same customer a second time on the next
+     * sweep. Each account's lots are instead marked in their own short transaction, committed the instant its
+     * message is handed over: a failure on account N never touches accounts 1..N-1, and only account N's lots are
+     * retried later. A crash between the hand-over and the mark is covered by the adapter's own key, which is the
+     * account and the day.
+     *
+     * @return how many messages were handed over, which is what the sweeper logs
      */
     public int warnExpiringLots() {
         Instant now = clock.instant();
         List<LotRow> due = store.lotsNeedingExpiryWarning(now, BATCH);
+        // Grouped in the order the worklist returned them, so the account whose lot lapses first is warned first.
+        Map<UUID, List<LotRow>> byAccount = new LinkedHashMap<>();
         for (LotRow lot : due) {
-            AccountRow account = accountOf(lot);
-            long daysRemaining = Duration.between(now, lot.expiresAt()).toDays();
-            expiryWarnings.lotExpiring(
-                    account.tenantId(), account.id(), lot.id(), lot.expiresAt(), lot.remainingMinor(), daysRemaining);
-            transactions.executeWithoutResult(status -> store.markExpiryWarningSent(account.tenantId(), lot.id(), now));
+            byAccount.computeIfAbsent(lot.accountId(), id -> new ArrayList<>()).add(lot);
         }
-        return due.size();
+        int messages = 0;
+        for (List<LotRow> lots : byAccount.values()) {
+            AccountRow account = accountOf(lots.getFirst());
+            expiryWarnings.lotsExpiring(
+                    account.tenantId(),
+                    account.brandId(),
+                    account.customerAccountId(),
+                    account.id(),
+                    account.currency(),
+                    lots.stream()
+                            .map(lot -> new ExpiringLot(lot.id(), lot.expiresAt(), lot.remainingMinor()))
+                            .toList(),
+                    now);
+            transactions.executeWithoutResult(status -> {
+                for (LotRow lot : lots) {
+                    store.markExpiryWarningSent(account.tenantId(), lot.id(), now);
+                }
+            });
+            messages++;
+        }
+        return messages;
     }
 
     /**

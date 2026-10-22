@@ -1,14 +1,14 @@
 # ADR 0181: Compensation from a case, promotion targeting, the re-quote and discretionary discounts
 
 - Decision status: Accepted — proposed by Claude (batch 21, wave `w6-promotions-reviews-approvals`); accepted by the platform owner 2026-10-14
-- Implementation status: Partial — the wave is being built; this line is advanced to Built when it ends.
+- Implementation status: Built — D10 to D23 are in the console and the platform: the case drawer picks, hands off and (for the owner) mints, the order pane shows and re-checks the scheduled-order re-quote, and the staff worklist labels every tenant action; D11 and D23 are recorded declines. Open inputs (finance, counsel, the SMS gateway) are external facts built dark.
 - Date proposed: 2026-10-14
 - Date decided: 2026-10-14
 - Deciders: proposed by Claude (batch 21); Ayubkhon Abbosov (platform owner) decides
 - Depends on: ADR 0018, ADR 0019, ADR 0025, ADR 0027, ADR 0044, ADR 0048, ADR 0050, ADR 0072, ADR 0112, ADR 0140, ADR 0159
 - Supersedes / Superseded by: — (edits no record's decision; it adds a dated status addition to ADR 0019, ADR 0140 and ADR 0159 where a decision below closes one of their open inputs)
 - Open inputs:
-  - Finance, for the three `pricing.promotion.approval.*` limits, the new gift-value key and the customer export limit: the defaults stay provisional (finance).
+  - Finance, for the three `pricing.promotion.approval.*` limits (a `FREE_ITEM` gift's value is weighed against the amount limit) and the customer export limit: the defaults stay provisional (finance).
   - Finance and counsel, for the fiscal and tax treatment of a service line and the lawfulness of a payment-method-dependent surcharge: the order-level markup is built and stays off until they answer (finance, counsel). See `docs/runbooks/external-connections/w6-promotions-reviews-approvals.md`.
   - Counsel, for the class of the loyalty-expiry message and the expiry of a promotional balance, and the SMS gateway, for each tenant's wording (counsel, platform owner). Same runbook.
 
@@ -117,6 +117,8 @@ can tell them apart. A new ADR 0039 command with reason codes, a cap and a new
 - **No operator can type a discount into an order line.** An owner who wants one uses a
   remedy and takes its second signature.
 
+- **The plaintext of a minted apology code sits in the idempotency record for a day.** The mint endpoint is idempotent like every mutating route and its response is stored for replay; the code is bound to one customer's account at mint and cannot be redeemed by anyone else, so a copy is worth nothing to a reader of the table, but it is a copy. `@OneTimeResponse` exists for credentials that are not so bound and is reserved by `IdempotentResponseClassificationTests` for classified responses; a grant code is neither.
+
 ### Accepted trade-offs
 
 - Each decision takes the smallest default; each names the event that reopens it.
@@ -127,12 +129,19 @@ The wave implements the decisions as follows (see the gap-map rows `5.4`, `6.1`,
 `9.4`):
 
 - D10: `GET .../recovery-cases/{caseId}/compensation-candidates` (`recovery.case.manage`),
-  the picker and the mint form in `recovery-case-drawer`.
+  the picker and the mint form in `recovery-case-drawer`. *Implementation note, 2026-10-14:*
+  the drawer shows the code once and preselects the new grant in the picker; the operator
+  presses Link. It does not attach by itself, because linking is its own audited act
+  (`COMPENSATION_ATTACHED`) and a case that auto-linked a code nobody had yet handed over
+  would record a compensation that has not happened. The order-remedy console opens on the
+  case's order from `/finance/payments?order=`.
 - D11: IA row 6.1 and ADR 0140's status line record the decline.
 - D12: `ScheduledOrderRequoteService` is unchanged; the console shows its findings
-  (`GET`/`POST .../orders/{orderId}/promotion-requotes`).
+  (`GET`/`POST .../orders/{orderId}/promotion-requotes`) in the order pane.
 - D23: IA row 9.4 and `operations-spec/staff-and-access.md` record the decline;
-  `approval-action-labels.ts` labels every tenant-worklist action.
+  `approval-action-labels.ts` labels every tenant-worklist action and
+  `ApprovalActionLabelMirrorTests` fails the build when an action added to `ApprovalAction`
+  has no label.
 
 ## Rollout and rollback
 
@@ -142,10 +151,10 @@ decisions themselves.
 ## Implementation checklist
 
 - [x] ADR 0181 written
-- [ ] D10 picker, hand-off and mint in the drawer
-- [ ] D11 recorded in the IA, the gap map's source rows and ADR 0140
-- [ ] D12 console panel and the dated addition to ADR 0019
-- [ ] D23 recorded in the IA and the staff spec; labels
+- [x] D10 picker, hand-off and mint in the drawer
+- [x] D11 recorded in the IA and ADR 0140
+- [x] D12 console panel and the dated addition to ADR 0019
+- [x] D23 recorded in the IA and the staff spec; labels and the drift test
 
 ## Exit criteria
 

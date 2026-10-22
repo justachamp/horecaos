@@ -924,6 +924,26 @@ export const settingsPaths = {
   consentTypes(tenantId: string): string {
     return `${TENANT}/${enc(tenantId)}/consent-types`;
   },
+
+  // ------------------------------------------------ 9.4 Approvals: who signs (ADR 0050, ADR 0181)
+
+  /**
+   * `OperationsApprovalPolicyController` — the operations twin of the control-plane routes, so the console
+   * calls its own surface. `GET` lists every version, `POST` publishes the next one.
+   */
+  approvalPolicies(tenantId: string): string {
+    return `${OPERATIONS}/tenants/${enc(tenantId)}/approval-policies`;
+  },
+
+  /** Every registered action with its missing-policy mode and the policies the tenant has authored for it. */
+  approvalPolicyCoverage(tenantId: string): string {
+    return `${this.approvalPolicies(tenantId)}/coverage`;
+  },
+
+  /** End-dates one version in force: the only way to retire a threshold. */
+  approvalPolicyExpiry(tenantId: string, policyId: string): string {
+    return `${this.approvalPolicies(tenantId)}/${enc(policyId)}/expiry`;
+  },
 } as const;
 
 function enc(value: string): string {

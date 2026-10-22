@@ -392,7 +392,7 @@ class CartCheckoutAndOrderTests {
                         clock),
                 // No expiry-warning assertion lives in this suite — it is about
                 // the hold/settlement boundary, not the pre-expiry message.
-                (tenantId, accountId, lotId, expiresAt, remainingMinor, daysRemaining) -> {},
+                (tenantId, brandId, customerAccountId, accountId, currency, lots, now) -> {},
                 new TransactionTemplate(new DataSourceTransactionManager(dataSource)),
                 clock);
         confirmationSettles = new OrderConfirmedSettlementTrigger(settlementPlanner);

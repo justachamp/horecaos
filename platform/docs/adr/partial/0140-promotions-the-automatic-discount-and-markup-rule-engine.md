@@ -33,20 +33,30 @@
   the menu gives it, with one tap that writes the line through the ordinary cart call (the gift
   is free only because the next price says so, and a gift the menu cannot sell right now is not
   offered); and the marketing report's redemption log has «show customer» for an operator
-  holding `customer.read`, which calls the reveal and opens the customer card. Not built: order-level markup and `SERVICE_CHARGE` (the
-  open fiscal and legal input; markups are item-level only); named-customer targeting
-  (needs a static audience) and a polygon geozone (a delivery-zone condition matches by
-  zone id); an approval threshold on the value of a `FREE_ITEM` gift (activation approval
-  looks at markup, percentage and fixed-amount thresholds); the delivery-fee threshold
-  basis, which no Accepted ADR decides (pre- or post-discount subtotal handed to the fee
-  resolver); what a changed scheduled-order re-quote leads to (the customer's acceptance
-  with its payment delta, or a cancellation) and the checkpoint instants, which ADR 0019
-  leaves open; the ADR 0043 reporting metrics named below (`promo.discount_som` and the
-  rest, which need a grain: the fact carries no legal entity, which ADR 0038 requires of a
-  money metric); benefit grants as a redemption fact source (`source_kind GRANT` exists
-  with no producer); a customer-facing promotion title per locale (the storefronts show
-  kinds of benefit, never a promotion name); and the console screen that shows an order's
-  re-quote findings and its re-check.
+  holding `customer.read`, which calls the reveal and opens the customer card. Operations batch 21 (wave `w6-promotions-reviews-approvals`, decisions in
+  [ADR 0181](../built/0181-compensation-from-a-case-promotion-targeting-requote-and-discretionary-discounts.md))
+  adds: benefit grants as a redemption source (`V0667`: a code the customer presents resolves
+  to their one-off grant in the quote, which is claimed at checkout with the conditional update,
+  released on a failed checkout and on a cancelled, rejected or expired order, kept by an
+  amendment, and written to the day-close fact as `source_kind GRANT` with the adjustment source
+  `GRANT`); the `promo.*` metrics at the legal-entity grain (`V0668` stamps the fact with the order's
+  branch and entity from `fact_order`; `MetricRegistry` registers seven); an approval threshold on a
+  `FREE_ITEM` gift (its highest unit price is weighed against `pricing.promotion.approval.amount_over_minor`);
+  the delivery-fee threshold basis pinned by test (the post-discount subtotal, as ADR 0037 says; the
+  fee resolver is no longer handed the pre-discount figure); a customer-facing title per locale
+  (`V0669`), authored in the editor and shown by both storefronts in the customer's language with the
+  kind of benefit as the fallback; the order-level markup and a `SERVICE_CHARGE` line (stage 5 of the
+  engine, inside `fees`, with no tax share yet) **dark** behind `pricing.order_markup.enabled`, enforced
+  at authoring, at input resolution and at evaluation (`V0670`); and the console's re-quote panel on the
+  order pane with its re-check. **Not built:** switching the service charge on, which waits on finance
+  and counsel (the fiscal receipt line and tax classifier of a service line, whether a
+  payment-method-dependent surcharge is lawful), the dine-in session-rate feed that would supply a
+  rate, a surcharge wording for the order-level markup on the storefronts, and fee reports that would
+  count the charge in `fee_minor`; a polygon geozone (a delivery-zone condition matches by zone id).
+  **Declined for v1 by ADR 0181:** named-customer targeting (D11; revisit when a static audience is
+  built), a customer-facing acceptance flow with a payment delta for a changed scheduled-order
+  re-quote (D12: the findings stay evidence an operator acts on, at the confirmation and the kitchen
+  start), and an operator's discretionary order-line discount (D23; the three remedy producers serve it).
 - Date proposed: 2026-09-29
 - Date decided: 2026-10-01
 - Deciders: proposed by Claude (wave batch 14); Ayubkhon Abbosov (platform owner)
@@ -121,6 +131,16 @@
 
 
 **Decision record, 2026-10-01.** Accepted by Ayubkhon Abbosov (platform owner) with the instruction "accept all" over ADRs 0136–0144. Every open input above is closed on the default this record proposes for it; where a record defers an input to a named owner, that deferral stands as written and implementation proceeds without it. Implementation starts in operations batch 17 the same day.
+
+**Status additions, 2026-10-14 ([ADR 0181](../built/0181-compensation-from-a-case-promotion-targeting-requote-and-discretionary-discounts.md)).**
+Three open inputs above are closed without editing the Decision. *Named-customer targeting* (D11) is declined for
+v1: no static audience kind and no id list inside a rule; the revisit trigger is the one this record already names, a
+static audience built with its consent, suppression and erasure design. *Operator-applied discretionary discounts*
+(D23) are declined for v1: the three approval-gated remedy producers serve the same intent, and the worklist now
+labels every tenant action. *Which subtotal the delivery-fee thresholds are judged on* is the post-discount goods
+subtotal, which is what ADR 0037 says and what the engine already did: `DeliveryFeeThresholdBasisTests` pins it
+through the real quote path, and the fee resolver is no longer handed a goods subtotal (it ignored the figure it was
+given). Finance's confirmation of the three `pricing.promotion.approval.*` limits stays open.
 
 ## Context
 

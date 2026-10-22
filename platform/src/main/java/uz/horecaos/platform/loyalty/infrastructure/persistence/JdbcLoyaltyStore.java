@@ -933,15 +933,32 @@ public class JdbcLoyaltyStore {
      * warning configured (the column's own zero default, for a lot older
      * than this column or a rule authored with no warning) -- zero must never
      * be read as "warn immediately".
+     *
+     * <p>Two more rules, both about the customer rather than the lot (ADR 0046's default is "at most one message
+     * per customer per day", ADR 0181):
+     * <ul>
+     *   <li>a lot whose expiry has already passed is not warned about: telling someone their points "expire in
+     *       -1 days" is worse than telling them nothing, and closing the lot is {@code expireLots}' job;
+     *   <li>an account that had any lot warned in the last 24 hours is left alone until that day has passed, so
+     *       a lot that comes into its window in the afternoon waits for tomorrow's message instead of making a
+     *       second one today. The window is rolling, not a calendar day, so there is no midnight at which two
+     *       messages can fall a minute apart.
+     * </ul>
      */
     public List<LotRow> lotsNeedingExpiryWarning(Instant asOf, int limit) {
         return jdbc.sql("""
-                SELECT * FROM loyalty.lots
-                 WHERE status = 'ACTIVE'
-                   AND expiry_warning_sent_at IS NULL
-                   AND expiry_warning_days > 0
-                   AND expires_at <= :asOf + (expiry_warning_days * INTERVAL '1 day')
-                 ORDER BY expires_at
+                SELECT * FROM loyalty.lots AS lot
+                 WHERE lot.status = 'ACTIVE'
+                   AND lot.expiry_warning_sent_at IS NULL
+                   AND lot.expiry_warning_days > 0
+                   AND lot.expires_at > :asOf
+                   AND lot.expires_at <= :asOf + (lot.expiry_warning_days * INTERVAL '1 day')
+                   AND NOT EXISTS (
+                       SELECT 1 FROM loyalty.lots AS warned
+                        WHERE warned.tenant_id = lot.tenant_id
+                          AND warned.account_id = lot.account_id
+                          AND warned.expiry_warning_sent_at > :asOf - INTERVAL '1 day')
+                 ORDER BY lot.expires_at
                  LIMIT :limit
                 """)
                 .param("asOf", utc(asOf))

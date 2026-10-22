@@ -425,6 +425,13 @@ export const staffRu: AreaMessages<typeof staffEn> = {
   // Fiscal receipt correction approval (ADR 0166)
   'staff.approvals.action.fiscalCorrectionRequest': 'Коррекция или аннулирование фискального чека',
   'staff.approvals.action.fiscalCorrectionAttach': 'Привязка данных фискального агента к чеку',
+  'staff.approvals.action.orderingAmendmentDecrease':
+    'Уменьшение позиций или суммы оформленного заказа',
+  'staff.approvals.action.courierRunPayChange':
+    'Изменение расчёта оплаты курьеру за рейс из нескольких заказов',
+  'staff.approvals.action.reportingBusinessDayBoundaryChange':
+    'Перенос времени начала рабочего дня',
+  'staff.approvals.action.iamPlatformGrantManage': 'Выдача или отзыв роли платформенного уровня',
   // end: Fiscal receipt correction approval (ADR 0166)
   'staff.approvals.tab.pending': 'Ожидают',
   'staff.approvals.tab.decided': 'Решённые',
