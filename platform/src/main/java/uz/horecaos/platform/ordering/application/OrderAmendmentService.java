@@ -159,6 +159,7 @@ public class OrderAmendmentService {
     private final OrderDeliveryPoint deliveryPoint;
     private final CartMenuRules menu;
     private final LineRemovalCoordinator removals;
+    private final MarkedOrderPayment markedPayment;
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     public OrderAmendmentService(
@@ -182,7 +183,8 @@ public class OrderAmendmentService {
             PromotionRedemptionPort promotions,
             PromotionQueryPort promotionQuery,
             CartMenuRules menu,
-            LineRemovalCoordinator removals) {
+            LineRemovalCoordinator removals,
+            MarkedOrderPayment markedPayment) {
         this.orders = orders;
         this.amendments = amendments;
         this.audit = audit;
@@ -203,6 +205,7 @@ public class OrderAmendmentService {
         this.promotionQuery = promotionQuery;
         this.menu = menu;
         this.removals = removals;
+        this.markedPayment = markedPayment;
         this.deliveryPoint = new OrderDeliveryPoint(orders, protection, objectMapper);
         // A second template for the one write that has to outlive the exception it
         // accompanies, exactly as PaymentAttemptService needs for the same reason:
@@ -279,6 +282,7 @@ public class OrderAmendmentService {
         requireRemovalsPossible(decoded.basket(), liveAtPropose);
         requireOrderableQuantities(order, decoded.basket());
         requireWeighedLinesStayAtHandover(order, decoded, liveAtPropose);
+        requireMarkedGoodsKeepAMarkingCapableMethod(order, decoded);
         requireScannedLinesAreNotReplaced(tenantId, orderId, decoded);
         long deltaTotalMinor = 0L;
         boolean requiresApproval = false;
@@ -1739,6 +1743,29 @@ public class OrderAmendmentService {
                             + method
                             + " in advance");
         }
+    }
+
+    /**
+     * ADR 0038 stage 6, ADR 0166 Decision 7: the second door to the sale checkout already guards.
+     *
+     * <p>A basket holding a marked good is not offered, and cannot check out with, a method whose receipt
+     * cannot carry the code ({@code CartPaymentOptions}, {@code CheckoutEligibilityGuard}). Changing the
+     * payment method of a live order is the other way to the same pair, so it is shut by the same rule: an
+     * order that holds a marked good, or that this same batch adds one to, is not moved to such a method.
+     * Asked at propose, so the operator is refused before the customer is rung.
+     */
+    private void requireMarkedGoodsKeepAMarkingCapableMethod(OrderRow order, DecodedAmendment decoded) {
+        String method = decoded.paymentMethodCode();
+        if (method == null) {
+            return;
+        }
+        Set<UUID> added = new HashSet<>();
+        decoded.basket().addedLines().forEach(line -> added.add(line.variantId()));
+        markedPayment
+                .refusalOf(order.tenantId(), order.brandId(), order.orderId(), method, added)
+                .ifPresent(message -> {
+                    throw new AmendmentRefusedException("MARKED_GOODS_NEED_MARKING_CAPABLE_PAYMENT", message);
+                });
     }
 
     /**

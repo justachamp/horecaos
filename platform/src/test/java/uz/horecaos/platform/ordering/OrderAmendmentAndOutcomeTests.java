@@ -10,10 +10,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.jspecify.annotations.Nullable;
@@ -419,13 +421,10 @@ class OrderAmendmentAndOutcomeTests {
                 new uz.horecaos.platform.ordering.infrastructure.catalog.JdbcCartMenuRules(jdbc, objectMapper),
                 // ADR 0169: the real inventory, the real settlement planner, and a kitchen the test can set.
                 new LineRemovalCoordinator(
-                        configuration,
-                        reasons,
-                        lineProduction,
-                        inventory,
-                        settlementPlanner,
-                        orderStore,
-                        objectMapper));
+                        configuration, reasons, lineProduction, inventory, settlementPlanner, orderStore, objectMapper),
+                // ADR 0166 Decision 7: the rule a test sets (nothing is marked unless it says so).
+                (tenantId, brandId, orderId, paymentMethodCode, addedVariants) ->
+                        markedPaymentRule.refusalOf(tenantId, brandId, orderId, paymentMethodCode, addedVariants));
         amendments = amendmentService.apply(new FakeConfigurationResolver());
         // The same service with the brand's removal gate on, for the tests that take a line off an order.
         removalAmendments = amendmentService.apply(
@@ -1349,6 +1348,53 @@ class OrderAmendmentAndOutcomeTests {
                 .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
                         .isEqualTo("PAYMENT_METHOD_CHANGE_REQUIRES_VOID_REFUND"));
         assertThat(orderQuery.revisions(TENANT, orderId)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName(
+            "ADR 0166 Decision 7: an order holding a marked good is not switched to a method whose receipt cannot carry the code")
+    void changePaymentMethodIsRefusedWhenTheMethodCannotCarryTheMarkedCode() {
+        UUID orderId = orderIdOf(placeOrder("idem-pay-marked"));
+        int version = orderStore.find(TENANT, orderId).orElseThrow().version();
+        List<Set<UUID>> asked = new ArrayList<>();
+        markedPaymentRule = (tenantId, brandId, order, method, added) -> {
+            asked.add(added);
+            return "TERMINAL".equals(method)
+                    ? Optional.of("This order has a marked item, whose receipt must carry its code")
+                    : Optional.empty();
+        };
+
+        assertThatThrownBy(() -> tx(() -> amendments.propose(
+                        TENANT,
+                        orderId,
+                        propose(
+                                "k-pay-marked",
+                                version,
+                                OrderAmendmentService.AmendmentCommand.changePaymentMethod("TERMINAL")))))
+                .isInstanceOf(OrderAmendmentService.AmendmentRefusedException.class)
+                .satisfies(thrown -> assertThat(((OrderAmendmentService.AmendmentRefusedException) thrown).code())
+                        .isEqualTo("MARKED_GOODS_NEED_MARKING_CAPABLE_PAYMENT"));
+        assertThat(orderQuery.revisions(TENANT, orderId))
+                .as("a refused amendment writes no revision")
+                .hasSize(1);
+        assertThat(asked).as("the rule was asked, once").hasSize(1);
+
+        // The same order may still go to a method the rule has nothing against.
+        var toCash = amend("k-pay-marked-cash", OrderAmendmentService.AmendmentCommand.changePaymentMethod("CASH"));
+        assertThat(toCash.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
+    }
+
+    @Test
+    @DisplayName("an amendment that does not change the method never asks the marked-goods rule")
+    void anAmendmentThatKeepsTheMethodDoesNotAskTheMarkedRule() {
+        orderIdOf(placeOrder("idem-pay-marked-none"));
+        markedPaymentRule = (tenantId, brandId, order, method, added) -> {
+            throw new AssertionError("no method was named, so there is nothing to ask");
+        };
+
+        var result = amend("k-no-method", OrderAmendmentService.AmendmentCommand.kitchenNote("Без лука"));
+
+        assertThat(result.amendment().status()).isEqualTo(AmendmentStatus.APPLIED);
     }
 
     @Test
@@ -5523,6 +5569,10 @@ class OrderAmendmentAndOutcomeTests {
                 .query(Integer.class)
                 .single();
     }
+
+    /** What the amendment service asks about marked goods; a test replaces it, and nothing is marked by default. */
+    private volatile uz.horecaos.platform.ordering.application.MarkedOrderPayment markedPaymentRule =
+            uz.horecaos.platform.ordering.application.MarkedOrderPayment.NONE;
 
     private static final PaymentIntentPort UNWIRED_PAYMENTS = new PaymentIntentPort() {
         @Override

@@ -42,13 +42,14 @@
   V0685 snapshots the `tender_id` and `business_date` on the document at opening.
   `FiscalNodeFacts.requiresMarkingCapablePayment` is called from `CartPaymentOptions` and
   `CheckoutEligibilityGuard` (while `feature.marked_goods` is on for the tenant), so Payme is neither
-  offered nor accepted for a basket holding a marked node. The paper receipt prints the lines as filed.
+  offered nor accepted for a basket holding a marked node, and `OrderAmendmentService` refuses
+  (`MARKED_GOODS_NEED_MARKING_CAPABLE_PAYMENT`, through `MarkedOrderPayment`) a `CHANGE_PAYMENT_METHOD`
+  that would move an order holding a marked line, or adding one in the same batch, to such a method. The paper receipt prints the lines as filed.
   The Click `Amount` for a weighed count goes through an injected `ClickQuantityScale`
   (`horecaos.payments.click.quantity-scale`, default 1, a fractional count refused until Click answers).
   Not built: `openPartnerObligation` driven at capture, the Payme detail on either surface, the
   `FiscalTerminalPort` and its fake adapter, the reader for `order_revisions.fiscal_correction_required`,
-  `FiscalCorrectionRequested.v1` and `FiscalCorrectionAttached.v1` on `fiscal.events`, the
-  `CHANGE_PAYMENT_METHOD` amendment's own marked-goods refusal, the adapter from `OrderMarkCounts`
+  `FiscalCorrectionRequested.v1` and `FiscalCorrectionAttached.v1` on `fiscal.events`, the adapter from `OrderMarkCounts`
   to ADR 0161's `OrderMarksPort` (until it exists the block reads «marks not built»).
   The console (`q-fiscal-evidence`) draws the read on the order detail's fiscal panel, under the
   tenders of the payments page, where each tender links to its document, and beneath the order

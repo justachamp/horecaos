@@ -40,8 +40,9 @@
   `PaymentIntentPort.carriesMarkingCodes`, answered from the method's receipt port, not from a
   `supports_marking` column), so a basket holding a marked node is not offered Payme and a checkout naming
   it is refused `MARKED_GOODS_NEED_MARKING_CAPABLE_PAYMENT`, while the flag is on for the tenant; the
-  `CHANGE_PAYMENT_METHOD` amendment does not yet make the same refusal, and the builder's own
-  `MARKING_CODES_UNSUPPORTED` refusal stands behind it; P2 and P3 are not met; the receipt's VAT percent is now the
+  `CHANGE_PAYMENT_METHOD` amendment makes the same refusal at propose (`MarkedOrderPayment`: an order that
+  holds a marked line, or whose batch adds one, is not moved to Payme), and the builder's own
+  `MARKING_CODES_UNSUPPORTED` refusal stands behind both; P2 and P3 are not met; the receipt's VAT percent is now the
   whole percent of the rate the accepted quote recorded; inventory
   is not a scan point in v1; and the gap-map row `X.35` is for the owner to re-audit.
 - Date proposed: 2026-10-07
