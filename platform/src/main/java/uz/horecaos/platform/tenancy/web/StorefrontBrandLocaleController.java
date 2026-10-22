@@ -52,7 +52,7 @@ public class StorefrontBrandLocaleController {
                     + "registry's content tier, and says so (configured=false). A language the registry no "
                     + "longer has live is left out. Cacheable: it changes only when an operator edits the "
                     + "brand's languages.")
-    ResponseEntity<BrandLocalesResponse> brandLocales(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
+    public ResponseEntity<BrandLocalesResponse> brandLocales(@PathVariable UUID tenantId, @PathVariable UUID brandId) {
         TenantLocaleSet set = locales.brandLocaleSet(tenantId, brandId);
         List<String> offered = set.locales().stream()
                 .filter(tag -> PlatformLocales.isActive(tag, Tier.CONTENT))

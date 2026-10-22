@@ -1,5 +1,5 @@
 import { DOCUMENT } from '@angular/common';
-import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import { Injectable, InjectionToken, computed, effect, inject, signal } from '@angular/core';
 
 import { PlatformLocales, heldPlatformLocales } from './platform-locales.service';
 import { StorageService } from './storage.service';
@@ -15,7 +15,16 @@ const LANG_KEY = 'lang';
  * {@link PlatformLocales}). An id is the registry's `catalogCode`, so `uz` here is `uz-Latn` there.
  * Adding a language means adding its file and its id here; nothing else in the app names it.
  */
-export const BUILD_CATALOGUES: readonly string[] = ['uz', 'ru', 'en'];
+export const BUILD_CATALOGUE_IDS: readonly string[] = ['uz', 'ru', 'en'];
+
+/**
+ * {@link BUILD_CATALOGUE_IDS} as an injectable, so the activation rehearsal can stand in for a build
+ * that has gained a catalogue without adding one. Nothing else overrides it.
+ */
+export const BUILD_CATALOGUES = new InjectionToken<readonly string[]>('BUILD_CATALOGUES', {
+  providedIn: 'root',
+  factory: () => BUILD_CATALOGUE_IDS,
+});
 
 /**
  * The platform's tag for a language id of this app (ADR 0149).
@@ -54,6 +63,7 @@ export class LangService {
   private readonly storage = inject(StorageService);
   private readonly registry = inject(PlatformLocales);
   private readonly document = inject(DOCUMENT);
+  private readonly catalogues = inject(BUILD_CATALOGUES);
 
   /**
    * The active language. `uz` until the registry and the brand's default have been read: it is the
@@ -73,10 +83,10 @@ export class LangService {
   readonly offered = computed<readonly LanguageOption[]>(() => {
     const entries = this.registry.entries();
     const live = entries.filter(
-      (entry) => entry.tiers.includes('CONTENT') && BUILD_CATALOGUES.includes(entry.catalogCode),
+      (entry) => entry.tiers.includes('CONTENT') && this.catalogues.includes(entry.catalogCode),
     );
     if (live.length === 0) {
-      return BUILD_CATALOGUES.map((id) => ({ id, tag: id, label: id }));
+      return this.catalogues.map((id) => ({ id, tag: id, label: id }));
     }
     const brand = this.registry.brand();
     const served = brand?.configured ? brand.locales : null;

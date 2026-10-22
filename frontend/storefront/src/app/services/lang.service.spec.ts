@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../core/api/api-client';
 import { APP_CONFIG } from '../core/config/app-config';
 import { REGISTRY_FIXTURE } from '../../testing/platform-locales.fixture';
-import { BUILD_CATALOGUES, LangService, langIdOf, platformTag } from './lang.service';
+import { BUILD_CATALOGUE_IDS, LangService, langIdOf, platformTag } from './lang.service';
 import {
   BrandLocales,
   PlatformLocaleEntry,
@@ -38,7 +38,7 @@ describe('platformTag', () => {
   });
 
   it('round-trips every id this app has a catalogue for', () => {
-    for (const id of BUILD_CATALOGUES) {
+    for (const id of BUILD_CATALOGUE_IDS) {
       expect(langIdOf(platformTag(id))).toBe(id);
     }
   });
@@ -193,7 +193,7 @@ describe('LangService (ADR 0149, Decision 5 and 6)', () => {
 
     await lang.load();
 
-    expect(lang.offered().map((option) => option.id)).toEqual([...BUILD_CATALOGUES]);
+    expect(lang.offered().map((option) => option.id)).toEqual([...BUILD_CATALOGUE_IDS]);
     expect(lang.langId()).toBe('uz');
   });
 

@@ -121,6 +121,21 @@ class LocaleListsLiveInTheRegistryTests {
     }
 
     @Test
+    @DisplayName("the activation-rehearsal seam is a test seam: no main source but the registry names it")
+    void theRehearsalSeamIsNeverCalledFromProduction() throws IOException {
+        List<String> callers = new ArrayList<>();
+        for (Path source : javaSources()) {
+            String relative = MAIN.relativize(source).toString();
+            if (!relative.equals(REGISTRY) && Files.readString(source).contains("rehearseActivation")) {
+                callers.add(relative);
+            }
+        }
+        assertThat(callers)
+                .as("declaring a language live is a release, never something production code does at run time")
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("no migration after V0499 spells a closed list of languages in a CHECK")
     void noNewMigrationClosesTheSet() throws IOException {
         Path migrations = Path.of("src/main/resources/db/migration");
