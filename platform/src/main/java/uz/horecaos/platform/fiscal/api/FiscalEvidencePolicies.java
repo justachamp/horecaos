@@ -1,8 +1,12 @@
 package uz.horecaos.platform.fiscal.api;
 
 import java.util.Set;
+import java.util.UUID;
+import uz.horecaos.platform.iam.api.ResourceScope;
 import uz.horecaos.platform.iam.api.ResourceScope.ScopeType;
 import uz.horecaos.platform.tenancy.api.PolicyKey;
+import uz.horecaos.platform.tenancy.api.PolicyResolver;
+import uz.horecaos.platform.tenancy.api.ResolvedPolicy;
 
 /**
  * The ADR 0030 policy key the fiscal evidence surface owns (ADR 0166).
@@ -52,6 +56,37 @@ public final class FiscalEvidencePolicies {
 
         public static FiscalEvidenceRetention platformDefault() {
             return new FiscalEvidenceRetention(DEFAULT_YEARS, true);
+        }
+    }
+
+    /**
+     * The retention that applies to a tenant's fiscal evidence: the tenant's figure, never below the
+     * platform's (ADR 0166 Decision 10).
+     *
+     * <p>The key is settable at both scopes and the resolver returns the most specific, which on its own would let
+     * a tenant write five years under a platform that states seven. The record says the opposite: «a tenant's
+     * accountant may lengthen it, and no deployment can shorten it below what the platform states», because the
+     * obligation is the tenant's but the platform answers for having kept what it was handed. So every reader
+     * (the evidence screen, the retention report, ADR 0161's marking evidence, which declares no key of its own)
+     * resolves the key here and gets the longer of the two.
+     *
+     * <p>An unreadable policy is the platform default, loudly: a tenant's evidence is never kept for less because a
+     * document could not be parsed.
+     */
+    public static FiscalEvidenceRetention effectiveRetention(PolicyResolver policies, UUID tenantId) {
+        FiscalEvidenceRetention platform = readOrDefault(policies, ResourceScope.platform());
+        FiscalEvidenceRetention tenant = readOrDefault(policies, ResourceScope.tenant(tenantId));
+        // On a tie the tenant's own is the more specific statement, and it may be the one that was confirmed.
+        return tenant.years() >= platform.years() ? tenant : platform;
+    }
+
+    private static FiscalEvidenceRetention readOrDefault(PolicyResolver policies, ResourceScope scope) {
+        try {
+            return policies.resolve(EVIDENCE_RETENTION, scope)
+                    .map(ResolvedPolicy::document)
+                    .orElseGet(FiscalEvidenceRetention::platformDefault);
+        } catch (RuntimeException unreadable) {
+            return FiscalEvidenceRetention.platformDefault();
         }
     }
 

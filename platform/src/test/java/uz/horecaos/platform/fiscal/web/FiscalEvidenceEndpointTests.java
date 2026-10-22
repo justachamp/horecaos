@@ -727,6 +727,72 @@ class FiscalEvidenceEndpointTests {
         }
     }
 
+    // ------------------------------------------------------------------ retention (X.2-11)
+
+    @Test
+    @DisplayName(
+            "the platform sees each tenant's evidence against its retention, report-only; a tenant's own people cannot read it")
+    void theRetentionReportIsThePlatformsAndDeletesNothing() throws Exception {
+        UUID recent = issuedClickDocument(seedOrder("E-901"), ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        UUID old = issuedClickDocument(seedOrder("E-902"), ENTITY_A, line("Lavash", 1, 25_000L, List.of()));
+        jdbc.sql("UPDATE fiscal.fiscal_documents SET created_at = :at, issued_at = :at WHERE id = :id")
+                .param("id", old)
+                .param("at", Instant.now().minus(Duration.ofDays(365L * 8)).atOffset(ZoneOffset.UTC))
+                .update();
+        grantPlatformAdmin("retention-platform-admin");
+
+        MvcResult read = mvc.perform(
+                        get("/api/v1/control-plane/fiscal/retention").with(tokenFor("retention-platform-admin")))
+                .andReturn();
+
+        assertThat(read.getResponse().getStatus()).isEqualTo(200);
+        JsonNode rows = json.readTree(read.getResponse().getContentAsString());
+        JsonNode mine = java.util.stream.StreamSupport.stream(rows.spliterator(), false)
+                .filter(row -> row.path("tenantId").asText().equals(TENANT.toString()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("the tenant that holds evidence is in the report"));
+        assertThat(mine.path("retentionYears").asInt()).isEqualTo(7);
+        assertThat(mine.path("provisional").asBoolean())
+                .as("the default nobody has confirmed says so")
+                .isTrue();
+        assertThat(mine.path("documents").asLong()).isEqualTo(2);
+        assertThat(mine.path("pastRetention").asLong())
+                .as("one is eight years old and one is not")
+                .isEqualTo(1);
+        assertThat(rows.toString()).doesNotContain(FISCAL_SIGN).doesNotContain(RECEIPT_URL);
+
+        // Report-only: both documents are still there, and the recent one is untouched.
+        assertThat(jdbc.sql("SELECT count(*) FROM fiscal.fiscal_documents WHERE tenant_id = :t")
+                        .param("t", TENANT)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(2L);
+        assertThat(documentStatus(recent)).isEqualTo("ISSUED");
+
+        // A tenant's own finance role is not the platform's.
+        assertThat(mvc.perform(get("/api/v1/control-plane/fiscal/retention").with(tokenFor(FINANCE)))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus())
+                .isEqualTo(403);
+    }
+
+    private void grantPlatformAdmin(String subject) {
+        jdbc.sql("""
+                INSERT INTO iam.grants
+                    (id, tenant_id, principal_subject, role_id, role_is_platform, scope_type, scope_id,
+                     status, granted_by, reason, valid_from)
+                VALUES (:id, NULL, :subject, :roleId, true, 'PLATFORM', NULL,
+                        'ACTIVE', 'test-fixture', 'fiscal retention endpoint test', :validFrom)
+                ON CONFLICT DO NOTHING
+                """)
+                .param("id", UUID.nameUUIDFromBytes((subject + PlatformRole.PLATFORM_ADMIN.code()).getBytes(UTF_8)))
+                .param("subject", subject)
+                .param("roleId", RoleRegistrySynchronizer.platformRoleId(PlatformRole.PLATFORM_ADMIN))
+                .param("validFrom", Instant.now().minus(Duration.ofHours(1)).atOffset(ZoneOffset.UTC))
+                .update();
+    }
+
     // ------------------------------------------------------ correction and void
 
     // ------------------------------------------- an amendment after the receipt (X.2-6, ADR 0166 Decision 8)

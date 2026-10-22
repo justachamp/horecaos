@@ -3473,6 +3473,16 @@ export interface ResumeScopeRequest {
   reason: string;
 }
 
+export interface RetentionRow {
+  documents?: number;
+  oldest?: string;
+  pastRetention?: number;
+  provisional?: boolean;
+  retainedAfter?: string;
+  retentionYears?: number;
+  tenantId?: string;
+}
+
 export interface RetentionRule {
   code?: string;
   enforcedBy?: string;
@@ -4513,6 +4523,7 @@ export interface Operations {
   "findings": { method: "GET"; path: "/api/v1/control-plane/fiscal-reference/mxik/imports/{runId}/findings"; request: { parameters: { path: { runId: string }; query: { after?: string; limit?: number } } }; responses: { "200": PageMxikImportFindingResponse } };
   "reject": { method: "POST"; path: "/api/v1/control-plane/fiscal-reference/mxik/imports/{runId}/reject"; request: { parameters: { path: { runId: string } } }; responses: { "200": MxikImportRunResponse } };
   "status_1": { method: "GET"; path: "/api/v1/control-plane/fiscal-reference/mxik/status"; request: { parameters: Record<string, never> }; responses: { "200": ReferenceStatus } };
+  "retention": { method: "GET"; path: "/api/v1/control-plane/fiscal/retention"; request: { parameters: Record<string, never> }; responses: { "200": Array<RetentionRow> } };
   "list_17": { method: "GET"; path: "/api/v1/control-plane/grants"; request: { parameters: Record<string, never> }; responses: { "200": Array<PlatformGrantView> } };
   "grant_1": { method: "POST"; path: "/api/v1/control-plane/grants"; request: { parameters: Record<string, never>; body: PlatformGrantRequest }; responses: { "200": PlatformGrantResponse } };
   "revoke_1": { method: "DELETE"; path: "/api/v1/control-plane/grants/{grantId}"; request: { parameters: { path: { grantId: string } }; body: PlatformGrantControllerReasonRequest }; responses: { "200": PlatformGrantResponse } };

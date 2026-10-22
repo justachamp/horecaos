@@ -34155,6 +34155,38 @@
         },
         "type" : "object"
       },
+      "RetentionRow" : {
+        "properties" : {
+          "documents" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "oldest" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "pastRetention" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "provisional" : {
+            "type" : "boolean"
+          },
+          "retainedAfter" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "retentionYears" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "tenantId" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "RetentionRule" : {
         "properties" : {
           "code" : {
@@ -45342,6 +45374,29 @@
         },
         "summary" : "Whether the official ИКПУ/MXIK list is loaded, which dataset it is, and how old",
         "tags" : [ "Fiscal reference" ]
+      }
+    },
+    "/api/v1/control-plane/fiscal/retention" : {
+      "get" : {
+        "description" : "Report-only (ADR 0166 Decision 10): nothing is deleted or marked, and no role the application uses may delete a fiscal row. The period is the tenant's, never below the platform's, and flagged provisional while it is the unconfirmed default.",
+        "operationId" : "retention",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/RetentionRow"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "How much fiscal evidence each tenant holds, and how much is past its retention",
+        "tags" : [ "Platform fiscal" ]
       }
     },
     "/api/v1/control-plane/grants" : {
