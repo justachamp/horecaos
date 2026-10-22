@@ -935,6 +935,31 @@ export const ACTIVITY_ACTION_SENTENCES: Readonly<Record<string, Readonly<Record<
       ru: 'С клиента снята юридическая блокировка',
       'uz-Latn': 'Mijozdan huquqiy cheklov olib tashlandi',
     },
+    'customer.dsar.requested': {
+      en: 'Copy of a customer’s data requested',
+      ru: 'Запрошена копия данных клиента',
+      'uz-Latn': 'Mijoz maʻlumotlari nusxasi soʻraldi',
+    },
+    'customer.dsar.cancelled': {
+      en: 'Request for a copy of a customer’s data withdrawn',
+      ru: 'Запрос копии данных клиента отозван',
+      'uz-Latn': 'Mijoz maʻlumotlari nusxasi soʻrovi qaytarib olindi',
+    },
+    'customer.dsar.exported': {
+      en: 'Customer’s data gathered into a copy',
+      ru: 'Данные клиента собраны в копию',
+      'uz-Latn': 'Mijoz maʻlumotlari nusxaga jamlandi',
+    },
+    'customer.dsar.bundle_revealed': {
+      en: 'Customer’s data copy opened',
+      ru: 'Открыта копия данных клиента',
+      'uz-Latn': 'Mijoz maʻlumotlari nusxasi ochildi',
+    },
+    'customer.correction.applied': {
+      en: 'Customer’s data corrected against evidence',
+      ru: 'Данные клиента исправлены на основании подтверждения',
+      'uz-Latn': 'Mijoz maʻlumotlari dalil asosida tuzatildi',
+    },
     'customer.blacklist.revealed': {
       en: 'Customer blacklist revealed',
       ru: 'Клиент чёрный список раскрыто',
