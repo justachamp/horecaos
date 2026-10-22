@@ -31,9 +31,9 @@ Four rows of the operations gap map stayed below `BUILT` in the 2026-10-14 audit
 4. **Decline «Кто принимает первым»: orders are branch-first.** The order is accepted by the branch that will cook it (`AUTO_CONFIRM`, or `RESTAURANT_APPROVAL` at that branch); a courier does not accept an order before the branch. ADR 0019 said to carry the parameter or refuse it, and this record refuses it. The clause is struck from `settings.md` Card 4 and from the information architecture's 10.3, as ADR 0165 struck the deposit. Revisit when a signed tenant needs courier-first dispatch.
 5. **The readers that were waiting on no decision are built in the same wave, at the values that keep today's behaviour.**
    - **Operator promo code.** `ordering.operator_promo_code_allowed` is read where an operator-keyed order is priced (`OperatorOrderingService#fillAndPrice`, which `place` and the quote share): a promo code on an operator-keyed order is refused with `OPERATOR_PROMO_CODE_NOT_ALLOWED` when the resolved value is `false`. The registered default flips from `false` to `true` in both declarations, because the key had no reader and operators apply codes today; a tenant that wants the lock sets `false`, and a tenant that had already stored `false` gets the lock it asked for.
-   - **Pre-order branch selection.** The requested time (`requestedFor`) enters the operator branch resolver: candidates are evaluated for service and zone validity at that instant, and when no candidate is open then, `ordering.preorder_branch_resolution` picks among the candidates that accept a scheduled order: `BY_OPENING_TIME` takes the one that opens soonest, `BY_DISTANCE` the one nearest the delivery point. A `PICKUP` order has no customer point, so `BY_DISTANCE` there falls back to `BY_OPENING_TIME`, and the field says so. `OperatorOrderingService#place` re-derives the same proposal server-side.
+   - **Pre-order branch selection.** The requested time (`requestedFor`) enters the operator branch resolver: candidates are evaluated for service and zone validity at that instant, and when no candidate is open then, `ordering.preorder_branch_resolution` ranks the closed ones: `BY_OPENING_TIME` puts the one that opens soonest first, `BY_DISTANCE` the one nearest the delivery point, and a branch whose own policy takes no pre-order into a closed slot sorts last in either. A `PICKUP` order has no customer point, so `BY_DISTANCE` there falls back to `BY_OPENING_TIME`, and the field says so. The key is read at brand scope, because the question is asked of the brand's branches and the screen and the server's own re-derivation in `OperatorOrderingService#place` must agree on it; the field says a value set on one branch is not read.
    - **Card 5 toggles.** Two new keys, `ordering.operator_callback_flag_allowed` and `ordering.operator_change_due_allowed`, default `true`. When the callback flag is allowed the operator can raise «Перезвонить клиенту» at creation (today it is raised only by the `SET_CALLBACK_REQUESTED` amendment after the order exists); when change-due is not allowed, an operator order with `cashTenderedMinor` is refused and the screen hides «Сдача».
-   - **Echoes.** Settings that live on another screen but that the information architecture lists on 10.3 are shown read-only with a link: delivery distance mode (row `3.7`), the branch order limit (row `10.2c`), and the channel «Колл-центр» payment methods and order types (row `10.4b`). `delivery.out_of_zone_policy` and courier visibility (row `10.13`) are not echoed: the first is itself not enforced (`DeliveryConfigurationKeys`), so echoing it would print a setting that changes nothing.
+   - **Echoes.** Settings that live on another screen but that the information architecture lists on 10.3 are shown read-only with a link, in a card at the foot of the order-policy page: delivery distance mode (row `3.7`, the standard tariff's mode), the branch order limit (row `10.2c`, read for the branch the scope bar is on, because there is no batched read of it), the kitchen's paid-only hold (ADR 0168), what happens to an address outside every zone (row `10.13`), and the call-centre channel's payment methods and order types (row `10.4b`). The out-of-zone row carries the platform's own caveat, «Пока не применяется»: `delivery.out_of_zone_policy` is registered and editable and the delivery fee resolver does not read it yet (`DeliveryConfigurationKeys`), so an echo that printed the value without saying so would make it read as a setting that works. That is a finding for row `10.13`, recorded here and not fixed here.
 
 ## Alternatives considered
 
@@ -89,13 +89,15 @@ Four rows of the operations gap map stayed below `BUILT` in the 2026-10-14 audit
 
 The account is a predicate of every statement: it must belong to the path's tenant, and it must be visible to the path's brand (`identity_partition_brand_id` is null for a tenant-shared account, or equal to the brand); anything else is `404`, the same answer as "no such customer". The masked read decrypts the address document inside the service and returns only the masked projection.
 
-**Configuration.** Registry changes are made in both declarations and `OrderingConfigurationKeyTests` fails the build if they drift: five removed; `ordering.operator_promo_code_allowed` default `true`; `ordering.operator_callback_flag_allowed` and `ordering.operator_change_due_allowed` added with default `true`. One migration deletes the stored rows of the five removed keys (V0653).
+**Configuration.** Registry changes are made in both declarations and `OrderingConfigurationKeyTests` fails the build if they drift: five removed; `ordering.operator_promo_code_allowed` default `true`; `ordering.operator_callback_flag_allowed` and `ordering.operator_change_due_allowed` added with default `true`. One migration, `V0653__the_five_order_policy_scalars_nothing_read_leave_the_registry.sql`, deletes the stored rows of the five removed keys; `RetiredOrderPolicyKeysMigrationTests` puts the rows back, shows `ConfigurationKeyStartupValidator` refusing to boot over them, runs the very file Flyway ran and shows it satisfied with the live row untouched. The two gates are validated where the one writer applies the rules: `ConfigurationValueRules` holds the shape (`ALL`, or channel codes; a minimum of 0 to 1000) and `AutoAcceptChannelsGuard`, a `ConfigurationWriteGuard`, refuses a code that is not one of the tenant's channels.
 
-**Acceptance.** `AutoAcceptGate` (ordering application) is asked by `CheckoutOrderWriter#create` for the order's channel code and customer account; it reads the two keys at the location scope, counts completed orders through `JdbcOrderStore`, and answers `Pass`, `Held(reason)` or `Unenforceable`. The held order is written with the document's `approvalChannel` and `timeoutAction` snapshots and an `approval_deadline_at`, and `CheckoutProgressionStep#awaitApproval` records `reason_code` on its transition.
+**Acceptance.** `AutoAcceptGate` (ordering application) is asked by `CheckoutOrderWriter#create` for the order's channel code and customer account; it reads the two keys at the order's location scope, counts completed orders through `JdbcOrderStore#countCompletedForCustomer`, and answers `Pass`, `Held(reason)` or `Unenforceable`. The held order is written with the document's `approvalChannel` and `timeoutAction` snapshots, the mode snapshot `RESTAURANT_APPROVAL` and an `approval_deadline_at` (`ck_order_approval_deadline` ties the two together), and `CheckoutProgressionStep#awaitApproval` records `AUTO_ACCEPT_HELD_CHANNEL` or `AUTO_ACCEPT_HELD_PRIOR_ORDERS` as the `reason_code` of the `RECEIVED` to `AWAITING_APPROVAL` transition. `OrderStateService#paymentCaptured` reads the order's own mode snapshot, not the pinned policy's. Gate outcomes are counted in `horecaos.order.auto_accept_gate{outcome,reason}`.
 
 **Operator order path.** `OperatorOrderEntryPolicyController` serves `GET .../locations/{locationId}/orders/entry-policy` (`ORDER_PLACE`, `LOCATION`) with the three booleans the New order screen needs; the same values are enforced server-side in `OperatorOrderingService`.
 
-**Branch resolution.** `BranchResolutionQueryService#resolve` takes an optional `requestedFor`; `BranchResolutionPort.DeliveryBranchMatch` gains the branch's own coordinates (nullable), the existing six-argument constructor stays.
+**Branch resolution.** `BranchResolutionQueryService#resolve` takes an optional `requestedFor`, and `POST .../orders/branch-resolution` accepts it; a candidate carries `nextAvailableAt`, `acceptsScheduledOrders` and `distanceMeters`. `BranchResolutionPort.DeliveryBranchMatch` gains the branch's own coordinates (nullable), the existing six-argument constructor stays.
+
+**Console.** `NewOrderApi` calls the location-scoped routes (`capturedAddresses`, `captureAddress`, `placeAddressPin`); `q-address-pin-editor` (a `q-map-pin` with no way to take the pin away) replaces the text editor for a saved address, which the persona cannot read; the page hides what `GET .../orders/entry-policy` says is off and re-asks the branch resolver when the «Позже» time changes. The order-policy page drops the five fields, adds Card 1's hold-back path (the approval fields are shown under auto-confirm, offered with nobody chosen), a notice on Card 3 when the gates have nowhere to send an order, the three Card 5 toggles, and `q-order-policy-neighbours-card` for the echoes.
 
 **Testing.** Each behaviour is named in the implementation checklist with the test that proves it; the both-ends proofs call the production controllers with the JSON the console sends, as `LOCATION_STAFF`, and do not seed what production creates.
 
@@ -105,19 +107,19 @@ The migration is a delete of rows no code reads; it ships with the code that sto
 
 ## Implementation checklist
 
-- [ ] Capability, role bundles, role-registry and action-code dictionary kept in step
-- [ ] Masked list, add-with-pin and set-pin routes, audited and rate-limited, with the account checked against tenant and brand
-- [ ] The New order address pane calls the location-scoped routes; the tenant routes stay for the Customers screen
-- [ ] Both-ends proof as `LOCATION_STAFF`: look up, create on a miss, add an address with a pin, place a `DELIVERY` order through the production controller with the console's JSON
-- [ ] Both-ends HTTP test of `POST .../orders/aggregator-entries`: console JSON, `ORDER_PLACE` refusal, Idempotency-Key replay, the `LOCATION_STAFF` `DELIVERY` case
-- [ ] The five retired fields, keys, stored rows and strings removed
-- [ ] Both gates read at checkout; the acceptance document relaxed; Card 1 and Card 3 updated
-- [ ] Operator promo-code permission refused on place and on quote when `false`
-- [ ] Pre-order branch selection reads the requested time and ranks out-of-hours candidates
-- [ ] Echoes for distance mode, the branch order limit and the call-centre channel
-- [ ] Card 5 callback and change-due toggles
-- [ ] «Кто принимает первым» struck from `settings.md` Card 4 and the information architecture
-- [ ] Status additions on ADR 0002, ADR 0039, ADR 0114, ADR 0145 and ADR 0150
+- [x] Capability, role bundles, role-registry and action-code dictionary kept in step
+- [x] Masked list, add-with-pin and set-pin routes, audited and rate-limited, with the account checked against tenant and brand
+- [x] The New order address pane calls the location-scoped routes; the tenant routes stay for the Customers screen
+- [x] Both-ends proof as `LOCATION_STAFF`: look up, create on a miss, add an address with a pin, place a `DELIVERY` order through the production controller with the console's JSON
+- [x] Both-ends HTTP test of `POST .../orders/aggregator-entries`: console JSON, `ORDER_PLACE` refusal, Idempotency-Key replay, the `LOCATION_STAFF` `DELIVERY` case
+- [x] The five retired fields, keys, stored rows and strings removed
+- [x] Both gates read at checkout; the acceptance document relaxed; Card 1 and Card 3 updated
+- [x] Operator promo-code permission refused on place and on quote when `false`
+- [x] Pre-order branch selection reads the requested time and ranks out-of-hours candidates
+- [x] Echoes for distance mode, the branch order limit, the kitchen paid-only hold, the out-of-zone policy and the call-centre channel
+- [x] Card 5 callback and change-due toggles
+- [x] «Кто принимает первым» struck from `settings.md` Card 4 and the information architecture
+- [x] Status additions on ADR 0002, ADR 0039, ADR 0114, ADR 0145 and ADR 0150
 
 ## Exit criteria
 
