@@ -198,7 +198,7 @@ class WebPushChannelAdapterTests {
     @DisplayName("a subscription URL the platform does not send to is never called")
     void anAddressOutsideTheAllowlistIsNeverCalled() {
         WebPushChannelAdapter strict =
-                adapter(vapidPublicKey, SECRET_REFERENCE, SUBJECT, new PushEndpointPolicy("fcm.googleapis.com", true));
+                adapter(vapidPublicKey, SECRET_REFERENCE, SUBJECT, new PushEndpointPolicy("fcm.googleapis.com", false));
 
         ProviderOutcome outcome = strict.send(dispatch(service.endpoint("/wpush/ssrf"), "A", "B"), CALL);
 
