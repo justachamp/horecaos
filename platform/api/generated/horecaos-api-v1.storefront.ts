@@ -125,6 +125,11 @@ export interface Branch {
   name?: string;
 }
 
+export interface BundleLink {
+  expiresAt?: string;
+  url?: string;
+}
+
 export interface CallbackRequestResponse {
   leadId: string;
 }
@@ -341,6 +346,17 @@ export interface EventsRequest {
 
 export interface ExchangeRequest {
   tableToken: string;
+}
+
+export interface ExportRequestStatus {
+  bundleAvailable?: boolean;
+  bundleExpiresAt?: string;
+  cancelledAt?: string;
+  id?: string;
+  producedAt?: string;
+  requestedAt?: string;
+  responseDueAt?: string;
+  status?: string;
 }
 
 export interface FaqEntryResponse {
@@ -1201,10 +1217,14 @@ export interface Operations {
   "removeAddress": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } } }; responses: { "200": unknown } };
   "address": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } } }; responses: { "200": StorefrontCustomerControllerAddressResponse } };
   "updateAddress": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/addresses/{addressId}"; request: { parameters: { path: { addressId: string; brandId: string; tenantId: string } }; body: SaveAddressRequest }; responses: { "200": StorefrontCustomerControllerAddressResponse } };
-  "request": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/callback-requests"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CustomerCallbackRequest }; responses: { "200": CallbackRequestResponse } };
+  "request_1": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/callback-requests"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: CustomerCallbackRequest }; responses: { "200": CallbackRequestResponse } };
   "currentErasureRequest": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/erasure-request"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": StorefrontCustomerControllerErasureRequestResponse } };
   "requestErasure": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/erasure-request"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": StorefrontCustomerControllerErasureRequestResponse } };
   "cancelErasureRequest": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/erasure-request/cancel"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": StorefrontCustomerControllerErasureRequestResponse } };
+  "current": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/export-request"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": ExportRequestStatus } };
+  "request": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/export-request"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": ExportRequestStatus } };
+  "bundle": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/export-request/bundle"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": BundleLink } };
+  "cancel_1": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/export-request/cancel"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": ExportRequestStatus } };
   "favourites": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/favourites"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": FavouritesResponse } };
   "removeFavourite": { method: "DELETE"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/favourites/{productId}"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } } }; responses: { "200": unknown } };
   "addFavourite": { method: "PUT"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/favourites/{productId}"; request: { parameters: { path: { brandId: string; productId: string; tenantId: string } } }; responses: { "200": unknown } };
@@ -1232,7 +1252,7 @@ export interface Operations {
   "linkViaMiniApp": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/mini-app-link"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: MiniAppLinkRequest }; responses: { "200": CustomerTelegramLinkStatusResponse } };
   "issueCode": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/sign-in-codes"; request: { parameters: { path: { brandId: string; tenantId: string } } }; responses: { "200": SignInCodeResponse } };
   "poll": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/telegram/sign-in-codes/{code}"; request: { parameters: { path: { brandId: string; code: string; tenantId: string } } }; responses: { "200": SignInPollResponse } };
-  "current": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/terms"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { brandName: string; locale: string } } }; responses: { "200": TermsView } };
+  "current_1": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/terms"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { brandName: string; locale: string } } }; responses: { "200": TermsView } };
   "accept": { method: "POST"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/terms/accept"; request: { parameters: { path: { brandId: string; tenantId: string } }; body: AcceptRequest }; responses: { "200": AcceptResponse } };
   "acceptanceStatus": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/terms/acceptance-status"; request: { parameters: { path: { brandId: string; tenantId: string }; query: { brandName: string; locale: string } } }; responses: { "200": AcceptanceStatusView } };
   "page": { method: "GET"; path: "/api/v1/storefront/tenants/{tenantId}/channels/{channel}/pages/{slug}"; request: { parameters: { path: { channel: string; slug: string; tenantId: string }; query: { locale: string } } }; responses: { "200": PageView } };

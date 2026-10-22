@@ -328,6 +328,18 @@
         },
         "type" : "object"
       },
+      "BundleLink" : {
+        "properties" : {
+          "expiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "CallbackRequestResponse" : {
         "properties" : {
           "leadId" : {
@@ -983,6 +995,41 @@
           }
         },
         "required" : [ "tableToken" ],
+        "type" : "object"
+      },
+      "ExportRequestStatus" : {
+        "properties" : {
+          "bundleAvailable" : {
+            "type" : "boolean"
+          },
+          "bundleExpiresAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "cancelledAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "producedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "requestedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "responseDueAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "FaqEntryResponse" : {
@@ -6178,7 +6225,7 @@
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/callback-requests" : {
       "post" : {
         "description" : "Creates one lead in the call centre's queue, linked to the caller's own account. 202: what was created is a work item for a person, not a call. The number to ring is in the body. A guest asking on behalf of a company says so with forCompany=true, which files it as a catering enquiry.",
-        "operationId" : "request",
+        "operationId" : "request_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -6331,6 +6378,156 @@
           }
         },
         "summary" : "Withdraw the caller's own PENDING erasure request",
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/export-request" : {
+      "get" : {
+        "description" : "The waiting request if there is one, else the most recent of any status. 204 when I have never asked.",
+        "operationId" : "current",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExportRequestStatus"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "My current request for a copy of my data, if any",
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
+      },
+      "post" : {
+        "description" : "Records the request and the date the tenant owes an answer by; it gathers nothing by itself (ADR 0029). Idempotent: asking again while a request is waiting returns that request.",
+        "operationId" : "request",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExportRequestStatus"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask for a copy of my data",
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/export-request/bundle" : {
+      "get" : {
+        "description" : "The link works for a few minutes. Each call is recorded against me as the reader. 404 until staff have produced the bundle, and after it has expired.",
+        "operationId" : "bundle",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BundleLink"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A short-lived link to my data, once it has been prepared",
+        "tags" : [ "Customer self-service" ],
+        "x-horecaos-surface" : "published"
+      }
+    },
+    "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/me/export-request/cancel" : {
+      "post" : {
+        "description" : "Idempotent for a request already withdrawn. Refused for one already produced.",
+        "operationId" : "cancel_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenantId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "brandId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExportRequestStatus"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Withdraw my waiting request for a copy of my data",
         "tags" : [ "Customer self-service" ],
         "x-horecaos-surface" : "published"
       }
@@ -7552,7 +7749,7 @@
     "/api/v1/storefront/tenants/{tenantId}/brands/{brandId}/terms" : {
       "get" : {
         "description" : "The tenant's own published text when it has one for this language; otherwise the platform's brand-neutral default with brandName interpolated in. Cached briefly like the FAQ, because this changes on the order of weeks.",
-        "operationId" : "current",
+        "operationId" : "current_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "tenantId",
@@ -7951,6 +8148,9 @@
   }, {
     "description" : "Continue with Telegram: mint a sign-in code and poll it into a session (ADR 0063)",
     "name" : "Telegram sign-in"
+  }, {
+    "description" : "A customer's own profile, saved addresses, and the products they marked",
+    "name" : "Customer self-service"
   }, {
     "description" : "Public, non-secret analytics identifiers for a brand",
     "name" : "Storefront analytics"
