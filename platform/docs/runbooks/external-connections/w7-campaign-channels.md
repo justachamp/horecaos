@@ -236,8 +236,10 @@ Then delete `vapid.pem`; nothing keeps it.
    file: mount `<app-push-subscribe />` (and add `PushSubscribeComponent` to the page's `imports`) where a
    signed-in customer should find it, for example under `<app-profile-menu>` in
    `frontend/storefront/src/app/pages/profile/profile.component.html` and in the profile page of
-   `frontend/storefront-milliy`. On a home-screen banner pass `[dismissible]="true"`. Until it is mounted no
-   customer can opt in, so no campaign has a push recipient.
+   `frontend/storefront-milliy`. On a home-screen banner pass `[dismissible]="true"`. In the same page's
+   sign-out handler, next to `this.telegramLink.forget()`, add `this.pushSubscription.forget()` (inject
+   `PushSubscriptionService`), so the next customer on the handset does not inherit this one's state.
+   Until it is mounted no customer can opt in, so no campaign has a push recipient.
 
 **How to prove the connection.**
 

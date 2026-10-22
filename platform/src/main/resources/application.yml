@@ -377,7 +377,10 @@ horecaos:
   # key is named by an ADR 0028 reference whose value is the 32-byte P-256 private scalar, base64url,
   # for example horecaos:production:provider_notification:platform:vapid. The subject is where a push
   # service may write to about us: a mailto: or an https: address. The hosts a subscription may name
-  # (the browser vendors' push services) are code, not configuration; see PushEndpointPolicy.
+  # default to the browser vendors' push services (horecaos.push.allowed-hosts, and
+  # horecaos.push.require-https, both read by PushEndpointPolicy and deliberately not mapped to an
+  # environment variable): they are what keeps a customer's browser from making the platform call an
+  # address of its choosing, so only a test sets them.
   push:
     vapid:
       public-key: ${HORECAOS_PUSH_VAPID_PUBLIC_KEY:}
